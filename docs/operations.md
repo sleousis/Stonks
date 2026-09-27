@@ -22,7 +22,7 @@ Run `uv run stonks db init` after every upgrade, before the first tick. It appli
 
 Every step is safe to rerun: ingest upserts, the tick reuses client ids for the same `as_of` and skips orders already placed (and model books already evaluated), and health only opens or clears the operational halt. Times are UTC. `tick` defaults `--as-of` to today's UTC date and refuses a date older than its latest snapshot.
 
-- `stonks tick --tickers ...` (or `--asset-class`) runs a scoped tick. It trades only those tickers and leaves every other holding alone, not even selling it. A tick over `[production].universe` still sells a holding that left the universe.
+- `stonks tick --tickers ...` (or `--asset-class`) runs a scoped tick. It trades only those tickers and leaves every other holding alone, not even selling it. A tick over `[production].universe` still sells a holding that left the universe. Add `--full` to trade the whole book over those tickers. The CLI and the API tick job run the same code.
 - When the broker fills less than an order asked for (a simulated buy scaled down to cash), the order row keeps the filled quantity. Its `status_reason` says what was asked for.
 
 ## Scheduler
@@ -109,7 +109,7 @@ Each fire is one `scheduled_runs` row keyed by job and run key (session date, lo
 
 A failed run is not retried. It alerts; rerun it with `run-now`. A run interrupted by a crash is marked `failed` ("interrupted") at the next start. If the scheduler stops while an API job runs, the job keeps going in the API; check `GET /api/jobs/{id}` before rerunning.
 
-A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_runs` row at `running`, and the `stuck_ticks` check then holds the operational buy halt. The next start of the process that runs ticks (`stonks serve`, or the `local` scheduler) closes such rows as `error` ("interrupted"). The next health run then clears the halt. Run `stonks health` to clear it at once. A same-day rerun of the tick is safe.
+A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_runs` row at `running`, and the `stuck_ticks` check then holds the operational buy halt. The next start of the process that runs ticks (`stonks serve`, or the `local` scheduler) closes such rows as `error` ("interrupted"). Each running row names the host and process that run it, so a tick that is still running (a CLI tick, say) is left alone. A row from another host is closed once it is 12 hours old. The next health run then clears the halt. Run `stonks health` to clear it at once. A same-day rerun of the tick is safe.
 
 ### Dead-man checks
 
@@ -368,11 +368,17 @@ flowchart LR
 
 - Client ids carry the portfolio, so two portfolios never share one.
 - Every book writes one `portfolio_runs` row per tick: mode, status, counts, any halt, and its paper and auto subscriptions.
-- Paper days for the auto gate come from `portfolio_runs`: days that finished without an error or a risk breach, after the last breach and after the last switch to notify. The subscriptions view shows the same count.
+- Paper days for the auto gate come from `portfolio_runs`: days that finished without an error or a risk breach, after the last breach and after the last switch to notify. Only weekdays up to today count, and a day halted with `all` traded nothing, so it does not count. The subscriptions view shows the same count.
+- A real tick for a date after today is refused. Only a dry run may look ahead.
 - Auto needs 20 paper days, an active strategy, a healthy connection that can trade, no halt, and a fresh second factor.
 - A broker error pauses the portfolio's auto subscriptions with a `paused_reason`, writes an audit row and tells the owner. A plain rejection pauses nothing. Resume by switching back to auto, which runs the checklist again.
+- Auto trades only an active strategy. When a strategy leaves `active` (demoted to shadow or retired), its auto subscriptions pause with `strategy_not_active: <status>`, an audit row and a notice to the owner. The tick also refuses, and pauses, any auto subscription whose strategy is not active. Paper and notify subscriptions go on.
+- A retired strategy exits its own holdings in each paper book that follows it, whatever the other strategies decided for those tickers. Once it holds nothing its subscription is turned off (audited as `service:system`). Its auto subscriptions pause instead, so real holdings wait for their owner.
+- An auto book trades only what it owns in the connected account. What it owns is its own net filled quantity per ticker (its fill ledger, carried through splits). Holdings you bought yourself are marked in the snapshot but never traded, and an order that would sell your own long or cover your own short is dropped (`external_holdings_skipped` in the tick summary). The book sizes on the account's cash plus its own positions. The legacy live default book of `[brokers].kind` still treats its whole account as its own, so keep that account dedicated.
 - Owner risk limits (`users.risk_policy_json`) tighten every portfolio the owner has. They can only make limits stricter.
 - The default book `pf_default` follows every active strategy. A promotion subscribes it to the strategy when it has no subscription yet: paper on the simulated broker, auto when `[brokers].kind` is an external broker. The row is audited as `service:system`. Migration 022 did the same once for the strategies already active. A subscription the owner turned off stays off.
+- Upgrading an install whose `[brokers].kind` is external (for example `alpaca`): migration 022 wrote those `pf_default` rows in paper, because `pf_default` was a simulated portfolio. The first real tick turns the rows the system wrote to auto (audited as `service:system`, reason `default_book_live_broker`), so the live account keeps trading. A row whose mode someone changed is left alone. If the live default holds positions but no auto strategy runs on it, each tick sends a "default book unmanaged" alert.
+- A dry run plans the same books but writes nothing: no paper account rows and no mode switch.
 - With the flag set to false the tick trades only the old single book: `pf_default` over every active strategy.
 
 ## Financing of short books

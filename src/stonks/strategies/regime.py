@@ -9,14 +9,15 @@ The filter holds ``n`` conditions from :mod:`stonks.features.regime_conditions`
 trend, and any condition a later module registers). On each bar it counts
 how many trigger. Risk off when at least ``k`` do. Then ``mode`` decides:
 
-- ``block_new_buys``: the inner strategy runs as usual but its buys are
-  dropped. Sells pass, and held names stay in the ranking, so the inner
-  does not dump them just because the gate is shut.
-- ``exit_all``: no picks and every long is sold.
-- ``scale``: buy quantities are multiplied by the share of conditions that
-  did not trigger (all triggered means no buys).
+- ``block_new_buys``: the inner strategy runs as usual but its opening
+  orders (buys and short sales) are dropped. Closes pass, and held names
+  stay in the ranking, so the inner does not dump them just because the
+  gate is shut.
+- ``exit_all``: no picks, every long is sold and every short covered.
+- ``scale``: opening quantities are multiplied by the share of conditions
+  that did not trigger (all triggered means no new positions).
 
-Sells always pass. A condition that can't be judged (no data, too little
+Closes (sells of longs, covers of shorts) always pass (BE-14). A condition that can't be judged (no data, too little
 history, stale data) counts as not triggered, or as triggered with
 ``when_unknown="trigger"``. Every condition reads only data dated on or
 before ``as_of``.
@@ -43,9 +44,10 @@ from stonks.features.regime_conditions import ConditionContext, RegimeCondition,
 from stonks.strategies._common import (
     LakeBarCaches,
     as_datetime,
-    close_all_positions,
-    closing_orders,
+    close_all,
+    closes_only,
     iso,
+    split_effects,
 )
 from stonks.strategies._wrapping import InnerStrategyWrapper, inner_param_specs
 
@@ -230,33 +232,16 @@ class RegimeFilter(InnerStrategyWrapper):
             return self._inner.decide(my_picks, portfolio, prices, as_of)
         mode = self.params["mode"]
         if mode == "exit_all":
-            return close_all_positions(self.id, portfolio, as_of)
+            return close_all(self.id, portfolio, as_of)
         orders = self._inner.decide(my_picks, portfolio, prices, as_of)
         if mode == "block_new_buys":
-            if self.supports_short:  # covers go through, new shorts do not
-                return closing_orders(orders, portfolio)
-            return [o for o in orders if o.side != "buy"]
+            return closes_only(orders, portfolio)
         hits, n = self.triggered_count(as_of, lake)
         share = (n - hits) / n
-        if self.supports_short:
-            return _scale_opening(orders, portfolio, share)
         out: list[Order] = []
-        for order in orders:
-            if order.side != "buy":
+        for order in split_effects(orders, portfolio):
+            if order.position_effect == "close":
                 out.append(order)
             elif share > 0:
                 out.append(dataclasses.replace(order, quantity=order.quantity * share))
         return out
-
-
-def _scale_opening(orders: Sequence[Order], portfolio: Portfolio, share: float) -> list[Order]:
-    """Closes as they are, opening legs (either side) scaled by ``share``."""
-    from stonks.execution.orders import classify_all
-
-    out: list[Order] = []
-    for leg in classify_all(orders, portfolio.positions):
-        if leg.position_effect == "close":
-            out.append(leg)
-        elif share > 0:
-            out.append(dataclasses.replace(leg, quantity=leg.quantity * share))
-    return out

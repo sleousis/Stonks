@@ -40,13 +40,16 @@ STRATEGIES = {
     "bh_flat": BuyAndHold({"ticker": "FLAT.US", "allocation": 0.3}),
     "bh_down": BuyAndHold({"ticker": "DOWN.US", "allocation": 0.3}),
 }
-#: Status changes before the tick of day ``i``.
+#: Status changes before the tick of day ``i``. No strategy that holds a
+#: position is retired: there the books differ on purpose (BE-18: a
+#: subscription book exits a retired strategy's holdings, the old single
+#: book keeps them), which ``test_tick_modes`` covers.
 PLAN = {
     0: [("mom", "active"), ("bh_up", "active")],
     1: [("bh_flat", "active")],
-    2: [("bh_up", "retired"), ("bh_down", "active")],
-    3: [("bh_flat", "retired")],
-    4: [("bh_flat", "active")],
+    2: [("bh_down", "active")],
+    3: [],
+    4: [],
 }
 
 ORDERS = (

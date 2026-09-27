@@ -178,7 +178,7 @@ The registry-wide property test changes from "buy notional never increases, sell
 - `BaseStrategy.short_capable` and the `short_mode` param (`flat` or `short`). It sits outside the param spec, so a long-only instance keeps exactly its old params. `supports_short` is on only with `short_mode = "short"`.
 - The ranker takes `allow_short`. It keeps short scores (`score < -threshold`) of strategies that support shorts in `SignalSet.shorts`, apart from `scores`. `SignalSet.for_book(allow_short)` is what a book reads. The tick asks for shorts when any book allows them.
 - Constructor settings gain `min_net`, `max_net` and `neutral` (`none`, `dollar`, `beta`), and `max_gross` may reach 4.0 when `long_only` is off. A long-only book still stops at 1.0.
-- `equal_weight_top_n` shorts the `n_short` lowest z-scores in long/short mode. `vol_target` keeps short forecasts. Both read betas (given, or estimated against the equal-weight universe).
+- `equal_weight_top_n` shorts the `n_short` most negative scores in long/short mode. Only a name scored below 0 is shorted, never the weakest of the names a strategy expects to rise. `vol_target` keeps short forecasts. Both read betas (given, or estimated against the equal-weight universe).
 - The pipeline runs a cash book's constructor long-only at no more than 1.0 gross, whatever its settings say.
 - The backtest engine passes short picks to a strategy's own `decide` too.
 - `ewmac_trend` and `tsmom` short their down trends (`ath_trend` has no short side). New strategies: `ls_momentum` (long/short 12-1 momentum) and `pairs_reversion` (spread z-score with a half-life check, `features/pairs.py`).

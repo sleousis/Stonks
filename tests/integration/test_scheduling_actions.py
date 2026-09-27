@@ -129,7 +129,8 @@ def test_a_tick_job_with_its_own_tickers_runs_scoped(settings, monkeypatch, para
 
 
 def test_tick_skip_can_be_disabled(settings):
-    ctx, _ = _ctx(settings, "tick", date(2026, 11, 26), skip_closed_days=False)
+    # Thanksgiving 2025: a closed day in the past (a future tick is refused)
+    ctx, _ = _ctx(settings, "tick", date(2025, 11, 27), skip_closed_days=False)
     assert get_action("tick")(ctx).status == "succeeded"
 
 

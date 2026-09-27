@@ -82,6 +82,25 @@ def test_flatten_cancels_only_working_buys(state):
     assert order_row(state, "sell1")["status"] == "pending"
 
 
+def test_be12_reduce_only_cancels_short_sales_and_keeps_covers(state):
+    broker = CancellingBroker()
+    insert_order(state, "short1", side="sell")
+    insert_order(state, "cover1", side="buy")
+    insert_order(state, "sell1", side="sell")
+    insert_order(state, "buy1", side="buy")  # no effect recorded: a buy opens
+    _pf_default(state)
+    state.execute("UPDATE orders SET position_effect = 'open' WHERE client_id = 'short1'")
+    state.execute("UPDATE orders SET position_effect = 'close' WHERE client_id = 'cover1'")
+    for cid, side in [("short1", "sell"), ("cover1", "buy"), ("sell1", "sell"), ("buy1", "buy")]:
+        broker.set(cid, "pending", 0.0, None, side=side)
+
+    summary = cancel_working_orders(broker, state, portfolio_id="pf_default", openings_only=True)
+
+    assert sorted(summary.cancelled) == ["buy1", "short1"]
+    assert order_row(state, "cover1")["status"] == "pending"
+    assert order_row(state, "sell1")["status"] == "pending"
+
+
 def test_other_portfolios_orders_are_left_alone(state):
     broker = CancellingBroker()
     insert_order(state, "mine")

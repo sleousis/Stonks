@@ -9,6 +9,10 @@ strategy's scores independently:
 - ``"zscore"``: cross-sectional z-score within the strategy, winsorised at
   +/-3 and re-standardised.
 - ``"rank"``: cross-sectional percentile in ``(0, 1]``.
+- ``"signed_rank"``: the percentile within each sign, so a positive score
+  stays positive (in ``(0, 1]``) and a negative one negative (in
+  ``[-1, 0)``). Long/short books use it where a z-score would short the
+  weakest of names the strategy expects to rise (BE-15).
 - ``"forecast"``: Carver's forecast scaling, ``f = raw * scalar`` capped at
   +/-20, where ``scalar = 10 / mean|raw|`` is estimated in the lab
   (:func:`estimate_forecast_scalar`) and passed in
@@ -94,6 +98,23 @@ def _rank(strategy_id: str, s: pd.Series, ctx: SignalContext) -> pd.Series:
     if len(s) < MIN_CROSS_SECTION:
         return _sign(s)
     return cs_rank(s)
+
+
+@register_normalizer("signed_rank")
+def _signed_rank(strategy_id: str, s: pd.Series, ctx: SignalContext) -> pd.Series:
+    out = pd.Series(0.0, index=s.index)
+    positive: pd.Series = s.loc[s > 0]
+    negative: pd.Series = -s.loc[s < 0]
+    for side, sign in ((positive, 1.0), (negative, -1.0)):
+        if len(side) == 0:
+            continue
+        ranked = (
+            pd.Series(cs_rank(side), index=side.index)
+            if len(side) >= MIN_CROSS_SECTION
+            else pd.Series(1.0, index=side.index)
+        )
+        out.loc[side.index] = sign * ranked.astype(float)
+    return out
 
 
 def estimate_forecast_scalar(raw_history: Iterable[float]) -> float:

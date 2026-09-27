@@ -8,7 +8,7 @@ so a context carrying later bars cannot leak the future into a decision.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from typing import Any
 
@@ -47,6 +47,30 @@ def history(ctx: RiskContext, ticker: str) -> pd.DataFrame | None:
     if ctx.as_of is not None:
         frame = frame[frame.index <= pd.Timestamp(ctx.as_of)]
     return frame if not frame.empty else None
+
+
+def marks(ctx: RiskContext) -> dict[str, float] | None:
+    """The context's prices, a held ticker with none carried at its last
+    close in the history (BE-45). ``None`` when a holding still has no
+    mark: the book's value is unknown, so value-based rules skip rather
+    than read the holding as worth 0."""
+    out = {t: float(p) for t, p in ctx.prices.items() if p is not None and math.isfinite(p)}
+    for ticker in ctx.portfolio.unmarked(out):
+        if abs(ctx.portfolio.positions.get(ticker, 0.0)) <= EPS:
+            continue
+        frame = history(ctx, ticker)
+        last = float(frame["close"].iloc[-1]) if frame is not None else math.nan
+        if not (math.isfinite(last) and last > 0):
+            _log.warning("risk.unmarked_holding", ticker=ticker)
+            return None
+        out[ticker] = last
+    return out
+
+
+def book_value(ctx: RiskContext) -> float | None:
+    """The book's value at :func:`marks`, or ``None`` when unknown."""
+    prices = marks(ctx)
+    return None if prices is None else ctx.portfolio.total_value(prices)
 
 
 def last_atr(ctx: RiskContext, ticker: str, bars: int = ATR_BARS) -> float | None:
@@ -114,13 +138,25 @@ def positions_after_sells(orders: Sequence[Order], ctx: RiskContext) -> dict[str
     return positions
 
 
-def is_opening_buy(order: Order, ctx: RiskContext) -> bool:
-    """A buy that grows (or opens) a long position. A buy against a short
-    (a cover) reduces risk and is left alone by the scaling rules."""
-    return order.side == "buy" and ctx.portfolio.positions.get(order.ticker, 0.0) >= 0.0
+def is_opening(order: Order, positions: Mapping[str, float]) -> bool:
+    """The order opens or grows a position, long or short. With a position
+    effect (orders split at zero) that decides; otherwise it is read from
+    the held quantity: a buy opens unless it covers a short, a sell opens
+    only from a flat or short position."""
+    if order.position_effect is not None:
+        return order.position_effect == "open"
+    held = positions.get(order.ticker, 0.0)
+    return held >= 0 if order.side == "buy" else held <= 0
 
 
-def scale_buys(
+def is_opening_order(order: Order, ctx: RiskContext) -> bool:
+    """:func:`is_opening` against the context's book. Closes (sells of a
+    long, covers of a short) reduce risk and are left alone by the halt and
+    scaling rules (BE-05)."""
+    return is_opening(order, ctx.portfolio.positions)
+
+
+def scale_opens(
     orders: Sequence[Order],
     ctx: RiskContext,
     scale: float,
@@ -128,15 +164,16 @@ def scale_buys(
     reason: str,
     only: set[str] | None = None,
 ) -> tuple[list[Order], list[RiskAdjustment]]:
-    """Multiply opening buys (of ``only`` tickers, when given) by ``scale``
-    in ``[0, 1]``; buys that shrink to nothing are dropped."""
+    """Multiply opening orders, buys and short sales (of ``only`` tickers,
+    when given), by ``scale`` in ``[0, 1]``; orders that shrink to nothing
+    are dropped. Closes pass untouched."""
     scale = min(max(scale, 0.0), 1.0)
     if scale >= 1.0:
         return list(orders), []
     kept: list[Order] = []
     adjustments: list[RiskAdjustment] = []
     for order in orders:
-        if not is_opening_buy(order, ctx) or (only is not None and order.ticker not in only):
+        if not is_opening_order(order, ctx) or (only is not None and order.ticker not in only):
             kept.append(order)
             continue
         qty = order.quantity * scale

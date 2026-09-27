@@ -57,13 +57,17 @@ runs the default book only and writes the pre-accounts columns.
 from __future__ import annotations
 
 import json
+import os
+import socket
+import sys
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal, get_args
 
 from stonks.accounts.book import BookSpec
+from stonks.accounts.default_book import align_default_book
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Mode, Subscription
 from stonks.accounts.models import Portfolio as AccountPortfolio
 from stonks.accounts.paper import ensure_paper_account
@@ -74,7 +78,6 @@ from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.brokers.base import BrokerKind, OrderRejectedError, OrderStateSource
 from stonks.execution.brokers.simulated import SimulatedCosts
-from stonks.execution.margin import RegTMargin
 from stonks.execution.orders import SideToken, make_client_id
 from stonks.execution.reconcile import (
     NON_TERMINAL_STATUSES,
@@ -93,7 +96,11 @@ from stonks.portfolio.pipeline import (
     build_orders,
     vols_from_history,
 )
-from stonks.production.auto_pause import broker_error_reason, pause_auto
+from stonks.production.auto_pause import (
+    broker_error_reason,
+    pause_auto,
+    strategy_not_active_reason,
+)
 from stonks.production.corporate_actions import (
     CorporateActionPlan,
     adjust_orders_for_splits,
@@ -109,7 +116,7 @@ from stonks.production.corporate_actions import (
     working_orders,
 )
 from stonks.production.decay import DecaySettings
-from stonks.production.financing import last_accrual, record_accrual
+from stonks.production.financing import last_accrual, record_accrual, short_account
 from stonks.production.halts import active_halts
 from stonks.production.hooks import (
     GateContext,
@@ -123,6 +130,7 @@ from stonks.production.hooks import (
 from stonks.production.hooks.attribution import load_attribution
 from stonks.production.ledger import ledger_columns, ledger_filter
 from stonks.production.monitor_settings import RiskMonitorSettings
+from stonks.production.ownership import drop_unowned_crossings, managed_view, owned_positions
 from stonks.production.portfolio_runs import PortfolioRun, record_run, runs_recorded
 from stonks.production.prices import PriceBook, held_tickers, load_history, load_prices
 from stonks.production.quit_rule import QuitRuleSettings
@@ -166,7 +174,14 @@ _VOL_HISTORY_BARS = 260
 class BackdatedTickError(ValueError):
     """A non-dry-run tick was asked to trade a date earlier than the latest
     portfolio snapshot. Trading it would apply today's portfolio to an old
-    date and write a new "latest" snapshot that belongs in the past."""
+    date and write a new "latest" snapshot that belongs in the past.
+    Entrypoints treat every refused tick date as this error."""
+
+
+class FutureTickError(BackdatedTickError):
+    """A non-dry-run tick was asked to trade a date after today (UTC). Its
+    snapshot would block every real tick until that date, and its run
+    would count as a paper day that never happened (BE-27)."""
 
 
 @dataclass(frozen=True)
@@ -304,6 +319,8 @@ class TickPlan:
     #: Opens a connection's trading adapter for auto books (``None``: auto
     #: books other than the legacy live default are skipped).
     traders: TraderFactory | None = field(default=None, compare=False)
+    #: Problems the plan found that an operator should hear about (BE-10).
+    notices: tuple[str, ...] = ()
 
     @classmethod
     def default(cls, settings: TickSettings) -> TickPlan:
@@ -356,12 +373,19 @@ def run_tick(
     log = _log.bind(tick_id=tick_id, as_of=as_of.isoformat(), dry_run=dry_run)
     plan = plan or TickPlan.default(settings)
     if not dry_run:
+        today = utc_today()
+        if as_of > today:
+            raise FutureTickError(
+                f"as_of {as_of.isoformat()} is after today ({today.isoformat()}); "
+                "only a dry run may look ahead"
+            )
         _refuse_backdated(state, as_of, log, [b.portfolio_id for b in plan.books])
 
     state.execute(
-        "INSERT INTO tick_runs (id, started_at, status) VALUES (?, ?, 'running')",
-        [tick_id, started],
+        "INSERT INTO tick_runs (id, started_at, status, summary_json) VALUES (?, ?, 'running', ?)",
+        [tick_id, started, json.dumps({OWNER_KEY: tick_owner()})],
     )
+    _RUNNING.add(tick_id)
 
     # Any failure past this point closes the tick as 'error' so the ledger
     # never keeps a row stuck at 'running'; the exception still propagates.
@@ -405,8 +429,23 @@ def run_tick(
             log,
         )
         raise
+    finally:
+        _RUNNING.discard(tick_id)
     if result.status == "partial":
         _safe_notify(notifier, _partial_notification(result, as_of), log)
+    if not dry_run:
+        for notice in plan.notices:
+            log.warning("tick.plan_notice", notice=notice)
+            _safe_notify(
+                notifier,
+                Notification(
+                    level="warning",
+                    title="default book unmanaged",
+                    message=notice,
+                    fields={"tick_id": tick_id, "as_of": as_of.isoformat()},
+                ),
+                log,
+            )
     return result
 
 
@@ -458,6 +497,10 @@ class _TickRun:
     scoped: bool
     signals: SignalSet
     pool: StrategyPool
+    #: Ids of the strategies that are ``active`` right now (auto needs one).
+    active: frozenset[str] = frozenset()
+    #: Every registered strategy's status right now.
+    statuses: Mapping[str, str] = field(default_factory=dict)
     _shadow: SignalSet | None = None
     _shadow_error: Exception | None = None
     _vols: dict[str, float] | None = None
@@ -554,6 +597,8 @@ def _run_tick_body(
         scoped=scoped,
         signals=signals,
         pool=pool,
+        statuses=(statuses := {h.id: h.status for h in registry.list_all()}),
+        active=frozenset(sid for sid, st in statuses.items() if st == "active"),
     )
     _expect_consumers(run)
 
@@ -590,6 +635,7 @@ def _run_tick_body(
                 outcome = _pause_on_broker_error(
                     run, book, outcome, "an order raised at the broker"
                 )
+        outcome = _pause_inactive_auto(run, book, outcome)
         results.append(outcome)
         _record_portfolio_run(run, book, outcome, started_at)
 
@@ -658,23 +704,42 @@ def trades_live(book: TickBook, settings: TickSettings) -> bool:
     return book.portfolio_id == DEFAULT_PORTFOLIO_ID and settings.broker_kind != "simulated"
 
 
-def book_strategies(book: TickBook, scored: Sequence[str], settings: TickSettings) -> list[str]:
+def book_strategies(
+    book: TickBook,
+    scored: Sequence[str],
+    settings: TickSettings,
+    active: Collection[str] | None = None,
+) -> list[str]:
     """The strategies whose signals a book trades. The legacy book trades
     every scored (active) strategy. A subscription book trades its paper and
     auto subscriptions, except at a live broker, where only auto ones place
-    orders: paper money must never reach a real account."""
+    orders: paper money must never reach a real account. An auto
+    subscription trades only while its strategy is ``active`` (BE-01;
+    ``active`` names them, ``None`` skips the check)."""
     if book.legacy or book.spec.strategy_weights is None:
         return list(scored)
     live = trades_live(book, settings)
+    modes = book.spec.strategy_modes
     return [
         s
         for s, w in book.spec.strategy_weights.items()
-        if w > 0 and (not live or book.spec.strategy_modes.get(s) is Mode.AUTO)
+        if w > 0
+        and (not live or modes.get(s) is Mode.AUTO)
+        and (active is None or modes.get(s) is not Mode.AUTO or s in active)
     ]
 
 
+def inactive_auto(book: TickBook, active: Collection[str]) -> list[str]:
+    """Strategies of ``book``'s auto subscriptions that are not active."""
+    if book.legacy or book.spec.strategy_weights is None:
+        return []
+    modes = book.spec.strategy_modes
+    return sorted(s for s in book.spec.strategy_weights if modes.get(s) is Mode.AUTO
+                  and s not in active)  # fmt: skip
+
+
 def _book_strategies(run: _TickRun, book: TickBook) -> list[str]:
-    return book_strategies(book, list(run.signals.scores), run.settings)
+    return book_strategies(book, list(run.signals.scores), run.settings, run.active)
 
 
 def _needs_shadow_signals(run: _TickRun) -> bool:
@@ -832,6 +897,17 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         max_staleness_days=settings.max_price_staleness_days,
     )
     prices = book_prices.prices
+    # BE-02: a connected account may hold the user's own positions. The auto
+    # book decides and sizes on what it owns (its fill ledger) and never
+    # trades the rest; the snapshot still marks the whole account.
+    account = portfolio
+    external_holdings: dict[str, float] = {}
+    if connection:
+        owned = owned_positions(state, portfolio_id, actions)
+        portfolio, external_holdings = managed_view(account, owned)
+        held = held_tickers(portfolio.positions)
+        if external_holdings:
+            log.info("tick.external_holdings", tickers=sorted(external_holdings))
 
     def result(status: TickStatus, winner: str | None, placed: int, fills: int, summary: dict):
         return BookResult(
@@ -870,9 +946,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             halt_summary = halted(gate())
             with state.transaction():
                 if persist_corporate_actions() or applied:
-                    _snapshot_portfolio(
-                        state, tick_id, portfolio, prices, as_of, portfolio_id=scope
-                    )
+                    _snapshot_portfolio(state, tick_id, account, prices, as_of, portfolio_id=scope)
         log.info("tick.portfolio_noop", reason=reason)
         return result("noop", None, 0, 0, {"reason": reason, **halt_summary, **corporate_summary})
 
@@ -916,6 +990,13 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             volumes=book_prices.volumes,
             portfolio_id=portfolio_id,
         )
+        if book.spec.allow_short:
+            # the short rules read the book's own margin model and borrow
+            # source, as they do in a backtest (BE-30)
+            margin, borrow = short_account(book.spec.risk)
+            risk_context = replace(
+                risk_context, margin=margin, borrow=borrow or risk_context.borrow
+            )
     book_input = BookInput(
         portfolio=portfolio,
         construction=construction,
@@ -946,7 +1027,31 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         exit_owner=exit_owner,
         client_id=make_id,
     )
-    if pipeline.reason is not None:
+    # BE-18: a retired strategy of this subscription book exits its own
+    # holdings, whatever the others decided for those tickers, then its
+    # subscription ends. The legacy single book keeps its old rule: holdings
+    # whose owners all left active are kept (``no_active_owner``).
+    members = set() if book.legacy else set(book.spec.strategy_weights or {})
+    retired = sorted(sid for sid in members if run.statuses.get(sid) == "retired")
+    retired_owned: dict[str, str] = {}
+    exits: list[Order] = []
+    if retired and run.scoped and held:
+        owners = _holding_owners(state, portfolio_id, held, book_input.prior_attribution)
+        retired_owned = {t: sid for t, sid in owners.items() if sid in retired}
+        exits = [
+            Order(
+                client_id=make_id(sid, t, "sell" if portfolio.positions[t] > 0 else "cover"),
+                ticker=t,
+                side="sell" if portfolio.positions[t] > 0 else "buy",
+                quantity=abs(portfolio.positions[t]),
+                strategy_id=sid,
+                position_effect="close",
+            )
+            for t, sid in sorted(retired_owned.items())
+        ]
+        if exits:
+            log.info("tick.retired_exits", tickers=sorted(retired_owned))
+    if pipeline.reason is not None and not exits:
         return noop(pipeline.reason)
     winner_id = pipeline.decided_by
     if winner_id is not None and not pipeline.exit_only:
@@ -958,13 +1063,24 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     risk_adjustments = list(pipeline.adjustments)
     slice_policy = book_input.risk_overrides.get(winner_id) if winner_id else None
     proposed = pipeline.orders
+    if exits:
+        proposed = [o for o in proposed if o.ticker not in retired_owned] + exits
     outside: list[str] = []
     if settings.scoped:
-        allowed = set(universe)
+        # the scope is the tick's tickers, even when the portfolio has its own
+        # universe: the ranker scored only them (BE-03)
+        allowed = set(settings.universe) & set(universe)
         outside = sorted({o.ticker for o in proposed if o.ticker not in allowed})
         if outside:
             log.info("tick.outside_universe_skipped", tickers=outside)
         proposed = [o for o in proposed if o.ticker in allowed]
+    external_skipped: list[str] = []
+    if external_holdings:
+        proposed, external_skipped = drop_unowned_crossings(
+            proposed, portfolio.positions, external_holdings
+        )
+        if external_skipped:
+            log.warning("tick.external_holdings_skipped", tickers=external_skipped)
 
     halt = gate()
     if halt is not None:
@@ -977,9 +1093,9 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             portfolio, settings, prices, as_of, factory, book_prices.volumes, asset_classes
         )
         if book.spec.allow_short and isinstance(broker, SimulatedBroker):
-            # Roadmap 16.1: a short book's paper broker trades on margin.
-            model = book.spec.risk.rules.margin_call.margin.build()
-            broker.enable_shorts(model if model.allows_short else RegTMargin())
+            # Roadmap 16.1: a short book's paper broker trades on margin, with
+            # the configured borrow lists and fees (BE-30).
+            broker.enable_shorts(*short_account(book.spec.risk))
     # Roadmap 16.1: a short book's paper broker charges borrow fees and debit
     # interest for the days since the stored accrual date (else the last
     # snapshot), before any order changes the positions.
@@ -1048,6 +1164,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         placed += 1
         outcomes.append((order, "pending", None))
         try:
+            assert isinstance(broker, OrderStateSource)  # checked when the broker opened
             synced = reconcile_order(broker, state, order.client_id, reject_unknown=False)
         except Exception as exc:
             log.warning("tick.order.sync_failed", client_id=order.client_id, error=str(exc))
@@ -1122,6 +1239,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         )
 
     hook_summary: dict[str, Any] = {}
+    after = portfolio
     if not dry_run and external:
         # Report what the broker made of each submission (e.g. rejected).
         booked = _order_statuses(state, [o.client_id for o, _, _ in outcomes])
@@ -1183,6 +1301,10 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             log,
         )
 
+    ended: list[str] = []
+    if retired and run.scoped and not dry_run:
+        holdings = (after if external else portfolio).positions
+        ended = _end_retired_subscriptions(run, book, retired, retired_owned, holdings)
     exit_strategy_id = winner_id if pipeline.exit_only else None
     status: TickStatus = "ok" if not any_failure else "partial"
     return result(
@@ -1200,6 +1322,9 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             ),
             "stale_buys_dropped": pipeline.stale_buys,
             **({"outside_universe_skipped": outside} if outside else {}),
+            **({"external_holdings_skipped": external_skipped} if external_skipped else {}),
+            **({"retired_exits": sorted(retired_owned)} if retired_owned else {}),
+            **({"retired_subscriptions_ended": ended} if ended else {}),
             **({"open_order_conflicts": open_conflicts} if open_conflicts else {}),
             **halted(halt),
             **({"constructor": construction.method} if not book.legacy else {}),
@@ -1218,19 +1343,90 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
 #: ``summary_json.error`` of a tick row closed by :func:`recover_interrupted_ticks`.
 INTERRUPTED_ERROR = "interrupted: the process running the tick stopped before it finished"
 
+#: ``summary_json`` key of a running tick: the host and process running it.
+OWNER_KEY = "owner"
+#: A running tick owned by another host is taken for dead after this long.
+FOREIGN_TICK_MAX_AGE = timedelta(hours=12)
+#: Ticks running in this process right now.
+_RUNNING: set[str] = set()
+
+
+def tick_owner() -> dict[str, Any]:
+    """The host and process that run a tick (written on its running row)."""
+    return {"host": socket.gethostname(), "pid": os.getpid()}
+
+
+def _process_alive(pid: int) -> bool:
+    """Whether a process with ``pid`` runs on this host."""
+    if pid <= 0:
+        return False
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return False
+            return code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _owner_gone(tick_id: str, summary: str | None, started_at: str, now: datetime) -> bool:
+    """A running row may be closed: it names no owner (written before
+    owners were recorded), its owner process on this host is gone, or its
+    owner is another host and the row is older than
+    :data:`FOREIGN_TICK_MAX_AGE` (BE-44)."""
+    try:
+        owner = json.loads(summary).get(OWNER_KEY) if summary else None
+    except (ValueError, AttributeError):
+        owner = None
+    if not isinstance(owner, dict):
+        return True
+    if owner.get("host") == socket.gethostname():
+        pid = int(owner.get("pid") or 0)
+        if pid == os.getpid():  # this process: gone unless it runs it now
+            return tick_id not in _RUNNING
+        return not _process_alive(pid)
+    try:
+        started = datetime.fromisoformat(started_at)
+    except ValueError:
+        return True
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=UTC)
+    return now - started > FOREIGN_TICK_MAX_AGE
+
 
 def recover_interrupted_ticks(state: SqliteState, *, now: datetime | None = None) -> list[str]:
-    """Close every ``tick_runs`` row still ``running`` as ``error`` (TO-06).
+    """Close every ``tick_runs`` row still ``running`` whose process is gone
+    as ``error`` (TO-06, BE-44).
 
-    Call only where no tick can be running: at the start of the process
-    that runs ticks (the API, whose tick jobs never outlive it, or the
-    ``local`` scheduler). A killed tick committed nothing past its last
-    transaction, so a same-day rerun repeats it safely (idempotent client
-    ids). Without this the stuck-tick health check fails for ever and the
-    operational halt blocks every buy. Returns the closed ids."""
-    at = (now or datetime.now(UTC)).isoformat(timespec="seconds")
-    rows = state.sql("SELECT id FROM tick_runs WHERE status = 'running' ORDER BY started_at")
-    ids = [r["id"] for r in rows]
+    Call at the start of the process that runs ticks (the API, whose tick
+    jobs never outlive it, or the ``local`` scheduler). A running row names
+    the host and process that run it: a row of a live process (a CLI tick
+    running right now) is left alone, and so is a young row of another
+    host. A killed tick committed nothing past its last transaction, so a
+    same-day rerun repeats it safely (idempotent client ids). Without this
+    the stuck-tick health check fails for ever and the operational halt
+    blocks every buy. Returns the closed ids."""
+    clock = now or datetime.now(UTC)
+    at = clock.isoformat(timespec="seconds")
+    rows = state.sql(
+        "SELECT id, started_at, summary_json FROM tick_runs WHERE status = 'running'"
+        " ORDER BY started_at"
+    )
+    ids = [r["id"] for r in rows if _owner_gone(r["id"], r["summary_json"], r["started_at"], clock)]
     if not ids:
         return []
     summary = json.dumps({"error": INTERRUPTED_ERROR, "error_type": "Interrupted"})
@@ -1249,7 +1445,11 @@ def recover_interrupted_ticks(state: SqliteState, *, now: datetime | None = None
 
 
 def load_tick_plan(
-    state: SqliteState, settings: TickSettings, traders: TraderFactory | None = None
+    state: SqliteState,
+    settings: TickSettings,
+    traders: TraderFactory | None = None,
+    *,
+    dry_run: bool = False,
 ) -> TickPlan:
     """The books of every active portfolio (of an active owner), plus every
     enabled notify-mode subscription (design section 5, S6):
@@ -1267,8 +1467,16 @@ def load_tick_plan(
 
     The simulated default portfolio keeps a book while it holds positions,
     even with no strategy subscribed, so corporate actions on its holdings
-    still apply. Every book is tightened by its owner's risk limits."""
+    still apply. Every book is tightened by its owner's risk limits.
+
+    At an external broker the system's paper ``pf_default`` rows turn auto
+    first (:func:`~stonks.accounts.default_book.align_default_book`, BE-10),
+    and a live default that holds positions with no auto strategy is named
+    in ``notices``. A dry run writes nothing (no paper account rows, no
+    mode switch, BE-52)."""
     live_default = settings.broker_kind != "simulated"
+    if live_default and not dry_run:
+        align_default_book(state, settings.broker_kind)
     rows = state.sql(
         "SELECT p.*, u.risk_policy_json AS owner_risk_json FROM portfolios p"
         " JOIN users u ON u.id = p.owner_id WHERE p.status = 'active' AND u.status = 'active'"
@@ -1305,7 +1513,7 @@ def load_tick_plan(
         account: AccountPortfolio | None = portfolio
         parent: str | None = None
         if mode == "paper" and trades_at_broker(portfolio):
-            paper = ensure_paper_account(state, portfolio)
+            paper = ensure_paper_account(state, portfolio, create=not dry_run)
             spec = replace(spec, portfolio_id=paper.id, broker="simulated")
             account, parent = paper, portfolio.id
         books.append(
@@ -1341,7 +1549,14 @@ def load_tick_plan(
         paper = [s for s in own if s.mode is Mode.PAPER]
         add(portfolio, paper, owner_risk, "paper", keep_holdings=keep)
     notify = tuple(s for s in subs if s.mode is Mode.NOTIFY)
-    return TickPlan(books=tuple(books), notify=notify, traders=traders)
+    notices: list[str] = []
+    auto_default = any(b.portfolio_id == DEFAULT_PORTFOLIO_ID and b.mode == "auto" for b in books)
+    if live_default and not auto_default and holds_positions(DEFAULT_PORTFOLIO_ID):
+        notices.append(
+            f"{DEFAULT_PORTFOLIO_ID} trades at {settings.broker_kind} and holds positions,"
+            " but no auto subscription runs on it: nothing manages those holdings"
+        )
+    return TickPlan(books=tuple(books), notify=notify, traders=traders, notices=tuple(notices))
 
 
 def _pause_on_broker_error(
@@ -1366,6 +1581,94 @@ def _pause_on_broker_error(
     if not paused:
         return outcome
     return replace(outcome, summary={**outcome.summary, "auto_paused": paused})
+
+
+def _holding_owners(
+    state: SqliteState,
+    portfolio_id: str,
+    held: Sequence[str],
+    prior: Mapping[str, Mapping[str, float]],
+) -> dict[str, str]:
+    """The strategy that owns each held ticker: the largest share of its
+    last attribution, else the strategy behind its latest fill here."""
+    owners: dict[str, str] = {}
+    for ticker in held:
+        shares: Mapping[str, float] = prior.get(ticker) or {}
+        if shares:
+            owners[ticker] = min(shares, key=lambda sid, s=shares: (-abs(s[sid]), sid))
+    rest = [t for t in held if t not in owners]
+    if rest:
+        marks = ",".join("?" for _ in rest)
+        rows = state.sql(
+            "SELECT ticker, strategy_id FROM orders WHERE portfolio_id = ? AND strategy_id IS NOT"
+            f" NULL AND status IN ('filled', 'partially_filled') AND ticker IN ({marks})"
+            " ORDER BY updated_at DESC, created_at DESC, rowid DESC",
+            [portfolio_id, *rest],
+        )
+        for r in rows:
+            owners.setdefault(r["ticker"], r["strategy_id"])
+    return owners
+
+
+def _end_retired_subscriptions(
+    run: _TickRun,
+    book: TickBook,
+    retired: Sequence[str],
+    owned: Mapping[str, str],
+    holdings: Mapping[str, float],
+) -> list[str]:
+    """Disable the book's subscriptions of retired strategies that hold
+    nothing any more (BE-18; design: exit-only until flat, then disable).
+    Audited as ``service:system``. Never raises."""
+    from stonks.accounts.scope import Scope
+    from stonks.accounts.subscriptions import SubscriptionRepository
+
+    still = {sid for t, sid in owned.items() if abs(holdings.get(t, 0.0)) > _QTY_EPSILON}
+    ended: list[str] = []
+    repo = SubscriptionRepository(run.state)
+    system = Scope.service("system")
+    for sid in retired:
+        sub_id = book.subscription_ids.get(sid)
+        if sid in still or sub_id is None:
+            continue
+        try:
+            repo.disable(system, sub_id, reason="strategy retired and its holdings are closed")
+        except Exception as exc:  # pragma: no cover - best effort
+            run.log.error("tick.retired_disable_failed", subscription_id=sub_id, error=str(exc))
+            continue
+        ended.append(sub_id)
+    return ended
+
+
+def _pause_inactive_auto(run: _TickRun, book: TickBook, outcome: BookResult) -> BookResult:
+    """Pause the book's auto subscriptions whose strategy is not active
+    (BE-01): the book already left them out, this makes it stick."""
+    if book.mode != "auto" or run.dry_run or not run.scoped:
+        return outcome
+    by_strategy: dict[str, list[str]] = {}
+    for sid in inactive_auto(book, run.active):
+        if sid in book.subscription_ids:
+            by_strategy.setdefault(sid, []).append(book.subscription_ids[sid])
+    if not by_strategy:
+        return outcome
+    paused: list[str] = []
+    for sid, ids in by_strategy.items():
+        status = run.statuses.get(sid, "missing")
+        try:
+            paused += pause_auto(
+                run.state,
+                book.portfolio_id,
+                ids,
+                strategy_not_active_reason(status),
+                tick_id=run.tick_id,
+                as_of=run.as_of,
+            )
+        except Exception as exc:  # pragma: no cover - best effort, the tick goes on
+            run.log.error("tick.auto_pause_failed", portfolio_id=book.portfolio_id, error=str(exc))
+    if not paused:
+        return outcome
+    prior = list(outcome.summary.get("auto_paused") or [])
+    return replace(outcome, summary={**outcome.summary, "auto_paused": [*prior, *paused]})
 
 
 def _record_portfolio_run(
@@ -1427,9 +1730,11 @@ def _notify_signals(run: _TickRun) -> list[NotifySignal]:
     signals = run.all_signals() if _needs_shadow_signals(run) else run.signals
     out: list[NotifySignal] = []
     for sub in run.plan.notify:
-        scores = signals.scores.get(sub.strategy_id)
-        if not scores:
+        # a strategy scored today with no picks still counts: that is the
+        # day its exits are written (BE-16)
+        if sub.strategy_id not in signals.scores:
             continue
+        scores = signals.scores[sub.strategy_id]
         picks = sorted(scores.items(), key=lambda p: p[1], reverse=True)
         out.append(
             NotifySignal(
@@ -1852,7 +2157,10 @@ def _arrival(broker: Broker, fill: Fill) -> float | None:
     """The pre-cost price a simulated fill was priced from (the close it
     filled at): its arrival price for TCA. Unknown for other brokers."""
     reference = getattr(broker, "reference_price", None)
-    return reference(fill.order_client_id) if callable(reference) else None
+    if not callable(reference):
+        return None
+    value = reference(fill.order_client_id)
+    return float(value) if isinstance(value, int | float) else None
 
 
 def _record_fill(

@@ -1,6 +1,10 @@
 """GoLiveService — the go-live gate (:mod:`stonks.production.golive`) as a
 typed view for transports. Same checks and numbers as ``stonks golive
-check``; it only reports and never changes a strategy's status."""
+check``; it only reports and never changes a strategy's status.
+
+An active strategy's evidence is the default book's P&L. Through the API
+only that book's owner and admins see those figures; anyone else gets the
+verdicts with the P&L values and the live costs hidden (BE-46)."""
 
 from __future__ import annotations
 
@@ -9,11 +13,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Role
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError
 from stonks.app.serialize import FiniteFloat
+from stonks.auth.principal import Principal
 from stonks.config import GoLivePolicy
 from stonks.production.golive import PaperSource, evaluate_golive
+from stonks.store.state import SqliteState
 
 GoLiveCheckName = Literal[
     "status",
@@ -88,13 +95,22 @@ class GoLiveReport(BaseModel):
     policy: GoLivePolicy
 
 
+#: Checks whose value is read from the paper P&L.
+PNL_CHECKS = frozenset({"max_drawdown", "max_drift", "within_mc_band", "quit_rule"})
+HIDDEN = "hidden: the default book's figures are for its owner and admins"
+
+
 class GoLiveService:
     def __init__(self, context: AppContext) -> None:
         self._ctx = context
 
-    def check(self, strategy_id: str, since: date | None = None) -> GoLiveReport:
+    def check(
+        self, strategy_id: str, since: date | None = None, *, principal: Principal | None = None
+    ) -> GoLiveReport:
         """Evaluate the strategy's paper period against ``[golive]``.
-        ``NotFoundError`` for an unknown id."""
+        ``NotFoundError`` for an unknown id. With a ``principal`` that is
+        neither an admin nor the default book's owner, the default book's
+        figures are hidden (BE-46)."""
         policy = self._ctx.settings.golive
         with self._ctx.state() as state:
             registry = self._ctx.registry_on(state)
@@ -102,6 +118,24 @@ class GoLiveService:
                 report = evaluate_golive(state, registry, strategy_id, policy, since=since)
             except KeyError:
                 raise NotFoundError(f"no strategy with id {strategy_id!r}") from None
+            hide = report.source == "portfolio" and not _sees_default_book(state, principal)
+        view = self._view(report, policy)
+        if not hide:
+            return view
+        return view.model_copy(
+            update={
+                "checks": [
+                    c.model_copy(update={"value": None, "detail": HIDDEN})
+                    if c.name in PNL_CHECKS
+                    else c
+                    for c in view.checks
+                ],
+                "costs": None,
+            }
+        )
+
+    @staticmethod
+    def _view(report: Any, policy: GoLivePolicy) -> GoLiveReport:
         return GoLiveReport(
             strategy_id=report.strategy_id,
             status=report.status,
@@ -121,6 +155,14 @@ class GoLiveService:
             costs=CostComparisonView.model_validate(report.costs) if report.costs else None,
             policy=policy.model_copy(deep=True),
         )
+
+
+def _sees_default_book(state: SqliteState, principal: Principal | None) -> bool:
+    """No principal (the CLI, a service), an admin, or the default book's owner."""
+    if principal is None or principal.role is Role.ADMIN or principal.scope.is_service:
+        return True
+    rows = state.sql("SELECT owner_id FROM portfolios WHERE id = ?", [DEFAULT_PORTFOLIO_ID])
+    return bool(rows) and rows[0]["owner_id"] == principal.scope.user_id
 
 
 def golive_service(services: Any) -> GoLiveService:

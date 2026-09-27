@@ -264,3 +264,35 @@ def test_average_cost_grows_shrinks_and_splits() -> None:
     b.rescale_cost("X", 3.0)
     assert b.average_cost("X") == pytest.approx(5.0)
     b.rescale_cost("NOPE", 3.0)
+
+
+# ---- BE-13, BE-31: closes never open, dust never leaves a short ----------------------------
+
+
+def test_be13_a_close_larger_than_the_holding_fills_only_the_holding() -> None:
+    b = _short_broker(borrow=FlatBorrow())
+    b.set_prices({"X": 10.0}, as_of=FRI)
+    b.place_order(_order("b1", side="buy", qty=5.0))
+    close = Order("s1", "X", "sell", 8.0, position_effect="close")
+    fill = b.place_order(close)
+    assert fill is not None and fill.quantity == pytest.approx(5.0)
+    assert b.fetch_portfolio().positions == {}
+    # nothing left to close: refused
+    assert b.place_order(Order("s2", "X", "sell", 1.0, position_effect="close")) is None
+
+
+def test_be13_an_open_on_the_wrong_side_is_refused() -> None:
+    b = _short_broker(borrow=FlatBorrow())
+    b.set_prices({"X": 10.0}, as_of=FRI)
+    b.place_order(_order("b1", side="buy", qty=5.0))
+    assert b.place_order(Order("s1", "X", "sell", 3.0, position_effect="open")) is None
+    assert b.fetch_portfolio().positions == {"X": 5.0}
+
+
+def test_be31_a_dust_oversell_on_margin_ends_flat() -> None:
+    b = _short_broker(cash=100_000.0, borrow=FlatBorrow())
+    b.set_prices({"X": 10.0}, as_of=FRI)
+    b.place_order(_order("b1", side="buy", qty=1000.0))
+    fill = b.place_order(_order("s1", side="sell", qty=1000.0 * (1 + 5e-10)))
+    assert fill is not None and fill.quantity == 1000.0
+    assert b.fetch_portfolio().positions == {}

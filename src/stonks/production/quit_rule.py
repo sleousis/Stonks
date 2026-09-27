@@ -63,9 +63,9 @@ CloseLoader = Callable[[Sequence[str], date, int], Mapping[str, pd.DataFrame]]
 class QuitRuleSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    quit_multiple: float = Field(1.5, ge=1.0, le=3.0)
+    quit_multiple: float = Field(default=1.5, ge=1.0, le=3.0)
     auto_demote: bool = False
-    min_eval_days: int = Field(126, ge=0)
+    min_eval_days: int = Field(default=126, ge=0)
 
 
 @dataclass(frozen=True)

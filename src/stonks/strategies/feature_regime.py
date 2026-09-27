@@ -263,10 +263,9 @@ class FeatureRegimeFilter(InnerStrategyWrapper):
         lake = self._recall_lake()
         if lake is None:
             return self._inner.decide(my_picks, portfolio, prices, as_of)
-        held = {
-            t for t, q in portfolio.positions.items() if q > 0 or (q < 0 and self.supports_short)
+        tickers = {t for _, t in my_picks} | {
+            t for t, q in portfolio.positions.items() if abs(q) > 1e-12
         }
-        tickers = {t for _, t in my_picks} | held
         off = {t for t in tickers if self.is_risk_off(t, as_of, lake)}
         picks = [(s, t) for s, t in my_picks if t not in off]
         orders = [
@@ -274,24 +273,14 @@ class FeatureRegimeFilter(InnerStrategyWrapper):
         ]
         for ticker in sorted(off):
             qty = portfolio.positions.get(ticker, 0.0)
-            if qty > 0:
+            if abs(qty) > 1e-12:  # a short is covered as a long is sold (BE-14)
+                token = "sell" if qty > 0 else "cover"
                 orders.append(
                     Order(
-                        client_id=f"{self.id}:sell:{ticker}:{iso(as_of)}",
+                        client_id=f"{self.id}:{token}:{ticker}:{iso(as_of)}",
                         ticker=ticker,
-                        side="sell",
-                        quantity=qty,
-                        order_type="market",
-                        strategy_id=self.id,
-                    )
-                )
-            elif qty < 0 and self.supports_short:  # a short in a risk-off name is covered
-                orders.append(
-                    Order(
-                        client_id=f"{self.id}:cover:{ticker}:{iso(as_of)}",
-                        ticker=ticker,
-                        side="buy",
-                        quantity=-qty,
+                        side="sell" if qty > 0 else "buy",
+                        quantity=abs(qty),
                         order_type="market",
                         strategy_id=self.id,
                         position_effect="close",

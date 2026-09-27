@@ -264,7 +264,8 @@ def test_a_risk_breach_restarts_the_paper_count(state, alice, portfolios, subs):
     pf = portfolios.create(alice, name="Book")
     sub = subs.subscribe(alice, strategy_id="s_active", portfolio_id=pf.id, mode=Mode.PAPER)
     seed_paper_days(state, sub.id, 5, portfolio_id=pf.id)
-    seed_paper_days(state, sub.id, 1, start=date(2026, 1, 6), breached=True, portfolio_id=pf.id)
+    # five weekdays from Thu 1 Jan end on Wed 7 Jan; the breach comes after
+    seed_paper_days(state, sub.id, 1, start=date(2026, 1, 8), breached=True, portfolio_id=pf.id)
     assert subs.get(alice, sub.id).paper_days_completed == 0
 
 
@@ -459,3 +460,18 @@ def test_paper_accounts_are_created_once_and_hidden_from_lists(state, alice, por
     assert ensure_paper_account(state, live) == paper
     assert paper.id not in {p.id for p in portfolios.list(alice)}
     assert owned_portfolio(state, alice, paper.id) == paper
+
+
+def test_be53_a_hidden_paper_account_cannot_be_renamed_or_paused(state, alice, portfolios):
+    from stonks.accounts.paper import ensure_paper_account
+
+    live = portfolios.create(alice, name="Live", kind="broker")
+    paper = ensure_paper_account(state, live)
+    with pytest.raises(NotFound):
+        portfolios.rename(alice, paper.id, "Mine now")
+    with pytest.raises(NotFound):
+        portfolios.set_status(alice, paper.id, "paused")
+    assert state.sql("SELECT name FROM portfolios WHERE id = ?", [paper.id])[0][0] == paper.name
+    assert not state.sql(
+        "SELECT 1 FROM audit_log WHERE target_id = ? AND action LIKE 'portfolio.%'", [paper.id]
+    )

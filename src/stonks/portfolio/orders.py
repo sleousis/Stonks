@@ -152,6 +152,12 @@ def _long_short_orders(
     bad = {t: w for t, w in target_weights.items() if not math.isfinite(w)}
     if bad:
         raise ValueError(f"targets must be finite: {bad}")
+    blind = [t for t, q in portfolio.positions.items() if q < 0 and _price(prices, t) is None]
+    if blind:
+        # an unpriced short is a liability of unknown size: counting it as 0
+        # would overstate equity and oversize every target (BE-45)
+        _log.warning("orders.unpriced_short_holdings", tickers=sorted(blind))
+        return []
     equity = portfolio.total_value(prices)
     if not equity > 0:
         return []

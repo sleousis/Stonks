@@ -12,9 +12,29 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from stonks.store.state import SqliteState
+
+if TYPE_CHECKING:
+    from stonks.config import RiskPolicy
+    from stonks.execution.borrow import BorrowSource
+    from stonks.execution.margin import MarginModel
+
+
+def short_account(policy: RiskPolicy) -> tuple[MarginModel, BorrowSource | None]:
+    """The margin model and borrow source a short book's paper account
+    trades with (BE-30): the ``margin_call`` rule's model (Reg T when that
+    model cannot short) and a ``FlatBorrow`` over the ``borrow`` settings of
+    ``borrow_check``, else of ``squeeze_guard``. ``None`` borrow: none is
+    configured, the broker keeps its default source."""
+    from stonks.execution.margin import RegTMargin
+
+    rules = policy.rules
+    model = rules.margin_call.margin.build()
+    margin = model if model.allows_short else RegTMargin()
+    settings = rules.borrow_check.borrow or rules.squeeze_guard.borrow
+    return margin, (settings.build() if settings is not None else None)
 
 
 def last_accrual(state: SqliteState, portfolio_id: str) -> date | None:

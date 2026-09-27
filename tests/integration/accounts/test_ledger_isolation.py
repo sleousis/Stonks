@@ -174,8 +174,12 @@ def test_portfolio_service_reads_one_portfolio(two_books, tmp_path):
         from stonks.app.orders import OrdersService
 
         orders = OrdersService(ctx)
-        assert [o.ticker for o in orders.orders(limit=10, offset=0).items] == ["UP.US"]
-        assert [f.ticker for f in orders.fills(limit=10, offset=0).items] == ["UP.US"]
+        assert [
+            o.ticker for o in orders.orders(limit=10, offset=0, portfolio_id="pf_default").items
+        ] == ["UP.US"]
+        assert [
+            f.ticker for f in orders.fills(limit=10, offset=0, portfolio_id="pf_default").items
+        ] == ["UP.US"]
         theirs_orders = orders.orders(limit=10, offset=0, portfolio_id=other).items
         assert {o.ticker for o in theirs_orders} == {"FLAT.US", "DOWN.US"}
         assert orders.fills(limit=10, offset=0, portfolio_id=other).total == 1

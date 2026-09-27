@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Response
 
-from stonks.api.deps import PageDep, PrincipalDep, ServicesDep, needs
+from stonks.api.deps import OptionalPrincipalDep, PageDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.jobs import Job
@@ -35,9 +35,11 @@ def list_ticks(
 
 
 @router.get("/jobs/{job_id}/result", response_model=TickResultView, operation_id="getTickResult")
-def get_tick_result(job_id: str, services: ServicesDep) -> TickResultView:
+def get_tick_result(
+    job_id: str, services: ServicesDep, principal: OptionalPrincipalDep
+) -> TickResultView:
     """The result of a succeeded tick job (409 until it has succeeded)."""
-    return services.jobs.typed_result(job_id, TICK_JOB, TickResultView)
+    return services.jobs.typed_result(job_id, TICK_JOB, TickResultView, principal)
 
 
 @router.get("/{tick_id}", response_model=TickRunWithOrders, operation_id="getTick")

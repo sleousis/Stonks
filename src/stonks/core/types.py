@@ -117,24 +117,13 @@ class Portfolio:
         mark forward, skip a risk rule, or refuse to trade."""
         return sorted(t for t in self.positions if not _finite(prices.get(t)))
 
-    def total_value(self, prices: Mapping[str, float], *, strict: bool = False) -> float:
+    def total_value(self, prices: Mapping[str, float]) -> float:
         """Cash plus every position marked at ``prices``. A held ticker with
-        no price counts as 0 unless ``strict``, which raises
-        :class:`MissingPriceError` naming them (see :meth:`unmarked`)."""
-        if strict:
-            missing = self.unmarked(prices)
-            if missing:
-                raise MissingPriceError(missing)
+        no price counts as 0: callers that must not read a holding as worth
+        nothing check :meth:`unmarked` first (the risk path carries the last
+        close, BE-45)."""
         mark = sum(qty * prices.get(t, 0.0) for t, qty in self.positions.items())
         return self.cash + mark
-
-
-class MissingPriceError(KeyError):
-    """Held tickers have no price to mark them at."""
-
-    def __init__(self, tickers: list[str]) -> None:
-        super().__init__(f"no price for held ticker(s): {', '.join(tickers)}")
-        self.tickers = tickers
 
 
 def _mark(prices: Mapping[str, float], ticker: str) -> float:

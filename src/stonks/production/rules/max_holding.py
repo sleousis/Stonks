@@ -1,5 +1,6 @@
-"""Maximum holding time (BL-27; Ghosh & Donadio): a long position held for
-``max_holding_bars`` bars or more since its entry date is sold in full.
+"""Maximum holding time (BL-27; Ghosh & Donadio): a position held for
+``max_holding_bars`` bars or more since its entry date is closed in full
+(a long is sold, a short is covered, BE-04).
 This guards against zombie positions, e.g. ones left by a retired
 strategy that no longer proposes orders for them.
 
@@ -11,7 +12,8 @@ strategies already proposed to the whole position, gets the client id
 book's ``portfolio_id`` for a non-default portfolio) and no
 strategy id, and takes the tick id the other orders share. Buys of an
 expiring ticker are dropped in the same tick, so the tick doesn't sell and
-buy the same name. Shorts are not expired (no buy-to-cover here).
+buy the same name. A short is covered the same way (client id side
+``cover``), and new short sales of it are dropped.
 
 Runs first, so the later rules see the freed exposure. Off by default.
 """
@@ -20,7 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
@@ -65,7 +67,7 @@ class MaxHolding(RiskRule):
         for ticker, qty in sorted(ctx.portfolio.positions.items()):
             entry = ctx.entry_dates.get(ticker)
             frame = history(ctx, ticker)
-            if qty <= EPS or entry is None or frame is None:
+            if abs(qty) <= EPS or entry is None or frame is None:
                 continue
             held_bars = int((frame.index > pd.Timestamp(entry)).sum())
             if held_bars >= limit:
@@ -76,14 +78,18 @@ class MaxHolding(RiskRule):
         kept: list[Order] = []
         adjustments: list[RiskAdjustment] = []
         for order in orders:
-            if order.side == "buy" and order.ticker in expired:
-                _, bars, _ = expired[order.ticker]
+            held = expired.get(order.ticker)
+            # an order that grows the expiring position (a buy of a long, a
+            # sell of a short) is dropped: the tick closes it instead
+            grows = held is not None and (order.side == "buy") == (held[0] > 0)
+            if grows:
+                assert held is not None
                 adjustments.append(
                     adjustment(
                         order,
                         self.name,
                         0.0,
-                        f"position held {bars} bars >= max {limit}; being closed",
+                        f"position held {held[1]} bars >= max {limit}; being closed",
                     )
                 )
             else:
@@ -91,8 +97,9 @@ class MaxHolding(RiskRule):
         tick_ids = {o.tick_id for o in orders}
         tick_id = tick_ids.pop() if len(tick_ids) == 1 else None
         for ticker, (qty, bars, last_bar) in expired.items():
-            selling = sum(o.quantity for o in kept if o.side == "sell" and o.ticker == ticker)
-            remaining = qty - selling
+            side: Literal["buy", "sell"] = "sell" if qty > 0 else "buy"
+            closing = sum(o.quantity for o in kept if o.side == side and o.ticker == ticker)
+            remaining = abs(qty) - closing
             if remaining <= EPS:
                 continue
             forced = Order(
@@ -100,15 +107,17 @@ class MaxHolding(RiskRule):
                     as_of=ctx.as_of or last_bar,
                     strategy_id=CLIENT_ID_SOURCE,
                     ticker=ticker,
-                    side="sell",
+                    side="sell" if qty > 0 else "cover",
                     portfolio_id=ctx.portfolio_id,
                 ),
                 ticker=ticker,
-                side="sell",
+                side=side,
                 quantity=remaining,
                 tick_id=tick_id,
+                position_effect="close",
             )
             kept.append(forced)
-            reason = f"position held {bars} bars >= max {limit}; forced sell"
+            what = "forced sell" if qty > 0 else "forced cover"
+            reason = f"position held {bars} bars >= max {limit}; {what}"
             adjustments.append(adjustment(forced, self.name, remaining, reason, original=0.0))
         return kept, adjustments

@@ -11681,6 +11681,7 @@
           },
           "weight": {
             "default": 1.0,
+            "maximum": 100.0,
             "minimum": 0.0,
             "title": "Weight",
             "type": "number"
@@ -27093,7 +27094,7 @@
     },
     "/api/strategies/{strategy_id}/golive": {
       "get": {
-        "description": "Every go-live check of the strategy's paper period against\n``[golive]`` (same as ``stonks golive check``). Reports only; promotion\nstays a human action.",
+        "description": "Every go-live check of the strategy's paper period against\n``[golive]`` (same as ``stonks golive check``). Reports only; promotion\nstays a human action. An active strategy's P&L figures come from the\ndefault book: only its owner and admins see them.",
         "operationId": "getGoLiveReport",
         "parameters": [
           {

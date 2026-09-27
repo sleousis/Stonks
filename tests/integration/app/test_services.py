@@ -259,13 +259,20 @@ def test_coverage(services):
 
 
 def test_orders_and_fills_filters(services, seeded):
-    orders = services.orders.orders(tick_id=seeded["tick_id"], limit=10, offset=0)
+    orders = services.orders.orders(
+        tick_id=seeded["tick_id"], limit=10, offset=0, portfolio_id="pf_default"
+    )
     assert orders.total == 1
     order = orders.items[0]
     assert order.ticker == "UP.US"
     assert order.status == "filled"
-    assert services.orders.orders(ticker="NOPE", limit=10, offset=0).total == 0
-    fills = services.orders.fills(tick_id=seeded["tick_id"], limit=10, offset=0)
+    assert (
+        services.orders.orders(ticker="NOPE", limit=10, offset=0, portfolio_id="pf_default").total
+        == 0
+    )
+    fills = services.orders.fills(
+        tick_id=seeded["tick_id"], limit=10, offset=0, portfolio_id="pf_default"
+    )
     assert fills.total == 1
     assert fills.items[0].order_client_id == order.client_id
 

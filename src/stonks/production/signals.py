@@ -20,7 +20,10 @@ rank, model weights, a one-line ``text``). A failing ``explain`` keeps the
 default and records ``explain_error``.
 
 The phase is keyed by ``(strategy_id, as_of)``: a strategy already recorded
-for the day is skipped, so a re-run writes nothing twice.
+for the day is skipped, so a re-run writes nothing twice. A scored day with
+nothing to record (no picks, no model book holding) still writes one marker
+row (ticker ``""``, no score), so the next day diffs against that empty day
+and an exit is signalled once, not every day (BE-17).
 """
 
 from __future__ import annotations
@@ -41,6 +44,9 @@ _log = get_logger("stonks.production.signals")
 EventKind = Literal["entry", "exit", "increase", "decrease", "risk"]
 
 _QTY_EPSILON = 1e-9
+
+#: ``signals.ticker`` of the marker row of a scored day with no picks.
+NO_PICKS = ""
 
 
 @dataclass(frozen=True)
@@ -203,7 +209,8 @@ def _record_one(
         tickers = list(dict.fromkeys([*scores, *today]))
     else:
         prev = state.sql(
-            "SELECT ticker FROM signals WHERE strategy_id = ? AND score IS NOT NULL AND as_of ="
+            "SELECT ticker FROM signals WHERE strategy_id = ? AND score IS NOT NULL"
+            " AND ticker != '' AND as_of ="
             " (SELECT MAX(as_of) FROM signals WHERE strategy_id = ? AND as_of < ?)",
             [sid, sid, day],
         )
@@ -214,6 +221,13 @@ def _record_one(
         ]
         changes = entries + exits
         tickers = list(scores)
+    if not tickers:
+        # the marker of a scored day with no picks (BE-17)
+        state.execute(
+            "INSERT OR IGNORE INTO signals (as_of, strategy_id, ticker, tick_id, score, rank,"
+            " model_weight) VALUES (?, ?, ?, ?, NULL, NULL, NULL)",
+            [day, sid, NO_PICKS, tick_id],
+        )
     for t in tickers:
         state.execute(
             "INSERT OR IGNORE INTO signals (as_of, strategy_id, ticker, tick_id, score, rank,"

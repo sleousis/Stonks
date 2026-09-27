@@ -39,6 +39,7 @@ with no decision interval set, which reads like a daily decision.
 from __future__ import annotations
 
 import copy
+import dataclasses
 import math
 import weakref
 from collections.abc import Iterator, Mapping, Sequence
@@ -64,12 +65,15 @@ __all__ = [
     "BarCache",
     "LakeBarCaches",
     "as_datetime",
+    "close_all",
+    "closes_only",
     "decision_interval",
     "get_last_n_bars",
     "iso",
     "long_only_decide",
     "memo_scope",
     "sell_all_longs",
+    "split_effects",
     "visible_cutoff",
 ]
 
@@ -486,3 +490,52 @@ def sell_all_longs(strategy_id: str, portfolio: Portfolio, as_of: Any) -> list[O
         for ticker, qty in portfolio.positions.items()
         if qty > 0
     ]
+
+
+def close_all(strategy_id: str, portfolio: Portfolio, as_of: Any) -> list[Order]:
+    """A market close of every position: longs sold, shorts covered (a
+    wrapper's risk-off exit, BE-14)."""
+    return [
+        Order(
+            client_id=f"{strategy_id}:{'sell' if qty > 0 else 'cover'}:{ticker}:{iso(as_of)}",
+            ticker=ticker,
+            side="sell" if qty > 0 else "buy",
+            quantity=abs(qty),
+            order_type="market",
+            strategy_id=strategy_id,
+            position_effect="close",
+        )
+        for ticker, qty in portfolio.positions.items()
+        if abs(qty) > 1e-12
+    ]
+
+
+def split_effects(orders: Sequence[Order], portfolio: Portfolio) -> list[Order]:
+    """``orders`` split at zero against the book, each leg with its position
+    effect: the part that reduces a position is ``close``, the rest
+    ``open``. An order with an effect already passes as it is."""
+    held = dict(portfolio.positions)
+    out: list[Order] = []
+    for order in orders:
+        if order.position_effect is not None:
+            out.append(order)
+            continue
+        qty = held.get(order.ticker, 0.0)
+        closable = max(-qty, 0.0) if order.side == "buy" else max(qty, 0.0)
+        close = min(order.quantity, closable)
+        rest = order.quantity - close
+        if close > 1e-12:
+            out.append(dataclasses.replace(order, quantity=close, position_effect="close"))
+        if rest > 1e-12:
+            cid = f"{order.client_id}:open" if close > 1e-12 else order.client_id
+            out.append(
+                dataclasses.replace(order, client_id=cid, quantity=rest, position_effect="open")
+            )
+        held[order.ticker] = qty + (order.quantity if order.side == "buy" else -order.quantity)
+    return out
+
+
+def closes_only(orders: Sequence[Order], portfolio: Portfolio) -> list[Order]:
+    """The closing legs of ``orders`` (a risk-off wrapper blocks new risk,
+    long or short, and lets exits through)."""
+    return [o for o in split_effects(orders, portfolio) if o.position_effect == "close"]

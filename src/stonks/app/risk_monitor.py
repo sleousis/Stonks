@@ -84,7 +84,8 @@ class RiskSummaryView(BaseModel):
 class RiskMonitorService:
     def __init__(self, context: AppContext) -> None:
         self._context = context
-        self._settings = RiskMonitorSettings()
+        # ``[production.risk_monitor]``, not the defaults (BE-51)
+        self._settings = context.settings.production.risk_monitor
 
     def latest(self, portfolio_id: str) -> RiskSummaryView:
         """The portfolio and each strategy sleeve on the latest day."""
