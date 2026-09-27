@@ -157,9 +157,7 @@ def change_stage(
                 created,
             ],
         )
-        state.execute(
-            "UPDATE portfolios SET live_stage = ? WHERE id = ?", [to_stage, portfolio_id]
-        )
+        state.execute("UPDATE portfolios SET live_stage = ? WHERE id = ?", [to_stage, portfolio_id])
         AuditLog(state).record(
             actor,
             f"live.stage_{direction}d",

@@ -62,9 +62,7 @@ def test_a_promotion_needs_a_passing_report(state):
     with pytest.raises(StageError, match="gate"):
         change_stage(state, PF, "broker_paper", actor="u", reason="r", gate_report=None)
     with pytest.raises(StageError, match="did not pass"):
-        change_stage(
-            state, PF, "broker_paper", actor="u", reason="r", gate_report=_report(False)
-        )
+        change_stage(state, PF, "broker_paper", actor="u", reason="r", gate_report=_report(False))
     with pytest.raises(StageError, match="another stage"):
         change_stage(
             state, PF, "broker_paper", actor="u", reason="r",
@@ -83,9 +81,7 @@ def test_a_promotion_never_skips_a_stage(state):
 
 def test_a_demotion_goes_down_any_number_of_steps_without_a_report(state):
     for target in ("broker_paper", "live_small"):
-        change_stage(
-            state, PF, target, actor="u", reason="up", gate_report=_report(target=target)
-        )
+        change_stage(state, PF, target, actor="u", reason="up", gate_report=_report(target=target))
     change = change_stage(state, PF, "sim_paper", actor="u", reason="drift twice")
     assert (change.direction, change.gate_report) == ("demote", None)
     assert get_stage(state, PF) == "sim_paper"
