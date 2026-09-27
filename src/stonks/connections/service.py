@@ -37,7 +37,7 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any
+from typing import Any, Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
@@ -830,11 +830,15 @@ class ConnectionService:
 
     # ---- trading (auto mode, S6) -----------------------------------------------------------
 
-    def open_trader(self, scope: Scope, portfolio_id: str) -> Any:
+    def open_trader(
+        self, scope: Scope, portfolio_id: str, *, session: Literal["tick", "api"] = "tick"
+    ) -> Any:
         """The ``Broker`` placing orders in the account ``portfolio_id``
         mirrors, through its connection's trading adapter. Refused when the
         portfolio isn't linked, the provider is disabled or can't trade.
-        Provider errors come back redacted."""
+        Provider errors come back redacted. ``session`` names the calling
+        process, so a provider with one session per process (IBKR's client
+        ids) opens the right one: ``api`` for the API (roadmap 19.17)."""
         from stonks.connections.base import Capability
 
         portfolio = owned_portfolio(self._state, scope, portfolio_id)
@@ -847,7 +851,9 @@ class ConnectionService:
         try:
             # the trader runs in the caller's thread, so it may use the state
             # DB (the IBKR contract cache and orderRef lookup, roadmap 19.3)
-            context = self._context(cls, record.id, extra={"state": self._state})
+            context = self._context(
+                cls, record.id, extra={"state": self._state, "session": session}
+            )
             conn = cls.open(credentials, context)
             return conn.trader(portfolio.external_account_id)
         except ProviderError as exc:

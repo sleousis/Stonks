@@ -28,6 +28,7 @@ from stonks.execution.brokers.simulated import SimulatedCosts
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.config import Settings
     from stonks.execution.brokers.ibkr.broker import IbkrBroker
+    from stonks.execution.brokers.ibkr.factory import Role as IbkrRole
 
 __all__ = [
     "AlpacaBroker",
@@ -75,6 +76,7 @@ def make_broker(
     portfolio: Portfolio,
     *,
     kind: BrokerKind | None = None,
+    ibkr_role: IbkrRole = "tick",
 ) -> SimulatedBroker | AlpacaBroker | IbkrBroker:
     """Build the broker named by ``kind`` (default ``settings.brokers.kind``).
 
@@ -85,7 +87,10 @@ def make_broker(
     ignores ``portfolio``: the broker account is the source of truth, read
     it with ``fetch_portfolio()``. ``ibkr`` builds the Interactive Brokers
     adapter for the default portfolio's gateway (``[brokers.ibkr]``); it
-    connects on first use and checks the account then.
+    connects on first use and checks the account then. ``ibkr_role``
+    picks its API client id: ``tick`` for the tick, ``api`` for the API
+    process (the kill switch and manual orders), so both can hold a session
+    at once (roadmap 19.17).
     """
     kind = kind or settings.brokers.kind
     if kind == "simulated":
@@ -99,7 +104,10 @@ def make_broker(
         state = SqliteState(settings.state.path)
         try:
             broker = connect_ibkr(
-                settings.brokers.ibkr, portfolio_id=DEFAULT_PORTFOLIO_ID, role="tick", state=state
+                settings.brokers.ibkr,
+                portfolio_id=DEFAULT_PORTFOLIO_ID,
+                role=ibkr_role,
+                state=state,
             )
         except Exception:
             state.close()

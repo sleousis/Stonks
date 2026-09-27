@@ -344,9 +344,10 @@ class IbkrConnection(BrokerConnection):
     # ---- trading --------------------------------------------------------------------
 
     def trader(self, account_id: str) -> IbkrBroker:
-        """An ``IbkrBroker`` on the tick's client id, trading ``account_id``
-        only. The contract cache and ``orderRef`` lookup use the state DB
-        the caller passes as ``extra["state"]`` (the tick's)."""
+        """An ``IbkrBroker`` trading ``account_id`` only, on the tick's
+        client id, or the API's when the caller passes ``extra["session"]
+        = "api"`` (roadmap 19.17). The contract cache and ``orderRef``
+        lookup use the state DB the caller passes as ``extra["state"]``."""
         self.require(Capability.TRADE)
         if self.gw.account_id is not None and account_id != self.gw.account_id:
             raise ProviderError(
@@ -356,7 +357,7 @@ class IbkrConnection(BrokerConnection):
         broker = connect_ibkr(
             self._config,
             gateway=self.gateway,
-            role="tick",
+            role="api" if extra.get("session") == "api" else "tick",
             state=extra.get("state"),
             client_factory=self._factory,
             borrow_fees=extra.get("borrow_fees"),

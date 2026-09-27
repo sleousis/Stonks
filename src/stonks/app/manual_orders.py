@@ -21,7 +21,8 @@ simulated fills on the Stonks ledger.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any, Literal
 
@@ -38,6 +39,7 @@ from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.core.protocols import Broker
+from stonks.execution.brokers.base import close_broker
 from stonks.logging import get_logger
 from stonks.production.manual import (
     CancelResult,
@@ -180,7 +182,7 @@ class ManualOrdersService:
             self._authorize(who, live, confirm_live)
             book = self._book(state, account)
             tick = build_tick_settings(self._ctx.settings, [])
-            with self._ctx.lake() as lake:
+            with self._ctx.lake() as lake, _closing(book.broker):
                 try:
                     result = change_manual_order(
                         state,
@@ -223,6 +225,8 @@ class ManualOrdersService:
                 raise NotFoundError(str(exc)) from None
             except ManualOrderRefused as exc:
                 raise _conflict(exc) from None
+            finally:
+                close_broker(broker)
         return OrderCancelResult(
             client_id=result.client_id, status=result.status, cancelled=result.cancelled
         )
@@ -254,7 +258,7 @@ class ManualOrdersService:
                 client_key=body.client_id,
                 allow_reduce=body.allow_reduce,
             )
-            with self._ctx.lake() as lake:
+            with self._ctx.lake() as lake, _closing(book.broker):
                 try:
                     result = place_manual_order(
                         state, lake, order, book, tick, preview=preview, now=self._clock()
@@ -351,7 +355,7 @@ class ManualOrdersService:
         from stonks.core.types import Portfolio
         from stonks.execution.brokers import make_broker
 
-        return make_broker(settings, Portfolio(cash=0.0))
+        return make_broker(settings, Portfolio(cash=0.0), ibkr_role="api")
 
     def _view(
         self,
@@ -386,6 +390,16 @@ class ManualOrdersService:
         )
 
 
+@contextmanager
+def _closing(broker: object | None) -> Iterator[None]:
+    """Close a broker built for this request when it is done, so the next
+    request can open the API's client id again (roadmap 19.17)."""
+    try:
+        yield
+    finally:
+        close_broker(broker)
+
+
 def _connection_trader(context: AppContext, account: AccountPortfolio) -> Broker:
     """The linked connection's trading adapter, opened as the scheduler
     does for auto books (the owner check was done by the caller)."""
@@ -395,7 +409,7 @@ def _connection_trader(context: AppContext, account: AccountPortfolio) -> Broker
     with context.state() as state:
         service = ConnectionService(state, ConnectionsConfig.load())
         try:
-            return service.open_trader(Scope.service("manual_orders"), account.id)
+            return service.open_trader(Scope.service("manual_orders"), account.id, session="api")
         except Exception as exc:
             raise ConflictError(
                 f"the broker of portfolio {account.id} cannot trade: {exc}"

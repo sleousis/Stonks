@@ -178,6 +178,42 @@ def test_real_money_needs_a_fresh_second_factor(app, client, people, settings, b
     assert cancelled.status_code == 200 and cancelled.json()["cancelled"] is True
 
 
+class ClosingBroker(WorkingBroker):
+    """Counts closes: an IBKR broker holds the API's client id until closed."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.closes = 0
+
+    def close(self) -> None:
+        self.closes += 1
+
+
+def test_each_request_closes_the_broker_it_opened(app, client, people, settings, brokers):
+    """Roadmap 19.17: the next request can open the API's client id again."""
+    alice = people["alice"]
+    pid = _book(settings, alice["id"], name="Live", kind="broker")
+    broker = brokers[pid] = ClosingBroker()
+    allow_step_up(app)
+    body = _body(pid, order_type="limit", limit_price=95.0)
+    client.post("/api/orders/manual/preview", json=body, headers=alice["headers"])
+    assert broker.closes == 1
+    out = client.post("/api/orders/manual", json=body, headers=alice["headers"]).json()
+    assert broker.closes == 2
+    changed = client.post(
+        f"/api/orders/{out['client_id']}/change",
+        json={"portfolio_id": pid, "quantity": 3, "reason": "smaller"},
+        headers=alice["headers"],
+    ).json()
+    assert broker.closes == 3
+    client.post(
+        f"/api/orders/{changed['client_id']}/cancel",
+        json={"portfolio_id": pid, "reason": "done"},
+        headers=alice["headers"],
+    )
+    assert broker.closes == 4
+
+
 def test_cancel_of_a_filled_order_is_a_conflict(client, people, settings):
     alice = people["alice"]
     pid = _book(settings, alice["id"])

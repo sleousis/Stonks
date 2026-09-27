@@ -168,7 +168,8 @@ BrokerLookup = Callable[[str], object | None]
 
 def settings_brokers(context: AppContext) -> BrokerLookup:
     """Today only the default portfolio trades at an external broker
-    (``[brokers].kind``), built the way the tick builds it."""
+    (``[brokers].kind``). At IBKR it uses the API's own client id, so it
+    connects while a tick holds the tick's (roadmap 19.17)."""
 
     def lookup(portfolio_id: str) -> object | None:
         from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
@@ -178,7 +179,7 @@ def settings_brokers(context: AppContext) -> BrokerLookup:
         settings = context.settings
         if portfolio_id != DEFAULT_PORTFOLIO_ID or settings.brokers.kind == "simulated":
             return None
-        return make_broker(settings, Portfolio(cash=0.0))
+        return make_broker(settings, Portfolio(cash=0.0), ibkr_role="api")
 
     return lookup
 
@@ -339,20 +340,29 @@ class HaltService:
         covers (only opening orders for a reduce-only ``buys`` halt: buys and
         short sales, never covers, BE-12). Runs on every engage, so pressing
         again retries a cancel that failed. Never raises."""
+        from stonks.execution.brokers.base import close_broker
         from stonks.execution.cancel import cancel_working_orders
 
         reduce_only = halt.halt == "buys"
-        for portfolio_id in _covered_portfolios(state, halt):
+        covered = _covered_portfolios(state, halt)
+        for portfolio_id in covered:
+            broker: object | None = None
             try:
                 broker = self._brokers(portfolio_id)
                 if broker is None:
                     continue
                 summary = cancel_working_orders(
-                    broker, state, portfolio_id=portfolio_id, openings_only=reduce_only
+                    broker,
+                    state,
+                    portfolio_id=portfolio_id,
+                    openings_only=reduce_only,
+                    global_fallback=_may_cancel_all(halt, covered, broker),
                 )
             except Exception as exc:
                 _log.error("kill_switch.cancel_failed", portfolio_id=portfolio_id, error=str(exc))
                 continue
+            finally:
+                close_broker(broker)
             if summary.cancelled or summary.failed:
                 AuditLog(state).record(
                     scope.actor,
@@ -424,6 +434,20 @@ class HaltService:
         if halt is None or not self._visible(state, scope, halt):
             raise NotFoundError(f"halt {halt_id} not found")
         return halt
+
+
+def _may_cancel_all(halt: Halt, covered: list[str], broker: object) -> bool:
+    """Whether the kill switch may fall back to cancelling every order at
+    the broker (IBKR's ``reqGlobalCancel``) when single cancels fail, say
+    because the running tick owns the orders (roadmap 19.17). Only a
+    stop-all halt, and only when it covers every portfolio the broker's
+    gateway serves: a global halt, or one naming all of them."""
+    if halt.halt != "all":
+        return False
+    if halt.scope == "global":
+        return True
+    served = tuple(getattr(broker, "portfolios", ()) or ())
+    return bool(served) and set(served) <= set(covered)
 
 
 def _covered_portfolios(state: SqliteState, halt: Halt) -> list[str]:
