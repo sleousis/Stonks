@@ -156,3 +156,34 @@ def test_closing_sells_never_need_a_locate():
     )
     b.place_order(close)
     assert len(gw.sent) == 1
+
+
+# ---- the broker's own borrow source for the tick (roadmap 19.14) --------------------
+
+
+def test_a_margin_broker_offers_its_locate_with_the_lake_fees():
+    from stonks.execution.brokers.base import BorrowLocator
+
+    b, gw = broker(account_type="margin", allow_short=True)
+    assert isinstance(b, BorrowLocator)
+    gw.shortable_data[AAPL.contract.con_id] = IbShortability(AAPL.contract.con_id, 2.0, 500.0)
+    source = b.borrow_source(lake_fees(AAPL_US=BorrowQuote("hard", 0.12)))
+    assert isinstance(source, IbkrBorrowSource)
+    assert source.quote("AAPL.US", TODAY) == BorrowQuote("hard", 0.12, 500.0)
+    # the broker's own locate before a short sale uses the same source
+    assert b.borrow is source
+
+
+def test_the_lake_fees_fill_in_a_locate_built_without_them():
+    b, gw = broker(account_type="margin", allow_short=True)
+    b.borrow = IbkrBorrowSource(b)
+    gw.shortable_data[AAPL.contract.con_id] = IbShortability(AAPL.contract.con_id, 2.0, 500.0)
+    source = b.borrow_source(lake_fees(AAPL_US=BorrowQuote("hard", 0.12)))
+    assert source is b.borrow
+    assert source is not None
+    assert source.quote("AAPL.US", TODAY) == BorrowQuote("hard", 0.12, 500.0)
+
+
+def test_a_cash_broker_offers_no_locate():
+    b, _ = broker()
+    assert b.borrow_source(lake_fees()) is None

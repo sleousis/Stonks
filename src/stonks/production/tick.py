@@ -129,7 +129,12 @@ from stonks.production.corporate_actions import (
     working_orders,
 )
 from stonks.production.decay import DecaySettings
-from stonks.production.financing import last_accrual, record_accrual, short_account
+from stonks.production.financing import (
+    broker_borrow_source,
+    last_accrual,
+    record_accrual,
+    short_account,
+)
 from stonks.production.halts import active_halts
 from stonks.production.hooks import (
     GateContext,
@@ -1252,6 +1257,13 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             base,
             live=_live_context(run, book, broker, sorted(live_tickers), external_holdings),
         )
+        if book.spec.allow_short:
+            # 19.14: a short book at a real broker reads borrow from the
+            # broker (IBKR's locate), with the lake's borrow_rates for the
+            # fee. A broker without a locate keeps the settings' source.
+            located = broker_borrow_source(broker, lake)
+            if located is not None:
+                risk_context = replace(risk_context, borrow=located)
     book_input = BookInput(
         portfolio=portfolio,
         construction=construction,

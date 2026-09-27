@@ -198,6 +198,24 @@ def ensure_window(ctx: RunContext) -> tuple[date, date]:
     return ctx.fire.as_of - timedelta(days=days), ctx.fire.as_of
 
 
+def no_gateways() -> JobOutcome:
+    """The outcome of a job that needs an IB Gateway while none is set."""
+    return JobOutcome("skipped", {"reason": "no_gateways"})
+
+
+def borrow_markets(ctx: RunContext) -> list[str] | None:
+    """The markets the ``ingest_borrow`` job pulls (``params.markets``, else
+    ``[sources.ibkr_borrow] markets``), or ``None`` while no IB Gateway is
+    configured: only a book at IBKR reads borrow rates (roadmap 19.14)."""
+    from stonks.ingest.sources.ibkr_borrow import resolve_markets
+
+    if not ctx.settings.brokers.ibkr.gateways:
+        return None
+    raw = ctx.params.get("markets")
+    wanted = [raw] if isinstance(raw, str) else list(raw or [])
+    return resolve_markets(wanted, ctx.settings.sources.ibkr_borrow.markets)
+
+
 def universes_outcome(results: Mapping[str, Mapping[str, Any]]) -> JobOutcome:
     """The ``universes_refresh`` outcome from each universe's step results
     (``refresh`` / ``ensure`` statuses): failed when any step failed."""

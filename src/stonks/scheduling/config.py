@@ -99,7 +99,8 @@ def default_jobs() -> list[JobConfig]:
     jobs (``broker_health`` every 5 minutes, ``ibkr_reauth_reminder`` on
     Sunday at 18:00 New York time, and the reconciliation checks
     ``live_sod_check`` an hour before the open and ``live_eod_check`` 15
-    minutes after the close) skip while no gateway is configured.
+    minutes after the close, and ``ingest_borrow`` 35 minutes after the
+    close) skip while no gateway is configured.
     ``model_retrain`` refits the strategies that learn from data every
     Saturday into candidate versions, and skips when there are none.
     ``live_submit`` (open minus 20 minutes) sends approved order tickets and
@@ -129,6 +130,13 @@ def default_jobs() -> list[JobConfig]:
             action="ingest_prices",
             trigger=SessionTriggerConfig(offset_minutes=30),
             deadline_minutes=60,
+        ),
+        # IBKR's short stock files into borrow_rates, the fee a short book
+        # at IBKR pays (roadmap 19.14). Skips while no gateway is set.
+        JobConfig(
+            name="ingest_borrow",
+            action="ingest_borrow",
+            trigger=SessionTriggerConfig(offset_minutes=35),
         ),
         # Price alerts on the closes the ingest just stored (roadmap 20.2).
         JobConfig(

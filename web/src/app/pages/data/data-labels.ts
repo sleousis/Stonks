@@ -26,6 +26,7 @@ export const KIND_LABELS: Readonly<Record<string, string>> = {
   tvl: 'DeFi value locked',
   exchanges: 'Exchange lists',
   aggregate: 'Combined bars',
+  borrow: 'Borrow rates',
 };
 
 /** "Daily prices" for `prices`; an unknown kind is humanized. */

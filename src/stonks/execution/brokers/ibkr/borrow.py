@@ -60,7 +60,7 @@ class IbkrBorrowSource(BorrowSource):
         general_fee_rate: float = 0.005,
     ) -> None:
         self._broker = broker
-        self._fees = fees
+        self.fees = fees
         self.general_fee_rate = general_fee_rate
         #: (day, ticker) -> (status, shares) or None for "no answer"
         self._live: dict[tuple[date, str], tuple[BorrowStatus, float | None] | None] = {}
@@ -68,7 +68,7 @@ class IbkrBorrowSource(BorrowSource):
     def quote(
         self, ticker: str, day: date, asset_class: AssetClass = "equity"
     ) -> BorrowQuote | None:
-        fee_quote = self._fees.quote(ticker, day, asset_class) if self._fees is not None else None
+        fee_quote = self.fees.quote(ticker, day, asset_class) if self.fees is not None else None
         if day != today(self._broker.clock):
             return fee_quote
         live = self._live_answer(ticker, day)

@@ -69,6 +69,19 @@ class ShortStockFileError(DataSourceError):
     """The file is not a short stock file we can read."""
 
 
+def resolve_markets(markets: Iterable[str] | None, default: Iterable[str]) -> list[str]:
+    """The markets to pull: ``markets`` when given, else ``default``, in
+    lower case. Raises ``ValueError`` for an unknown market or none."""
+    chosen = [m.strip().lower() for m in (markets or default) if m.strip()]
+    unknown = [m for m in chosen if m not in SHORT_STOCK_MARKETS]
+    if unknown or not chosen:
+        raise ValueError(
+            f"unknown short stock market {', '.join(unknown) or '(none)'}: "
+            f"choose from {', '.join(sorted(SHORT_STOCK_MARKETS))}"
+        )
+    return chosen
+
+
 def parse_short_stock_file(
     text: str,
     market: str,

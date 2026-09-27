@@ -291,7 +291,13 @@ class TicketService:
         from stonks.production.submit import submit_tickets
 
         with self._ctx.state() as state:
-            result = submit_tickets(state, submit_broker_opener(self._ctx.settings, state))
+            settings = self._ctx.settings
+            result = submit_tickets(
+                state,
+                submit_broker_opener(settings, state),
+                risk=settings.production.risk,
+                live=settings.production.live,
+            )
         return TicketSubmitResult(
             sent=result.sent,
             failed=result.failed,

@@ -757,7 +757,7 @@ flowchart LR
 - **Submit window.** `[production.live.submit]`: `calendar` (XNYS), `window_minutes` (20) and `deadline_minutes` (2). A ticket may go out from the next open minus the window until the open minus the deadline, then it expires. The `live_submit` job fires at open minus 20 minutes on every backend, reads the real time (never the fire time) and is never caught up late.
 - **Submit steps.** Per portfolio: open the broker, `startup_reconcile` then `require_reconciled`, then the halts in force now (a halt of new orders holds every ticket, a halt of buys holds the opening ones). Each order row is committed `pending`, sent, then `submitted`. A rejection fails the ticket. A submit with no answer is `unknown` until reconciliation settles it.
 - **The tick.** An external book now runs `startup_reconcile` before it decides and noops (reason `orders_unreconciled`) while an order is `unknown`. It builds `RiskContext.live` with `build_live_context` (quotes for the held and signalled tickers, since the orders do not exist yet). The tick's order rows write the fine `state` with the status, a submit with no answer turns `unknown`, and a sent order turns `submitted`.
-- **Not yet.** The pre-open gap check at submit (19.5), MCP and API tokens approving (never: step-up only), a CLI for tickets (the console approves, `stonks schedule run-now live_submit` sends), and a menu badge with the waiting count (the push and the Approvals page carry it).
+- **Not yet.** The pre-open gap check at submit (built in 19.14, section 16), the stage (`broker_paper` or `live`) in the live context (19.9: it is `live` for now), MCP and API tokens approving (never: step-up only), a CLI for tickets (the console approves, `stonks schedule run-now live_submit` sends), and a menu badge with the waiting count (the push and the Approvals page carry it).
 
 ## 17. What 19.9 built
 
@@ -803,7 +803,7 @@ The `ibkr` connection, borrow checks, daily borrow rates and Flex statements. Wh
 - **Borrow rates.** DuckDB migration 021 adds `borrow_rates (ticker, as_of, source, currency, isin, available_shares, fee_rate_annual, rebate_rate_annual)`, rates as yearly fractions and `source` in the key. `stonks ingest borrow` reads IBKR's public short stock files (`ingest/sources/ibkr_borrow.py`, one market per unit of the run). Bond CUSIPs and masked ISINs are dropped. `LakeBorrowSource` quotes from the table: `none` at zero shares, `hard` at or above a fee threshold, else `easy`.
 - **Not a price source.** The borrow source is not one of the `--source` ids, so the API and its generated client are unchanged.
 - **Flex.** `execution/brokers/ibkr/flex.py` runs the two-step Flex Web Service fetch, polls while IBKR generates the statement, and parses execution-level trades and cash transactions. The token comes only from `STONKS_IBKR_FLEX_TOKEN`, is refused in TOML and is scrubbed from every error. The sync caches a statement for `refresh_hours` and never fails when Flex fails.
-- **Not yet.** The tick still builds a short book's borrow source from settings. Wiring the broker's own `IbkrBorrowSource` into the short rules, and a scheduled `ingest borrow` job, are follow-ups. Flex rows are not yet compared with our fills (that is reconciliation, 19.5).
+- **Not yet.** Flex rows are not yet compared with our fills (that is reconciliation, 19.5). The broker borrow source in the tick and the `ingest_borrow` job came with 19.14 (section 16).
 
 ## 15. What 19.5 built
 
@@ -859,3 +859,24 @@ Broker edge cases in the IBKR adapter and the tick. Where it differs from the se
 - **orderRef length.** `test_live_order_ref_max_length_is_measured` places far limit buys on the paper account with references of 24 to 128 characters, reads each back on the open order and after the cancel, and records the longest kept whole. It fails when `[brokers.ibkr.orders] order_ref_max_length` is longer than that.
 - **Measured value.** Not measured yet: to be filled in from the first live run (the test's `order_ref_max_measured` property). `order_ref_max_length` stays 40 until then.
 - **Live London test.** `test_live_london_prices_are_in_pounds` checks that `VOD.LSE` resolves with a magnifier of 100 and quotes in pounds.
+
+## 20. What 19.14 built
+
+19.14 connects what 19.3, 19.5 and 19.8 left apart. No migration.
+
+```mermaid
+flowchart LR
+  J[live_submit job] --> B[open the broker]
+  B --> G{submit_gate:<br/>may_submit?}
+  G -- no --> S[send nothing,<br/>report kept]
+  G -- yes --> H{halts}
+  H -- clear --> P{pre-open gap<br/>within the band?}
+  P -- no --> A[hold the ticket,<br/>push the owner]
+  P -- yes --> O[order sent]
+```
+
+- **Submit gate.** `production/submit.py` calls `submit_gate` in place of its own `startup_reconcile` and `require_reconciled`. It sends only when `CheckResult.may_submit`. Every run stores a `submit` report. An outage or a fault reports the portfolio as `error`, drift or an order still `unknown` as `skipped`. A lookup the broker times out on counts as drift in 19.5, so it also opens the `broker_drift` halt of buys, and a person clears it.
+- **Pre-open gap.** `production/live/gap.py`. The limit is the portfolio's `price_band.max_gap_pct`, else its `band_pct`. It follows the tick's merge: the global policy tightened by the owner's and the portfolio's limits. The quote is the broker's latest (`QuoteSource`), delayed ones included. An opening ticket with no quote is held. A close always goes out (P28). A held ticket stays approved, expires at the deadline, and the owner gets one high-urgency push per portfolio and day.
+- **Borrow from the broker.** A new optional capability, `BorrowLocator.borrow_source(fees)`, in `execution/brokers/base.py`. `IbkrBroker` implements it on a margin account: its own `IbkrBorrowSource`, with the lake's `borrow_rates` (`LakeBorrowSource`) filled in as the fee. The tick asks for it when a short book trades at an external broker (`financing.broker_borrow_source`) and hands it to the short rules. The broker's own locate before a short sale uses the same source. A broker without the capability, or a cash account, keeps the settings' source.
+- **Borrow ingest job.** `ingest_borrow` runs at close plus 35 minutes on the `local`, `api` and `in_process` backends and skips while `[brokers.ibkr.gateways]` is empty. It reads `params.markets`, else `[sources.ibkr_borrow] markets`. The `api` backend posts `POST /api/ingest/runs` with the new kind `borrow` and a `markets` list, so the lake keeps one writer.
+- **Not yet.** The gap check reads one quote per ticker and does not retry. A held ticket is not re-checked later in the window, since the job fires once.

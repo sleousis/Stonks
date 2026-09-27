@@ -9,9 +9,12 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
 
 from stonks.core.types import Fill, Order, OrderSide, OrderStatus
+
+if TYPE_CHECKING:
+    from stonks.execution.borrow import BorrowSource
 
 #: Which broker the production tick trades through (``[brokers].kind``).
 #: ``ibkr`` is the Interactive Brokers adapter (roadmap 19.2).
@@ -337,6 +340,16 @@ class QuoteSource(Protocol):
     ticker with no data is left out of the answer."""
 
     def quotes(self, tickers: Sequence[str]) -> Mapping[str, Quote]: ...
+
+
+@runtime_checkable
+class BorrowLocator(Protocol):
+    """Optional capability: the broker's own borrow answer for short sales
+    (roadmap 19.14). ``fees`` quotes the fee when the broker knows only
+    whether a name can be borrowed (the lake's ``borrow_rates``, say).
+    ``None``: this account cannot short."""
+
+    def borrow_source(self, fees: BorrowSource | None = None) -> BorrowSource | None: ...
 
 
 @dataclass(frozen=True)

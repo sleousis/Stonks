@@ -500,6 +500,23 @@ class IbkrBroker:
     def executions(self, since: datetime) -> Sequence[Execution]:
         return [e for e in self._session_executions() if e.executed_at >= since]
 
+    # ---- BorrowLocator --------------------------------------------------------------
+
+    def borrow_source(self, fees: BorrowSource | None = None) -> BorrowSource | None:
+        """IBKR's locate (``IbkrBorrowSource``) with ``fees`` for the fee,
+        the same source this broker checks before a short sale. ``None`` on
+        an account that cannot short (roadmap 19.14)."""
+        if not self.allow_short:
+            return None
+        from stonks.execution.brokers.ibkr.borrow import IbkrBorrowSource
+
+        current = self.borrow
+        if current is None:
+            self.borrow = IbkrBorrowSource(self, fees=fees)
+        elif isinstance(current, IbkrBorrowSource) and current.fees is None:
+            current.fees = fees
+        return self.borrow
+
     # ---- QuoteSource ----------------------------------------------------------------
 
     def quotes(self, tickers: Sequence[str]) -> Mapping[str, Quote]:

@@ -3678,7 +3678,11 @@ export type IngestRequest = {
     /**
      * Kind
      */
-    kind: 'prices' | 'intraday' | 'fundamentals' | 'metadata';
+    kind: 'prices' | 'intraday' | 'fundamentals' | 'metadata' | 'borrow';
+    /**
+     * Markets
+     */
+    markets?: Array<string>;
     /**
      * Since
      */
