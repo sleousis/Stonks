@@ -281,3 +281,38 @@ def test_short_disclosure_keeps_the_short_under_the_reporting_line():
     assert verdicts[0].rule == "short_disclosure"
     kept, _ = run([short], inputs(prof, account=acct))
     assert kept == []
+
+
+# ---- review 2026-09-27: day trades counted from the fills ------------------------------
+
+
+def _fill(side: str, qty: float, day: date, ticker: str = "X.US"):
+    return (ticker, side, qty, 10.0, day)
+
+
+def test_two_round_trips_in_one_day_are_two_day_trades():
+    from stonks.accounts.rules.inputs import day_trades
+
+    fills = [_fill(s, 10, AS_OF) for s in ("buy", "sell", "buy", "sell")]
+    assert day_trades(fills, AS_OF, 5) == [AS_OF, AS_OF]
+
+
+def test_selling_an_old_holding_then_buying_is_not_a_day_trade():
+    from datetime import timedelta
+
+    from stonks.accounts.rules.inputs import day_trades
+
+    fills = [
+        _fill("buy", 10, AS_OF - timedelta(days=7)),
+        _fill("sell", 10, AS_OF),
+        _fill("buy", 10, AS_OF),
+    ]
+    assert day_trades(fills, AS_OF, 5) == []
+
+
+def test_a_short_opened_and_covered_today_is_a_day_trade_and_opened_today():
+    from stonks.accounts.rules.inputs import day_trades, opened_on
+
+    fills = [_fill("sell", 10, AS_OF), _fill("buy", 10, AS_OF)]
+    assert day_trades(fills, AS_OF, 5) == [AS_OF]
+    assert opened_on([_fill("sell", 10, AS_OF)], AS_OF) == frozenset({"X.US"})
