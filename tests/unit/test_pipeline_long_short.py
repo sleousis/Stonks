@@ -72,3 +72,17 @@ def test_cash_book_runs_the_constructor_long_only_at_one_gross():
         assert all(w > 0 for w in weights.values())
         assert result.target_book.gross <= 1.0 + 1e-9
         assert all(o.side == "buy" for o in result.orders)
+
+
+def test_be15_all_positive_scores_short_nothing():
+    # the strategy expects all five to rise: the weakest are not shorts
+    signals = {"s": {"A": 0.05, "B": 0.04, "C": 0.03, "D": 0.02, "E": 0.01}}
+    result = build_orders(
+        signals,
+        _book(True),
+        MarketView(as_of=AS_OF, prices=PRICES),
+        strategies=lambda s: _Shorter(),
+    )
+    weights = result.target_book.weights
+    assert set(weights) == {"A", "B"} and all(w > 0 for w in weights.values())
+    assert all(o.side == "buy" for o in result.orders)

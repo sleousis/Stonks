@@ -16,8 +16,8 @@ Long/short modes (``long_only=False``, roadmap 16.3):
 
 - ``equal_weight_top_n`` also shorts the ``n_short`` (default ``n``) most
   negative combined scores, every position at ``max_gross / names``. Its
-  signals are then z-scores, so a score below the cross-section mean is a
-  short.
+  signals are then signed ranks, so only a score below 0 is a short
+  (BE-15).
 - ``vol_target`` keeps negative forecasts as short weights.
 
 Both read betas, so ``neutral`` may be ``"dollar"`` or ``"beta"``.
@@ -147,11 +147,13 @@ class EqualWeightTopN(PortfolioConstructor):
 
     Signals are percentile ranks (RS-06): the pipeline passes only scores
     above the threshold, so every input is a buy, and a z-score would clip
-    the below-mean half to 0 in long-only mode. In long/short mode the
-    ``n_short`` most negative z-scores are shorts (see the module doc)."""
+    the below-mean half to 0 in long-only mode. In long/short mode signals
+    are signed ranks and the ``n_short`` most negative are shorts: only a
+    name the strategies score below 0 is shorted, never the weakest of the
+    names they expect to rise (BE-15)."""
 
     signal_method = "rank"
-    long_short_signal_method = "zscore"
+    long_short_signal_method = "signed_rank"
     beta_aware = True
     Settings = EqualWeightSettings
 

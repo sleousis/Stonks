@@ -118,8 +118,8 @@ def test_long_only_equal_weight_ignores_negatives():
     assert book.weights == pytest.approx({"A": 0.5, "B": 0.5})
 
 
-def test_equal_weight_long_short_normalises_with_zscores():
-    assert _ew().normalization() == "zscore"
+def test_equal_weight_long_short_normalises_with_signed_ranks():
+    assert _ew().normalization() == "signed_rank"
     assert get_constructor("equal_weight_top_n").normalization() == "rank"
 
 
