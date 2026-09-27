@@ -282,3 +282,35 @@ def test_the_next_tick_settles_a_sent_ticket(world):
         t for t in list_tickets(world.state, portfolio_ids=[world.live]) if t.id == ticket.id
     ]
     assert settled[0].status == "unfilled"  # the opening auction did not fill it
+
+
+# ---- review 2026-09-27: a book stopped after the tick sends nothing ---------------------
+
+
+def test_a_paused_subscription_holds_its_approved_tickets(world):
+    settings = replace(modes.SETTINGS, live=LiveSettings(submit_in_window=True))
+    _tick(world, DAY1, settings)
+    world.state.execute(
+        "UPDATE subscriptions SET paused_reason = 'broker_error: down' WHERE id = ?",
+        [world.bob_auto],
+    )
+    result = _submit(world, IN_WINDOW)
+    assert result.sent == 0 and world.book.orders == {}
+    assert list_tickets(world.state, portfolio_ids=[world.live])[0].status == "approved"
+
+
+def test_a_retired_strategy_holds_its_approved_tickets(world):
+    settings = replace(modes.SETTINGS, live=LiveSettings(submit_in_window=True))
+    _tick(world, DAY1, settings)
+    world.registry.set_status("bh_up", "retired", actor="t", reason="gone")
+    world.state.execute("UPDATE subscriptions SET paused_reason = NULL")
+    assert _submit(world, IN_WINDOW).sent == 0
+    assert world.book.orders == {}
+
+
+def test_a_disabled_owner_holds_every_ticket(world):
+    settings = replace(modes.SETTINGS, live=LiveSettings(submit_in_window=True))
+    _tick(world, DAY1, settings)
+    world.state.execute("UPDATE users SET status = 'disabled' WHERE id = ?", [world.bob.user_id])
+    assert _submit(world, IN_WINDOW).sent == 0
+    assert world.book.orders == {}

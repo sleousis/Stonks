@@ -155,12 +155,14 @@ def _submit_portfolio(
         portfolio_id=portfolio_id,
         user_id=owner[0]["owner_id"] if owner else None,
     )
-    stop_all = any(h.halt == "all" for h in halts)
+    stop_all = any(h.halt == "all" for h in halts) or not _book_running(state, portfolio_id)
     stop_buys = any(h.halt == "buys" for h in halts)
+    running = _running_strategies(state, portfolio_id)
 
     sent = failed = held = 0
     for ticket in tickets:
-        if stop_all or (stop_buys and not _reduces(ticket)):
+        stopped = ticket.strategy_id is not None and ticket.strategy_id not in running
+        if stop_all or stopped or (stop_buys and not _reduces(ticket)):
             held += 1
             continue
         outcome = _send(state, broker, ticket, clock)
@@ -170,6 +172,32 @@ def _submit_portfolio(
         log.warning("submit.held_by_halt", held=held)
     status: PortfolioSubmitStatus = "partial" if failed else "ok"
     return PortfolioSubmit(portfolio_id, status, sent=sent, failed=failed, held=held)
+
+
+def _book_running(state: SqliteState, portfolio_id: str) -> bool:
+    """The portfolio is active and its owner is not disabled. A book stopped
+    after the tick decided sends nothing (its tickets expire)."""
+    rows = state.sql(
+        "SELECT p.status AS portfolio_status, u.status AS user_status FROM portfolios p"
+        " LEFT JOIN users u ON u.id = p.owner_id WHERE p.id = ?",
+        [portfolio_id],
+    )
+    if not rows:
+        return False
+    return rows[0]["portfolio_status"] == "active" and rows[0]["user_status"] in (None, "active")
+
+
+def _running_strategies(state: SqliteState, portfolio_id: str) -> set[str]:
+    """Strategies with a running live subscription on ``portfolio_id``:
+    enabled, approve or auto, not paused, on an active strategy. A ticket
+    of any other strategy (paused or retired after the tick) is held."""
+    rows = state.sql(
+        "SELECT s.strategy_id FROM subscriptions s JOIN strategies st ON st.id = s.strategy_id"
+        " WHERE s.portfolio_id = ? AND s.enabled = 1 AND s.mode IN ('approve', 'auto')"
+        " AND s.paused_reason IS NULL AND st.status = 'active'",
+        [portfolio_id],
+    )
+    return {r["strategy_id"] for r in rows}
 
 
 def _reduces(ticket: Ticket) -> bool:
