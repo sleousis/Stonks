@@ -389,7 +389,7 @@ A lab run's result links to it.
 ### Metric help
 
 Every metric shows a "?" tip with one plain sentence and a link to the
-in-app glossary (`/help/glossary#<key>`, nav: System, Glossary). The text
+in-app glossary (`/help/glossary#<key>`, account menu, Glossary). The text
 lives in one file, `core/help/glossary.ts`, and the glossary page is built
 from it. Tips close when the page scrolls.
 
@@ -991,20 +991,44 @@ automate it.
 
 ### Lighthouse budget
 
-Measured on the production build (`npm run build`, served by `stonks serve`)
-with mobile emulation, on the dashboard and one detail page. Dropping below
-a line is a bug.
+Lighthouse 12, mobile (Moto G Power, simulated 4G and 4x CPU), signed in as
+the seeded trader on the e2e stack (`uv run python -m tests.e2e.stack`),
+production build. The stack sits behind an HTTPS, HTTP/2 proxy with gzip
+and brotli, as Caddy serves it in production (`deploy/Caddyfile`). The
+target is 95 or more for performance, accessibility and best practices on
+every main page. Dropping below a line is a bug.
 
-| Metric | Budget | Last check (Sep 2026, no API running) |
-|---|---|---|
-| Accessibility | 100 (never below 95) | 100 |
-| Best practices | at least 95 | 96 (console logs the missing API) |
-| SEO | at least 90 | 100 |
-| Performance | at least 90 | not measured yet |
-| Largest contentful paint | at most 2.5 s | not measured yet |
-| Cumulative layout shift | at most 0.1 | 0.44 before the fix below; not re-measured yet |
-| Total blocking time | at most 200 ms | not measured yet |
-| Initial JS + CSS | at most 600 kB raw (build warns), 1 MB (build fails) | 390 kB raw, 108 kB transferred |
+| Page | Performance | Accessibility | Best practices | LCP | CLS | TBT |
+|---|---|---|---|---|---|---|
+| Today `/` | 98 | 100 | 100 | 2.1 s | 0.064 | 80 ms |
+| Strategies | 99 | 100 | 100 | 1.8 s | 0.002 | 70 ms |
+| Insights | 98 | 100 | 100 | 2.1 s | 0.047 | 70 ms |
+| Orders | 98 | 100 | 100 | 2.1 s | 0.018 | 70 ms |
+| Trade costs | 98 | 100 | 100 | 2.1 s | 0.055 | 70 ms |
+| Chart `/charts/AAA.US` | 99 | 100 | 100 | 2.0 s | 0.002 | 60 ms |
+
+Measured 2026-09-27. Over plain HTTP/1.1 (six connections, so the chunks
+queue) the same pages score 91 to 96, with LCP near 3 s. Initial JS and CSS:
+472 kB raw, 126 kB transferred (the build warns at 600 kB, fails at 1 MB).
+
+What keeps it there:
+
+- `index.html` paints the rail and the drawing brand mark before any
+  script runs, so first paint does not wait for Angular.
+- `npm run build` runs `scripts/preload-routes.mjs`: `modulepreload` for
+  the chunks `main.js` imports, and a small inline script that preloads the
+  current URL's lazy page chunks, so they download with `main.js` instead
+  of one round trip after another. It keeps `ngsw.json`'s index hash right.
+- The command palette, shortcut sheet, step-up prompt and kill sheet are
+  `@defer`red until first use (the kill sheet on idle).
+- The display face is Archivo cut to its one width and Latin only
+  (`src/styles/fonts/`, 30 kB instead of 90 kB).
+- Nothing jumps as data arrives: the strip holds its phase and trading run
+  slots until the schedule is read (`TradingDayService.settled`), Today's
+  blotter waits for it too, the setup card holds its place while the guide
+  loads when it showed last time, and Insights keeps a fixed header line.
+- Preloading the fonts was tried and dropped: it slowed first paint and did
+  not reduce shifts.
 
 Layout shift: `app-loading-state`, `app-empty-state` and `app-error-state`
 all reserve at least 9.5rem (an error with a one-line message and a 44px
