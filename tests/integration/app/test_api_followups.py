@@ -129,6 +129,21 @@ def test_orders_carry_the_fine_state(client, settings, seeded):
     assert items and all(o["state"] == "unknown" for o in items)
 
 
+def test_orders_say_which_are_protective_stops(client, settings, seeded):
+    items = client.get("/api/orders", headers=AUTH).json()["items"]
+    assert items and all(o["protective"] is False and o["stop_price"] is None for o in items)
+    with SqliteState(settings.state.path) as state:
+        state.execute(
+            "UPDATE orders SET order_type = 'stop', stop_price = 90.5, time_in_force = 'gtc',"
+            " protective = 1"
+        )
+    items = client.get("/api/orders", headers=AUTH).json()["items"]
+    assert all(
+        (o["protective"], o["stop_price"], o["time_in_force"]) == (True, 90.5, "gtc")
+        for o in items
+    )
+
+
 def test_tick_summary_types_exit_and_stale_keys():
     summary = TickSummary.model_validate(
         {"reason": "no_candidates", "exit_strategy_id": "s1", "stale_buys_dropped": ["A.US"]}

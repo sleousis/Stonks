@@ -40,6 +40,16 @@ class OrderView(BaseModel):
     placed_by: str | None = None
     #: The order a changed manual order replaced.
     replaces_client_id: str | None = None
+    #: The trigger price of a stop order (a protective stop, roadmap 19.10).
+    stop_price: float | None = None
+    #: How long the order works at the broker: ``day``, ``gtc`` (until
+    #: cancelled), ``opg`` (the opening auction) or ``ioc``. ``None``: the
+    #: broker's default.
+    time_in_force: str | None = None
+    #: A protective stop Stonks placed after an entry filled. It works until
+    #: the position closes, follows the position's size, and its fill is a
+    #: stop-out of the strategy that held the position.
+    protective: bool = False
 
 
 class FillView(BaseModel):
