@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 
+import { SILENT_HEADERS } from '../core/http/interceptors';
 import { allItems, unwrap } from './api-call';
 import { approveTickets, getTicketSummary, listTickets, rejectTicket } from './generated/sdk.gen';
 import type { TicketView } from './generated/types.gen';
@@ -19,8 +20,9 @@ export class TicketsService {
     return allItems((query) => unwrap(listTickets({ query: { ...query, status } })));
   }
 
-  summary() {
-    return unwrap(getTicketSummary());
+  /** `silent`: no error toast (the nav badge polls it quietly). */
+  summary(silent = false) {
+    return unwrap(getTicketSummary({ headers: silent ? SILENT_HEADERS : undefined }));
   }
 
   approve(ids: readonly string[]) {

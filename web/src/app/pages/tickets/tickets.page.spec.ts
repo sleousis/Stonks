@@ -8,6 +8,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { TicketCountService } from '../../core/tickets/ticket-count.service';
 import { TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { TicketsPage } from './tickets.page';
@@ -98,6 +99,20 @@ describe('TicketsPage', () => {
     expect(cards[0].textContent).toContain('Checked by 1 rule');
     expect(cards[0].querySelector('app-mode-stamp')!.textContent).toContain('LIVE');
     expect(button(el, 'Approve all 2')).toBeTruthy();
+  });
+
+  it('keeps the nav badge in step with what waits (22.10)', async () => {
+    vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockResolvedValue(true);
+    const count = TestBed.inject(TicketCountService);
+    const el = await render([ticket(), MSFT]);
+    expect(count.waiting()).toBe(2);
+    button(el, 'Approve', 1).click();
+    (await nextRequest(controller, '/api/tickets/approve', 'POST')).flush({
+      items: [ticket({ status: 'approved' })],
+    });
+    await tick();
+    fixture.detectChanges();
+    expect(count.waiting()).toBe(1);
   });
 
   it('says so when nothing waits', async () => {

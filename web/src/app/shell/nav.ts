@@ -1,7 +1,17 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+} from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
 import { SessionService } from '../core/auth/session.service';
+import { TicketCountService } from '../core/tickets/ticket-count.service';
 import { NAV_GROUPS, NAV_ITEMS, type NavItem, navItemVisible, navViewer } from './nav-items';
 
 /**
@@ -10,7 +20,12 @@ import { NAV_GROUPS, NAV_ITEMS, type NavItem, navItemVisible, navViewer } from '
  * Notifications. Research follows (paper trading, the leaderboard and the
  * build tools for those who can use them), then System for admins. Account
  * pages live in the account menu by the user's name.
+ *
+ * Approvals carries a badge with the tickets that wait (22.10). The number
+ * is hidden from screen readers, and the link's label says it in words.
  */
+const TICKETS = '/tickets';
+
 @Component({
   selector: 'app-nav',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -25,9 +40,13 @@ import { NAV_GROUPS, NAV_ITEMS, type NavItem, navItemVisible, navViewer } from '
               routerLinkActive="active"
               ariaCurrentWhenActive="page"
               [routerLinkActiveOptions]="{ exact: item.path === '/' }"
+              [attr.aria-label]="spoken(item)"
               (click)="navigate.emit()"
             >
               <span>{{ item.label }}</span>
+              @if (badge(item); as n) {
+                <b class="count" aria-hidden="true">{{ n }}</b>
+              }
               @if (item.key) {
                 <kbd aria-hidden="true">g {{ item.key }}</kbd>
               }
@@ -107,6 +126,22 @@ import { NAV_GROUPS, NAV_ITEMS, type NavItem, navItemVisible, navViewer } from '
       border-radius: 2px;
       background: var(--color-accent);
     }
+    .count {
+      min-width: 20px;
+      margin-left: auto;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: var(--color-primary);
+      color: var(--color-primary-ink);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-semibold);
+      line-height: 20px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    .count + kbd {
+      margin-left: var(--space-2);
+    }
     kbd {
       font: inherit;
       font-size: var(--text-xs);
@@ -137,6 +172,28 @@ export class Nav {
     NAV_ITEMS.filter((i) => navItemVisible(i, this.viewer)),
   );
   protected readonly main = computed(() => this.visible().filter((i) => i.group === 'Main'));
+  private readonly tickets = inject(TicketCountService);
+
+  constructor() {
+    const destroyRef = inject(DestroyRef);
+    let watching = false;
+    effect(() => {
+      if (watching || !this.visible().some((i) => i.path === TICKETS)) return;
+      watching = true;
+      this.tickets.watch(destroyRef);
+    });
+  }
+
+  /** The count shown on an item, or 0 for none. */
+  protected badge(item: NavItem): number {
+    return item.path === TICKETS ? this.tickets.waiting() : 0;
+  }
+
+  /** The link's accessible name when it carries a badge, else null (its text). */
+  protected spoken(item: NavItem): string | null {
+    const n = this.badge(item);
+    return n > 0 ? `${item.label}, ${n} ${n === 1 ? 'ticket' : 'tickets'} waiting` : null;
+  }
   protected readonly groups = computed(() =>
     NAV_GROUPS.map((title) => ({
       title,
