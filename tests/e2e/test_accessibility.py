@@ -21,6 +21,7 @@ ADMIN_PAGES = (
     "/profile",
     "/insights",
     "/insights/risk",
+    "/lab/ledger",
     "/admin/users",
     "/dashboard",
     "/strategies",

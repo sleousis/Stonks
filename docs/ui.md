@@ -289,9 +289,9 @@ outside `shared/chart/lightweight-chart-engine.ts`.
   [summary]="summary()" [series]="series()" [height]="300" />
 ```
 
-Series: `{ id, label, kind: 'line' | 'area', color: 'brass' | 'primary' | 'gain' | 'loss' | 'muted', pane?: 0 | 1, format?: 'money' | 'percent' | 'number', points: { time, value }[] }`.
+Series: `{ id, label, kind: 'line' | 'area', color: 'brass' | 'primary' | 'gain' | 'loss' | 'muted' | 'violet', pane?: 0 | 1, format?: 'money' | 'percent' | 'number', points: { time, value }[] }`.
 `time` is `YYYY-MM-DD` for daily data or an ISO timestamp. Equity is a
-`primary` line in pane 0 (`brass` only for a live portfolio); drawdown is a `loss` area in pane 1. Always pass a one or two
+`primary` line in pane 0 (`brass` only for a live portfolio); drawdown is a `loss` area in pane 1. Comparison lines (other strategies on the shadow chart) use `violet`, never amber or brass. Always pass a one or two
 sentence `summary` (the canvas is invisible to screen readers). Tests use
 `provideFakeChart()` from `src/testing/fake-chart.ts`.
 
