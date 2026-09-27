@@ -106,6 +106,29 @@ describe('sessionInterceptor', () => {
       expect(nav).not.toHaveBeenCalled();
     });
 
+    it('keeps the second-factor step a 401 names (UX-70)', async () => {
+      vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      const result = firstValueFrom(http.get('/api/portfolio'));
+      controller
+        .expectOne('/api/portfolio')
+        .flush({ ...problem(401, 'mfa_required: x'), next_step: 'verify' }, UNAUTHORIZED);
+      await expect(result).rejects.toBeTruthy();
+      expect(session.step()).toBe('verify');
+    });
+
+    it('bearer 401 clears the tab token and navigates to /login (UX-39)', async () => {
+      const tokens = TestBed.inject(AuthTokenService);
+      tokens.setToken('stk_revoked');
+      const nav = vi.spyOn(router, 'navigate').mockResolvedValue(true);
+      const result = firstValueFrom(http.get('/api/portfolio'));
+      controller.expectOne('/api/portfolio').flush(problem(401, 'not_authenticated'), UNAUTHORIZED);
+      await expect(result).rejects.toBeTruthy();
+      expect(tokens.token()).toBeNull();
+      expect(sessionStorage.getItem('stonks.apiToken')).toBeNull();
+      expect(session.status()).toBe('signed-out');
+      expect(nav).toHaveBeenCalledWith(['/login'], { queryParams: { next: '/' } });
+    });
+
     it('lets the sign-in routes handle their own failures', async () => {
       await signIn();
       const nav = vi.spyOn(router, 'navigate');
@@ -149,6 +172,7 @@ describe('sessionInterceptor', () => {
     it('fails with the original error when the prompt is cancelled', async () => {
       await signIn();
       const stepUp = TestBed.inject(StepUpService);
+      const error = vi.spyOn(TestBed.inject(ToastService), 'error');
       const result = firstValueFrom(http.post('/api/auth/password', {}));
       controller
         .expectOne('/api/auth/password')
@@ -156,6 +180,8 @@ describe('sessionInterceptor', () => {
       await tick();
       stepUp.cancel();
       await expect(result).rejects.toMatchObject({ status: 403 });
+      // The trader cancelled: no error toast on top (UX-38).
+      expect(error).not.toHaveBeenCalled();
     });
   });
 });

@@ -4,7 +4,8 @@ import { AuthService } from '../../api/auth.service';
 import type { MeView, MfaCodeRequest } from '../../api/models';
 import { ApiError } from '../http/api-error';
 import { AuthTokenService } from './auth-token.service';
-import { type Permission, allowed, denial, routePermission } from './permissions';
+import { HARD_NAVIGATE, currentUrl } from './hard-navigate';
+import { type Permission, allowed, denial } from './permissions';
 
 /**
  * - `unknown`: not asked yet.
@@ -31,25 +32,28 @@ const CSRF_COOKIE = 'stonks_csrf';
  * interceptor, and the caller's identity from `GET /api/auth/me`.
  * An API token saved in Settings (token mode) wins over the session, as it
  * does on the server.
+ *
+ * Signing out, or a different user turning up on the same tab, reloads the
+ * page (`HARD_NAVIGATE`), so no root store keeps the last user's data (UX-07).
  */
 @Injectable({ providedIn: 'root' })
 export class SessionService {
   private readonly api = inject(AuthService);
   private readonly tokens = inject(AuthTokenService);
+  private readonly hardNavigate = inject(HARD_NAVIGATE);
 
   private readonly meSignal = signal<MeView | null>(null);
   private readonly statusSignal = signal<SessionStatus>('unknown');
   private readonly stepSignal = signal<SecondFactorStep | null>(null);
   private readonly csrf = signal<string | null>(null);
-  private readonly enrolled = signal(false);
   private loading: Promise<SessionStatus> | null = null;
+  /** The last user this tab showed, to notice a different one signing in. */
+  private lastUserId: string | null = null;
 
   readonly me = this.meSignal.asReadonly();
   readonly status = this.statusSignal.asReadonly();
-  /** The second-factor step the last sign-in asked for, when known. */
+  /** The second-factor step the last sign-in (or 401) asked for, when known. */
   readonly step = this.stepSignal.asReadonly();
-  /** True right after first-login enrolment (the push prompt follows). */
-  readonly justEnrolled = this.enrolled.asReadonly();
 
   readonly role = computed(() => this.meSignal()?.role ?? null);
   readonly isAdmin = computed(() => this.role() === 'admin');
@@ -79,12 +83,6 @@ export class SessionService {
   /** Why the current user may not do this (a short hint), or null. */
   whyNot(permission: Permission): string | null {
     return denial(this.meSignal(), permission);
-  }
-
-  /** `can()` for a route template from openapi.json (`POST`, `/api/ticks`). */
-  canCall(method: string, path: string): boolean {
-    const permission = routePermission(method, path);
-    return permission === null ? this.meSignal() !== null : this.can(permission);
   }
 
   /** The token for `X-CSRF-Token` on unsafe requests made with the session cookie. */
@@ -118,7 +116,6 @@ export class SessionService {
   async confirmEnrolment(code: string): Promise<string[]> {
     const res = await this.api.confirmEnrolment(code);
     if (res.csrf_token) this.csrf.set(res.csrf_token);
-    this.enrolled.set(true);
     await this.load(true);
     return res.recovery_codes ?? [];
   }
@@ -134,7 +131,10 @@ export class SessionService {
     }
   }
 
-  /** End the session (and forget this tab's API token). Never throws. */
+  /**
+   * End the session, forget this tab's API token, and reload on the sign-in
+   * page so nothing of this user stays in memory. Never throws.
+   */
   async logout(): Promise<void> {
     try {
       await this.api.logout();
@@ -143,8 +143,8 @@ export class SessionService {
     }
     this.tokens.clear();
     this.csrf.set(null);
-    this.enrolled.set(false);
     this.markSignedOut();
+    this.hardNavigate('/login');
   }
 
   /** The API said the session is gone (expired, revoked). */
@@ -154,27 +154,51 @@ export class SessionService {
     this.statusSignal.set('signed-out');
   }
 
-  /** The API said the second factor is still missing. */
-  markMfaPending(): void {
+  /** The API said the second factor is still missing (and maybe which step). */
+  markMfaPending(step: SecondFactorStep | null = null): void {
     this.meSignal.set(null);
     this.statusSignal.set('mfa-pending');
+    if (step) this.stepSignal.set(step);
   }
 
   private async fetch(): Promise<SessionStatus> {
     let status: SessionStatus;
     try {
-      this.meSignal.set(await this.api.me());
+      const me = await this.api.me();
+      this.meSignal.set(me);
+      this.stepSignal.set(null);
       status = 'signed-in';
+      this.noticeUser(me.user_id);
     } catch (err) {
-      this.meSignal.set(null);
-      if (err instanceof ApiError && err.code === 'mfa_required') status = 'mfa-pending';
-      else if (err instanceof ApiError && err.isNetwork) status = 'unreachable';
-      // The server says in the 401 itself when reads need no credential.
-      else if (err instanceof ApiError && err.code === 'reads_open') status = 'open';
-      else status = 'signed-out';
+      const apiError = err instanceof ApiError ? err : null;
+      if (apiError?.status === 401) {
+        // Only the server saying "not signed in" forgets the user (UX-36).
+        this.meSignal.set(null);
+        if (apiError.code === 'mfa_required') {
+          status = 'mfa-pending';
+          if (apiError.nextStep) this.stepSignal.set(apiError.nextStep);
+        } else if (apiError.code === 'reads_open') {
+          // The server says in the 401 itself when reads need no credential.
+          status = 'open';
+        } else {
+          status = 'signed-out';
+        }
+      } else if (this.meSignal()) {
+        // A network blip or a server error: whoever was signed in still is.
+        status = this.statusSignal();
+      } else {
+        status = apiError?.isNetwork ? 'unreachable' : 'signed-out';
+      }
     }
     this.statusSignal.set(status);
     return status;
+  }
+
+  /** A different user on this tab than before: reload so no store keeps the old one. */
+  private noticeUser(userId: string): void {
+    const before = this.lastUserId;
+    this.lastUserId = userId;
+    if (before !== null && before !== userId) this.hardNavigate(currentUrl());
   }
 }
 
