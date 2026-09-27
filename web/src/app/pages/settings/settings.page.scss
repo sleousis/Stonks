@@ -2,6 +2,8 @@
 
 .column {
   display: grid;
+  // One track that may shrink, so a wide panel scrolls inside itself (no page scroll).
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: var(--space-4);
   min-width: 0;
