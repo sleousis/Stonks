@@ -298,6 +298,21 @@ stale_after_seconds = 60
 backfill = true           # fill gaps from the REST intraday ingest
 backfill_source = "eodhd"
 
+[engine]
+# The intraday engine process (roadmap 21.2.5, docs/design/intraday.md).
+# Off by default: the engine_start and engine_stop jobs skip. Run it by hand
+# with `python -m stonks.engine run` or replay a recording with `replay`.
+# Books are listed as [[engine.books]] (id, portfolio_id, strategies,
+# broker = "simulated" | "ibkr", initial_cash, sessions).
+enabled = false
+interval = "1m"
+calendar = "XNYS"
+universe = []                      # [] = [streaming].tickers
+start_before_open_minutes = 15     # engine_start fires at open minus this
+stop_after_close_minutes = 10      # engine_stop fires, and the process stops, at close plus this
+stale_after_seconds = 180          # no new entries on a ticker with no bar for this long
+stop_timeout_seconds = 60
+
 [audit]
 # Statement audit tolerances (BL-36): relative gaps above which
 # `stonks audit statements` (also run after `stonks ingest fundamentals`)

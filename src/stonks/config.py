@@ -22,6 +22,7 @@ from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
+from stonks.engine.settings import EngineSettings
 from stonks.factors.settings import FactorSettings
 from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
@@ -556,6 +557,8 @@ class Settings(BaseSettings):
     factors: FactorSettings = FactorSettings()
     # ``[streaming]``: live price streams (roadmap 21.1). Off by default.
     streaming: StreamingSettings = Field(default_factory=StreamingSettings)
+    # ``[engine]``: the intraday engine process (roadmap 21.2.5). Off by default.
+    engine: EngineSettings = Field(default_factory=EngineSettings)
 
 
 #: Secrets read straight from the environment by blocks that keep their own
