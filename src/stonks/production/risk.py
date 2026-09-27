@@ -247,17 +247,19 @@ def entry_dates_from_fills(
     fills: Iterable[tuple[str, str, float, date]],
 ) -> dict[str, date]:
     """``(ticker, side, quantity, day)`` fills, oldest first -> the day each
-    still-open position was last opened from flat."""
+    still-open position, long or short, was last opened from flat or
+    flipped to the other side (BE-04). Flat drops the date."""
+    eps = 1e-12
     net: dict[str, float] = {}
     entry: dict[str, date] = {}
     for ticker, side, quantity, day in fills:
         before = net.get(ticker, 0.0)
         after = before + (quantity if side == "buy" else -quantity)
         net[ticker] = after
-        if before <= 1e-12 < after:
-            entry[ticker] = day
-        elif after <= 1e-12:
+        if abs(after) <= eps:
             entry.pop(ticker, None)
+        elif abs(before) <= eps or before * after < 0:
+            entry[ticker] = day
     return entry
 
 

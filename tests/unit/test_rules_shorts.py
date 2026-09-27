@@ -506,3 +506,42 @@ def test_rules_never_raise_gross_and_never_block_a_close(seed: int) -> None:
             if o.ticker == close.ticker and o.side == close.side and o.position_effect == "close"
         )
         assert kept >= close.quantity - 1e-9
+
+
+# ---- BE-04: entry dates of shorts ------------------------------------------------------------
+
+
+def test_be04_a_short_gets_an_entry_date() -> None:
+    from stonks.production.risk import entry_dates_from_fills
+
+    d1, d2 = date(2026, 3, 2), date(2026, 3, 3)
+    assert entry_dates_from_fills([("X", "sell", 10.0, d1)]) == {"X": d1}
+    # adding to a short keeps its first entry
+    assert entry_dates_from_fills([("X", "sell", 10.0, d1), ("X", "sell", 5.0, d2)]) == {"X": d1}
+
+
+def test_be04_a_flip_restarts_the_entry_and_flat_drops_it() -> None:
+    from stonks.production.risk import entry_dates_from_fills
+
+    d1, d2, d3 = date(2026, 3, 2), date(2026, 3, 3), date(2026, 3, 4)
+    flip = [("X", "buy", 10.0, d1), ("X", "sell", 20.0, d2)]
+    assert entry_dates_from_fills(flip) == {"X": d2}
+    back = [*flip, ("X", "buy", 30.0, d3)]
+    assert entry_dates_from_fills(back) == {"X": d3}
+    assert entry_dates_from_fills([*flip, ("X", "buy", 10.0, d3)]) == {}
+
+
+def test_be04_max_holding_covers_an_old_short() -> None:
+    history = {"X": _bars([50.0] * 40)}
+    entry = history["X"].index[-30].date()
+    result = _run(
+        [_o("sell", 5, effect="open")],
+        Portfolio(cash=15_000.0, positions={"X": -100.0}),
+        {"X": 50.0},
+        _policy(max_holding={"max_holding_bars": 20}),
+        history=history,
+        entry_dates={"X": entry},
+    )
+    [cover] = result.orders
+    assert cover.client_id == "2026-03-20:risk.max_holding:X:cover"
+    assert (cover.side, cover.quantity, cover.position_effect) == ("buy", 100.0, "close")
