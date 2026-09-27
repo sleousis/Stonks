@@ -92,7 +92,7 @@
   "src/stonks/ops/backup.py::reportOptionalSubscript": 4,
   "src/stonks/portfolio/_risk_based.py::reportArgumentType": 1,
   "src/stonks/portfolio/_risk_based.py::reportAttributeAccessIssue": 1,
-  "src/stonks/portfolio/constructors.py::reportAttributeAccessIssue": 6,
+  "src/stonks/portfolio/constructors.py::reportAttributeAccessIssue": 5,
   "src/stonks/portfolio/constructors.py::reportCallIssue": 1,
   "src/stonks/portfolio/optimizers.py::reportArgumentType": 1,
   "src/stonks/portfolio/optimizers.py::reportAttributeAccessIssue": 1,
