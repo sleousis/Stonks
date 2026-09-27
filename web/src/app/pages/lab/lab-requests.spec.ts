@@ -164,12 +164,18 @@ describe('lab requests', () => {
     });
 
     it('runs on a stored universe, fetching missing data first when asked', () => {
-      const body = buildLabRunRequest(labForm({ tickers: '', universeId: 'sp500', ensureData: true }));
+      const body = buildLabRunRequest(
+        labForm({ tickers: '', universeId: 'sp500', ensureData: true }),
+      );
       expect(body.universe_id).toBe('sp500');
       expect(body.ensure_data).toBe(true);
       expect(body).not.toHaveProperty('universe');
-      expect(labRunErrors(labForm({ tickers: '', universeId: 'sp500' }))['tickers']).toBeUndefined();
-      expect(buildLabRunRequest(labForm({ universeId: 'sp500' }))).not.toHaveProperty('ensure_data');
+      expect(
+        labRunErrors(labForm({ tickers: '', universeId: 'sp500' }))['tickers'],
+      ).toBeUndefined();
+      expect(buildLabRunRequest(labForm({ universeId: 'sp500' }))).not.toHaveProperty(
+        'ensure_data',
+      );
       expect(buildLabRunRequest(labForm({ ensureData: true }))).not.toHaveProperty('ensure_data');
       expect(labRunErrors(labForm({ tickers: '' }))['tickers']).toBeDefined();
     });

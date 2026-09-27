@@ -226,7 +226,8 @@ export class SchedulePage {
     try {
       const result = await this.ops.verifyBackup(backup.id);
       this.verified.set(result);
-      if (result.ok) this.toasts.success(`Verified the backup from ${this.when(backup.created_at)}.`);
+      if (result.ok)
+        this.toasts.success(`Verified the backup from ${this.when(backup.created_at)}.`);
     } catch {
       // The error interceptor already showed the API's message.
     } finally {

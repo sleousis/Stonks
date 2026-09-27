@@ -136,9 +136,13 @@
     @if (verified(); as v) {
       <div class="outcome" role="status" [attr.data-ok]="v.ok">
         @if (v.ok) {
-          <p><strong>Backup {{ v.backup_id }} checks out.</strong> Every file matches its record.</p>
+          <p>
+            <strong>Backup {{ v.backup_id }} checks out.</strong> Every file matches its record.
+          </p>
         } @else {
-          <p><strong>Backup {{ v.backup_id }} has problems.</strong> Do not restore from it.</p>
+          <p>
+            <strong>Backup {{ v.backup_id }} has problems.</strong> Do not restore from it.
+          </p>
           <ul>
             @for (problem of v.problems; track $index) {
               <li>{{ problem }}</li>

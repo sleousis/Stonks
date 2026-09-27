@@ -189,8 +189,9 @@ describe('SchedulePage', () => {
       expect(runs.textContent).toContain('broker down');
       const backups = el.querySelector('[aria-labelledby="backups-title"]')!;
       expect(backups.textContent).toContain('5 MB');
-      expect(backups.querySelector('button[aria-label="Verify backup stonks-20260925T020000Z"]'))
-        .not.toBeNull();
+      expect(
+        backups.querySelector('button[aria-label="Verify backup stonks-20260925T020000Z"]'),
+      ).not.toBeNull();
       expect(el.textContent).not.toContain('command line');
       expect(el.textContent).not.toContain('[scheduler]');
     });
@@ -246,7 +247,7 @@ describe('SchedulePage', () => {
       await settle();
       const outcome = el.querySelector('.outcome')!;
       expect(outcome.getAttribute('data-ok')).toBe('false');
-      expect(outcome.textContent).toContain('checksum mismatch')
+      expect(outcome.textContent).toContain('checksum mismatch');
       expect(outcome.textContent).toContain('Do not restore from it.');
     });
 

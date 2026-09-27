@@ -16,4 +16,14 @@ export default [
     title: 'Lab signal IC',
     loadComponent: () => import('./signal-ic.page').then((m) => m.SignalIcPage),
   },
+  {
+    path: 'ledger',
+    title: 'Lab trial ledger',
+    loadComponent: () => import('./ledger.page').then((m) => m.LedgerPage),
+  },
+  {
+    path: 'ledger/:runId',
+    title: 'Lab run in the ledger',
+    loadComponent: () => import('./ledger-run.page').then((m) => m.LedgerRunPage),
+  },
 ] satisfies Routes;

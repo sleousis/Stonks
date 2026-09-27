@@ -128,8 +128,8 @@ export class LabRunFormView {
   protected readonly suiteTests = computed(() =>
     suiteTests(this.form(), this.suites()).map((id) => SURVIVAL_TESTS.find((t) => t.id === id)!),
   );
-  protected readonly suiteInfo = computed(
-    () => this.suites().find((s) => s.id === this.form().suite)!,
+  protected readonly suiteInfo = computed(() =>
+    this.suites().find((s) => s.id === this.form().suite)!,
   );
   protected readonly runs = (id: SurvivalTestName) =>
     suiteTests(this.form(), this.suites()).includes(id);

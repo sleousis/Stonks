@@ -1,0 +1,75 @@
+// The trial ledger and one recorded run.
+@use 'breakpoints' as bp;
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.lead {
+  margin: 0 0 var(--space-4);
+  color: var(--color-ink-2);
+  max-width: 70ch;
+}
+
+.filters {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: minmax(0, 20rem);
+  margin-bottom: var(--space-4);
+}
+
+.count {
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+}
+
+.cell-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+
+  @include bp.phone {
+    min-height: var(--touch-min);
+  }
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  margin-bottom: var(--space-2);
+}
+
+.tiles {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  margin-bottom: var(--space-4);
+}
+
+.facts {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+
+  @include bp.from-tablet {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  dt {
+    font-size: var(--text-xs);
+    color: var(--color-ink-2);
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.params {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}

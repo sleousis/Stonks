@@ -20,15 +20,7 @@ export interface ChartPoint {
  * brass, so peer lines never use it.
  */
 export type ChartColor =
-  | 'brass'
-  | 'primary'
-  | 'gain'
-  | 'loss'
-  | 'muted'
-  | 'info'
-  | 'warn'
-  | 'violet'
-  | 'ink';
+  'brass' | 'primary' | 'gain' | 'loss' | 'muted' | 'info' | 'warn' | 'violet' | 'ink';
 export type ChartValueFormat = 'money' | 'percent' | 'number';
 
 export interface ChartSeries {
