@@ -146,6 +146,34 @@ describe('StatusChangeDialog', () => {
     });
   });
 
+  describe('go-live ticket (UX-03)', () => {
+    const lines = [
+      { label: 'Strategy', value: 'Momentum 3fa9' },
+      { label: 'Broker', value: 'Alpaca live' },
+    ];
+
+    it('shows the ticket lines and a LIVE stamp for real money', async () => {
+      await open({ ticket: { lines, live: true } });
+      const ticket = form().querySelector('.ticket')!;
+      expect(ticket.classList).toContain('live');
+      expect(ticket.textContent).toContain('Momentum 3fa9');
+      expect(ticket.textContent).toContain('Alpaca live');
+      expect(ticket.querySelector('app-mode-stamp')!.textContent).toContain('LIVE');
+    });
+
+    it('shows PAPER without brass on a paper broker', async () => {
+      await open({ ticket: { lines, live: false } });
+      const ticket = form().querySelector('.ticket')!;
+      expect(ticket.classList).not.toContain('live');
+      expect(ticket.querySelector('app-mode-stamp')!.textContent).toContain('PAPER');
+    });
+
+    it('shows no stamp while the broker is unknown', async () => {
+      await open({ ticket: { lines, live: null } });
+      expect(form().querySelector('.ticket app-mode-stamp')).toBeNull();
+    });
+  });
+
   it('cancels the pending request when opened again', async () => {
     const { answer: first } = await open();
     await open({ title: 'Second' });

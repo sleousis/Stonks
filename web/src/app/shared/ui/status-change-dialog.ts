@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 
 import type { GoLiveReport, StatusChangeRequest } from '../../api/models';
+import type { TicketLine } from '../../core/confirm/confirm.service';
 import { type CheckRow, checkRow } from '../golive-checks';
+import { ModeStamp } from './mode-stamp';
 import { Sheet, TypedConfirm, typedMatches } from './sheet';
 import { HoldButton } from './sheet-hold-button';
 import { StatusPill } from './status-pill';
@@ -9,11 +11,21 @@ import { StatusPill } from './status-pill';
 /** A promotion override needs a reason of at least this many characters (API rule). */
 export const OVERRIDE_MIN_REASON = 20;
 
+/**
+ * Going live as an order ticket (UX-03): strategy, portfolios and broker,
+ * with a LIVE stamp for real money, PAPER for a paper broker, and no stamp
+ * while the broker is unknown (`live: null`).
+ */
+export interface StatusChangeTicket {
+  lines: readonly TicketLine[];
+  live: boolean | null;
+}
+
 export interface StatusChangeOptions {
   title: string;
   /** What will happen, in plain words. */
   message: string;
-  /** The action's verb ("Promote", "Retire"). */
+  /** The action's verb ("Go live", "Stop"). */
   confirmLabel: string;
   tone?: 'default' | 'danger';
   /** Characters the reason needs (1 = required, 20 for an override). */
@@ -32,6 +44,8 @@ export interface StatusChangeOptions {
   golive?: GoLiveReport | null;
   /** Why the go-live result is missing, e.g. the check failed to load. */
   goliveNote?: string | null;
+  /** Show the change as an order ticket (going live). */
+  ticket?: StatusChangeTicket | null;
 }
 
 interface Open extends StatusChangeOptions {
@@ -41,8 +55,9 @@ interface Open extends StatusChangeOptions {
 let nextId = 0;
 
 /**
- * Asks for the reason behind a status change (promote, shadow, retire,
- * enable, disable) and, for promotions, shows the go-live result first.
+ * Asks for the reason behind a status change (go live, back to paper
+ * trading, stop) and, when going live, shows the ticket and the go-live
+ * result first.
  * Pages host one and call `open()`; it resolves to the request body, or
  * `null` when cancelled. Full-screen sheet on phones.
  *
@@ -52,7 +67,7 @@ let nextId = 0;
 @Component({
   selector: 'app-status-change-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StatusPill, Sheet, TypedConfirm, HoldButton],
+  imports: [StatusPill, ModeStamp, Sheet, TypedConfirm, HoldButton],
   template: `
     <app-sheet
       [open]="!!current()"
@@ -64,6 +79,29 @@ let nextId = 0;
       @if (current(); as req) {
         <form class="sheet-form" (submit)="$event.preventDefault(); answer(true)">
           <h2 [id]="id + '-title'">{{ req.title }}</h2>
+          @if (req.ticket; as t) {
+            <div
+              class="ticket"
+              [class.live]="t.live === true"
+              aria-label="Go-live ticket"
+              role="group"
+            >
+              <p class="ticket-head">
+                <span class="ticket-kind">Go-live ticket</span>
+                @if (t.live !== null) {
+                  <app-mode-stamp [live]="t.live" />
+                }
+              </p>
+              <dl class="ticket-lines">
+                @for (line of t.lines; track line.label) {
+                  <div>
+                    <dt>{{ line.label }}</dt>
+                    <dd class="num">{{ line.value }}</dd>
+                  </div>
+                }
+              </dl>
+            </div>
+          }
           <p [id]="id + '-message'" class="sheet-message">{{ req.message }}</p>
 
           @if (req.golive; as g) {
