@@ -450,7 +450,8 @@ def test_the_fallback_fetches_only_the_failed_tickers_own_gap(lake):
     ensurer = DataEnsurer(lake, primary, EnsureSettings(), pipeline_factory=factory, today=TODAY)
     report = ensurer.ensure(["A.US", "B.US"], date(2024, 7, 1), date(2025, 6, 30))
     assert report.tickers_fetched == 2
-    assert fallback.price_calls == [("A.US", date(2025, 6, 28), date(2025, 6, 30))]
+    # the gap plus the 5-bar overlap, so its adjustment basis is checked (BE-36)
+    assert fallback.price_calls == [("A.US", date(2025, 6, 23), date(2025, 6, 30))]
 
 
 # ---- edge cases ------------------------------------------------------------------------------

@@ -21,6 +21,7 @@ import pydantic
 import requests
 
 from stonks.core.interval import Interval
+from stonks.ingest.adjustment import adj_ratio, adjustment_drift
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.quality import (
     BarQualityChecker,
@@ -94,7 +95,12 @@ class IngestPipeline:
       ``ranges`` the fallback is asked only for that ticker's ranges;
     - store the run's quality summary on ``ingest_runs.quality_json`` and
       send one warning through ``notifier`` when it breaches the
-      checker's alert thresholds.
+      checker's alert thresholds;
+    - for daily bars, compare the batch's ``adj_close / close`` with the
+      stored bars it overlaps. When the vendor restated it (a split or
+      dividend since the last fetch, beyond ``adjustment_tolerance``), the
+      stored bars older than the batch are scaled onto the new basis, so
+      the series never mixes two bases (BE-09). ``None`` turns it off.
     """
 
     def __init__(
@@ -107,8 +113,10 @@ class IngestPipeline:
         notifier: Notifier | None = None,
         clock: Callable[[], datetime] | None = None,
         sessions: SessionCloses | None = None,
+        adjustment_tolerance: float | None = 5e-4,
     ):
         self._source = source
+        self._adjustment_tolerance = adjustment_tolerance
         self._lake = lake
         self._quality = quality if quality is not None else BarQualityChecker()
         self._fallback = fallback
@@ -347,6 +355,8 @@ class IngestPipeline:
             clean, quarantined = self._validate(
                 frame, ticker, interval, stale_ref, run["id"], supplier, quality
             )
+            if interval == Interval.DAY_1:
+                self._readjust(ticker, clean, quality)
             upsert(clean)
             return {"rows": len(rows), "quarantined": quarantined, "supplied_by": supplier}
 
@@ -364,6 +374,44 @@ class IngestPipeline:
         summary = quality.to_dict()
         self._alert(result, summary, quality.breaches(self._quality.config))
         return replace(result, quality=summary)
+
+    def _readjust(self, ticker: str, clean: pd.DataFrame, quality: RunQuality) -> None:
+        """Scale the stored daily bars older than ``clean`` onto the
+        vendor's new adjustment basis when the overlap shows it moved."""
+        if self._adjustment_tolerance is None or clean.empty:
+            return
+        days = pd.to_datetime(clean["date"])
+        first, last = days.min(), days.max()
+        stored = self._lake.get_bars(
+            ticker, Interval.DAY_1, first.to_pydatetime(), last.to_pydatetime()
+        )
+        if stored.empty:
+            return
+        factor = adjustment_drift(
+            _ratios(pd.to_datetime(stored["timestamp"]), stored),
+            _ratios(days, clean),
+            self._adjustment_tolerance,
+        )
+        if factor is None:
+            return
+        older = self._lake.get_bars(
+            ticker,
+            Interval.DAY_1,
+            datetime(1900, 1, 1),
+            (first - pd.Timedelta(microseconds=1)).to_pydatetime(),
+        )
+        quality.readjusted[ticker] = factor
+        if older.empty:
+            return
+        older["adj_close"] = older["adj_close"] * factor
+        self._lake.upsert_bars(older, interval=Interval.DAY_1)
+        self._log.warning(
+            "bars.readjusted",
+            ticker=ticker,
+            before=str(first.date()),
+            bars=len(older),
+            factor=factor,
+        )
 
     def _fetch_with_fallback(
         self,
@@ -598,6 +646,16 @@ def _status(ok: int, failed: int) -> str:
     if ok == 0:
         return "error"
     return "partial"
+
+
+def _ratios(days: pd.Series, frame: pd.DataFrame) -> dict[date, float]:
+    """``day -> adj_close / close`` of the rows where both are valid."""
+    out: dict[date, float] = {}
+    for day, close, adj in zip(days, frame["close"], frame["adj_close"], strict=True):
+        ratio = adj_ratio(close, adj)
+        if ratio is not None:
+            out[pd.Timestamp(day).date()] = ratio
+    return out
 
 
 def _prices_to_df(rows: Iterable[RawPriceBar]) -> pd.DataFrame:

@@ -53,11 +53,11 @@ from datetime import UTC, date, datetime, timedelta
 from datetime import time as dtime
 from typing import Any
 
-import numpy as np
 import pandas as pd
 from pydantic import BaseModel, Field
 
 from stonks.core.interval import Interval
+from stonks.ingest.adjustment import adj_ratio, adjustment_drift
 from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.pipeline import _SOFT_FAIL_EXCEPTIONS, IngestPipeline
 from stonks.ingest.redact import format_exception
@@ -243,7 +243,11 @@ class DataEnsurer:
         self._lake = lake
         self._source = source
         self._settings = settings or EnsureSettings()
-        self._pipeline_factory = pipeline_factory or (lambda src, lk: IngestPipeline(src, lk))
+        self._pipeline_factory = pipeline_factory or (
+            lambda src, lk: IngestPipeline(
+                src, lk, adjustment_tolerance=self._settings.adjustment_tolerance
+            )
+        )
         self._today = today
         self._clock = clock
         self._sessions = sessions if sessions is not None else default_sessions()
@@ -414,7 +418,7 @@ class DataEnsurer:
             [names, befores, self._settings.overlap_bars],
         ).fetchall()
         for ticker, ts, close, adj in rows:
-            ratio = _ratio(close, adj)
+            ratio = adj_ratio(close, adj)
             if ratio is not None:
                 plan.tails.setdefault(ticker, {})[pd.Timestamp(ts).date()] = ratio
         if not plan.tails:
@@ -429,16 +433,12 @@ class DataEnsurer:
     def _drift(self, tail: dict[date, float], rows: Iterable[Any]) -> float | None:
         """The factor by which the vendor's ``adj_close / close`` moved on
         the oldest overlapping bar that moved, or ``None`` when none did."""
-        tol = self._settings.adjustment_tolerance
-        for r in sorted(rows, key=_row_day):
-            old = tail.get(_row_day(r))
-            new = _ratio(getattr(r, "close", None), getattr(r, "adj_close", None))
-            if old is None or new is None:
-                continue
-            factor = new / old
-            if abs(factor - 1.0) > tol:
-                return factor
-        return None
+        fresh: dict[date, float] = {}
+        for r in rows:
+            ratio = adj_ratio(getattr(r, "close", None), getattr(r, "adj_close", None))
+            if ratio is not None:
+                fresh.setdefault(_row_day(r), ratio)
+        return adjustment_drift(tail, fresh, self._settings.adjustment_tolerance)
 
     def _bulk(self, plan: _Plan) -> tuple[dict[str, list[Any]], int]:
         """Prefetched rows for tickers whose gaps a few bulk days cover.
@@ -514,8 +514,7 @@ class DataEnsurer:
         tail = plan.tails.get(ticker) if interval == Interval.DAY_1 else None
         factor = plan.drift.get(ticker)
         if factor is None:
-            ranges = [*gaps[:-1], (min(tail), gaps[-1][1])] if tail else gaps
-            rows = self._fetch_ranges(ticker, ranges, interval)
+            rows = self._fetch_ranges(ticker, _with_overlap(gaps, tail), interval)
             factor = self._drift(tail, rows) if tail else None
             if factor is None:
                 return self._final(ticker, rows, interval, plan)
@@ -586,18 +585,19 @@ class DataEnsurer:
             until = max(g[1] for gs in gaps.values() for g in gs)
             try:
                 if interval == Interval.DAY_1:
-                    result = pipeline.run_prices(tickers, since=since, until=until, ranges=gaps)
+                    # a fallback is asked for the overlap too, so the
+                    # pipeline's drift check sees its basis (BE-36)
+                    spans = {t: _with_overlap(g, plan.tails.get(t)) for t, g in gaps.items()}
+                    result = pipeline.run_prices(tickers, since=since, until=until, ranges=spans)
                 else:
                     result = pipeline.run_intraday_bars(
                         tickers, interval, since=since, until=until, ranges=gaps
                     )
             finally:
                 prefetcher.cancel()
+        # Stored bars older than a refetch (past the vendor's history
+        # limit) were scaled onto the new basis by the pipeline (BE-09).
         self._record_ranges(gaps, fetched, interval)
-        for ticker, (start, factor) in readjusted.items():
-            first = plan.first_bar.get(ticker)
-            if ticker in fetched and first is not None and first < start:
-                self._rescale(ticker, start, factor)
         report.readjusted = sorted(t for t in readjusted if t in fetched)
         failed = [t for t in tickers if t not in fetched]
         report.run_id = result.run_id
@@ -615,24 +615,6 @@ class DataEnsurer:
             bulk_days=report.bulk_days,
         )
         return report
-
-    def _rescale(self, ticker: str, before: date, factor: float) -> None:
-        """Multiply ``adj_close`` of the stored daily bars older than
-        ``before`` (which the vendor no longer serves) by ``factor``."""
-        end = datetime.combine(before, dtime()) - timedelta(microseconds=1)
-        old = self._lake.get_bars(ticker, Interval.DAY_1, datetime(1900, 1, 1), end)
-        if old.empty:
-            return
-        old["adj_close"] = old["adj_close"] * factor
-        self._lake.upsert_bars(old, interval=Interval.DAY_1)
-        _log.warning(
-            "ensure.rescaled",
-            ticker=ticker,
-            before=str(before),
-            bars=len(old),
-            factor=factor,
-            reason="older than the vendor's history limit",
-        )
 
     def _record_ranges(
         self,
@@ -666,15 +648,11 @@ class DataEnsurer:
             )
 
 
-def _ratio(close: Any, adj: Any) -> float | None:
-    """``adj / close`` when both are finite and positive, else ``None``."""
-    try:
-        c, a = float(close), float(adj)
-    except (TypeError, ValueError):
-        return None
-    if not (np.isfinite(c) and np.isfinite(a)) or c <= 0 or a <= 0:
-        return None
-    return a / c
+def _with_overlap(gaps: list[DateRange], tail: dict[date, float] | None) -> list[DateRange]:
+    """``gaps`` with the last one stretched back over the stored ``tail``."""
+    if not tail:
+        return gaps
+    return [*gaps[:-1], (min(tail), gaps[-1][1])]
 
 
 def _row_day(row: Any) -> date:
