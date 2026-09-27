@@ -203,14 +203,6 @@ def test_bulk_falls_back_per_ticker_when_unsupported(lake):
     assert report.bulk_days == 0 and report.tickers_fetched == 25
 
 
-def test_refresh_exchange_day(lake):
-    source = _source("A.US", "B.US", start=date(2025, 6, 27), end=date(2025, 6, 27), bulk=True)
-    report = _ensurer(lake, source, bulk=True).refresh_exchange_day("US", date(2025, 6, 27))
-    assert source.bulk_calls == [("US", date(2025, 6, 27))]
-    assert report.tickers_fetched == 2
-    assert lake.count_rows("bars") == 2
-
-
 def test_writes_go_through_the_pipeline_factory(lake):
     from stonks.ingest.pipeline import IngestPipeline
 

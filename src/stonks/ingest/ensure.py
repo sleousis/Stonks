@@ -350,39 +350,6 @@ class DataEnsurer:
         todo = [t for t in plan.gaps if t not in prefetched]
         return self._write(plan, prefetched, todo, interval, report)
 
-    def refresh_exchange_day(
-        self, exchange: str, day: date, tickers: Sequence[str] | None = None
-    ) -> EnsureReport:
-        """Refresh one exchange for one day: one bulk call, falling back to
-        one call per ticker (``tickers``, else the source's listing) when
-        the plan or the source has no bulk data."""
-        report = EnsureReport(
-            interval=str(Interval.DAY_1), start=day, end=day, source=self._source.source_id
-        )
-        rows: dict[str, list[Any]] = {}
-        if self._limits.bulk:
-            try:
-                self._limiter.acquire()
-                for bar in self._source.fetch_bulk_eod(exchange, day):
-                    rows.setdefault(bar.ticker, []).append(bar)
-                report.bulk_days = 1
-            except _SOFT_FAIL_EXCEPTIONS as exc:
-                report.warnings.append(f"bulk {exchange} {day} failed: {format_exception(exc)}")
-                rows = {}
-        if report.bulk_days:
-            names = list(rows) if tickers is None else [t for t in tickers if t in rows]
-            plan = _Plan(gaps={t: [(day, day)] for t in names})
-            plan.asset_classes = self._lake.get_asset_classes(names)
-            report.tickers_requested = len(names)
-            report.gaps = len(names)
-            return self._write(plan, {t: rows[t] for t in names}, [], Interval.DAY_1, report)
-        names = list(tickers) if tickers is not None else self._source.list_tickers(exchange)
-        plan = _Plan(gaps={t: [(day, day)] for t in names})
-        plan.asset_classes = self._lake.get_asset_classes(names)
-        report.tickers_requested = len(names)
-        report.gaps = len(names)
-        return self._write(plan, {}, names, Interval.DAY_1, report)
-
     # ---- internals -----------------------------------------------------------
 
     def _covered(
