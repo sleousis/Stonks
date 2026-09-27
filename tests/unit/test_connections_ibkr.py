@@ -75,9 +75,7 @@ def factory_for(gw: FakeIbGateway):
 
 
 def opened(gw: FakeIbGateway, *, gateway: str = "paper", **extra) -> IbkrConnection:
-    ctx = ProviderContext(
-        config=CONFIG, connection_id="c1", transport=factory_for(gw), extra=extra
-    )
+    ctx = ProviderContext(config=CONFIG, connection_id="c1", transport=factory_for(gw), extra=extra)
     return IbkrConnection.open(Credentials({"gateway": gateway}), ctx)
 
 
@@ -93,7 +91,7 @@ def test_is_registered_with_trade_and_short():
 
 
 def test_needs_a_configured_gateway():
-    with pytest.raises(ProviderNotConfigured, match="brokers.ibkr.gateways"):
+    with pytest.raises(ProviderNotConfigured, match=r"brokers.ibkr.gateways"):
         IbkrConnection.check_configured(ConnectionsConfig(enabled_providers=("ibkr",)))
     IbkrConnection.check_configured(CONFIG)
     ctx = ProviderContext(config=CONFIG, transport=factory_for(FakeIbGateway()))

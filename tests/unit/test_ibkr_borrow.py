@@ -64,7 +64,9 @@ def test_hard_name_without_a_known_fee_is_no_quote():
     gw.shortable_data[AAPL.contract.con_id] = IbShortability(AAPL.contract.con_id, 2.0, 100.0)
     assert IbkrBorrowSource(b).quote("AAPL.US", TODAY) is None
     fees = lake_fees(AAPL_US=BorrowQuote("hard", 0.12))
-    assert IbkrBorrowSource(b, fees=fees).quote("AAPL.US", TODAY) == BorrowQuote("hard", 0.12, 100.0)
+    assert IbkrBorrowSource(b, fees=fees).quote("AAPL.US", TODAY) == BorrowQuote(
+        "hard", 0.12, 100.0
+    )
 
 
 def test_easy_name_without_a_known_fee_uses_the_general_fee():
@@ -144,8 +146,13 @@ def test_margin_account_shorts_only_with_a_locate():
 
 def test_closing_sells_never_need_a_locate():
     b, gw = broker()
-    b.place_order(
-        Order(client_id="t1-s1-AAPL.US-close", ticker="AAPL.US", side="sell", quantity=5.0,
-              position_effect="close", decision_price=200.0)  # fmt: skip
+    close = Order(
+        client_id="t1-s1-AAPL.US-close",
+        ticker="AAPL.US",
+        side="sell",
+        quantity=5.0,
+        position_effect="close",
+        decision_price=200.0,
     )
+    b.place_order(close)
     assert len(gw.sent) == 1

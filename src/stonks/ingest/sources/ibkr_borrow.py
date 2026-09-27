@@ -216,9 +216,7 @@ class IbkrBorrowDataSource(DataSource):
         try:
             text = self._fetch(f"{name}.txt")
         except (OSError, EOFError, ftplib.Error) as exc:
-            raise DataSourceError(
-                f"short stock file {name}: {type(exc).__name__}: {exc}"
-            ) from exc
+            raise DataSourceError(f"short stock file {name}: {type(exc).__name__}: {exc}") from exc
         return parse_short_stock_file(text, name, source=self.source_id)
 
     def list_tickers(self, exchange: str) -> list[str]:

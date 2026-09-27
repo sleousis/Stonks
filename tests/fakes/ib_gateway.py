@@ -371,6 +371,4 @@ class FakeIbGateway:
     def shortability(self, contracts: Sequence[IbContract]) -> Sequence[IbShortability]:
         self._need_connection()
         self.shortable_requests += 1
-        return [
-            self.shortable_data[c.con_id] for c in contracts if c.con_id in self.shortable_data
-        ]
+        return [self.shortable_data[c.con_id] for c in contracts if c.con_id in self.shortable_data]

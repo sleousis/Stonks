@@ -2049,7 +2049,7 @@ class DuckDBLake:
         row = cur.fetchone()
         if row is None:
             return None
-        out = dict(zip(self._BORROW_RATE_COLS, row, strict=True))
+        out: dict[str, Any] = dict(zip(self._BORROW_RATE_COLS, row, strict=True))
         out["as_of"] = _as_calendar_date(out["as_of"])
         return out
 

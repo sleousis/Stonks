@@ -241,7 +241,11 @@ class IbAsyncClient:
             try:
                 loop = asyncio.get_running_loop()
                 deadline = loop.time() + wait
-                while loop.time() < deadline and any(_missing(t.shortable) for t in tickers):
+                while True:
+                    if loop.time() >= deadline:
+                        break
+                    if not any(_missing(t.shortable) for t in tickers):
+                        break
                     await asyncio.sleep(_ACK_POLL_SECONDS)
             finally:
                 for c in wanted:

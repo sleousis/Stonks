@@ -143,9 +143,7 @@ class IbkrFlexSettings(BaseModel):
 
     #: The Activity Flex Query to run. ``None`` turns Flex off.
     query_id: str | None = None
-    base_url: str = (
-        "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService"
-    )
+    base_url: str = "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebService"
     timeout_seconds: float = Field(default=30.0, gt=0)
     #: Seconds between polls while IBKR generates the statement.
     poll_seconds: float = Field(default=5.0, ge=0)

@@ -62,6 +62,6 @@ def test_ibkr_gateways_come_from_brokers_ibkr(tmp_path):
     assert cfg.ibkr.gateways["paper"].port == 4004
     assert cfg.ibkr.flex.query_id == "123"
     assert ConnectionsConfig.load(tmp_path / "none.toml", environ={}).ibkr.gateways == {}
-    path.write_text('[connections.ibkr]\nallow_live = true\n')
+    path.write_text("[connections.ibkr]\nallow_live = true\n")
     with pytest.raises(ValueError, match=r"\[brokers.ibkr\]"):
         ConnectionsConfig.load(path, environ={})

@@ -314,7 +314,9 @@ class IbkrConnection(BrokerConnection):
         for act in self._flex_activities(account_id):
             if act.trade_date is None or act.trade_date >= since:
                 found.setdefault(act.provider_activity_id, act)
-        return sorted(found.values(), key=lambda a: (a.trade_date or date.min, a.provider_activity_id))
+        return sorted(
+            found.values(), key=lambda a: (a.trade_date or date.min, a.provider_activity_id)
+        )
 
     def _flex_activities(self, account_id: str) -> list[Activity]:
         if self._flex is None:

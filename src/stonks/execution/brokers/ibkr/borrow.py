@@ -104,7 +104,13 @@ class IbkrBorrowSource(BorrowSource):
             broker.ensure_ready()
             resolved = broker.resolver.resolve(ticker)
             answers = client.shortability([resolved.contract])
-        except (BrokerError, UnsupportedTickerError, IbApiError, ConnectionError, TimeoutError) as exc:
+        except (
+            BrokerError,
+            UnsupportedTickerError,
+            IbApiError,
+            ConnectionError,
+            TimeoutError,
+        ) as exc:
             _log.warning("ibkr.borrow.no_answer", ticker=ticker, error=str(exc))
             return None
         for answer in answers:
