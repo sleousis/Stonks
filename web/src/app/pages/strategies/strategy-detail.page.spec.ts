@@ -282,6 +282,19 @@ describe('StrategyDetailPage', () => {
     expect(el.querySelector('a[href="/go-live?strategy=momentum-v3"]')).not.toBeNull();
   });
 
+  it('uses trader words only: no system words outside what people typed (UX-09)', async () => {
+    await load();
+    const copy = el.cloneNode(true) as HTMLElement;
+    // Reasons are what people wrote; the page's own words must be clean.
+    copy.querySelectorAll('.timeline .reason').forEach((r) => r.remove());
+    expect(copy.textContent).not.toMatch(/shadow|promot|regist|retire/i);
+    const pills = [...el.querySelectorAll('.timeline app-status-pill')].map((p) =>
+      p.textContent?.trim(),
+    );
+    expect(pills).toContain('Paper trading');
+    expect(pills).toContain('Live');
+  });
+
   it('shows the status history newest first, with reasons and overrides', async () => {
     await load();
     const items = el.querySelectorAll('.timeline li');
