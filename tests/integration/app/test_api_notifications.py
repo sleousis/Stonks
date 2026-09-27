@@ -272,6 +272,27 @@ def test_send_a_test_notification_to_yourself(client):
     assert feed["items"][0]["id"] == body["notification_id"]
 
 
+def test_a_second_test_notification_within_a_minute_is_refused(client, settings):
+    """BE-40: a looped test call must not send unlimited push, email and
+    webhook calls."""
+    from stonks.store.state import SqliteState
+
+    assert _subscribe(client).status_code == 201
+    assert client.post("/api/notifications/test", headers=AUTH).status_code == 201
+    again = client.post("/api/notifications/test", headers=AUTH)
+    sent = 1
+    if again.status_code == 201:  # the first call was in the minute before
+        sent, again = 2, client.post("/api/notifications/test", headers=AUTH)
+    assert again.status_code == 429, again.text
+    assert again.json()["code"] == "rate_limited"
+    assert "Retry-After" in again.headers
+    with SqliteState(settings.state.path) as state:
+        rows = state.sql(
+            "SELECT COUNT(*) AS n FROM notification_outbox WHERE title = 'Test notification'"
+        )
+    assert rows[0]["n"] == sent
+
+
 def test_a_test_notification_needs_a_signed_in_person(client, settings, services):
     with TestClient(create_app(settings, services=services), client=REMOTE) as remote:
         assert remote.post("/api/notifications/test").status_code == 401

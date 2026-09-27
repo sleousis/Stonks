@@ -1055,6 +1055,7 @@ export const markNotificationsRead = <ThrowOnError extends boolean = false>(opti
  * Send yourself a test notification on every channel you turned on
  * (push devices, email, your webhook), to check that alerts reach you.
  * It skips quiet hours. Only ever reaches you, so viewers may do it too.
+ * One a minute: a second call in the same minute answers 429.
  */
 export const sendTestNotification = <ThrowOnError extends boolean = false>(options?: Options<SendTestNotificationData, ThrowOnError>): RequestResult<SendTestNotificationResponses, SendTestNotificationErrors, ThrowOnError> => (options?.client ?? client).post<SendTestNotificationResponses, SendTestNotificationErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

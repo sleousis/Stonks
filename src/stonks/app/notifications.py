@@ -12,13 +12,13 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from stonks.accounts import AccountsError, NotFound, Scope
 from stonks.app.context import AppContext
-from stonks.app.errors import NotFoundError, ValidationError
+from stonks.app.errors import NotFoundError, RateLimitedError, ValidationError
 from stonks.notify import service as notify
 from stonks.notify.channels import build_channels
 from stonks.notify.events import Audience, Category, Event
@@ -314,9 +314,13 @@ class NotificationsAppService:
     def send_test(self, scope: Scope) -> TestNotificationView:
         """Queue a test notification for the caller on every channel they
         have turned on. The delivery worker sends it within seconds, high
-        urgency, so quiet hours don't hold it."""
+        urgency, so quiet hours don't hold it. One per user per minute: a
+        second call in the same minute raises :class:`RateLimitedError`
+        (BE-40). The router's dedupe index enforces it across processes."""
         if scope.is_service or scope.user_id is None:
             raise ValidationError("a service has no devices to notify")
+        now = datetime.now(UTC)
+        minute = now.strftime("%Y-%m-%dT%H:%M")
         channels = build_channels(self.settings)
         with self._state() as state:
             router = NotificationRouter(
@@ -330,7 +334,13 @@ class NotificationsAppService:
                     audience=Audience.users(scope.user_id),
                     urgency="high",
                     deep_link="/notifications",
+                    dedupe_key=f"test_notification:{minute}",
                 )
+            )
+        if scope.user_id in result.deduped_user_ids:
+            raise RateLimitedError(
+                "one test notification a minute: try again shortly",
+                retry_after=60 - now.second,
             )
         ids = result.notification_ids
         return TestNotificationView(

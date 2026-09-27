@@ -11231,6 +11231,10 @@ export type SendTestNotificationErrors = {
      */
     422: ProblemDetails;
     /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
      * Service Unavailable
      */
     503: ProblemDetails;

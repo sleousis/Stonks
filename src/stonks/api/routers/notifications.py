@@ -9,7 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Path, Query, Response
 
 from stonks.api.deps import PageDep, ScopeDep, ServicesDep, needs
-from stonks.api.errors import PROBLEM_RESPONSES
+from stonks.api.errors import PROBLEM_RESPONSES, ProblemDetails
 from stonks.app.notifications import (
     FeedView,
     MarkReadRequest,
@@ -179,9 +179,11 @@ def mark_read(body: MarkReadRequest, services: ServicesDep, scope: ScopeDep) -> 
     response_model=TestNotificationView,
     operation_id="sendTestNotification",
     dependencies=needs(Permission.READ),
+    responses={429: {"model": ProblemDetails, "description": "Too Many Requests"}},
 )
 def send_test(services: ServicesDep, scope: ScopeDep) -> TestNotificationView:
     """Send yourself a test notification on every channel you turned on
     (push devices, email, your webhook), to check that alerts reach you.
-    It skips quiet hours. Only ever reaches you, so viewers may do it too."""
+    It skips quiet hours. Only ever reaches you, so viewers may do it too.
+    One a minute: a second call in the same minute answers 429."""
     return services.notifications.send_test(scope)
