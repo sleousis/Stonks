@@ -33,6 +33,7 @@ dependencies = [
     "quantlib>=1.36",
     "optuna>=5.0.0",
     "ib-async>=2.0",
+    "websockets>=15.0",
 ]
 
 [project.scripts]
