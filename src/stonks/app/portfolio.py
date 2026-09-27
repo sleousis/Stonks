@@ -511,9 +511,9 @@ class PortfolioService:
                 [tickers],
             )
         return {
-            r.id: normalize_currency(str(r.currency))[0]
-            for r in df.itertuples(index=False)
-            if r.currency
+            str(r["id"]): normalize_currency(str(r["currency"]))[0]
+            for r in df.to_dict("records")
+            if r["currency"]
         }
 
     def _latest_closes(self, tickers: list[str]) -> dict[str, tuple[float, date]]:
@@ -535,13 +535,12 @@ class PortfolioService:
                 """,
                 [tickers],
             )
-        return {
-            r.ticker: (
-                float(r.close) * scales.get(r.ticker, 1.0),
-                r.date.date() if isinstance(r.date, datetime) else r.date,
-            )
-            for r in df.itertuples(index=False)
-        }
+        out: dict[str, tuple[float, date]] = {}
+        for r in df.to_dict("records"):
+            ticker, day = str(r["ticker"]), r["date"]
+            day = day.date() if isinstance(day, datetime) else day
+            out[ticker] = (float(r["close"]) * scales.get(ticker, 1.0), day)
+        return out
 
 
 def _position(

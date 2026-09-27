@@ -729,13 +729,14 @@ def _next_session(
     )
     out: dict[str, tuple[float | None, float | None]] = {}
     scales = price_scales(lake, tickers)
-    for row in df.itertuples(index=False):
-        scale = scales.get(str(row.ticker), 1.0)
-        open_, close = _positive(row.open), _positive(row.close)
+    for rec in df.to_dict("records"):
+        ticker = str(rec["ticker"])
+        scale = scales.get(ticker, 1.0)
+        open_, close = _positive(rec["open"]), _positive(rec["close"])
         open_ = None if open_ is None else open_ * scale
         close = None if close is None else close * scale
         if open_ is not None or close is not None:
-            out[str(row.ticker)] = (open_, close)
+            out[ticker] = (open_, close)
     return out
 
 
