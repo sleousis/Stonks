@@ -10,16 +10,23 @@ gets no alert of that kind at all, not even in the app. Every kind is on
 until the person turns it off. Which channels carry the kinds left on is
 the ``event_alert`` category's channel preference, like any other category.
 
+Economic release alerts add two choices in :class:`EconomicAlertPrefStore`:
+the countries (default: those of the person's portfolios' base currencies,
+else US) and the lowest importance that alerts (default: high).
+
 This is the storage layer and takes a bare ``user_id``; the scoped entry
 points (who may change whose settings) are in :mod:`stonks.notify.service`.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+import json
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
+from stonks.calendars.countries import FALLBACK_COUNTRY, country_for_currency, is_country_code
+from stonks.calendars.importance import IMPORTANCE_LEVELS, Importance
 from stonks.notify.events import CATEGORIES, Category
 from stonks.notify.quiet import QuietHours, parse_hhmm
 from stonks.store.state import SqliteState
@@ -204,3 +211,103 @@ class EventAlertPrefStore:
                     " enabled = excluded.enabled, updated_at = excluded.updated_at",
                     [user_id, topic, int(bool(enabled)), _iso(now)],
                 )
+
+
+#: At most this many countries per person.
+ECONOMIC_COUNTRIES_MAX = 30
+
+
+@dataclass(frozen=True)
+class EconomicAlertPrefs:
+    """A person's economic release alert choices, defaults filled in."""
+
+    #: The countries alerts go out for, in order.
+    countries: tuple[str, ...]
+    #: True while the countries follow the person's portfolios.
+    countries_default: bool
+    #: The lowest importance that alerts.
+    min_importance: Importance
+
+
+def default_countries(state: SqliteState, user_id: str) -> tuple[str, ...]:
+    """The countries of the base currencies of a person's portfolios that
+    are not archived, oldest portfolio first, else US."""
+    rows = state.sql(
+        "SELECT base_currency FROM portfolios WHERE owner_id = ? AND status != 'archived'"
+        " ORDER BY created_at, id",
+        [user_id],
+    )
+    found = [country_for_currency(r["base_currency"] or "") for r in rows]
+    countries = tuple(dict.fromkeys(c for c in found if c))
+    return countries or (FALLBACK_COUNTRY,)
+
+
+def clean_countries(countries: Sequence[str]) -> tuple[str, ...]:
+    """Upper case, each once, in the order given. ``ValueError`` for a bad
+    code, an empty list or too many."""
+    out = tuple(dict.fromkeys(c.strip().upper() for c in countries))
+    if not out:
+        raise ValueError("pick at least one country, or turn economic releases off")
+    if len(out) > ECONOMIC_COUNTRIES_MAX:
+        raise ValueError(f"pick at most {ECONOMIC_COUNTRIES_MAX} countries")
+    for code in out:
+        if not is_country_code(code):
+            raise ValueError(f"bad country code {code!r}; use two letters such as US or DE")
+    return out
+
+
+class EconomicAlertPrefStore:
+    """Countries and importance threshold for economic release alerts. No
+    row means the defaults."""
+
+    def __init__(self, state: SqliteState) -> None:
+        self._state = state
+
+    def get(self, user_id: str) -> EconomicAlertPrefs:
+        rows = self._state.sql(
+            "SELECT countries_json, min_importance FROM economic_alert_prefs WHERE user_id = ?",
+            [user_id],
+        )
+        raw = rows[0]["countries_json"] if rows else None
+        threshold: Importance = rows[0]["min_importance"] if rows else "high"
+        if raw is None:
+            return EconomicAlertPrefs(default_countries(self._state, user_id), True, threshold)
+        return EconomicAlertPrefs(tuple(json.loads(raw)), False, threshold)
+
+    def set(
+        self,
+        user_id: str,
+        *,
+        countries: Sequence[str] | None = None,
+        default_countries: bool = False,
+        min_importance: str | None = None,
+        now: datetime,
+    ) -> None:
+        """Change what is given. ``countries`` picks them, ``default_countries``
+        goes back to following the portfolios. ``ValueError`` on bad input."""
+        if countries is not None and default_countries:
+            raise ValueError("pick countries or go back to the default, not both")
+        if min_importance is not None and min_importance not in IMPORTANCE_LEVELS:
+            raise ValueError(
+                f"unknown importance {min_importance!r}; choose from {list(IMPORTANCE_LEVELS)}"
+            )
+        picked = clean_countries(countries) if countries is not None else None
+        if picked is None and not default_countries and min_importance is None:
+            return
+        rows = self._state.sql(
+            "SELECT countries_json, min_importance FROM economic_alert_prefs WHERE user_id = ?",
+            [user_id],
+        )
+        stored = rows[0]["countries_json"] if rows else None
+        if picked is not None:
+            stored = json.dumps(list(picked))
+        elif default_countries:
+            stored = None
+        threshold = min_importance or (rows[0]["min_importance"] if rows else "high")
+        self._state.execute(
+            "INSERT INTO economic_alert_prefs (user_id, countries_json, min_importance,"
+            " updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET"
+            " countries_json = excluded.countries_json,"
+            " min_importance = excluded.min_importance, updated_at = excluded.updated_at",
+            [user_id, stored, threshold, _iso(now)],
+        )
