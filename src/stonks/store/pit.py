@@ -16,7 +16,9 @@ a daily decision). Then:
   ``S`` when ``S + I <= reach`` (:meth:`PointInTimeLake.bar_cutoff`);
 - **day-stamped rows** are known once their day has ended
   (:attr:`PointInTimeLake.known_through`): statements by
-  ``available_date`` (the filing date), macro prints by publication date,
+  ``available_date`` (the day after the filing date, since a filing may
+  land after the close: usable from the decision bar's start day, daily
+  or intraday), macro prints by publication date,
   share counts, dividends, splits, bond yields and TVL by their day;
 - **universe membership** shows spans that started by then, and an exit
   dated later reads as still open (nobody knew it yet);
@@ -36,7 +38,7 @@ one cheap view per decision: ``session.at(as_of)``.
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Mapping
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import pandas as pd
@@ -157,6 +159,10 @@ class PointInTimeLake:
         self._session = session if session is not None else PitSession(lake)
         self._reach = decision_reach(self._as_of, decision_interval)
         self._known = known_through(self._as_of, decision_interval)
+        #: Filings carry no time of day, so one is used from the day after
+        #: it (``available_date``): by the decision bar's start day, daily or
+        #: intraday (BE-22).
+        self._filed_by = self._as_of.date()
 
     # ---- the decision ---------------------------------------------------------
 
@@ -250,16 +256,19 @@ class PointInTimeLake:
                 statement, ticker, missing_filing_lag_days=missing_filing_lag_days
             ),
         )
-        return _rows(full, _on_or_before(full["available_date"], self._known))
+        return _rows(full, _on_or_before(full["available_date"], self._filed_by))
 
     def _read_get_statements_as_of(
         self, statement: str, ticker: str, as_of: Any, **kwargs: Any
     ) -> pd.DataFrame:
-        return self._lake.get_statements_as_of(statement, ticker, self._clamp_day(as_of), **kwargs)
+        day = self._filed_by if as_of is None else min(_day(as_of), self._filed_by)
+        return self._lake.get_statements_as_of(statement, ticker, day, **kwargs)
 
     def _statement(self, table: str, ticker: str) -> pd.DataFrame:
+        """Rows filed before the decision day: a filing is used from the
+        day after it (BE-22)."""
         full = self._cached((table, ticker), lambda: getattr(self._lake, f"get_{table}")(ticker))
-        return _rows(full, _on_or_before(full["filing_date"], self._known))
+        return _rows(full, _on_or_before(full["filing_date"], self._filed_by - timedelta(days=1)))
 
     def _read_get_income_statement(self, ticker: str) -> pd.DataFrame:
         return self._statement("income_statement", ticker)
