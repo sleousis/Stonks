@@ -108,4 +108,14 @@ def test_make_broker_kind_override():
 
 def test_unknown_kind_rejected():
     with pytest.raises(ValueError):
-        BrokersConfig(kind="ibkr")
+        BrokersConfig(kind="etrade")  # type: ignore[arg-type]
+
+
+def test_ibkr_kind_is_known_but_has_no_adapter_yet():
+    """Roadmap 19.2 builds the adapter. Until then make_broker refuses."""
+    from stonks.config import Settings
+    from stonks.execution.brokers import BrokerError, make_broker
+
+    assert BrokersConfig(kind="ibkr").kind == "ibkr"
+    with pytest.raises(BrokerError, match=r"19.2"):
+        make_broker(Settings(), Portfolio(cash=0.0), kind="ibkr")

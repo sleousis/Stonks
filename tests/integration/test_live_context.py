@@ -89,6 +89,27 @@ def test_a_failing_broker_leaves_the_account_and_quotes_empty(state):
     assert live.allocation is None and live.account_rules is None
 
 
+def test_instrument_facts_from_the_lake(lake):
+    from stonks.production.live.context import instrument_facts
+
+    lake.con.execute(
+        "INSERT INTO instruments (id, asset_class, security_type, isin, currency)"
+        " VALUES ('SPY.US', 'equity', 'etf', 'US78462F1030', 'USD'),"
+        " ('SAP.XETRA', 'equity', 'common_stock', NULL, 'EUR')"
+    )
+    lake.con.execute(
+        "INSERT INTO shares_outstanding (ticker, date, shares) VALUES"
+        " ('SAP.XETRA', '2026-01-01', 1000.0), ('SAP.XETRA', '2026-06-30', 1200.0)"
+    )
+    facts = instrument_facts(lake, ["SPY.US", "SAP.XETRA", "NONE.US"])
+    assert set(facts) == {"SPY.US", "SAP.XETRA"}
+    assert facts["SPY.US"].is_fund and facts["SPY.US"].domicile == "US"
+    assert facts["SPY.US"].shares_outstanding is None
+    assert facts["SAP.XETRA"].shares_outstanding == 1200.0
+    assert facts["SAP.XETRA"].domicile is None
+    assert instrument_facts(None, ["SPY.US"]) == {}
+
+
 def test_a_broker_without_capabilities_is_fine(state):
     live = build_live_context(state, "pf_default", DAY, broker=object())
     assert live.account is None and live.quotes == {}

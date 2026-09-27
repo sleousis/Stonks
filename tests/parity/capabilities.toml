@@ -1159,3 +1159,23 @@ routes = [
 console = ["exportOrders", "exportFills", "exportJournal", "exportSnapshots", "exportPnl", "exportLabTrials"]
 cli = { limited = "files download in the console, the CLI prints the same rows" }
 mcp = { limited = "CSV files are downloads, the list tools return the same rows" }
+
+# ---- live trading (roadmap 19.6, 19.7) --------------------------------------------
+
+[[capability]]
+id = "live.settings.read"
+domain = "trading"
+title = "Read a live portfolio's allocation and account profile"
+routes = ["GET /api/portfolios/{portfolio_id}/live/allocation", "GET /api/portfolios/{portfolio_id}/live/account-profile"]
+console = { limited = "the console form lands with the go-live page (roadmap 19.9)" }
+cli = { limited = "owner settings live in the console, the API has them now" }
+mcp = { limited = "read tools land with the live stages (roadmap 19.9)" }
+
+[[capability]]
+id = "live.settings.write"
+domain = "trading"
+title = "Set a live portfolio's allocation and account profile (step-up)"
+routes = ["PUT /api/portfolios/{portfolio_id}/live/allocation", "PUT /api/portfolios/{portfolio_id}/live/account-profile"]
+console = { limited = "the console form lands with the go-live page (roadmap 19.9)" }
+cli = { limited = "needs a fresh second factor, done in the web app" }
+mcp = { limited = "needs a fresh second factor, done in the web app" }
