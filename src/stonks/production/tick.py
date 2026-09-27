@@ -106,6 +106,7 @@ from stonks.portfolio.pipeline import (
 )
 from stonks.production.auto_pause import (
     broker_error_reason,
+    is_short_outage,
     pause_auto,
     strategy_not_active_reason,
 )
@@ -1639,9 +1640,14 @@ def load_tick_plan(
 def _pause_on_broker_error(
     run: _TickRun, book: TickBook, outcome: BookResult, error: BaseException | str
 ) -> BookResult:
-    """An auto book whose broker failed pauses its auto subscriptions."""
+    """An auto book whose broker failed pauses its auto subscriptions. A
+    short outage only skips the day (roadmap 19.5): a long one pauses
+    through the broker health job and the reconciliation checks."""
     if book.mode != "auto" or run.dry_run or not run.scoped:
         return outcome
+    if is_short_outage(error):
+        run.log.warning("tick.broker_outage", portfolio_id=book.portfolio_id, error=str(error))
+        return replace(outcome, summary={**outcome.summary, "broker_outage": True})
     reason = broker_error_reason(error)
     try:
         paused = pause_auto(

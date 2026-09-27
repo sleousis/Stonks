@@ -16,12 +16,23 @@ subscription to it pauses with ``strategy_not_active: <status>``
 (:func:`pause_auto_for_strategy`, called by the registry's ``set_status``),
 and the tick refuses and pauses any auto subscription whose strategy is not
 active (BE-01). Paper and notify subscriptions are left alone.
+
+**Short outage versus fault** (roadmap 19.5). A broker that does not
+answer (``BrokerUnavailableError``, a dropped socket, a timeout) is a
+short outage: the book skips the day and nothing pauses. The next day
+decides afresh. Only a long outage pauses, counted in sessions by the
+``broker_health`` job and the reconciliation checks. Every other failure
+(a wrong account, a refused login, a broker answer that makes no sense) is
+a fault and pauses at once (:func:`broker_failure_kind`). Material
+reconciliation drift pauses too, with a ``broker_drift`` reason that names
+the report (:func:`drift_reason`).
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
+from typing import Literal
 
 from stonks.accounts.audit import AuditLog, iso_now
 from stonks.logging import get_logger
@@ -34,7 +45,30 @@ ACTOR = "service:system"
 BROKER_ERROR = "broker_error"
 #: ``paused_reason`` prefix of a pause because the strategy left ``active``.
 STRATEGY_NOT_ACTIVE = "strategy_not_active"
+#: ``paused_reason`` prefix of a pause on reconciliation drift (roadmap 19.5).
+BROKER_DRIFT = "broker_drift"
 _REASON_MAX = 300
+
+#: ``outage``: the broker did not answer, skip the day. ``fault``: pause.
+BrokerFailureKind = Literal["outage", "fault"]
+
+
+def broker_failure_kind(error: BaseException | str) -> BrokerFailureKind:
+    """Whether a broker failure is a short outage or a fault. A plain
+    message (a partial run) is a fault, as before."""
+    from stonks.execution.brokers.base import BrokerUnavailableError
+
+    if isinstance(error, (BrokerUnavailableError, ConnectionError, TimeoutError)):
+        return "outage"
+    return "fault"
+
+
+def is_short_outage(error: BaseException | str) -> bool:
+    return broker_failure_kind(error) == "outage"
+
+
+def drift_reason(report_id: str, items: int) -> str:
+    return f"{BROKER_DRIFT}: report {report_id} found {items} unexplained item(s)"[:_REASON_MAX]
 
 
 def broker_error_reason(error: BaseException | str) -> str:
@@ -91,6 +125,26 @@ def pause_auto(
     return paused
 
 
+def auto_subscription_ids(state: SqliteState, portfolio_id: str) -> list[str]:
+    """The running auto subscriptions of ``portfolio_id``."""
+    if not state.sql("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'subscriptions'"):
+        return []
+    rows = state.sql(
+        "SELECT id FROM subscriptions WHERE portfolio_id = ? AND mode = 'auto'"
+        " AND paused_reason IS NULL ORDER BY id",
+        [portfolio_id],
+    )
+    return [r["id"] for r in rows]
+
+
+def pause_portfolio_auto(
+    state: SqliteState, portfolio_id: str, reason: str, *, as_of: date
+) -> list[str]:
+    """Pause every running auto subscription of ``portfolio_id``."""
+    ids = auto_subscription_ids(state, portfolio_id)
+    return pause_auto(state, portfolio_id, ids, reason, tick_id=None, as_of=as_of)
+
+
 def pause_auto_for_strategy(
     state: SqliteState, strategy_id: str, status: str, *, as_of: date | None = None
 ) -> list[str]:
@@ -122,7 +176,13 @@ def _notify_owner(state: SqliteState, portfolio_id: str, reason: str, as_of: dat
     from stonks.notify.events import Audience, Event
     from stonks.notify.router import configured_router
 
-    if reason.startswith(STRATEGY_NOT_ACTIVE):
+    if reason.startswith(BROKER_DRIFT):
+        body = (
+            f"Stonks paused auto mode on this portfolio because the broker and the ledger "
+            f"disagree ({reason}). New buys are halted. Read the reconcile report, fix the "
+            "cause, clear the halt with a reason, then resume."
+        )
+    elif reason.startswith(STRATEGY_NOT_ACTIVE):
         body = (
             f"Stonks paused auto mode on this portfolio because its strategy is no longer "
             f"active ({reason}). Nothing is placed for it. Check your holdings at the broker."
