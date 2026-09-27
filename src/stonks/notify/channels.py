@@ -124,6 +124,7 @@ def register_channel(name: str) -> Callable[[type[Channel]], type[Channel]]:
 def _load_builtins() -> None:
     # Imported for their @register_channel side effect.
     from stonks.notify import smtp, webpush  # noqa: F401
+    from stonks.telegram import channel  # noqa: F401
 
 
 def channel_names() -> list[str]:
