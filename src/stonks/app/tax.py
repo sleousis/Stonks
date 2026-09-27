@@ -235,7 +235,8 @@ class TaxService:
         with self._ctx.state() as state:
             view = _settings_view(state, portfolio_id)
             raw = state.sql(
-                "SELECT f.id, f.ticker, f.quantity, f.price, f.fee, f.filled_at, o.side"
+                "SELECT f.id, f.ticker, f.quantity, f.price, f.fee, f.fee_currency, f.filled_at,"
+                " o.side"
                 " FROM fills f JOIN orders o ON o.client_id = f.order_client_id"
                 " WHERE f.portfolio_id = ? ORDER BY f.filled_at, f.id",
                 [portfolio_id],
@@ -259,6 +260,28 @@ class TaxService:
             for r in split_rows
         ]
         currencies = self._currencies(sorted({r["ticker"] for r in raw}))
+        fee_fx = self._fx(
+            {*currencies.values(), *(r["fee_currency"] for r in raw if r["fee_currency"])},
+            view.base_currency,
+        )
+
+        def fee_of(r: Any) -> float:
+            """The fee in the trade's currency (a broker may report the
+            commission in another one, ``fills.fee_currency``)."""
+            fee = float(r["fee"] or 0.0)
+            source = r["fee_currency"]
+            target = currencies.get(r["ticker"]) or view.base_currency
+            if not fee or not source or source.upper() == target.upper():
+                return fee
+            day = _utc(r["filled_at"]).date()
+            converted = fee_fx.convert(fee, source.upper(), target.upper(), day)
+            if converted is None:
+                raise ValidationError(
+                    f"no FX rate from {source} to {target} on or before {day} for the "
+                    f"commission of fill {r['id']}; ingest the rate (stonks ingest fx)"
+                )
+            return converted
+
         fills = [
             TaxFill(
                 id=int(r["id"]),
@@ -266,7 +289,7 @@ class TaxService:
                 side=r["side"],
                 quantity=float(r["quantity"]),
                 price=float(r["price"]),
-                fee=float(r["fee"] or 0.0),
+                fee=fee_of(r),
                 filled_at=_utc(r["filled_at"]),
                 currency=currencies.get(r["ticker"]),
             )

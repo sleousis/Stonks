@@ -219,3 +219,55 @@ def test_fx_rate_read(client, people, settings):
         "/api/fx/rate", params={"base": "CHF", "quote": "USD"}, headers=people["vic"]["headers"]
     )
     assert none.json()["rate"] is None
+
+
+def test_a_commission_in_another_currency_is_converted(client, people, book, settings):
+    from stonks.ingest.pipeline import _rows_to_df
+    from stonks.ingest.schemas import TickerProfile
+
+    lake = DuckDBLake(settings.lake.path)
+    lake.migrate()
+    lake.upsert_instrument_profile(
+        _rows_to_df([TickerProfile(id="EU.XETRA", name="Eu", asset_class="equity", currency="EUR")])
+    )
+    lake.upsert_fx_rates(
+        pd.DataFrame(
+            [
+                {
+                    "base_currency": "EUR",
+                    "quote_currency": "USD",
+                    "observation_date": pd.Timestamp("2025-01-02").date(),
+                    "rate": 1.25,
+                    "source": "fake",
+                }
+            ]
+        )
+    )
+    lake.close()
+    pid = book["pid"]
+    with SqliteState(settings.state.path) as state:
+        for cid, side, price, fee, fee_ccy, at in [
+            ("e1", "buy", 100.0, 1.25, "USD", "2025-04-01T09:00:00+00:00"),
+            ("e2", "sell", 110.0, 0.0, None, "2025-05-02T09:00:00+00:00"),
+        ]:
+            state.execute(
+                "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status,"
+                " created_at, updated_at, portfolio_id) VALUES (?, 'EU.XETRA', ?, 10, 'market',"
+                " 'filled', ?, ?, ?)",
+                [cid, side, at, at, pid],
+            )
+            state.execute(
+                "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, fee_currency,"
+                " filled_at, portfolio_id) VALUES (?, 'EU.XETRA', 10, ?, ?, ?, ?, ?)",
+                [cid, price, fee, fee_ccy, at, pid],
+            )
+    rows = _rows(
+        client.get(
+            "/api/tax/exports/gains",
+            params={"portfolio_id": pid, "year": 2025},
+            headers=people["alice"]["headers"],
+        ).text
+    )
+    [row] = [r for r in rows if r["ticker"] == "EU.XETRA"]
+    # the 1.25 USD commission is 1.00 EUR at 1.25 USD per EUR
+    assert (row["currency"], row["cost_basis"]) == ("EUR", "1001.00")
