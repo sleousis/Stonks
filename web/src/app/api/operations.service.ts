@@ -1,13 +1,26 @@
 import { Injectable } from '@angular/core';
 
 import { unwrap } from './api-call';
-import { getBackupResult, listJobs, listStatementFlags, startBackup } from './generated/sdk.gen';
+import {
+  getBackupResult,
+  getRestoreResult,
+  listBackups,
+  listStatementFlags,
+  restoreBackup,
+  startBackup,
+  verifyBackup,
+} from './generated/sdk.gen';
 import type { ListStatementFlagsData } from './models';
 
-/** The job kind of a server-side backup. */
-export const BACKUP_JOB_KIND = 'backup';
+/** How many backups the Schedule page lists (newest first). */
+export const BACKUPS_SHOWN = 50;
 
-/** Backups taken by the server, and the statement audit's flags. */
+/** The text `POST /api/backups/{id}/restore` needs typed. */
+export function restoreConfirmation(backupId: string): string {
+  return `RESTORE ${backupId}`;
+}
+
+/** Backups on the server (take, list, verify, staged restore) and the statement audit's flags. */
 @Injectable({ providedIn: 'root' })
 export class OperationsService {
   /** Starts a backup job (verify and prune included); follow it, then read `backupResult`. */
@@ -20,11 +33,34 @@ export class OperationsService {
   }
 
   /**
-   * Backup jobs the server ran, newest first. The API has no route listing the
-   * backup folders on disk, so this is the history the console can show.
+   * Every backup folder on disk, newest first, with its size. Includes the
+   * ones the nightly job or an operator made outside the console.
    */
-  backupJobs(limit = 20) {
-    return unwrap(listJobs({ query: { kind: BACKUP_JOB_KIND, limit } }));
+  backups(limit = BACKUPS_SHOWN) {
+    return unwrap(listBackups({ query: { limit } }));
+  }
+
+  /** Checks a backup's files against its manifest. */
+  verifyBackup(backupId: string) {
+    return unwrap(verifyBackup({ path: { backup_id: backupId } }));
+  }
+
+  /**
+   * Starts a staged restore into a new folder (the live data is never
+   * touched). Needs a fresh second factor. Returns the job, then read `restoreResult`.
+   */
+  restoreBackup(backupId: string) {
+    return unwrap(
+      restoreBackup({
+        path: { backup_id: backupId },
+        body: { confirmation: restoreConfirmation(backupId) },
+      }),
+    );
+  }
+
+  /** Where a staged restore put the data and how to switch to it. */
+  restoreResult(jobId: string) {
+    return unwrap(getRestoreResult({ path: { job_id: jobId } }));
   }
 
   statementFlags(query?: ListStatementFlagsData['query']) {

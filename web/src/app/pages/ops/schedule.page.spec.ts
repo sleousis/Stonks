@@ -2,15 +2,16 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 
-import type { Job, MeView, ScheduleView } from '../../api/models';
+import type { BackupView, Job, MeView, Page, ScheduleView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
+import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
-import { SchedulePage, backupRow, jobRows } from './schedule.page';
+import { SchedulePage, formatSize, jobRows } from './schedule.page';
 
 const SCHEDULE: ScheduleView = {
   backend: 'in_process',
@@ -78,6 +79,16 @@ function backupJob(over: Partial<Job> = {}): Job {
   };
 }
 
+const BACKUP: BackupView = {
+  id: 'stonks-20260925T020000Z',
+  created_at: '2026-09-25T02:00:00Z',
+  size_bytes: 5 * 1024 * 1024,
+};
+
+function backupPage(items: BackupView[] = [BACKUP]): Page<BackupView> {
+  return { items, total: items.length, limit: 50, offset: 0 };
+}
+
 function finished(jobId: string): JobHandle {
   const event = { job_id: jobId, status: 'succeeded', progress: 1 } as const;
   return {
@@ -100,14 +111,11 @@ describe('schedule helpers', () => {
     expect(rows[1]).toMatchObject({ name: 'health', last_status: null });
   });
 
-  it('reads the backup id from a job result', () => {
-    expect(backupRow(backupJob())).toMatchObject({
-      backup_id: 'stonks-20260925T020000Z',
-      pruned: 2,
-    });
-    expect(
-      backupRow(backupJob({ status: 'failed', result: null, error: 'disk full' })),
-    ).toMatchObject({ backup_id: null, pruned: null, error: 'disk full' });
+  it('writes sizes in bytes, KB, MB and GB', () => {
+    expect(formatSize(512)).toBe('512 B');
+    expect(formatSize(1536)).toBe('1.5 KB');
+    expect(formatSize(5 * 1024 * 1024)).toBe('5 MB');
+    expect(formatSize(null)).toBe('–');
   });
 });
 
@@ -117,6 +125,7 @@ describe('SchedulePage', () => {
   let el: HTMLElement;
   let confirm: ReturnType<typeof vi.fn>;
   let track: ReturnType<typeof vi.fn>;
+  let stepUp: ReturnType<typeof vi.fn>;
 
   async function settle(): Promise<void> {
     for (let i = 0; i < 4; i++) {
@@ -132,12 +141,14 @@ describe('SchedulePage', () => {
   async function setup(me: MeView): Promise<void> {
     confirm = vi.fn().mockResolvedValue(true);
     track = vi.fn((id: string) => finished(id));
+    stepUp = vi.fn().mockResolvedValue(true);
     TestBed.configureTestingModule({
       providers: [
         ...provideApi(),
         provideHttpClientTesting(),
         { provide: ConfirmService, useValue: { confirm } },
         { provide: JobsService, useValue: { track } },
+        { provide: StepUpService, useValue: { ensure: stepUp } },
       ],
     });
     http = TestBed.inject(HttpTestingController);
@@ -150,12 +161,11 @@ describe('SchedulePage', () => {
     const sched = await nextRequest(http, '/api/schedule');
     expect(sched.request.urlWithParams).toContain('limit=30');
     sched.flush(SCHEDULE);
-    (await nextRequest(http, '/api/jobs')).flush({
-      items: [backupJob()],
-      total: 1,
-      limit: 20,
-      offset: 0,
-    });
+    if (me.role === 'admin') {
+      const list = await nextRequest(http, '/api/backups');
+      expect(list.request.urlWithParams).toContain('limit=50');
+      list.flush(backupPage());
+    }
     await settle();
   }
 
@@ -178,7 +188,9 @@ describe('SchedulePage', () => {
       const runs = el.querySelector('[aria-labelledby="runs-title"]')!;
       expect(runs.textContent).toContain('broker down');
       const backups = el.querySelector('[aria-labelledby="backups-title"]')!;
-      expect(backups.textContent).not.toContain('stonks-20260925T020000Z');
+      expect(backups.textContent).toContain('5 MB');
+      expect(backups.querySelector('button[aria-label="Verify backup stonks-20260925T020000Z"]'))
+        .not.toBeNull();
       expect(el.textContent).not.toContain('command line');
       expect(el.textContent).not.toContain('[scheduler]');
     });
@@ -201,31 +213,82 @@ describe('SchedulePage', () => {
       const post = await nextRequest(http, '/api/backups', 'POST');
       post.flush(backupJob({ id: 'job_b2', status: 'queued', result: null }));
       await tick();
-      for (const r of http.match((x) => x.url.split('?')[0] === '/api/jobs')) {
-        r.flush({ items: [], total: 0, limit: 20, offset: 0 });
+      for (const r of http.match((x) => x.url.split('?')[0] === '/api/backups')) {
+        r.flush(backupPage());
       }
       (await nextRequest(http, '/api/backups/jobs/job_b2/result')).flush({
         backup_id: 'stonks-20260926T120000Z',
         pruned: [],
       });
       await tick();
-      for (const r of http.match((x) => x.url.split('?')[0] === '/api/jobs')) {
-        r.flush({
-          items: [
-            backupJob({
-              id: 'job_b2',
-              result: { backup_id: 'stonks-20260926T120000Z', pruned: [] },
-            }),
-          ],
-          total: 1,
-          limit: 20,
-          offset: 0,
-        });
+      for (const r of http.match((x) => x.url.split('?')[0] === '/api/backups')) {
+        r.flush(backupPage([{ ...BACKUP, id: 'stonks-20260926T120000Z' }, BACKUP]));
       }
       await settle();
       expect(track).toHaveBeenCalledWith('job_b2', expect.anything());
       expect(success).toHaveBeenCalledWith('Backed up the system.');
       expect(el.querySelector('app-job-progress')!.textContent).toContain('Backup: Finished.');
+    });
+  });
+
+  describe('backups on disk, as an admin', () => {
+    beforeEach(() => setup(ADMIN));
+
+    it('verifies a backup and says what it found', async () => {
+      el.querySelector<HTMLButtonElement>(
+        'button[aria-label="Verify backup stonks-20260925T020000Z"]',
+      )!.click();
+      (await nextRequest(http, `/api/backups/${BACKUP.id}/verify`, 'POST')).flush({
+        backup_id: BACKUP.id,
+        ok: false,
+        problems: ['lake.duckdb: checksum mismatch'],
+      });
+      await settle();
+      const outcome = el.querySelector('.outcome')!;
+      expect(outcome.getAttribute('data-ok')).toBe('false');
+      expect(outcome.textContent).toContain('checksum mismatch')
+      expect(outcome.textContent).toContain('Do not restore from it.');
+    });
+
+    it('restores only after the typed words and a step-up, and never touches live data', async () => {
+      const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+      el.querySelector<HTMLButtonElement>(
+        'button[aria-label="Restore backup stonks-20260925T020000Z"]',
+      )!.click();
+      const post = await nextRequest(http, `/api/backups/${BACKUP.id}/restore`, 'POST');
+      expect(confirm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tone: 'danger',
+          typedConfirmation: `RESTORE ${BACKUP.id}`,
+          message: expect.stringContaining('The live data is never touched.'),
+        }),
+      );
+      expect(stepUp).toHaveBeenCalledWith('Restore a backup');
+      expect(post.request.body).toEqual({ confirmation: `RESTORE ${BACKUP.id}` });
+      post.flush(backupJob({ id: 'job_r', kind: 'backup_restore', status: 'queued' }));
+      (await nextRequest(http, '/api/backups/restores/job_r/result')).flush({
+        backup_id: BACKUP.id,
+        data_dir: '/data/restores/r1',
+        next_steps: ['Stop the server.', 'Point the data folder at the restored copy.'],
+        lake_migrations_applied: [],
+        state_migrations_applied: [],
+      });
+      await settle();
+      expect(track).toHaveBeenCalledWith('job_r', expect.anything());
+      const outcome = el.querySelector('.outcome')!;
+      expect(outcome.textContent).toContain('/data/restores/r1');
+      expect(outcome.textContent).toContain('The live data was not touched.');
+      expect(outcome.querySelectorAll('ol li').length).toBe(2);
+      expect(success).toHaveBeenCalledWith('Restored the backup into a new folder.');
+    });
+
+    it('does nothing when the step-up is cancelled', async () => {
+      stepUp.mockResolvedValue(false);
+      el.querySelector<HTMLButtonElement>(
+        'button[aria-label="Restore backup stonks-20260925T020000Z"]',
+      )!.click();
+      await settle();
+      expect(http.match(`/api/backups/${BACKUP.id}/restore`)).toEqual([]);
     });
   });
 
@@ -239,6 +302,7 @@ describe('SchedulePage', () => {
       const backUp = button('Back up now')!;
       expect(backUp.disabled).toBe(true);
       expect(backUp.parentElement!.textContent).toContain('Admins only.');
+      expect(el.textContent).toContain('Backups are for admins');
     });
   });
 });

@@ -130,25 +130,85 @@
     @if (backupRun(); as run) {
       <app-job-progress label="Backup" [handle]="run" />
     }
-    @if (backups.error(); as err) {
+    @if (restoreRun(); as run) {
+      <app-job-progress label="Restore" [handle]="run" />
+    }
+    @if (verified(); as v) {
+      <div class="outcome" role="status" [attr.data-ok]="v.ok">
+        @if (v.ok) {
+          <p><strong>Backup {{ v.backup_id }} checks out.</strong> Every file matches its record.</p>
+        } @else {
+          <p><strong>Backup {{ v.backup_id }} has problems.</strong> Do not restore from it.</p>
+          <ul>
+            @for (problem of v.problems; track $index) {
+              <li>{{ problem }}</li>
+            }
+          </ul>
+        }
+      </div>
+    }
+    @if (restored(); as r) {
+      <div class="outcome" role="status" data-ok="true">
+        <p>
+          <strong>Restored backup {{ r.backup_id }} into a new folder.</strong> The live data was
+          not touched.
+        </p>
+        <p>
+          Restored copy: <code>{{ r.data_dir }}</code>
+        </p>
+        @if (r.next_steps.length) {
+          <p>To switch to it:</p>
+          <ol>
+            @for (step of r.next_steps; track $index) {
+              <li>{{ step }}</li>
+            }
+          </ol>
+        }
+      </div>
+    }
+    @if (!canBackUp()) {
+      <app-empty-state
+        title="Backups are for admins"
+        message="An admin can list, check and restore the server's backups here."
+      />
+    } @else if (backups.error(); as err) {
       <app-error-state title="Could not load backups" [error]="err" (retry)="backups.reload()" />
     } @else if (!backups.hasValue()) {
       <app-loading-state label="Loading backups" [rows]="3" />
     } @else if (backupRows().length === 0) {
       <app-empty-state
-        title="No backups from the server yet"
-        message="Backups made here or by the nightly backup job are listed with their result."
+        title="No backups on the server yet"
+        message="Backups made here, by the nightly backup job or by an operator are listed with their size."
       />
     } @else {
       <app-data-table
-        caption="Backups the server ran"
+        caption="Backups on the server"
         [rows]="backupRows()"
         [columns]="backupColumns"
         [rowKey]="backupKey"
         [initialSort]="{ key: 'created_at', dir: 'desc' }"
       >
-        <ng-template appCell="status" [appCellOf]="backupRows()" let-b>
-          <app-status-pill [status]="b.status" />
+        <ng-template appCell="actions" [appCellOf]="backupRows()" let-b>
+          <div class="row-actions">
+            <button
+              type="button"
+              class="btn"
+              [disabled]="busyBackup() !== null"
+              [attr.aria-label]="'Verify backup ' + b.id"
+              (click)="verify(b)"
+            >
+              Verify
+            </button>
+            <button
+              type="button"
+              class="btn btn-danger"
+              [disabled]="busyBackup() !== null || !canRestore()"
+              [attr.aria-label]="'Restore backup ' + b.id"
+              (click)="restore(b)"
+            >
+              Restore
+            </button>
+          </div>
         </ng-template>
       </app-data-table>
     }

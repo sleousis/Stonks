@@ -8,12 +8,19 @@ import {
   signal,
 } from '@angular/core';
 
-import type { Job, ScheduledJobView, ScheduledRunView } from '../../api/models';
-import { OperationsService } from '../../api/operations.service';
+import type {
+  BackupView,
+  RestoreResultView,
+  ScheduledJobView,
+  ScheduledRunView,
+  VerifyView,
+} from '../../api/models';
+import { OperationsService, restoreConfirmation } from '../../api/operations.service';
 import { ScheduleService } from '../../api/schedule.service';
 import { SessionService } from '../../core/auth/session.service';
+import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
-import { formatDateTime } from '../../core/format/format';
+import { formatDateTime, formatNumber } from '../../core/format/format';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
@@ -33,15 +40,17 @@ export interface JobRow extends ScheduledJobView {
   last_run_at: string | null;
 }
 
-/** A backup job as a history row. */
-export interface BackupRow {
-  id: string;
-  status: Job['status'];
-  created_at: string;
-  finished_at: string | null;
-  backup_id: string | null;
-  pruned: number | null;
-  error: string | null;
+/** A size in bytes as B, KB, MB or GB (1024 steps). */
+export function formatSize(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes)) return '–';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${formatNumber(value, { digits: unit === 0 ? 0 : 1 })} ${units[unit]}`;
 }
 
 export function jobRows(jobs: readonly ScheduledJobView[], recent: readonly ScheduledRunView[]) {
@@ -52,22 +61,10 @@ export function jobRows(jobs: readonly ScheduledJobView[], recent: readonly Sche
   });
 }
 
-export function backupRow(job: Job): BackupRow {
-  const result = (job.result ?? null) as { backup_id?: unknown; pruned?: unknown } | null;
-  return {
-    id: job.id,
-    status: job.status,
-    created_at: job.created_at,
-    finished_at: job.finished_at ?? null,
-    backup_id: typeof result?.backup_id === 'string' ? result.backup_id : null,
-    pruned: Array.isArray(result?.pruned) ? result.pruned.length : null,
-    error: job.error ?? null,
-  };
-}
-
 /**
  * The built-in scheduler (jobs, next fire, recent runs, run now) and
- * server-side backups (history and Back up now, followed to completion).
+ * server-side backups: every backup on disk, Back up now, Verify and a
+ * staged Restore (a new folder, the live data is never touched).
  */
 @Component({
   selector: 'app-schedule-page',
@@ -93,12 +90,15 @@ export class SchedulePage {
   private readonly toasts = inject(ToastService);
   private readonly jobs = inject(JobsService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly stepUp = inject(StepUpService);
   protected readonly session = inject(SessionService);
 
   /** Running jobs by hand is the admins'. */
   protected readonly canRun = computed(() => this.session.can('operations.run'));
   /** Backups cover every portfolio: admins only. */
   protected readonly canBackUp = computed(() => this.session.can('operations.run'));
+  /** A restore also needs a fresh second factor, asked for when it starts. */
+  protected readonly canRestore = computed(() => this.session.can('backups.restore'));
 
   /** Ticks every second so "Next run" counts down. */
   protected readonly now = signal(Date.now());
@@ -106,24 +106,33 @@ export class SchedulePage {
   protected readonly schedule = resource({
     loader: () => this.scheduleApi.overview({ limit: RECENT_RUNS }),
   });
-  protected readonly backups = resource({ loader: () => this.ops.backupJobs() });
+  /** Only admins may list backups, so nobody else asks. */
+  protected readonly backups = resource({
+    params: () => (this.canBackUp() ? {} : undefined),
+    loader: () => this.ops.backups(),
+  });
 
   protected readonly jobRows = computed(() =>
     this.schedule.hasValue()
       ? jobRows(this.schedule.value().jobs, this.schedule.value().recent)
       : [],
   );
-  protected readonly backupRows = computed(() =>
-    this.backups.hasValue() ? this.backups.value().items.map(backupRow) : [],
+  protected readonly backupRows = computed<BackupView[]>(() =>
+    this.backups.hasValue() ? this.backups.value().items : [],
   );
 
   protected readonly running = signal<string | null>(null);
   protected readonly backupRun = signal<JobHandle | null>(null);
   protected readonly backingUp = signal(false);
+  /** The backup being checked or restored (its buttons wait). */
+  protected readonly busyBackup = signal<string | null>(null);
+  protected readonly verified = signal<VerifyView | null>(null);
+  protected readonly restoreRun = signal<JobHandle | null>(null);
+  protected readonly restored = signal<RestoreResultView | null>(null);
 
   protected readonly jobKey = (j: JobRow) => j.name;
   protected readonly runKey = (r: ScheduledRunView) => r.id;
-  protected readonly backupKey = (b: BackupRow) => b.id;
+  protected readonly backupKey = (b: BackupView) => b.id;
 
   private readonly baseJobColumns: TableColumn<JobRow>[] = [
     { key: 'name', label: 'Job', value: (j) => humanize(j.name), mobile: 'title' },
@@ -172,17 +181,16 @@ export class SchedulePage {
     { key: 'error', label: 'Error', sortable: false, value: (r) => r.error ?? '' },
   ];
 
-  protected readonly backupColumns: TableColumn<BackupRow>[] = [
+  protected readonly backupColumns: TableColumn<BackupView>[] = [
     {
       key: 'created_at',
       label: 'Backup',
       value: (b) => formatDateTime(b.created_at),
       mobile: 'title',
     },
-    { key: 'status', label: 'Status' },
-    { key: 'finished_at', label: 'Finished', format: 'datetime', mobile: 'hide' },
-    { key: 'pruned', label: 'Old ones removed', format: 'number', mobile: 'hide' },
-    { key: 'error', label: 'Error', sortable: false, value: (b) => b.error ?? '' },
+    { key: 'id', label: 'Name', sortable: false, mobile: 'hide' },
+    { key: 'size_bytes', label: 'Size', value: (b) => formatSize(b.size_bytes) },
+    { key: 'actions', label: 'Actions', sortable: false, value: () => '' },
   ];
 
   async runNow(job: JobRow): Promise<void> {
@@ -208,6 +216,54 @@ export class SchedulePage {
       // The error interceptor already showed the API's message.
     } finally {
       this.running.set(null);
+    }
+  }
+
+  async verify(backup: BackupView): Promise<void> {
+    if (this.busyBackup() || !this.canBackUp()) return;
+    this.busyBackup.set(backup.id);
+    this.verified.set(null);
+    try {
+      const result = await this.ops.verifyBackup(backup.id);
+      this.verified.set(result);
+      if (result.ok) this.toasts.success(`Verified the backup from ${this.when(backup.created_at)}.`);
+    } catch {
+      // The error interceptor already showed the API's message.
+    } finally {
+      this.busyBackup.set(null);
+    }
+  }
+
+  async restore(backup: BackupView): Promise<void> {
+    if (this.busyBackup() || !this.canRestore()) return;
+    const ok = await this.confirm.confirm({
+      title: `Restore the backup from ${this.when(backup.created_at)}?`,
+      message:
+        'Copies this backup into a new folder on the server and checks it. The live data is never touched. Switching to the restored copy is a separate step, explained when it finishes.',
+      confirmLabel: 'Restore',
+      tone: 'danger',
+      typedConfirmation: restoreConfirmation(backup.id),
+    });
+    if (!ok) return;
+    if (!(await this.stepUp.ensure('Restore a backup'))) return;
+    this.busyBackup.set(backup.id);
+    this.restored.set(null);
+    try {
+      // A stale second factor comes back as 403 step_up_required: the session
+      // interceptor prompts for a code and retries once.
+      const job = await this.ops.restoreBackup(backup.id);
+      this.restoreRun()?.stop();
+      const handle = this.jobs.track(job.id, this.destroyRef);
+      this.restoreRun.set(handle);
+      const last = await handle.finished;
+      if (last?.status === 'succeeded') {
+        this.restored.set(await this.ops.restoreResult(job.id));
+        this.toasts.success('Restored the backup into a new folder.');
+      }
+    } catch {
+      // The error interceptor already showed the API's message.
+    } finally {
+      this.busyBackup.set(null);
     }
   }
 

@@ -394,7 +394,7 @@ Tickers open `/data?instrument=<id>`.
 | Page | Route | What it does |
 |---|---|---|
 | Halts | `/ops/halts` | Active and past halts, the kill switch (global or one portfolio, reason, buys only), Resume and Clear |
-| Schedule and backups | `/ops/schedule` | Jobs with next and last run, recent runs and Run now. Backup jobs and Back up now |
+| Schedule and backups | `/ops/schedule` | Jobs with next and last run, recent runs and Run now. Every backup on disk with its size, Back up now, Verify and a staged Restore (admins) |
 | Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
 | Universes | `/universes`, `/universes/:id` | List, create (JSON spec or CSV), index history import, members on a date, Refresh and Ensure data |
 
