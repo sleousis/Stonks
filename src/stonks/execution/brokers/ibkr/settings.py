@@ -92,6 +92,8 @@ class IbkrClientIds(BaseModel):
     tick: int = Field(default=11, ge=0)
     sync: int = Field(default=12, ge=0)
     health: int = Field(default=13, ge=0)
+    #: Live prices for the streaming source (roadmap 21.1). Read only.
+    stream: int = Field(default=14, ge=0)
 
 
 class IbkrHealthSettings(BaseModel):
