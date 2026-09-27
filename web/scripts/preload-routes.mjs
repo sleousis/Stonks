@@ -9,7 +9,7 @@
 // Also refreshes index.html's hash in ngsw.json (the service worker checks it)
 // and removes the stats file from the output.
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -173,16 +173,27 @@ export function preloadScript(rows, closure) {
   );
 }
 
-function sha1(path) {
-  return createHash('sha1').update(readFileSync(path)).digest('hex');
+function sha1(content) {
+  return createHash('sha1').update(content).digest('hex');
+}
+
+/** The file's text, or null when it does not exist (no check-then-read race). */
+function readIfPresent(path) {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return null;
+    throw err;
+  }
 }
 
 function main() {
-  if (!existsSync(STATS)) {
+  const statsText = readIfPresent(STATS);
+  if (statsText === null) {
     console.error(`preload-routes: ${STATS} is missing (the production build writes it).`);
     process.exit(1);
   }
-  const stats = JSON.parse(readFileSync(STATS, 'utf8'));
+  const stats = JSON.parse(statsText);
   const { closure, eager } = chunkGraph(stats, process.cwd());
   const rows = routeTable(resolve('src/app/app.routes.ts'));
   const script = preloadScript(rows, closure);
@@ -193,10 +204,12 @@ function main() {
     .replace(new RegExp(`<link rel="modulepreload" href="[^"]+" ${MARK}>`, 'g'), '');
   html = html.replace('</head>', `${links}${script}\n</head>`);
   writeFileSync(INDEX, html);
-  if (existsSync(NGSW)) {
-    const ngsw = JSON.parse(readFileSync(NGSW, 'utf8'));
+  const ngswText = readIfPresent(NGSW);
+  if (ngswText !== null) {
+    const ngsw = JSON.parse(ngswText);
     if (ngsw.hashTable?.['/index.html']) {
-      ngsw.hashTable['/index.html'] = sha1(INDEX);
+      // Hash what we just wrote, not a second read of the file.
+      ngsw.hashTable['/index.html'] = sha1(html);
       writeFileSync(NGSW, JSON.stringify(ngsw, null, 2));
     }
   }
