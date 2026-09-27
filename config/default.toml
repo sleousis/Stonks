@@ -270,6 +270,19 @@ lease_seconds = 120
 cache = "parquet"
 # cache_dir = "data/factor_panels"  # omit: factor_panels next to the lake file
 
+[streaming]
+# Live price streams into 1m bars (roadmap 21.1, docs/design/intraday.md).
+# Off by default. Run with `python -m stonks.streaming run`. The EODHD key
+# comes from EODHD_API_KEY, never from here.
+enabled = false
+source = "eodhd"          # eodhd | ibkr | replay
+tickers = []
+calendar = "XNYS"         # when a silent stream counts as stale
+bar_mode = "auto"         # auto | trades | quotes
+stale_after_seconds = 60
+backfill = true           # fill gaps from the REST intraday ingest
+backfill_source = "eodhd"
+
 [audit]
 # Statement audit tolerances (BL-36): relative gaps above which
 # `stonks audit statements` (also run after `stonks ingest fundamentals`)
