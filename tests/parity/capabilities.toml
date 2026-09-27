@@ -1159,3 +1159,23 @@ routes = [
 console = ["exportOrders", "exportFills", "exportJournal", "exportSnapshots", "exportPnl", "exportLabTrials"]
 cli = { limited = "files download in the console, the CLI prints the same rows" }
 mcp = { limited = "CSV files are downloads, the list tools return the same rows" }
+
+# ---- options research (Phase 17) -------------------------------------------------
+
+[[capability]]
+id = "options.ingest"
+domain = "options"
+title = "Fetch end-of-day option chains into the lake"
+routes = []
+console = { limited = "options are research only until live options follow 17.5" }
+cli = "stonks options ingest"
+mcp = { limited = "options are research only until live options follow 17.5" }
+
+[[capability]]
+id = "options.research"
+domain = "options"
+title = "Read a chain with Greeks, list options strategies, backtest and validate one"
+routes = []
+console = { limited = "options are research only until live options follow 17.5" }
+cli = ["stonks options chain", "stonks options strategies", "stonks options backtest"]
+mcp = { limited = "options are research only until live options follow 17.5" }
