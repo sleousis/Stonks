@@ -37,10 +37,10 @@ dividend_withholding_rate = 0.0
 # only) or "all" non-retired strategies.
 model_books = "shadow"
 # true: trade one book per portfolio from its paper/auto subscriptions (and
-# record notify-mode signals) instead of one book over every active strategy.
-# When on, a newly promoted strategy trades only once a subscription includes
-# it (e.g. subscribe pf_default to it).
-books_from_subscriptions = false
+# record notify-mode signals). A promotion subscribes pf_default to the
+# strategy, so the default book still trades every active strategy.
+# false: the old single book over every active strategy, other books idle.
+books_from_subscriptions = true
 
 [production.construction]
 # Portfolio constructor for every book (a portfolio's construction_json is

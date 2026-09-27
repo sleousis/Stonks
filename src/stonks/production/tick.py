@@ -558,7 +558,10 @@ def _run_tick_body(
         try:
             outcome = _run_book(run, book)
         except Exception as exc:
-            if single and book.legacy:
+            # The default book alone fails the tick as the old single book
+            # did (the entrypoint reports the error), other books are
+            # isolated from each other.
+            if single and (book.legacy or book.portfolio_id == DEFAULT_PORTFOLIO_ID):
                 raise
             log.error(
                 "tick.portfolio_failed",

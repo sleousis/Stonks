@@ -35,7 +35,8 @@ from pathlib import Path
 
 import pyotp
 
-from stonks.accounts.models import DEFAULT_OWNER_ID, DEFAULT_PORTFOLIO_ID
+from stonks.accounts.default_book import ensure_default_subscription
+from stonks.accounts.models import DEFAULT_OWNER_ID, DEFAULT_PORTFOLIO_ID, Mode
 from stonks.accounts.portfolios import PortfolioRepository
 from stonks.accounts.scope import Scope
 from stonks.accounts.users import UserRepository
@@ -271,6 +272,8 @@ def _seed_strategies(state: SqliteState, artifacts: Path) -> None:
         registry.set_status(
             sid, "active", actor="test:e2e", reason="seeded for the e2e stack", override=True
         )
+        # like a promotion: the default book follows every active strategy
+        ensure_default_subscription(state, sid, Mode.PAPER)
     # Registered strategies start in shadow: the go-live gate refuses it.
     for sid in SHADOW_IDS.values():
         registry.register(BuyAndHold({"ticker": "CCC.US", "allocation": 0.5}), [report], sid)

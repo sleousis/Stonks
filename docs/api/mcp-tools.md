@@ -944,7 +944,7 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `end` | date | yes |  | YYYY-MM-DD |
 | `survival_tests` | list["oos" \| "period_stability" \| "perturbation" \| "drift" \| "runs_test" \| "permutation" \| "walk_forward"] \| null | no | `null` | survival suite; server default when omitted |
 | `tuner` | "grid" \| "random" | no | `"random"` |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" | no | `"sharpe"` |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
 | `budget` | integer | no | `20` | tuner trials |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |
@@ -1033,7 +1033,7 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `end` | date | yes |  | YYYY-MM-DD |
 | `survival_tests` | list["oos" \| "period_stability" \| "perturbation" \| "drift" \| "runs_test" \| "permutation" \| "walk_forward"] \| null | no | `null` | survival suite; server default when omitted |
 | `tuner` | "grid" \| "random" | no | `"random"` |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" | no | `"sharpe"` |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
 | `budget` | integer | no | `20` | tuner trials |
 | `train_ratio` | number | no | `0.7` |  |
 | `interval` | string | no | `"1d"` |  |

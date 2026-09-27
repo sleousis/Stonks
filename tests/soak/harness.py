@@ -36,7 +36,8 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
+from stonks.accounts.default_book import ensure_default_subscription
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Mode
 from stonks.config import load_settings
 from stonks.core.params import ParameterSpec
 from stonks.core.protocols import SurvivalReport
@@ -288,6 +289,8 @@ class SoakRun:
                 registry.set_status(
                     sid, "active", actor=ACTOR, reason="seeded for the paper soak", override=True
                 )
+                # like a promotion: the default book follows every active strategy
+                ensure_default_subscription(state, sid, Mode.PAPER)
             registry.register(ChurnStrategy({"ticker": "AAA.US"}), [report], "soak_churn")
             registry.set_status(
                 "soak_churn",
@@ -296,6 +299,7 @@ class SoakRun:
                 reason="seeded for the paper soak",
                 override=True,
             )
+            ensure_default_subscription(state, "soak_churn", Mode.PAPER)
         store = RunStore(self.settings.state.path)
         store.migrate()
 

@@ -318,7 +318,7 @@ A strategy with a model book signals what its book did. One without signals new 
 
 Strategies that set `parallel_scoring = True` are scored in worker processes over a read-only copy of the lake. `[production] scoring_workers` sets the processes (0 means every core) and `parallel_min_estimates` (default 2000) is the smallest job worth a pool. Other strategies are scored in the tick's own process.
 
-With `[production] books_from_subscriptions = true` the tick trades one book per portfolio from its subscriptions:
+The tick trades one book per portfolio from its subscriptions (`[production] books_from_subscriptions = true`, the default):
 
 | Mode | What the tick does |
 |------|--------------------|
@@ -342,7 +342,12 @@ flowchart LR
 - Auto needs 20 paper days, an active strategy, a healthy connection that can trade, no halt, and a fresh second factor.
 - A broker error pauses the portfolio's auto subscriptions with a `paused_reason`, writes an audit row and tells the owner. A plain rejection pauses nothing. Resume by switching back to auto, which runs the checklist again.
 - Owner risk limits (`users.risk_policy_json`) tighten every portfolio the owner has. They can only make limits stricter.
-- The flag is off by default. Strategies promoted after the accounts migration have no subscription, so turning it on stops them trading until someone subscribes a portfolio to them.
+- The default book `pf_default` follows every active strategy. A promotion subscribes it to the strategy when it has no subscription yet: paper on the simulated broker, auto when `[brokers].kind` is an external broker. The row is audited as `service:system`. Migration 022 did the same once for the strategies already active. A subscription the owner turned off stays off.
+- With the flag set to false the tick trades only the old single book: `pf_default` over every active strategy.
+
+## Financing of short books
+
+A portfolio with `allow_short` trades on margin. Each tick its paper broker charges the borrow fee of every short and interest on negative cash for the calendar days since the last charge. The tick keeps that date in `financing_accruals` and each charge in `financing_charges`, both written with the snapshot. A book with no stored date starts from its latest snapshot. A dry run charges nothing.
 
 ## Model books (shadow mode)
 

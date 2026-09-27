@@ -236,10 +236,11 @@ class ProductionConfig(BaseModel):
     # or "all" non-retired ones (design section 5).
     model_books: Literal["shadow", "all"] = "shadow"
     # Trade one book per portfolio from its paper/auto subscriptions (and
-    # record notify signals) instead of the single legacy book over every
-    # active strategy. Off by default. When on, a newly promoted strategy
-    # trades only once a subscription (e.g. on pf_default) includes it.
-    books_from_subscriptions: bool = False
+    # record notify signals). pf_default follows every active strategy: a
+    # promotion subscribes it (accounts.default_book), so it trades like
+    # the old single book. false: the old single book over every active
+    # strategy, other portfolios idle.
+    books_from_subscriptions: bool = True
     # Worker processes that score strategies opting in with
     # ``parallel_scoring`` (0 = every core, 1 = in the tick's process). A
     # pool starts only for at least ``parallel_min_estimates`` estimates.

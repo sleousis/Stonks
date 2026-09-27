@@ -502,6 +502,48 @@ export type BenchmarkStatsView = {
 };
 
 /**
+ * BorrowCheckSettings
+ */
+export type BorrowCheckSettings = {
+    borrow?: BorrowSettings | null;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Max Borrow Fee
+     */
+    max_borrow_fee?: number | null;
+};
+
+/**
+ * BorrowSettings
+ *
+ * ``FlatBorrow`` knobs: the general-collateral fee per asset class and
+ * the tickers that are hard to borrow or not borrowable at all.
+ */
+export type BorrowSettings = {
+    /**
+     * Fee Rate Annual
+     */
+    fee_rate_annual?: {
+        [key: string]: number;
+    };
+    /**
+     * Hard
+     */
+    hard?: Array<string>;
+    /**
+     * Hard Fee Rate Annual
+     */
+    hard_fee_rate_annual?: number;
+    /**
+     * None
+     */
+    none?: Array<string>;
+};
+
+/**
  * BrokerInfo
  */
 export type BrokerInfo = {
@@ -1025,7 +1067,7 @@ export type DraftLabRunRequest = {
     /**
      * Objective
      */
-    objective?: 'sharpe' | 'cagr' | 'final_return';
+    objective?: 'sharpe' | 'cagr' | 'final_return' | 'cv_sharpe' | 'cv_cagr' | 'cv_final_return';
     /**
      * Preflight
      */
@@ -1537,6 +1579,16 @@ export type GoLiveReport = {
      * Strategy Id
      */
     strategy_id: string;
+};
+
+/**
+ * GrossExposureSettings
+ */
+export type GrossExposureSettings = {
+    /**
+     * Max Gross
+     */
+    max_gross?: number | null;
 };
 
 /**
@@ -2367,7 +2419,7 @@ export type LabRunRequest = {
     /**
      * Objective
      */
-    objective?: 'sharpe' | 'cagr' | 'final_return';
+    objective?: 'sharpe' | 'cagr' | 'final_return' | 'cv_sharpe' | 'cv_cagr' | 'cv_final_return';
     /**
      * Preflight
      */
@@ -2573,6 +2625,68 @@ export type LoginView = {
 };
 
 /**
+ * MarginCallSettings
+ */
+export type MarginCallSettings = {
+    /**
+     * Buffer
+     */
+    buffer?: number;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    margin?: MarginSettings;
+};
+
+/**
+ * MarginRates
+ *
+ * Requirement rates, as fractions of a position's market value.
+ */
+export type MarginRates = {
+    /**
+     * Initial Long
+     */
+    initial_long?: number;
+    /**
+     * Initial Short
+     */
+    initial_short?: number;
+    /**
+     * Maintenance Long
+     */
+    maintenance_long?: number;
+    /**
+     * Maintenance Short
+     */
+    maintenance_short?: number;
+};
+
+/**
+ * MarginSettings
+ *
+ * Which margin model a book uses, and its rates.
+ */
+export type MarginSettings = {
+    /**
+     * Debit Rate Annual
+     */
+    debit_rate_annual?: number;
+    /**
+     * Model
+     */
+    model?: 'cash' | 'reg_t';
+    /**
+     * Overrides
+     */
+    overrides?: {
+        [key: string]: MarginRates;
+    };
+    rates?: MarginRates;
+};
+
+/**
  * MarkReadRequest
  */
 export type MarkReadRequest = {
@@ -2741,6 +2855,20 @@ export type MfaView = {
      * Recovery Codes Left
      */
     recovery_codes_left: number;
+};
+
+/**
+ * NetExposureSettings
+ */
+export type NetExposureSettings = {
+    /**
+     * Max Net
+     */
+    max_net?: number | null;
+    /**
+     * Min Net
+     */
+    min_net?: number | null;
 };
 
 /**
@@ -4573,14 +4701,20 @@ export type Role = 'viewer' | 'trader' | 'admin';
  * RuleSettings
  */
 export type RuleSettings = {
+    borrow_check?: BorrowCheckSettings;
     circuit_breaker?: CircuitBreakerSettings;
     drawdown_scaling?: DrawdownScalingSettings;
+    gross_exposure?: GrossExposureSettings;
     liquidity?: LiquiditySettings;
+    margin_call?: MarginCallSettings;
     max_holding?: MaxHoldingSettings;
+    net_exposure?: NetExposureSettings;
     operational_halt?: OperationalHaltSettings;
     portfolio_vol?: PortfolioVolSettings;
     risk_per_position?: RiskPerPositionSettings;
     sector_cap?: SectorCapSettings;
+    short_caps?: ShortCapsSettings;
+    squeeze_guard?: SqueezeGuardSettings;
 };
 
 /**
@@ -4897,6 +5031,20 @@ export type ShadowPnlSummary = {
 };
 
 /**
+ * ShortCapsSettings
+ */
+export type ShortCapsSettings = {
+    /**
+     * Max Short Total
+     */
+    max_short_total?: number | null;
+    /**
+     * Max Short Weight
+     */
+    max_short_weight?: number | null;
+};
+
+/**
  * ShortfallView
  *
  * Implementation shortfall of one order. Costs are positive, in bps of
@@ -5152,6 +5300,33 @@ export type SpecValidateRequest = {
     spec: {
         [key: string]: unknown;
     };
+};
+
+/**
+ * SqueezeGuardSettings
+ */
+export type SqueezeGuardSettings = {
+    /**
+     * Atr Multiple
+     */
+    atr_multiple?: number | null;
+    borrow?: BorrowSettings | null;
+    /**
+     * Max Adverse Pct
+     */
+    max_adverse_pct?: number | null;
+    /**
+     * Max Borrow Fee
+     */
+    max_borrow_fee?: number | null;
+    /**
+     * Spike Bars
+     */
+    spike_bars?: number;
+    /**
+     * Spike Pct
+     */
+    spike_pct?: number | null;
 };
 
 /**
@@ -5733,7 +5908,7 @@ export type SweepRequest = {
     /**
      * Objective
      */
-    objective?: 'sharpe' | 'cagr' | 'final_return';
+    objective?: 'sharpe' | 'cagr' | 'final_return' | 'cv_sharpe' | 'cv_cagr' | 'cv_final_return';
     /**
      * Preflight
      */

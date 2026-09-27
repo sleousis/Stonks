@@ -32,7 +32,7 @@ class TickRuntime:
     #: None for the default simulated broker (the tick builds it itself).
     broker_factory: BrokerFactory | None = None
     #: ``[production].books_from_subscriptions``.
-    books_from_subscriptions: bool = False
+    books_from_subscriptions: bool = True
 
     def plan_for(self, state: SqliteState) -> TickPlan | None:
         """The books to trade: one per portfolio from its subscriptions when
