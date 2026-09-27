@@ -78,6 +78,26 @@ min_order_notional = 0.0
 # [production.risk.rules.drawdown_scaling]
 # schedule = [[0.10, 0.5], [0.20, 0.0]]   # size by drawdown from peak
 
+# Short-book rules (roadmap 16.2), all off by default. They matter only for
+# a portfolio with allow_short. Examples:
+# [production.risk.rules.margin_call]
+# enabled = true                   # forced closes on a margin breach
+# [production.risk.rules.gross_exposure]
+# max_gross = 1.0                  # sum of |weights|
+# [production.risk.rules.net_exposure]
+# min_net = 0.0
+# max_net = 1.0
+# [production.risk.rules.short_caps]
+# max_short_weight = 0.05          # per name
+# max_short_total = 0.5
+# [production.risk.rules.borrow_check]
+# enabled = true
+# max_borrow_fee = 0.10            # drop shorts costing more than 10 %/yr
+# [production.risk.rules.squeeze_guard]
+# max_borrow_fee = 0.10
+# max_adverse_pct = 0.25           # cover 25 % above entry
+# spike_pct = 0.30                 # cover after a 30 % rise in spike_bars bars
+
 # Circuit breaker (BL-28): halts new buys after a loss. Off until a limit is
 # set. Recommended values below. A trip opens a risk_halts row the owner
 # sees and clears (`stonks halts list`, `stonks halts clear ID --reason ...`).

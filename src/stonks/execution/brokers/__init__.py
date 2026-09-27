@@ -69,6 +69,7 @@ def make_broker(
             cfg.secret_key.get_secret_value() if cfg.secret_key else None,
             paper=cfg.paper,
             allow_live=cfg.allow_live,
+            allow_short=cfg.allow_short,
             max_retries=cfg.max_retries,
             retry_backoff_seconds=cfg.retry_backoff_seconds,
         )

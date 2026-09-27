@@ -16,6 +16,11 @@ from typing import Any, Literal
 OrderSide = Literal["buy", "sell"]
 OrderType = Literal["market", "limit", "stop", "stop_limit"]
 OrderStatus = Literal["pending", "filled", "partially_filled", "rejected", "cancelled"]
+#: Whether an order opens (or grows) a position or closes (shrinks) one.
+#: ``sell`` + ``open`` is a short sale, ``buy`` + ``close`` a cover
+#: (``docs/design/shorting.md``).
+PositionEffect = Literal["open", "close"]
+_POSITION_EFFECTS = ("open", "close")
 
 # Top-level asset class. Closed set; future additions (forex, fund, index)
 # are non-breaking. Lives in core so every block (ingest, lake, strategies,
@@ -45,10 +50,17 @@ class Order:
     decision_context: Mapping[str, Any] | None = field(default=None, compare=False)
     #: The cost model's estimate at ``decision_price``, in bps of notional.
     expected_cost_bps: float | None = None
+    #: ``open`` or ``close``; ``None`` (legacy) means infer it from the
+    #: position when filling. See ``execution.orders.classify``.
+    position_effect: PositionEffect | None = None
 
     def __post_init__(self) -> None:
         if self.quantity <= 0:
             raise ValueError(f"Order.quantity must be positive, got {self.quantity}")
+        if self.position_effect is not None and self.position_effect not in _POSITION_EFFECTS:
+            raise ValueError(
+                f"Order.position_effect must be open or close, got {self.position_effect!r}"
+            )
         if self.order_type in ("limit", "stop_limit") and self.limit_price is None:
             raise ValueError(f"Order.limit_price is required for order_type={self.order_type!r}")
 
@@ -83,6 +95,22 @@ class Portfolio:
         cash_delta = -fill.signed_quantity * fill.price - fill.fee
         self.cash += cash_delta
 
+    def long_value(self, prices: Mapping[str, float]) -> float:
+        """Market value of the long positions (unpriced ones count as 0)."""
+        return sum(q * _mark(prices, t) for t, q in self.positions.items() if q > 0)
+
+    def short_value(self, prices: Mapping[str, float]) -> float:
+        """Market value of the short positions, as a positive magnitude."""
+        return sum(-q * _mark(prices, t) for t, q in self.positions.items() if q < 0)
+
+    def gross(self, prices: Mapping[str, float]) -> float:
+        """Long value plus short value."""
+        return self.long_value(prices) + self.short_value(prices)
+
+    def net(self, prices: Mapping[str, float]) -> float:
+        """Long value minus short value."""
+        return self.long_value(prices) - self.short_value(prices)
+
     def unmarked(self, prices: Mapping[str, float]) -> list[str]:
         """Held tickers with no usable price in ``prices`` (absent or not a
         finite number), sorted. Callers decide what to do: carry the last
@@ -107,6 +135,11 @@ class MissingPriceError(KeyError):
     def __init__(self, tickers: list[str]) -> None:
         super().__init__(f"no price for held ticker(s): {', '.join(tickers)}")
         self.tickers = tickers
+
+
+def _mark(prices: Mapping[str, float], ticker: str) -> float:
+    price = prices.get(ticker)
+    return float(price) if _finite(price) else 0.0  # type: ignore[arg-type]
 
 
 def _finite(value: Any) -> bool:

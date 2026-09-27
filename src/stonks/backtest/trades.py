@@ -4,21 +4,24 @@ Pure functions over a backtest's ``Fill`` sequence: every caller (lab, API
 backtests, reporting, survival tests) reads ``BacktestReport.trades`` and
 ``BacktestReport.trade_stats`` instead of pairing fills itself.
 
-Pairing (long-only, FIFO)
--------------------------
+Pairing (FIFO, long and short lots)
+-----------------------------------
 - A backtest trades one portfolio, so lots are pooled per ticker (RS-04).
-  Every buy opens a lot labelled with its strategy key: the ``"<index>:"``
-  prefix the engine puts on each ``client_id`` (``""`` when there is none).
-- A sell closes the oldest lots with its own strategy key first, then the
-  oldest lots of any other key. So two strategy instances keep their own
-  round trips while each sells what it bought, and a sell whose key owns no
-  lot (a construction pipeline whose owner changed, a risk-rule exit whose
-  client id starts with a date) still closes the shares the portfolio holds.
-  The key is a label for attribution, never a reason to leave a lot open.
-- Each (lot, sell) pair is one ``RoundTrip``, so a partial exit splits the
-  lot and one sell can close several lots. Sell quantity beyond the open
-  lots (a short, which the long-only broker never fills) is ignored with a
-  warning.
+  Every lot is labelled with its strategy key: the ``"<index>:"`` prefix
+  the engine puts on each ``client_id`` (``""`` when there is none).
+- A fill first closes the open lots of the other direction: a sell closes
+  long lots, a buy closes short lots (a cover). It takes the oldest lots
+  with its own strategy key first, then the oldest lots of any other key.
+  So two strategy instances keep their own round trips while each closes
+  what it opened, and a fill whose key owns no lot (a construction
+  pipeline whose owner changed, a risk-rule exit whose client id starts
+  with a date) still closes the shares the portfolio holds. The key is a
+  label for attribution, never a reason to leave a lot open.
+- What is left of the fill opens a lot in its own direction: a buy opens a
+  long lot, a sell beyond the long lots opens a short lot (roadmap 16.1).
+  Sell-open then buy-close is one short round trip (``side = "short"``).
+- Each (lot, closing fill) pair is one ``RoundTrip``, so a partial exit
+  splits the lot and one fill can close several lots.
 - Lots still open at the end are marked at the last close (``bars``), else
   at ``marks``, else at the ticker's last fill price, and flagged
   ``is_open``.
@@ -31,9 +34,11 @@ Pairing (long-only, FIFO)
 
 Money
 -----
-- ``pnl = (exit_px - entry_px) * qty - fees + dividends``, where ``fees`` is
-  the lot's share of its buy fee plus its share of the sell fee (both pro
-  rata to quantity). Fill prices already include slippage, so
+- ``pnl = (exit_px - entry_px) * qty - fees + dividends`` for a long lot and
+  ``(entry_px - exit_px) * qty - fees + dividends`` for a short one, where
+  ``fees`` is the lot's share of its opening fee plus its share of the
+  closing fee (both pro rata to quantity). A short's dividends are the
+  (negative) dividends it paid. Fill prices already include slippage, so
   ``slippage_cost = |fill price - reference price| * qty`` (entry and exit)
   is reported, not subtracted again.
 - ``return_pct = pnl / (entry_px * qty + entry fee)``, the cost basis.
@@ -41,9 +46,10 @@ Money
   closed with the lot held: ``exit index - entry index`` for a closed lot
   (fills happen at a bar's open), up to and including the last bar for an
   open one.
-- MAE / MFE are the worst and best excursion of the bars' low / high from
-  the entry price over [entry bar, exit bar] (split-adjusted, bounded by 0),
-  and ``None`` when no bars are passed.
+- MAE / MFE are the worst and best excursion from the entry price over
+  [entry bar, exit bar] (split-adjusted, bounded by 0): the bars' low and
+  high for a long, their high and low for a short (a rise hurts it). ``None``
+  when no bars are passed.
 """
 
 from __future__ import annotations
@@ -53,7 +59,7 @@ import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
@@ -61,16 +67,14 @@ import pandas as pd
 from stonks.backtest import metrics
 from stonks.backtest.corporate_actions import CorporateActionRecord
 from stonks.core.types import Fill
-from stonks.logging import get_logger
 
 if TYPE_CHECKING:
     from stonks.backtest.report import BacktestReport
 
-_log = get_logger("stonks.backtest.trades")
-
 #: Relative size below which a lot remainder is float dust, not a position.
 _DUST = 1e-9
 ReferencePrice = Callable[[str], float | None]
+TradeSide = Literal["long", "short"]
 
 
 @dataclass(frozen=True)
@@ -96,6 +100,8 @@ class RoundTrip:
     is_open: bool
     #: Cash dividends credited while the lot was held (inside ``pnl``).
     dividends: float = 0.0
+    #: ``long`` (bought then sold) or ``short`` (sold then bought back).
+    side: TradeSide = "long"
 
 
 @dataclass(frozen=True)
@@ -139,6 +145,8 @@ class _Lot:
     fee: float
     slippage: float
     dividends: float = 0.0
+    #: ``1`` for a long lot, ``-1`` for a short one.
+    direction: int = 1
 
     def take(self, qty: float) -> tuple[float, float, float]:
         """Remove ``qty`` shares; return their share of the entry fee,
@@ -178,8 +186,16 @@ def build_round_trips(
     events.extend((_utc(f.filled_at), 1, f) for f in fills if f.quantity > 0)
     events.sort(key=lambda e: (e[0], e[1]))  # stable: fill order kept
 
-    def excursion(lot_ticker: str, entry: datetime, exit_: datetime, entry_px: float):
-        return excursions.mae_mfe(lot_ticker, entry, exit_, entry_px, splits.get(lot_ticker, []))
+    def excursion(lot: _Lot, exit_: datetime):
+        mae, mfe = excursions.mae_mfe(
+            lot.ticker,
+            lot.entry_ts,
+            exit_,
+            lot.entry_px,
+            splits.get(lot.ticker, []),
+            direction=lot.direction,
+        )
+        return mae, mfe
 
     def bars_between(entry: datetime, exit_: datetime | None) -> int:
         start = bisect.bisect_left(clock, entry)
@@ -198,25 +214,12 @@ def build_round_trips(
         key = _strategy_key(fill.order_client_id)
         slip = _slippage(fill, reference_price)
         queue = lots.setdefault(fill.ticker, [])
-        if fill.side == "buy":
-            queue.append(
-                _Lot(
-                    key,
-                    fill.ticker,
-                    ts,
-                    fill.quantity,
-                    fill.quantity,
-                    fill.price,
-                    fill.fee,
-                    slip,
-                )
-            )
-            continue
-        to_sell = fill.quantity
-        for lot in _sell_order(queue, key):
-            if to_sell <= _DUST * fill.quantity:
+        direction = 1 if fill.side == "buy" else -1
+        to_close = fill.quantity
+        for lot in _close_order(queue, key, -direction):
+            if to_close <= _DUST * fill.quantity:
                 break
-            qty = min(lot.qty, to_sell)
+            qty = min(lot.qty, to_close)
             share = qty / fill.quantity
             trades.append(
                 _trip(
@@ -231,10 +234,23 @@ def build_round_trips(
                     is_open=False,
                 )
             )
-            to_sell -= qty
+            to_close -= qty
         queue[:] = [lot for lot in queue if lot.qty > _DUST * lot.size]
-        if to_sell > _DUST * fill.quantity:
-            _log.warning("sell_exceeds_open_lots", ticker=fill.ticker, excess=to_sell)
+        if to_close > _DUST * fill.quantity:
+            share = to_close / fill.quantity
+            queue.append(
+                _Lot(
+                    key,
+                    fill.ticker,
+                    ts,
+                    to_close,
+                    to_close,
+                    fill.price,
+                    fill.fee * share,
+                    slip * share,
+                    direction=direction,
+                )
+            )
 
     end = clock[-1] if clock else None
     open_trips = []
@@ -268,15 +284,15 @@ def _trip(
     exit_fee: float,
     exit_slippage: float,
     bars_held: int,
-    excursion: Callable[[str, datetime, datetime, float], tuple[float | None, float | None]],
+    excursion: Callable[[_Lot, datetime], tuple[float | None, float | None]],
     is_open: bool,
 ) -> RoundTrip:
     entry_px = lot.entry_px
+    mae, mfe = excursion(lot, exit_ts)
     entry_fee, entry_slippage, dividends = lot.take(qty)
     fees = entry_fee + exit_fee
-    pnl = (exit_px - entry_px) * qty - fees + dividends
+    pnl = lot.direction * (exit_px - entry_px) * qty - fees + dividends
     basis = entry_px * qty + entry_fee
-    mae, mfe = excursion(lot.ticker, lot.entry_ts, exit_ts, entry_px)
     return RoundTrip(
         ticker=lot.ticker,
         strategy_key=lot.strategy_key,
@@ -294,14 +310,16 @@ def _trip(
         mfe_pct=mfe,
         is_open=is_open,
         dividends=dividends,
+        side="long" if lot.direction > 0 else "short",
     )
 
 
-def _sell_order(queue: Sequence[_Lot], key: str) -> list[_Lot]:
-    """The lots a sell under ``key`` closes, in order: its own lots oldest
-    first, then every other lot oldest first."""
-    return [lot for lot in queue if lot.strategy_key == key] + [
-        lot for lot in queue if lot.strategy_key != key
+def _close_order(queue: Sequence[_Lot], key: str, direction: int) -> list[_Lot]:
+    """The lots of ``direction`` a fill under ``key`` closes, in order: its
+    own lots oldest first, then every other lot oldest first."""
+    same = [lot for lot in queue if lot.direction == direction]
+    return [lot for lot in same if lot.strategy_key == key] + [
+        lot for lot in same if lot.strategy_key != key
     ]
 
 
@@ -315,7 +333,7 @@ def _apply_corporate_action(lots: Mapping[str, list[_Lot]], record: CorporateAct
     elif record.quantity_before:
         per_share = record.cash_delta / record.quantity_before
         for lot in held:
-            lot.dividends += lot.qty * per_share
+            lot.dividends += lot.direction * lot.qty * per_share
 
 
 def _strategy_key(client_id: str) -> str:
@@ -387,10 +405,13 @@ class _Excursions:
         exit_: datetime,
         entry_px: float,
         splits: Sequence[tuple[datetime, float]],
+        *,
+        direction: int = 1,
     ) -> tuple[float | None, float | None]:
         """Excursions over [entry, exit], in the lot's post-split shares:
         bars before a split inside the holding period are divided by its
-        ratio."""
+        ratio. A short (``direction=-1``) loses on the high and gains on
+        the low."""
         data = self._by_ticker.get(ticker)
         if data is None or entry_px <= 0:
             return None, None
@@ -404,9 +425,11 @@ class _Excursions:
         for split_ts, ratio in splits:
             if entry < split_ts <= exit_:
                 factor[window < _ns(split_ts)] /= ratio
-        mae = min(0.0, float((low[lo:hi] * factor).min()) / entry_px - 1.0)
-        mfe = max(0.0, float((high[lo:hi] * factor).max()) / entry_px - 1.0)
-        return mae, mfe
+        lowest = float((low[lo:hi] * factor).min()) / entry_px
+        highest = float((high[lo:hi] * factor).max()) / entry_px
+        if direction < 0:
+            return min(0.0, 1.0 - highest), max(0.0, 1.0 - lowest)
+        return min(0.0, lowest - 1.0), max(0.0, highest - 1.0)
 
 
 def _ns(ts: datetime) -> int:

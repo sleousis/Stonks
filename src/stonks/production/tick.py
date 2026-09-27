@@ -70,10 +70,11 @@ from stonks.backtest.costs import CostModel, CostModelSettings, FixedCostModel
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.interval import Interval
 from stonks.core.protocols import Broker
-from stonks.core.types import Fill, Order, OrderSide, OrderStatus, Portfolio
+from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.brokers.base import BrokerKind, OrderRejectedError, OrderStateSource
 from stonks.execution.brokers.simulated import SimulatedCosts
-from stonks.execution.orders import make_client_id
+from stonks.execution.margin import RegTMargin
+from stonks.execution.orders import SideToken, make_client_id
 from stonks.execution.reconcile import (
     NON_TERMINAL_STATUSES,
     reconcile_order,
@@ -115,7 +116,7 @@ from stonks.production.hooks import (
     run_tick_hooks,
 )
 from stonks.production.hooks.attribution import load_attribution
-from stonks.production.ledger import ledger_filter
+from stonks.production.ledger import ledger_columns, ledger_filter
 from stonks.production.prices import PriceBook, held_tickers, load_history, load_prices
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.ranker import Ranker, SignalSet, StrategyPool
@@ -842,6 +843,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         prior_attribution=(load_attribution(state, portfolio_id, as_of) if run.scoped else {}),
         costs=settings.fill_costs,
         risk_context=risk_context,
+        allow_short=book.spec.allow_short,
     )
     candidates = None if book.legacy else set(strategy_ids)
 
@@ -885,12 +887,17 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     halt = gate()
     if halt is not None:
         log.warning("tick.portfolio_halted", halt=halt.halt, gate=halt.gate, reason=halt.reason)
-        proposed = [] if halt.halt == "all" else [o for o in proposed if o.side == "sell"]
+        # A halt keeps only position-reducing orders (sells of longs, covers).
+        proposed = [] if halt.halt == "all" else [o for o in proposed if _reduces(o)]
 
     if broker is None:
         broker = _build_broker(
             portfolio, settings, prices, as_of, factory, book_prices.volumes, asset_classes
         )
+        if book.spec.allow_short and isinstance(broker, SimulatedBroker):
+            # Roadmap 16.1: a short book's paper broker trades on margin.
+            model = book.spec.risk.rules.margin_call.margin.build()
+            broker.enable_shorts(model if model.allows_short else RegTMargin())
     # Every order records its decision: price, time, context and the
     # modelled cost (BL-32, P22).
     orders_with_tick = annotate_orders(
@@ -1235,11 +1242,18 @@ def _notify_signals(run: _TickRun) -> list[NotifySignal]:
 # ---- helpers ---------------------------------------------------------------
 
 
-def _client_id_fn(as_of: date, portfolio_id: str) -> Callable[[str | None, str, OrderSide], str]:
+def _reduces(order: Order) -> bool:
+    """A sell of a long or a cover of a short (never a short sale)."""
+    if order.position_effect is not None:
+        return order.position_effect == "close"
+    return order.side == "sell"
+
+
+def _client_id_fn(as_of: date, portfolio_id: str) -> Callable[[str | None, str, SideToken], str]:
     """Deterministic client ids (:func:`make_client_id`: the default
     portfolio keeps the pre-accounts format, others carry their id)."""
 
-    def make(strategy_id: str | None, ticker: str, side: OrderSide) -> str:
+    def make(strategy_id: str | None, ticker: str, side: SideToken) -> str:
         return make_client_id(
             as_of=as_of,
             strategy_id=strategy_id or PORTFOLIO_STRATEGY,
@@ -1571,6 +1585,8 @@ def _record_order(
         extra["portfolio_id"] = portfolio_id
     if tca_recorded(state):
         extra.update(decision_values(order))
+    if order.position_effect is not None and "position_effect" in ledger_columns(state, "orders"):
+        extra["position_effect"] = order.position_effect  # migration 021
     extra_col = "".join(f", {c}" for c in extra)
     extra_val = ", ?" * len(extra)
     state.execute(

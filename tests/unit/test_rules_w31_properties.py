@@ -167,8 +167,19 @@ def test_bars_after_as_of_never_change_the_result(seed):
     assert clean == dirty
 
 
+#: The short-book rules (roadmap 16.2) run around these; see test_rules_shorts.py.
+SHORT_RULES = {
+    "margin_call",
+    "squeeze_guard",
+    "gross_exposure",
+    "net_exposure",
+    "short_caps",
+    "borrow_check",
+}
+
+
 def test_rules_run_in_the_documented_order():
-    names = [r.name for r in registered_rules()]
+    names = [r.name for r in registered_rules() if r.name not in SHORT_RULES]
     assert names[:3] == W31
     caps_then_ours = names[names.index("max_weight_per_asset_class") + 1 :]
     assert caps_then_ours == [*W31_ORDER, "cash_buffer", "min_order_notional"]

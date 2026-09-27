@@ -33,15 +33,40 @@ they're running in a backtest or in paper-mode production. Key properties:
 - ``fills`` and ``reference_price(client_id)`` (the pre-cost price) feed the
   round-trip trade ledger (``stonks.backtest.trades``)
 
-Long-only: a sell beyond the held quantity is rejected. Short sales
-(``docs/design/shorting.md``) will add a ``sell``-to-open branch here; the
-fill model already prices both sides symmetrically.
+Long-only by default: a sell beyond the held quantity is rejected.
+
+Short selling and margin (roadmap 16.1, ``docs/design/shorting.md``)
+--------------------------------------------------------------------
+With a ``margin`` model other than ``cash`` (``RegTMargin``) the broker
+checks opening orders against the model's excess equity instead of cash:
+an opening buy or short sale larger than the room is scaled down, covers
+and sells of a long are never limited by margin, and cash may go negative
+(a margin loan). With ``allow_short`` (which needs a model that allows
+shorts, ``enable_shorts``) a sell beyond the held quantity closes the long
+and sells the rest short:
+
+1. the ``BorrowSource`` (default ``FlatBorrow``) must quote the ticker as
+   borrowable on the fill day, else the short part is dropped
+   (``not_borrowable``), and ``available_shares`` caps it;
+2. the margin model's initial requirement must fit the excess equity left
+   after the closing part, else the short part is scaled down;
+3. it fills on the sell side of the cost model and credits the proceeds.
+
+``accrue(as_of)`` charges financing once per day: the borrow fee on every
+short (``|qty| x price x fee / 360`` per calendar day, at the current
+prices) and debit interest on negative cash. Each charge is a
+``FinancingEvent`` in ``financing``. A long-only cash book accrues nothing.
+``margin_call()`` plans the closes that cure a maintenance breach, most
+losing positions first, and ``recalled(as_of)`` lists shorts whose borrow
+was withdrawn (sources with history only).
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
+from typing import Literal
 
 import numpy as np
 
@@ -57,6 +82,8 @@ from stonks.backtest.fills import (
 )
 from stonks.core.interval import Interval
 from stonks.core.types import AssetClass, Fill, Order, Portfolio
+from stonks.execution.borrow import DAY_COUNT, BorrowSource, FlatBorrow, daily_fee
+from stonks.execution.margin import MarginModel
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.backtest.simulated_broker")
@@ -68,6 +95,22 @@ _SCALE_ITERATIONS = 50
 _DUST = 1e-9
 _NO_STATS = MarketStats()
 
+FinancingKind = Literal["borrow_fee", "debit_interest"]
+
+
+@dataclass(frozen=True)
+class FinancingEvent:
+    """One financing charge debited to cash by ``accrue``."""
+
+    timestamp: datetime
+    #: The short the borrow fee is for; ``None`` for debit interest.
+    ticker: str | None
+    kind: FinancingKind
+    #: Cash change (negative: a charge).
+    amount: float
+    #: Calendar days the charge covers.
+    days: int
+
 
 class SimulatedBroker:
     def __init__(
@@ -78,6 +121,10 @@ class SimulatedBroker:
         cost_model: CostModel | None = None,
         fill_model: FillModel | None = None,
         settlement_days: int = 0,
+        *,
+        margin: MarginModel | None = None,
+        borrow: BorrowSource | None = None,
+        allow_short: bool = False,
     ) -> None:
         if cost_model is not None and (slippage_bps or fee_per_trade):
             raise ValueError("pass either cost_model or slippage_bps/fee_per_trade, not both")
@@ -103,6 +150,19 @@ class SimulatedBroker:
         #: The bar interval (``set_interval``) and one bar's length in days.
         self._interval: Interval | None = None
         self._bar_days: float | None = None
+        #: Margin, borrow and financing (see the module doc). ``None``
+        #: margin is the cash account: the legacy code path, unchanged.
+        self._margin: MarginModel | None = None
+        self._borrow: BorrowSource = borrow or FlatBorrow()
+        self._allow_short = False
+        self._financing: list[FinancingEvent] = []
+        self._accrued_through: date | None = None
+        #: Average entry price per held ticker (margin-call ordering).
+        self._avg_cost: dict[str, float] = {}
+        if margin is not None and margin.name != "cash":
+            self._margin = margin
+        if allow_short:
+            self.enable_shorts(margin, borrow)
 
     @classmethod
     def from_execution(
@@ -162,6 +222,39 @@ class SimulatedBroker:
             return cost_spec
         return fill_spec.merge(cost_spec)
 
+    def enable_shorts(self, margin: MarginModel | None, borrow: BorrowSource | None = None) -> None:
+        """Allow short sales under ``margin`` (a model that allows shorts)
+        and ``borrow`` (default: keep the current source)."""
+        if margin is None or not margin.allows_short:
+            name = "none" if margin is None else margin.name
+            raise ValueError(f"short selling needs a margin model that allows shorts, got {name}")
+        self._margin = margin
+        if borrow is not None:
+            self._borrow = borrow
+        self._allow_short = True
+
+    @property
+    def allow_short(self) -> bool:
+        return self._allow_short
+
+    @property
+    def margin(self) -> MarginModel | None:
+        """The margin model (``None``: a cash account)."""
+        return self._margin
+
+    @property
+    def borrow(self) -> BorrowSource:
+        return self._borrow
+
+    @property
+    def financing(self) -> tuple[FinancingEvent, ...]:
+        """Every financing charge, in order (read-only)."""
+        return tuple(self._financing)
+
+    def average_cost(self, ticker: str) -> float | None:
+        """Average entry price of the held position (``None`` when flat)."""
+        return self._avg_cost.get(ticker)
+
     @property
     def settlement_days(self) -> int:
         return self._settlement_days
@@ -209,7 +302,17 @@ class SimulatedBroker:
         quantity = decision.quantity
 
         cost = self._cost(order, price, quantity)
-        if order.side == "buy":
+        held = self._portfolio.positions.get(order.ticker, 0.0)
+        close_qty = quantity
+        if self._margin is not None:
+            sized = self._size_on_margin(order, price, quantity, cost, held)
+            if sized is None:
+                self._unfilled[order.client_id] = 0.0
+                return None
+            if sized[0] != quantity:
+                self._unfilled[order.client_id] = 0.0
+            quantity, close_qty, cost = sized
+        elif order.side == "buy":
             if quantity * cost.fill_price + cost.fee > self.buying_power:
                 # cash, not liquidity, binds: nothing is worth carrying
                 self._unfilled[order.client_id] = 0.0
@@ -231,10 +334,9 @@ class SimulatedBroker:
                     filled=quantity,
                 )
         else:  # sell
-            held = self._portfolio.positions.get(order.ticker, 0.0)
             if 0 < held < quantity <= held * (1 + _DUST):
                 # float dust (0.1 + 0.2 > 0.3): sell exactly what is held
-                quantity = held
+                quantity = close_qty = held
                 cost = self._cost(order, price, quantity)
             if held < quantity:
                 self._unfilled[order.client_id] = 0.0
@@ -256,9 +358,10 @@ class SimulatedBroker:
             filled_at=self._fill_time(),
             side=order.side,
         )
+        self._track_cost(fill, held)
         self._portfolio.apply_fill(fill)
         if order.side == "sell" and self._settlement_days:
-            proceeds = quantity * cost.fill_price - cost.fee
+            proceeds = close_qty * cost.fill_price - cost.fee
             if proceeds > 0:
                 self._unsettled.append((self._settles_on(fill.filled_at), proceeds))
         self._fills_by_client_id[order.client_id] = fill
@@ -272,6 +375,96 @@ class SimulatedBroker:
         expired, was cut by cash or position (a buy scaled to cash, a
         rejected sell), or was never placed."""
         return self._unfilled.get(client_id, 0.0)
+
+    # ---- margin, borrow and financing ---------------------------------------
+
+    def accrue(self, as_of: date, *, since: date | None = None) -> list[FinancingEvent]:
+        """Charge financing for the calendar days from the last accrual (or
+        ``since``) to ``as_of``, at the current prices: the borrow fee of
+        every short and interest on negative cash. The first call only sets
+        the start. Returns the new charges."""
+        day = _day(as_of)
+        last = since if since is not None else self._accrued_through
+        if self._accrued_through is None or day > self._accrued_through:
+            self._accrued_through = day
+        if last is None or day <= last:
+            return []
+        days = (day - last).days
+        stamp = _utc(as_of)
+        events: list[FinancingEvent] = []
+        for ticker, qty in sorted(self._portfolio.positions.items()):
+            price = self._prices.get(ticker)
+            if qty >= 0 or not price or price <= 0:
+                continue
+            quote = self._borrow.quote(ticker, day, self._asset_classes.get(ticker, "equity"))
+            fee = 0.0 if quote is None else daily_fee(qty, price, quote, days)
+            if fee > 0:
+                events.append(FinancingEvent(stamp, ticker, "borrow_fee", -fee, days))
+        rate = self._margin.debit_rate_annual if self._margin is not None else 0.0
+        if rate > 0 and self._portfolio.cash < 0:
+            interest = -self._portfolio.cash * rate * days / DAY_COUNT
+            events.append(FinancingEvent(stamp, None, "debit_interest", -interest, days))
+        for event in events:
+            self._portfolio.cash += event.amount
+        self._financing.extend(events)
+        return events
+
+    def margin_deficit(self) -> float:
+        """How far equity sits below the maintenance requirement at the
+        current prices (0 for a cash account or a book in good standing)."""
+        if self._margin is None:
+            return 0.0
+        return self._margin.deficit(self._portfolio, self._prices, self._asset_classes)
+
+    def margin_call(self) -> list[tuple[str, float]]:
+        """``(ticker, signed quantity to trade)`` closes that cure the
+        maintenance deficit at the current prices: the most losing
+        position (vs its average cost) first, each closed only as far as
+        needed. Empty when there is no deficit."""
+        deficit = self.margin_deficit()
+        if deficit <= 0 or self._margin is None:
+            return []
+        held = [
+            (t, q, self._prices[t])
+            for t, q in self._portfolio.positions.items()
+            if q and self._prices.get(t, 0.0) > 0
+        ]
+
+        def pnl(item: tuple[str, float, float]) -> float:
+            ticker, qty, price = item
+            return (price - self._avg_cost.get(ticker, price)) * qty
+
+        plan: list[tuple[str, float]] = []
+        for ticker, qty, price in sorted(held, key=lambda i: (pnl(i), i[0])):
+            if deficit <= 0:
+                break
+            asset_class = self._asset_classes.get(ticker, "equity")
+            close = self._margin.cover_quantity(qty, price, deficit, asset_class)
+            if close <= 0:
+                continue
+            plan.append((ticker, close if qty < 0 else -close))
+            deficit -= close * price * self._margin.maintenance_rate(qty, asset_class)
+        return plan
+
+    def recalled(self, as_of: date) -> list[str]:
+        """Held shorts the borrow source no longer quotes as borrowable on
+        ``as_of`` (only sources with history can recall)."""
+        if not self._borrow.has_history:
+            return []
+        day = _day(as_of)
+        out = []
+        for ticker, qty in sorted(self._portfolio.positions.items()):
+            if qty >= 0:
+                continue
+            quote = self._borrow.quote(ticker, day, self._asset_classes.get(ticker, "equity"))
+            if quote is None or not quote.shortable:
+                out.append(ticker)
+        return out
+
+    def rescale_cost(self, ticker: str, ratio: float) -> None:
+        """A split of ``ratio``: the average cost divides by it."""
+        if ticker in self._avg_cost and ratio > 0:
+            self._avg_cost[ticker] /= ratio
 
     # ---- trade ledger inputs ------------------------------------------------
 
@@ -365,6 +558,86 @@ class SimulatedBroker:
             return 0.0, cost
         return lo, lo_cost
 
+    def _size_on_margin(
+        self, order: Order, price: float, quantity: float, cost: TradeCost, held: float
+    ) -> tuple[float, float, TradeCost] | None:
+        """``(quantity, closing part, cost)`` of an order on a margin
+        account, or ``None`` when nothing may fill. The closing part is
+        never limited; the opening part must be borrowable (short sales)
+        and fit the excess equity left after the closing part."""
+        margin = self._margin
+        assert margin is not None
+        sign = 1.0 if order.side == "buy" else -1.0
+        closable = max(-held, 0.0) if sign > 0 else max(held, 0.0)
+        close_qty = min(quantity, closable)
+        if quantity - close_qty <= _DUST * quantity:
+            close_qty = quantity
+        open_qty = quantity - close_qty
+        if open_qty > 0 and sign < 0:
+            open_qty = self._borrowable(order, open_qty)
+        if open_qty > 0:
+            after_close = Portfolio(self._portfolio.cash, dict(self._portfolio.positions))
+            if close_qty > 0:
+                after_close.apply_fill(
+                    Fill(
+                        order.client_id,
+                        order.ticker,
+                        close_qty,
+                        cost.fill_price,
+                        0.0,
+                        self._fill_time(),
+                        order.side,
+                    )
+                )
+            asset_class = self._asset_classes.get(order.ticker, "equity")
+            excess = margin.excess_equity(after_close, self._prices, self._asset_classes)
+            per_share = margin.initial_requirement(order.ticker, sign, cost.fill_price, asset_class)
+            room = max(excess - cost.fee, 0.0) / per_share
+            if open_qty > room:
+                _log.debug(
+                    "order_scaled_to_margin",
+                    client_id=order.client_id,
+                    requested=open_qty,
+                    filled=room,
+                )
+                open_qty = room
+        total = close_qty + open_qty
+        if total <= 0:
+            _log.debug("order_rejected", client_id=order.client_id, reason="insufficient_margin")
+            return None
+        if total != quantity:
+            cost = self._cost(order, price, total)
+        return total, close_qty, cost
+
+    def _borrowable(self, order: Order, quantity: float) -> float:
+        """The part of a short sale of ``quantity`` that can be borrowed."""
+        if not self._allow_short:
+            _log.debug("order_rejected", client_id=order.client_id, reason="short_not_allowed")
+            return 0.0
+        day = _day(self._as_of) if self._as_of is not None else datetime.now(UTC).date()
+        asset_class = self._asset_classes.get(order.ticker, "equity")
+        quote = self._borrow.quote(order.ticker, day, asset_class)
+        if quote is None or not quote.shortable:
+            _log.debug("order_rejected", client_id=order.client_id, reason="not_borrowable")
+            return 0.0
+        if quote.available_shares is not None:
+            return min(quantity, max(quote.available_shares, 0.0))
+        return quantity
+
+    def _track_cost(self, fill: Fill, held: float) -> None:
+        """Keep the average entry price of the position ``fill`` changes."""
+        signed = fill.signed_quantity
+        after = held + signed
+        if abs(after) <= _DUST * max(abs(held), fill.quantity):
+            self._avg_cost.pop(fill.ticker, None)
+        elif held == 0 or (held > 0) != (after > 0):
+            self._avg_cost[fill.ticker] = fill.price  # opened or flipped
+        elif (signed > 0) == (held > 0):  # grew
+            old = self._avg_cost.get(fill.ticker, fill.price)
+            self._avg_cost[fill.ticker] = (old * abs(held) + fill.price * fill.quantity) / abs(
+                after
+            )
+
     def _settles_on(self, filled_at: datetime) -> np.datetime64:
         day = np.datetime64(filled_at.date(), "D")
         return np.busday_offset(day, self._settlement_days, roll="forward")
@@ -383,6 +656,10 @@ class SimulatedBroker:
 
     def reconcile(self) -> list[Fill]:
         return list(self._fills_order)
+
+
+def _day(value: date) -> date:
+    return value.date() if isinstance(value, datetime) else value
 
 
 def _utc(value: date) -> datetime:

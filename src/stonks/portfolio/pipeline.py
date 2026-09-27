@@ -30,6 +30,19 @@ client-id segment :data:`PORTFOLIO_STRATEGY`).
 
 The pipeline is pure: no database, no lake. Callers bring the market view
 (prices, fresh tickers, volumes, volatilities) and the strategies.
+
+Shorts (roadmap 16.1)
+---------------------
+A short opens only when the book allows it (``BookInput.allow_short``) and
+the strategy does (``supports_short``, read with ``getattr``). Otherwise
+everything is exactly as above. In a short book the target-weight route
+keeps negative scores of the strategies that support shorts (the others
+are clipped at 0), lets the constructor keep negative weights, and diffs
+signed targets (``orders_from_targets(allow_short=True)``). In
+``single_winner`` the winner's orders are split at zero
+(:func:`stonks.execution.orders.classify`) and the opening sell legs are
+dropped unless the winner supports shorts. Client ids carry the side token
+(``short``, ``cover``) so the two legs of a split stay distinct.
 """
 
 from __future__ import annotations
@@ -45,8 +58,8 @@ import pandas as pd
 
 from stonks.backtest.costs import CostModel, CostModelSettings
 from stonks.config import RiskPolicy
-from stonks.core.types import Order, OrderSide, Portfolio
-from stonks.execution.orders import make_client_id
+from stonks.core.types import Order, Portfolio
+from stonks.execution.orders import SideToken, classify_all, make_client_id, side_token
 from stonks.features.volatility import annualize, ewma_vol
 from stonks.logging import get_logger
 from stonks.portfolio.base import (
@@ -112,6 +125,8 @@ class BookInput:
     prior_attribution: Mapping[str, Mapping[str, float]] = field(default_factory=dict)
     costs: FillCosts = field(default_factory=FillCosts)
     risk_context: RiskContext | None = None
+    #: The book may hold short positions (``portfolios.allow_short``).
+    allow_short: bool = False
 
     def strategies(self, signals: Mapping[str, Any]) -> list[str]:
         """The book's strategies that sent signals, in signal order."""
@@ -130,8 +145,8 @@ class Decider(Protocol):
     ) -> list[Order]: ...
 
 
-#: ``(strategy_id or None, ticker, side) -> client id``.
-ClientIdFn = Callable[[str | None, str, OrderSide], str]
+#: ``(strategy_id or None, ticker, side token) -> client id``.
+ClientIdFn = Callable[[str | None, str, SideToken], str]
 
 
 @dataclass(frozen=True)
@@ -172,7 +187,7 @@ def build_orders(
         return _single_winner(
             constructor, book_signals, book, market, strategies, exit_owner, make_id
         )
-    return _from_targets(constructor, book_signals, book, market, make_id)
+    return _from_targets(constructor, book_signals, book, market, make_id, strategies)
 
 
 def apply_book_risk(
@@ -198,6 +213,7 @@ def apply_book_risk(
         cost_model=book.costs.model,
         volumes=market.volumes,
         context=book.risk_context,
+        allow_short=book.allow_short,
     )
 
 
@@ -246,14 +262,17 @@ def _single_winner(
         exit_only, picks = True, []
     if strategies is None:
         raise ValueError("the single_winner route needs the strategies that decide")
-    proposed = strategies(winner).decide(picks, book.portfolio, dict(market.prices), market.as_of)
+    decider = strategies(winner)
+    proposed = decider.decide(picks, book.portfolio, dict(market.prices), market.as_of)
+    if book.allow_short:
+        proposed = _split_at_zero(proposed, book.portfolio, _supports_short(decider))
     kept, stale = _drop_stale(proposed, market)
     risk = apply_book_risk(kept, book, market, book.risk_overrides.get(winner))
     # Orders a risk rule created (e.g. a max_holding forced sell) keep the
     # rule's client id and no strategy; the winner's own orders take its ids.
     decided = {o.client_id for o in kept}
     orders = [
-        replace(o, strategy_id=winner, client_id=make_id(winner, o.ticker, o.side))
+        replace(o, strategy_id=winner, client_id=make_id(winner, o.ticker, side_token(o)))
         if o.client_id in decided
         else o
         for o in risk.orders
@@ -276,6 +295,7 @@ def _from_targets(
     book: BookInput,
     market: MarketView,
     make_id: ClientIdFn,
+    strategies: Callable[[str], Decider] | None = None,
 ) -> PipelineResult:
     if not signals:
         # Not one of the book's strategies was scored (failed to load, not
@@ -283,12 +303,22 @@ def _from_targets(
         _log.warning("pipeline.no_signals", held=sorted(_held(book.portfolio)))
         return PipelineResult(orders=[], target_book=TargetBook(), reason="no_signals")
     method = book.construction.signal_method or constructor.signal_method
+    shorting = book.allow_short and _any_shorts(signals, strategies)
+    if shorting:
+        constructor = _long_short(book.construction)
     normalised = normalize(
         signals,
         method,
         long_only=constructor.settings.long_only,
         context=SignalContext(vols_annual=market.vols_annual),
     )
+    if shorting:
+        normalised = {
+            sid: scores
+            if _supports_short(strategies(sid) if strategies else None)
+            else {t: max(v, 0.0) for t, v in scores.items()}
+            for sid, scores in normalised.items()
+        }
     target = constructor.target_weights(_construction_input(normalised, book, market))
     decision_date = market.as_of.date() if isinstance(market.as_of, datetime) else market.as_of
     raw = orders_from_targets(
@@ -298,6 +328,7 @@ def _from_targets(
         buffer_fraction=book.construction.buffer_fraction,
         min_trade_weight=book.construction.min_trade_weight,
         as_of=decision_date,
+        allow_short=shorting,
     )
     owned = []
     for order in raw:
@@ -305,7 +336,9 @@ def _from_targets(
             book.prior_attribution.get(order.ticker)
         )
         owned.append(
-            replace(order, strategy_id=owner, client_id=make_id(owner, order.ticker, order.side))
+            replace(
+                order, strategy_id=owner, client_id=make_id(owner, order.ticker, side_token(order))
+            )
         )
     kept, stale = _drop_stale(owned, market)
     risk = apply_book_risk(kept, book, market)
@@ -340,6 +373,36 @@ def _construction_input(
     )
 
 
+def _supports_short(strategy: object) -> bool:
+    return bool(getattr(strategy, "supports_short", False))
+
+
+def _any_shorts(
+    signals: Mapping[str, Mapping[str, float]], strategies: Callable[[str], Decider] | None
+) -> bool:
+    """Any of the book's signalling strategies may short."""
+    return strategies is not None and any(_supports_short(strategies(s)) for s in signals)
+
+
+def _long_short(construction: ConstructionSettings) -> PortfolioConstructor:
+    """The book's constructor with negative weights allowed."""
+    params = {**construction.params, "long_only": False}
+    return construction.model_copy(update={"params": params}).build()
+
+
+def _split_at_zero(orders: Sequence[Order], portfolio: Portfolio, may_short: bool) -> list[Order]:
+    """Orders split at zero against the book; opening sells are dropped
+    unless the strategy may short. A leg whose token matches the order's
+    side keeps its client id."""
+    out: list[Order] = []
+    for leg in classify_all(orders, portfolio.positions):
+        if leg.side == "sell" and leg.position_effect == "open" and not may_short:
+            _log.info("pipeline.short_dropped", ticker=leg.ticker, quantity=leg.quantity)
+            continue
+        out.append(leg)
+    return out
+
+
 def _drop_stale(orders: Sequence[Order], market: MarketView) -> tuple[list[Order], list[str]]:
     if market.buyable is None:
         return list(orders), []
@@ -358,7 +421,7 @@ def _dominant(shares: Mapping[str, float] | None) -> str | None:
 
 
 def _default_client_id(as_of: date | datetime) -> ClientIdFn:
-    def make(strategy_id: str | None, ticker: str, side: OrderSide) -> str:
+    def make(strategy_id: str | None, ticker: str, side: SideToken) -> str:
         return make_client_id(
             as_of=as_of,  # type: ignore[arg-type]
             strategy_id=strategy_id or PORTFOLIO_STRATEGY,

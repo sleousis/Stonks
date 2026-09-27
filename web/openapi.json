@@ -978,6 +978,85 @@
         "title": "BenchmarkStatsView",
         "type": "object"
       },
+      "BorrowCheckSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "borrow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BorrowSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_borrow_fee": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Borrow Fee"
+          }
+        },
+        "title": "BorrowCheckSettings",
+        "type": "object"
+      },
+      "BorrowSettings": {
+        "additionalProperties": false,
+        "description": "``FlatBorrow`` knobs: the general-collateral fee per asset class and\nthe tickers that are hard to borrow or not borrowable at all.",
+        "properties": {
+          "fee_rate_annual": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "propertyNames": {
+              "enum": [
+                "equity",
+                "crypto",
+                "commodity",
+                "bond"
+              ]
+            },
+            "title": "Fee Rate Annual",
+            "type": "object"
+          },
+          "hard": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Hard",
+            "type": "array"
+          },
+          "hard_fee_rate_annual": {
+            "default": 0.05,
+            "minimum": 0.0,
+            "title": "Hard Fee Rate Annual",
+            "type": "number"
+          },
+          "none": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "None",
+            "type": "array"
+          }
+        },
+        "title": "BorrowSettings",
+        "type": "object"
+      },
       "BrokerInfo": {
         "properties": {
           "allow_live": {
@@ -2943,6 +3022,25 @@
           "policy"
         ],
         "title": "GoLiveReport",
+        "type": "object"
+      },
+      "GrossExposureSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_gross": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Gross"
+          }
+        },
+        "title": "GrossExposureSettings",
         "type": "object"
       },
       "HaltView": {
@@ -4993,6 +5091,118 @@
         "title": "LoginView",
         "type": "object"
       },
+      "MarginCallSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "buffer": {
+            "default": 0.0,
+            "exclusiveMaximum": 1.0,
+            "minimum": 0.0,
+            "title": "Buffer",
+            "type": "number"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "margin": {
+            "$ref": "#/components/schemas/MarginSettings",
+            "default": {
+              "debit_rate_annual": 0.0,
+              "model": "reg_t",
+              "overrides": {},
+              "rates": {
+                "initial_long": 0.5,
+                "initial_short": 0.5,
+                "maintenance_long": 0.25,
+                "maintenance_short": 0.3
+              }
+            }
+          }
+        },
+        "title": "MarginCallSettings",
+        "type": "object"
+      },
+      "MarginRates": {
+        "additionalProperties": false,
+        "description": "Requirement rates, as fractions of a position's market value.",
+        "properties": {
+          "initial_long": {
+            "default": 0.5,
+            "exclusiveMinimum": 0.0,
+            "title": "Initial Long",
+            "type": "number"
+          },
+          "initial_short": {
+            "default": 0.5,
+            "exclusiveMinimum": 0.0,
+            "title": "Initial Short",
+            "type": "number"
+          },
+          "maintenance_long": {
+            "default": 0.25,
+            "minimum": 0.0,
+            "title": "Maintenance Long",
+            "type": "number"
+          },
+          "maintenance_short": {
+            "default": 0.3,
+            "minimum": 0.0,
+            "title": "Maintenance Short",
+            "type": "number"
+          }
+        },
+        "title": "MarginRates",
+        "type": "object"
+      },
+      "MarginSettings": {
+        "additionalProperties": false,
+        "description": "Which margin model a book uses, and its rates.",
+        "properties": {
+          "debit_rate_annual": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Debit Rate Annual",
+            "type": "number"
+          },
+          "model": {
+            "default": "cash",
+            "enum": [
+              "cash",
+              "reg_t"
+            ],
+            "title": "Model",
+            "type": "string"
+          },
+          "overrides": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/MarginRates"
+            },
+            "propertyNames": {
+              "enum": [
+                "equity",
+                "crypto",
+                "commodity",
+                "bond"
+              ]
+            },
+            "title": "Overrides",
+            "type": "object"
+          },
+          "rates": {
+            "$ref": "#/components/schemas/MarginRates",
+            "default": {
+              "initial_long": 0.5,
+              "initial_short": 0.5,
+              "maintenance_long": 0.25,
+              "maintenance_short": 0.3
+            }
+          }
+        },
+        "title": "MarginSettings",
+        "type": "object"
+      },
       "MarkReadRequest": {
         "properties": {
           "ids": {
@@ -5313,6 +5523,35 @@
           "recovery_codes_left"
         ],
         "title": "MfaView",
+        "type": "object"
+      },
+      "NetExposureSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_net": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Net"
+          },
+          "min_net": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Net"
+          }
+        },
+        "title": "NetExposureSettings",
         "type": "object"
       },
       "NoteRequest": {
@@ -7932,19 +8171,43 @@
           "rules": {
             "$ref": "#/components/schemas/RuleSettings",
             "default": {
+              "borrow_check": {
+                "enabled": false
+              },
               "circuit_breaker": {
                 "cooldown": "rest_of_month",
                 "week_sessions": 5
               },
               "drawdown_scaling": {},
+              "gross_exposure": {},
               "liquidity": {},
+              "margin_call": {
+                "buffer": 0.0,
+                "enabled": false,
+                "margin": {
+                  "debit_rate_annual": 0.0,
+                  "model": "reg_t",
+                  "overrides": {},
+                  "rates": {
+                    "initial_long": 0.5,
+                    "initial_short": 0.5,
+                    "maintenance_long": 0.25,
+                    "maintenance_short": 0.3
+                  }
+                }
+              },
               "max_holding": {},
+              "net_exposure": {},
               "operational_halt": {},
               "portfolio_vol": {},
               "risk_per_position": {
                 "atr_multiple": 3.0
               },
-              "sector_cap": {}
+              "sector_cap": {},
+              "short_caps": {},
+              "squeeze_guard": {
+                "spike_bars": 5
+              }
             }
           }
         },
@@ -8412,6 +8675,12 @@
       "RuleSettings": {
         "additionalProperties": false,
         "properties": {
+          "borrow_check": {
+            "$ref": "#/components/schemas/BorrowCheckSettings",
+            "default": {
+              "enabled": false
+            }
+          },
           "circuit_breaker": {
             "$ref": "#/components/schemas/CircuitBreakerSettings",
             "default": {
@@ -8423,12 +8692,38 @@
             "$ref": "#/components/schemas/DrawdownScalingSettings",
             "default": {}
           },
+          "gross_exposure": {
+            "$ref": "#/components/schemas/GrossExposureSettings",
+            "default": {}
+          },
           "liquidity": {
             "$ref": "#/components/schemas/LiquiditySettings",
             "default": {}
           },
+          "margin_call": {
+            "$ref": "#/components/schemas/MarginCallSettings",
+            "default": {
+              "buffer": 0.0,
+              "enabled": false,
+              "margin": {
+                "debit_rate_annual": 0.0,
+                "model": "reg_t",
+                "overrides": {},
+                "rates": {
+                  "initial_long": 0.5,
+                  "initial_short": 0.5,
+                  "maintenance_long": 0.25,
+                  "maintenance_short": 0.3
+                }
+              }
+            }
+          },
           "max_holding": {
             "$ref": "#/components/schemas/MaxHoldingSettings",
+            "default": {}
+          },
+          "net_exposure": {
+            "$ref": "#/components/schemas/NetExposureSettings",
             "default": {}
           },
           "operational_halt": {
@@ -8448,6 +8743,16 @@
           "sector_cap": {
             "$ref": "#/components/schemas/SectorCapSettings",
             "default": {}
+          },
+          "short_caps": {
+            "$ref": "#/components/schemas/ShortCapsSettings",
+            "default": {}
+          },
+          "squeeze_guard": {
+            "$ref": "#/components/schemas/SqueezeGuardSettings",
+            "default": {
+              "spike_bars": 5
+            }
           }
         },
         "title": "RuleSettings",
@@ -8989,6 +9294,37 @@
         "title": "ShadowPnlSummary",
         "type": "object"
       },
+      "ShortCapsSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_short_total": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Short Total"
+          },
+          "max_short_weight": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Short Weight"
+          }
+        },
+        "title": "ShortCapsSettings",
+        "type": "object"
+      },
       "ShortfallView": {
         "description": "Implementation shortfall of one order. Costs are positive, in bps of\nthe filled quantity's value at the decision price; ``null`` while an\ninput is not known yet.",
         "properties": {
@@ -9479,6 +9815,77 @@
           "spec"
         ],
         "title": "SpecValidateRequest",
+        "type": "object"
+      },
+      "SqueezeGuardSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "atr_multiple": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atr Multiple"
+          },
+          "borrow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BorrowSettings"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_adverse_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Adverse Pct"
+          },
+          "max_borrow_fee": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Borrow Fee"
+          },
+          "spike_bars": {
+            "default": 5,
+            "minimum": 1.0,
+            "title": "Spike Bars",
+            "type": "integer"
+          },
+          "spike_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spike Pct"
+          }
+        },
+        "title": "SqueezeGuardSettings",
         "type": "object"
       },
       "StartPortalRequest": {
