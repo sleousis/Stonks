@@ -240,6 +240,14 @@ describe('lab requests', () => {
       expect(buildLabRunRequest(labForm({ wfSplits: 5 }))).not.toHaveProperty('walk_forward');
     });
 
+    it('sends a cross-validated objective and scores walk-forward on its plain metric', () => {
+      const body = buildLabRunRequest(
+        labForm({ objective: 'cv_sharpe', suite: 'custom', tests: ['walk_forward'], wfSplits: 4 }),
+      );
+      expect(body.objective).toBe('cv_sharpe');
+      expect(body.walk_forward).toEqual({ n_splits: 4, metric: 'sharpe' });
+    });
+
     it('validates tuner and survival options', () => {
       const errors = labRunErrors(
         labForm({

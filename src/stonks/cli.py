@@ -1287,7 +1287,7 @@ def lab_ic(ctx: typer.Context) -> None:
 
 
 _LAB_TUNERS = ("grid", "random")
-_LAB_OBJECTIVES = ("sharpe", "cagr", "final_return")
+_LAB_OBJECTIVES = ("sharpe", "cagr", "final_return", "cv_sharpe", "cv_cagr", "cv_final_return")
 _LAB_COST_MODELS = ("config", "zero", "realistic")
 
 
@@ -1447,7 +1447,7 @@ def lab_run(
         "sharpe",
         "--objective",
         callback=_choice("--objective", _LAB_OBJECTIVES),
-        help="sharpe|cagr|final_return",
+        help="sharpe|cagr|final_return, or cv_ plus one of them to score on purged folds",
     ),
     tests: str | None = typer.Option(
         None,
@@ -1766,7 +1766,7 @@ def lab_sweep(
         "sharpe",
         "--objective",
         callback=_choice("--objective", _LAB_OBJECTIVES),
-        help="sharpe|cagr|final_return",
+        help="sharpe|cagr|final_return, or cv_ plus one of them to score on purged folds",
     ),
     tests: str | None = typer.Option(
         None, "--tests", help="comma-separated survival test ids; default: --preset"
