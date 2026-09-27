@@ -250,6 +250,13 @@ class BaseStrategy:
     def fit(self, dataset: Any) -> None:
         return None
 
+    @property
+    def retrainable(self) -> bool:
+        """True when ``fit`` learns state from data (a model, a regime
+        fit), so scheduled retraining applies (roadmap 22.6). The default
+        asks whether the class overrides :meth:`fit`."""
+        return type(self).fit is not BaseStrategy.fit
+
     def data_tickers(self) -> tuple[str, ...]:
         """Tickers this strategy reads but does not trade (see module doc)."""
         return ()
