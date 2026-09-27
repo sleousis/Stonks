@@ -447,6 +447,23 @@ A clean week has no unresolved reconciliation drift, no stuck orders, rejections
 
 Waves: 19.1, 19.4, 19.6 and 19.7 first, then 19.2 and 19.8, then 19.3, 19.5, 19.9 and 19.10, then 19.11 and 19.12. The owner provides the IBKR account and its paper account, a secondary API username with IBKR Mobile for 2FA, market data subscriptions, the account type and client class, the capital to allocate, and 1 GB more VM memory per gateway.
 
+## Phase 20: Complete product
+
+Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invited traders, no billing or public sign-up. Research data comes from EODHD All-in-one, live prices from Interactive Brokers.
+
+| WP | Scope |
+|----|-------|
+| 20.1 Manual orders | Place, change and cancel your own orders from the console, MCP and CLI, next to what strategies do. Each goes through the order ticket, every risk rule, the kill switch and the account rules, and is recorded with its reason and attribution `manual`. |
+| 20.2 Price alerts | Alerts when a ticker crosses a level or moves by a percent over a window, on watchlists or single tickers, checked on each data refresh (and on live prices once intraday lands), sent through push, email and Telegram with quiet hours. |
+| 20.3 Telegram bot | A notification channel plus commands: status, today, positions, signals, and the kill switch with a typed confirmation. Each chat is linked to one user with a one-time code, and every command respects that user's permissions. |
+| 20.4 AI assistant | An in-app chat that talks to any OpenAI-compatible model endpoint (the owner's own open-source model on the local server through Ollama, vLLM or llama.cpp) and acts through the existing MCP tools as the signed-in user. Write actions need the same confirmations as the console, step-up actions stay in the web app. |
+| 20.5 Currency and tax per portfolio | Each portfolio picks a base currency. FX rates in the lake, values and P&L converted, and yearly tax exports (realized gains per lot with FIFO or specific lots, dividends, withholding) for US and EU rules. |
+| 20.6 Deploy anywhere | The same stack on a cloud VM or a local home server: one Compose file with profiles, a local-server guide (Tailscale, auto start, UPS and power loss, backups off the machine), and a cloud guide, with the lab worker and the model server optional. |
+
+## Phase 21: Intraday trading
+
+Planned after live daily trading is stable. Streaming prices (EODHD websockets, IBKR), a live event engine that decides on minute bars, intraday strategies with realistic fills and session rules, intraday risk (per-minute loss limits, halts), and the monitoring an always-on intraday loop needs.
+
 ## Execution order
 
 1. Wave 1 in parallel: backtest (1.2, 1.3, 3.5), lab (1.4, 1.5, 3.3), production (2.3, 2.4, 2.5), broker (2.1, 2.2), data (3.4), strategies (3.1, 3.2, 4.2), and the service layer plus REST API for existing features (5.1).
@@ -460,3 +477,4 @@ Waves: 19.1, 19.4, 19.6 and 19.7 first, then 19.2 and 19.8, then 19.3, 19.5, 19.
 9. Phases 15 to 17 follow the design docs in `docs/design/` (`accounts-and-modes.md`, `shorting.md`, `options.md`). The first step of 15.2 (accounts data model, no behaviour change) lands **before W2.1 (9.2.1) is wired into the tick**, so W2.1 writes the tick once as a loop over portfolios with a `BookSpec` instead of rewriting it twice. The backend of 13.1 (login, roles, 2FA, tokens) runs as part of Phase 15; see the step plan in `accounts-and-modes.md` section 12.
 10. Phase 18 runs last: the review sweep starts as soon as the code is frozen for review, the fix waves follow each merge wave, and the release waits for every gate.
 11. Phase 19 follows `docs/design/live-trading.md`. Its code waves can start once Phase 18 has frozen the money paths, and real money waits for each stage gate.
+12. Phase 17 (options) starts now, in parallel with Phase 19. Phase 20 runs alongside them. Phase 21 (intraday) follows once live daily trading is stable.
