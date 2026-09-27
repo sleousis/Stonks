@@ -5,7 +5,6 @@ result comes back through the same job row."""
 from __future__ import annotations
 
 import threading
-import time
 from datetime import date
 
 import pytest
@@ -165,19 +164,35 @@ def test_the_snapshot_context_refuses_without_a_snapshot(offload_settings, tmp_p
     ctx.close()  # never closes the real lake
 
 
-def test_a_stopping_worker_requeues_its_running_job(api, worker):
+def test_a_stopping_worker_requeues_its_running_job(api, worker, monkeypatch):
     """BE-42: a worker shut down mid-job hands the job back to the queue
-    (a restart is not a user cancel)."""
+    (a restart is not a user cancel). Event driven like the cancel test:
+    the job holds at its first checkpoint until the stop is requested, so
+    the stop always lands on a running job, however loaded the machine is."""
     job = api.lab.submit_lab_run(_request(budget=1000))
+    at_checkpoint = threading.Event()
+    stop_sent = threading.Event()
+    check_cancelled = JobContext.check_cancelled
+
+    def gated(ctx: JobContext) -> None:
+        if ctx.job_id == job.id:
+            at_checkpoint.set()
+            stop_sent.wait(timeout=120)
+        check_cancelled(ctx)
+
+    monkeypatch.setattr(JobContext, "check_cancelled", gated)
     stop = threading.Event()
     thread = threading.Thread(target=worker.run_forever, args=(stop,), daemon=True)
     thread.start()
-    deadline = time.monotonic() + 30
-    while api.jobs.get(job.id).status == "queued" and time.monotonic() < deadline:
-        time.sleep(0.02)
-    stop.set()
-    worker.request_stop()
-    thread.join(timeout=60)
+    try:
+        assert at_checkpoint.wait(timeout=120), "the worker never reached a trial"
+        stop.set()
+        worker.request_stop()
+    finally:
+        stop_sent.set()
+        stop.set()
+        thread.join(timeout=120)
+    assert not thread.is_alive()
     requeued = api.jobs.get(job.id)
     assert requeued.status == "queued"
     assert requeued.error is None
