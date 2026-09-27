@@ -121,11 +121,17 @@ def test_ticker_suffix_and_asset_class():
         calendar_for_ticker("AAPL")
 
 
-def test_every_mapped_exchange_resolves():
+def _exchange_codes() -> list[str]:
     from stonks.scheduling.calendar import EXCHANGE_CALENDARS
 
-    for code in EXCHANGE_CALENDARS:
-        assert isinstance(calendar_for_exchange(code), MarketCalendar)
+    return sorted(EXCHANGE_CALENDARS)
+
+
+# One case per exchange, so the workers share them (BE-68, TT-17).
+@pytest.mark.slow
+@pytest.mark.parametrize("code", _exchange_codes())
+def test_every_mapped_exchange_resolves(code):
+    assert isinstance(calendar_for_exchange(code), MarketCalendar)
 
 
 def test_register_custom_calendar():

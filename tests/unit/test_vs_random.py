@@ -57,6 +57,7 @@ def test_registered():
     assert "vs_random" in survival_test_names()
 
 
+@pytest.mark.slow
 def test_planted_edge_beats_the_noise(edge_lake):
     report = _test().run(WeekdaySignal({"weekday": 2}), dataset_for(edge_lake, TICKERS))
     assert report.passed, report.notes
@@ -67,6 +68,7 @@ def test_planted_edge_beats_the_noise(edge_lake):
     assert m["p_value"] == pytest.approx(1 / 11)
 
 
+@pytest.mark.slow
 def test_pure_noise_strategy_fails(plain_lake):
     report = _test().run(WeekdaySignal({"weekday": 0}), dataset_for(plain_lake, TICKERS))
     assert not report.passed

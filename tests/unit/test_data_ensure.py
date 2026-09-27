@@ -206,6 +206,7 @@ def test_one_long_gap_does_not_turn_bulk_off_for_the_exchange(lake):
     assert report.tickers_fetched == 26
 
 
+@pytest.mark.slow
 def test_bulk_falls_back_per_ticker_when_unsupported(lake):
     tickers = [f"T{i}.US" for i in range(25)]
     for t in tickers:
