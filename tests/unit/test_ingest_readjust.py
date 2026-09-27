@@ -87,9 +87,9 @@ def test_a_daily_run_with_a_matching_overlap_leaves_older_bars_alone(lake):
 
 def test_readjust_can_be_turned_off(lake):
     seed_daily_bars(lake, "A.US", date(2025, 6, 2), date(2025, 6, 13), close=100.0)
-    IngestPipeline(
-        _dividend_source(), lake, clock=_clock, adjustment_tolerance=None
-    ).run_prices(["A.US"], since=date(2025, 6, 11), until=date(2025, 6, 20))
+    IngestPipeline(_dividend_source(), lake, clock=_clock, adjustment_tolerance=None).run_prices(
+        ["A.US"], since=date(2025, 6, 11), until=date(2025, 6, 20)
+    )
     assert _adj(lake)[date(2025, 6, 2)] == pytest.approx(100.0)
 
 

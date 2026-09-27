@@ -470,7 +470,9 @@ def test_failed_lists_the_pipelines_failures():
             ["A.US", "B.US"], since=date(2025, 6, 2), until=date(2025, 6, 6)
         )
         assert result.failed == ("A.US",)
-        report = _ensurer(lake, primary).ensure(["A.US", "C.US"], date(2025, 6, 2), date(2025, 6, 6))
+        report = _ensurer(lake, primary).ensure(
+            ["A.US", "C.US"], date(2025, 6, 2), date(2025, 6, 6)
+        )
         assert report.failed == ["A.US"]
     finally:
         lake.close()
