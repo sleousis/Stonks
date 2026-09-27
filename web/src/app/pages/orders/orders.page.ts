@@ -1,21 +1,35 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 
 import { RefreshStatus, UpdatedAgo } from '../../shared/auto-refresh';
 import { ExportButton } from '../../shared/ui/export-button';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { NoBook, bookState } from '../../shared/ui/no-book';
 import { PageHeader } from '../../shared/ui/page-header';
+import { LoadingState } from '../../shared/ui/states';
+import { OrdersTabs } from './orders-tabs';
 
 /**
- * Orders and the trading runs (ticks) that produce them. The header and view
- * tabs stay put; the child routes (orders, fills, ticks, ticks/:id) render
- * below and report their freshness to the header through RefreshStatus.
+ * Orders and the trading runs that produce them. The header and view tabs
+ * (shared with Trade costs) stay put; the child routes (orders, fills, runs,
+ * runs/:id) render below and report their freshness to the header through
+ * RefreshStatus. With no portfolio, Orders and Fills point at opening one.
  */
 @Component({
   selector: 'app-orders-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, PageHeader, UpdatedAgo, ExportButton],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    PageHeader,
+    UpdatedAgo,
+    ExportButton,
+    OrdersTabs,
+    NoBook,
+    LoadingState,
+  ],
   providers: [RefreshStatus],
   template: `
     <app-page-header
@@ -23,7 +37,7 @@ import { PageHeader } from '../../shared/ui/page-header';
       description="Orders placed by trading runs, the fills they received, and the runs themselves."
     >
       <app-updated-ago [at]="status.updatedAt()" />
-      @if (!onRuns()) {
+      @if (!onRuns() && book() !== 'none') {
         <ng-container ngProjectAs="[actions]">
           <app-export-button kind="orders" label="Orders CSV" [ghost]="true" />
           <app-export-button kind="fills" label="Fills CSV" [ghost]="true" />
@@ -32,70 +46,24 @@ import { PageHeader } from '../../shared/ui/page-header';
       }
     </app-page-header>
 
-    <nav class="tabs" aria-label="Orders views">
-      <a
-        routerLink="/orders"
-        routerLinkActive="active"
-        ariaCurrentWhenActive="page"
-        [routerLinkActiveOptions]="{ exact: true }"
-        >Orders</a
-      >
-      <a routerLink="/orders/fills" routerLinkActive="active" ariaCurrentWhenActive="page">Fills</a>
-      <a routerLink="/orders/ticks" routerLinkActive="active" ariaCurrentWhenActive="page"
-        >Trading runs</a
-      >
-    </nav>
+    <app-orders-tabs />
 
-    <router-outlet />
-  `,
-  styles: `
-    @use 'breakpoints' as bp;
-
-    .tabs {
-      display: flex;
-      gap: var(--space-1);
-      margin: calc(-1 * var(--space-2)) 0 var(--space-4);
-      border-bottom: 1px solid var(--color-border);
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-    .tabs a {
-      display: inline-flex;
-      align-items: center;
-      min-height: 36px;
-      padding: 0 var(--space-3);
-      margin-bottom: -1px;
-      border-bottom: 2px solid transparent;
-      color: var(--color-ink-2);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
-      text-decoration: none;
-      white-space: nowrap;
-      transition: color var(--dur-fast) var(--ease);
-    }
-    .tabs a:hover {
-      color: var(--color-ink);
-    }
-    .tabs a.active {
-      color: var(--color-ink);
-      border-bottom-color: var(--color-accent);
-    }
-    @include bp.phone {
-      .tabs a {
-        flex: 1 1 0;
-        justify-content: center;
-        min-height: var(--touch-min);
-      }
-    }
-    @include bp.coarse {
-      .tabs a {
-        min-height: var(--touch-min);
-      }
+    @if (onRuns() || book() === 'ready') {
+      <router-outlet />
+    } @else if (book() === 'none') {
+      <app-no-book
+        message="Orders and fills show here once you have a portfolio. A paper one trades with pretend money."
+      />
+    } @else {
+      <app-loading-state label="Loading your portfolios" [rows]="4" />
     }
   `,
 })
 export class OrdersPage {
   protected readonly status = inject(RefreshStatus);
+  private readonly portfolioCtx = inject(PortfolioContextService);
+  /** Orders and fills belong to a portfolio: with none, point at opening one (UX-13). */
+  protected readonly book = computed(() => bookState(this.portfolioCtx));
   private readonly router = inject(Router);
   private readonly url = toSignal(
     this.router.events.pipe(

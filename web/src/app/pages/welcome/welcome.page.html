@@ -153,6 +153,11 @@
                         </button>
                       </div>
                     </form>
+                  } @else if (!portfolios.options().length) {
+                    <p class="muted">
+                      This account can look but not trade, so it cannot open a portfolio. A trader
+                      account can.
+                    </p>
                   }
                 }
                 @case ('data') {
@@ -196,7 +201,10 @@
                 }
                 @case ('follow') {
                   @if (strategies.hasValue() && strategies.value().length === 0) {
-                    <p class="muted">No strategy is ready to follow yet. Ask your admin.</p>
+                    <p class="muted">
+                      No strategy is ready to follow yet. Strategies show here once they start paper
+                      trading.
+                    </p>
                   } @else if (session.can('portfolio.trade')) {
                     <form class="form-grid inline-form" (submit)="follow($event)">
                       <div class="field">

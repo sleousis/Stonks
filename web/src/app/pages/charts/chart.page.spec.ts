@@ -75,11 +75,11 @@ describe('ChartPage', () => {
 
   afterEach(() => http.verify());
 
-  async function render(ticker?: string) {
+  async function render(ticker?: string, books = [book({ id: 'pf_1', name: 'Main' })]) {
     const fixture = TestBed.createComponent(ChartPage);
     if (ticker) fixture.componentRef.setInput('ticker', ticker);
     fixture.detectChanges();
-    (await nextRequest(http, '/api/portfolios')).flush(page([book({ id: 'pf_1', name: 'Main' })]));
+    (await nextRequest(http, '/api/portfolios')).flush(page(books));
     (await nextRequest(http, '/api/watchlists')).flush(page([]));
     return fixture;
   }
@@ -127,6 +127,19 @@ describe('ChartPage', () => {
     await tick(5);
   });
 
+  it('offers to open a paper portfolio where your fills would be, with no portfolio (UX-13)', async () => {
+    const fixture = await render('UP.US', []);
+    (await nextRequest(http, '/api/charts/UP.US')).flush(view(300));
+    for (let i = 0; i < 3; i++) {
+      await tick(5);
+      fixture.detectChanges();
+    }
+    const el: HTMLElement = fixture.nativeElement;
+    const link = el.querySelector<HTMLAnchorElement>('app-no-book a');
+    expect(link?.textContent?.trim()).toBe('Open a paper portfolio');
+    expect(link?.getAttribute('href')).toBe('/welcome?step=portfolio');
+  });
+
   it('asks for a ticker when none is open', async () => {
     const fixture = await render();
     await tick();
@@ -149,5 +162,8 @@ describe('ChartPage', () => {
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
     expect(el.textContent).toContain('No prices yet');
+    // A trader cannot update data: no dead end on a page they may not use.
+    expect(el.querySelector('a[href="/data"]')).toBeNull();
+    expect(el.querySelector('app-empty-state a')?.getAttribute('href')).toBe('/watchlists');
   });
 });

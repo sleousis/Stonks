@@ -208,7 +208,6 @@ describe('SessionStrip', () => {
     const select = el.querySelector<HTMLSelectElement>('#portfolio-picker')!;
     expect(select).not.toBeNull();
     expect([...select.options].map((o) => o.textContent?.trim())).toEqual([
-      'My default portfolio',
       'Main',
       'Real money (live)',
     ]);

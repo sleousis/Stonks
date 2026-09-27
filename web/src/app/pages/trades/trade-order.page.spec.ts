@@ -89,7 +89,10 @@ describe('TradeOrderPage', () => {
     expect(ticket.textContent).toContain('Strategy signal');
     // The raw id is only secondary text, never the heading.
     expect(el.querySelector('h1')?.textContent).not.toContain(CLIENT_ID);
-    expect(el.querySelector('.ticket-id')?.textContent).toContain(CLIENT_ID);
+    const details = el.querySelector<HTMLDetailsElement>('details.ticket-id')!;
+    expect(details.open).toBe(false);
+    expect(details.querySelector('summary')?.textContent).toContain('Technical details');
+    expect(details.textContent).toContain(CLIENT_ID);
   });
 
   it('adds a note with the typed text', async () => {

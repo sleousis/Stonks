@@ -2,19 +2,45 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource } from '
 import { RouterLink } from '@angular/router';
 
 import { PortfolioService } from '../../api/portfolio.service';
-import { formatMoney, formatNumber, formatPercent, toneClass } from '../../core/format/format';
+import {
+  activeFormat,
+  formatMoney,
+  formatNumber,
+  formatPercent,
+  toneClass,
+} from '../../core/format/format';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { StatTile } from '../../shared/ui/stat-tile';
+import { autoRefresh } from '../../shared/auto-refresh';
+import { NoBook } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { RunsPassed } from './runs-passed';
 
 const TOP_HOLDINGS = 8;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The label of the day's-change tile (UX-34): "Today" for today's session,
+ * the weekday ("Friday") for one earlier this week, else "Last session".
+ * `day` is the P&L row's date (YYYY-MM-DD).
+ */
+export function sessionLabel(day: string | null | undefined, now = new Date()): string {
+  if (!day) return 'Today';
+  const { locale, timeZone } = activeFormat();
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone }).format(now);
+  if (day === today) return 'Today';
+  const at = Date.parse(`${day}T00:00:00Z`);
+  const days = Math.round((Date.parse(`${today}T00:00:00Z`) - at) / DAY_MS);
+  if (!Number.isFinite(days) || days < 0 || days > 6) return 'Last session';
+  return new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }).format(at);
+}
 
 /** My portfolio: value, today's change and the biggest holdings. */
 @Component({
   selector: 'app-portfolio-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatTile, ModeStamp, LoadingState, EmptyState, ErrorState],
+  imports: [RouterLink, StatTile, ModeStamp, NoBook, LoadingState, EmptyState, ErrorState],
   template: `
     <section class="panel" [class.live-frame]="live()" aria-labelledby="home-portfolio">
       <div class="panel-head">
@@ -23,7 +49,9 @@ const TOP_HOLDINGS = 8;
           @if (mode(); as m) {
             <app-mode-stamp [live]="m === 'live'" />
           }
-          <a routerLink="/dashboard" class="more">Details</a>
+          @if (hasBook()) {
+            <a routerLink="/insights" class="more">Details</a>
+          }
         </span>
       </div>
       @if (portfolio.error(); as err) {
@@ -35,12 +63,9 @@ const TOP_HOLDINGS = 8;
       } @else if (!portfolio.hasValue()) {
         <app-loading-state label="Loading your portfolio" [rows]="4" />
       } @else if (portfolio.value() === null) {
-        <app-empty-state
-          title="No portfolio yet"
-          message="You get signals from the strategies you follow. To paper trade them, ask your admin for a portfolio."
-        >
-          <a routerLink="/strategies" class="btn">Browse strategies</a>
-        </app-empty-state>
+        <app-no-book
+          message="You get signals from the strategies you follow. A paper portfolio lets them trade for you with pretend money."
+        />
       } @else {
         <div class="panel-body body">
           <div class="tiles">
@@ -54,7 +79,7 @@ const TOP_HOLDINGS = 8;
               [help]="false"
             />
             <app-stat-tile
-              label="Today"
+              [label]="dayLabel()"
               [value]="dayChange() ?? 'No change yet'"
               [detail]="dayReturn()"
               [detailTone]="dayTone()"
@@ -80,7 +105,7 @@ const TOP_HOLDINGS = 8;
               }
             </ul>
             @if (more() > 0) {
-              <a routerLink="/dashboard" class="more">and {{ more() }} more</a>
+              <a routerLink="/insights" class="more">and {{ more() }} more</a>
             }
           }
         </div>
@@ -177,10 +202,19 @@ export class PortfolioCard {
 
   private async ifBook<T>(read: () => Promise<T>): Promise<T | null> {
     await this.portfolioCtx.load();
-    const ctx = this.portfolioCtx;
-    if (ctx.state() === 'ready' && ctx.options().length === 0) return null;
+    if (this.portfolioCtx.noBook()) return null;
     return read();
   }
+
+  /** The value moves during the session: every minute, and when a trading run starts (UX-12). */
+  protected readonly auto = autoRefresh(() => [this.portfolio, this.pnl], {
+    triggers: [inject(RunsPassed).count],
+  });
+
+  /** "Details" only when there is a portfolio to show details of. */
+  protected readonly hasBook = computed(
+    () => this.portfolio.hasValue() && this.portfolio.value() !== null,
+  );
 
   private readonly latest = computed(() =>
     this.pnl.hasValue() ? (this.pnl.value()?.rows.at(-1) ?? null) : null,
@@ -207,6 +241,7 @@ export class PortfolioCard {
     return row?.daily_return == null ? null : formatPercent(row.daily_return, { signed: true });
   });
   protected readonly dayTone = computed(() => toneClass(this.latest()?.daily_change));
+  protected readonly dayLabel = computed(() => sessionLabel(this.latest()?.day));
 
   private readonly sorted = computed(() =>
     this.portfolio.hasValue() && this.portfolio.value()

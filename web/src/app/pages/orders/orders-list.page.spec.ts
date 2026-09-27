@@ -73,6 +73,13 @@ describe('OrdersListPage', () => {
     expect(el.querySelector('th button.sort')).toBeNull();
   });
 
+  it('keeps the time on the phone card and hides the limit instead (UX-57)', async () => {
+    const { el } = await render([order(0)]);
+    const cell = (label: string) => el.querySelector(`td[data-label="${label}"]`)!;
+    expect(cell('Created').classList).not.toContain('hide-phone');
+    expect(cell('Limit').classList).toContain('hide-phone');
+  });
+
   it('says where orders come from, in trader words', async () => {
     const { el } = await render([]);
     const text = el.textContent ?? '';

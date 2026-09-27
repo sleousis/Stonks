@@ -198,8 +198,8 @@ describe('DashboardPage', () => {
     expect(text).toContain('$25,000.00');
     expect(text).toContain('32.6% of value');
     expect(text).toContain('-$1,250.00 (-1.60%) on 2026-09-25');
-    expect(text).toContain('3 active');
-    expect(text).toContain('2 in shadow');
+    expect(text).toContain('3 live');
+    expect(text).toContain('2 paper trading');
 
     const positionRows = el.querySelectorAll('section[aria-labelledby="positions-title"] tbody tr');
     expect(positionRows.length).toBe(2);
@@ -280,8 +280,8 @@ describe('DashboardPage', () => {
     expect(controller.match((r) => r.url.split('?')[0] === '/api/strategies').length).toBe(0);
     summary.flush(STRATEGY_COUNTS);
     await flushAll();
-    expect(el.textContent).toContain('3 active');
-    expect(el.textContent).toContain('2 in shadow');
+    expect(el.textContent).toContain('3 live');
+    expect(el.textContent).toContain('2 paper trading');
   });
 
   it('tick row links to its detail', async () => {

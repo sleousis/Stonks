@@ -13,85 +13,94 @@
 </app-page-header>
 
 <!-- Summary --------------------------------------------------------------->
-@if (portfolio.error(); as err) {
-  <app-error-state
-    title="Could not load the portfolio"
-    [error]="err"
-    (retry)="portfolio.reload()"
+@if (book() === 'none') {
+  <app-no-book
+    class="no-book"
+    message="Your value, P&L and positions show here once you have a portfolio. A paper one trades with pretend money."
   />
+} @else {
+  @if (portfolio.error(); as err) {
+    <app-error-state
+      title="Could not load the portfolio"
+      [error]="err"
+      (retry)="portfolio.reload()"
+    />
+  }
+  <section class="tiles" aria-label="Portfolio summary">
+    <app-stat-tile
+      class="tile-value"
+      label="Portfolio value"
+      featured
+      [live]="live()"
+      [loading]="portfolio.isLoading() && !portfolio.hasValue()"
+      [value]="portfolio.hasValue() ? money(portfolio.value().total_value) : '–'"
+      [amount]="portfolio.hasValue() ? portfolio.value().total_value : null"
+      [format]="moneyFormat"
+      [detail]="dayChange()"
+      [detailTone]="dayTone()"
+    />
+    <app-stat-tile
+      label="Cash"
+      [loading]="portfolio.isLoading() && !portfolio.hasValue()"
+      [value]="portfolio.hasValue() ? money(portfolio.value().cash) : '–'"
+      [detail]="cashShare()"
+    />
+    <app-stat-tile
+      label="Positions"
+      [loading]="portfolio.isLoading() && !portfolio.hasValue()"
+      [value]="portfolio.hasValue() ? money(portfolio.value().positions_value) : '–'"
+      [detail]="positionsDetail()"
+      [detailTone]="positionsTone()"
+    />
+    <app-stat-tile
+      label="Drawdown"
+      [loading]="pnl.isLoading() && !pnl.hasValue()"
+      [value]="percent(drawdownNow())"
+      [detail]="worstDrawdown() === null ? null : 'Worst ' + percent(worstDrawdown())"
+      [detailTone]="(worstDrawdown() ?? 0) < 0 ? 'loss' : ''"
+    />
+    <app-stat-tile
+      label="Strategies"
+      [loading]="strategyCounts.isLoading() && !strategyCounts.hasValue()"
+      [value]="strategyCounts.hasValue() ? strategyCounts.value().active + ' live' : '–'"
+      [detail]="strategyCounts.hasValue() ? strategyCounts.value().shadow + ' paper trading' : null"
+    />
+  </section>
 }
-<section class="tiles" aria-label="Portfolio summary">
-  <app-stat-tile
-    class="tile-value"
-    label="Portfolio value"
-    featured
-    [live]="live()"
-    [loading]="portfolio.isLoading() && !portfolio.hasValue()"
-    [value]="portfolio.hasValue() ? money(portfolio.value().total_value) : '–'"
-    [amount]="portfolio.hasValue() ? portfolio.value().total_value : null"
-    [format]="moneyFormat"
-    [detail]="dayChange()"
-    [detailTone]="dayTone()"
-  />
-  <app-stat-tile
-    label="Cash"
-    [loading]="portfolio.isLoading() && !portfolio.hasValue()"
-    [value]="portfolio.hasValue() ? money(portfolio.value().cash) : '–'"
-    [detail]="cashShare()"
-  />
-  <app-stat-tile
-    label="Positions"
-    [loading]="portfolio.isLoading() && !portfolio.hasValue()"
-    [value]="portfolio.hasValue() ? money(portfolio.value().positions_value) : '–'"
-    [detail]="positionsDetail()"
-    [detailTone]="positionsTone()"
-  />
-  <app-stat-tile
-    label="Drawdown"
-    [loading]="pnl.isLoading() && !pnl.hasValue()"
-    [value]="percent(drawdownNow())"
-    [detail]="worstDrawdown() === null ? null : 'Worst ' + percent(worstDrawdown())"
-    [detailTone]="(worstDrawdown() ?? 0) < 0 ? 'loss' : ''"
-  />
-  <app-stat-tile
-    label="Strategies"
-    [loading]="strategyCounts.isLoading() && !strategyCounts.hasValue()"
-    [value]="strategyCounts.hasValue() ? strategyCounts.value().active + ' active' : '–'"
-    [detail]="strategyCounts.hasValue() ? strategyCounts.value().shadow + ' in shadow' : null"
-  />
-</section>
 
 <div class="page-grid">
-  <!-- Performance ---------------------------------------------------------->
-  <section class="panel span-8" aria-labelledby="perf-title">
-    <div class="panel-head">
-      <h2 id="perf-title">Value and drawdown</h2>
-      @if (rows().length) {
-        <span class="muted num">{{ rows().length }} days</span>
-      }
-    </div>
-    <div class="panel-body">
-      @if (pnl.error(); as err) {
-        <app-error-state title="Could not load P&L" [error]="err" (retry)="pnl.reload()" />
-      } @else if (!pnl.hasValue()) {
-        <app-loading-state label="Loading P&L" [rows]="6" />
-      } @else if (rows().length === 0) {
-        <app-empty-state
-          title="No P&L yet"
-          message="The series starts after the first trading run saves a portfolio snapshot."
-        >
-          <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
-        </app-empty-state>
-      } @else {
-        <app-time-series-chart
-          ariaLabel="Portfolio value, with drawdown below"
-          [summary]="chartSummary()"
-          [series]="chartSeries()"
-          [height]="320"
-        />
-      }
-    </div>
-  </section>
+  @if (book() !== 'none') {
+    <!-- Performance ---------------------------------------------------------->
+    <section class="panel span-8" aria-labelledby="perf-title">
+      <div class="panel-head">
+        <h2 id="perf-title">Value and drawdown</h2>
+        @if (rows().length) {
+          <span class="muted num">{{ rows().length }} days</span>
+        }
+      </div>
+      <div class="panel-body">
+        @if (pnl.error(); as err) {
+          <app-error-state title="Could not load P&L" [error]="err" (retry)="pnl.reload()" />
+        } @else if (!pnl.hasValue()) {
+          <app-loading-state label="Loading P&L" [rows]="6" />
+        } @else if (rows().length === 0) {
+          <app-empty-state
+            title="No P&L yet"
+            message="The series starts after the first trading run saves a portfolio snapshot."
+          >
+            <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
+          </app-empty-state>
+        } @else {
+          <app-time-series-chart
+            ariaLabel="Portfolio value, with drawdown below"
+            [summary]="chartSummary()"
+            [series]="chartSeries()"
+            [height]="320"
+          />
+        }
+      </div>
+    </section>
+  }
 
   <!-- Health --------------------------------------------------------------->
   <section class="panel span-4" aria-labelledby="health-title">
@@ -133,33 +142,35 @@
     }
   </section>
 
-  <!-- Positions ------------------------------------------------------------>
-  <section class="panel span-7" aria-labelledby="positions-title">
-    <div class="panel-head">
-      <h2 id="positions-title">Positions</h2>
-    </div>
-    @if (portfolio.error()) {
-      <p class="panel-body muted">Positions are unavailable until the portfolio loads.</p>
-    } @else if (!portfolio.hasValue()) {
-      <app-loading-state label="Loading positions" [rows]="5" />
-    } @else if (portfolio.value().positions.length === 0) {
-      <app-empty-state
-        title="No open positions"
-        message="The portfolio is all cash. Positions appear after a trading run fills orders."
-      >
-        <a class="btn" routerLink="/orders">See orders</a>
-      </app-empty-state>
-    } @else {
-      <app-data-table
-        caption="Open positions valued at the latest prices"
-        [rows]="portfolio.value().positions"
-        [columns]="positionColumns"
-        [rowKey]="positionKey"
-        [initialSort]="{ key: 'market_value', dir: 'desc' }"
-        [pageSize]="10"
-      />
-    }
-  </section>
+  @if (book() !== 'none') {
+    <!-- Positions ------------------------------------------------------------>
+    <section class="panel span-7" aria-labelledby="positions-title">
+      <div class="panel-head">
+        <h2 id="positions-title">Positions</h2>
+      </div>
+      @if (portfolio.error()) {
+        <p class="panel-body muted">Positions are unavailable until the portfolio loads.</p>
+      } @else if (!portfolio.hasValue()) {
+        <app-loading-state label="Loading positions" [rows]="5" />
+      } @else if (portfolio.value().positions.length === 0) {
+        <app-empty-state
+          title="No open positions"
+          message="The portfolio is all cash. Positions appear after a trading run fills orders."
+        >
+          <a class="btn" routerLink="/orders">See orders</a>
+        </app-empty-state>
+      } @else {
+        <app-data-table
+          caption="Open positions valued at the latest prices"
+          [rows]="portfolio.value().positions"
+          [columns]="positionColumns"
+          [rowKey]="positionKey"
+          [initialSort]="{ key: 'market_value', dir: 'desc' }"
+          [pageSize]="10"
+        />
+      }
+    </section>
+  }
 
   <!-- Ticks ---------------------------------------------------------------->
   <section class="panel span-5" aria-labelledby="ticks-title">

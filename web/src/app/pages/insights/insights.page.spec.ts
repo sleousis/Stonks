@@ -35,6 +35,8 @@ describe('InsightsPage', () => {
           useValue: {
             selectedId: selected,
             live,
+            state: () => 'ready',
+            noBook: () => false,
             query: () => (selected() ? { portfolio_id: selected() } : {}),
           },
         },
@@ -92,6 +94,9 @@ describe('InsightsPage', () => {
     expect(text).toContain('equity');
     expect(text).toContain('70.0%');
     expect(text).toContain('Since the start');
+    // Money changes carry their sign (UX-58).
+    expect(text).toContain('+$1,000.00 today');
+    expect(el.querySelector('.figures dd.gain')?.textContent).toContain('+$1,000.00');
     expect(text).toContain('n/a');
     expect(text).toContain('22.0%');
     expect(text).toContain('Beta covers 90% of the holdings.');
@@ -101,12 +106,12 @@ describe('InsightsPage', () => {
   it('switches the allocation between asset class, sector, currency and holding', async () => {
     setup();
     await flushAll();
-    const holding = [...el.querySelectorAll<HTMLButtonElement>('.segment')].find(
+    const holding = [...el.querySelectorAll<HTMLButtonElement>('[role=radio]')].find(
       (b) => b.textContent?.trim() === 'Holding',
     )!;
     holding.click();
     fixture.detectChanges();
-    expect(holding.getAttribute('aria-pressed')).toBe('true');
+    expect(holding.getAttribute('aria-checked')).toBe('true');
     const slices = el.querySelector('.slices')!.textContent ?? '';
     expect(slices).toContain('AAPL.US');
     expect(slices).not.toContain('equity');
@@ -132,6 +137,10 @@ describe('InsightsPage', () => {
     expect(seen.some((u) => u.includes('/api/portfolio/snapshots') && u.includes('limit=20'))).toBe(
       true,
     );
+    // Each snapshot names its run by date, linked, never by its raw id (UX-27).
+    const table = el.querySelector('section[aria-labelledby="history-title"] table')!;
+    expect(table.textContent).not.toContain('t7');
+    expect(table.querySelector('a[href="/orders/ticks/t7"]')?.textContent).toMatch(/2026/);
   });
 
   it('shows totals across every book to admins only', async () => {
