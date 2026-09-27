@@ -265,6 +265,13 @@ def _to_naive_utc(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
     return index.tz_convert("UTC").tz_localize(None)
 
 
+#: A ticker on each macro country's market calendar: its session closes
+#: decide when a daily index value is final.
+_MACRO_MARKETS: dict[str, str] = {"USA": "VIX.US"}
+#: Index levels settle a little after the stock market closes.
+_MACRO_CLOSE_MARGIN = timedelta(minutes=15)
+
+
 def _to_local_dates(index: pd.DatetimeIndex) -> list[date]:
     # Daily bars are stamped at exchange-local midnight; the local calendar
     # date is the trading date (converting to UTC first would shift Asian
@@ -413,6 +420,7 @@ class YahooDataSource(DataSource):
         if frame.empty:
             return []
         days = _to_local_dates(pd.DatetimeIndex(frame.index))
+        final = self._closed_days(country, days)
         return [
             MacroIndicatorRow(
                 country_iso=country,
@@ -422,8 +430,22 @@ class YahooDataSource(DataSource):
                 country_name=_COUNTRY_NAMES.get(country),
                 value=float(close),
             )
-            for day, close in zip(days, frame["Close"], strict=True)
+            for day, close, done in zip(days, frame["Close"], final, strict=True)
+            if done
         ]
+
+    def _closed_days(self, country: str, days: list[date]) -> list[bool]:
+        """Whether each day's value is a close: during the session Yahoo's
+        last row holds the live index level. The day counts once its
+        market's session closed plus :data:`_MACRO_CLOSE_MARGIN` (the VIX
+        settles at 16:15 New York time, BE-38)."""
+        from stonks.ingest.sessions import default_sessions, is_final
+
+        market = _MACRO_MARKETS.get(country)
+        if market is None or not days:
+            return [True] * len(days)
+        now = self._now().astimezone(UTC) - _MACRO_CLOSE_MARGIN
+        return is_final(default_sessions(), market, days, now, "equity")
 
     def fetch_intraday_bars(
         self,
