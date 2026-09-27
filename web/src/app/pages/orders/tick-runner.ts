@@ -250,7 +250,7 @@ import { TickTicketDialog } from './tick-ticket-dialog';
     progress {
       width: 100%;
       height: 6px;
-      accent-color: var(--color-brass);
+      accent-color: var(--color-accent);
     }
     h3 {
       display: flex;

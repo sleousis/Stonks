@@ -82,6 +82,6 @@ export class HomePage {
 
   protected readonly greeting = computed(() => {
     const name = this.session.me()?.display_name;
-    return name ? `Hello, ${name}` : 'Home';
+    return name ? `Hello, ${name}` : 'Today';
   });
 }

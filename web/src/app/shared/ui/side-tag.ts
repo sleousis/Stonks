@@ -26,7 +26,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
       height: 1.5rem;
       border: 1.5px solid var(--color-ink);
       border-radius: var(--radius-sm);
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-family: var(--font-mono);
       font-size: var(--text-xs);
       font-weight: var(--weight-bold);
       line-height: 1;

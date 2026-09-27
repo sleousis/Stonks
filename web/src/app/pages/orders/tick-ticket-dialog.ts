@@ -29,14 +29,14 @@ import type { TickTicket } from './tick-confirm';
     >
       @if (ticket(); as t) {
         <form method="dialog" (submit)="$event.preventDefault(); answer(true)">
-          <div class="ticket" [attr.data-mode]="t.live ? 'live' : 'paper'">
+          <div class="ticket" [class.live]="t.live" [attr.data-mode]="t.live ? 'live' : 'paper'">
             <div class="ticket-head">
               <h2 id="ticket-title">{{ t.title }}</h2>
               <app-mode-stamp [live]="t.live" />
             </div>
-            <dl class="lines">
+            <dl class="ticket-lines">
               @for (line of t.lines; track line.label) {
-                <div class="line">
+                <div>
                   <dt>{{ line.label }}</dt>
                   <dd [class.num]="line.mono">{{ line.value }}</dd>
                 </div>
@@ -88,46 +88,8 @@ import type { TickTicket } from './tick-confirm';
       gap: var(--space-4);
       padding: var(--space-5);
     }
-    .ticket {
-      border: 1px dashed var(--color-border-strong);
-      border-radius: var(--radius-md);
-      background: var(--color-surface-2);
-    }
-    .ticket[data-mode='live'] {
-      border-color: var(--color-brass);
-    }
-    .ticket-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-2);
-      padding: var(--space-3) var(--space-4);
-      border-bottom: 1px dashed var(--color-border-strong);
-    }
     h2 {
       font-size: var(--text-lg);
-    }
-    .lines {
-      display: grid;
-      margin: 0;
-      padding: var(--space-2) var(--space-4);
-    }
-    .line {
-      display: flex;
-      justify-content: space-between;
-      gap: var(--space-3);
-      padding: var(--space-1) 0;
-      font-size: var(--text-sm);
-    }
-    dt {
-      color: var(--color-ink-3);
-    }
-    dd {
-      min-width: 0;
-      margin: 0;
-      font-weight: var(--weight-medium);
-      text-align: right;
-      overflow-wrap: anywhere;
     }
     .message {
       color: var(--color-ink-2);

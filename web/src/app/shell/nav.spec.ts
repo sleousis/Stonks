@@ -31,7 +31,7 @@ describe('Nav', () => {
 
   it('puts Home and Profile first, and Users for admins only', () => {
     expect(mine(render(TRADER))).toEqual([
-      'Home',
+      'Today',
       'Notifications',
       'Broker connections',
       'Profile',
@@ -41,7 +41,7 @@ describe('Nav', () => {
       providers: [provideRouter([]), { provide: SessionService, useValue: session }],
     });
     expect(mine(render(ADMIN))).toEqual([
-      'Home',
+      'Today',
       'Notifications',
       'Broker connections',
       'Profile',

@@ -123,7 +123,7 @@ import { groupStrategies } from './lab-requests';
     }
     .option.selected {
       background: var(--color-surface);
-      border-left-color: var(--color-brass);
+      border-left-color: var(--color-accent);
     }
     input[type='radio'] {
       margin: 3px 0 0;

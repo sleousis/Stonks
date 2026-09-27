@@ -148,7 +148,7 @@ describe('HomePage', () => {
     await tick();
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('h1')?.textContent).toContain('Home');
+    expect(el.querySelector('h1')?.textContent).toContain('Today');
     expect(el.querySelector('.banner a')?.getAttribute('href')).toBe('/login');
   });
 

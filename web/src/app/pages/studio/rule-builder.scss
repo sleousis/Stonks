@@ -47,7 +47,7 @@
 }
 
 .mono {
-  font-family: ui-monospace, 'Cascadia Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
 }
 

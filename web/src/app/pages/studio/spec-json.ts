@@ -81,7 +81,7 @@ import {
       border-radius: var(--radius-sm);
       background: var(--color-surface-2);
       color: var(--color-ink);
-      font-family: ui-monospace, 'Cascadia Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+      font-family: var(--font-mono);
       font-size: var(--text-xs);
       line-height: 1.55;
       white-space: pre;

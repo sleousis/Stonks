@@ -27,6 +27,7 @@ import { SideTag } from './side-tag';
           @if (req.ticket; as t) {
             <div class="ticket" [class.live]="t.live" aria-label="Order ticket" role="group">
               <p class="ticket-head">
+                <span class="ticket-kind">Order ticket</span>
                 @if (t.side) {
                   <app-side-tag [side]="t.side" />
                 }
@@ -67,45 +68,6 @@ import { SideTag } from './side-tag';
         </form>
       }
     </app-sheet>
-  `,
-  styles: `
-    .ticket {
-      display: grid;
-      gap: var(--space-2);
-      padding: var(--space-3);
-      border: 1px dashed var(--color-border-strong);
-      border-radius: var(--radius-sm);
-      background: var(--color-surface-2);
-    }
-    .ticket.live {
-      border-style: solid;
-      border-color: var(--color-brass);
-    }
-    .ticket-head {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-    }
-    .ticket-lines {
-      display: grid;
-      gap: var(--space-1);
-      margin: 0;
-    }
-    .ticket-lines div {
-      display: flex;
-      justify-content: space-between;
-      gap: var(--space-3);
-      min-width: 0;
-    }
-    .ticket-lines dt {
-      color: var(--color-ink-2);
-    }
-    .ticket-lines dd {
-      margin: 0;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      text-align: right;
-      overflow-wrap: anywhere;
-    }
   `,
 })
 export class ConfirmDialog {

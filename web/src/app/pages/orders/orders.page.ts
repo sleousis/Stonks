@@ -73,7 +73,7 @@ import { PageHeader } from '../../shared/ui/page-header';
     }
     .tabs a.active {
       color: var(--color-ink);
-      border-bottom-color: var(--color-brass);
+      border-bottom-color: var(--color-accent);
     }
     @include bp.phone {
       .tabs a {

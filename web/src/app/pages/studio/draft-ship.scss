@@ -51,9 +51,9 @@
   }
 
   [data-state='current'] & {
-    border-color: var(--color-brass);
-    background: var(--color-brass);
-    box-shadow: 0 0 0 4px var(--color-brass-soft);
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    box-shadow: 0 0 0 4px var(--color-accent-soft);
   }
 }
 
@@ -87,7 +87,7 @@
 }
 
 .mono {
-  font-family: ui-monospace, 'Cascadia Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 0.95em;
   overflow-wrap: anywhere;
 }

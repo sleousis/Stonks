@@ -86,16 +86,16 @@ export function jobText(h: JobHandle): string {
       border-radius: 999px;
       overflow: hidden;
       background: var(--color-surface-3);
-      accent-color: var(--color-brass);
+      accent-color: var(--color-accent);
     }
     progress::-webkit-progress-bar {
       background: var(--color-surface-3);
     }
     progress::-webkit-progress-value {
-      background: var(--color-brass);
+      background: var(--color-accent);
     }
     progress::-moz-progress-bar {
-      background: var(--color-brass);
+      background: var(--color-accent);
     }
   `,
 })

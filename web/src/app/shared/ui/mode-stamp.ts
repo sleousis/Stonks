@@ -21,20 +21,24 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       vertical-align: middle;
     }
     .stamp {
-      padding: 0 var(--space-1);
-      border: 1.5px solid var(--color-ink-3);
-      border-radius: var(--radius-sm);
-      color: var(--color-ink-2);
+      padding: 1px var(--space-2) 0;
+      border: 1.5px dashed var(--color-paper);
+      border-radius: var(--radius-xs);
+      color: var(--color-paper);
+      font-family: var(--font-display);
+      font-stretch: var(--display-stretch);
       font-size: var(--text-xs);
       font-weight: var(--weight-bold);
-      letter-spacing: 0.08em;
-      line-height: 1.5;
-      transform: rotate(-2deg);
+      letter-spacing: var(--tracking-stamp);
+      line-height: 1.45;
+      transform: rotate(-3deg);
     }
+    /* Real money: a double brass rule, the only stamp in the house metal. */
     .stamp[data-mode='live'] {
-      border-color: var(--color-brass);
-      box-shadow: inset 0 0 0 1px var(--color-brass);
-      color: var(--color-ink);
+      border: 2px solid var(--color-live);
+      outline: 1px solid var(--color-live);
+      outline-offset: 1px;
+      color: var(--color-live);
     }
   `,
 })

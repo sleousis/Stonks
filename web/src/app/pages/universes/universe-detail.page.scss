@@ -116,7 +116,7 @@
 .spec {
   margin: 0;
   overflow-x: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
