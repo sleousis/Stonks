@@ -209,9 +209,9 @@ describe('LabRunResultView', () => {
       'Monte Carlo permutation',
     ]);
     expect(rows.map((r) => r.querySelector('app-status-pill')!.textContent!.trim())).toEqual([
-      'pass',
-      'fail',
-      'pass',
+      'Passed',
+      'Failed',
+      'Passed',
     ]);
     expect(rows[1].classList).toContain('failed');
     expect(rows[1].textContent).toContain('Positive folds');
