@@ -6,6 +6,7 @@ import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { PortfoliosPanel } from './portfolios-panel';
 
 const MAIN = book({ id: 'pf_1', name: 'Main', is_default: true });
@@ -40,11 +41,9 @@ describe('PortfoliosPanel', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  /** Both the panel and the picker read the list after a change. */
+  /** One read after a change: the panel shows the context's list, like the picker (UX-69). */
   async function flushLists(list: unknown[]) {
-    for (let i = 0; i < 2; i++) {
-      (await nextRequest(controller, '/api/portfolios')).flush(page(list));
-    }
+    (await nextRequest(controller, '/api/portfolios')).flush(page(list));
     await tick();
     fixture.detectChanges();
   }
@@ -111,5 +110,27 @@ describe('PortfoliosPanel', () => {
     expect(button(el, 'Rename').disabled).toBe(true);
     expect(button(el, 'Open portfolio').disabled).toBe(true);
     expect(el.textContent).toContain('Traders and admins only.');
+  });
+
+  it('shows the same list as the portfolio picker (UX-69)', async () => {
+    await render();
+    const ctx = TestBed.inject(PortfolioContextService);
+    expect(ctx.options().map((p) => p.id)).toEqual(['pf_1', 'pf_2']);
+  });
+
+  it("an invalid field's describedby resolves to the error (UX-61)", async () => {
+    const el = await render();
+    type(el, '#new-portfolio-cash', '-5');
+    el.querySelector<HTMLFormElement>('form.new')!.dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+    const name = el.querySelector<HTMLInputElement>('#new-portfolio-name')!;
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(el.querySelector('#' + name.getAttribute('aria-describedby'))?.textContent).toContain(
+      'Enter a name.',
+    );
+    const cash = el.querySelector<HTMLInputElement>('#new-portfolio-cash')!;
+    expect(el.querySelector('#' + cash.getAttribute('aria-describedby'))?.textContent).toContain(
+      'above 0',
+    );
   });
 });

@@ -7,7 +7,7 @@ import {
   signal,
 } from '@angular/core';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 
 import { AuthService } from '../../api/auth.service';
 import type { ApiScope, TokenView } from '../../api/models';
@@ -76,7 +76,6 @@ export class ProfilePage {
   protected readonly session = inject(SessionService);
   private readonly confirm = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
-  private readonly router = inject(Router);
   private readonly fb = inject(NonNullableFormBuilder);
 
   protected readonly passwordMin = PASSWORD_MIN;
@@ -104,6 +103,22 @@ export class ProfilePage {
     },
     { validators: sameAs('next', 'repeat') },
   );
+
+  // Which password field shows an error, for aria-invalid and aria-describedby (UX-61).
+  protected currentInvalid(): boolean {
+    const c = this.passwordForm.controls.current;
+    return c.touched && c.invalid;
+  }
+
+  protected nextInvalid(): boolean {
+    const c = this.passwordForm.controls.next;
+    return c.touched && c.invalid;
+  }
+
+  protected repeatInvalid(): boolean {
+    return this.passwordForm.controls.repeat.touched && this.passwordForm.hasError('mismatch');
+  }
+
   protected readonly savingPassword = signal(false);
 
   // Recovery codes --------------------------------------------------------------
@@ -216,9 +231,9 @@ export class ProfilePage {
     }
   }
 
+  /** Signs out and reloads on the sign-in page (UX-07). */
   protected async signOut(): Promise<void> {
     await this.session.logout();
-    await this.router.navigateByUrl('/login');
   }
 
   protected scopeLabel(token: TokenView): string {

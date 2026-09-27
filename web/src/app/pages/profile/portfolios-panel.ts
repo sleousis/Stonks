@@ -3,7 +3,6 @@ import {
   Component,
   computed,
   inject,
-  resource,
   signal,
 } from '@angular/core';
 
@@ -21,8 +20,8 @@ const NAME_MAX = 80;
 
 /**
  * Profile: your portfolios with their PAPER or LIVE stamp, Rename, and a
- * form that opens a new paper portfolio. The portfolio picker reloads after
- * each change.
+ * form that opens a new paper portfolio. The list is the portfolio context's
+ * (the same one the picker shows), read again after each change.
  */
 @Component({
   selector: 'app-portfolios-panel',
@@ -33,24 +32,24 @@ const NAME_MAX = 80;
       <div class="panel-head">
         <h2 id="portfolios-title">Your portfolios</h2>
       </div>
-      @if (list.error(); as err) {
+      @if (ctx.state() === 'failed') {
         <app-error-state
           title="Could not load your portfolios"
-          [error]="err"
-          (retry)="list.reload()"
+          [error]="loadError"
+          (retry)="reload()"
         />
-      } @else if (!list.hasValue()) {
+      } @else if (ctx.state() === 'idle' || ctx.state() === 'loading') {
         <app-loading-state label="Loading your portfolios" [rows]="2" />
       } @else {
         <div class="panel-body stack">
-          @if (list.value().length === 0) {
+          @if (books().length === 0) {
             <app-empty-state
               title="No portfolio yet"
               message="Open a paper portfolio below, then follow a strategy on it."
             />
           } @else {
             <ul class="books">
-              @for (p of list.value(); track p.id) {
+              @for (p of books(); track p.id) {
                 <li>
                   <span class="name">{{ p.name }}</span>
                   <app-mode-stamp [live]="p.trading === 'live'" />
@@ -86,11 +85,13 @@ const NAME_MAX = 80;
                 autocomplete="off"
                 [attr.maxlength]="nameMax"
                 [disabled]="!canManage()"
+                [attr.aria-invalid]="nameError() ? true : null"
+                [attr.aria-describedby]="nameError() ? 'new-portfolio-name-error' : null"
                 [value]="newName()"
                 (input)="newName.set($any($event.target).value)"
               />
               @if (nameError(); as e) {
-                <span class="error">{{ e }}</span>
+                <span id="new-portfolio-name-error" class="error">{{ e }}</span>
               }
             </div>
             <div class="field">
@@ -101,13 +102,16 @@ const NAME_MAX = 80;
                 type="number"
                 inputmode="decimal"
                 min="1"
-                aria-describedby="new-portfolio-cash-hint"
+                [attr.aria-invalid]="cashError() ? true : null"
+                [attr.aria-describedby]="
+                  cashError() ? 'new-portfolio-cash-error' : 'new-portfolio-cash-hint'
+                "
                 [disabled]="!canManage()"
                 [value]="newCash()"
                 (input)="newCash.set($any($event.target).value)"
               />
               @if (cashError(); as e) {
-                <span class="error">{{ e }}</span>
+                <span id="new-portfolio-cash-error" class="error">{{ e }}</span>
               } @else {
                 <span id="new-portfolio-cash-hint" class="hint"
                   >Empty uses the usual starting amount.</span
@@ -215,12 +219,16 @@ const NAME_MAX = 80;
 })
 export class PortfoliosPanel {
   private readonly api = inject(PortfoliosService);
-  private readonly ctx = inject(PortfolioContextService);
+  /** The one list of your portfolios (UX-69): the picker and this panel share it. */
+  protected readonly ctx = inject(PortfolioContextService);
   private readonly session = inject(SessionService);
   private readonly toasts = inject(ToastService);
 
   protected readonly nameMax = NAME_MAX;
-  protected readonly list = resource({ loader: () => this.api.list() });
+  protected readonly books = this.ctx.options;
+  protected readonly loadError = new Error(
+    'Check your connection and try again. It also tries again on its own.',
+  );
   protected readonly canManage = computed(() => this.session.can('portfolio.manage'));
 
   protected readonly newName = signal('');
@@ -285,8 +293,15 @@ export class PortfoliosPanel {
     }
   }
 
+  constructor() {
+    void this.ctx.load();
+  }
+
+  protected reload(): void {
+    void this.ctx.load(true);
+  }
+
   private async refresh(): Promise<void> {
-    this.list.reload();
     await this.ctx.load(true);
   }
 }
