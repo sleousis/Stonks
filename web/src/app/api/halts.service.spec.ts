@@ -33,9 +33,9 @@ describe('HaltsService', () => {
   });
 
   it('engages, resumes and clears', async () => {
-    const kill = halts.kill({ scope: 'global', reason: 'outage', flatten: false });
+    const kill = halts.kill({ scope: 'global', reason: 'outage', buys_only: false });
     const k = await nextRequest(controller, '/api/halts/kill', 'POST');
-    expect(k.request.body).toEqual({ scope: 'global', reason: 'outage', flatten: false });
+    expect(k.request.body).toEqual({ scope: 'global', reason: 'outage', buys_only: false });
     k.flush({ id: 4 });
     await kill;
 

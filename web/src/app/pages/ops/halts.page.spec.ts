@@ -145,7 +145,7 @@ describe('HaltsPage', () => {
       expect(past.textContent).toContain('health passed');
     });
 
-    it('asks for a reason before engaging, then sends scope, portfolio and flatten', async () => {
+    it('asks for a reason before engaging, then sends scope, portfolio and buys only', async () => {
       const success = vi.spyOn(TestBed.inject(ToastService), 'success');
       button('Engage kill switch')!.click();
       await settle();
@@ -157,8 +157,8 @@ describe('HaltsPage', () => {
       const reason = el.querySelector<HTMLTextAreaElement>('#kill-reason')!;
       reason.value = 'Odd fills';
       reason.dispatchEvent(new Event('input'));
-      const flatten = el.querySelector<HTMLInputElement>('.kill input[type="checkbox"]')!;
-      flatten.click();
+      const buysOnly = el.querySelector<HTMLInputElement>('.kill input[type="checkbox"]')!;
+      buysOnly.click();
       fixture.detectChanges();
 
       button('Engage kill switch')!.click();
@@ -167,7 +167,7 @@ describe('HaltsPage', () => {
       expect(post.request.body).toEqual({
         scope: 'portfolio',
         reason: 'Odd fills',
-        flatten: true,
+        buys_only: true,
         portfolio_id: 'pf_default',
       });
       post.flush(halt({ id: 9, scope: 'portfolio', portfolio_id: 'pf_default', halt: 'buys' }));
