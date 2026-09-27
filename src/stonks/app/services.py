@@ -29,6 +29,7 @@ from stonks.app.ownership import check_owner, owner_filter, owner_of
 from stonks.app.pagination import Page
 from stonks.app.portfolio import PortfolioService
 from stonks.app.schedule import ScheduleService
+from stonks.app.screener import ScreenerService
 from stonks.app.signals import SignalService
 from stonks.app.strategies import StrategyService
 from stonks.app.stream_tokens import IssuedStreamToken, StreamTokenSigner
@@ -193,6 +194,7 @@ class Services:
     insights: InsightsService
     ledger: TrialLedgerService
     calendars: CalendarService
+    screener: ScreenerService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -225,6 +227,7 @@ class Services:
         orders = OrdersService(context)
         lab = LabService(context, strategies, runner)
         portfolio = PortfolioService(context)
+        universes = UniverseService(context, runner)
         services = cls(
             context=context,
             runner=runner,
@@ -252,12 +255,13 @@ class Services:
             notifications=NotificationsAppService(context),
             schedule=ScheduleService(context),
             signals=SignalService(context, strategies, runner),
-            universes=UniverseService(context, runner),
+            universes=universes,
             auth=_auth_service(context),
             subscriptions=SubscriptionService(context),
             insights=InsightsService(context, portfolio),
             ledger=TrialLedgerService(context),
             calendars=CalendarService(context, runner),
+            screener=ScreenerService(context, universes),
         )
         services.schedule.bind(services)
         return services

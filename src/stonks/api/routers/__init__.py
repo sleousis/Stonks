@@ -32,6 +32,7 @@ from stonks.api.routers import (
     portfolios,
     risk,
     schedule,
+    screener,
     shadow,
     signals,
     sources,
@@ -83,6 +84,7 @@ API_ROUTERS: list[APIRouter] = [
     charts.router,
     exports.router,
     calendars.router,
+    screener.router,
 ]
 
 #: Routers that always need a principal, even for reads on loopback.
