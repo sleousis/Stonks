@@ -127,6 +127,15 @@
           <option value="final_return" [selected]="form().objective === 'final_return'">
             Total return
           </option>
+          <option value="cv_sharpe" [selected]="form().objective === 'cv_sharpe'">
+            Sharpe on purged folds
+          </option>
+          <option value="cv_cagr" [selected]="form().objective === 'cv_cagr'">
+            CAGR on purged folds
+          </option>
+          <option value="cv_final_return" [selected]="form().objective === 'cv_final_return'">
+            Total return on purged folds
+          </option>
         </select>
       </div>
       <div class="field">

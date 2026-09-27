@@ -32,7 +32,7 @@ class TickRuntime:
     #: None for the default simulated broker (the tick builds it itself).
     broker_factory: BrokerFactory | None = None
     #: ``[production].books_from_subscriptions``.
-    books_from_subscriptions: bool = False
+    books_from_subscriptions: bool = True
 
     def plan_for(self, state: SqliteState) -> TickPlan | None:
         """The books to trade: one per portfolio from its subscriptions when
@@ -90,6 +90,8 @@ def build_tick_settings(
         construction=p.construction,
         model_books=p.model_books,
         quit_rule=p.quit_rule,
+        risk_monitor=p.risk_monitor,
+        decay=p.decay,
         scoped=scoped,
         bars_due=dict(bars_due) if bars_due else None,
         scoring_workers=p.scoring_workers or default_max_workers(),

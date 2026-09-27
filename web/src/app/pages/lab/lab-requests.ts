@@ -377,7 +377,9 @@ export function buildLabRunRequest(f: LabRunForm, catalog: OptionCatalog = {}): 
     if (f.wfMinWfe !== null) wf.min_wfe = f.wfMinWfe;
     if (f.wfMatrix) wf.matrix = true;
     // Only send a config when something differs from the test's defaults.
-    if (Object.keys(wf).length) body.walk_forward = { ...wf, metric: f.objective };
+    // A cv_ objective scores walk-forward on its plain metric.
+    const metric = f.objective.replace(/^cv_/, '') as NonNullable<WalkForwardConfig['metric']>;
+    if (Object.keys(wf).length) body.walk_forward = { ...wf, metric };
   }
   if (tests.includes('mcpt')) {
     const mcpt: McptOptions = {};

@@ -2056,7 +2056,10 @@
             "enum": [
               "sharpe",
               "cagr",
-              "final_return"
+              "final_return",
+              "cv_sharpe",
+              "cv_cagr",
+              "cv_final_return"
             ],
             "title": "Objective",
             "type": "string"
@@ -4610,7 +4613,10 @@
             "enum": [
               "sharpe",
               "cagr",
-              "final_return"
+              "final_return",
+              "cv_sharpe",
+              "cv_cagr",
+              "cv_final_return"
             ],
             "title": "Objective",
             "type": "string"
@@ -10860,7 +10866,10 @@
             "enum": [
               "sharpe",
               "cagr",
-              "final_return"
+              "final_return",
+              "cv_sharpe",
+              "cv_cagr",
+              "cv_final_return"
             ],
             "title": "Objective",
             "type": "string"

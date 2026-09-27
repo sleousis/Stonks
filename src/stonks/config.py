@@ -26,6 +26,8 @@ from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.ops.config import BackupConfig
 from stonks.portfolio.settings import ConstructionSettings
+from stonks.production.decay import DecaySettings
+from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.rules.settings import RuleSettings
 from stonks.scheduling.config import SchedulerConfig
@@ -226,16 +228,19 @@ class ProductionConfig(BaseModel):
     health: HealthConfig = HealthConfig()
     # ``[production.construction]``: the global constructor and no-trade
     # buffer (default ``single_winner``, today's behaviour); a portfolio's
-    # ``construction_json`` is merged on top.
-    construction: ConstructionSettings = ConstructionSettings()
+    # ``construction_json`` is merged on top. A factory, so importing this
+    # module does not run constructor discovery (which imports
+    # ``portfolio.pipeline`` and, through it, ``production.risk``).
+    construction: ConstructionSettings = Field(default_factory=ConstructionSettings)
     # Which strategies keep a model book: "shadow" (only shadow strategies)
     # or "all" non-retired ones (design section 5).
     model_books: Literal["shadow", "all"] = "shadow"
     # Trade one book per portfolio from its paper/auto subscriptions (and
-    # record notify signals) instead of the single legacy book over every
-    # active strategy. Off by default. When on, a newly promoted strategy
-    # trades only once a subscription (e.g. on pf_default) includes it.
-    books_from_subscriptions: bool = False
+    # record notify signals). pf_default follows every active strategy: a
+    # promotion subscribes it (accounts.default_book), so it trades like
+    # the old single book. false: the old single book over every active
+    # strategy, other portfolios idle.
+    books_from_subscriptions: bool = True
     # Worker processes that score strategies opting in with
     # ``parallel_scoring`` (0 = every core, 1 = in the tick's process). A
     # pool starts only for at least ``parallel_min_estimates`` estimates.
@@ -245,6 +250,11 @@ class ProductionConfig(BaseModel):
     # to shadow) an active strategy whose attributed drawdown passes
     # quit_multiple x its backtest drawdown.
     quit_rule: QuitRuleSettings = QuitRuleSettings()
+    # ``[production.risk_monitor]`` (BL-47): daily VaR and ES snapshots and
+    # the violation checks after each real tick.
+    risk_monitor: RiskMonitorSettings = RiskMonitorSettings()
+    # ``[production.decay]``: the alpha-decay check per strategy sleeve.
+    decay: DecaySettings = DecaySettings()
 
 
 class GoLivePolicy(BaseModel):
@@ -489,7 +499,7 @@ class Settings(BaseSettings):
     logging: LoggingConfig = LoggingConfig()
     brokers: BrokersConfig = Field(default_factory=BrokersConfig)
     sources: SourcesConfig = SourcesConfig()
-    production: ProductionConfig = ProductionConfig()
+    production: ProductionConfig = Field(default_factory=ProductionConfig)
     notify: NotifyConfig = NotifyConfig()
     api: ApiConfig = Field(default_factory=ApiConfig)
     auth: AuthConfig = AuthConfig()

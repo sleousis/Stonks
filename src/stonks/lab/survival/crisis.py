@@ -70,13 +70,30 @@ class CrisisTest:
     class Options(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
-        max_dd_ratio: float = Field(default=1.5, gt=0.0)
-        abs_floor: float = Field(default=0.05, ge=0.0, lt=1.0)
-        min_bars: int = Field(default=10, ge=2)
-        require_coverage: bool = False
-        benchmark: str | None = None
+        max_dd_ratio: float = Field(
+            default=1.5,
+            gt=0.0,
+            description="Deepest fall allowed in a crisis, as a multiple of the benchmark's fall.",
+        )
+        abs_floor: float = Field(
+            default=0.05,
+            ge=0.0,
+            lt=1.0,
+            description="A fall this small always passes, so a calm benchmark does not demand zero.",
+        )
+        min_bars: int = Field(
+            default=10, ge=2, description="Fewest bars of a crisis the data must hold to judge it."
+        )
+        require_coverage: bool = Field(
+            default=False, description="Fail when the data covers no crisis at all."
+        )
+        benchmark: str | None = Field(
+            default=None, description="Ticker to compare with. Empty uses the run's benchmark."
+        )
         #: Custom windows replacing :data:`CRISIS_WINDOWS`.
-        windows: list[CrisisWindow] | None = None
+        windows: list[CrisisWindow] | None = Field(
+            default=None, description="Your own crisis dates in place of the built-in list."
+        )
 
     def __init__(self, options: CrisisTest.Options | None = None) -> None:
         self.options = options or CrisisTest.Options()

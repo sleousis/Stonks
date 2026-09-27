@@ -139,12 +139,40 @@ class CPCVTest:
     class Options(BaseModel):
         model_config = ConfigDict(extra="forbid")
 
-        n_groups: int = Field(default=6, ge=3, le=12)
-        n_test_groups: int = Field(default=2, ge=1, le=6)
-        embargo_pct: float = Field(default=0.01, ge=0.0, lt=0.5)
-        min_positive_share: float = Field(default=0.6, ge=0.0, le=1.0)
-        min_psr: float = Field(default=0.9, gt=0.0, lt=1.0)
-        retune: Literal["auto", "never"] = "auto"
+        n_groups: int = Field(
+            default=6,
+            ge=3,
+            le=12,
+            description="Blocks of trading days the full window is cut into.",
+        )
+        n_test_groups: int = Field(
+            default=2,
+            ge=1,
+            le=6,
+            description="Blocks held out in each split. Must be fewer than the blocks.",
+        )
+        embargo_pct: float = Field(
+            default=0.01,
+            ge=0.0,
+            lt=0.5,
+            description="Share of days skipped after each held-out block so training never peeks.",
+        )
+        min_positive_share: float = Field(
+            default=0.6,
+            ge=0.0,
+            le=1.0,
+            description="Share of backtest paths that must have a Sharpe above zero.",
+        )
+        min_psr: float = Field(
+            default=0.9,
+            gt=0.0,
+            lt=1.0,
+            description="Lowest chance, over all paths together, that the true Sharpe is above zero.",
+        )
+        retune: Literal["auto", "never"] = Field(
+            default="auto",
+            description="auto tunes again on each split when the run tunes. never only refits.",
+        )
         #: Worker processes for the splits; ``None`` means the default.
         max_workers: int | None = Field(default=None, ge=1)
         seed: int | None = 0

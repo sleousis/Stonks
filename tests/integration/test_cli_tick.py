@@ -87,7 +87,7 @@ base_url = "https://example.test/api"
         BuyAndHold({"ticker": "UP.US", "allocation": 1.0}),
         reports=[SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.0})],
     )
-    seed_status(registry, sid, "active")
+    seed_status(registry, sid, "active", default_book=True)
     state.close()
 
     return tmp_path, sid

@@ -36,6 +36,7 @@ from stonks.core.types import Portfolio
 from stonks.ingest.ensure import DataEnsurer, EnsureReport
 from stonks.ingest.wiring import build_ingest_pipeline
 from stonks.lab.backtesting import run_backtest
+from stonks.lab.cv import CVObjective
 from stonks.lab.dataset import LabDataset, scoring_window
 from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObjective
 from stonks.lab.parallel import ParallelSettings
@@ -68,7 +69,9 @@ LAB_ENSURE_JOB = "lab_ensure"
 LAB_SWEEP_JOB = "lab_sweep"
 
 TunerName = Literal["grid", "random"]
-ObjectiveName = Literal["sharpe", "cagr", "final_return"]
+#: ``cv_*`` score each trial on purged folds of the train window
+#: (``lab.cv.CVObjective``), so the tuner stops picking on in-sample fit.
+ObjectiveName = Literal["sharpe", "cagr", "final_return", "cv_sharpe", "cv_cagr", "cv_final_return"]
 CostModelName = Literal["zero", "realistic"]
 
 #: API names kept from before the survival-test registry (BL-10).
@@ -127,6 +130,9 @@ _OBJECTIVES: dict[str, Callable[[], Objective]] = {
     "sharpe": SharpeObjective,
     "cagr": CAGRObjective,
     "final_return": FinalReturnObjective,
+    "cv_sharpe": lambda: CVObjective(SharpeObjective()),
+    "cv_cagr": lambda: CVObjective(CAGRObjective()),
+    "cv_final_return": lambda: CVObjective(FinalReturnObjective()),
 }
 _COST_MODELS: dict[str, tuple[str, Callable[[], CostModelSettings]]] = {
     "zero": ("No fees, spread or impact.", CostModelSettings),

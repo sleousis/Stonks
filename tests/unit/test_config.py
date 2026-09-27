@@ -303,3 +303,35 @@ def test_config_universe_id_pattern_matches_the_universes_block():
     from stonks.universes.base import UNIVERSE_ID_PATTERN
 
     assert config.UNIVERSE_ID_PATTERN == UNIVERSE_ID_PATTERN
+
+
+def test_risk_monitor_and_decay_read_from_toml(tmp_path):
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text(
+        """
+[production.risk_monitor]
+enabled = false
+lam = 0.97
+window = 120
+
+[production.decay]
+short_window = 30
+negative_days = 10
+""".strip()
+    )
+    s = load_settings(config_path=cfg)
+    monitor = s.production.risk_monitor
+    assert (monitor.enabled, monitor.lam, monitor.window) == (False, 0.97, 120)
+    decay = s.production.decay
+    assert (decay.short_window, decay.negative_days, decay.long_window) == (30, 10, 120)
+
+
+def test_the_default_config_keeps_the_risk_monitor_defaults():
+    from pathlib import Path
+
+    from stonks.production.decay import DecaySettings
+    from stonks.production.monitor_settings import RiskMonitorSettings
+
+    s = load_settings(config_path=Path("config/default.toml"))
+    assert s.production.risk_monitor == RiskMonitorSettings()
+    assert s.production.decay == DecaySettings()

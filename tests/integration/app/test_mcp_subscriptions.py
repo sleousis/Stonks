@@ -44,18 +44,22 @@ async def test_portfolio_reads(mcp):
 @pytest.mark.anyio
 async def test_subscribe_is_guarded_then_applies(mcp, test_client):
     args = {"strategy_id": "bah_shadow", "mode": "paper", "portfolio_id": "pf_default"}
+    # the default book already follows the active strategy
+    before = test_client.get("/api/subscriptions", headers=AUTH).json()["items"]
+    assert [s["strategy_id"] for s in before] == ["bah_active"]
     preview = await call(mcp, "subscribe", args)
     assert preview["preview"] is True and preview["applied"] is False
-    assert test_client.get("/api/subscriptions", headers=AUTH).json()["items"] == []
+    assert test_client.get("/api/subscriptions", headers=AUTH).json()["items"] == before
     done = await call(mcp, "subscribe", args | {"confirm": True})
     sub = done["subscription"]
     assert done["applied"] is True and sub["mode"] == "paper"
     listed = await call(mcp, "list_subscriptions")
-    assert [s["id"] for s in listed["items"]] == [sub["id"]]
+    assert {s["id"] for s in listed["items"]} == {before[0]["id"], sub["id"]}
 
     off = await call(mcp, "update_subscription", {"subscription_id": sub["id"], "enabled": False})
     assert off["preview"] is True
-    assert test_client.get("/api/subscriptions", headers=AUTH).json()["items"][0]["enabled"] is True
+    items = test_client.get("/api/subscriptions", headers=AUTH).json()["items"]
+    assert next(s for s in items if s["id"] == sub["id"])["enabled"] is True
     applied = await call(
         mcp,
         "update_subscription",

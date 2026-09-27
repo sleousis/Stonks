@@ -109,11 +109,12 @@ def test_construction_and_model_books_reach_the_tick_settings():
     assert built.model_books == "all"
 
 
-def test_defaults_keep_todays_single_book():
+def test_defaults_build_books_from_subscriptions():
     p = Settings().production
     assert p.construction.method == "single_winner"
     assert p.model_books == "shadow"
-    assert p.books_from_subscriptions is False
+    # pf_default is subscribed to each active strategy (accounts.default_book)
+    assert p.books_from_subscriptions is True
 
 
 def test_unknown_constructor_fails_at_load_time():
@@ -121,14 +122,15 @@ def test_unknown_constructor_fails_at_load_time():
         Settings(production={"construction": {"method": "nope"}})
 
 
-def test_the_plan_comes_from_subscriptions_only_when_switched_on(tmp_path, monkeypatch):
+def test_the_plan_comes_from_subscriptions_unless_switched_off(tmp_path, monkeypatch):
     from stonks.production import settings_builder
     from stonks.store.state import SqliteState
 
     state = SqliteState(tmp_path / "state.sqlite")
     state.migrate()
     try:
-        assert build_tick_runtime(Settings(), ["A.US"]).plan_for(state) is None
+        off = Settings(production={"books_from_subscriptions": False})
+        assert build_tick_runtime(off, ["A.US"]).plan_for(state) is None
         seen = {}
 
         def fake_load(st, tick_settings, traders=None):
@@ -137,9 +139,7 @@ def test_the_plan_comes_from_subscriptions_only_when_switched_on(tmp_path, monke
             return "plan"
 
         monkeypatch.setattr(settings_builder, "load_tick_plan", fake_load)
-        runtime = build_tick_runtime(
-            Settings(production={"books_from_subscriptions": True}), ["A.US"]
-        )
+        runtime = build_tick_runtime(Settings(), ["A.US"])
         assert runtime.plan_for(state) == "plan"
         assert seen["args"] == (state, runtime.settings)
         assert callable(seen["traders"])  # auto books trade through their connection
@@ -153,3 +153,30 @@ def test_the_quit_rule_reaches_the_tick_settings():
         update={"auto_demote": True}
     )
     assert build_tick_settings(settings, ["A.US"]).quit_rule.auto_demote is True
+
+
+def test_risk_monitor_and_decay_reach_the_tick_settings():
+    from stonks.production.decay import DecaySettings
+    from stonks.production.monitor_settings import RiskMonitorSettings
+
+    settings = _settings()
+    settings.production.risk_monitor = RiskMonitorSettings(lam=0.9, window=100)
+    settings.production.decay = DecaySettings(short_window=40)
+    built = build_tick_settings(settings, ["A.US"])
+    assert built.risk_monitor == RiskMonitorSettings(lam=0.9, window=100)
+    assert built.decay == DecaySettings(short_window=40)
+
+
+def test_the_risk_monitor_hook_reads_the_tick_settings():
+    from stonks.production.decay import DecaySettings
+    from stonks.production.hooks.risk_monitor import _settings as hook_settings
+    from stonks.production.monitor_settings import RiskMonitorSettings
+
+    tick = TickSettings(
+        universe=["A.US"],
+        risk_monitor=RiskMonitorSettings(enabled=False),
+        decay=DecaySettings(negative_days=5),
+    )
+    assert hook_settings(tick, "risk_monitor", RiskMonitorSettings).enabled is False
+    assert hook_settings(tick, "decay", DecaySettings).negative_days == 5
+    assert TickSettings(universe=[]).risk_monitor == RiskMonitorSettings()

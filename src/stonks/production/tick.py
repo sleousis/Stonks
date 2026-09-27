@@ -68,7 +68,7 @@ from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Mode, Subscription
 from stonks.accounts.models import Portfolio as AccountPortfolio
 from stonks.accounts.paper import ensure_paper_account
 from stonks.backtest.costs import CostModel, CostModelSettings, FixedCostModel
-from stonks.backtest.simulated_broker import SimulatedBroker
+from stonks.backtest.simulated_broker import FinancingEvent, SimulatedBroker
 from stonks.core.interval import Interval
 from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
@@ -108,6 +108,8 @@ from stonks.production.corporate_actions import (
     record_plan,
     working_orders,
 )
+from stonks.production.decay import DecaySettings
+from stonks.production.financing import last_accrual, record_accrual
 from stonks.production.halts import active_halts
 from stonks.production.hooks import (
     GateContext,
@@ -120,6 +122,7 @@ from stonks.production.hooks import (
 )
 from stonks.production.hooks.attribution import load_attribution
 from stonks.production.ledger import ledger_columns, ledger_filter
+from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.portfolio_runs import PortfolioRun, record_run, runs_recorded
 from stonks.production.prices import PriceBook, held_tickers, load_history, load_prices
 from stonks.production.quit_rule import QuitRuleSettings
@@ -199,6 +202,10 @@ class TickSettings:
     model_books: Literal["shadow", "all"] = "shadow"
     #: ``[production.quit_rule]``: read by the ``quit_rule`` tick hook.
     quit_rule: QuitRuleSettings = field(default_factory=QuitRuleSettings)
+    #: ``[production.risk_monitor]`` and ``[production.decay]``: read by the
+    #: ``risk_monitor`` tick hook.
+    risk_monitor: RiskMonitorSettings = field(default_factory=RiskMonitorSettings)
+    decay: DecaySettings = field(default_factory=DecaySettings)
     #: A scoped tick (explicit tickers, e.g. a crypto-only job) trades only
     #: tickers of ``universe``: holdings outside it are marked but never
     #: traded, not even sold (TO-04). The full tick over the configured
@@ -551,7 +558,10 @@ def _run_tick_body(
         try:
             outcome = _run_book(run, book)
         except Exception as exc:
-            if single and book.legacy:
+            # The default book alone fails the tick as the old single book
+            # did (the entrypoint reports the error), other books are
+            # isolated from each other.
+            if single and (book.legacy or book.portfolio_id == DEFAULT_PORTFOLIO_ID):
                 raise
             log.error(
                 "tick.portfolio_failed",
@@ -962,6 +972,14 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             # Roadmap 16.1: a short book's paper broker trades on margin.
             model = book.spec.risk.rules.margin_call.margin.build()
             broker.enable_shorts(model if model.allows_short else RegTMargin())
+    # Roadmap 16.1: a short book's paper broker charges borrow fees and debit
+    # interest for the days since the stored accrual date (else the last
+    # snapshot), before any order changes the positions.
+    financing: list[FinancingEvent] | None = None
+    if book.spec.allow_short and isinstance(broker, SimulatedBroker) and not dry_run:
+        financing = broker.accrue(as_of, since=last_accrual(state, portfolio_id) or since)
+        for event in financing:
+            log.info("tick.financing", ticker=event.ticker, kind=event.kind, amount=event.amount)
     # Every order records its decision: price, time, context and the
     # modelled cost (BL-32, P22).
     orders_with_tick = annotate_orders(
@@ -1132,6 +1150,8 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                         state, fill, portfolio_id=scope, arrival_price=_arrival(broker, fill)
                     )
             persist_corporate_actions()
+            if financing is not None:
+                record_accrual(state, portfolio_id, as_of, financing, tick_id=tick_id)
             _snapshot_portfolio(state, tick_id, portfolio, prices, as_of, portfolio_id=scope)
             hook_summary = hooks(portfolio, prices)
 
@@ -1179,6 +1199,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             "fills": fills_count,
             "risk_adjustments": [a.as_dict() for a in risk_adjustments],
             **corporate_summary,
+            **({"financing": round(sum(e.amount for e in financing), 6)} if financing else {}),
             **hook_summary,
         },
     )

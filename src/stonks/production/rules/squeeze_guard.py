@@ -63,7 +63,7 @@ def _entry_close(ctx: RiskContext, ticker: str) -> float | None:
     frame = history(ctx, ticker)
     if entry is None or frame is None:
         return None
-    upto = frame[frame.index <= pd.Timestamp(entry)]
+    upto = frame.loc[frame.index <= pd.Timestamp(entry)]
     if upto.empty:
         return None
     value = float(upto["close"].iloc[-1])

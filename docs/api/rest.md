@@ -709,7 +709,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no |  |
 | `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
@@ -1200,7 +1200,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no |  |
 | `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |
@@ -2554,7 +2554,7 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `hypothesis` | string \| null | no |  |
 | `interval` | string | no |  |
 | `mcpt` | [McptOptions](#mcptoptions) \| null | no |  |
-| `objective` | "sharpe" \| "cagr" \| "final_return" | no |  |
+| `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no |  |
 | `preflight` | boolean \| null | no |  |
 | `premortem` | string \| null | no |  |
 | `preset` | "promotion" \| "quick" \| "standard" \| null | no |  |

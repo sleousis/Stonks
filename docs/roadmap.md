@@ -13,8 +13,9 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 12 | Mostly done. Open: three runbooks (tick failed, broker unreachable, disk full). |
 | 13 | Partly done: PWA and push, command palette, in-app help, accessibility and locale. The rest is planned. |
 | 14 | Done except 14.9 lab offload. |
-| 15 | Partly done: design, data model, connection seam, notifications backend. Per-portfolio books are built but not wired into the tick yet. |
-| 16, 17 | Planned. |
+| 15 | Mostly done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Open: order placement for real providers. |
+| 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
+| 17 | Planned. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
 
@@ -134,8 +135,8 @@ About 60 trading books from three reading lists and the Axon "100 books" series,
 - Wave 3: done. The rules are set under `[production.risk.rules.*]`, the circuit breaker and operational halt are off by default, and the quit rule alerts after every tick (`[production.quit_rule]`). Halts are listed and cleared with `stonks halts`. The lab runs the data preflight before tuning, and `stonks audit statements` checks the statements (also after `stonks ingest fundamentals`). 9.3.4 records the decision price and context on every order and reports implementation shortfall and the trade journal with `stonks tca`, `/api/tca` and MCP tools. Round trips with MAE and MFE in the journal are not built yet.
 - Wave 4: done. 9.4.1 to 9.4.4 (`quant_momentum`, `stocks_on_the_move` with `atr_parity`, `ewmac_trend`, `tsmom`, `ath_trend`, `TrailingStopWrapper`, `quant_value`), 9.4.5 (`RegimeFilter`) and 9.4.6 (legacy defaults and metadata backfill).
 - Wave 5: 9.5.1 done. The `hrp`, `erc` and `mean_variance_costs` constructors, four covariance estimators and the effective number of bets are in `portfolio/`. They read `returns_history`, which the tick and the backtest don't fill yet, so today they fall back to each name's own volatility.
-- Wave 5: 9.5.4 done. After each real tick the `risk_monitor` hook writes daily VaR and ES per portfolio and per strategy sleeve to `risk_snapshots` (SQLite `019`), with the violation ratio, a Kupiec test and the alpha-decay check. Alerts go to the portfolio owner, `health` warns on a bad violation ratio, and `/api/risk/live`, `/api/risk/snapshots` and two MCP tools read them. The `pool_correlation` survival test is in the registry but in no preset yet. Its settings use defaults until the tick settings carry them. `registry audit` with BH is not built.
-- Wave 5: 9.5.2 done. Purged and combinatorial purged k-fold and `CVObjective` (`lab/cv.py`), the `cpcv` test (in `promotion`), `LabDataset.train_segments`, the triple-barrier and uniqueness toolkit (`features/labels.py`), bet sizing and sample weights (`features/ml.py`). `trendline_meta_label` fits each CV segment separately, weights trades by uniqueness, reports a purged CV score and trades above the barriers' break-even probability. `CVObjective` is not a CLI or API objective choice yet.
+- Wave 5: 9.5.4 done. After each real tick the `risk_monitor` hook writes daily VaR and ES per portfolio and per strategy sleeve to `risk_snapshots` (SQLite `019`), with the violation ratio, a Kupiec test and the alpha-decay check. Alerts go to the portfolio owner, `health` warns on a bad violation ratio, and `/api/risk/live`, `/api/risk/snapshots` and two MCP tools read them. The `pool_correlation` survival test is in the registry but in no preset yet. The monitor reads `[production.risk_monitor]` and `[production.decay]`. `registry audit` with BH is not built.
+- Wave 5: 9.5.2 done. Purged and combinatorial purged k-fold and `CVObjective` (`lab/cv.py`), the `cpcv` test (in `promotion`), `LabDataset.train_segments`, the triple-barrier and uniqueness toolkit (`features/labels.py`), bet sizing and sample weights (`features/ml.py`). `trendline_meta_label` fits each CV segment separately, weights trades by uniqueness, reports a purged CV score and trades above the barriers' break-even probability. The lab objectives `cv_sharpe`, `cv_cagr` and `cv_final_return` tune on purged folds through `CVObjective` (CLI, API, MCP and the Lab page).
 - Wave 5: 9.5.3 done. `MarkovSwitchingRegime` (statsmodels, wrapped, with our own Hamilton filter) in `features/regimes.py`, the `latent_regime_filter` wrapper, the `vix_term_structure` condition (`features/regime_vix.py`) and Yahoo's `vix_spot` and `vix_3m` macro series.
 - Wave 5: 9.5.5 done. The `crisis` test (in `promotion`), the `stress` test (block bootstrap or GARCH-t filtered historical simulation, in no preset) and the `VolForecaster` seam (`ewma`, `garch` wrapping `arch`, `har_rv`) in `features/vol_forecast.py`.
 
@@ -304,7 +305,7 @@ Decided: one small always-on cloud VM (for example Hetzner Cloud or DigitalOcean
 **Status:**
 
 - Done: 15.1 design; 15.2 data model (migration 010, default owner `usr_owner` and portfolio `pf_default`, scoped services, golden single-owner tick); 15.3 read-only connection seam with Alpaca, SnapTrade and fake providers (`python -m stonks.connections`); the 15.6 notification backend (outbox, Web Push, email, webhook, quiet hours, preferences).
-- Mostly done: 15.5. The tick stores every scored strategy's signals and signal events with a plain reason (migration 020) and can score opted-in strategies on all cores. Per subscription, notify sends the events to the outbox, paper trades a simulated account (a broker portfolio gets its own paper account) and auto trades the connected account. Auto needs the checklist (20 paper days from `portfolio_runs`, a healthy connection that can trade, no halt) and a fresh second factor, pauses itself on a broker error, and obeys owner risk limits and the kill switch at every scope. Still open: the entrypoints run these per-portfolio books only with `[production] books_from_subscriptions = true` (off by default, because strategies promoted after the accounts migration have no subscription and would stop trading), and no provider but the fake one can place orders yet. 15.6 delivery works and the tick now enqueues signals.
+- Done: 15.5. The tick stores every scored strategy's signals and signal events with a plain reason (migration 020) and can score opted-in strategies on all cores. Per subscription, notify sends the events to the outbox, paper trades a simulated account (a broker portfolio gets its own paper account) and auto trades the connected account. Auto needs the checklist (20 paper days from `portfolio_runs`, a healthy connection that can trade, no halt) and a fresh second factor, pauses itself on a broker error, and obeys owner risk limits and the kill switch at every scope. The entrypoints build these per-portfolio books by default (`[production] books_from_subscriptions = true`). A promotion subscribes `pf_default` to the strategy (paper, or auto at an external broker, audited as `service:system`) and migration 022 did the same for the strategies already active, so the default book trades exactly as the old single book did. A parity test checks it. Still open: no provider but the fake one can place orders yet. 15.6 delivery works and the tick now enqueues signals.
 - Done: 15.4 insights. Any portfolio you own, a synced broker account too, shows allocation (asset class, sector, currency, ticker), exposure (gross, net, beta), P&L over periods, risk (volatility, drawdown, VaR, concentration) and which active strategies agree or disagree with each holding, and why. Routes under `/api/insights`, MCP tools `get_insights` and `get_strategy_agreement`. Admins see totals only.
 - Done: per-user API and MCP tokens. `stonks mcp` acts as the owner of `STONKS_MCP_TOKEN`, with that token's scopes. A test calls every MCP tool as several people and checks it is refused exactly when its REST route is.
 - Done: 15.7 simple home screen (portfolio, today’s signals, my strategies with the mode switch).
@@ -323,7 +324,7 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 
 ## Phase 16: Short selling
 
-**Status:** 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. Design and what changed from it: `docs/design/shorting.md`.
+**Status:** 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. Design and what changed from it: `docs/design/shorting.md`. A short book's paper broker charges borrow fees and debit interest for every day since the stored accrual date (migration 023, `production/financing.py`). Still open: the margin-call notification, a lake table of borrow rates, and broker-reported borrow.
 
 | WP | Scope |
 |----|-------|
@@ -368,19 +369,19 @@ The last phase. The whole project is reviewed file by file, fixed, tested throug
 | 18.7 Feature completeness | A capability matrix of API, console, CLI and MCP. Fill every gap and add the parity test. |
 | 18.8 Release | Changelog, docs and wiki final pass, version 1.0 tag and a deploy dry run. |
 
-**Gate status (integration step 6, measured 2026-09-27)**
+**Gate status (integration step 7, measured 2026-09-27)**
 
 CI enforces each gate at today's value where it is still below the target, so it passes now and the floor only moves up. Raise a floor in the same change that lifts coverage.
 
 | Gate | Target | Today | Enforced by |
 |---|---|---|---|
-| Coverage overall (coverage.py's combined line and branch number) | 90 | 94.2 (lines 95.7, branches 87.6) | `fail_under = 90` in `pyproject.toml` |
-| Coverage `core/` | 95 | 98.4 | floor 95 (the target) in `tools/coverage_gate.py` |
-| Coverage `production/` | 95 | 95.5 | floor 95 |
-| Coverage `execution/` | 95 | 95.9 | floor 95 |
+| Coverage overall (coverage.py's combined line and branch number) | 90 | 94.3 (lines 95.8, branches 88.0) | `fail_under = 90` in `pyproject.toml` |
+| Coverage `core/` | 95 | 98.5 | floor 95 (the target) in `tools/coverage_gate.py` |
+| Coverage `production/` | 95 | 95.9 | floor 95 |
+| Coverage `execution/` | 95 | 96.8 | floor 95 |
 | Coverage `auth/` | 95 | 98.5 | floor 95 |
-| Coverage `portfolio/` | 95 | 96.3 | floor 95 |
-| Pyright basic over `src/stonks` | 0 errors | 479 errors, all in the baseline (10 fixed and locked in this step) | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
+| Coverage `portfolio/` | 95 | 96.5 | floor 95 |
+| Pyright basic over `src/stonks` | 0 errors | 493 errors, all in the baseline (14 added in step 7: pandas typing noise in untouched files after the statsmodels and arch dependencies came in; errors in new code were fixed) | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
 | Surviving mutants on the money paths | under 10% | 19.8% over six targets (the risk rules still to run in full) | `tools/mutation.py`, weekly and manual (`.github/workflows/mutation.yml`) |
 | Ruff | no ignore without a comment | met | `[tool.ruff.lint]`, every ignore says why |
 | End to end, desktop and 375px phone | every journey passes | 26 passed (13 per viewport), 0 xfail, no known app issue | `uv run pytest -m e2e tests/e2e`, `.github/workflows/e2e.yml` |

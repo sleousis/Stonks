@@ -127,7 +127,7 @@ def seeded(settings) -> dict:
             reports=[SurvivalReport(test_id="oos", passed=True, metrics={"sharpe_oos": 1.5})],
             strategy_id="bah_active",
         )
-        seed_status(registry, active_id, "active")
+        seed_status(registry, active_id, "active", default_book=True)
         shadow_id = registry.register(
             BuyAndHold({"ticker": "DOWN.US", "allocation": 1.0}),
             reports=[],

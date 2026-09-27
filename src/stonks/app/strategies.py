@@ -15,6 +15,7 @@ from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from stonks.accounts.default_book import default_mode, ensure_default_subscription
 from stonks.app.catalog import CatalogService, class_path_of
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
@@ -321,7 +322,9 @@ def change_status(
     A move to ``active`` evaluates the go-live gate (``[golive]`` policy)
     and passes the report to the registry, which refuses the promotion
     unless it passed or ``override`` comes with a long enough reason; the
-    report is stored with the audit row either way. Demotions need a
+    report is stored with the audit row either way. A promotion also
+    subscribes ``pf_default`` to the strategy when it has no subscription
+    (``accounts.default_book``), in the same transaction. Demotions need a
     reason. Maps registry errors onto service errors: unknown id ->
     ``NotFoundError``, refused promotion -> ``ConflictError``, a broken
     rule (missing actor / reason) -> ``ValidationError``.
@@ -336,14 +339,20 @@ def change_status(
                 if status == "active"
                 else None
             )
-            change = registry.set_status(
-                strategy_id,
-                status,
-                actor=actor,
-                reason=reason,
-                golive_report=report,
-                override=override,
-            )
+            with state.transaction():
+                change = registry.set_status(
+                    strategy_id,
+                    status,
+                    actor=actor,
+                    reason=reason,
+                    golive_report=report,
+                    override=override,
+                )
+                if change is not None and status == "active":
+                    # the default book keeps trading every active strategy
+                    ensure_default_subscription(
+                        state, strategy_id, default_mode(ctx.settings.brokers.kind)
+                    )
         except KeyError:
             raise NotFoundError(f"no strategy with id {strategy_id!r}") from None
         except PromotionRefused as exc:
