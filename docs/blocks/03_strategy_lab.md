@@ -15,8 +15,9 @@ src/stonks/lab/
 ├── universe.py      # point-in-time universes: id, list or rule (BL-37)
 ├── catalog.py       # every strategy `stonks lab run` can name
 ├── dataset.py       # LabDataset: train / validation windows, embargo
-├── objectives.py    # sharpe, cagr, final_return
-├── tuning/          # grid.py, random.py, tune_and_fit in base.py
+├── objectives.py    # sharpe, cagr, final_return, sortino, calmar, sharpe_dd, multi
+├── tuning/          # grid.py, random.py, optuna.py, tune_and_fit in base.py
+├── heatmap.py       # 2D parameter sweeps around the tuned set
 ├── trials.py        # trial ledger: lab_runs, lab_trials
 ├── manifest.py      # reproducibility manifest (git sha, config hash, data fingerprint)
 ├── parallel.py      # the one spawn process pool (tuning, sweeps, reruns)
@@ -56,11 +57,34 @@ class Strategy(Protocol):
 
 ## Tuners and objectives
 
-- Tuners: `grid` and `random` (`--tuner`). A tuner reads only the `ParamSpace`.
-- Objectives: `sharpe` (default), `cagr`, `final_return` (`--objective`).
-- `lab.cv.CVObjective(inner, folds=5)` wraps any of them: it scores a strategy on purged folds of the train window, each fold fitted on the others, so a tuner stops picking on in-sample fit (BL-45). It is a code-level option today, not a CLI choice.
+- Tuners: `grid`, `random` and `optuna` (`--tuner`). A tuner reads only the `ParamSpace`.
+- `optuna` is Bayesian search. Optuna stays inside `lab/tuning/optuna.py`, behind the `Tuner` seam. It asks for trials in fixed batches and our process pool runs them, so the result is the same for any worker count and the same seed gives the same trials.
+- `--sampler` picks how optuna searches: `tpe` (default), `nsga2` (a Pareto search over the parts of the `multi` objective) or `random`.
+- `--prune` lets optuna stop a trial early when its fast vectorised score trails the others. Only strategies with the fast path can be pruned. A pruned trial still counts in the trial ledger (P2).
+- Objectives (`--objective`): `sharpe` (default), `cagr`, `final_return`, `sortino`, `calmar`, `sharpe_dd` (Sharpe less twice the max drawdown) and `multi` (Sharpe plus half the Calmar less the max drawdown). `cv_sharpe`, `cv_cagr` and `cv_final_return` score on purged folds.
+- `lab.cv.CVObjective(inner, folds=5)` wraps any of them: it scores a strategy on purged folds of the train window, each fold fitted on the others, so a tuner stops picking on in-sample fit (BL-45). The `cv_*` objectives are this wrapper.
 - Trials run in parallel on `[lab.parallel] max_workers` processes (0 = every core). Results do not depend on the worker count.
 - Worker snapshots and the permuted, perturbed and noise lakes of the survival tests copy every ticker a run reads: the universe, `LabDataset.reference_tickers` (filled from the strategy's `data_tickers()`) and the benchmark ticker. See `lab.dataset.data_tickers`. References are permuted together with the universe.
+
+### Fast path
+
+A strategy can give `target_positions(closes, params)`: its target weights for every bar at once, with no look-ahead. `momentum`, `ma_crossover`, `donchian_breakout`, `ewmac_trend` and `tsmom` have it. The lab uses it to screen trials, to prune them and to fill heatmaps. Parity tests check it against the event engine.
+
+### Parameter heatmaps
+
+`--heatmap x,y` (or `--heatmap auto`) sweeps two parameters around the tuned set after tuning. The other parameters stay at their tuned values.
+
+- `--heatmap-grid N` sets the points per axis (2 to 15, default 7). The tuned value is always on the axis.
+- Cells use the fast path when the strategy has one. `--heatmap-full` scores them with full backtests instead.
+- Every cell counts as a trial before the survival suite runs (P2). The winner is still the tuner's pick.
+- The `plateau` test's verdict and its neighbourhood are drawn on the map.
+- The map is in the run result, the JSON output, the artifact's `meta.json` and the strategy's tear sheet (`stonks report --backtest <id>`). The CLI prints it as a grid.
+- The API and the MCP `run_lab` tool take it as `heatmap: {x, y, grid_size, fast}`.
+
+```bash
+uv run stonks lab run ma_crossover --tickers AAPL.US --start 2023-01-01 --end 2025-01-01 \
+  --tuner optuna --objective calmar --prune --heatmap fast,slow --tests plateau
+```
 
 ## Survival tests
 

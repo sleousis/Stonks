@@ -17,6 +17,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
 | 19 | Planned. Design: `docs/design/live-trading.md`. |
+| 22 | 22.1 and 22.5 done. The rest is planned. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
 
@@ -471,6 +472,8 @@ Planned after live daily trading is stable. Streaming prices (EODHD websockets, 
 ## Phase 22: Research depth
 
 From the competitor study of 44 open-source projects (Qlib, alphalens, vectorbt, pysystemtrade, freqtrade and others). Stonks leads on validation; these close the gaps in factor research, risk and model lifecycle.
+
+**Status:** 22.1 and 22.5 done. The console does not draw the heatmap yet. The lab run result and the tear sheet carry it.
 
 | WP | Scope |
 |----|-------|
