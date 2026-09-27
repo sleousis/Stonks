@@ -97,7 +97,3 @@ class ScreenSpec(BaseModel):
         if self.sort_by is not None:
             names.append(self.sort_by)
         return list(dict.fromkeys([*names, *self.columns]))
-
-    def screen_only(self) -> ScreenSpec:
-        """This spec as a plain :class:`ScreenSpec` (drops subclass fields)."""
-        return ScreenSpec.model_validate(self.model_dump(include=set(ScreenSpec.model_fields)))

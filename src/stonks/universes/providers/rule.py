@@ -83,7 +83,10 @@ class RuleProvider(UniverseProvider):
         opened: dict[str, date] = {}
         spans: list[MembershipSpan] = []
         for day in dates:
-            members = set(screen_tickers(ctx.lake, spec, day))
+            try:
+                members = set(screen_tickers(ctx.lake, spec, day))
+            except KeyError as exc:  # the screen's universe_id is not stored
+                raise ValueError(str(exc.args[0]) if exc.args else str(exc)) from None
             for ticker in [t for t in opened if t not in members]:
                 spans.append(MembershipSpan(ticker, opened.pop(ticker), day))
             for ticker in members:

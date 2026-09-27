@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import date
 
+import pandas as pd
 import pytest
 from pydantic import ValidationError
 
@@ -178,3 +179,49 @@ def test_rule_universe_top_n(market):
     )
     refresh_universe(market, "top1", as_of=END)
     assert set(market.get_universe_membership("top1")["ticker"]) == {"BBB.US"}
+
+
+def test_rule_universe_on_a_missing_universe_is_a_value_error(market):
+    UniverseStore(market).save(
+        UniverseDefinition(
+            id="orphan", kind="rule", spec={"start": "2024-12-02", "universe_id": "ghost"}
+        )
+    )
+    with pytest.raises(ValueError, match="ghost"):
+        refresh_universe(market, "orphan", as_of=END)
+
+
+def test_annual_statements_when_quarters_are_missing(market):
+    market.upsert_income_statement(
+        pd.DataFrame(
+            [
+                {
+                    "ticker": "BBB.US",
+                    "period_end": date(2022, 12, 31),
+                    "frequency": "A",
+                    "filing_date": date(2023, 3, 1),
+                    "currency": "USD",
+                    "revenue": 1e8,
+                    "net_income": 1e7,
+                },
+                {
+                    "ticker": "BBB.US",
+                    "period_end": date(2023, 12, 31),
+                    "frequency": "A",
+                    "filing_date": None,
+                    "currency": "USD",
+                    "revenue": 1.2e8,
+                    "net_income": 1.2e7,
+                },
+            ]
+        )
+    )
+    data = ScreenData(market, ["BBB.US"], END)
+    assert data.metric("net_margin")["BBB.US"] == pytest.approx(0.1)
+    assert data.metric("revenue_growth")["BBB.US"] == pytest.approx(0.2)
+
+
+def test_no_candidates_reads_nothing(market):
+    data = ScreenData(market, [], END)
+    for metric in metric_ids():
+        assert data.metric(metric) == {}
