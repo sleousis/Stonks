@@ -10,16 +10,16 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from stonks.accounts import NotFound, PortfolioRepository, owned_portfolio
+from stonks.accounts import AccountsError, NotFound, PortfolioRepository, owned_portfolio
 from stonks.accounts import Portfolio as AccountPortfolio
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.app.context import AppContext
 from stonks.app.cost_basis import FillLot, average_costs
-from stonks.app.errors import NotFoundError
+from stonks.app.errors import NotFoundError, ValidationError
 from stonks.app.pagination import Page
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
@@ -100,6 +100,29 @@ class PortfolioTotalsView(BaseModel):
 
 Trading = Literal["paper", "live"]
 BrokerKind = Literal["simulated", "alpaca", "connection"]
+
+PortfolioName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
+]
+
+
+class PortfolioCreate(BaseModel):
+    """A new paper portfolio of yours (simulated fills on the Stonks ledger).
+    Broker portfolios come from linking a broker connection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: PortfolioName
+    initial_cash: float | None = Field(
+        default=None, gt=0, le=1e12, description="Starting cash; default the configured amount."
+    )
+    base_currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
+
+
+class PortfolioRename(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: PortfolioName
 
 
 class TradingModeView(BaseModel):
@@ -186,6 +209,39 @@ class PortfolioService:
             )
             for p in books
         ]
+
+    def create(self, principal: Principal, body: PortfolioCreate) -> PortfolioSummaryView:
+        """Open a new paper portfolio owned by the caller."""
+        require(principal, Permission.PORTFOLIO_MANAGE)
+        with self._ctx.state() as state:
+            try:
+                made = PortfolioRepository(state).create(
+                    principal.scope,
+                    name=body.name,
+                    base_currency=body.base_currency,
+                    initial_cash=body.initial_cash,
+                )
+            except AccountsError as exc:
+                raise ValidationError(str(exc)) from None
+        return self._summary(principal, made.id)
+
+    def rename(
+        self, principal: Principal, portfolio_id: str, body: PortfolioRename
+    ) -> PortfolioSummaryView:
+        """Rename one of your portfolios (404 when it isn't yours)."""
+        require(principal, Permission.PORTFOLIO_MANAGE)
+        with self._ctx.state() as state:
+            try:
+                PortfolioRepository(state).rename(principal.scope, portfolio_id, body.name)
+            except NotFound as exc:
+                raise NotFoundError(str(exc)) from None
+        return self._summary(principal, portfolio_id)
+
+    def _summary(self, principal: Principal, portfolio_id: str) -> PortfolioSummaryView:
+        for view in self.list_mine(principal):
+            if view.id == portfolio_id:
+                return view
+        raise NotFoundError(f"portfolio {portfolio_id} not found")
 
     def trading_modes(self, principal: Principal) -> list[TradingModeView]:
         """For each of your portfolios: paper or live, and the broker."""
