@@ -94,10 +94,13 @@ BEGIN
     SELECT RAISE(ABORT, 'version changes go through ModelVersionRegistry (audited)');
 END;
 
--- The model a strategy trades is its live version's artifact.
+-- Once a strategy has versions, the model it trades is its live version's
+-- artifact. A strategy without versions keeps its registered artifact.
 CREATE TRIGGER IF NOT EXISTS strategies_artifact_path_audited
 BEFORE UPDATE OF artifact_path ON strategies
-WHEN NEW.artifact_path IS NOT OLD.artifact_path AND NOT EXISTS (
+WHEN NEW.artifact_path IS NOT OLD.artifact_path
+ AND EXISTS (SELECT 1 FROM model_versions WHERE strategy_id = NEW.id)
+ AND NOT EXISTS (
     SELECT 1 FROM model_versions mv
     WHERE mv.strategy_id = NEW.id AND mv.status = 'live' AND mv.artifact_path = NEW.artifact_path
 )

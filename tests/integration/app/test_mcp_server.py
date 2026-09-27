@@ -160,6 +160,10 @@ READ_TOOLS = {
     "get_fx_rate",
     "list_order_drafts",
     "list_cash_flows",
+    "list_model_versions",
+    "get_model_version_history",
+    "list_model_candidates",
+    "check_model_swap",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -179,6 +183,7 @@ JOB_TOOLS = {
     "create_watchlist",
     "create_price_alert",
     "draft_order",
+    "retrain_models",
 }
 # Overwrite a draft's fields; no confirm (a draft is never traded).
 EDIT_TOOLS = {
@@ -210,6 +215,8 @@ GUARDED_TOOLS = {
     "change_order",
     "cancel_order",
     "delete_price_alert",
+    "swap_model_version",
+    "reject_model_version",
 }
 
 

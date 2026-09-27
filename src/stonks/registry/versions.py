@@ -33,7 +33,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from stonks.core.protocols import Strategy
 from stonks.registry.store import (
@@ -176,9 +176,8 @@ class ModelVersionRegistry:
         module_name, cls_name = handle.class_path.split(":", 1)
         cls = getattr(importlib.import_module(module_name), cls_name)
         loader = getattr(cls, "load", None)
-        if callable(loader):
-            return loader(target.artifact_path)
-        return cls(handle.params)
+        loaded = loader(target.artifact_path) if callable(loader) else cls(handle.params)
+        return cast(Strategy, loaded)
 
     def next_version(self, strategy_id: str) -> tuple[int, str, Path]:
         """The next version number, its stored (relative) artifact path and
