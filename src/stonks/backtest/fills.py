@@ -363,7 +363,7 @@ class MinuteFillModel:
     spread of a recorded quote, over ``BarFillModel`` (roadmap 21.2.3)."""
 
     def __init__(self, settings: MinuteFillSettings | None = None) -> None:
-        self._s = settings or MinuteFillSettings()
+        self._s = settings or MinuteFillSettings.model_validate({})
         self._bars = BarFillModel(
             FillModelSettings(
                 max_participation=self._s.max_participation,
@@ -382,16 +382,16 @@ class MinuteFillModel:
 
     @property
     def market_stats_spec(self) -> MarketStatsSpec:
-        return MarketStatsSpec(adv_window=self._s.adv_window)
+        return MarketStatsSpec.model_validate({"adv_window": self._s.adv_window})
 
     def decide(self, order: Order, quote: BarQuote) -> FillDecision:
         s = self._s
         day_order = order.time_in_force != "gtc"
         if s.expire_at_session_end and day_order and quote.new_session:
             return FillDecision.none("session_end")
-        if s.max_gap_bars is not None and quote.gap_bars is not None:
-            if quote.gap_bars > s.max_gap_bars:
-                return FillDecision.none("gap")
+        gap = quote.gap_bars
+        if s.max_gap_bars is not None and gap is not None and gap > s.max_gap_bars:
+            return FillDecision.none("gap")
         decision = self._bars.decide(order, quote)
         if order.time_in_force == "ioc" and decision.carry:
             decision = FillDecision(decision.quantity, decision.price, 0.0, decision.reason)
