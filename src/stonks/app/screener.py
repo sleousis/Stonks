@@ -1,7 +1,11 @@
 """ScreenerService: run screens, keep your saved ones, and turn a screen
 into a stored universe for the lab (roadmap 20.8).
 
-- Running a screen and reading saved screens need ``data.read``. Saving,
+- Running a screen and reading saved screens need ``data.read``. A screen
+  over ``[screener] max_candidates`` is a 422 that says how to narrow it.
+  ``size`` counts the candidates first, and a big screen runs as the
+  ``screen_run`` background job with progress (roadmap 20.11). Results are
+  reused for a short time per spec and date. Saving,
   changing and deleting one need ``portfolio.manage`` (your own workspace,
   like watchlists). Another person's screen reads as missing (404).
 - Saving a screen as a universe is research work (``lab.run``). The
@@ -18,20 +22,29 @@ import secrets
 import sqlite3
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from stonks.accounts.audit import iso_now
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
-from stonks.app.jobs import Job
+from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.universes import UniverseCreate, UniverseService, UniverseView
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.logging import get_logger
-from stonks.screener import ScreenResult, ScreenSpec, all_metrics, run_screen
+from stonks.screener import (
+    ScreenResult,
+    ScreenSpec,
+    TooManyCandidates,
+    all_metrics,
+    run_screen,
+)
+from stonks.screener.cache import ScreenCache
+from stonks.screener.engine import Progress, candidates
 from stonks.screener.metrics.base import MetricGroup, MetricUnit
+from stonks.screener.settings import ScreenerSettings
 from stonks.store.state import SqliteState
 from stonks.universes.base import UNIVERSE_ID_PATTERN
 
@@ -41,6 +54,8 @@ MAX_SCREENS = 100
 MAX_SNAPSHOT = 5000
 #: Default history of a rule universe made from a screen.
 DEFAULT_RULE_DAYS = 365
+#: The background job that runs a large screen (roadmap 20.11).
+SCREEN_RUN_JOB = "screen_run"
 
 _log = get_logger("stonks.app.screener")
 
@@ -68,6 +83,20 @@ class ScreenRunRequest(BaseModel):
         if (self.spec is None) == (self.screen_id is None):
             raise ValueError("give either spec or screen_id")
         return self
+
+
+class ScreenSize(BaseModel):
+    """How big a screen is before any metric is read, and how to run it."""
+
+    as_of: date
+    #: Tickers the rule (and the universe) keep on the date.
+    candidates: int
+    max_candidates: int
+    job_threshold: int
+    #: More candidates than the cap: the screen would fail. Narrow it.
+    over_cap: bool
+    #: Big enough to run as a background job with progress.
+    use_job: bool
 
 
 def _name(v: str | None) -> str | None:
@@ -176,15 +205,26 @@ class ScreenerService:
         self,
         context: AppContext,
         universes: UniverseService,
+        runner: JobRunner | None = None,
         *,
         clock: Callable[[], datetime] = _utcnow,
     ) -> None:
         self._ctx = context
         self._universes = universes
+        self._runner = runner
         self._clock = clock
+        settings = self._settings()
+        self._cache = ScreenCache(settings.cache_seconds, settings.cache_entries)
+        if runner is not None:
+            # a read-only research job: general lane, stoppable by its owner
+            runner.register(SCREEN_RUN_JOB, self._handle_run, cancellable=True, operation=False)
 
     def _today(self) -> date:
         return self._clock().date()
+
+    def _settings(self) -> ScreenerSettings:
+        """``[screener]``, read on each call so a changed setting applies."""
+        return getattr(self._ctx.settings, "screener", None) or ScreenerSettings()
 
     # ---- metrics and runs ------------------------------------------------------------
 
@@ -199,16 +239,78 @@ class ScreenerService:
         ]
 
     def run(self, principal: Principal, request: ScreenRunRequest) -> ScreenResult:
+        """Run a screen now. 422 over the candidate cap. A repeat of the same
+        spec and date within ``[screener] cache_seconds`` is served from
+        the cache."""
         require(principal, Permission.READ)
-        spec = request.spec or self.get(principal, request.screen_id or "").spec
-        return self._run(spec, request.as_of or self._today())
+        spec, as_of = self._resolve(principal, request)
+        return self._run(spec, as_of)
 
-    def _run(self, spec: ScreenSpec, as_of: date) -> ScreenResult:
+    def size(self, principal: Principal, request: ScreenRunRequest) -> ScreenSize:
+        """Count the candidates (no metric is read) and say whether the
+        screen is over the cap or big enough for the background job."""
+        require(principal, Permission.READ)
+        spec, as_of = self._resolve(principal, request)
+        settings = self._settings()
         with self._ctx.lake() as lake:
             try:
-                return run_screen(lake, spec, as_of)
+                count = len(candidates(lake, spec, as_of))
             except KeyError as exc:
                 raise NotFoundError(str(exc.args[0]) if exc.args else str(exc)) from None
+        over = count > settings.max_candidates
+        return ScreenSize(
+            as_of=as_of,
+            candidates=count,
+            max_candidates=settings.max_candidates,
+            job_threshold=settings.job_threshold,
+            over_cap=over,
+            use_job=not over and count > settings.job_threshold,
+        )
+
+    def submit(self, principal: Principal, request: ScreenRunRequest) -> Job:
+        """Queue the screen as a background job with progress. The spec is
+        fixed at submit time (a saved screen is read now, as its owner)."""
+        require(principal, Permission.READ)
+        if self._runner is None:
+            raise ConflictError("background screens need the job runner")
+        spec, as_of = self._resolve(principal, request)
+        params = {"spec": spec.model_dump(mode="json"), "as_of": as_of.isoformat()}
+        return self._runner.submit(SCREEN_RUN_JOB, params, owner_id=principal.user_id)
+
+    def _resolve(self, principal: Principal, request: ScreenRunRequest) -> tuple[ScreenSpec, date]:
+        spec = request.spec or self.get(principal, request.screen_id or "").spec
+        return spec, request.as_of or self._today()
+
+    def _handle_run(self, params: dict[str, Any], ctx: JobContext) -> ScreenResult:
+        spec = ScreenSpec.model_validate(params["spec"])
+        as_of = date.fromisoformat(params["as_of"])
+
+        def progress(fraction: float, message: str) -> None:
+            ctx.check_cancelled()
+            ctx.progress(fraction, message)
+
+        return self._run(spec, as_of, progress=progress)
+
+    def _run(self, spec: ScreenSpec, as_of: date, progress: Progress | None = None) -> ScreenResult:
+        hit = self._cache.get(spec, as_of)
+        if hit is not None:
+            _log.info("screener.cache_hit", as_of=as_of.isoformat())
+            return hit.model_copy(update={"cached": True})
+        with self._ctx.lake() as lake:
+            try:
+                result = run_screen(
+                    lake,
+                    spec,
+                    as_of,
+                    max_candidates=self._settings().max_candidates,
+                    progress=progress,
+                )
+            except KeyError as exc:
+                raise NotFoundError(str(exc.args[0]) if exc.args else str(exc)) from None
+            except TooManyCandidates as exc:
+                raise ValidationError(str(exc)) from None
+        self._cache.put(spec, as_of, result)
+        return result
 
     # ---- saved screens -----------------------------------------------------------------
 

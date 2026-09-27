@@ -299,7 +299,7 @@ class Services:
             telegram=TelegramService(context),
             factors=FactorService(context, runner),
             calendars=CalendarService(context, runner),
-            screener=ScreenerService(context, universes),
+            screener=ScreenerService(context, universes, runner),
         )
         services.schedule.bind(services)
         return services

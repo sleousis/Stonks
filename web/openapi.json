@@ -16747,6 +16747,11 @@
             "title": "As Of",
             "type": "string"
           },
+          "cached": {
+            "default": false,
+            "title": "Cached",
+            "type": "boolean"
+          },
           "candidates": {
             "title": "Candidates",
             "type": "integer"
@@ -16886,6 +16891,46 @@
           }
         },
         "title": "ScreenRunRequest",
+        "type": "object"
+      },
+      "ScreenSize": {
+        "description": "How big a screen is before any metric is read, and how to run it.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "candidates": {
+            "title": "Candidates",
+            "type": "integer"
+          },
+          "job_threshold": {
+            "title": "Job Threshold",
+            "type": "integer"
+          },
+          "max_candidates": {
+            "title": "Max Candidates",
+            "type": "integer"
+          },
+          "over_cap": {
+            "title": "Over Cap",
+            "type": "boolean"
+          },
+          "use_job": {
+            "title": "Use Job",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "as_of",
+          "candidates",
+          "max_candidates",
+          "job_threshold",
+          "over_cap",
+          "use_job"
+        ],
+        "title": "ScreenSize",
         "type": "object"
       },
       "ScreenSpec": {
@@ -39588,6 +39633,184 @@
         "x-permission": "operations.run"
       }
     },
+    "/api/screener/jobs": {
+      "post": {
+        "description": "Run a large screen as a background job; follow ``/api/jobs/{id}``\nor its event stream, then read ``/api/screener/jobs/{id}/result``.",
+        "operationId": "submitScreenJob",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScreenRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Submit Screen Job",
+        "tags": [
+          "screener"
+        ],
+        "x-permission": "data.read"
+      }
+    },
+    "/api/screener/jobs/{job_id}/result": {
+      "get": {
+        "description": "The rows of a finished screen job (409 until it has succeeded).",
+        "operationId": "getScreenJobResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Screen Job Result",
+        "tags": [
+          "screener"
+        ],
+        "x-permission": "data.read"
+      }
+    },
     "/api/screener/metrics": {
       "get": {
         "description": "Every metric a screen may filter or sort on, with its unit.",
@@ -40216,6 +40439,94 @@
           "screener"
         ],
         "x-permission": "portfolio.manage"
+      }
+    },
+    "/api/screener/size": {
+      "post": {
+        "description": "Count a screen's candidates before running it (no metric is read):\nover the cap it would fail, above the job threshold run it as a job.",
+        "operationId": "sizeScreen",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScreenRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenSize"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Size Screen",
+        "tags": [
+          "screener"
+        ],
+        "x-permission": "data.read"
       }
     },
     "/api/screener/universes": {

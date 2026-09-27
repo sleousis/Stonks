@@ -171,3 +171,86 @@ def test_save_a_snapshot_warns_about_survivorship(client, people, market):
         headers=alice,
     )
     assert dated.status_code == 422
+
+
+# ---- screens at scale (roadmap 20.11) ------------------------------------------------------
+
+
+def test_size_says_when_to_use_the_job(client, people, market, settings):
+    vic = people["vic"]["headers"]
+    body = {"spec": {"sectors": ["Tech"]}, "as_of": AS_OF}
+    res = client.post("/api/screener/size", json=body, headers=vic)
+    assert res.status_code == 200, res.text
+    out = res.json()
+    assert out["candidates"] == 2 and out["as_of"] == AS_OF
+    assert out["max_candidates"] == settings.screener.max_candidates
+    assert out["over_cap"] is False and out["use_job"] is False
+    settings.screener.job_threshold = 1
+    assert client.post("/api/screener/size", json=body, headers=vic).json()["use_job"] is True
+    settings.screener.max_candidates = 1
+    over = client.post("/api/screener/size", json=body, headers=vic).json()
+    assert over["over_cap"] is True and over["use_job"] is False
+
+
+def test_the_cap_is_a_clear_422(client, people, market, settings):
+    settings.screener.max_candidates = 2
+    res = client.post(
+        "/api/screener/run",
+        json={"spec": {"sectors": ["Tech", "Energy"]}, "as_of": AS_OF},
+        headers=people["vic"]["headers"],
+    )
+    assert res.status_code == 422
+    assert "3 candidates" in res.text and "cap of 2" in res.text
+
+
+def test_a_screen_as_a_background_job(client, people, market):
+    alice, bob = people["alice"]["headers"], people["bob"]["headers"]
+    body = {
+        "spec": {"sectors": ["Tech", "Energy"], "sort_by": "price", "columns": ["return_12m"]},
+        "as_of": AS_OF,
+    }
+    res = client.post("/api/screener/jobs", json=body, headers=alice)
+    assert res.status_code == 202, res.text
+    job_id = res.json()["id"]
+    assert res.json()["kind"] == "screen_run"
+    job = client.app.state.services.runner.wait(job_id, timeout=30)
+    assert job.status == "succeeded", job.error
+    assert job.progress == 1.0
+    out = client.get(f"/api/screener/jobs/{job_id}/result", headers=alice)
+    assert out.status_code == 200, out.text
+    assert [r["ticker"] for r in out.json()["rows"]] == ["BBB.US", "AAA.US", "CCC.US"]
+    assert out.json()["metrics"] == ["price", "return_12m"]
+    # another person's job is missing
+    assert client.get(f"/api/screener/jobs/{job_id}/result", headers=bob).status_code == 404
+    # a saved screen by id, and someone else's saved screen is a 404 at submit
+    sid = client.post(
+        "/api/screener/screens", json={"name": "Top", "spec": {"limit": 1}}, headers=alice
+    ).json()["id"]
+    queued = client.post("/api/screener/jobs", json={"screen_id": sid}, headers=alice)
+    assert queued.status_code == 202
+    assert (
+        client.post("/api/screener/jobs", json={"screen_id": sid}, headers=bob).status_code == 404
+    )
+
+
+def test_a_job_over_the_cap_fails_with_the_message(client, people, market, settings):
+    settings.screener.max_candidates = 1
+    alice = people["alice"]["headers"]
+    res = client.post("/api/screener/jobs", json={"spec": {}, "as_of": AS_OF}, headers=alice)
+    job = client.app.state.services.runner.wait(res.json()["id"], timeout=30)
+    assert job.status == "failed" and "cap of 1" in (job.error or "")
+    result = client.get(f"/api/screener/jobs/{job.id}/result", headers=alice)
+    assert result.status_code == 409
+
+
+def test_a_repeat_run_comes_from_the_cache(client, people, market):
+    vic = people["vic"]["headers"]
+    body = {"spec": {"sort_by": "price"}, "as_of": AS_OF}
+    first = client.post("/api/screener/run", json=body, headers=vic).json()
+    assert first["cached"] is False
+    again = client.post("/api/screener/run", json=body, headers=vic).json()
+    assert again["cached"] is True and again["rows"] == first["rows"]
+    other_day = client.post(
+        "/api/screener/run", json={**body, "as_of": "2024-12-30"}, headers=vic
+    ).json()
+    assert other_day["cached"] is False

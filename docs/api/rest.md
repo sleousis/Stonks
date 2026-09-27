@@ -359,6 +359,8 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| POST | `/api/screener/jobs` | Submit Screen Job | `data.read` | [ScreenRunRequest](#screenrunrequest) | [Job](#job) |
+| GET | `/api/screener/jobs/{job_id}/result` | Get Screen Job Result | `data.read` |  | [ScreenResult](#screenresult) |
 | GET | `/api/screener/metrics` | List Metrics | sign-in |  | list[[MetricView](#metricview)] |
 | POST | `/api/screener/run` | Run Screen | `data.read` | [ScreenRunRequest](#screenrunrequest) | [ScreenResult](#screenresult) |
 | GET | `/api/screener/screens` | List Screens | sign-in |  | [Page_SavedScreenView_](#page_savedscreenview_) |
@@ -366,6 +368,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/screener/screens/{screen_id}` | Get Screen | sign-in |  | [SavedScreenView](#savedscreenview) |
 | PATCH | `/api/screener/screens/{screen_id}` | Update Screen | `portfolio.manage` | [SavedScreenUpdate](#savedscreenupdate) | [SavedScreenView](#savedscreenview) |
 | DELETE | `/api/screener/screens/{screen_id}` | Delete Screen | `portfolio.manage` |  |  |
+| POST | `/api/screener/size` | Size Screen | `data.read` | [ScreenRunRequest](#screenrunrequest) | [ScreenSize](#screensize) |
 | POST | `/api/screener/universes` | Save As Universe | `lab.run` | [ScreenUniverseRequest](#screenuniverserequest) | [ScreenUniverseView](#screenuniverseview) |
 
 ## shadow endpoints
@@ -3851,6 +3854,7 @@ Rename, replace the spec, or both. Unset fields stay.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `as_of` | date | yes |  |
+| `cached` | boolean | no |  |
 | `candidates` | integer | yes |  |
 | `matched` | integer | yes |  |
 | `metrics` | list[string] | yes |  |
@@ -3876,6 +3880,19 @@ Run ``spec``, or one of your saved screens by ``screen_id``.
 | `as_of` | date \| null | no |  |
 | `screen_id` | string \| null | no |  |
 | `spec` | [ScreenSpec](#screenspec) \| null | no |  |
+
+### ScreenSize
+
+How big a screen is before any metric is read, and how to run it.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `candidates` | integer | yes |  |
+| `job_threshold` | integer | yes |  |
+| `max_candidates` | integer | yes |  |
+| `over_cap` | boolean | yes |  |
+| `use_job` | boolean | yes |  |
 
 ### ScreenSpec
 
