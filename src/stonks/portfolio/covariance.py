@@ -17,6 +17,15 @@ Estimators are found by name, like constructors:
   correlation matrix (Lopez de Prado): eigenvalues under the random-matrix
   edge ``(1 + sqrt(N/T))**2`` are replaced by their average, then the
   sample volatilities are put back.
+- ``pca``: a statistical factor model, the top ``n_factors`` principal
+  components plus specific variance (roadmap 22.4).
+- ``style``: a style factor model over momentum, size, value, volatility
+  and sector exposures, plus ``residual_pcs`` principal components of what
+  they leave (roadmap 22.4). See :mod:`stonks.portfolio.factor_model`.
+
+``estimate(returns, exposures=...)`` passes raw per-ticker exposures (rows
+tickers, known at the decision) to the estimators that use them; the
+others ignore them.
 """
 
 from __future__ import annotations
@@ -27,6 +36,8 @@ from typing import Any, ClassVar
 
 import numpy as np
 import pandas as pd
+
+from stonks.portfolio.factor_model import fit_pca_model, fit_style_model, model_exposures
 
 #: Smallest eigenvalue :func:`nearest_psd` allows, relative to the mean variance.
 PSD_FLOOR = 1e-10
@@ -67,8 +78,23 @@ class CovarianceEstimator(ABC):
 
     name: ClassVar[str] = ""
 
-    def estimate(self, returns: pd.DataFrame | np.ndarray) -> np.ndarray:
-        return nearest_psd(self._estimate(_as_array(returns)))
+    def estimate(
+        self, returns: pd.DataFrame | np.ndarray, *, exposures: pd.DataFrame | None = None
+    ) -> np.ndarray:
+        """Per-bar covariance of ``returns``. ``exposures`` (rows tickers,
+        matched to the columns of a frame) feed a factor model; other
+        estimators ignore them."""
+        x = _as_array(returns)
+        if isinstance(returns, pd.DataFrame):
+            columns = [str(c) for c in returns.columns]
+        else:
+            columns = [str(i) for i in range(x.shape[1])]
+        return nearest_psd(self._estimate_with(x, columns, exposures))
+
+    def _estimate_with(
+        self, x: np.ndarray, columns: list[str], exposures: pd.DataFrame | None
+    ) -> np.ndarray:
+        return self._estimate(x)
 
     @abstractmethod
     def _estimate(self, x: np.ndarray) -> np.ndarray: ...
@@ -163,3 +189,41 @@ class DenoisedCovariance(CovarianceEstimator):
             d = np.sqrt(np.clip(np.diag(corr), _ABS_FLOOR, None))
             corr = corr / np.outer(d, d)
         return corr * np.outer(std, std)
+
+
+@register_estimator("pca")
+class PcaCovariance(CovarianceEstimator):
+    """Statistical factor model: ``n_factors`` principal components plus
+    specific variance (:func:`~stonks.portfolio.factor_model.fit_pca_model`)."""
+
+    def __init__(self, n_factors: int = 3) -> None:
+        if int(n_factors) < 1:
+            raise ValueError(f"n_factors must be at least 1, got {n_factors}")
+        self.n_factors = int(n_factors)
+
+    def _estimate(self, x: np.ndarray) -> np.ndarray:
+        return fit_pca_model(x, self.n_factors).covariance()
+
+
+@register_estimator("style")
+class StyleCovariance(CovarianceEstimator):
+    """Style factor model (:func:`~stonks.portfolio.factor_model.fit_style_model`)
+    over the exposures handed to :meth:`estimate`. Without them, momentum
+    and volatility are read from the returns themselves."""
+
+    def __init__(self, residual_pcs: int = 0) -> None:
+        if int(residual_pcs) < 0:
+            raise ValueError(f"residual_pcs must be at least 0, got {residual_pcs}")
+        self.residual_pcs = int(residual_pcs)
+
+    def _estimate(self, x: np.ndarray) -> np.ndarray:
+        return self._estimate_with(x, [str(i) for i in range(x.shape[1])], None)
+
+    def _estimate_with(
+        self, x: np.ndarray, columns: list[str], exposures: pd.DataFrame | None
+    ) -> np.ndarray:
+        b = model_exposures(columns, x, exposures)
+        model = fit_style_model(
+            x, b.to_numpy(), list(b.columns), tickers=columns, residual_pcs=self.residual_pcs
+        )
+        return model.covariance()
