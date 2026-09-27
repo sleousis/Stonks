@@ -12,6 +12,7 @@ import pytest
 
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError
+from stonks.app.jobs import JobContext
 from stonks.app.lab import LabRunRequest
 from stonks.app.services import Services
 from stonks.app.strategies import StrategyRef
@@ -109,21 +110,40 @@ def test_the_worker_runs_a_sweep(api, worker):
     assert done.status == "succeeded", done.error
 
 
-def test_a_cancel_from_the_api_stops_the_worker_job(api, worker):
+def test_a_cancel_from_the_api_stops_the_worker_job(api, worker, monkeypatch):
+    """Event driven, no timing: the job's first cancellation checkpoint
+    signals ``at_checkpoint`` and holds there until the test has cancelled
+    it, so the job can neither finish first nor overwrite the cancel's
+    progress message, however loaded the machine is."""
     job = api.lab.submit_lab_run(_request(budget=1000))
+    at_checkpoint = threading.Event()
+    cancel_sent = threading.Event()
+    check_cancelled = JobContext.check_cancelled
+
+    def gated(ctx: JobContext) -> None:
+        if ctx.job_id == job.id:
+            at_checkpoint.set()
+            cancel_sent.wait(timeout=120)
+            # the worker's heartbeat turns the API's cancel into this flag
+            ctx._cancel.wait(timeout=120)
+        check_cancelled(ctx)
+
+    monkeypatch.setattr(JobContext, "check_cancelled", gated)
     stop = threading.Event()
     thread = threading.Thread(target=worker.run_forever, args=(stop,), daemon=True)
     thread.start()
     try:
-        deadline = time.monotonic() + 30
-        while api.jobs.get(job.id).status == "queued" and time.monotonic() < deadline:
-            time.sleep(0.02)
-        assert api.jobs.cancel(job.id).message == "cancellation requested"
-        done = api.jobs.wait(job.id, timeout=60)
-        assert done.status == "cancelled"
+        assert at_checkpoint.wait(timeout=120), "the worker never reached a trial"
+        requested = api.jobs.cancel(job.id)
+        assert (requested.status, requested.message) == ("running", "cancellation requested")
+        cancel_sent.set()
+        done = api.jobs.wait(job.id, timeout=120)
+        assert done.status == "cancelled", done.error
     finally:
+        cancel_sent.set()
         stop.set()
-        thread.join(timeout=30)
+        thread.join(timeout=120)
+    assert not thread.is_alive()
     assert worker.queue.stats(lease_seconds=60).workers_alive == 0  # stopped
 
 
