@@ -31,7 +31,9 @@ ROLE_SCOPES: dict[Role, frozenset[ApiScope]] = {
 #: Scopes that allow any unsafe HTTP method (the method-keyed floor).
 WRITE_SCOPES = frozenset({ApiScope.TRADE, ApiScope.LAB, ApiScope.ADMIN})
 
-Via = Literal["session", "token", "legacy", "cli", "scheduler"]
+#: ``assistant`` and ``telegram``: a signed-in user acting through the in-app
+#: assistant or a linked Telegram chat. Like a token, they never pass step-up.
+Via = Literal["session", "token", "legacy", "cli", "scheduler", "assistant", "telegram"]
 
 
 @dataclass(frozen=True)
