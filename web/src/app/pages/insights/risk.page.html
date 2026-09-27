@@ -1,0 +1,221 @@
+<app-page-header
+  title="Risk"
+  description="How close the book is to its limits, how much it could lose on a bad day, and whether the risk model has been right."
+>
+  <app-updated-ago [at]="auto.updatedAt()" />
+</app-page-header>
+
+<app-insights-nav />
+
+<div class="page-grid">
+  <!-- Limits -------------------------------------------------------------->
+  <section class="panel span-12" aria-labelledby="limits-title">
+    <div class="panel-head">
+      <h2 id="limits-title">Against the limits</h2>
+    </div>
+    @if (policy.error(); as err) {
+      <app-error-state title="Could not load the limits" [error]="err" (retry)="policy.reload()" />
+    } @else if (limitsLoading()) {
+      <app-loading-state label="Loading the limits" [rows]="6" />
+    } @else {
+      <ul class="limits" aria-label="Each measure against its limit">
+        @for (r of rows(); track r.key) {
+          <li [class]="'limit limit-' + r.status">
+            <span class="limit-label">
+              {{ r.label }}
+              @if (r.help) {
+                <app-help-tip [term]="r.help" />
+              }
+            </span>
+            <span class="limit-figures num">
+              <span class="visually-hidden">Now </span>{{ r.now }}
+              <span class="muted"> of {{ r.limit }}</span>
+            </span>
+            <span class="meter" aria-hidden="true">
+              <span [style.width]="meterWidth(r)"></span>
+            </span>
+            <span class="limit-status">{{ statusText[r.status] }}</span>
+          </li>
+        }
+      </ul>
+      <p class="panel-body hint">
+        The limits every book trades under. Your own settings can make them tighter.
+        @if (insights.error() || live.error()) {
+          Some readings are missing because a panel below failed to load.
+        }
+      </p>
+    }
+  </section>
+
+  <!-- Today --------------------------------------------------------------->
+  <section class="panel span-5" aria-labelledby="today-title">
+    <div class="panel-head">
+      <h2 id="today-title">On a bad day</h2>
+      @if (live.hasValue() && live.value().as_of) {
+        <span class="muted num">{{ live.value().as_of }}</span>
+      }
+    </div>
+    <div class="panel-body">
+      @if (live.error(); as err) {
+        <app-error-state title="Could not load live risk" [error]="err" (retry)="live.reload()" />
+      } @else if (!live.hasValue()) {
+        <app-loading-state label="Loading live risk" [rows]="4" />
+      } @else if (!live.value().portfolio) {
+        <app-empty-state
+          title="No risk readings yet"
+          message="Each trading run measures the book. Readings appear after the first one."
+        >
+          <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
+        </app-empty-state>
+      } @else {
+        @let b = live.value().portfolio!;
+        <dl class="figures">
+          <div>
+            <dt>VaR 95% <app-help-tip term="var" /></dt>
+            <dd class="num">{{ pct(b.var_95) }}</dd>
+          </div>
+          <div>
+            <dt>VaR 99%</dt>
+            <dd class="num">{{ pct(b.var_99) }}</dd>
+          </div>
+          <div>
+            <dt>ES 95% <app-help-tip term="expected_shortfall" /></dt>
+            <dd class="num">{{ pct(b.es_95) }}</dd>
+          </div>
+          <div>
+            <dt>ES 99%</dt>
+            <dd class="num">{{ pct(b.es_99) }}</dd>
+          </div>
+        </dl>
+        <p class="hint">One-day losses as a share of value, {{ money(b.value) }} today.</p>
+        <dl class="misses">
+          <div>
+            <dt>Beat 95% VaR <app-help-tip term="violation_ratio" /></dt>
+            <dd>{{ violationText(b.violations_95, b.violation_ratio_95, b.kupiec_p_95) }}</dd>
+          </div>
+          <div>
+            <dt>Beat 99% VaR</dt>
+            <dd>{{ violationText(b.violations_99, b.violation_ratio_99, b.kupiec_p_99) }}</dd>
+          </div>
+        </dl>
+        <p class="hint">Over the last {{ b.window_days }} days.</p>
+        @if (b.ratio_out_of_band) {
+          <p class="warning" role="note">
+            The model misses far more or far less often than it should. Treat these numbers with
+            care.
+          </p>
+        }
+      }
+    </div>
+  </section>
+
+  <!-- Sleeves ------------------------------------------------------------->
+  <section class="panel span-7" aria-labelledby="sleeves-title">
+    <div class="panel-head">
+      <h2 id="sleeves-title">Strategy sleeves</h2>
+    </div>
+    @if (live.error()) {
+      <p class="panel-body muted">Sleeves show once live risk loads.</p>
+    } @else if (!live.hasValue()) {
+      <app-loading-state label="Loading strategy sleeves" [rows]="3" />
+    } @else if (live.value().strategies.length === 0) {
+      <app-empty-state
+        title="No strategy sleeves"
+        message="Each strategy that trades this book gets its own reading after a trading run."
+      />
+    } @else {
+      <app-data-table
+        caption="Risk of each strategy's share of the book"
+        [rows]="live.value().strategies"
+        [columns]="sleeveColumns"
+        [rowKey]="sleeveKey"
+      >
+        <ng-template appCell="decayed" [appCellOf]="live.value().strategies" let-s>
+          @if (s.decayed) {
+            <span class="decay">Fading. {{ s.decay_reason }}</span>
+          } @else {
+            <span class="muted">Holding up</span>
+          }
+        </ng-template>
+      </app-data-table>
+    }
+  </section>
+
+  <!-- History chart ------------------------------------------------------->
+  <section class="panel span-12" aria-labelledby="chart-title">
+    <div class="panel-head">
+      <h2 id="chart-title">Risk over time</h2>
+      @if (chartDays()) {
+        <span class="muted num">{{ chartDays() }} days</span>
+      }
+    </div>
+    <div class="panel-body">
+      @if (chart.error(); as err) {
+        <app-error-state
+          title="Could not load the history"
+          [error]="err"
+          (retry)="chart.reload()"
+        />
+      } @else if (!chart.hasValue()) {
+        <app-loading-state label="Loading the history" [rows]="6" />
+      } @else if (chartDays() === 0) {
+        <app-empty-state
+          title="No history yet"
+          message="One reading is saved per trading day. The chart fills as trading runs go by."
+        />
+      } @else {
+        <app-time-series-chart
+          ariaLabel="95% VaR and ES, with each day's loss below"
+          [summary]="chartSummary()"
+          [series]="chartSeries()"
+          [height]="300"
+        />
+      }
+    </div>
+  </section>
+
+  <!-- History table ------------------------------------------------------->
+  <section class="panel span-12" aria-labelledby="history-title">
+    <div class="panel-head">
+      <h2 id="history-title">Daily readings</h2>
+      @if (historyPage(); as p) {
+        <span class="muted num">{{ p.total }} days</span>
+      }
+    </div>
+    @let hp = historyPage();
+    @if (history.error(); as err) {
+      <app-error-state
+        title="Could not load the readings"
+        [error]="err"
+        (retry)="history.reload()"
+      />
+    } @else if (!hp) {
+      <app-loading-state label="Loading the readings" [rows]="5" />
+    } @else if (hp.items.length === 0) {
+      <app-empty-state
+        title="No readings yet"
+        message="One reading is saved per trading day, after each trading run."
+      />
+    } @else {
+      <app-data-table
+        caption="Daily risk readings, newest first"
+        [rows]="hp.items"
+        [columns]="historyColumns"
+        [rowKey]="historyKey"
+        [total]="hp.total"
+        [offset]="hp.offset"
+        [pageSize]="historyPageSize"
+        [busy]="history.isLoading()"
+        (pageChange)="historyOffset.set($event.offset)"
+      >
+        <ng-template appCell="violation_95" [appCellOf]="hp.items" let-r>
+          @if (r.violation_95 === null) {
+            <span class="muted">n/a</span>
+          } @else {
+            {{ r.violation_95 ? 'Yes' : 'No' }}
+          }
+        </ng-template>
+      </app-data-table>
+    }
+  </section>
+</div>
