@@ -1541,9 +1541,11 @@ def _notify_signals(run: _TickRun) -> list[NotifySignal]:
     signals = run.all_signals() if _needs_shadow_signals(run) else run.signals
     out: list[NotifySignal] = []
     for sub in run.plan.notify:
-        scores = signals.scores.get(sub.strategy_id)
-        if not scores:
+        # a strategy scored today with no picks still counts: that is the
+        # day its exits are written (BE-16)
+        if sub.strategy_id not in signals.scores:
             continue
+        scores = signals.scores[sub.strategy_id]
         picks = sorted(scores.items(), key=lambda p: p[1], reverse=True)
         out.append(
             NotifySignal(
