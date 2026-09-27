@@ -19,12 +19,11 @@ _LOCK = threading.Lock()
 _DISCOVERED = False
 
 
-def register_stream_source(
-    source_id: str,
-) -> Callable[[type[StreamingSource]], type[StreamingSource]]:
-    def decorate(cls: type[StreamingSource]) -> type[StreamingSource]:
-        if not source_id or source_id != source_id.lower() or not source_id.isidentifier():
-            raise ValueError(f"bad streaming source id {source_id!r}")
+def register_stream_source[S: type[StreamingSource]](source_id: str) -> Callable[[S], S]:
+    if not source_id or source_id != source_id.lower() or not source_id.isidentifier():
+        raise ValueError(f"bad streaming source id {source_id!r}")
+
+    def decorate(cls: S) -> S:
         existing = _SOURCES.get(source_id)
         if existing is not None and existing.__qualname__ != cls.__qualname__:
             raise ValueError(f"streaming source {source_id!r} is registered twice")

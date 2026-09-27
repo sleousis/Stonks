@@ -98,10 +98,17 @@ def _opt(value: Any) -> float | None:
     return None if value is None or pd.isna(value) else float(value)
 
 
+def _as_utc(value: Any) -> datetime:
+    when = value if isinstance(value, datetime) else pd.Timestamp(value).to_pydatetime()
+    if not isinstance(when, datetime):
+        raise ValueError(f"a recording row has no timestamp: {value!r}")
+    return when.replace(tzinfo=UTC)
+
+
 def event_from_row(row: dict[str, Any]) -> StreamEvent:
     """A recording row back as its event."""
     kind = row["kind"]
-    ts = pd.Timestamp(row["timestamp"]).to_pydatetime().replace(tzinfo=UTC)
+    ts = _as_utc(row["timestamp"])
     source = row.get("source") or ""
     if kind == "trade":
         return TradeTick(row["ticker"], ts, float(row["price"]), _opt(row["size"]) or 0.0, source)

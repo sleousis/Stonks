@@ -298,7 +298,7 @@ class StreamRunner:
             for subscriber in self.bar_subscribers:
                 self._notify(subscriber, bar)
 
-    def _notify(self, subscriber: Callable[[object], object], item: object) -> None:
+    def _notify[T](self, subscriber: Callable[[T], object], item: T) -> None:
         try:
             subscriber(item)
         except Exception as exc:
