@@ -25,6 +25,9 @@ order rules are in :mod:`stonks.strategies.examples._forecast_trend`.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 import pandas as pd
 
 from stonks.core.params import ParameterSpec
@@ -34,9 +37,11 @@ from stonks.features.forecast import (
     cap_forecast,
     ewmac_raw,
 )
+from stonks.strategies._vectorized import forecast_weights
 from stonks.strategies.examples._forecast_trend import (
     ForecastTrendStrategy,
     forecast_specs,
+    require_fixed_modes,
     rule_scalar,
     sizing_specs,
 )
@@ -106,3 +111,21 @@ class EWMACTrend(ForecastTrendStrategy):
         rules = self.rule_forecasts(bars["close"].astype(float))
         value = self._combine(rules).iloc[-1]
         return None if pd.isna(value) else float(value)
+
+    # ---- vectorised fast path (lab/vectorized.py) ---------------------------
+
+    @classmethod
+    def target_positions(cls, closes: pd.DataFrame, params: Mapping[str, Any]) -> pd.DataFrame:
+        """Each ticker's combined forecast sized the ``vol_target`` way, for
+        a whole table of daily closes. Close to the event engine, not exact:
+        no 10% no-trade buffer, an IDM of 1, and the EMAs seeded at the
+        table's first row rather than a trailing window. Only the fixed
+        scalar and FDM modes are supported."""
+        strategy = cls(dict(params))
+        require_fixed_modes(strategy.params)
+        return forecast_weights(
+            closes,
+            lambda column: strategy._combine(strategy.rule_forecasts(column)),
+            tau=float(strategy.params["tau"]),
+            allow_short=strategy.supports_short,
+        )
