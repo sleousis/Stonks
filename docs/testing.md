@@ -7,6 +7,7 @@ Stonks has three kinds of tests.
 | Unit and integration | `tests/unit`, `tests/integration` | yes |
 | Live vendor contracts | `tests/integration/live` | no, needs `STONKS_RUN_LIVE_TESTS=1` |
 | End to end in a browser | `tests/e2e` | no, needs `-m e2e` |
+| Paper soak, long run | `tests/soak` | no, needs `-m soak` (the smoke run is in the default suite) |
 
 ```bash
 uv run pytest -n auto          # the default suite, no network, no browser
@@ -124,6 +125,51 @@ After a change that should move those numbers, refresh the file and check it in:
 ```bash
 STONKS_UPDATE_GOLDEN=1 uv run pytest tests/integration/test_cli_golden_run.py
 ```
+
+## The paper soak
+
+`tests/soak` runs the whole daily loop for many trading days in fast forward, in one process, on the simulated broker.
+
+```mermaid
+flowchart LR
+  C[Fake clock] --> S[Real scheduler]
+  S --> M[Ingest metadata]
+  S --> P[Ingest prices]
+  S --> T[Tick]
+  S --> H[Health]
+  S --> B[Backup]
+  T --> I{Invariants}
+```
+
+`tests/soak/harness.py` builds a throwaway install: both stores, the canned market from `tests/e2e/fake_market.py`, buy and hold strategies and a churn strategy that trades every day. The real scheduler runs the real jobs through the `local` backend. The clock jumps from one fire to the next, so a quarter takes about two minutes.
+
+The run adds trouble on purpose:
+
+- **Crashes.** On chosen days the tick dies mid-portfolio, after the order reaches the broker and before the ledger commits. A new scheduler starts, recovers the interrupted rows, and the day's tick is run again by hand.
+- **Kill switch.** Engaged before one day's tick and resumed after it.
+- **DST.** The window crosses a clock change, so ticks must keep firing once per session at 16:45 New York time.
+- **Holidays.** No tick fires on an exchange holiday.
+
+After every tick it checks:
+
+- cash plus positions at the day's closes equals the snapshot's equity, and cash is not negative,
+- positions equal the net of all fills,
+- no fill is booked twice, no order fills more than its size, no order repeats, no order stays open from an earlier day,
+- snapshots never go back in time,
+- no order goes out under the kill switch,
+- no tick or scheduled run is stuck in `running`,
+- the day's bar landed and the day has one risk snapshot.
+
+At the end: one successful tick per session, one New York time for every tick, and a non-empty backup folder.
+
+```bash
+uv run pytest tests/soak                 # the smoke run: 4 sessions across the March 2026 DST switch
+uv run pytest -m soak tests/soak -s      # the long run: February to April 2026, 62 sessions
+```
+
+The long run prints one line, for example `62 sessions, 62 ticks, 61 orders, 61 fills, 3 restarts, 89 backups, 177 health runs, ...`. The smoke run also breaks the ledger on purpose and checks that each invariant reports it.
+
+`.github/workflows/soak.yml` runs the long soak every Monday and by hand, and uploads its log.
 
 ## In CI
 

@@ -7,10 +7,10 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | Phase | Status |
 |-------|--------|
 | 1 to 8 | Done, except 5.4 end-to-end tests (now 13.14). 8.4 moved to 11.8. |
-| 9 | Waves 1 to 4 done. Wave 5: 9.5.1 done. Details under Phase 9. |
+| 9 | Waves 1 to 4 done. Wave 5: 9.5.1 and 9.5.4 done. Details under Phase 9. |
 | 10 | Done: 10.1 to 10.5. |
 | 11 | Done except parts of 11.6. 11.8 is this docs refresh. |
-| 12 | Mostly done. Open: 12.10 soak test, three runbooks (tick failed, broker unreachable, disk full). |
+| 12 | Mostly done. Open: three runbooks (tick failed, broker unreachable, disk full). |
 | 13 | Partly done: PWA and push, command palette, in-app help, accessibility and locale. The rest is planned. |
 | 14 | Done except 14.9 lab offload. |
 | 15 | Partly done: design, data model, connection seam, notifications backend. Per-portfolio books are built but not wired into the tick yet. |
@@ -134,6 +134,7 @@ About 60 trading books from three reading lists and the Axon "100 books" series,
 - Wave 3: done. The rules are set under `[production.risk.rules.*]`, the circuit breaker and operational halt are off by default, and the quit rule alerts after every tick (`[production.quit_rule]`). Halts are listed and cleared with `stonks halts`. The lab runs the data preflight before tuning, and `stonks audit statements` checks the statements (also after `stonks ingest fundamentals`). 9.3.4 records the decision price and context on every order and reports implementation shortfall and the trade journal with `stonks tca`, `/api/tca` and MCP tools. Round trips with MAE and MFE in the journal are not built yet.
 - Wave 4: done. 9.4.1 to 9.4.4 (`quant_momentum`, `stocks_on_the_move` with `atr_parity`, `ewmac_trend`, `tsmom`, `ath_trend`, `TrailingStopWrapper`, `quant_value`), 9.4.5 (`RegimeFilter`) and 9.4.6 (legacy defaults and metadata backfill).
 - Wave 5: 9.5.1 done. The `hrp`, `erc` and `mean_variance_costs` constructors, four covariance estimators and the effective number of bets are in `portfolio/`. They read `returns_history`, which the tick and the backtest don't fill yet, so today they fall back to each name's own volatility.
+- Wave 5: 9.5.4 done. After each real tick the `risk_monitor` hook writes daily VaR and ES per portfolio and per strategy sleeve to `risk_snapshots` (SQLite `019`), with the violation ratio, a Kupiec test and the alpha-decay check. Alerts go to the portfolio owner, `health` warns on a bad violation ratio, and `/api/risk/live`, `/api/risk/snapshots` and two MCP tools read them. The `pool_correlation` survival test is in the registry but in no preset yet. Its settings use defaults until the tick settings carry them. `registry audit` with BH is not built.
 
 Migration numbers in the tables below were plans. The landed ones are SQLite `008_lab_trials`, `009_status_changes`, `014_position_attribution`, `016_risk_halts` and `017_tca`, and DuckDB `014_statement_flags` and `015_universe_membership`. New migrations take the next free number.
 
@@ -196,7 +197,7 @@ Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and
 | 9.5.1 Optimising constructors (BL-44) | Covariance estimators, HRP, ERC, mean-variance with costs (cvxpy, wrapped), effective number of bets. | `portfolio/{covariance,hrp,erc,optimizers,diversification}.py` |
 | 9.5.2 ML hygiene (BL-45) | Purged and combinatorial CV, CPCV test, triple-barrier and uniqueness toolkit, bet sizing. | `lab/cv.py`, `lab/survival/cpcv.py`, `features/labels.py`, `features/ml.py`, `strategies/examples/trendline_meta_label.py`, `lab/dataset.py` |
 | 9.5.3 Latent regimes (BL-46) | Markov-switching regime filter; VIX term-structure condition. | `features/regimes.py`, `strategies/latent_regime.py`, `features/regime_conditions_vix.py`, `ingest/sources/yahoo.py` |
-| 9.5.4 Live monitoring (BL-47) | VaR/ES with violation ratio, alpha-decay monitor, correlation-to-pool test. | `production/risk_metrics.py`, `production/decay.py`, `lab/survival/pool_correlation.py`, `store/migrations_sqlite/011_risk_snapshots.sql` |
+| 9.5.4 Live monitoring (BL-47) | VaR/ES with violation ratio, alpha-decay monitor, correlation-to-pool test. | `production/risk_metrics.py`, `production/decay.py`, `lab/survival/pool_correlation.py`, `store/migrations_sqlite/019_risk_snapshots.sql` |
 | 9.5.5 Stress (BL-48) | Crisis windows, stress simulation, `VolForecaster` with GARCH (arch, wrapped). | `lab/survival/crisis.py`, `lab/survival/stress.py`, `features/vol_forecast.py` |
 | 9.5.6 Engineering guards (BL-49) | Point-in-time lake proxy, universe membership in engine and ranker, pyright, Hypothesis property tests, vectorised pre-screen. | `store/pit.py`, `lab/vectorized.py`, `pyrightconfig.json`, `backtest/engine.py`, `production/ranker.py`, `.github/workflows/ci.yml`, `tests/property/*` |
 
@@ -233,9 +234,8 @@ Found while building the console and merging Waves 2 and 3.
 
 **Status:**
 
-- Done: 12.1 calendars, 12.2 scheduler (`stonks schedule`), 12.3 dead-man's switch and observability (deadlines, pings, `GET /metrics`, probes, and the backup, push delivery and sync jobs), 12.4 backups (`stonks backup`, and `POST /api/backups` while the server holds the lake), 12.5 data quality and fallback (`[ingest.quality]`, `[ingest.fallback]`), 12.6 kill switch (`stonks halts kill`, the API, the MCP `engage_kill_switch` tool, resume needs a typed confirmation), 12.7 Docker and Compose, 12.8 security checks in CI, 12.9 releases, 12.12 repo hygiene.
+- Done: 12.1 calendars, 12.2 scheduler (`stonks schedule`), 12.3 dead-man's switch and observability (deadlines, pings, `GET /metrics`, probes, and the backup, push delivery and sync jobs), 12.4 backups (`stonks backup`, and `POST /api/backups` while the server holds the lake), 12.5 data quality and fallback (`[ingest.quality]`, `[ingest.fallback]`), 12.6 kill switch (`stonks halts kill`, the API, the MCP `engage_kill_switch` tool, resume needs a typed confirmation), 12.7 Docker and Compose, 12.8 security checks in CI, 12.9 releases, 12.10 paper soak (`tests/soak`, a smoke run in the default suite, the long run weekly in `soak.yml`), 12.12 repo hygiene.
 - Partly: 12.11 (runbooks for stale data, restore and failed deploys).
-- Not started: 12.10 soak test.
 
 What it takes to run Stonks unattended every day and trust it.
 

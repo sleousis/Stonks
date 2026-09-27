@@ -76,7 +76,7 @@ Enforced: BL-22 adds a `benchmark_relative` survival test that reports beta, alp
 
 **P17. A new strategy must bring something the pool lacks.**
 Why: many weak, uncorrelated streams beat one strong one. A candidate that correlates at 0.7 or more with an existing strategy adds cost and no breadth (Tulchinsky; Meucci; Dalio, via Schwager).
-Enforced: BL-47 (correlation-to-pool check) and BL-12 (per-strategy attribution).
+Enforced: the `pool_correlation` survival test (`lab/survival/pool_correlation.py`, BL-47) fails a candidate above 0.7 correlation with an active strategy unless its IR is 10% better. It is opt in, not in a preset yet. BL-12 attributes P&L per strategy, and the `risk_monitor` hook scores each strategy sleeve daily.
 
 ## 4. Costs and execution realism
 

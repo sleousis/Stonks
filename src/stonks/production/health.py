@@ -63,6 +63,7 @@ def check_health(
     checks.extend(_guard("stuck_ticks", lambda: [_stuck_ticks(state, config, now)]))
     checks.extend(_guard("stuck_ingest_runs", lambda: [_stuck_ingest(lake, config, now)]))
     checks.extend(_guard("ingest_failures", lambda: [_ingest_failures(lake, config, now)]))
+    checks.extend(_guard("var_violations", lambda: [_var_violations(state, now)]))
     report = HealthReport(checks=checks, checked_at=now)
     _log.info(
         "health.checked",
@@ -178,6 +179,31 @@ def _ingest_failures(lake: DuckDBLake, config: HealthConfig, now: datetime) -> H
             detail=f"failed in last {config.ingest_failure_lookback_hours}h: {runs}",
         )
     return HealthCheck(name="ingest_failures", ok=True, detail="none")
+
+
+def _var_violations(state: SqliteState, now: datetime) -> HealthCheck:
+    """BL-47: warns when a portfolio's rolling 95% VaR violation ratio is
+    outside the band (the risk model is off), once enough days are scored."""
+    from stonks.production.risk_metrics import (
+        RiskMonitorSettings,
+        latest_portfolio_rows,
+        risk_snapshots_enabled,
+    )
+
+    if not risk_snapshots_enabled(state):
+        return HealthCheck(name="var_violations", ok=True, detail="no risk_snapshots table")
+    settings = RiskMonitorSettings()
+    off = [
+        f"{r.portfolio_id} ratio {r.violation_ratio_95:.2f} over {r.window_days}d"
+        for r in latest_portfolio_rows(state, now.astimezone(UTC).date())
+        if r.ratio_out_of_band(settings)
+    ]
+    if off:
+        band = f"{settings.ratio_low:g}-{settings.ratio_high:g}"
+        return HealthCheck(
+            name="var_violations", ok=False, detail=f"outside {band}: {', '.join(off)}"
+        )
+    return HealthCheck(name="var_violations", ok=True, detail="within band or too few days")
 
 
 def _parse_iso(value: str) -> datetime:

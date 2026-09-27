@@ -126,6 +126,7 @@ A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_r
 | `stuck_ticks` | A tick has been `running` for more than N minutes. | `stuck_tick_minutes` (60) |
 | `stuck_ingest_runs` | An ingest has been `running` for more than N minutes. | `stuck_ingest_minutes` (180) |
 | `ingest_failures` | An ingest failed in the last N hours. | `ingest_failure_lookback_hours` (24) |
+| `var_violations` | A portfolio's rolling 95% VaR violation ratio is outside 0.5 to 1.5, after at least 60 scored days. It never opens a halt. | see Live risk below |
 
 The API serves `GET /api/health` (liveness, used by Docker and Caddy) and `GET /api/health/report` (the full report). The report only reads: it lists open halts but never opens or clears one, whatever tickers it is asked about. `POST /api/health/run` (admins, `operations.run`) runs the checks and syncs the operational halt, recorded under the caller. The `api` scheduler backend uses it.
 
@@ -280,6 +281,18 @@ flowchart LR
 ### Quit rule
 
 After each tick the quit rule checks every active strategy. It sums the strategy's share of each portfolio's P&L since promotion. When the drawdown of that P&L passes 1.5 times the backtest drawdown, or the Monte Carlo 95th percentile when it is lower, the admins get an `error` notification. With `auto_demote` on, the strategy also moves to `shadow` with a logged reason.
+
+### Live risk
+
+After each real tick the `risk_monitor` hook writes one `risk_snapshots` row per portfolio, and one per strategy sleeve of it (the positions attribution gives the strategy).
+
+- **VaR and ES.** One-day 95% and 99%, from an EWMA covariance (0.94) of the last 250 daily returns. They are fractions of the book's value, and a loss is positive. A portfolio's value includes cash.
+- **Violations.** Each day, yesterday's holdings times today's returns is compared with yesterday's VaR. Trades and deposits do not count. The row keeps the rolling violation ratio (1.0 is right) and the Kupiec p-value.
+- **Alpha decay.** For each sleeve, the rolling 60 and 120 day IR. It fires when the 60 day IR stays below zero for 20 days, or the 120 day IR falls below half of the backtest's (the `oos` Sharpe, else the benchmark-relative IR).
+
+The portfolio owner gets a `risk` warning when the violation ratio leaves the band or a sleeve decays, once per crossing. `GET /api/risk/live` shows one of your portfolios on its latest day and `GET /api/risk/snapshots` pages its history (`?strategy_id=` for one sleeve). The MCP tools `live_risk` and `risk_snapshots` read the same.
+
+In the lab, the `pool_correlation` survival test refuses a strategy whose validation returns correlate above 0.7 with any active strategy, unless its IR is at least 10% better. It is not in a preset yet; add it with `--tests`.
 
 ## Splits and dividends
 

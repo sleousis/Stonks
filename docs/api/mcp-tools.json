@@ -2326,6 +2326,35 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "One of your portfolios on its latest tick day: one-day 95% and\n99% VaR and expected shortfall (fractions of value, loss positive),\nthe rolling VaR violation ratio (1.0 is right, outside 0.5 to 1.5\nmeans the risk model is off) with its Kupiec p-value, and per\nstrategy sleeve the same plus the alpha-decay check against the\nbacktest's IR.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          }
+        },
+        "title": "live_riskArguments",
+        "type": "object"
+      },
+      "name": "live_risk",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One of your orders in full: decision price and context, arrival\nand fill prices, the shortfall split and the notes.",
       "input_schema": {
         "properties": {
@@ -2497,6 +2526,74 @@
       },
       "name": "retire_strategy",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Daily risk snapshots of one of your portfolios, newest first:\nVaR, ES, the day's hypothetical return, violations and decay.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one strategy's sleeve; default the whole portfolio",
+            "title": "Strategy Id"
+          }
+        },
+        "title": "risk_snapshotsArguments",
+        "type": "object"
+      },
+      "name": "risk_snapshots",
+      "needs_confirm": false
     },
     {
       "annotations": {

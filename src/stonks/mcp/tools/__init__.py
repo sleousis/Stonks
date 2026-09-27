@@ -10,6 +10,7 @@ from stonks.mcp.tools import (
     insights,
     jobs,
     reads,
+    risk,
     studio,
     subscriptions,
     tca,
@@ -28,6 +29,7 @@ MODULES = (
     tca,
     subscriptions,
     insights,
+    risk,
 )
 
 

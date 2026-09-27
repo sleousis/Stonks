@@ -130,6 +130,8 @@ READ_TOOLS = {
     "get_insights",
     "get_strategy_agreement",
     "get_insights_totals",
+    "live_risk",
+    "risk_snapshots",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
