@@ -263,7 +263,14 @@ def _wash(
             continue
         if buy.filled_at == sale.filled_at and buy.id < sale.id:
             continue
+        lot = next((x for x in book.lots if x.fill_id == buy.id and x.kind == "long"), None)
+        later = buy.filled_at > sale.filled_at
+        if lot is None and not later:
+            # bought before and already sold: nothing is held to replace
+            continue
         free = buy.quantity - used.get(buy.id, 0.0)
+        if lot is not None and not later:
+            free = min(free, lot.quantity)
         take = min(free, need)
         if take <= _EPS:
             continue
@@ -271,10 +278,8 @@ def _wash(
         used[buy.id] = used.get(buy.id, 0.0) + take
         need -= take
         disallowed += part
-        lot = next((x for x in book.lots if x.fill_id == buy.id and x.kind == "long"), None)
         if lot is not None:
             lot.added_basis += part
-        elif buy.filled_at > sale.filled_at:
+        else:
             pending[buy.id] = pending.get(buy.id, 0.0) + part
-        # a replacement bought before and already sold keeps nothing to adjust
     return disallowed
