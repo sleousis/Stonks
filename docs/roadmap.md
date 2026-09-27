@@ -18,7 +18,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 17 | Planned. |
 | 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. 19.2 IBKR adapter, 19.3 connection and borrow, 19.5 reconciliation and drift, and 19.8 tickets and approve mode done. Design: `docs/design/live-trading.md`. |
 | 20 | 20.1 to 20.8 done, backend and console. |
-| 21 | 21.1 (streaming data) done, off by default. 21.2 and 21.3 planned in small work packages. Design: `docs/design/intraday.md`. |
+| 21 | 21.1 (streaming data) and 21.2.1 (event driver) done, off by default. The rest of 21.2 and 21.3 planned in small work packages. Design: `docs/design/intraday.md`. |
 | 22 | All of 22.1 to 22.9 done. Factors: `docs/factors.md`. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
@@ -484,12 +484,12 @@ Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invit
 
 Streaming prices (EODHD websockets, IBKR), a live event engine that decides on minute bars, intraday strategies with realistic fills and session rules, intraday risk (per-minute loss limits, halts), and the monitoring an always-on intraday loop needs. Design: `docs/design/intraday.md`.
 
-**Status:** 21.1 done. Real intraday trading still waits for live daily trading to be stable.
+**Status:** 21.1 and 21.2.1 done. Real intraday trading still waits for live daily trading to be stable.
 
 | WP | Scope | Owns | Status |
 |----|-------|------|--------|
 | 21.1 Streaming data | The `StreamingSource` seam and registry (`eodhd` websockets, `ibkr` over the adapter's quotes, `replay`), ticks to 1m bars with the `bars` columns, idempotent writes into the `BarStore`, a Parquet recorder and replayer, and a supervised runner (reconnect with backoff, gap backfill through the REST intraday ingest, health metrics). Off by default (`[streaming]`). | `core/stream.py`, `streaming/*` | done (no migration) |
-| 21.2.1 Event driver | `EventDriver` over any `StreamingSource`, the `FakeClock` hand-off, bar-close dispatch, and a source that replays lake bars for the backtest. | `engine/driver.py`, `streaming/sources/lake_bars.py` | planned |
+| 21.2.1 Event driver | `EventDriver` over any `StreamingSource`, the `FakeClock` hand-off, bar-close dispatch, and a source that replays lake bars for the backtest. | `engine/driver.py`, `streaming/sources/lake_bars.py` | done (no migration) |
 | 21.2.2 Decision step | Decide on a bar close through `Strategy.decide` and a minute point-in-time lake, then `build_orders` per book. The intraday backtest runs on the driver. | `engine/step.py`, `backtest/intraday.py` | planned |
 | 21.2.3 Intraday router and fills | Orders through the order state machine, next-bar fills with the participation cap and half spread, day orders at IBKR, reconciliation of intraday fills. | `engine/router.py`, `backtest/fills.py`, `execution/brokers/ibkr/orders.py` | planned |
 | 21.2.4 Session rules | Regular hours only, no entries at the open and close edges, flatten before the close, per-ticker trading halts, early closes. | `engine/sessions.py` | planned |

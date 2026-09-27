@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 21. It takes Stonks from one decision a day to decisions on minute bars, with live prices, a live event engine, intraday strategies, and the risk and monitoring an always-on loop needs.
 
-Status: 21.1 (streaming data) built. 21.2 and 21.3 are planned and split into small work packages (section 9).
+Status: 21.1 (streaming data) and 21.2.1 (event driver) built. The rest of 21.2 and 21.3 are planned and split into small work packages (section 9).
 
 Owner decisions this page follows:
 
@@ -93,7 +93,7 @@ flowchart LR
   IB --> LED
 ```
 
-- **One replay driver.** `EventDriver` pulls events from any `StreamingSource`. The backtest's intraday path becomes a source too: a `BarReplaySource` reads lake bars and yields `StreamBar` events in time order. So the backtest and live share the loop, the session rules, the decision step and the router. Only fills differ (simulated or broker).
+- **One replay driver.** `EventDriver` pulls events from any `StreamingSource`. The backtest's intraday path becomes a source too: `LakeBarSource` (`lake_bars`) reads lake bars and yields `StreamBar` events in time order. So the backtest and live share the loop, the session rules, the decision step and the router. Only fills differ (simulated or broker).
 - **The Clock.** Every time read in the engine comes from a `Clock`. Live uses `SystemClock`. Replay and the backtest use a `FakeClock` the source advances to each event, so rules like "no entries in the last 10 minutes" behave the same in both.
 - **Decisions** happen on a bar close, through the existing `Strategy.decide` with a `PointInTimeLake` clamped to the decision bar (`visible_cutoff`, P12). The step builds orders through `portfolio.pipeline.build_orders`, the one pipeline the tick and the backtest share.
 - **The order state machine** (`execution/order_state.py`) is reused unchanged. Intraday orders move `pending`, `submitted`, `accepted`, `partially_filled`, `filled`, or end `cancelled`, `expired` or `rejected`. A submit with no answer is `unknown`, and nothing is sent for that ticker until reconciliation settles it. The engine runs `startup_reconcile` and `require_reconciled` before it trades after any restart.
@@ -157,7 +157,7 @@ Shared files (`config.py`, `config/default.toml`, `cli.py`, router mounts, the M
 | WP | Scope | Owns |
 |----|-------|------|
 | 21.1 Streaming data | The `StreamingSource` seam and registry, EODHD websocket and IBKR sources, bar builder, writer, recorder, replayer and the supervised runner. | `core/stream.py`, `streaming/*` |
-| 21.2.1 Event driver | `EventDriver` over any `StreamingSource`, the `FakeClock` hand-off, bar-close dispatch, and `BarReplaySource` that turns lake bars into `StreamBar` events. | `engine/driver.py`, `streaming/sources/lake_bars.py` |
+| 21.2.1 Event driver (built) | `EventDriver` over any `StreamingSource`, the `FakeClock` hand-off, bar-close dispatch, and `LakeBarSource` that turns lake bars into `StreamBar` events. | `engine/driver.py`, `streaming/sources/lake_bars.py` |
 | 21.2.2 Decision step | Decide on a bar close through `Strategy.decide` and a minute `PointInTimeLake`, then `build_orders` per book. The intraday backtest runs on the driver. | `engine/step.py`, `backtest/intraday.py` |
 | 21.2.3 Intraday router and fills | Orders through the state machine, next-bar fills with the participation cap and the half spread, day orders at IBKR, reconciliation of intraday fills. | `engine/router.py`, `backtest/fills.py` (additions), `execution/brokers/ibkr/orders.py` (day orders) |
 | 21.2.4 Session rules | Regular hours only, no entries at the open and close edges, flatten before the close, per-ticker trading halts, early closes. | `engine/sessions.py` |
@@ -174,3 +174,26 @@ Waves:
 2. 21.2.1, 21.2.4 and 21.3.1 in parallel.
 3. 21.2.2, 21.2.3 and 21.3.2.
 4. 21.2.5, 21.3.3, 21.3.4 and 21.3.5.
+
+## 10. What 21.2.1 built
+
+```mermaid
+flowchart LR
+  SRC[any StreamingSource<br/>live, replay, lake_bars] --> BB[BarBuilder<br/>ticks to bars]
+  BB --> P[pending closes<br/>grouped by close time]
+  P -->|close + settle passed| BC[BarClose<br/>bars sorted by ticker]
+  BC --> H1[handler, priority -10<br/>gates such as sessions]
+  BC --> H2[handler, priority 0<br/>decision step]
+```
+
+- **`engine/driver.py`**: `EventDriver(source, clock=..., interval=1m, settle=...)`.
+  - `run(tickers)` pulls the source until it ends or `stop()` is called. `on_event(event)` is public, so the driver can also be a `StreamRunner` subscriber.
+  - Every event goes through a `BarBuilder`. Ticks become bars, and a bar a source delivered passes through.
+  - Bars that close at the same moment make one `BarClose` (`at`, `interval`, `bars` sorted by ticker, `sequence`). It is dispatched once `at + settle` has passed (settle is the builder's grace, 2 seconds by default), so a slow ticker's bar for the same minute is still in it.
+  - A bar that closes at or before a moment already dispatched is late. It is dropped and counted.
+  - With a `FakeClock` the driver owns time. Event time moves the clock forward, never back. During a dispatch the clock reads `at + settle`, the moment a live run decides at. With any other clock (live) the driver only reads it.
+  - A finite source closes and dispatches every bar at its end. A live stream that ends or is stopped keeps the bar in progress. A disconnect propagates and keeps pending closes, so the next `run` carries on.
+- **The handler interface.** A handler is an object with `on_bar_close(event: BarClose)` (the `BarCloseHandler` protocol) or a plain callable. `register(handler, name=..., priority=0)` returns its unique name. Handlers run by `priority` (lower first), then registration order. Gates such as the session rules (21.2.4) register with a negative priority and the decision step (21.2.2) at 0. A handler that raises is logged and counted in `DriverStats.handler_errors` by name, and the others still run.
+- **`streaming/sources/lake_bars.py`**: `LakeBarSource(reader, start=, end=, interval=1m, clock=, chunk=1 day)`, registered as `lake_bars`. It reads the lake (anything with `get_bars`, such as `DuckDBLake`) one chunk at a time and yields `StreamBar` events by time, then ticker. A bar is yielded only once closed: the `FakeClock` is set to its close first, and a bar that closes after `end` is never read (P12). Rows that are not sound bars are skipped and counted. It has no settings, so the backtest builds it in code.
+- **Tests**: `tests/unit/engine/test_driver.py` (grouping, the clock at dispatch, ticks through the builder, the same input giving the same event sequence in any arrival order, handler order, a raising handler isolated and counted, late bars, live mode, stop and disconnect, and lake bars giving the same events as the same bars fed directly) and `tests/unit/streaming/test_lake_bars.py` (order, point in time, chunked reads, bad rows, a real lake).
+- No migration, no settings, no CLI. `engine/__init__.py` imports nothing.
