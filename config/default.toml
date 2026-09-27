@@ -249,6 +249,13 @@ poll_seconds = 2
 heartbeat_seconds = 10
 lease_seconds = 120
 
+[factors]
+# Factor panel cache (roadmap 22.2, docs/factors.md). "parquet" keeps one file
+# per panel across restarts, "memory" keeps panels in this process only, "off"
+# computes every time. A panel is dropped as soon as the data it read changes.
+cache = "parquet"
+# cache_dir = "data/factor_panels"  # omit: factor_panels next to the lake file
+
 [audit]
 # Statement audit tolerances (BL-36): relative gaps above which
 # `stonks audit statements` (also run after `stonks ingest fundamentals`)

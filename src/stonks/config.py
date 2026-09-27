@@ -20,6 +20,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
+from stonks.factors.settings import FactorSettings
 from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.offload.settings import LabOffloadSettings
@@ -520,6 +521,8 @@ class Settings(BaseSettings):
     ensure: EnsureSettings = Field(default_factory=EnsureSettings)
     backup: BackupConfig = BackupConfig()
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
+    # ``[factors]``: the factor panel cache (roadmap 22.2).
+    factors: FactorSettings = FactorSettings()
 
 
 #: Secrets read straight from the environment by blocks that keep their own
