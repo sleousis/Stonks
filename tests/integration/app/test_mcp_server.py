@@ -139,6 +139,8 @@ READ_TOOLS = {
     "list_trade_journal",
     "get_order_tca",
     "get_golive_report",
+    "list_ledger_runs",
+    "get_ledger_run",
     "get_schedule",
     "list_alerts",
     "list_notifications",

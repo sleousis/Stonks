@@ -128,6 +128,7 @@ Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`,
 | `get_risk_policy` | `GET /api/risk/policy` |
 | `get_live_risk`, `list_risk_snapshots` (VaR, ES, violations and decay) | `GET /api/risk/live`, `GET /api/risk/snapshots` |
 | `get_golive_report` (every go-live check with value, limit and verdict) | `GET /api/strategies/{id}/golive` |
+| `list_ledger_runs`, `get_ledger_run` (the trial ledger: hypothesis, trials, verdict) | `GET /api/lab/ledger[/{run_id}]` |
 | `get_schedule` (jobs, next and last runs, market session) | `GET /api/schedule` |
 | `list_notifications` (your feed and unread count) | `GET /api/notifications` |
 | `list_alerts` (system alerts) | `GET /api/alerts` |

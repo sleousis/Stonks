@@ -1049,6 +1049,30 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "One recorded lab run with every trial (parameters, score, status)\nand the trial count of its strategy class across all runs.",
+      "input_schema": {
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "title": "get_ledger_runArguments",
+        "type": "object"
+      },
+      "name": "get_ledger_run",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One of your portfolios on its latest tick day: one-day 95% and\n99% VaR and expected shortfall (fractions of value, loss positive),\nthe rolling VaR violation ratio (1.0 is right, outside 0.5 to 1.5\nmeans the risk model is off) with its Kupiec p-value, and per\nstrategy sleeve the same plus the alpha-decay check against the\nbacktest's IR.",
       "input_schema": {
         "properties": {
@@ -2210,6 +2234,52 @@
         "type": "object"
       },
       "name": "list_jobs",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "The trial ledger: every recorded lab run, newest first, with its\nhypothesis, tuner, budget, trials run and failed, best score and\nverdict. Trials of a class add up across runs, which is what the\ndeflated Sharpe and other multiple-testing checks count.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "strategy_class": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "only runs of this module:Class",
+            "title": "Strategy Class"
+          }
+        },
+        "title": "list_ledger_runsArguments",
+        "type": "object"
+      },
+      "name": "list_ledger_runs",
       "needs_confirm": false
     },
     {

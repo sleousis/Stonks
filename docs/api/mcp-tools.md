@@ -31,6 +31,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_insights`](#get_insights) | read | no |
 | [`get_insights_totals`](#get_insights_totals) | read | no |
 | [`get_job`](#get_job) | read | no |
+| [`get_ledger_run`](#get_ledger_run) | read | no |
 | [`get_live_risk`](#get_live_risk) | read | no |
 | [`get_order_tca`](#get_order_tca) | read | no |
 | [`get_pnl`](#get_pnl) | read | no |
@@ -59,6 +60,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_halts`](#list_halts) | read | no |
 | [`list_ingest_runs`](#list_ingest_runs) | read | no |
 | [`list_jobs`](#list_jobs) | read | no |
+| [`list_ledger_runs`](#list_ledger_runs) | read | no |
 | [`list_notifications`](#list_notifications) | read | no |
 | [`list_orders`](#list_orders) | read | no |
 | [`list_portfolio_snapshots`](#list_portfolio_snapshots) | read | no |
@@ -239,6 +241,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `job_id` | string | yes |  |  |
+
+### `get_ledger_run`
+
+One recorded lab run with every trial (parameters, score, status)
+and the trial count of its strategy class across all runs.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `run_id` | string | yes |  |  |
 
 ### `get_live_risk`
 
@@ -527,6 +540,21 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `status` | "queued" \| "running" \| "succeeded" \| "failed" \| "cancelled" \| null | no | `null` |  |
 | `kind` | string \| null | no | `null` | backtest, lab_run, ingest, tick, studio_backtest, studio_lab_run |
+| `limit` | integer | no | `50` | page size |
+| `offset` | integer | no | `0` | rows to skip |
+
+### `list_ledger_runs`
+
+The trial ledger: every recorded lab run, newest first, with its
+hypothesis, tuner, budget, trials run and failed, best score and
+verdict. Trials of a class add up across runs, which is what the
+deflated Sharpe and other multiple-testing checks count.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_class` | string \| null | no | `null` | only runs of this module:Class |
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 

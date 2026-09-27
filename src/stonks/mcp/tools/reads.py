@@ -349,6 +349,29 @@ def register(t: ToolContext) -> None:
         return await t.get(f"/api/strategies/{seg(strategy_id)}/golive", {"since": iso(since)})
 
     @server.tool(annotations=READ)
+    async def list_ledger_runs(
+        strategy_class: Annotated[
+            str | None, Field(max_length=200, description="only runs of this module:Class")
+        ] = None,
+        limit: Limit = 50,
+        offset: Offset = 0,
+    ) -> dict[str, Any]:
+        """The trial ledger: every recorded lab run, newest first, with its
+        hypothesis, tuner, budget, trials run and failed, best score and
+        verdict. Trials of a class add up across runs, which is what the
+        deflated Sharpe and other multiple-testing checks count."""
+        return await t.get(
+            "/api/lab/ledger",
+            {"strategy_class": strategy_class, "limit": limit, "offset": offset},
+        )
+
+    @server.tool(annotations=READ)
+    async def get_ledger_run(run_id: str) -> dict[str, Any]:
+        """One recorded lab run with every trial (parameters, score, status)
+        and the trial count of its strategy class across all runs."""
+        return await t.get(f"/api/lab/ledger/{seg(run_id)}")
+
+    @server.tool(annotations=READ)
     async def get_schedule(
         limit: Annotated[int, Field(ge=1, le=200, description="recent runs to show")] = 20,
     ) -> dict[str, Any]:

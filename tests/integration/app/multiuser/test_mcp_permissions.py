@@ -304,6 +304,8 @@ CASES: dict[str, Case] = {
         "GET", "/api/strategies/{strategy_id}/golive", lambda i: {"strategy_id": "bah_active"}
     ),
     "get_schedule": _c("GET", "/api/schedule"),
+    "list_ledger_runs": _c("GET", "/api/lab/ledger"),
+    "get_ledger_run": _c("GET", "/api/lab/ledger/{run_id}", lambda i: {"run_id": "lab_missing"}),
     "list_alerts": _c("GET", "/api/alerts"),
     "list_notifications": _c("GET", "/api/notifications"),
     "mark_notifications_read": _c("POST", "/api/notifications/read"),

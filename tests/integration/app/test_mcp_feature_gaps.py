@@ -186,3 +186,25 @@ async def test_old_tool_names_still_work_and_say_they_are_deprecated(mcp):
         assert tools[old].description.startswith(f"Deprecated alias of {new}.")
         assert tools[old].input_schema == tools[new].input_schema
     assert await call(mcp, "health") == await call(mcp, "get_api_health")
+
+
+@pytest.mark.anyio
+async def test_the_trial_ledger_can_be_read_back(mcp):
+    job = await call(
+        mcp,
+        "run_lab",
+        {
+            "class_path": "stonks.strategies.examples.momentum:Momentum",
+            "universe": ["UP.US", "DOWN.US"],
+            "budget": 2,
+            "preset": "quick",
+            "hypothesis": "trend persists",
+            **WINDOW,
+        },
+    )
+    done = await _wait(mcp, job["id"])
+    runs = await call(mcp, "list_ledger_runs")
+    assert [r["id"] for r in runs["items"]] == [done["result"]["run_id"]]
+    assert runs["items"][0]["hypothesis"] == "trend persists"
+    detail = await call(mcp, "get_ledger_run", {"run_id": runs["items"][0]["id"]})
+    assert len(detail["trials"]) == detail["n_trials"] == 2
