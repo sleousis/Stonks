@@ -57,7 +57,9 @@ After each refresh, every active person gets one notification per upcoming event
 | `earnings_upcoming` | 2 days |
 | `ex_dividend_upcoming` | 1 day |
 
-Alerts use the `signal` category, so your notification settings, channels and quiet hours apply. The dedupe key holds the kind, ticker and date, so a second refresh the same day sends nothing new. A new kind is one module in `calendars/alert_kinds/`.
+Alerts use their own `event_alert` category, so you can turn them off for a channel and keep strategy signals. Quiet hours apply as for any alert. Each kind also follows one of your switches in Settings, Alert settings, Upcoming events: `earnings`, `dividends` or `economic`. All are on until you turn one off, and off means none of that kind, not even in the app. The switches are in `GET /api/notifications/preferences` (`event_alerts`), changed with `PUT` on the same route or the MCP tool `set_event_alerts`. `GET /api/calendars/alert-kinds` names each kind's switch (`topic`).
+
+The dedupe key holds the kind, ticker and date, so a second refresh the same day sends nothing new. A new kind is one module in `calendars/alert_kinds/` that names its `topic`. No kind uses `economic` yet: it is ready for economic release alerts.
 
 ## Commands
 
@@ -74,7 +76,7 @@ uv run stonks calendars refresh [--source eodhd] [--start ... --end ...] [--no-a
 
 - `GET /api/calendars`, `GET /api/calendars/news`, `GET /api/calendars/earnings-warnings`, `GET /api/calendars/alert-kinds`.
 - `POST /api/calendars/refresh` (operators) queues the refresh job. `GET /api/calendars/refresh/{job_id}/result` returns its result.
-- MCP: `get_calendar`, `get_news`, `get_earnings_warnings`, `list_event_alert_kinds`.
+- MCP: `get_calendar`, `get_news`, `get_earnings_warnings`, `list_event_alert_kinds`, and `get_notification_preferences` and `set_event_alerts` for the switches.
 
 ## Adding a source
 

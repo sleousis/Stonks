@@ -133,6 +133,7 @@ Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`,
 | `list_ledger_runs`, `get_ledger_run` (the trial ledger: hypothesis, trials, verdict) | `GET /api/lab/ledger[/{run_id}]` |
 | `get_schedule` (jobs, next and last runs, market session) | `GET /api/schedule` |
 | `list_notifications` (your feed and unread count) | `GET /api/notifications` |
+| `get_notification_preferences` (channel switches per category, event alert kinds, quiet hours) | `GET /api/notifications/preferences` |
 | `list_alerts` (system alerts) | `GET /api/alerts` |
 | `get_tca_summary`, `list_trade_journal`, `get_order_tca` | `GET /api/tca/...` |
 | `list_halts` | `GET /api/halts` |
@@ -222,6 +223,7 @@ stops at its next trial).
 | `place_order` (a manual order through the kill switch, every halt and every risk rule, and the preview runs every check) | `POST /api/orders/manual[/preview]` |
 | `change_order` (cancel and replace a working manual order), `cancel_order` (any working order of your portfolio) | `POST /api/orders/{id}/change`, `POST /api/orders/{id}/cancel` |
 | `delete_price_alert` | `DELETE /api/price-alerts/{id}` |
+| `set_event_alerts` (idempotent, turns your earnings, dividend or economic release alerts on or off) | `PUT /api/notifications/preferences` |
 
 `draft_order` (`POST /api/orders/drafts`) proposes an order without placing it: the server prices and checks it, and you approve it in the web app with a fresh second factor. `list_order_drafts` reads them.
 
@@ -261,7 +263,7 @@ These stay out of MCP on purpose. The parity test
 - Linking a Telegram chat, tax settings changes, specific-lot picks and
   the CSV tax exports.
 - Anything that mints credentials or redirects alerts: API tokens,
-  notification preferences, quiet hours, the webhook.
+  channel switches, quiet hours, the webhook.
 - Turning a safety stop back off: clearing a halt, running health checks,
   run now on a scheduled job.
 

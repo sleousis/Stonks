@@ -551,6 +551,14 @@ Tickers open `/data?instrument=<id>`.
   **Send a test notification** (`POST /api/notifications/test`): it goes to
   every channel you turned on, skips quiet hours, and the toast says how
   many deliveries went out and on which channels.
+- **Alert settings.** The table has a row per kind of alert and a column
+  per channel: Signals, Price alerts, Upcoming events, Orders and fills,
+  Risk alerts and System. Price alerts and upcoming events have their own
+  rows, so turning them off keeps strategy signals. Below it, "Upcoming
+  events" has one switch per kind: Earnings coming up, Ex-dividend dates
+  coming up and Economic releases coming up. All are on until you turn one
+  off. Off means none of that kind, not even in the app. The feed labels
+  them "Price alert" and "Upcoming event".
 - **Toasts.** Success and info leave after a few seconds and pause while
   hovered or focused. Errors stay until dismissed. The toast layer is a
   manual popover in the top layer, so toasts over a modal stay usable.
@@ -1291,6 +1299,9 @@ flowchart LR
   type and channel and quiet hours next to the push opt-in.
   `GET /api/notifications/preferences` has `channel_defaults`: whether each
   channel is on when you never set it, and whether it stands in for push.
+  It also has `event_alerts`, one switch per upcoming-event kind (`earnings`,
+  `dividends`, `economic`) with plain words. `PUT` takes `event_alerts` and
+  `preferences`, and changes only what it is given.
 - **Owners.** Jobs and Studio drafts record `owner_id`. A trader sees only
   their own jobs and drafts (others are 404). Admins see all of them.
   `GET /api/alerts` shows only your alerts (admins also see the admin

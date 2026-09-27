@@ -258,7 +258,7 @@ Each person keeps their own alert rules, on one ticker or on every ticker of one
 | `moves_pct` | The price moved at least `pct` percent, up or down, over the last `window_days` days. It fires when that becomes true, not every day it stays true. |
 
 - The `price_alerts` job checks every enabled rule after the price ingest, on the latest close of each ticker. Each rule remembers the last price it saw per ticker, so a crossing is found whatever the time between checks.
-- A firing goes to the rule's owner through the notification router: the feed, push, email, Telegram and their webhook, with their quiet hours and preferences. It is recorded once per rule, ticker and bar, so a rerun sends nothing twice.
+- A firing goes to the rule's owner through the notification router in the `price_alert` category: the feed, push, email, Telegram and their webhook, with their quiet hours and preferences. Turning price alerts off for a channel keeps strategy signals on it. It is recorded once per rule, ticker and bar, so a rerun sends nothing twice.
 - Changing a rule's thresholds starts it fresh from the next price.
 - Manage rules in the console, over MCP or the API (`/api/price-alerts`), or from the shell:
 
