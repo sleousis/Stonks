@@ -443,11 +443,17 @@ class DataEnsurer:
                 by_exchange.setdefault(t.rsplit(".", 1)[1], []).append(t)
         out: dict[str, list[Any]] = {}
         calls = 0
-        for exchange, names in by_exchange.items():
+        limit = self._settings.bulk_max_days
+        for exchange, listed in by_exchange.items():
+            # a name missing more days than a bulk run covers (a dead name
+            # in a point-in-time universe) goes per ticker, so it never
+            # turns bulk off for the rest of its exchange (BE-61)
+            own = {t: {d for g in gaps[t] for d in _business_days(g)} for t in listed}
+            names = [t for t in listed if len(own[t]) <= limit]
             if len(names) < self._settings.bulk_min_tickers:
                 continue
-            days = sorted({d for t in names for g in gaps[t] for d in _business_days(g)})
-            if not days or len(days) > self._settings.bulk_max_days:
+            days = sorted(set().union(*(own[t] for t in names)))
+            if not days or len(days) > limit:
                 continue
             tails = [max(plan.tails[t]) for t in names if plan.tails.get(t)]
             overlap = max(tails) if tails else None

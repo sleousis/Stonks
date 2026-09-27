@@ -51,7 +51,7 @@ date,ticker,action
 2. It subtracts what the lake already has and the ranges it already asked for (`bar_fetch_ranges`). A dead name with no data is not asked for again.
 3. It drops gaps that hold no closed session: weekends, market holidays, and today before the close. The market calendar decides. A ticker with no known calendar counts every weekday.
 4. It fetches the gaps on a thread pool, with one rate limiter per source.
-5. On a paid plan, an exchange that misses the same few days is fetched with one bulk call a day. If that fails it falls back to one call per ticker.
+5. On a paid plan, an exchange that misses the same few days is fetched with one bulk call a day. If that fails it falls back to one call per ticker. A name that misses more days than a bulk run covers, such as a dead name, is fetched on its own and the rest still use bulk.
 6. One thread writes everything through the ingest pipeline, with quality checks and one `ingest_runs` row. A failing ticker is logged and skipped. When the pipeline has a fallback source, it asks the fallback only for that ticker's own gaps, plus the overlap below.
 
 ### Adjusted prices stay on one basis

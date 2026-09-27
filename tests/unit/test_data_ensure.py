@@ -191,6 +191,21 @@ def test_bulk_refreshes_an_exchange_in_one_call_a_day(lake):
     assert last.date() == date(2025, 6, 30)
 
 
+def test_one_long_gap_does_not_turn_bulk_off_for_the_exchange(lake):
+    """BE-61: a dead name in a point-in-time universe misses months; it is
+    fetched on its own while the others still share the bulk days."""
+    tickers = [f"T{i}.US" for i in range(25)]
+    for t in tickers:
+        seed_daily_bars(lake, t, date(2025, 6, 2), date(2025, 6, 25))
+    source = _source(*tickers, "DEAD.US", start=date(2025, 1, 2), end=date(2025, 6, 30), bulk=True)
+    report = _ensurer(lake, source, bulk=True, bulk_min_tickers=20).ensure(
+        [*tickers, "DEAD.US"], date(2025, 6, 2), date(2025, 6, 30)
+    )
+    assert report.bulk_days == 4
+    assert [c[0] for c in source.price_calls] == ["DEAD.US"]
+    assert report.tickers_fetched == 26
+
+
 def test_bulk_falls_back_per_ticker_when_unsupported(lake):
     tickers = [f"T{i}.US" for i in range(25)]
     for t in tickers:
