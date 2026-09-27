@@ -67,6 +67,13 @@ describe('PortfoliosPanel', () => {
     expect(rows[1].textContent).toContain('LIVE');
   });
 
+  it('links a live portfolio, and only a live one, to its live settings', async () => {
+    const el = await render();
+    const links = [...el.querySelectorAll<HTMLAnchorElement>('.books li a')];
+    expect(links.map((a) => a.textContent?.trim())).toEqual(['Live settings']);
+    expect(links[0].getAttribute('href')).toBe('/profile/live/pf_2');
+  });
+
   it('opens a paper portfolio and reloads the picker', async () => {
     const el = await render();
     type(el, '#new-portfolio-name', '  Swing ');

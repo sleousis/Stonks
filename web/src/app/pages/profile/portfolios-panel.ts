@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { type PortfolioRef, PortfoliosService } from '../../api/portfolios.service';
 import { SessionService } from '../../core/auth/session.service';
@@ -20,7 +21,7 @@ const NAME_MAX = 80;
 @Component({
   selector: 'app-portfolios-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ModeStamp, PermissionNote, Sheet, EmptyState, ErrorState, LoadingState],
+  imports: [RouterLink, ModeStamp, PermissionNote, Sheet, EmptyState, ErrorState, LoadingState],
   template: `
     <section class="panel" aria-labelledby="portfolios-title">
       <div class="panel-head">
@@ -50,15 +51,25 @@ const NAME_MAX = 80;
                   @if (p.is_default) {
                     <span class="muted default">Default</span>
                   }
-                  <button
-                    type="button"
-                    class="btn"
-                    [disabled]="!canManage()"
-                    [attr.aria-label]="'Rename ' + p.name"
-                    (click)="openRename(p)"
-                  >
-                    Rename
-                  </button>
+                  <span class="book-actions">
+                    @if (p.trading === 'live') {
+                      <a
+                        class="btn"
+                        [routerLink]="['/profile/live', p.id]"
+                        [attr.aria-label]="'Live settings of ' + p.name"
+                        >Live settings</a
+                      >
+                    }
+                    <button
+                      type="button"
+                      class="btn"
+                      [disabled]="!canManage()"
+                      [attr.aria-label]="'Rename ' + p.name"
+                      (click)="openRename(p)"
+                    >
+                      Rename
+                    </button>
+                  </span>
                 </li>
               }
             </ul>
@@ -195,7 +206,10 @@ const NAME_MAX = 80;
     .default {
       font-size: var(--text-xs);
     }
-    .books .btn {
+    .book-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
       margin-left: auto;
     }
     .new h3 {
