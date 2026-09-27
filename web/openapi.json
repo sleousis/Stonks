@@ -276,6 +276,7 @@
         "type": "object"
       },
       "BacktestRequest": {
+        "description": "Give ``universe`` (tickers) or ``universe_id``: a stored universe,\nevery member at some point in the window, delisted names included.",
         "properties": {
           "benchmark": {
             "anyOf": [
@@ -359,14 +360,24 @@
             "items": {
               "type": "string"
             },
-            "minItems": 1,
             "title": "Universe",
             "type": "array"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9_.-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Universe Id"
           }
         },
         "required": [
           "strategy",
-          "universe",
           "start",
           "end"
         ],
@@ -2788,6 +2799,17 @@
             "title": "Quantity",
             "type": "number"
           },
+          "side": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          },
           "tick_id": {
             "anyOf": [
               {
@@ -4470,10 +4492,24 @@
       "KillSwitchRequest": {
         "additionalProperties": false,
         "properties": {
-          "flatten": {
+          "buys_only": {
             "default": false,
-            "title": "Flatten",
+            "description": "stop buys only: sells and exits still go through, no position is closed",
+            "title": "Buys Only",
             "type": "boolean"
+          },
+          "flatten": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "deprecated": true,
+            "description": "deprecated name of buys_only (it never closed a position)",
+            "title": "Flatten"
           },
           "portfolio_id": {
             "anyOf": [
@@ -4934,6 +4970,476 @@
           "registered_strategy_id"
         ],
         "title": "LabRunView",
+        "type": "object"
+      },
+      "LedgerRunDetail": {
+        "properties": {
+          "best_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Best finite objective score; null if none.",
+            "title": "Best Score"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hypothesis"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "interval": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval"
+          },
+          "n_failed": {
+            "description": "Trials that failed (no finite score).",
+            "title": "N Failed",
+            "type": "integer"
+          },
+          "n_trials": {
+            "description": "Trials this run evaluated.",
+            "title": "N Trials",
+            "type": "integer"
+          },
+          "n_trials_class": {
+            "description": "Trials of this strategy class across every recorded run (what P2 counts).",
+            "title": "N Trials Class",
+            "type": "integer"
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective"
+          },
+          "premortem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premortem"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "strategy_class": {
+            "title": "Strategy Class",
+            "type": "string"
+          },
+          "tickers": {
+            "default": 0,
+            "description": "Tickers in the dataset.",
+            "title": "Tickers",
+            "type": "integer"
+          },
+          "trials": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerTrialView"
+            },
+            "title": "Trials",
+            "type": "array"
+          },
+          "tuner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tuner"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Universe Id"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "error"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          }
+        },
+        "required": [
+          "id",
+          "strategy_class",
+          "hypothesis",
+          "premortem",
+          "tuner",
+          "objective",
+          "budget",
+          "seed",
+          "started_at",
+          "finished_at",
+          "verdict",
+          "n_trials",
+          "n_failed",
+          "best_score",
+          "trials",
+          "n_trials_class"
+        ],
+        "title": "LedgerRunDetail",
+        "type": "object"
+      },
+      "LedgerRunView": {
+        "description": "One recorded lab run: what was tested, why, and how it came out.",
+        "properties": {
+          "best_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Best finite objective score; null if none.",
+            "title": "Best Score"
+          },
+          "budget": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "hypothesis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hypothesis"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "interval": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval"
+          },
+          "n_failed": {
+            "description": "Trials that failed (no finite score).",
+            "title": "N Failed",
+            "type": "integer"
+          },
+          "n_trials": {
+            "description": "Trials this run evaluated.",
+            "title": "N Trials",
+            "type": "integer"
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective"
+          },
+          "premortem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Premortem"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "strategy_class": {
+            "title": "Strategy Class",
+            "type": "string"
+          },
+          "tickers": {
+            "default": 0,
+            "description": "Tickers in the dataset.",
+            "title": "Tickers",
+            "type": "integer"
+          },
+          "tuner": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tuner"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Universe Id"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pass",
+                  "fail",
+                  "error"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          }
+        },
+        "required": [
+          "id",
+          "strategy_class",
+          "hypothesis",
+          "premortem",
+          "tuner",
+          "objective",
+          "budget",
+          "seed",
+          "started_at",
+          "finished_at",
+          "verdict",
+          "n_trials",
+          "n_failed",
+          "best_score"
+        ],
+        "title": "LedgerRunView",
+        "type": "object"
+      },
+      "LedgerTrialView": {
+        "properties": {
+          "n_bars": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Bars"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Objective score; null for a failed trial.",
+            "title": "Score"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "trial_index": {
+            "title": "Trial Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "trial_index",
+          "params",
+          "score",
+          "n_bars",
+          "status"
+        ],
+        "title": "LedgerTrialView",
         "type": "object"
       },
       "LinkAccountRequest": {
@@ -6116,6 +6622,37 @@
         "title": "Page[JournalEntryView]",
         "type": "object"
       },
+      "Page_LedgerRunView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerRunView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[LedgerRunView]",
+        "type": "object"
+      },
       "Page_OrderView_": {
         "properties": {
           "items": {
@@ -6899,6 +7436,59 @@
           "expires_at"
         ],
         "title": "PortalLinkView",
+        "type": "object"
+      },
+      "PortfolioCreate": {
+        "additionalProperties": false,
+        "description": "A new paper portfolio of yours (simulated fills on the Stonks ledger).\nBroker portfolios come from linking a broker connection.",
+        "properties": {
+          "base_currency": {
+            "default": "USD",
+            "pattern": "^[A-Z]{3}$",
+            "title": "Base Currency",
+            "type": "string"
+          },
+          "initial_cash": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1000000000000.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Starting cash; default the configured amount.",
+            "title": "Initial Cash"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PortfolioCreate",
+        "type": "object"
+      },
+      "PortfolioRename": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "PortfolioRename",
         "type": "object"
       },
       "PortfolioSummaryView": {
@@ -11479,6 +12069,40 @@
           "groups"
         ],
         "title": "TcaSummaryView",
+        "type": "object"
+      },
+      "TestNotificationView": {
+        "description": "What a test notification queued: its feed id and one delivery per\nenabled channel target (a push device, the webhook, email).",
+        "properties": {
+          "channels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "deliveries": {
+            "title": "Deliveries",
+            "type": "integer"
+          },
+          "notification_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notification Id"
+          }
+        },
+        "required": [
+          "notification_id",
+          "deliveries",
+          "channels"
+        ],
+        "title": "TestNotificationView",
         "type": "object"
       },
       "TickRequest": {
@@ -17010,7 +17634,7 @@
     },
     "/api/halts/kill": {
       "post": {
-        "description": "Stop new orders: every portfolio (``global``, admins only), all of\nyours (``user``) or one of yours (``portfolio``). ``flatten`` stops buys\nonly, so sells and exits still go through. Returns the open kill switch\nwhen one is already on at that scope.",
+        "description": "Stop new orders: every portfolio (``global``, admins only), all of\nyours (``user``) or one of yours (``portfolio``). ``buys_only`` stops\nbuys only, so sells and exits still go through and no position is\nclosed (``flatten`` is its deprecated name). Returns the open kill switch\nwhen one is already on at that scope.",
         "operationId": "engageKillSwitch",
         "requestBody": {
           "content": {
@@ -19144,6 +19768,225 @@
         ]
       }
     },
+    "/api/lab/ledger": {
+      "get": {
+        "description": "Recorded lab runs, newest first: the strategy class, hypothesis,\ntuner and budget, how many trials ran and the verdict. Shared across\nusers, like the strategy list, because trial counts are.",
+        "operationId": "listLedgerRuns",
+        "parameters": [
+          {
+            "description": "only runs of this module:Class",
+            "in": "query",
+            "name": "strategy_class",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "only runs of this module:Class",
+              "title": "Strategy Class"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_LedgerRunView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Ledger Runs",
+        "tags": [
+          "lab"
+        ],
+        "x-permission": "lab.run"
+      }
+    },
+    "/api/lab/ledger/{run_id}": {
+      "get": {
+        "description": "One recorded lab run with every trial (parameters, score, status)\nand the trial count of its class across all runs.",
+        "operationId": "getLedgerRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "maxLength": 80,
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerRunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Ledger Run",
+        "tags": [
+          "lab"
+        ],
+        "x-permission": "lab.run"
+      }
+    },
     "/api/lab/runs": {
       "post": {
         "description": "Queue tune → fit → survival suite; fetch the typed result from\n``GET /api/lab/runs/{job_id}/result`` once it succeeds. Registering the\nresult in the catalog (``register_strategy``, ``register_if_passes``)\nneeds an admin.",
@@ -20726,6 +21569,84 @@
         "x-permission": "data.read"
       }
     },
+    "/api/notifications/test": {
+      "post": {
+        "description": "Send yourself a test notification on every channel you turned on\n(push devices, email, your webhook), to check that alerts reach you.\nIt skips quiet hours. Only ever reaches you, so viewers may do it too.",
+        "operationId": "sendTestNotification",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestNotificationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Send Test",
+        "tags": [
+          "notifications"
+        ],
+        "x-permission": "data.read"
+      }
+    },
     "/api/notifications/webhook": {
       "put": {
         "description": "Your fallback webhook. Write-only: never shown back in full.",
@@ -21706,6 +22627,92 @@
           "portfolio"
         ],
         "x-permission": "data.read"
+      },
+      "post": {
+        "description": "Open a new paper portfolio of yours: simulated fills on the Stonks\nledger, starting from ``initial_cash``. Subscribe strategies to it in\n``paper`` mode to trade it.",
+        "operationId": "createPortfolio",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortfolioCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioSummaryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Create Portfolio",
+        "tags": [
+          "portfolio"
+        ],
+        "x-permission": "portfolio.manage"
       }
     },
     "/api/portfolios/trading-modes": {
@@ -21816,6 +22823,106 @@
           "portfolio"
         ],
         "x-permission": "data.read"
+      }
+    },
+    "/api/portfolios/{portfolio_id}": {
+      "patch": {
+        "description": "Rename one of your portfolios (404 when it isn't yours).",
+        "operationId": "renamePortfolio",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PortfolioRename"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PortfolioSummaryView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Rename Portfolio",
+        "tags": [
+          "portfolio"
+        ],
+        "x-permission": "portfolio.manage"
       }
     },
     "/api/push/subscriptions": {

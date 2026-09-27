@@ -142,6 +142,8 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/lab/backtests/{job_id}/result` | Get Backtest Result | sign-in |  | [BacktestResult](#backtestresult) |
 | GET | `/api/lab/cost-models` | List Cost Models | sign-in |  | list[[CostModelPreset](#costmodelpreset)] |
 | GET | `/api/lab/ensure/{job_id}/result` | Get Lab Ensure Result | sign-in |  | [EnsureReport](#ensurereport) |
+| GET | `/api/lab/ledger` | List Ledger Runs | `lab.run` |  | [Page_LedgerRunView_](#page_ledgerrunview_) |
+| GET | `/api/lab/ledger/{run_id}` | Get Ledger Run | `lab.run` |  | [LedgerRunDetail](#ledgerrundetail) |
 | POST | `/api/lab/runs` | Start Lab Run | `lab.run` | [LabRunRequest](#labrunrequest) | [Job](#job) |
 | GET | `/api/lab/runs/{job_id}/result` | Get Lab Run Result | sign-in |  | [LabRunView](#labrunview) |
 | POST | `/api/lab/signal-ic` | Start Signal Ic | `lab.run` | [SignalICRequest](#signalicrequest) | [Job](#job) |
@@ -168,6 +170,7 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | PUT | `/api/notifications/preferences` | Update Preferences | `notifications.manage` | [PreferencesUpdate](#preferencesupdate) | [PreferencesView](#preferencesview) |
 | PUT | `/api/notifications/quiet-hours` | Set Quiet Hours | `notifications.manage` | [QuietHoursUpdate](#quiethoursupdate) | [PreferencesView](#preferencesview) |
 | POST | `/api/notifications/read` | Mark Read | `data.read` | [MarkReadRequest](#markreadrequest) | [MarkReadView](#markreadview) |
+| POST | `/api/notifications/test` | Send Test | `data.read` |  | [TestNotificationView](#testnotificationview) |
 | PUT | `/api/notifications/webhook` | Set Webhook | `notifications.manage` | [WebhookUpdate](#webhookupdate) | [PreferencesView](#preferencesview) |
 
 ## orders endpoints
@@ -191,7 +194,9 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 | GET | `/api/portfolio/snapshots` | List Snapshots | sign-in |  | [Page_SnapshotView_](#page_snapshotview_) |
 | GET | `/api/portfolio/totals` | Get Totals | `portfolio.totals` |  | [PortfolioTotalsView](#portfoliototalsview) |
 | GET | `/api/portfolios` | List Portfolios | `data.read` |  | [Page_PortfolioSummaryView_](#page_portfoliosummaryview_) |
+| POST | `/api/portfolios` | Create Portfolio | `portfolio.manage` | [PortfolioCreate](#portfoliocreate) | [PortfolioSummaryView](#portfoliosummaryview) |
 | GET | `/api/portfolios/trading-modes` | List Trading Modes | `data.read` |  | [Page_TradingModeView_](#page_tradingmodeview_) |
+| PATCH | `/api/portfolios/{portfolio_id}` | Rename Portfolio | `portfolio.manage` | [PortfolioRename](#portfoliorename) | [PortfolioSummaryView](#portfoliosummaryview) |
 
 ## push endpoints
 
@@ -388,6 +393,8 @@ Fee and spread for one asset class.
 
 ### BacktestRequest
 
+Give ``universe`` (tickers) or ``universe_id``: a stored universe, every member at some point in the window, delisted names included.
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `benchmark` | string \| null | no |  |
@@ -401,7 +408,8 @@ Fee and spread for one asset class.
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
 | `threshold` | number | no |  |
-| `universe` | list[string] | yes |  |
+| `universe` | list[string] | no |  |
+| `universe_id` | string \| null | no |  |
 
 ### BacktestResult
 
@@ -848,6 +856,7 @@ One go-live check that failed (``GoLiveCheck`` without ``passed``).
 | `order_client_id` | string | yes |  |
 | `price` | number | yes |  |
 | `quantity` | number | yes |  |
+| `side` | string \| null | no |  |
 | `tick_id` | string \| null | yes |  |
 | `ticker` | string | yes |  |
 
@@ -1179,7 +1188,8 @@ One order: why it was placed, the signal context, the outcome and the notes peop
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `flatten` | boolean | no |  |
+| `buys_only` | boolean | no | stop buys only: sells and exits still go through, no position is closed |
+| `flatten` | boolean \| null | no | deprecated name of buys_only (it never closed a position) |
 | `portfolio_id` | string \| null | no |  |
 | `reason` | string | yes |  |
 | `scope` | "global" \| "user" \| "portfolio" | yes |  |
@@ -1234,6 +1244,68 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `run_id` | string | no |  |
 | `survival_reports` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
 | `verdict` | "pass" \| "fail" | yes |  |
+
+### LedgerRunDetail
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `best_score` | number \| null | yes | Best finite objective score; null if none. |
+| `budget` | integer \| null | yes |  |
+| `end` | string \| null | no |  |
+| `finished_at` | date-time \| null | yes |  |
+| `hypothesis` | string \| null | yes |  |
+| `id` | string | yes |  |
+| `interval` | string \| null | no |  |
+| `n_failed` | integer | yes | Trials that failed (no finite score). |
+| `n_trials` | integer | yes | Trials this run evaluated. |
+| `n_trials_class` | integer | yes | Trials of this strategy class across every recorded run (what P2 counts). |
+| `objective` | string \| null | yes |  |
+| `premortem` | string \| null | yes |  |
+| `seed` | integer \| null | yes |  |
+| `start` | string \| null | no |  |
+| `started_at` | date-time | yes |  |
+| `strategy_class` | string | yes |  |
+| `tickers` | integer | no | Tickers in the dataset. |
+| `trials` | list[[LedgerTrialView](#ledgertrialview)] | yes |  |
+| `tuner` | string \| null | yes |  |
+| `universe_id` | string \| null | no |  |
+| `verdict` | "pass" \| "fail" \| "error" \| null | yes |  |
+
+### LedgerRunView
+
+One recorded lab run: what was tested, why, and how it came out.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `best_score` | number \| null | yes | Best finite objective score; null if none. |
+| `budget` | integer \| null | yes |  |
+| `end` | string \| null | no |  |
+| `finished_at` | date-time \| null | yes |  |
+| `hypothesis` | string \| null | yes |  |
+| `id` | string | yes |  |
+| `interval` | string \| null | no |  |
+| `n_failed` | integer | yes | Trials that failed (no finite score). |
+| `n_trials` | integer | yes | Trials this run evaluated. |
+| `objective` | string \| null | yes |  |
+| `premortem` | string \| null | yes |  |
+| `seed` | integer \| null | yes |  |
+| `start` | string \| null | no |  |
+| `started_at` | date-time | yes |  |
+| `strategy_class` | string | yes |  |
+| `tickers` | integer | no | Tickers in the dataset. |
+| `tuner` | string \| null | yes |  |
+| `universe_id` | string \| null | no |  |
+| `verdict` | "pass" \| "fail" \| "error" \| null | yes |  |
+
+### LedgerTrialView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `n_bars` | integer \| null | yes |  |
+| `params` | object | yes |  |
+| `score` | number \| null | yes | Objective score; null for a failed trial. |
+| `status` | "ok" \| "failed" | yes |  |
+| `trial_index` | integer | yes |  |
 
 ### LinkAccountRequest
 
@@ -1537,6 +1609,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_LedgerRunView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[LedgerRunView](#ledgerrunview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_OrderView_
 
 | Field | Type | Required | Description |
@@ -1745,6 +1826,22 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 | `connection_id` | string | yes |  |
 | `expires_at` | date-time | yes |  |
 | `url` | string | yes |  |
+
+### PortfolioCreate
+
+A new paper portfolio of yours (simulated fills on the Stonks ledger). Broker portfolios come from linking a broker connection.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_currency` | string | no |  |
+| `initial_cash` | number \| null | no | Starting cash; default the configured amount. |
+| `name` | string | yes |  |
+
+### PortfolioRename
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes |  |
 
 ### PortfolioSummaryView
 
@@ -2638,6 +2735,16 @@ Costs of a group of orders, weighted by notional, in bps.
 | `portfolio_id` | string | yes |  |
 | `since` | date \| null | yes |  |
 | `until` | date \| null | yes |  |
+
+### TestNotificationView
+
+What a test notification queued: its feed id and one delivery per enabled channel target (a push device, the webhook, email).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `channels` | list[string] | yes |  |
+| `deliveries` | integer | yes |  |
+| `notification_id` | integer \| null | yes |  |
 
 ### TickRequest
 

@@ -179,6 +179,9 @@ export type AuthCheck = {
 
 /**
  * BacktestRequest
+ *
+ * Give ``universe`` (tickers) or ``universe_id``: a stored universe,
+ * every member at some point in the window, delisted names included.
  */
 export type BacktestRequest = {
     /**
@@ -225,7 +228,11 @@ export type BacktestRequest = {
     /**
      * Universe
      */
-    universe: Array<string>;
+    universe?: Array<string>;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
 };
 
 /**
@@ -1450,6 +1457,10 @@ export type FillView = {
      */
     quantity: number;
     /**
+     * Side
+     */
+    side?: string | null;
+    /**
      * Tick Id
      */
     tick_id: string | null;
@@ -2351,9 +2362,19 @@ export type JournalNoteView = {
  */
 export type KillSwitchRequest = {
     /**
-     * Flatten
+     * Buys Only
+     *
+     * stop buys only: sells and exits still go through, no position is closed
      */
-    flatten?: boolean;
+    buys_only?: boolean;
+    /**
+     * Flatten
+     *
+     * deprecated name of buys_only (it never closed a position)
+     *
+     * @deprecated
+     */
+    flatten?: boolean | null;
     /**
      * Portfolio Id
      */
@@ -2532,6 +2553,228 @@ export type LabRunView = {
      * Verdict
      */
     verdict: 'pass' | 'fail';
+};
+
+/**
+ * LedgerRunDetail
+ */
+export type LedgerRunDetail = {
+    /**
+     * Best Score
+     *
+     * Best finite objective score; null if none.
+     */
+    best_score: number | null;
+    /**
+     * Budget
+     */
+    budget: number | null;
+    /**
+     * End
+     */
+    end?: string | null;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+    /**
+     * Hypothesis
+     */
+    hypothesis: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Interval
+     */
+    interval?: string | null;
+    /**
+     * N Failed
+     *
+     * Trials that failed (no finite score).
+     */
+    n_failed: number;
+    /**
+     * N Trials
+     *
+     * Trials this run evaluated.
+     */
+    n_trials: number;
+    /**
+     * N Trials Class
+     *
+     * Trials of this strategy class across every recorded run (what P2 counts).
+     */
+    n_trials_class: number;
+    /**
+     * Objective
+     */
+    objective: string | null;
+    /**
+     * Premortem
+     */
+    premortem: string | null;
+    /**
+     * Seed
+     */
+    seed: number | null;
+    /**
+     * Start
+     */
+    start?: string | null;
+    /**
+     * Started At
+     */
+    started_at: string;
+    /**
+     * Strategy Class
+     */
+    strategy_class: string;
+    /**
+     * Tickers
+     *
+     * Tickers in the dataset.
+     */
+    tickers?: number;
+    /**
+     * Trials
+     */
+    trials: Array<LedgerTrialView>;
+    /**
+     * Tuner
+     */
+    tuner: string | null;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
+    /**
+     * Verdict
+     */
+    verdict: 'pass' | 'fail' | 'error' | null;
+};
+
+/**
+ * LedgerRunView
+ *
+ * One recorded lab run: what was tested, why, and how it came out.
+ */
+export type LedgerRunView = {
+    /**
+     * Best Score
+     *
+     * Best finite objective score; null if none.
+     */
+    best_score: number | null;
+    /**
+     * Budget
+     */
+    budget: number | null;
+    /**
+     * End
+     */
+    end?: string | null;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+    /**
+     * Hypothesis
+     */
+    hypothesis: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Interval
+     */
+    interval?: string | null;
+    /**
+     * N Failed
+     *
+     * Trials that failed (no finite score).
+     */
+    n_failed: number;
+    /**
+     * N Trials
+     *
+     * Trials this run evaluated.
+     */
+    n_trials: number;
+    /**
+     * Objective
+     */
+    objective: string | null;
+    /**
+     * Premortem
+     */
+    premortem: string | null;
+    /**
+     * Seed
+     */
+    seed: number | null;
+    /**
+     * Start
+     */
+    start?: string | null;
+    /**
+     * Started At
+     */
+    started_at: string;
+    /**
+     * Strategy Class
+     */
+    strategy_class: string;
+    /**
+     * Tickers
+     *
+     * Tickers in the dataset.
+     */
+    tickers?: number;
+    /**
+     * Tuner
+     */
+    tuner: string | null;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
+    /**
+     * Verdict
+     */
+    verdict: 'pass' | 'fail' | 'error' | null;
+};
+
+/**
+ * LedgerTrialView
+ */
+export type LedgerTrialView = {
+    /**
+     * N Bars
+     */
+    n_bars: number | null;
+    /**
+     * Params
+     */
+    params: {
+        [key: string]: unknown;
+    };
+    /**
+     * Score
+     *
+     * Objective score; null for a failed trial.
+     */
+    score: number | null;
+    /**
+     * Status
+     */
+    status: 'ok' | 'failed';
+    /**
+     * Trial Index
+     */
+    trial_index: number;
 };
 
 /**
@@ -3236,6 +3479,28 @@ export type PageJournalEntryView = {
 };
 
 /**
+ * Page[LedgerRunView]
+ */
+export type PageLedgerRunView = {
+    /**
+     * Items
+     */
+    items: Array<LedgerRunView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[OrderView]
  */
 export type PageOrderView = {
@@ -3748,6 +4013,39 @@ export type PortalLinkView = {
      * Url
      */
     url: string;
+};
+
+/**
+ * PortfolioCreate
+ *
+ * A new paper portfolio of yours (simulated fills on the Stonks ledger).
+ * Broker portfolios come from linking a broker connection.
+ */
+export type PortfolioCreate = {
+    /**
+     * Base Currency
+     */
+    base_currency?: string;
+    /**
+     * Initial Cash
+     *
+     * Starting cash; default the configured amount.
+     */
+    initial_cash?: number | null;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * PortfolioRename
+ */
+export type PortfolioRename = {
+    /**
+     * Name
+     */
+    name: string;
 };
 
 /**
@@ -6172,6 +6470,27 @@ export type TcaSummaryView = {
      * Until
      */
     until: string | null;
+};
+
+/**
+ * TestNotificationView
+ *
+ * What a test notification queued: its feed id and one delivery per
+ * enabled channel target (a push device, the webhook, email).
+ */
+export type TestNotificationView = {
+    /**
+     * Channels
+     */
+    channels: Array<string>;
+    /**
+     * Deliveries
+     */
+    deliveries: number;
+    /**
+     * Notification Id
+     */
+    notification_id: number | null;
 };
 
 /**
@@ -10028,6 +10347,110 @@ export type GetLabEnsureResultResponses = {
 
 export type GetLabEnsureResultResponse = GetLabEnsureResultResponses[keyof GetLabEnsureResultResponses];
 
+export type ListLedgerRunsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Strategy Class
+         *
+         * only runs of this module:Class
+         */
+        strategy_class?: string | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/lab/ledger';
+};
+
+export type ListLedgerRunsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListLedgerRunsError = ListLedgerRunsErrors[keyof ListLedgerRunsErrors];
+
+export type ListLedgerRunsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageLedgerRunView;
+};
+
+export type ListLedgerRunsResponse = ListLedgerRunsResponses[keyof ListLedgerRunsResponses];
+
+export type GetLedgerRunData = {
+    body?: never;
+    path: {
+        /**
+         * Run Id
+         */
+        run_id: string;
+    };
+    query?: never;
+    url: '/api/lab/ledger/{run_id}';
+};
+
+export type GetLedgerRunErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLedgerRunError = GetLedgerRunErrors[keyof GetLedgerRunErrors];
+
+export type GetLedgerRunResponses = {
+    /**
+     * Successful Response
+     */
+    200: LedgerRunDetail;
+};
+
+export type GetLedgerRunResponse = GetLedgerRunResponses[keyof GetLedgerRunResponses];
+
 export type StartLabRunData = {
     body: LabRunRequest;
     path?: never;
@@ -10779,6 +11202,47 @@ export type MarkNotificationsReadResponses = {
 
 export type MarkNotificationsReadResponse = MarkNotificationsReadResponses[keyof MarkNotificationsReadResponses];
 
+export type SendTestNotificationData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/notifications/test';
+};
+
+export type SendTestNotificationErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SendTestNotificationError = SendTestNotificationErrors[keyof SendTestNotificationErrors];
+
+export type SendTestNotificationResponses = {
+    /**
+     * Successful Response
+     */
+    201: TestNotificationView;
+};
+
+export type SendTestNotificationResponse = SendTestNotificationResponses[keyof SendTestNotificationResponses];
+
 export type SetNotificationWebhookData = {
     body: WebhookUpdateWritable;
     path?: never;
@@ -11215,6 +11679,47 @@ export type ListPortfoliosResponses = {
 
 export type ListPortfoliosResponse = ListPortfoliosResponses[keyof ListPortfoliosResponses];
 
+export type CreatePortfolioData = {
+    body: PortfolioCreate;
+    path?: never;
+    query?: never;
+    url: '/api/portfolios';
+};
+
+export type CreatePortfolioErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CreatePortfolioError = CreatePortfolioErrors[keyof CreatePortfolioErrors];
+
+export type CreatePortfolioResponses = {
+    /**
+     * Successful Response
+     */
+    201: PortfolioSummaryView;
+};
+
+export type CreatePortfolioResponse = CreatePortfolioResponses[keyof CreatePortfolioResponses];
+
 export type ListTradingModesData = {
     body?: never;
     path?: never;
@@ -11266,6 +11771,52 @@ export type ListTradingModesResponses = {
 };
 
 export type ListTradingModesResponse = ListTradingModesResponses[keyof ListTradingModesResponses];
+
+export type RenamePortfolioData = {
+    body: PortfolioRename;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}';
+};
+
+export type RenamePortfolioErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RenamePortfolioError = RenamePortfolioErrors[keyof RenamePortfolioErrors];
+
+export type RenamePortfolioResponses = {
+    /**
+     * Successful Response
+     */
+    200: PortfolioSummaryView;
+};
+
+export type RenamePortfolioResponse = RenamePortfolioResponses[keyof RenamePortfolioResponses];
 
 export type DeletePushSubscriptionData = {
     body: PushUnsubscribeRequest;
