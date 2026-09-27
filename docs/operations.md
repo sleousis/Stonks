@@ -381,6 +381,7 @@ PUT /api/portfolios/{id}/live/allocation        {"amount": 2500, "currency": "US
 PUT /api/portfolios/{id}/live/account-profile   {"jurisdiction": "us", "account_type": "cash"}
 ```
 
+- In the console: Profile, then Live settings next to the LIVE portfolio. The page also lists which live safeguards and account rules act on it (`GET /api/portfolios/{id}/live/rules`). Gateway health shows on Health (`GET /api/brokers/gateways`).
 - The allocation is the most Stonks may hold in the book. There are no automatic steps. A bad week alerts but never changes it.
 - The profile picks the account rules: `us`, `eu` or `uk`, `cash` (default) or `margin`, `retail` (default) or `professional`. Shorts need a margin account.
 - The account is shared with your own trading. Stonks only trades the positions it opened (`[production.live] allow_manual_trades = true`).

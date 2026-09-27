@@ -569,6 +569,57 @@ flowchart LR
   server paged.
 - New glossary terms: violation ratio, alpha decay and concentration.
 
+## Live trading screens (Phase 19 wave 1)
+
+| Page | Route | What it does |
+|---|---|---|
+| Live settings | `/profile/live/:id` | A live portfolio's allocation and account profile, and which live safeguards and account rules act on it |
+| Broker gateways | `/health` (a panel) | Each IB Gateway: connected or down, the last good check, the fault, and the auto strategies it paused |
+
+```mermaid
+flowchart LR
+  P[Profile: your portfolios] -->|LIVE only| L[Live settings]
+  L --> A[Allocation: set by hand, reason, fresh code]
+  L --> C[Account profile: US, EU or UK, cash or margin, retail or professional]
+  L --> R[Live safeguards and account rules, read only]
+```
+
+- **Getting there.** Profile lists "Live settings" next to each LIVE
+  portfolio. A paper portfolio has none, and the page says so.
+- **Allocation.** The one brass figure on the page, in a `.live-frame`
+  panel. Unset reads "Not set" and "Nothing opens". A note says there are no
+  automatic steps: Stonks never raises or lowers the amount, and a bad week
+  only alerts. Set allocation needs an amount, a currency and a reason, then
+  the order ticket (LIVE) and a fresh code (`StepUpService.ensure()`, and
+  the interceptor on 403 `step_up_required`). `PUT
+  /api/portfolios/{id}/live/allocation`, permission `live.manage`.
+- **Account profile.** Three `<app-segmented>` choices, with one line each
+  on what the choice means (settlement days, day trades, fund documents).
+  Save profile keeps the stored currency, currency policy and wash sale
+  mode, and turns shorts off on a cash account. A missing profile is a 404
+  from the API, which the page reads as "Not set".
+- **Live rules, read only.** `GET /api/portfolios/{id}/live/rules` lists
+  each live safeguard with On or Off from the policy the book follows, and
+  each account rule with whether it applies to the profile. Words for every
+  rule live in `shared/live-rules.ts`.
+- **Trading run detail.** A risk adjustment tagged `account_rules.<rule>`
+  reads "Account rule: Settled cash only", a live safeguard its own name
+  (`liveAdjustmentLabel()`).
+- **Fine order state.** `<app-order-status>` takes `state` besides
+  `status`, and the state wins when the order has one: Pending, Sent,
+  Working, Partially filled, Filled, Cancelling, Cancelled, Expired,
+  Rejected and Outcome unknown. Sent, Working, Cancelling, Expired and
+  Outcome unknown carry a line on what they mean. The orders list, the
+  trading run detail and the strategy page show it. The status filter keeps
+  the coarse statuses.
+- **Broker gateways.** `<app-gateway-panel>` on Health reads `GET
+  /api/brokers/gateways` every minute. Each gateway is a card with its
+  PAPER or LIVE stamp and Connected, Down or Not checked yet. A down
+  gateway shows the fault and detail. Paused auto strategies link to their
+  page, where auto is turned on again with a fresh code. Other people's
+  paused books show as a count only. The `broker:<gateway>` health checks
+  still count toward the overall state, but leave the Runs list.
+
 ## Trader workspace (Phase 13)
 
 | Page | Route | What it does |
@@ -737,6 +788,8 @@ about the same thing.
 | Charts | `/api/charts/{ticker}` | none | `get_chart` |
 | Leaderboard, tear sheet | `/api/strategies/leaderboard`, `.../tearsheet` | none | `get_leaderboard`, `get_tear_sheet` |
 | Your risk limits | `/api/risk/limits` | none | `get_my_risk_limits` |
+| Live settings (allocation, account profile, live safeguards, account rules) | `/api/portfolios/{id}/live/*` | none | none |
+| Broker gateways (Health) | `/api/brokers/gateways` | none | none |
 | Download CSV | `/api/exports/*` | none | none |
 
 "Buys only" was called `flatten` before 1.0. It never closed a position,

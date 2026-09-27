@@ -16,7 +16,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 15 | Mostly done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Open: order placement for real providers. |
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
-| 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7. The IBKR adapter (19.2) is next. Design: `docs/design/live-trading.md`. |
+| 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. The IBKR adapter (19.2) is next. Design: `docs/design/live-trading.md`. |
 | 20 | Backend of 20.1 to 20.5 done (API, CLI, MCP). The console screens are next. 20.6 done. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
@@ -420,7 +420,7 @@ Pyright strict plan. Strict mode comes one package at a time, smallest first, ea
 
 ## Phase 19: Go live with real money
 
-**Status:** wave 1 done (19.1, 19.4, 19.6, 19.7). Design: `docs/design/live-trading.md`.
+**Status:** wave 1 done (19.1, 19.4, 19.6, 19.7), with its console screens: Live settings per live portfolio (allocation, account profile, and the live rules read only), broker gateway health on Health, and the fine order state in the orders views. Design: `docs/design/live-trading.md`.
 
 Stonks moves from simulated paper to real orders at Interactive Brokers, in stages. IB Gateway runs headless in Docker next to Stonks, and `ib_async` sits behind the `Broker` and `BrokerConnection` seams. Alpaca stays off. The IBKR login lives only in the gateway container's secret files. The account location is not decided, so account rules for the US and for the EU and UK are built and chosen per portfolio. The IBKR account is shared with the owner's own trading: Stonks only trades the positions it opened. The first live account is a cash account, long only.
 
