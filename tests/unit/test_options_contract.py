@@ -88,7 +88,8 @@ def test_occ_symbol_both_ways():
 
 
 @pytest.mark.parametrize(
-    "bad", ["", "AAPL", "TOOLONGROOT260116C00150000", "AAPL  26011XC00150000", "AAPL  261316C00150000"]
+    "bad",
+    ["", "AAPL", "TOOLONGROOT260116C00150000", "AAPL  26011XC00150000", "AAPL  261316C00150000"],
 )
 def test_bad_occ_symbols(bad):
     with pytest.raises(ValueError):

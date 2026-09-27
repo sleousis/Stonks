@@ -77,7 +77,7 @@ class OptionContract:
             raise ValueError(f"style must be american or european, got {self.style!r}")
         if self.settlement not in ("physical", "cash"):
             raise ValueError(f"settlement must be physical or cash, got {self.settlement!r}")
-        if isinstance(self.expiry, datetime) or not isinstance(self.expiry, date):
+        if type(self.expiry) is not date:  # a datetime or a string is not a date
             raise ValueError(f"expiry must be a date, got {self.expiry!r}")
 
     @property
