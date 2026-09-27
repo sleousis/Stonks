@@ -5,19 +5,8 @@ from __future__ import annotations
 
 from datetime import date
 
-import pytest
-
 from stonks.accounts.paper import paper_days_completed
 from stonks.production.portfolio_runs import PortfolioRun, list_runs, record_run
-from stonks.store.state import SqliteState
-
-
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
 
 
 def _run(day: int, *, subs=("sub_a",), status="ok", breached=False, tick=None, **kw):

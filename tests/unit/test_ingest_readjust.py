@@ -18,16 +18,6 @@ from stonks.ingest.schemas import RawPriceBar
 from tests.fixtures.universes import FakeListingSource, seed_daily_bars
 
 
-@pytest.fixture
-def lake(tmp_path):
-    from stonks.store.lake import DuckDBLake
-
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
-
-
 def _bar(day: date, close: float, adj: float) -> RawPriceBar:
     return RawPriceBar(
         ticker="A.US",

@@ -124,7 +124,6 @@ def test_pinned_session_verifies_certificates_when_verify_is_not_given():
     assert pool.assert_hostname == "hooks.example"
 
 
-
 # ---- NAT64 and IPv4-compatible addresses (BE-39) ---------------------------------------
 
 

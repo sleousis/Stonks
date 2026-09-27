@@ -15,7 +15,6 @@ from stonks.ingest.schemas import TickerProfile
 from stonks.production.prices import load_history
 from stonks.production.risk import build_risk_context
 from stonks.store.lake import DuckDBLake
-from stonks.store.state import SqliteState
 
 AS_OF = date(2026, 3, 31)
 
@@ -53,13 +52,6 @@ def lake(tmp_path):
     )
     yield lake
     lake.close()
-
-
-@pytest.fixture
-def state(tmp_path):
-    with SqliteState(tmp_path / "state.sqlite") as st:
-        st.migrate()
-        yield st
 
 
 def test_load_history_returns_last_bars_up_to_as_of_adjusted(lake):

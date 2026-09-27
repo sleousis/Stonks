@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
 from fastapi.testclient import TestClient
 
 from stonks.api import create_app
@@ -14,19 +13,6 @@ from stonks.app.tick_summary import TickSummary
 from stonks.config import GoLivePolicy
 from stonks.store.state import SqliteState
 from tests.integration.app.test_api import AUTH, LOOPBACK
-
-
-@pytest.fixture
-def app(settings, seeded, fake_source):
-    settings.api.allowed_hosts = ["testserver"]
-    return create_app(settings, source_factory=lambda: fake_source)
-
-
-@pytest.fixture
-def client(app):
-    with TestClient(app, client=LOOPBACK) as c:
-        yield c
-
 
 # ---- 11.1 go-live -------------------------------------------------------------
 

@@ -22,17 +22,6 @@ from stonks.universes import (
 from stonks.universes.providers.index import spans_from_index_history
 from tests.fixtures.universes import FakeListingSource, seed_daily_bars
 
-
-@pytest.fixture
-def lake(tmp_path):
-    from stonks.store.lake import DuckDBLake
-
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
-
-
 # ---- registry and store ------------------------------------------------------
 
 

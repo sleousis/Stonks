@@ -24,14 +24,6 @@ class Recorder(Notifier):
         self.sent.append(notification)
 
 
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
-
-
 def _by_name(report):
     return {c.name: c for c in report.checks}
 

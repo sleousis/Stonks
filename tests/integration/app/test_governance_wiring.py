@@ -4,20 +4,10 @@ reason / override / actor through the governed ``change_status``."""
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 
-from stonks.api import create_app
-from tests.integration.app.test_api import AUTH, LOOPBACK
+from tests.integration.app.test_api import AUTH
 
 LONG_REASON = "owner override: incubation cut short, see ticket 42"
-
-
-@pytest.fixture
-def client(settings, seeded, fake_source):
-    settings.api.allowed_hosts = ["testserver"]
-    app = create_app(settings, source_factory=lambda: fake_source)
-    with TestClient(app, client=LOOPBACK) as c:
-        yield c
 
 
 def test_promote_route_takes_override_and_reason_and_audits_the_caller(client, seeded):

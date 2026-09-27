@@ -11,26 +11,7 @@ from fastapi.testclient import TestClient
 from stonks.api import create_app
 from stonks.notify import Notification, StoreNotifier
 from stonks.store.state import SqliteState
-from tests.integration.app.test_api import AUTH, LOOPBACK, REMOTE
-
-
-@pytest.fixture
-def app(settings, seeded, fake_source):
-    settings.api.allowed_hosts = ["testserver"]
-    return create_app(settings, source_factory=lambda: fake_source)
-
-
-@pytest.fixture
-def client(app):
-    with TestClient(app, client=LOOPBACK) as c:
-        yield c
-
-
-@pytest.fixture
-def remote(app):
-    with TestClient(app, client=REMOTE) as c:
-        yield c
-
+from tests.integration.app.test_api import AUTH, LOOPBACK
 
 # ---- auth check ---------------------------------------------------------------
 

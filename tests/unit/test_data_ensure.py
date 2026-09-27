@@ -22,16 +22,6 @@ from tests.fixtures.universes import FakeListingSource, bars, seed_daily_bars
 TODAY = date(2025, 7, 1)
 
 
-@pytest.fixture
-def lake(tmp_path):
-    from stonks.store.lake import DuckDBLake
-
-    lk = DuckDBLake(tmp_path / "lake.duckdb")
-    lk.migrate()
-    yield lk
-    lk.close()
-
-
 def _source(*tickers: str, start=date(2023, 1, 1), end=date(2025, 6, 30), **kw):
     return FakeListingSource(prices={t: bars(t, start, end) for t in tickers}, **kw)
 

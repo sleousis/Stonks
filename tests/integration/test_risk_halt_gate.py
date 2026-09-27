@@ -6,8 +6,6 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 
-import pytest
-
 from stonks.production.halts import active_halts, clear_halt, list_halts, trip_halt
 from stonks.production.hooks import GateContext, registered_gates
 from stonks.production.hooks.risk_halts import RiskHaltGate
@@ -18,14 +16,6 @@ AS_OF = date(2025, 6, 10)
 PF = "pf_default"
 OWNER = "usr_owner"
 BREAKER = policy(circuit_breaker={"max_month_loss": 0.06, "max_drawdown_halt": 0.20})
-
-
-@pytest.fixture
-def state(tmp_path):
-    s = SqliteState(tmp_path / "state.sqlite")
-    s.migrate()
-    yield s
-    s.close()
 
 
 def _ctx(state, *, pf=PF, owner=OWNER, dry_run=False, pol=None, as_of=AS_OF) -> GateContext:
