@@ -498,7 +498,7 @@ Streaming prices (EODHD websockets, IBKR), a live event engine that decides on m
 | 21.3.2 Intraday risk | Per-minute loss limit and the `intraday_loss` halt, intraday drawdown scaling, orders per minute cap, stale data gate, kill switch per event. | `production/rules/intraday_*.py`, `production/halts.py`, a new SQLite migration | planned |
 | 21.3.3 Live marks and P&L | Minute marks from the stream, intraday P&L per book and sleeve, intraday risk snapshots. | `production/intraday_pnl.py`, a new SQLite migration | planned |
 | 21.3.4 Monitoring | Stream and engine metrics, engine dead-man, event to order latency, alerts, a live console panel. | `scheduling/metrics.py`, `api/routers/stream.py`, `web/src/app/pages/live/*` | planned |
-| 21.3.5 Intraday TCA | Spread from recorded quotes, arrival at the next minute, cost calibration for minute trading. | `production/tca.py`, `backtest/costs.py` | planned |
+| 21.3.5 Intraday TCA | Spread from recorded quotes at the decision and at each fill, arrival at the next minute, shortfall per order and per strategy sleeve, and `stonks tca calibrate --interval 1m`, which fits the spread and impact from quotes and fills up to its end date and proposes a `[backtest.costs]` block, never applied. | `production/intraday_tca.py`, `backtest/cost_calibration.py`, `cli_tca.py` | done (no migration) |
 
 Waves: 21.1 first (done), then 21.2.1, 21.2.4 and 21.3.1, then 21.2.2, 21.2.3 and 21.3.2, then 21.2.5, 21.3.3, 21.3.4 and 21.3.5.
 
