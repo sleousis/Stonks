@@ -107,3 +107,30 @@ def test_a_non_backtest_job_is_rejected(runner, env):
     r = runner.invoke(app, ["report", "--backtest", job.id])
     assert r.exit_code == 2, r.output
     assert "lab_run" in r.output
+
+
+def test_a_configured_universe_id_keeps_the_membership_gate(env, lake_trending):
+    """BE-07: a tear sheet over ``[production].universe = "<id>"`` carries
+    the id, so the backtest trades each name only while it is a member."""
+    from datetime import date
+
+    import pandas as pd
+
+    from stonks.app.context import AppContext
+    from stonks.app.tearsheets import TearSheetWindow, tear_sheet_request
+    from stonks.config import load_settings
+
+    lake_trending.upsert_universe_membership(
+        pd.DataFrame(
+            [
+                {"universe_id": "idx", "ticker": "UP.US", "start_date": date(2025, 10, 1)},
+                {"universe_id": "idx", "ticker": "DOWN.US", "start_date": date(2026, 1, 5)},
+            ]
+        )
+    )
+    settings = load_settings()
+    settings.production.universe = "idx"
+    window = TearSheetWindow(start=date(2025, 10, 1), end=date(2026, 4, 1))
+    request = tear_sheet_request(AppContext(settings), "buy_and_hold", window)
+    assert request.universe_id == "idx"
+    assert sorted(request.universe) == ["DOWN.US", "UP.US"]

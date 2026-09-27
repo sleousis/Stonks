@@ -174,3 +174,23 @@ def test_preflight_notes_membership_is_enforced_point_in_time(lake):
     codes = {i.code for i in run_preflight(ds).issues}
     assert "static_universe" not in codes
     assert "not_members" not in codes
+
+
+def test_api_backtests_on_a_universe_id_honour_membership(lake):
+    """BE-07 (RS-05 leftover): ``backtest_report`` (API, MCP, Studio rule
+    drafts and tear sheets) gates on membership, not on the window union."""
+    from stonks.app.lab import BacktestRequest, backtest_report
+    from stonks.config import Settings
+
+    request = BacktestRequest(
+        strategy={"class_path": "stonks.strategies.examples.buy_and_hold:BuyAndHold"},
+        universe_id=UNIVERSE_ID,
+        start=DAYS[0],
+        end=DAYS[-1],
+        cost_model="zero",
+        benchmark="none",
+    )
+    report, _ = backtest_report(Settings(), _BuyEverything(), request, lake)
+    entries = {t.ticker: t.entry_ts.date() for t in report.trades}
+    assert entries["A.US"] == DAYS[1]
+    assert entries["B.US"] > JOIN
