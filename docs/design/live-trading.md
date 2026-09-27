@@ -784,8 +784,32 @@ Reconciliation lives in `execution/drift.py` (pure diffs) and `production/live/c
 - **Positions.** Stonks owns its net filled quantity per ticker (`owned_positions`, manual orders excluded). The broker must hold at least that on the same side. The rest is external. With `allow_manual_trades = false` positions must match exactly.
 - **Orders.** A new optional broker capability, `OpenOrderSource.open_orders()`, lists every working order with its client id, or none when placed by hand. `IbkrBroker` implements it. A broker without it (the simulated one) is checked on positions and unresolved orders only.
 - **Kinds.** Material: `position_qty`, `unknown_position`, `unknown_order`, `missing_order`, `order_state` (the ledger closed an order the broker still works, or the state machine refused the broker's report), `unknown_execution`. Alert only: `unresolved_order` (still `unknown`, blocks a submit), `stuck_order`, `commission_missing`, `stale_order` (cancelled at the start of the day).
-- **Not yet.** Cash and `rules_mismatch` are not compared: in a shared account the owner's own trades move the cash. The optional Flex statement waits for 19.3. The broker snapshot and `live_gate_days` at the end of the day wait for 19.9, and so does demoting a stage after drift that stays for 2 checks.
+- **Not yet.** `rules_mismatch` is not compared. Cash and the Flex statement came in 19.15 (section 16). The broker snapshot and `live_gate_days` at the end of the day wait for 19.9, and so does demoting a stage after drift that stays for 2 checks.
 - **Outage versus fault.** `auto_pause.broker_failure_kind` names a `BrokerUnavailableError`, a dropped socket or a timeout an outage, anything else a fault. The tick no longer pauses auto on an outage: the book skips the day (`broker_outage` in its summary). A check pauses after outages on `[production.live] outage_pause_after_sessions` sessions in a row (2), and at once on a fault or drift. Drift pauses with a `broker_drift: report <id>` reason.
 - **Jobs.** `live_sod_check` (open minus 60 minutes) and `live_eod_check` (close plus 15) run the `live_reconcile` action through each gateway with the new `reconcile` client id (14). Splits come from the lake when it can be opened read only.
 - **Submit gate.** `submit_gate` runs a `submit` check. The submit window of 19.8 sends only when `CheckResult.may_submit`.
 - **Surfaces.** `GET /api/reconcile/reports`, `GET /api/reconcile/reports/{id}`, `stonks reconcile list|show|run`, the MCP tools `list_reconcile_reports` and `get_reconcile_report`, and a panel on Health that stays hidden until a report exists.
+
+## 16. What 19.15 built
+
+The end-of-day check now also compares cash and the broker's statement. No new table: the cash baseline and the notes live in the report's `summary_json`.
+
+```mermaid
+flowchart LR
+  E[eod check] --> P[positions and orders, as in 19.5]
+  E --> S{Flex set?}
+  S -->|yes| F[statement executions of our orders vs booked fills]
+  S -->|no| C
+  F --> C[cash change vs what Stonks explains]
+  C --> R[report: clean, warn or drift]
+```
+
+- **Cash.** The account is shared with the owner's own trading, so the check compares only what Stonks can explain. It takes the broker's change in cash and settled cash since the last end-of-day report of the portfolio. It subtracts the cash of Stonks' own fills and fees (every portfolio on the gateway), dividends on Stonks' positions, and every other flow the statement names (the owner's hand trades, dividends on the owner's holdings, interest, deposits). Settled cash counts a fill on its settle date (the `account_rules` cycles: US T+1, EU and UK T+2). What is left beyond `max(cash_tolerance, cash_tolerance_fraction x NLV)` is a `cash` or `settled_cash` item.
+- **Warn, not drift.** A cash item only warns. `[production.live.reconcile] cash_is_drift = true` makes it material, so it opens the halt and pauses auto. Without a Flex statement, a hand trade, a deposit or interest shows as a cash warning. That is expected.
+- **The first check** stores the baseline and compares nothing. So does a check after the account's base currency changed.
+- **One currency.** The check compares the account's base currency totals. Stonks' fills count at face value. Statement rows in another currency are skipped and counted in `skipped_foreign`.
+- **Flex statement.** When `[brokers.ibkr.flex] query_id` and `STONKS_IBKR_FLEX_TOKEN` are set, the check reads the statement through the cache the `ibkr` sync uses (`execution/brokers/ibkr/statements.py`). It maps each Flex statement to a vendor-free `BrokerStatement`. Statements of another account than the gateway's `account_id` are ignored. For each statement's days, the executions of the portfolio's own orders (by `orderRef` or execution id) must match its booked fills. Hand trades are left out.
+- **Statement kinds.** Material: `statement_missing_execution` (the statement lists it, the ledger never booked it), `statement_extra_execution` (booked, not in the statement), `statement_quantity`. Alert only: `statement_commission` (beyond `commission_tolerance`, or not booked yet). A failed Flex fetch never fails the check. It is noted as `summary.statement.status = failed`.
+- **Drift streak.** A drift report records `summary.drift_streak`, the drift reports in a row including this one. Demoting the stage after 2 is left to 19.9: no stage table exists yet (a `TODO(19.9)` in `checks.py`).
+- **Metrics.** `stonks_reconcile_drift_items{portfolio, severity}` (material or warning, unexplained items of the latest check), `stonks_reconcile_last_status{portfolio, status}` and `stonks_reconcile_last_check_timestamp_seconds{portfolio}`. Labels name the portfolio, never the account.
+- **Mutation testing.** `execution/drift.py` is the `drift` target of `tools/mutation.py`.

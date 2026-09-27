@@ -144,7 +144,7 @@ The API serves `GET /api/health` (liveness, used by Docker and Caddy) and `GET /
 
 `GET /api/ticks` and `GET /api/ticks/{id}` show everyone each tick's status, counts, winner and shadow results. Orders, clipped orders, stale buys, halts and per-portfolio details show only for your own portfolios, admins included. `?portfolio_id=` picks one of yours. The MCP tools `list_ticks` and `get_tick` read the same.
 
-`python -m stonks.scheduling metrics` prints Prometheus text from the state DB: tick counts, duration and last success; orders by status and rejections; API jobs and queue depth; each scheduled job's last success, last status and next run; the scheduler heartbeat. Per IB Gateway it adds `stonks_broker_connected` and `stonks_broker_last_ok_timestamp_seconds` (labelled by gateway and mode, never by account). `GET /metrics` adds the lab worker queue (see below). `--data-age` adds universe data age buckets but opens the lake, so use it only when `stonks serve` is not running.
+`python -m stonks.scheduling metrics` prints Prometheus text from the state DB: tick counts, duration and last success; orders by status and rejections; API jobs and queue depth; each scheduled job's last success, last status and next run; the scheduler heartbeat. Per IB Gateway it adds `stonks_broker_connected` and `stonks_broker_last_ok_timestamp_seconds` (labelled by gateway and mode, never by account). Per live portfolio it adds `stonks_reconcile_drift_items` (material and warning items of the latest reconcile check), `stonks_reconcile_last_status` and `stonks_reconcile_last_check_timestamp_seconds`. `GET /metrics` adds the lab worker queue (see below). `--data-age` adds universe data age buckets but opens the lake, so use it only when `stonks serve` is not running.
 
 `stonks serve` serves the same set, data age included, at `GET /metrics`. Scrapes from a loopback peer need no token. From anywhere else they need the scrape-only bearer token `STONKS_METRICS_TOKEN`. The API token is not accepted there, so Prometheus never holds an admin credential. `STONKS_METRICS_ALLOW_LOOPBACK=false` requires the token on loopback too.
 
@@ -433,6 +433,7 @@ The broker is the source of truth. `live_sod_check` and `live_eod_check` reconci
 - `outage`: the broker did not answer. The day is skipped. Outages on 2 sessions in a row (`[production.live] outage_pause_after_sessions`) pause auto.
 - `fault`: a wrong account or a refused login. Auto pauses at once.
 - The start-of-day check cancels day and auction orders left from an earlier session (`cancel_stale_orders`).
+- The end-of-day check compares the change in cash and settled cash with what Stonks can explain, and the Flex statement (when set) with Stonks' fills. A cash difference warns (`[production.live.reconcile] cash_is_drift` makes it drift). A missing or extra execution is drift, a commission difference warns. See `docs/runbooks/reconcile-drift.md`.
 
 Runbook for drift: read the report (`stonks reconcile list`, `stonks reconcile show <id>`, or Health in the console), find the cause (a missed fill, a manual sale of Stonks' shares, a split), fix it at the broker or let the next check book it, run `stonks reconcile run --portfolio <id>` until it is clean, then `stonks halts clear <id> --reason "..."` and resume auto with a fresh code.
 
