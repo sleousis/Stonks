@@ -99,6 +99,21 @@ Why these sizes:
 - Keep the disk under 70 % full. Backups snapshot the data, and with the DuckDB bar table each lab snapshot copies the whole lake (two are kept). Use the Parquet bar store before you turn the worker on: its snapshots are hard links.
 - For a big search, resize the VM for an hour rather than buying for the peak.
 
+### Add-ons
+
+Optional Compose profiles need memory on top of the rows above ([deploy.md](deploy.md#profiles)).
+
+| Add-on | Profile | Memory |
+|--------|---------|--------|
+| IB Gateway, paper | `ibkr-paper` | about 1 GB (a Java process, 1 GB limit) |
+| IB Gateway, live | `ibkr-live` | about 1 GB |
+| AI model server (Ollama) | `ai` | about 6 GB for a 7 to 8B model at 4 bit, 8 GB limit by default |
+
+- The 1-trader 4 GB VM holds the core plus one gateway.
+- Paper and live gateways at once want the 8 GB size.
+- The model server does not fit a small VM. Run it on a home server with 16 to 32 GB RAM or a GPU, or point `STONKS_AI_BASE_URL` at a model endpoint elsewhere.
+- A home mini PC with 16 GB RAM (Intel N100 class) holds the core, both gateways and a lab worker.
+
 ## Limits
 
 - **DuckDB has one writer.** Only the API process opens the lake read-write. Ingests and data fetches share one lane and run one at a time. Other processes read copies: the lab worker reads a snapshot, and CLI writes go through the API. More API processes would need a different lake, so grow the VM before adding processes.

@@ -53,8 +53,10 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `health`: checks, and opens or clears the operational halt | every 4 hours | none |
 | `backup`: `[backup]` target and retention | 05:00 UTC daily | 120 min |
 | `connections_sync`: broker connections whose sync is due | every hour | none |
+| `broker_health`: probes each IB Gateway (see Live trading) | every 5 minutes | none |
+| `ibkr_reauth_reminder`: push to approve the weekly IBKR login | Sunday 18:00 New York | none |
 
-Session jobs run on NYSE trading days. `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
+Session jobs run on NYSE trading days. The two IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty. `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 
 The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 
@@ -129,6 +131,7 @@ A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_r
 | `ingest_failures` | An ingest failed in the last N hours. | `ingest_failure_lookback_hours` (24) |
 | `var_violations` | A portfolio's rolling 95% VaR violation ratio is outside 0.5 to 1.5, after at least 60 scored days. It never opens a halt. | see Live risk below |
 | `lab_queue` | Lab worker jobs waited more than N minutes with no live worker, or a running one lost its worker. It never opens a halt. | `stuck_lab_queue_minutes` (30) |
+| `broker:<gateway>` | The IB Gateway did not answer the latest `broker_health` check. It never opens the operational halt. | `[brokers.ibkr.health]` |
 
 Freshness covers the tickers you pass, else `[production].universe`. A universe id there is resolved to its members on today's date, the same way the tick does. When nothing resolves (the universe was never refreshed), no freshness check runs, so it never opens the operational halt.
 
@@ -136,7 +139,7 @@ The API serves `GET /api/health` (liveness, used by Docker and Caddy) and `GET /
 
 `GET /api/ticks` and `GET /api/ticks/{id}` show everyone each tick's status, counts, winner and shadow results. Orders, clipped orders, stale buys, halts and per-portfolio details show only for your own portfolios, admins included. `?portfolio_id=` picks one of yours. The MCP tools `list_ticks` and `get_tick` read the same.
 
-`python -m stonks.scheduling metrics` prints Prometheus text from the state DB: tick counts, duration and last success; orders by status and rejections; API jobs and queue depth; each scheduled job's last success, last status and next run; the scheduler heartbeat. `GET /metrics` adds the lab worker queue (see below). `--data-age` adds universe data age buckets but opens the lake, so use it only when `stonks serve` is not running.
+`python -m stonks.scheduling metrics` prints Prometheus text from the state DB: tick counts, duration and last success; orders by status and rejections; API jobs and queue depth; each scheduled job's last success, last status and next run; the scheduler heartbeat. Per IB Gateway it adds `stonks_broker_connected` and `stonks_broker_last_ok_timestamp_seconds` (labelled by gateway and mode, never by account). `GET /metrics` adds the lab worker queue (see below). `--data-age` adds universe data age buckets but opens the lake, so use it only when `stonks serve` is not running.
 
 `stonks serve` serves the same set, data age included, at `GET /metrics`. Scrapes from a loopback peer need no token. From anywhere else they need the scrape-only bearer token `STONKS_METRICS_TOKEN`. The API token is not accepted there, so Prometheus never holds an admin credential. `STONKS_METRICS_ALLOW_LOOPBACK=false` requires the token on loopback too.
 
@@ -355,6 +358,66 @@ uv run stonks orders list --manual --user you@example.com
 - Each order is recorded with `origin = manual`, no strategy, who placed it and why, and an `audit_log` row. An order is refused while a tick runs.
 - The tick never trades a manual holding. Strategies decide and size without it, and the snapshot keeps it.
 
+## Live trading
+
+Phase 19 wave 1 is in place: the seams, the safeguards, the account rules and the gateway deployment. The IBKR adapter itself is the next wave, so no real order can go out yet. `[brokers] kind = "ibkr"` refuses to start until it lands. Design: `docs/design/live-trading.md`.
+
+### IB Gateway health
+
+List the gateways under `[brokers.ibkr.gateways.<name>]` (`host`, `port`, `mode`, `portfolios`). Credentials never go there: the IBKR login lives in the gateway's Docker secret files (`deploy/ibkr/README.md`).
+
+- `broker_health` probes each gateway every 5 minutes and stores the result in `broker_gateway_status`.
+- After `alert_after_failures` failed checks in a row (2), the owners of its portfolios and the admins get one high-urgency push a day.
+- A gateway down for `pause_after_sessions` trading sessions (2), or with a real fault (login refused, wrong account), pauses the auto subscriptions of its portfolios. Resume needs a fresh second factor.
+- A short outage only skips the day. Yesterday's decisions are never sent late.
+- `ibkr_reauth_reminder` pushes on Sunday evening: approve the IBKR login on your phone.
+
+### Allocation and account profile
+
+Each live portfolio needs two owner settings before anything opens. Both need a fresh second factor (`live.manage`) and write an audit row:
+
+```
+PUT /api/portfolios/{id}/live/allocation        {"amount": 2500, "currency": "USD", "reason": "..."}
+PUT /api/portfolios/{id}/live/account-profile   {"jurisdiction": "us", "account_type": "cash"}
+```
+
+- The allocation is the most Stonks may hold in the book. There are no automatic steps. A bad week alerts but never changes it.
+- The profile picks the account rules: `us`, `eu` or `uk`, `cash` (default) or `margin`, `retail` (default) or `professional`. Shorts need a margin account.
+- The account is shared with your own trading. Stonks only trades the positions it opened (`[production.live] allow_manual_trades = true`).
+
+### Live safeguards
+
+These risk rules act only on books at a real broker and never drop a closing order. All are off by default:
+
+| Rule | Setting under `[production.risk.rules.*]` | Effect |
+|------|-------------------------------------------|--------|
+| `capital_ramp` | `enabled` | Gross exposure capped at the owner's allocation and the account's net liquidation value. |
+| `live_notional_caps` | `max_order_notional`, `max_day_notional`, `max_user_day_notional`, `max_global_day_notional` | Opening orders clipped per order and per day. |
+| `price_band` | `band_pct`, `nbbo_band_pct`, `delayed_band_pct`, `max_gap_pct` | Every order gets a collared limit. An opening order is dropped when the price moved too far since the decision. |
+| `max_orders_per_run` | `max_opening_orders`, `max_closing_orders` | Opening orders over the limit are dropped. Too many closes open a `runaway` halt. |
+| `account_rules` | `enabled`, `settlement_days`, `pdt_*`, `wash_sale_window_days`, `short_disclosure_threshold` | The account rules below. |
+| `stop_cooldown` | `cooldown_days`, `count_losses` | A strategy does not reopen a ticker for some days after a stop-out on it. |
+| `stop_guard` | `max_stops`, `window_days`, `count_losses` | A strategy opens nothing after N stop-outs in the window. |
+| `losing_lock` | `max_consecutive_losses`, `lock_days` | A ticker whose last trades for the strategy all lost is locked. |
+
+Until broker-side stops exist, `count_losses = true` counts any losing exit as a stop-out.
+
+### Order states
+
+Live orders carry a fine state in `orders.state`: `pending`, `submitted`, `accepted`, `partially_filled`, `filled`, `pending_cancel`, `cancelled`, `expired`, `rejected` or `unknown`. The `status` column follows it. An order whose submit or cancel timed out is `unknown`, and nothing is sent for it again until reconciliation finds it at the broker by client id. A submit window stays shut while any order of the portfolio is `unknown`.
+
+### Account rules
+
+| Applies to | Rules |
+|------------|-------|
+| Every account | `restricted` (your list and names the broker refused), `short_permission`, `account_known` (no account state, nothing opens), `fx_funding` (spend only what a currency holds) |
+| Cash accounts | `settled_cash`: settled cash only. Sale proceeds wait for settlement (US T+1, EU and UK T+2), so nothing is bought with unsettled money. |
+| Margin accounts | `buying_power`: buys fit the available funds. |
+| US | `pdt` (margin under 25,000 USD), `wash_sale` (warn or block), `reg_sho` (locate and the price test) |
+| EU and UK | `priips_kid` (retail clients cannot buy funds without a local document, most US ETFs), `short_disclosure` (stay under 0.1% of issued shares) |
+
+A rule that would drop a close marks it as needing approval instead. The tag is `account_rules.<rule>` in the tick's adjustments.
+
 ## Risk policy
 
 Risk rules run between construction and the broker, configured under `[production.risk]`:
@@ -391,6 +454,8 @@ flowchart LR
 | `drawdown` | Value is 20% below its peak. | Only when a person clears it. |
 | `operational` | The scheduled health job or `stonks health` finds stale data or a stuck run. | When one of them passes again. |
 | `kill` | A person turns on the kill switch. | Resume with the typed confirmation. |
+| `runaway` | A live run tries to close more positions than `max_orders_per_run.max_closing_orders`. | Only when a person clears it. |
+| `broker_drift` | Reconciliation finds a difference it cannot explain (roadmap 19.5, not wired yet). | Only when a person clears it. |
 
 - The breaker limits live in `[production.risk.rules.circuit_breaker]` (`max_month_loss`, `max_week_loss`, `max_drawdown_halt`, `cooldown`). They are off until set. The same rule runs in backtests.
 - Breaker halts block buys. Sells and exits still go through.
@@ -601,3 +666,4 @@ cron does not know exchange holidays; on those days the tick finds no new bars a
 - [Data stale or bad](runbooks/data-stale.md)
 - [Back up and restore](runbooks/restore.md)
 - [Deploy failed](runbooks/deploy-failed.md)
+- IB Gateway set-up and the weekly login: `deploy/ibkr/README.md`

@@ -306,3 +306,17 @@ def in_process_universes_refresh(ctx: RunContext) -> JobOutcome:
             step |= ensure_step(e_status, e_error, e_result)
         results[universe.id] = step
     return universes_outcome(results)
+
+
+@IN_PROCESS_ACTIONS.register("broker_health")
+def in_process_broker_health(ctx: RunContext) -> JobOutcome:
+    from stonks.scheduling.local import broker_health_action
+
+    return broker_health_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("ibkr_reauth_reminder")
+def in_process_ibkr_reauth_reminder(ctx: RunContext) -> JobOutcome:
+    from stonks.scheduling.local import ibkr_reauth_reminder_action
+
+    return ibkr_reauth_reminder_action(ctx)

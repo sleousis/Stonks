@@ -129,6 +129,31 @@ def test_collect_from_state(tmp_path):
     assert "stonks_scheduler_heartbeat_timestamp_seconds" in metrics_text(path, now=NOW)
 
 
+def test_broker_gateway_metrics(tmp_path):
+    """Roadmap 19.4: labelled by gateway and mode, never by account."""
+    path = tmp_path / "state.sqlite"
+    with SqliteState(path) as s:
+        s.migrate()
+        s.execute(
+            "INSERT INTO broker_gateway_status (gateway, mode, connected, last_check_at,"
+            " last_ok_at) VALUES ('paper', 'paper', 1, '2026-09-25T21:55:00+00:00',"
+            " '2026-09-25T21:55:00+00:00'), ('live', 'live', 0, '2026-09-25T21:55:00+00:00',"
+            " NULL)"
+        )
+    snap = collect_snapshot(path, now=NOW)
+    assert snap.brokers == [
+        ("live", "live", False, None),
+        ("paper", "paper", True, datetime(2026, 9, 25, 21, 55, tzinfo=UTC)),
+    ]
+    text = metrics_text(path, now=NOW)
+    assert 'stonks_broker_connected{gateway="live",mode="live"} 0' in text
+    assert 'stonks_broker_connected{gateway="paper",mode="paper"} 1' in text
+    assert 'stonks_broker_last_ok_timestamp_seconds{gateway="paper",mode="paper"}' in text
+    assert "stonks_broker_connected" not in render_prometheus(
+        build_metrics(MetricsSnapshot(now=NOW))
+    )
+
+
 def test_collect_tolerates_unmigrated_db(tmp_path):
     snap = collect_snapshot(tmp_path / "empty.sqlite", now=NOW)
     assert snap.tick_counts == {} and snap.scheduled == {}

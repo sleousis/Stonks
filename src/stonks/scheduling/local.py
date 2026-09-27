@@ -19,7 +19,10 @@ The actions call the same services as the CLI:
 - ``price_alerts``: every person's price alert rules checked against the
   latest closes (roadmap 20.2);
 - ``connections_sync``: every due broker connection synced as
-  ``service:scheduler`` (state DB only, so every backend runs it here).
+  ``service:scheduler`` (state DB only, so every backend runs it here);
+- ``broker_health``: probes each IB Gateway, stores its status, alerts and
+  pauses auto after a long outage (roadmap 19.4, state DB only);
+- ``ibkr_reauth_reminder``: the Sunday push to approve the IBKR login.
 
 ``ingest_prices`` and ``tick`` are skipped when no instrument in the
 universe trades on the fire's date (asset classes read from the lake).
@@ -311,6 +314,56 @@ def connections_sync_action(ctx: RunContext) -> JobOutcome:
     failed = [r.connection_id for r in results if not r.ok]
     detail = {"connections": len(results), "failed": failed}
     return JobOutcome("failed" if failed else "succeeded", detail)
+
+
+@register_action("broker_health")
+def broker_health_action(ctx: RunContext) -> JobOutcome:
+    """Probe every configured IB Gateway (skipped when none is configured)."""
+    from stonks.core.clock import FixedClock
+    from stonks.production.broker_health import SocketProbe, check_gateways, gateway_targets
+    from stonks.store.state import SqliteState
+
+    config = ctx.settings.brokers.ibkr
+    targets = gateway_targets(config)
+    if not targets:
+        return JobOutcome("skipped", {"reason": "no_gateways"})
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        checks = check_gateways(
+            state,
+            targets,
+            SocketProbe(config.health.probe_timeout_seconds),
+            config.health,
+            clock=FixedClock(ctx.now),
+        )
+    finally:
+        state.close()
+    down = [c.status.gateway for c in checks if not c.status.connected]
+    detail = {
+        "gateways": len(checks),
+        "down": down,
+        "paused": sorted({s for c in checks for s in c.paused}),
+    }
+    # the job alerted on its own (once a day per gateway)
+    return JobOutcome("failed" if down else "succeeded", detail, alerted=bool(down))
+
+
+@register_action("ibkr_reauth_reminder")
+def ibkr_reauth_reminder_action(ctx: RunContext) -> JobOutcome:
+    """Remind the owners to approve the weekly IBKR login."""
+    from stonks.core.clock import FixedClock
+    from stonks.production.broker_health import gateway_targets, send_reauth_reminder
+    from stonks.store.state import SqliteState
+
+    targets = gateway_targets(ctx.settings.brokers.ibkr)
+    if not targets:
+        return JobOutcome("skipped", {"reason": "no_gateways"})
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        sent = send_reauth_reminder(state, targets, clock=FixedClock(ctx.now))
+    finally:
+        state.close()
+    return JobOutcome("succeeded", {"sent": sent})
 
 
 def _open_lake_members(lake: Any) -> MembersResolver:

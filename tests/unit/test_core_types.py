@@ -127,3 +127,63 @@ def test_features_dict_access_and_get_default():
     assert f.get("r_20") == 0.05
     assert f.get("unknown") is None
     assert f.get("unknown", default=0.0) == 0.0
+
+
+# ---- live broker fields (roadmap 19.1) ------------------------------------------
+
+
+def test_order_live_fields_default_to_the_paper_behaviour():
+    order = Order(client_id="x", ticker="AAPL.US", side="buy", quantity=1.0)
+    assert order.stop_price is None
+    assert order.time_in_force is None
+    assert order.outside_rth is False
+
+
+def test_stop_limit_order_carries_stop_and_limit():
+    order = Order(
+        client_id="x",
+        ticker="AAPL.US",
+        side="sell",
+        quantity=1.0,
+        order_type="stop_limit",
+        limit_price=95.0,
+        stop_price=96.0,
+        time_in_force="gtc",
+    )
+    assert order.stop_price == 96.0
+    assert order.time_in_force == "gtc"
+
+
+@pytest.mark.parametrize("field", ["stop_price", "limit_price"])
+@pytest.mark.parametrize("value", [0.0, -1.0, float("nan"), float("inf")])
+def test_order_prices_must_be_positive_and_finite(field, value):
+    kwargs = {"order_type": "limit", "limit_price": 10.0, field: value}
+    with pytest.raises(ValueError, match=field):
+        Order(client_id="x", ticker="AAPL.US", side="buy", quantity=1.0, **kwargs)
+
+
+def test_order_rejects_an_unknown_time_in_force():
+    with pytest.raises(ValueError, match="time_in_force"):
+        Order(
+            client_id="x",
+            ticker="AAPL.US",
+            side="buy",
+            quantity=1.0,
+            time_in_force="week",  # type: ignore[arg-type]
+        )
+
+
+def test_fill_execution_id_and_fee_currency_are_optional():
+    fill = Fill(
+        order_client_id="x",
+        ticker="AAPL.US",
+        quantity=1.0,
+        price=10.0,
+        fee=0.5,
+        filled_at=_now(),
+        side="buy",
+    )
+    assert fill.broker_exec_id is None
+    assert fill.fee_currency is None
+    tagged = dataclasses.replace(fill, broker_exec_id="0001.01", fee_currency="USD")
+    assert tagged.broker_exec_id == "0001.01"

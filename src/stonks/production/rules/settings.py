@@ -14,18 +14,28 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from stonks.production.rules._account_settings import AccountRulesSettings, longer_cycles
 from stonks.production.rules.borrow_check import BorrowCheckSettings
+from stonks.production.rules.capital_ramp import CapitalRampSettings
 from stonks.production.rules.circuit_breaker import CircuitBreakerSettings, Cooldown
 from stonks.production.rules.drawdown_scaling import DrawdownScalingSettings, Schedule
 from stonks.production.rules.exposure import GrossExposureSettings, NetExposureSettings
 from stonks.production.rules.liquidity import LiquiditySettings
+from stonks.production.rules.live_caps import LiveNotionalCapsSettings
 from stonks.production.rules.margin_call import MarginCallSettings
 from stonks.production.rules.max_holding import MaxHoldingSettings
+from stonks.production.rules.max_orders import MaxOrdersPerRunSettings
 from stonks.production.rules.operational_halt import OperationalHaltSettings
 from stonks.production.rules.option_greek_limits import OptionGreekLimitsSettings
 from stonks.production.rules.option_margin import OptionMarginSettings
 from stonks.production.rules.option_max_loss import OptionMaxLossSettings
 from stonks.production.rules.portfolio_vol import PortfolioVolSettings
+from stonks.production.rules.price_band import PriceBandSettings
+from stonks.production.rules.protections import (
+    LosingLockSettings,
+    StopCooldownSettings,
+    StopGuardSettings,
+)
 from stonks.production.rules.risk_per_position import RiskPerPositionSettings
 from stonks.production.rules.sector_cap import SectorCapSettings
 from stonks.production.rules.short_caps import ShortCapsSettings
@@ -33,25 +43,33 @@ from stonks.production.rules.short_option_guard import ShortOptionGuardSettings
 from stonks.production.rules.squeeze_guard import SqueezeGuardSettings
 
 __all__ = [
+    "AccountRulesSettings",
     "BorrowCheckSettings",
+    "CapitalRampSettings",
     "CircuitBreakerSettings",
     "DrawdownScalingSettings",
     "GrossExposureSettings",
     "LiquiditySettings",
+    "LiveNotionalCapsSettings",
+    "LosingLockSettings",
     "MarginCallSettings",
     "MaxHoldingSettings",
+    "MaxOrdersPerRunSettings",
     "NetExposureSettings",
     "OperationalHaltSettings",
     "OptionGreekLimitsSettings",
     "OptionMarginSettings",
     "OptionMaxLossSettings",
     "PortfolioVolSettings",
+    "PriceBandSettings",
     "RiskPerPositionSettings",
     "RuleSettings",
     "SectorCapSettings",
     "ShortCapsSettings",
     "ShortOptionGuardSettings",
     "SqueezeGuardSettings",
+    "StopCooldownSettings",
+    "StopGuardSettings",
     "merge_schedules",
     "tighter_rule_settings",
 ]
@@ -80,6 +98,18 @@ class RuleSettings(BaseModel):
     option_max_loss: OptionMaxLossSettings = OptionMaxLossSettings()
     option_margin: OptionMarginSettings = OptionMarginSettings()
     short_option_guard: ShortOptionGuardSettings = ShortOptionGuardSettings()
+    # Live safeguards (roadmap 19.6): act only on books at a real broker,
+    # every one off by default.
+    capital_ramp: CapitalRampSettings = CapitalRampSettings()
+    live_notional_caps: LiveNotionalCapsSettings = LiveNotionalCapsSettings()
+    price_band: PriceBandSettings = PriceBandSettings()
+    max_orders_per_run: MaxOrdersPerRunSettings = MaxOrdersPerRunSettings()
+    # The account rules engine (roadmap 19.7), off by default.
+    account_rules: AccountRulesSettings = AccountRulesSettings()
+    # Per-strategy protections for live books (roadmap 19.6), off by default.
+    stop_cooldown: StopCooldownSettings = StopCooldownSettings()
+    stop_guard: StopGuardSettings = StopGuardSettings()
+    losing_lock: LosingLockSettings = LosingLockSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -183,6 +213,35 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "min_dte": max,
         "max_short_contracts": _min_optional,
     },
+    "capital_ramp": {"enabled": _either},
+    "live_notional_caps": {
+        "max_order_notional": _min_optional,
+        "max_day_notional": _min_optional,
+        "max_user_day_notional": _min_optional,
+        "max_global_day_notional": _min_optional,
+    },
+    "price_band": {
+        "band_pct": _min_optional,
+        "nbbo_band_pct": min,
+        "delayed_band_pct": min,
+        "max_gap_pct": _min_optional,
+    },
+    "max_orders_per_run": {
+        "max_opening_orders": _min_optional,
+        "max_closing_orders": _min_optional,
+    },
+    "account_rules": {
+        "enabled": _either,
+        "settlement_days": longer_cycles,
+        "pdt_equity_threshold": max,
+        "pdt_max_day_trades": min,
+        "pdt_window_days": max,
+        "wash_sale_window_days": max,
+        "short_disclosure_threshold": min,
+    },
+    "stop_cooldown": {"cooldown_days": _max_optional, "count_losses": _either},
+    "stop_guard": {"max_stops": _min_optional, "window_days": max, "count_losses": _either},
+    "losing_lock": {"max_consecutive_losses": _min_optional, "lock_days": max},
 }
 
 

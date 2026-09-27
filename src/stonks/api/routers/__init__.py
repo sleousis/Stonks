@@ -24,6 +24,7 @@ from stonks.api.routers import (
     jobs,
     lab,
     ledger,
+    live,
     manual_orders,
     market,
     notifications,
@@ -96,6 +97,7 @@ API_ROUTERS: list[APIRouter] = [
     telegram.router,
     tax.router,
     tax.fx_router,
+    live.router,
 ]
 
 #: Routers that always need a principal, even for reads on loopback.

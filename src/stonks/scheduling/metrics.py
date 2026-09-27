@@ -107,6 +107,9 @@ class MetricsSnapshot:
     scheduled: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     next_runs: Mapping[str, datetime | None] = field(default_factory=dict)
     scheduler_heartbeat: datetime | None = None
+    #: IB Gateway health (roadmap 19.4): ``(gateway, mode, connected,
+    #: last ok)`` per gateway the ``broker_health`` job has seen.
+    brokers: Sequence[tuple[str, str, bool, datetime | None]] = ()
 
 
 def age_bucket(latest: date | None, today: date) -> str:
@@ -231,6 +234,24 @@ def build_metrics(snap: MetricsSnapshot) -> list[MetricFamily]:
             "gauge",
             [Sample(_ts(snap.scheduler_heartbeat))],
         )
+    if snap.brokers:
+        # labelled by gateway name and mode, never by account number
+        add(
+            "stonks_broker_connected",
+            "1 when the broker gateway answered its latest health check.",
+            "gauge",
+            [Sample(int(ok), {"gateway": gw, "mode": mode}) for gw, mode, ok, _ in snap.brokers],
+        )
+        add(
+            "stonks_broker_last_ok_timestamp_seconds",
+            "Unix time the broker gateway last answered a health check.",
+            "gauge",
+            [
+                Sample(_ts(last), {"gateway": gw, "mode": mode})
+                for gw, mode, _, last in snap.brokers
+                if last is not None
+            ],
+        )
     return fams
 
 
@@ -263,6 +284,17 @@ def collect_snapshot(
     now = now or datetime.now(UTC)
     with SqliteState(state_path) as state:
         tables = set(state.tables())
+        brokers = (
+            [
+                (r["gateway"], r["mode"], bool(r["connected"]), _parse(r["last_ok_at"]))
+                for r in state.sql(
+                    "SELECT gateway, mode, connected, last_ok_at FROM broker_gateway_status"
+                    " ORDER BY gateway"
+                )
+            ]
+            if "broker_gateway_status" in tables
+            else []
+        )
         tick_counts = _counts(state, "tick_runs")
         order_counts = _counts(state, "orders")
         job_counts = _counts(state, "jobs")
@@ -302,6 +334,7 @@ def collect_snapshot(
         scheduled=scheduled,
         next_runs=next_runs,
         scheduler_heartbeat=heartbeat,
+        brokers=brokers,
     )
 
 

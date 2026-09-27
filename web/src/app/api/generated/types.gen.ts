@@ -5,6 +5,114 @@ export type ClientOptions = {
 };
 
 /**
+ * AccountProfileBody
+ */
+export type AccountProfileBody = {
+    /**
+     * Account Type
+     */
+    account_type?: 'cash' | 'margin';
+    /**
+     * Allow Short
+     */
+    allow_short?: boolean;
+    /**
+     * Base Currency
+     */
+    base_currency?: string;
+    /**
+     * Client Class
+     */
+    client_class?: 'retail' | 'professional';
+    /**
+     * Fx Policy
+     */
+    fx_policy?: 'refuse' | 'convert';
+    /**
+     * Jurisdiction
+     */
+    jurisdiction: 'us' | 'eu' | 'uk';
+    /**
+     * Wash Sale Mode
+     */
+    wash_sale_mode?: 'warn' | 'block';
+};
+
+/**
+ * AccountProfileView
+ */
+export type AccountProfileView = {
+    /**
+     * Account Type
+     */
+    account_type?: 'cash' | 'margin';
+    /**
+     * Allow Short
+     */
+    allow_short?: boolean;
+    /**
+     * Base Currency
+     */
+    base_currency?: string;
+    /**
+     * Client Class
+     */
+    client_class?: 'retail' | 'professional';
+    /**
+     * Fx Policy
+     */
+    fx_policy?: 'refuse' | 'convert';
+    /**
+     * Jurisdiction
+     */
+    jurisdiction: 'us' | 'eu' | 'uk';
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Wash Sale Mode
+     */
+    wash_sale_mode?: 'warn' | 'block';
+};
+
+/**
+ * AccountRulesSettings
+ */
+export type AccountRulesSettings = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Pdt Equity Threshold
+     */
+    pdt_equity_threshold?: number;
+    /**
+     * Pdt Max Day Trades
+     */
+    pdt_max_day_trades?: number;
+    /**
+     * Pdt Window Days
+     */
+    pdt_window_days?: number;
+    /**
+     * Settlement Days
+     */
+    settlement_days?: {
+        [key: string]: number;
+    };
+    /**
+     * Short Disclosure Threshold
+     */
+    short_disclosure_threshold?: number;
+    /**
+     * Wash Sale Window Days
+     */
+    wash_sale_window_days?: number;
+};
+
+/**
  * ActionDecision
  */
 export type ActionDecision = {
@@ -658,11 +766,21 @@ export type BrokerInfo = {
     /**
      * Kind
      */
-    kind: 'simulated' | 'alpaca';
+    kind: 'simulated' | 'alpaca' | 'ibkr';
     /**
      * Paper
      */
     paper: boolean;
+};
+
+/**
+ * CapitalRampSettings
+ */
+export type CapitalRampSettings = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
 };
 
 /**
@@ -1980,7 +2098,7 @@ export type HaltView = {
     /**
      * Kind
      */
-    kind: 'month_loss' | 'week_loss' | 'drawdown' | 'operational' | 'kill';
+    kind: 'month_loss' | 'week_loss' | 'drawdown' | 'operational' | 'kill' | 'runaway' | 'broker_drift';
     /**
      * Portfolio Id
      */
@@ -3268,6 +3386,76 @@ export type LiquiditySettings = {
 };
 
 /**
+ * LiveAllocationUpdate
+ */
+export type LiveAllocationUpdate = {
+    /**
+     * Amount
+     */
+    amount: number;
+    /**
+     * Currency
+     */
+    currency: string;
+    /**
+     * Reason
+     */
+    reason: string;
+};
+
+/**
+ * LiveAllocationView
+ */
+export type LiveAllocationView = {
+    /**
+     * Amount
+     */
+    amount: number | null;
+    /**
+     * Currency
+     */
+    currency: string | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Reason
+     */
+    reason: string | null;
+    /**
+     * Updated At
+     */
+    updated_at: string | null;
+    /**
+     * Updated By
+     */
+    updated_by: string | null;
+};
+
+/**
+ * LiveNotionalCapsSettings
+ */
+export type LiveNotionalCapsSettings = {
+    /**
+     * Max Day Notional
+     */
+    max_day_notional?: number | null;
+    /**
+     * Max Global Day Notional
+     */
+    max_global_day_notional?: number | null;
+    /**
+     * Max Order Notional
+     */
+    max_order_notional?: number | null;
+    /**
+     * Max User Day Notional
+     */
+    max_user_day_notional?: number | null;
+};
+
+/**
  * LoginRequest
  */
 export type LoginRequest = {
@@ -3301,6 +3489,20 @@ export type LoginView = {
      * User Id
      */
     user_id: string;
+};
+
+/**
+ * LosingLockSettings
+ */
+export type LosingLockSettings = {
+    /**
+     * Lock Days
+     */
+    lock_days?: number;
+    /**
+     * Max Consecutive Losses
+     */
+    max_consecutive_losses?: number | null;
 };
 
 /**
@@ -3655,6 +3857,20 @@ export type MaxHoldingSettings = {
      * Max Holding Bars
      */
     max_holding_bars?: number | null;
+};
+
+/**
+ * MaxOrdersPerRunSettings
+ */
+export type MaxOrdersPerRunSettings = {
+    /**
+     * Max Closing Orders
+     */
+    max_closing_orders?: number | null;
+    /**
+     * Max Opening Orders
+     */
+    max_opening_orders?: number | null;
 };
 
 /**
@@ -5974,6 +6190,28 @@ export type PriceAlertView = {
 };
 
 /**
+ * PriceBandSettings
+ */
+export type PriceBandSettings = {
+    /**
+     * Band Pct
+     */
+    band_pct?: number | null;
+    /**
+     * Delayed Band Pct
+     */
+    delayed_band_pct?: number;
+    /**
+     * Max Gap Pct
+     */
+    max_gap_pct?: number | null;
+    /**
+     * Nbbo Band Pct
+     */
+    nbbo_band_pct?: number;
+};
+
+/**
  * ProbeView
  */
 export type ProbeView = {
@@ -6608,24 +6846,32 @@ export type Role = 'viewer' | 'trader' | 'admin';
  * RuleSettings
  */
 export type RuleSettings = {
+    account_rules?: AccountRulesSettings;
     borrow_check?: BorrowCheckSettings;
+    capital_ramp?: CapitalRampSettings;
     circuit_breaker?: CircuitBreakerSettings;
     drawdown_scaling?: DrawdownScalingSettings;
     gross_exposure?: GrossExposureSettings;
     liquidity?: LiquiditySettings;
+    live_notional_caps?: LiveNotionalCapsSettings;
+    losing_lock?: LosingLockSettings;
     margin_call?: MarginCallSettings;
     max_holding?: MaxHoldingSettings;
+    max_orders_per_run?: MaxOrdersPerRunSettings;
     net_exposure?: NetExposureSettings;
     operational_halt?: OperationalHaltSettings;
     option_greek_limits?: OptionGreekLimitsSettings;
     option_margin?: OptionMarginSettings;
     option_max_loss?: OptionMaxLossSettings;
     portfolio_vol?: PortfolioVolSettings;
+    price_band?: PriceBandSettings;
     risk_per_position?: RiskPerPositionSettings;
     sector_cap?: SectorCapSettings;
     short_caps?: ShortCapsSettings;
     short_option_guard?: ShortOptionGuardSettings;
     squeeze_guard?: SqueezeGuardSettings;
+    stop_cooldown?: StopCooldownSettings;
+    stop_guard?: StopGuardSettings;
 };
 
 /**
@@ -7403,6 +7649,38 @@ export type StepUpdate = {
      * State
      */
     state: 'done' | 'skipped' | 'todo';
+};
+
+/**
+ * StopCooldownSettings
+ */
+export type StopCooldownSettings = {
+    /**
+     * Cooldown Days
+     */
+    cooldown_days?: number | null;
+    /**
+     * Count Losses
+     */
+    count_losses?: boolean;
+};
+
+/**
+ * StopGuardSettings
+ */
+export type StopGuardSettings = {
+    /**
+     * Count Losses
+     */
+    count_losses?: boolean;
+    /**
+     * Max Stops
+     */
+    max_stops?: number | null;
+    /**
+     * Window Days
+     */
+    window_days?: number;
 };
 
 /**
@@ -15296,6 +15574,190 @@ export type RecordCashFlowResponses = {
 };
 
 export type RecordCashFlowResponse = RecordCashFlowResponses[keyof RecordCashFlowResponses];
+
+export type GetAccountProfileData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/account-profile';
+};
+
+export type GetAccountProfileErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetAccountProfileError = GetAccountProfileErrors[keyof GetAccountProfileErrors];
+
+export type GetAccountProfileResponses = {
+    /**
+     * Successful Response
+     */
+    200: AccountProfileView;
+};
+
+export type GetAccountProfileResponse = GetAccountProfileResponses[keyof GetAccountProfileResponses];
+
+export type SetAccountProfileData = {
+    body: AccountProfileBody;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/account-profile';
+};
+
+export type SetAccountProfileErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetAccountProfileError = SetAccountProfileErrors[keyof SetAccountProfileErrors];
+
+export type SetAccountProfileResponses = {
+    /**
+     * Successful Response
+     */
+    200: AccountProfileView;
+};
+
+export type SetAccountProfileResponse = SetAccountProfileResponses[keyof SetAccountProfileResponses];
+
+export type GetLiveAllocationData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/allocation';
+};
+
+export type GetLiveAllocationErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLiveAllocationError = GetLiveAllocationErrors[keyof GetLiveAllocationErrors];
+
+export type GetLiveAllocationResponses = {
+    /**
+     * Successful Response
+     */
+    200: LiveAllocationView;
+};
+
+export type GetLiveAllocationResponse = GetLiveAllocationResponses[keyof GetLiveAllocationResponses];
+
+export type SetLiveAllocationData = {
+    body: LiveAllocationUpdate;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/allocation';
+};
+
+export type SetLiveAllocationErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetLiveAllocationError = SetLiveAllocationErrors[keyof SetLiveAllocationErrors];
+
+export type SetLiveAllocationResponses = {
+    /**
+     * Successful Response
+     */
+    200: LiveAllocationView;
+};
+
+export type SetLiveAllocationResponse = SetLiveAllocationResponses[keyof SetLiveAllocationResponses];
 
 export type ListPriceAlertsData = {
     body?: never;

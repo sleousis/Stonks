@@ -25,3 +25,8 @@ build/
 # End-to-end test output (traces, axe report, server log)
 test-results/
 .e2e-stack/
+
+# IB Gateway credentials (deploy/ibkr/README.md). Server only, never in git.
+deploy/ibkr/secrets/*
+!deploy/ibkr/secrets/.gitignore
+!deploy/ibkr/secrets/README.md

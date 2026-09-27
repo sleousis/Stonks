@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 19. It takes Stonks from simulated paper trading to real orders at Interactive Brokers (IBKR), in stages, with a gate between each stage.
 
-Status: proposed. Nothing here is built yet.
+Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules). The IBKR adapter (19.2) and the rest are proposed. What wave 1 changed against this design is listed in section 11.
 
 Owner decisions (2026-09-27):
 
@@ -11,6 +11,13 @@ Owner decisions (2026-09-27):
 - The account location is not decided. Account rules are built for the US and for the EU and UK, and chosen per portfolio.
 - Alpaca stays off.
 - Secrets come only from the environment, never from git or TOML.
+
+Later owner decisions (2026-09-27), which this page now follows:
+
+- No mandatory approve stage. Auto may place live orders once the broker paper stage passes. Approve each trade stays an optional mode, not a gate.
+- The broker account is shared with the owner's own manual trading. Stonks only trades the positions it opened itself (ownership by attribution, `production/ownership.py`). It never touches, counts against, or sells the owner's own positions, and reconciliation does not treat them as drift. Manual trades are allowed by default.
+- The first live account is a cash account, long only. The account rules enforce settled cash only, no free-riding, no shorts and no margin. Margin with longs and shorts is a later Phase 19 follow-up, and the seams stay ready for it.
+- The owner sets, by hand, the amount Stonks may trade per live portfolio. There are no automatic ramp steps or suggestions. Changing it needs a fresh second factor and is audited. A bad week (TCA gap, drift, rejections) raises an alert but does not cut the amount. The kill switch and the halts still stop trading.
 
 Non-goals for this phase: options (Phase 17), futures, crypto at IBKR, advisor and family sub-accounts, intraday strategies, and a second live broker.
 
@@ -39,8 +46,7 @@ stateDiagram-v2
   sim_paper --> broker_paper: gate 1 passes + owner promotes
   broker_paper --> live_small: gate 2 passes + owner promotes
   live_small --> live_scale: gate 3 passes + owner promotes
-  live_scale --> live_scale: ramp step up after clean weeks
-  live_scale --> live_small: dirty week or drift
+  live_scale --> live_scale: owner raises the allocation by hand
   live_small --> broker_paper: drift, repeated rejects or owner
   broker_paper --> sim_paper: owner
 ```
@@ -49,8 +55,8 @@ stateDiagram-v2
 |---|---|---|---|
 | 0. `sim_paper` | none | `SimulatedBroker` | the tick, as today |
 | 1. `broker_paper` | none | IBKR paper account (`DU...` id) through IB Gateway in paper mode | the tick, auto mode |
-| 2. `live_small` | a small slice of a real account | IBKR live account (`U...` id) | approve mode first, then auto |
-| 3. `live_scale` | the slice grows along the capital ramp | same | auto |
+| 2. `live_small` | a small allocation the owner sets | IBKR live account (`U...` id) | auto (approve mode is optional) |
+| 3. `live_scale` | the owner raises the allocation by hand | same | auto |
 
 ### What we measure
 
@@ -74,21 +80,22 @@ A **clean week** is five sessions with zero unresolved drift at every end-of-day
 
 ### Gate 1 to 2: broker paper to live small
 
-- Entry: gate 1 report passes. The owner funded the live account, picked the account-rules profile (section 5), bought the market data (section 10), and set the live safeguards. Defaults for this stage: capital ramp at 5% of net liquidation value, per-order notional cap 1,000 in base currency, per-day cap 5,000, 10 opening orders per run, approve mode on.
-- Measure: all five numbers. Now the TCA gap is real, and approval latency is added (time from ticket to decision).
-- Exit (gate 2 report): at least 8 weeks in `live_small`, the last 6 clean, at least 30 filled live orders, the mean TCA gap's 95% interval includes zero or sits below it (the cost model is not too cheap), and at least 2 weeks in auto after approve mode with nothing a human had to fix.
+- Entry: gate 1 report passes. The owner funded the live account, picked the account profile (section 5), bought the market data (section 10), set the allocation by hand, and set the live safeguards. Suggested limits for this stage: per-order notional cap 1,000 in base currency, per-day cap 5,000, 10 opening orders per run. Approve mode is optional.
+- Measure: all five numbers. Now the TCA gap is real. With approve mode on, approval latency is added (time from ticket to decision).
+- Exit (gate 2 report): at least 8 weeks in `live_small`, the last 6 clean, at least 30 filled live orders, and the mean TCA gap's 95% interval includes zero or sits below it (the cost model is not too cheap).
 
 ### Gate 2 to 3: live small to scale up
 
 - Entry: gate 2 report passes.
 - Measure: the same, per ramp step.
-- Ramp: 5%, 10%, 25%, 50%, 100% of the capital the owner allocated to the portfolio. Each step up needs 4 clean weeks at the current step, a gate report, a reason and a step-up second factor. A dirty week drops one step on its own. Drift or a runaway halt drops back to `live_small` (5%).
-- Exit: none. `live_scale` at 100% is steady state. The quit rule, the circuit breaker and the drift checks keep running.
+- Allocation: the owner raises the amount by hand when they are ready, with a reason and a fresh second factor. Stonks never suggests or changes it. A dirty week raises an alert. Drift or a runaway halt stops new buys through the halts, as always.
+- Exit: none. `live_scale` is steady state. The quit rule, the circuit breaker and the drift checks keep running.
 
 ### Stage state
 
-- `portfolios.live_stage` holds the current stage and the ramp step.
-- `live_stage_changes (id, portfolio_id, from_stage, to_stage, ramp_pct, actor, reason, gate_report_json, created_at)` is append-only, like `status_changes`.
+- `portfolios.live_stage` holds the current stage.
+- `live_allocations (portfolio_id, amount, currency, reason, updated_at, updated_by)` holds the owner's amount (built in 19.6). Every change also writes an `audit_log` row.
+- `live_stage_changes (id, portfolio_id, from_stage, to_stage, actor, reason, gate_report_json, created_at)` is append-only, like `status_changes`.
 - `stonks live stage show|promote|demote <portfolio> --reason "..."`, the same in the API (step-up) and on the go-live page. MCP can read stages but not promote.
 - A promote needs a gate report computed at that moment, not a cached one.
 
@@ -356,49 +363,45 @@ New Prometheus families in `scheduling/metrics.py`, labelled by portfolio (never
 
 New registered risk rules in `production/rules/`. They run only for books whose broker is live (a new `RiskContext.live` field holds the account state, quotes and stage). In backtests and paper books `ctx.live` is `None` and every one of them does nothing, so backtests stay identical. Like every rule they only drop or shrink opening orders, and never drop an order that closes a position (P28). The property tests in `tests/property/` pick them up from the registry.
 
-| Rule | Runs | What it does |
+| Rule | Runs (`order`) | What it does |
 |---|---|---|
-| `capital_ramp` | whole-list rule, after `portfolio_vol` and before the circuit breaker (the exact `order` values are fixed in 19.6) | Scales opening buys so the book's gross exposure stays under ramp pct times the allocated capital, capped at the account's net liquidation value. |
-| `live_notional_caps` | order-rule pass, before `cash_buffer` | Per-order cap and per-day cap for opening orders, per portfolio. A per-user and a global daily cap sit on top. The day's sent notional is read from `orders`. |
-| `price_band` | order-rule pass, before `cash_buffer`, so cash sees the collared price | Fat-finger check. Sets or clamps the limit price of every order to the reference plus or minus the band. Drops an opening order whose reference moved beyond the gap limit since the decision. |
-| `max_orders_per_run` | order-rule pass, after `cash_buffer` | At most N opening orders per run. Closing orders beyond a higher ceiling trip a `runaway` halt and send the whole run to approval. |
-| `account_rules` | order-rule pass, before `min_order_notional` | Calls the account rules engine (section 5). |
+| `capital_ramp` | whole-list rule (4), after `portfolio_vol` and before the circuit breaker | The owner's allocation cap. Scales every opening order by one factor so the book's gross exposure stays at or under the allocation, capped at the account's net liquidation value. No allocation means nothing opens. |
+| `live_notional_caps` | whole-list rule (9), before the order-rule pass | Per-order cap and per-day cap for opening orders, per portfolio. A per-user and a global daily cap sit on top. The day's sent notional is read from `orders`. |
+| `price_band` | whole-list rule (9), before the order-rule pass | Fat-finger check. Sets or clamps the limit price of every order to the reference plus or minus the band. Drops an opening order whose reference moved beyond the gap limit since the decision. |
+| `account_rules` | whole-list rule (65), between `cash_buffer` and `min_order_notional` | Calls the account rules engine (section 5). |
+| `max_orders_per_run` | whole-list rule (80), last | At most N opening orders per run, dropped lowest score first. A run with more closing orders than a higher ceiling is a runaway: every opening order is dropped, each close is tagged, and the `live_runaway` hook opens a `runaway` halt (buys). |
+
+Every live rule is a whole-list rule. An order rule can change only a quantity, and `price_band` changes prices, while the caps need a running total across the run.
 
 ### Settings
 
-Under `[production.live]`, with portfolio and owner overrides that can only tighten (`RiskPolicy.tighter_of`):
+The limits are risk rule settings under `[production.risk.rules.<rule>]`, so portfolio and owner overrides can only tighten them (`RiskPolicy.tighter_of` and `MERGE_RULES`). Every one is off by default:
 
 ```toml
-[production.live]
-# Capital ramp: the steps a stage walks through, in percent of allocated capital.
-ramp_steps = [5, 10, 25, 50, 100]
-clean_weeks_per_step = 4
-allocated_capital = 0          # set per portfolio. 0 means nothing may open
+[production.risk.rules.capital_ramp]
+enabled = true                 # cap gross exposure at the owner's allocation
 
-[production.live.caps]
+[production.risk.rules.live_notional_caps]
 max_order_notional = 1000      # base currency
 max_day_notional = 5000
 max_user_day_notional = 10000
 max_global_day_notional = 20000
 
-[production.live.price_band]
+[production.risk.rules.price_band]
 band_pct = 0.02                # limit within 2% of the reference
 nbbo_band_pct = 0.01           # and within 1% outside the bid or ask when live quotes exist
 delayed_band_pct = 0.01        # tighter band when only a delayed quote or the lake close exists
 max_gap_pct = 0.05             # drop an opening order when price moved more than 5% since the decision
 
-[production.live.orders]
-max_opening_orders_per_run = 10
-max_closing_orders_per_run = 30
+[production.risk.rules.max_orders_per_run]
+max_opening_orders = 10
+max_closing_orders = 30
 
-[production.live.approval]
-expires_before_open_minutes = 20
-required_for_hard_to_borrow = true
-
-[production.live.stops]
-enabled = false
-atr_multiple = 3.0
+[production.risk.rules.account_rules]
+enabled = true
 ```
+
+`[production.live]` holds what is not a risk rule: `allow_manual_trades` (default `true`) today, and later the approval and stop settings (19.8, 19.10). The allocation is not a setting. The owner sets it per portfolio in the console (`PUT /api/portfolios/{id}/live/allocation`, step-up, audited).
 
 ### Fat-finger bands
 
@@ -408,17 +411,17 @@ atr_multiple = 3.0
 
 ### Max orders per run
 
-A bug that emits 500 orders must not reach the broker. Opening orders beyond the limit are dropped in score order. Closing orders are never dropped, but a run that tries to close more than the ceiling is not sent: every order becomes an approval ticket and a `runaway` halt (mode `buys`) is opened for the portfolio.
+A bug that emits 500 orders must not reach the broker. Opening orders beyond the limit are dropped in score order. Closing orders are never dropped. A run that tries to close more than the ceiling loses every opening order and opens a `runaway` halt (mode `buys`) for the portfolio. Once tickets exist (19.8), such a run becomes approval tickets instead of being sent.
 
-### Capital ramp
+### Allocation cap
 
-- The ramp step is part of the portfolio's live stage (section 1).
-- The rule scales only opening buys. A step down does not sell anything. The book shrinks as positions close in the normal course.
-- Step changes write `live_stage_changes` rows with a reason.
+- The owner sets the amount per live portfolio by hand, with a reason and a fresh second factor. It is stored in `live_allocations` and audited.
+- The `capital_ramp` rule scales only opening orders. Lowering the amount does not sell anything. The book shrinks as positions close in the normal course.
+- Stonks never changes the amount. A bad week alerts.
 
 ### Approve mode
 
-A fourth mode between paper and auto: `approve`. The tick decides, and every order waits for a person.
+An optional fourth mode between paper and auto: `approve`. The tick decides, and every order waits for a person. It is not a gate: a book may go from paper straight to auto once the broker paper stage passes.
 
 ```mermaid
 stateDiagram-v2
@@ -432,7 +435,7 @@ stateDiagram-v2
   submitted --> cancelled
 ```
 
-- Mode ladder: notify, paper, approve, auto. Switching to approve needs the same checklist as auto (20 paper days, active strategy, healthy trading connection, no halt, step-up). Moving from approve to auto needs nothing more, because approve already met the auto checklist.
+- Mode ladder: notify, paper, approve, auto. Approve is optional. Switching to approve needs the same checklist as auto (20 paper days, active strategy, healthy trading connection, no halt, step-up). Moving from approve to auto needs nothing more, because approve already met the auto checklist.
 - `order_tickets (id, portfolio_id, tick_id, client_id, order_json, preview_json, reason_json, status, expires_at, decided_by, decided_at, decision_reason, created_at)`. The ticket carries the client id, so a submitted ticket is idempotent like any order.
 - The push is high urgency with a minimal payload, as the notification design requires: "3 orders wait for approval in Growth". No amounts or tickers leave the server.
 - The ticket view in the console looks like an order ticket: side, ticker, quantity, limit, notional, the reason (signal, score, target weight), the what-if margin and commission, the band, and the risk and account rules that touched it. Approve one, reject one with a reason, or approve all for a run.
@@ -476,10 +479,10 @@ flowchart LR
   ALL --> V
 ```
 
-**Account profile.** `account_profiles (portfolio_id, jurisdiction, account_type, client_class, base_currency, fx_policy, wash_sale_mode, updated_at, updated_by)`:
+**Account profile.** `account_profiles (portfolio_id, jurisdiction, account_type, client_class, base_currency, fx_policy, wash_sale_mode, allow_short, updated_at, updated_by)`, set in the console (`PUT /api/portfolios/{id}/live/account-profile`, step-up, audited):
 
 - `jurisdiction` in {`us`, `eu`, `uk`}. It follows the IBKR entity that holds the account, not the owner's passport.
-- `account_type` in {`cash`, `margin`}. Shorts need `margin` (`allow_short` is refused on a cash profile).
+- `account_type` in {`cash`, `margin`}, default `cash`. The owner's first live account is a cash account, long only. Shorts need `margin` (`allow_short` is refused on a cash profile, by the service and by the table). Margin with longs and shorts is a later follow-up.
 - `client_class` in {`retail`, `professional`}. It decides the product restrictions.
 - The profile is checked against IBKR's `AccountType` at connect. A mismatch refuses to trade.
 - Changing a profile needs a step-up and an audit row. It can only be set before the first live stage, or with the book in `broker_paper`.
@@ -488,17 +491,19 @@ flowchart LR
 
 | Rule | What it checks |
 |---|---|
-| `settlement` | Tracks each fill's settlement date from the security's market, not the account's jurisdiction: US securities settle T+1. EU and UK markets settle T+2 today and plan to move to T+1 in October 2027, so the cycle is a setting per market. |
-| `buying_power` | Buys fit IBKR's `AvailableFunds` (margin) or settled cash (cash), net of the other orders of the run. The what-if answer wins when it is stricter. |
-| `restricted` | Drops buys of tickers on a restricted list: a per-portfolio list the owner keeps, and names IBKR refused earlier (cached from rejection text). |
-| `fx_funding` | A buy in a currency the account does not hold enough of follows `fx_policy`: `refuse` (default), or `convert` (a separate FX order through IBKR before the buy, own ticket). A cash account never borrows a currency. |
+| settlement | Not a gate. The settlement ledger tracks each fill's settlement date from the security's market, not the account's jurisdiction: US securities settle T+1. EU and UK markets settle T+2 today and plan to move to T+1 in October 2027, so the cycle is a setting per market (`settlement_days`). |
+| `restricted` | Drops opening orders in tickers on a restricted list: a per-portfolio list the owner keeps, and names IBKR refused earlier. |
+| `short_permission` | Drops every short sale on a cash account, and on a margin account whose profile does not allow shorts. |
+| `account_known` | With no account state from the broker, nothing opens. |
+| `settled_cash` | Cash accounts: buys use settled cash only, net of the other buys of the run. Sale proceeds never count until they settle, so the account never buys with money it has not received yet (no free-riding, no margin). |
+| `buying_power` | Margin accounts: buys fit `AvailableFunds`, net of the other buys of the run. The what-if answer wins when it is stricter (19.2). |
+| `fx_funding` | A buy in a currency the account does not hold enough of is clipped to what it holds. `convert` (a separate FX order before the buy) is not built yet, so both policies only spend what is held. A cash account never borrows a currency. |
 
 ### US rules
 
 | Rule | What it checks |
 |---|---|
-| `pdt` | Pattern day trader rule for margin accounts under 25,000 USD equity: at most 3 day trades in 5 business days. We count day trades (open and close of the same ticker in one session, protective stops included) and cross-check IBKR's `DayTradesRemaining`. An order that would make the 4th is dropped (an open) or needs approval (a close, never dropped). FINRA has proposed replacing this rule, so the threshold and count are settings. A daily strategy rarely day-trades, but stops can. |
-| `settled_cash` | Cash accounts: buys use settled cash only, and a position bought with unsettled funds is not sold before those funds settle (a good-faith violation). A would-be violation drops the buy. |
+| `pdt` | Pattern day trader rule for margin accounts under 25,000 USD equity: at most 3 day trades in 5 business days. We count day trades (open and close of the same ticker in one session) and cross-check IBKR's `DayTradesRemaining`, and the stricter wins. A close that would make the 4th needs approval (never dropped). With no day trade left, opening orders are dropped, since a stop could make another. Cash accounts are not subject to it. FINRA has proposed replacing this rule, so the threshold and count are settings. A daily strategy rarely day-trades, but stops can. |
 | `wash_sale` | A buy within 30 days of selling the same ticker at a loss is tagged in the journal. `wash_sale_mode` is `warn` (default) or `block` (drops the buy). Tax reporting stays with the broker. |
 | `reg_sho` | Opening short sales need a borrow quote (the locate). When a stock is under the short sale price test (Rule 201, after a 10% fall from the prior close), an opening short must be a limit above the bid. Our collared order may not be, so the rule drops it. |
 
@@ -552,8 +557,8 @@ sequenceDiagram
 **Policy.**
 
 - Positions are exact. One share off is drift.
-- Manual trades in a Stonks-managed account are not allowed by default (`[production.live] allow_manual_trades = false`). An unknown position or order opens a `broker_drift` halt (buys) for the portfolio and pauses its auto subscriptions. Closing orders keep working.
-- With `allow_manual_trades = true`, a manual position is adopted into an `unmanaged` sleeve. Strategies never sell it and the risk rules count it.
+- The owner trades by hand in the same account, so manual trades are allowed by default (`[production.live] allow_manual_trades = true`). Stonks only trades the positions it opened (ownership by attribution). The owner's positions and orders are kept apart as external: never sold, never counted as the book's, and never drift. Only a difference in Stonks' own positions, orders or fills is drift.
+- With `allow_manual_trades = false`, an unknown position or order opens a `broker_drift` halt (buys) for the portfolio and pauses its auto subscriptions. Closing orders keep working.
 - Clearing a `broker_drift` halt needs a reason, like every halt. The reconcile report is linked in the audit row.
 - A drift item that stays unexplained for 2 checks demotes the stage one step (section 1).
 
@@ -653,7 +658,7 @@ Each package owns the tests of its own modules. Shared files (`config.py`, `conf
 | 19.9 Stages, gates and preview | The stage state machine and `live_stage_changes`, `live_gate_days`, the gate reports, `stonks live stage` and `stonks live preview`, the go-live page section. | `production/live/stages.py`, `production/live/gates.py`, `production/live/preview.py`, `app/live.py`, `api/routers/live.py`, `web/src/app/golive/*`, `store/migrations_sqlite/NNN_live_stages.sql` |
 | 19.10 Protective stops | Stop placement after entry fills, resizing and cancelling, OCA groups, attribution of stop fills. | `production/live/stops.py` |
 | 19.11 Live tests, drills and runbooks | Live contract tests, `tools/live_soak.py`, `stonks halts drill` and `kill_switch_drills`, the five runbooks, the ops and deploy doc sections. | `tests/integration/live/test_ibkr_live.py`, `tools/live_soak.py`, `production/drills.py`, `docs/runbooks/{broker-outage,stuck-order,reconcile-drift,gateway-reauth,kill-switch-drill}.md` |
-| 19.12 Go live | Not code. Run stage 1 (20 days paper soak), gate 1, stage 2 with approve mode then auto, gate 2, then the ramp. Each step has a logged reason. | operations only |
+| 19.12 Go live | Not code. Run stage 1 (20 days paper soak), gate 1, stage 2 in auto (approve mode optional), gate 2, then raise the allocation by hand. Each step has a logged reason. | operations only |
 
 Waves:
 
@@ -680,12 +685,31 @@ Waves:
 ## Open questions
 
 1. Where will the account be (US, EU or UK)? Everything else follows from this.
-2. Cash or margin account, and do you want shorts live in this phase?
-3. How long should approve mode last in stage 2: the 2 weeks proposed, or until you switch it off?
-4. Are the ramp steps (5, 10, 25, 50, 100%) and 4 clean weeks per step right?
-5. May you trade by hand in the same IBKR account? The default says no (a separate account for manual trading is simpler).
+2. Answered: a cash account, long only, for now. Margin with shorts is a later follow-up.
+3. Answered: approve mode is optional, not a stage.
+4. Answered: no ramp steps. The owner sets the allocation by hand.
+5. Answered: yes, the account is shared. Stonks only trades its own positions.
 6. For an EU or UK account with a EUR or GBP base: hold a USD balance, or convert per trade (`fx_policy`)?
 7. Opening auction for every order (proposed, matches the backtest) or a day order at the open with a collar?
 8. Will other traders bring their own IBKR logins? Each login needs its own gateway container and its own weekly approval.
 9. Do you want a read-only stage (gateway with `READ_ONLY_API=yes`, sync only) before broker paper?
 10. Fractional shares stay off in this phase. Do small accounts need them later?
+
+## 11. What wave 1 built
+
+Wave 1 landed 19.1, 19.4, 19.6 and 19.7, plus the deploy side of 20.6. Where it differs from the sections above:
+
+- **Settings.** The safeguard limits are risk rule settings under `[production.risk.rules.<rule>]`, not `[production.live.*]`, so the existing tighten-only merge covers them. `[production.live]` holds only `allow_manual_trades` for now.
+- **Rule kinds.** Every live rule is a whole-list rule (section 4). `live_notional_caps` and `price_band` run before the order-rule pass, `account_rules` between `cash_buffer` and `min_order_notional`, and `max_orders_per_run` last.
+- **Allocation.** `capital_ramp` keeps its name but is the owner's allocation cap. It is stored in `live_allocations` and set through `PUT /api/portfolios/{id}/live/allocation` with the new step-up permission `live.manage`.
+- **Runaway.** A runaway run loses its opening orders and opens a `runaway` halt, but its closes still go out. Holding them as tickets waits for 19.8.
+- **Account rules.** The engine adds `short_permission` and `account_known`. `fx_funding` only spends what is held (conversion orders come later). Transaction taxes in the cost model are left for a later wave, so `backtest/costs.py` is untouched. Profile changes are not yet locked to the stage (stages are 19.9).
+- **Halts.** Migration 027 adds both `runaway` and `broker_drift` to `risk_halts` now, so 19.5 needs no table rebuild.
+- **Gateway health.** The `broker_health` job runs in the scheduler, so the scheduler joins the internal `ibkr` network too. Metrics are labelled by gateway and mode, never by account. A gateway down for two sessions, or with a real fault, pauses the auto subscriptions of the portfolios listed on it (`[brokers.ibkr.gateways.<name>] portfolios`). `SocketProbe` only checks the port. The adapter adds a login and account check (19.2).
+- **One migration.** Everything wave 1 stores is in SQLite migration 028: live order and fill columns, halt kinds, `live_allocations`, `broker_gateway_status`, `account_profiles`, `settlement_ledger`, `account_restricted` and `product_documents`.
+- **Order state machine.** `orders.state` holds the fine state: `pending`, `submitted`, `accepted`, `partially_filled`, `filled`, `pending_cancel`, `cancelled`, `expired`, `rejected` and `unknown`. `status` follows it, so every reader keeps working. Changes go through one transition table (`execution/order_state.py`) with a property test, and reconciliation refuses a report the table forbids. IBKR statuses map onto it in `execution/brokers/ibkr/status.py`. The tick's own writers move over with the submit split (19.8).
+- **Timed-out orders.** A submit, cancel or modify whose outcome is unknown becomes `unknown`. Nothing is sent for it again until reconciliation resolves it by client id. `startup_reconcile` and `require_reconciled` are the gate a submit window waits for (19.8 calls them).
+- **Clock.** Phase 19 code takes a `Clock` (`core/clock.py`: system, fixed and fake) instead of calling the time itself.
+- **Instruments.** Wave 1 needed no contract details, so it adds no instrument model. The IBKR adapter uses the shared `InstrumentSpec` in `core/` (tick size, lot size, multiplier, currency, broker contract ids) when it lands.
+- **Protections.** Three more live rules, freqtrade style, off by default: `stop_cooldown` (no reopen of a ticker for some days after a stop-out), `stop_guard` (a strategy opens nothing after N stop-outs in a window) and `losing_lock` (a ticker whose last trades all lost is locked). They read the book's closed trades from its own fills. Until broker-side stops exist, a losing exit counts as a stop-out.
+- **Seam ready for 19.2.** `BrokerKind` has `ibkr`, `[brokers.ibkr]` lists the gateways and refuses credentials in TOML, and `make_broker(kind="ibkr")` refuses until the adapter lands. `build_live_context` reads the account and quotes through the new capabilities, so the adapter only has to implement them. Nothing wires `build_live_context` into the tick yet: that is the decide and submit split of 19.8.

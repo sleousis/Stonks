@@ -1,0 +1,152 @@
+# IB Gateway
+
+Stonks trades at Interactive Brokers through IB Gateway, a small Java app that holds the login session. It runs as a container next to the api. Design: [docs/design/live-trading.md](../../docs/design/live-trading.md), section 3.
+
+## The two services
+
+| Service | Profile | Account | Port on the `ibkr` network |
+|---------|---------|---------|----------------------------|
+| `ib-gateway-paper` | `ibkr-paper` | IBKR paper account | 4004 |
+| `ib-gateway-live` | `ibkr-live` | IBKR live account | 4003 |
+
+- Image `ghcr.io/gnzsnz/ib-gateway` (IB Gateway plus IBC, which types the login and restarts the app). It is pinned to a version tag in `deploy/compose.yaml`. Update it on purpose and test on paper first.
+- Ports 4004 and 4003 are the image's relays to the gateway's API port. They live on the `ibkr` network, which is internal: only `api`, `scheduler` and the gateways join it. Nothing is published on the host.
+- The gateways reach IBKR's servers through their own `ibkr_egress` network. No Stonks service joins it.
+- VNC is off. See [One-off manual login](#one-off-manual-login-over-vnc) to turn it on for a moment.
+- Each gateway has a 1 GB memory limit (`IBKR_GATEWAY_MEMORY`).
+
+```mermaid
+flowchart LR
+  subgraph ibkr["ibkr network (internal)"]
+    API[api<br/>tick, submit, sync]
+    SCH[scheduler<br/>broker_health]
+    GP[ib-gateway-paper :4004]
+    GL[ib-gateway-live :4003]
+  end
+  API --> GP
+  API --> GL
+  SCH -. probe .-> GP
+  SCH -. probe .-> GL
+  GP -- ibkr_egress --> IB[(IBKR servers)]
+  GL -- ibkr_egress --> IB
+  PHONE[IBKR Mobile] -. weekly 2FA .-> IB
+```
+
+## Secret files
+
+The username and password come only from files in `deploy/ibkr/secrets/`. Docker mounts them into the gateway container at `/run/secrets/`. The Stonks containers never see them. Paper and live have separate files.
+
+| File | Holds |
+|------|-------|
+| `paper_username.txt` | Paper account username |
+| `paper_password.txt` | Paper account password |
+| `live_username.txt` | Dedicated live API username |
+| `live_password.txt` | Its password |
+
+Create them on the server, in `/opt/stonks/deploy` (or your checkout's `deploy/` folder):
+
+```bash
+cd deploy/ibkr/secrets
+umask 077
+read -r -p 'IBKR paper username: ' u && printf '%s' "$u" > paper_username.txt
+read -r -s -p 'IBKR paper password: ' p && printf '%s' "$p" > paper_password.txt && echo
+chmod 600 ./*.txt
+# The gateway runs as uid 1000 and Compose mounts the files as they are.
+sudo chown 1000:1000 ./*.txt
+```
+
+Do the same for `live_username.txt` and `live_password.txt` before you start the live profile.
+
+- `read -s` keeps the password out of your shell history and off the screen.
+- Never commit these files. The folder's `.gitignore` ignores everything except itself and its README.
+- Never put them in `.env`, TOML, chat or a ticket.
+- The image has `TWS_PASSWORD_FILE` but no file variable for the username. The Compose entrypoint reads the username file into `TWS_USERID` inside the container, then starts the image as usual.
+- Start a profile only after its two files exist.
+
+To change a password: update the file, then `docker compose --profile ibkr-live up -d --force-recreate ib-gateway-live`.
+
+## A dedicated username
+
+A login with the same username anywhere else (TWS, the web portal, the mobile app) kicks the gateway off. IBKR calls this a competing session. So:
+
+- In IBKR's Client Portal, create a **secondary username** with trading rights and market data. The gateway uses it and nothing else does.
+- Keep your main username for your own logins.
+- Never run the paper and live gateways with the same username. Each login would end the other.
+
+## The weekly login
+
+- **Daily.** IB Gateway must restart once a day. IBC restarts it at `AUTO_RESTART_TIME` (`IBKR_AUTO_RESTART_TIME`, default `11:45 PM` in `IBKR_TIME_ZONE`, default `America/New_York`). This keeps the session, so no 2FA is needed. Pick a quiet time away from the submit window (open minus 20 minutes) and the tick (close plus 45 minutes).
+- **Weekly.** After IBKR's Sunday reset (about 01:00 US Eastern) the session expires. IBC types the password and IBKR pushes an approval to **IBKR Mobile** on your phone. Approve it.
+- **Missed it?** `TWOFA_TIMEOUT_ACTION=restart` and `RELOGIN_AFTER_TWOFA_TIMEOUT=yes` make the gateway restart and ask again, so a late approval still works.
+- Stonks sends a push every Sunday evening (`ibkr_reauth_reminder`) and checks the gateway every 5 minutes (`broker_health`).
+
+If the gateway is down at submit time, no orders go out that day and the tickets expire. Nothing is ever sent late. Down for two sessions in a row pauses auto subscriptions. See the design doc, "When the gateway is down".
+
+## One-off manual login over VNC
+
+Sometimes IBKR asks for something IBC cannot type (a new agreement, a security question). Turn VNC on for a few minutes, over Tailscale only:
+
+1. Create `deploy/ibkr/secrets/vnc_password.txt` (as above, `chmod 600`, owner 1000).
+2. Add a file `deploy/compose.vnc.yaml` on the server only:
+
+   ```yaml
+   services:
+     ib-gateway-live:
+       environment:
+         VNC_SERVER_PASSWORD_FILE: /run/secrets/ibkr_vnc_password
+       secrets: [ibkr_live_username, ibkr_live_password, ibkr_vnc_password]
+       ports: ["${STONKS_TS_IP}:5900:5900"]
+   secrets:
+     ibkr_vnc_password:
+       file: ./ibkr/secrets/vnc_password.txt
+   ```
+
+   `STONKS_TS_IP` is the server's Tailscale address (`tailscale ip -4`). Binding to it keeps the port off the public internet and off your home network.
+3. `docker compose -f compose.yaml -f compose.vnc.yaml --profile ibkr-live up -d ib-gateway-live`
+4. Connect a VNC viewer from a tailnet device to `<server>:5900`, finish the login.
+5. Turn it off again: `docker compose --profile ibkr-live up -d ib-gateway-live`, then delete `vnc_password.txt` and `compose.vnc.yaml`.
+
+## Memory
+
+The gateway is a Java process. Plan about 1 GB per gateway.
+
+- A 4 GB VM or home server holds the core stack plus one gateway.
+- Paper and live at once want 8 GB.
+- See [docs/capacity.md](../../docs/capacity.md).
+
+## How Stonks connects
+
+In your server config (TOML), one table per gateway:
+
+```toml
+[brokers.ibkr]
+allow_live = false          # the live gateway is refused until you set true
+
+[brokers.ibkr.gateways.paper]
+host = "ib-gateway-paper"
+port = 4004
+mode = "paper"
+portfolios = ["pf_default"]
+
+[brokers.ibkr.gateways.live]
+host = "ib-gateway-live"
+port = 4003
+mode = "live"
+portfolios = ["pf_live"]
+```
+
+- `host` is the Compose service name. It resolves only on the `ibkr` network.
+- `portfolios` lists the portfolio ids that trade through that gateway.
+- `allow_live = false` is the default. Keep it until the paper gate in the design doc passes.
+- No username, password or token goes in TOML. The optional Flex statements token is `STONKS_IBKR_FLEX_TOKEN` in `deploy/.env`.
+
+## Start and stop
+
+```bash
+docker compose --profile ibkr-paper up -d        # paper gateway
+docker compose --profile ibkr-live up -d         # live gateway
+docker compose logs -f ib-gateway-paper          # watch the login
+docker compose --profile ibkr-paper stop ib-gateway-paper
+```
+
+Or add `ibkr-paper` (and later `ibkr-live`) to `COMPOSE_PROFILES` in `deploy/.env` so every `up` and deploy starts it.

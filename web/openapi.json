@@ -1,6 +1,195 @@
 {
   "components": {
     "schemas": {
+      "AccountProfileBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_type": {
+            "default": "cash",
+            "enum": [
+              "cash",
+              "margin"
+            ],
+            "title": "Account Type",
+            "type": "string"
+          },
+          "allow_short": {
+            "default": false,
+            "title": "Allow Short",
+            "type": "boolean"
+          },
+          "base_currency": {
+            "default": "USD",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Base Currency",
+            "type": "string"
+          },
+          "client_class": {
+            "default": "retail",
+            "enum": [
+              "retail",
+              "professional"
+            ],
+            "title": "Client Class",
+            "type": "string"
+          },
+          "fx_policy": {
+            "default": "refuse",
+            "enum": [
+              "refuse",
+              "convert"
+            ],
+            "title": "Fx Policy",
+            "type": "string"
+          },
+          "jurisdiction": {
+            "enum": [
+              "us",
+              "eu",
+              "uk"
+            ],
+            "title": "Jurisdiction",
+            "type": "string"
+          },
+          "wash_sale_mode": {
+            "default": "warn",
+            "enum": [
+              "warn",
+              "block"
+            ],
+            "title": "Wash Sale Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "jurisdiction"
+        ],
+        "title": "AccountProfileBody",
+        "type": "object"
+      },
+      "AccountProfileView": {
+        "additionalProperties": false,
+        "properties": {
+          "account_type": {
+            "default": "cash",
+            "enum": [
+              "cash",
+              "margin"
+            ],
+            "title": "Account Type",
+            "type": "string"
+          },
+          "allow_short": {
+            "default": false,
+            "title": "Allow Short",
+            "type": "boolean"
+          },
+          "base_currency": {
+            "default": "USD",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Base Currency",
+            "type": "string"
+          },
+          "client_class": {
+            "default": "retail",
+            "enum": [
+              "retail",
+              "professional"
+            ],
+            "title": "Client Class",
+            "type": "string"
+          },
+          "fx_policy": {
+            "default": "refuse",
+            "enum": [
+              "refuse",
+              "convert"
+            ],
+            "title": "Fx Policy",
+            "type": "string"
+          },
+          "jurisdiction": {
+            "enum": [
+              "us",
+              "eu",
+              "uk"
+            ],
+            "title": "Jurisdiction",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "wash_sale_mode": {
+            "default": "warn",
+            "enum": [
+              "warn",
+              "block"
+            ],
+            "title": "Wash Sale Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "jurisdiction",
+          "portfolio_id"
+        ],
+        "title": "AccountProfileView",
+        "type": "object"
+      },
+      "AccountRulesSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "pdt_equity_threshold": {
+            "default": 25000.0,
+            "minimum": 0.0,
+            "title": "Pdt Equity Threshold",
+            "type": "number"
+          },
+          "pdt_max_day_trades": {
+            "default": 3,
+            "minimum": 0.0,
+            "title": "Pdt Max Day Trades",
+            "type": "integer"
+          },
+          "pdt_window_days": {
+            "default": 5,
+            "minimum": 1.0,
+            "title": "Pdt Window Days",
+            "type": "integer"
+          },
+          "settlement_days": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Settlement Days",
+            "type": "object"
+          },
+          "short_disclosure_threshold": {
+            "default": 0.001,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Short Disclosure Threshold",
+            "type": "number"
+          },
+          "wash_sale_window_days": {
+            "default": 30,
+            "minimum": 0.0,
+            "title": "Wash Sale Window Days",
+            "type": "integer"
+          }
+        },
+        "title": "AccountRulesSettings",
+        "type": "object"
+      },
       "ActionDecision": {
         "additionalProperties": false,
         "properties": {
@@ -1207,7 +1396,8 @@
           "kind": {
             "enum": [
               "simulated",
-              "alpaca"
+              "alpaca",
+              "ibkr"
             ],
             "title": "Kind",
             "type": "string"
@@ -1224,6 +1414,18 @@
           "credentials_configured"
         ],
         "title": "BrokerInfo",
+        "type": "object"
+      },
+      "CapitalRampSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "title": "CapitalRampSettings",
         "type": "object"
       },
       "CashFlowCreate": {
@@ -3681,7 +3883,9 @@
               "week_loss",
               "drawdown",
               "operational",
-              "kill"
+              "kill",
+              "runaway",
+              "broker_drift"
             ],
             "title": "Kind",
             "type": "string"
@@ -6254,6 +6458,164 @@
         "title": "LiquiditySettings",
         "type": "object"
       },
+      "LiveAllocationUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "minimum": 0.0,
+            "title": "Amount",
+            "type": "number"
+          },
+          "currency": {
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "currency",
+          "reason"
+        ],
+        "title": "LiveAllocationUpdate",
+        "type": "object"
+      },
+      "LiveAllocationView": {
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "amount",
+          "currency",
+          "reason",
+          "updated_at",
+          "updated_by"
+        ],
+        "title": "LiveAllocationView",
+        "type": "object"
+      },
+      "LiveNotionalCapsSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_day_notional": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Day Notional"
+          },
+          "max_global_day_notional": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Global Day Notional"
+          },
+          "max_order_notional": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Order Notional"
+          },
+          "max_user_day_notional": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max User Day Notional"
+          }
+        },
+        "title": "LiveNotionalCapsSettings",
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -6306,6 +6668,31 @@
           "csrf_token"
         ],
         "title": "LoginView",
+        "type": "object"
+      },
+      "LosingLockSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "lock_days": {
+            "default": 30,
+            "minimum": 1.0,
+            "title": "Lock Days",
+            "type": "integer"
+          },
+          "max_consecutive_losses": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Consecutive Losses"
+          }
+        },
+        "title": "LosingLockSettings",
         "type": "object"
       },
       "LotPick": {
@@ -6902,6 +7289,37 @@
           }
         },
         "title": "MaxHoldingSettings",
+        "type": "object"
+      },
+      "MaxOrdersPerRunSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "max_closing_orders": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Closing Orders"
+          },
+          "max_opening_orders": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Opening Orders"
+          }
+        },
+        "title": "MaxOrdersPerRunSettings",
         "type": "object"
       },
       "McptOptions": {
@@ -10847,6 +11265,53 @@
         "title": "PriceAlertView",
         "type": "object"
       },
+      "PriceBandSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "band_pct": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1.0,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band Pct"
+          },
+          "delayed_band_pct": {
+            "default": 0.01,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Delayed Band Pct",
+            "type": "number"
+          },
+          "max_gap_pct": {
+            "anyOf": [
+              {
+                "exclusiveMaximum": 1.0,
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Gap Pct"
+          },
+          "nbbo_band_pct": {
+            "default": 0.01,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Nbbo Band Pct",
+            "type": "number"
+          }
+        },
+        "title": "PriceBandSettings",
+        "type": "object"
+      },
       "ProbeView": {
         "properties": {
           "checks": {
@@ -11564,7 +12029,32 @@
           "rules": {
             "$ref": "#/components/schemas/RuleSettings",
             "default": {
+              "account_rules": {
+                "enabled": false,
+                "pdt_equity_threshold": 25000.0,
+                "pdt_max_day_trades": 3,
+                "pdt_window_days": 5,
+                "settlement_days": {
+                  "AS": 2,
+                  "BR": 2,
+                  "F": 2,
+                  "LSE": 2,
+                  "MC": 2,
+                  "MI": 2,
+                  "PA": 2,
+                  "SW": 2,
+                  "TO": 1,
+                  "US": 1,
+                  "XETRA": 2,
+                  "default": 2
+                },
+                "short_disclosure_threshold": 0.001,
+                "wash_sale_window_days": 30
+              },
               "borrow_check": {
+                "enabled": false
+              },
+              "capital_ramp": {
                 "enabled": false
               },
               "circuit_breaker": {
@@ -11574,6 +12064,10 @@
               "drawdown_scaling": {},
               "gross_exposure": {},
               "liquidity": {},
+              "live_notional_caps": {},
+              "losing_lock": {
+                "lock_days": 30
+              },
               "margin_call": {
                 "buffer": 0.0,
                 "enabled": false,
@@ -11590,6 +12084,7 @@
                 }
               },
               "max_holding": {},
+              "max_orders_per_run": {},
               "net_exposure": {},
               "operational_halt": {},
               "option_greek_limits": {},
@@ -11600,6 +12095,10 @@
               },
               "option_max_loss": {},
               "portfolio_vol": {},
+              "price_band": {
+                "delayed_band_pct": 0.01,
+                "nbbo_band_pct": 0.01
+              },
               "risk_per_position": {
                 "atr_multiple": 3.0
               },
@@ -11613,6 +12112,13 @@
               },
               "squeeze_guard": {
                 "spike_bars": 5
+              },
+              "stop_cooldown": {
+                "count_losses": true
+              },
+              "stop_guard": {
+                "count_losses": true,
+                "window_days": 7
               }
             }
           }
@@ -12081,8 +12587,39 @@
       "RuleSettings": {
         "additionalProperties": false,
         "properties": {
+          "account_rules": {
+            "$ref": "#/components/schemas/AccountRulesSettings",
+            "default": {
+              "enabled": false,
+              "pdt_equity_threshold": 25000.0,
+              "pdt_max_day_trades": 3,
+              "pdt_window_days": 5,
+              "settlement_days": {
+                "AS": 2,
+                "BR": 2,
+                "F": 2,
+                "LSE": 2,
+                "MC": 2,
+                "MI": 2,
+                "PA": 2,
+                "SW": 2,
+                "TO": 1,
+                "US": 1,
+                "XETRA": 2,
+                "default": 2
+              },
+              "short_disclosure_threshold": 0.001,
+              "wash_sale_window_days": 30
+            }
+          },
           "borrow_check": {
             "$ref": "#/components/schemas/BorrowCheckSettings",
+            "default": {
+              "enabled": false
+            }
+          },
+          "capital_ramp": {
+            "$ref": "#/components/schemas/CapitalRampSettings",
             "default": {
               "enabled": false
             }
@@ -12106,6 +12643,16 @@
             "$ref": "#/components/schemas/LiquiditySettings",
             "default": {}
           },
+          "live_notional_caps": {
+            "$ref": "#/components/schemas/LiveNotionalCapsSettings",
+            "default": {}
+          },
+          "losing_lock": {
+            "$ref": "#/components/schemas/LosingLockSettings",
+            "default": {
+              "lock_days": 30
+            }
+          },
           "margin_call": {
             "$ref": "#/components/schemas/MarginCallSettings",
             "default": {
@@ -12126,6 +12673,10 @@
           },
           "max_holding": {
             "$ref": "#/components/schemas/MaxHoldingSettings",
+            "default": {}
+          },
+          "max_orders_per_run": {
+            "$ref": "#/components/schemas/MaxOrdersPerRunSettings",
             "default": {}
           },
           "net_exposure": {
@@ -12156,6 +12707,13 @@
             "$ref": "#/components/schemas/PortfolioVolSettings",
             "default": {}
           },
+          "price_band": {
+            "$ref": "#/components/schemas/PriceBandSettings",
+            "default": {
+              "delayed_band_pct": 0.01,
+              "nbbo_band_pct": 0.01
+            }
+          },
           "risk_per_position": {
             "$ref": "#/components/schemas/RiskPerPositionSettings",
             "default": {
@@ -12183,6 +12741,19 @@
             "$ref": "#/components/schemas/SqueezeGuardSettings",
             "default": {
               "spike_bars": 5
+            }
+          },
+          "stop_cooldown": {
+            "$ref": "#/components/schemas/StopCooldownSettings",
+            "default": {
+              "count_losses": true
+            }
+          },
+          "stop_guard": {
+            "$ref": "#/components/schemas/StopGuardSettings",
+            "default": {
+              "count_losses": true,
+              "window_days": 7
             }
           }
         },
@@ -13600,6 +14171,60 @@
           "state"
         ],
         "title": "StepUpdate",
+        "type": "object"
+      },
+      "StopCooldownSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "cooldown_days": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cooldown Days"
+          },
+          "count_losses": {
+            "default": true,
+            "title": "Count Losses",
+            "type": "boolean"
+          }
+        },
+        "title": "StopCooldownSettings",
+        "type": "object"
+      },
+      "StopGuardSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "count_losses": {
+            "default": true,
+            "title": "Count Losses",
+            "type": "boolean"
+          },
+          "max_stops": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Stops"
+          },
+          "window_days": {
+            "default": 7,
+            "minimum": 1.0,
+            "title": "Window Days",
+            "type": "integer"
+          }
+        },
+        "title": "StopGuardSettings",
         "type": "object"
       },
       "StrategyClassInfo": {
@@ -29600,6 +30225,380 @@
           "portfolio"
         ],
         "x-permission": "portfolio.manage"
+      }
+    },
+    "/api/portfolios/{portfolio_id}/live/account-profile": {
+      "get": {
+        "description": "The account profile (404 until one is set).",
+        "operationId": "getAccountProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountProfileView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Account Profile",
+        "tags": [
+          "live"
+        ]
+      },
+      "put": {
+        "description": "Set where the account is held and its type. Shorts need a margin\naccount. Needs a fresh second factor.",
+        "operationId": "setAccountProfile",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountProfileBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountProfileView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Account Profile",
+        "tags": [
+          "live"
+        ],
+        "x-permission": "live.manage"
+      }
+    },
+    "/api/portfolios/{portfolio_id}/live/allocation": {
+      "get": {
+        "description": "How much Stonks may trade in this live portfolio. ``amount`` is\n``null`` until you set it, and then nothing opens.",
+        "operationId": "getLiveAllocation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveAllocationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Live Allocation",
+        "tags": [
+          "live"
+        ]
+      },
+      "put": {
+        "description": "Set the amount by hand, with a reason. Needs a fresh second factor.\nThe book's gross exposure is capped at it (``capital_ramp``).",
+        "operationId": "setLiveAllocation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveAllocationUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveAllocationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Live Allocation",
+        "tags": [
+          "live"
+        ],
+        "x-permission": "live.manage"
       }
     },
     "/api/price-alerts": {

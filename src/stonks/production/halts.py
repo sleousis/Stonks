@@ -62,7 +62,12 @@ __all__ = [
 
 _log = get_logger("stonks.production.halts")
 
-HaltKind = Literal["month_loss", "week_loss", "drawdown", "operational", "kill"]
+#: ``runaway`` (a run that closes more than the ceiling, roadmap 19.6) and
+#: ``broker_drift`` (unexplained reconciliation drift, 19.5) came with
+#: migration 028.
+HaltKind = Literal[
+    "month_loss", "week_loss", "drawdown", "operational", "kill", "runaway", "broker_drift"
+]
 HaltScope = Literal["global", "user", "portfolio"]
 HaltMode = Literal["buys", "all"]
 HALT_KINDS: tuple[str, ...] = get_args(HaltKind)

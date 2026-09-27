@@ -69,6 +69,7 @@ Every route that changes something names one permission. A test walks the route 
 | `tokens.manage` | all | browser session only | create tokens |
 | `tokens.revoke` | all | any | revoke your own token |
 | `password.change`, `mfa.recovery_codes` | all | step-up | your password and recovery codes |
+| `live.manage` | trader, admin | trade, step-up | a live portfolio's allocation and account profile |
 
 The audit actor is always the caller (`user:<id>`). A request body cannot choose it. The old `actor` field on status changes is accepted and ignored.
 
@@ -87,7 +88,7 @@ Portfolio, orders, fills, P&L and insights reads take an optional `portfolio_id`
 
 ## Step-up
 
-Some actions need a second factor checked in the last 10 minutes: user admin, a password change, new recovery codes, a token with `trade` or `admin`, connecting or deleting a broker, turning the kill switch off, and a manual order on a book that trades real money (a preview of it needs none). Confirm with `POST /api/auth/mfa/verify` in the browser first. API tokens can never do these actions. They get `403 step_up_required`. The CLI on the server may still resume, because shell access already implies admin.
+Some actions need a second factor checked in the last 10 minutes: user admin, a password change, new recovery codes, a token with `trade` or `admin`, connecting or deleting a broker, turning the kill switch off, changing a live portfolio's allocation or account profile, and a manual order on a book that trades real money (a preview of it needs none). Confirm with `POST /api/auth/mfa/verify` in the browser first. API tokens can never do these actions. They get `403 step_up_required`. The CLI on the server may still resume, because shell access already implies admin.
 
 ## API tokens
 

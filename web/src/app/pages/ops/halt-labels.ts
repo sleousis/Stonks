@@ -7,6 +7,8 @@ export const HALT_KIND_LABEL: Record<HaltView['kind'], string> = {
   week_loss: 'Weekly loss',
   drawdown: 'Drawdown',
   operational: 'Operational',
+  runaway: 'Runaway orders',
+  broker_drift: 'Broker drift',
 };
 
 /** "Stops: New buys", never "Buys only", which reads as "only buys allowed" (UX-66). */

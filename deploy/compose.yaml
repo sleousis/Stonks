@@ -4,6 +4,17 @@
 #                                               scheduler (python -m stonks.scheduling run)
 #                                               lab-worker (python -m stonks.lab.offload worker)
 #                               api, scheduler and lab-worker share the one `data` volume (/data)
+#   api, scheduler --ibkr (internal)--> ib-gateway-paper :4004 / ib-gateway-live :4003 --> IBKR
+#
+# One file for a cloud VM and a home server (docs/deploy.md). A plain `up`
+# starts the core (api, caddy). Profiles add the rest, via COMPOSE_PROFILES
+# in .env or --profile:
+#   scheduler    the job loop (tick, ingest, health, broker_health)
+#   lab-worker   heavy lab jobs in their own container
+#   backup       the restic tool (one-shot runs)
+#   ibkr-paper   IB Gateway for the IBKR paper account (deploy/ibkr/README.md)
+#   ibkr-live    IB Gateway for the IBKR live account
+#   ai           an Ollama model server for the AI assistant
 #
 # Run from this directory:  docker compose up -d
 # Secrets and settings come from ./.env (copy .env.example; chmod 600).
@@ -34,6 +45,56 @@ x-app: &app
       max-size: 10m
       max-file: "5"
 
+# Shared by both IB Gateway services (ghcr.io/gnzsnz/ib-gateway, IBC inside).
+# Pinned to a version tag. To pin the digest as well, run
+#   docker buildx imagetools inspect ghcr.io/gnzsnz/ib-gateway:<tag>
+# and write the image as ghcr.io/gnzsnz/ib-gateway:<tag>@sha256:<digest>.
+# Update it on purpose, like the Stonks image, and test on paper first.
+x-ib-gateway: &ib-gateway
+  image: ghcr.io/gnzsnz/ib-gateway:10.50.1e
+  restart: unless-stopped
+  # The image has TWS_PASSWORD_FILE but no file variant for the user id.
+  # Read it from its secret file here, so no credential sits in the Compose
+  # environment, then start the image's normal command.
+  entrypoint:
+    - /bin/bash
+    - -c
+    - >-
+      TWS_USERID="$$(tr -d '\r\n' < "$$STONKS_TWS_USERID_FILE")" &&
+      export TWS_USERID &&
+      exec /home/ibgateway/scripts/run.sh
+  # Java: plan about 1 GB per gateway (docs/capacity.md).
+  mem_limit: ${IBKR_GATEWAY_MEMORY:-1g}
+  # ibkr: only api and scheduler can reach the API port. ibkr_egress: the
+  # way out to IBKR's servers, shared with no Stonks service.
+  networks:
+    - ibkr
+    - ibkr_egress
+  # Nothing is published on the host. VNC stays off (no VNC password set).
+  logging: *logging
+
+x-ib-env: &ib-env
+  # "yes" during a read-only soak: the gateway then refuses every order.
+  READ_ONLY_API: ${IBKR_READ_ONLY_API:-no}
+  # Only the internal ibkr network can reach the port, so accept connections.
+  TWS_ACCEPT_INCOMING: accept
+  # Daily restart that keeps the session (no 2FA). A quiet time, away from
+  # the submit (open minus 20 min) and tick (close plus 45 min) windows.
+  AUTO_RESTART_TIME: ${IBKR_AUTO_RESTART_TIME:-11:45 PM}
+  TIME_ZONE: ${IBKR_TIME_ZONE:-America/New_York}
+  # The weekly login waits for the IBKR Mobile approval. If it times out,
+  # restart and ask again instead of giving up.
+  TWOFA_TIMEOUT_ACTION: restart
+  RELOGIN_AFTER_TWOFA_TIMEOUT: "yes"
+
+x-ib-health: &ib-health
+  # Is the socat relay listening? The broker_health job does the real API
+  # handshake (logged in, right account, server time).
+  interval: 30s
+  timeout: 5s
+  start_period: 2m
+  retries: 3
+
 services:
   api:
     <<: *app
@@ -49,6 +110,11 @@ services:
       STONKS_LAB_EXECUTOR: ${STONKS_LAB_EXECUTOR:-in_process}
     expose:
       - "8000"
+    # default: Caddy and the proxy trust range. ibkr: the IB Gateway socket
+    # (the api runs the tick, submits orders and syncs, so it holds the session).
+    networks:
+      - default
+      - ibkr
     # A running tick or ingest is never cut off mid-way. Give it time to
     # finish on shutdown instead of Docker's default 10 s.
     stop_grace_period: 5m
@@ -75,6 +141,11 @@ services:
       STONKS_DATA_DIR: /data
       STONKS_API_URL: http://api:8000
       STONKS_API_TRUSTED_HOSTS: api
+    # ibkr: the broker_health job probes the IB Gateway socket every few
+    # minutes. It never holds a trading session, the api does.
+    networks:
+      - default
+      - ibkr
     # Let a running job's wait finish (or time out cleanly) on shutdown.
     stop_grace_period: 2m
     # On when COMPOSE_PROFILES includes "scheduler" (deploy/.env).
@@ -135,6 +206,69 @@ services:
       - no-new-privileges:true
     logging: *logging
 
+  # IB Gateway (roadmap 19.4, deploy/ibkr/README.md). Paper and live have
+  # their own profile, their own IBKR username and their own secret files.
+  # Never run both with the same username: each login kicks the other off.
+  ib-gateway-paper:
+    <<: *ib-gateway
+    profiles: ["ibkr-paper"]
+    environment:
+      <<: *ib-env
+      TRADING_MODE: paper
+      TWS_PASSWORD_FILE: /run/secrets/ibkr_paper_password
+      STONKS_TWS_USERID_FILE: /run/secrets/ibkr_paper_username
+    secrets:
+      - ibkr_paper_username
+      - ibkr_paper_password
+    # The image's socat relay for the paper API port (4002 inside).
+    expose:
+      - "4004"
+    healthcheck:
+      <<: *ib-health
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/4004"]
+
+  ib-gateway-live:
+    <<: *ib-gateway
+    profiles: ["ibkr-live"]
+    environment:
+      <<: *ib-env
+      TRADING_MODE: live
+      TWS_PASSWORD_FILE: /run/secrets/ibkr_live_password
+      STONKS_TWS_USERID_FILE: /run/secrets/ibkr_live_username
+    secrets:
+      - ibkr_live_username
+      - ibkr_live_password
+    # The image's socat relay for the live API port (4001 inside).
+    expose:
+      - "4003"
+    healthcheck:
+      <<: *ib-health
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/4003"]
+
+  # Optional model server for the AI assistant (roadmap 20.4, 20.6). Ollama
+  # serves an OpenAI-compatible API at http://model-server:11434/v1, which the
+  # app reads from STONKS_AI_BASE_URL. Private: default network only, no port
+  # on the host. Pull a model once:
+  #   docker compose exec model-server ollama pull <model>
+  model-server:
+    image: ollama/ollama:0.34.4
+    profiles: ["ai"]
+    restart: unless-stopped
+    expose:
+      - "11434"
+    volumes:
+      - models:/root/.ollama
+    # A 7-8B model at 4-bit needs about 6 GB. Raise it for bigger models.
+    # With an NVIDIA GPU and its container toolkit, add `gpus: all` here.
+    mem_limit: ${STONKS_AI_MEMORY:-8g}
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    logging: *logging
+
   # One-shot backup tool, not started by `up`. See deploy/backup/.
   restic:
     image: restic/restic:0.18.0
@@ -157,6 +291,24 @@ networks:
     ipam:
       config:
         - subnet: ${STONKS_DOCKER_SUBNET:-172.31.250.0/24}
+  # The IB Gateway API ports. Internal: no way out, and only api, scheduler
+  # and the gateways join it.
+  ibkr:
+    internal: true
+  # The gateways' way out to IBKR. No Stonks service joins it.
+  ibkr_egress:
+
+# IBKR credentials, one file each, read by the gateway containers only
+# (deploy/ibkr/README.md). Create them before you start a gateway profile.
+secrets:
+  ibkr_paper_username:
+    file: ./ibkr/secrets/paper_username.txt
+  ibkr_paper_password:
+    file: ./ibkr/secrets/paper_password.txt
+  ibkr_live_username:
+    file: ./ibkr/secrets/live_username.txt
+  ibkr_live_password:
+    file: ./ibkr/secrets/live_password.txt
 
 volumes:
   # All Stonks state: lake.duckdb, Parquet bars, state.sqlite, artifacts,
@@ -172,3 +324,5 @@ volumes:
   restic_cache:
   # Scratch target for restore tests; wiped by restore-test.sh.
   restore:
+  # Model weights for the model server (profile ai). Several GB per model.
+  models:

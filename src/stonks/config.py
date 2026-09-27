@@ -21,6 +21,7 @@ from stonks.assistant.settings import AssistantConfig
 from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
+from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
 from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.offload.settings import LabOffloadSettings
@@ -29,6 +30,7 @@ from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.ops.config import BackupConfig
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.decay import DecaySettings
+from stonks.production.live.settings import LiveSettings
 from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.rules.settings import RuleSettings
@@ -126,8 +128,11 @@ class BrokersConfig(BaseModel):
 
     # Which broker the production tick trades through. "simulated" (default)
     # needs no keys; "alpaca" is opt-in and needs ALPACA_API_KEY/SECRET_KEY.
-    kind: Literal["simulated", "alpaca"] = "simulated"
+    # "ibkr" is the Interactive Brokers adapter (roadmap 19.2, not built yet).
+    kind: Literal["simulated", "alpaca", "ibkr"] = "simulated"
     alpaca: AlpacaBrokerConfig = Field(default_factory=AlpacaBrokerConfig)
+    # ``[brokers.ibkr]``: the IB Gateways Stonks can reach (roadmap 19.4).
+    ibkr: IbkrBrokerConfig = Field(default_factory=IbkrBrokerConfig)
 
 
 class LakeBarsConfig(BaseModel):
@@ -261,6 +266,8 @@ class ProductionConfig(BaseModel):
     risk_monitor: RiskMonitorSettings = RiskMonitorSettings()
     # ``[production.decay]``: the alpha-decay check per strategy sleeve.
     decay: DecaySettings = DecaySettings()
+    # ``[production.live]``: live trading at a real broker (roadmap 19).
+    live: LiveSettings = LiveSettings()
 
 
 class GoLivePolicy(BaseModel):
@@ -542,6 +549,7 @@ ENV_ONLY_SECRETS: tuple[str, ...] = (
     "EODHD_API_KEY",
     "ALPACA_API_KEY",
     "ALPACA_SECRET_KEY",
+    "STONKS_IBKR_FLEX_TOKEN",
 )
 
 

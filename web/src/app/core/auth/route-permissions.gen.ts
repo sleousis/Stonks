@@ -8,6 +8,7 @@ export type RoutePermission =
   | 'killswitch.resume'
   | 'killswitch.user'
   | 'lab.run'
+  | 'live.manage'
   | 'mfa.recovery_codes'
   | 'notifications.manage'
   | 'operations.run'
@@ -122,6 +123,8 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'PUT /api/notifications/webhook': 'notifications.manage',
   'PUT /api/onboarding': 'data.read',
   'PUT /api/onboarding/steps/{step}': 'data.read',
+  'PUT /api/portfolios/{portfolio_id}/live/account-profile': 'live.manage',
+  'PUT /api/portfolios/{portfolio_id}/live/allocation': 'live.manage',
   'PUT /api/risk/limits': 'portfolio.manage',
   'PUT /api/tax/lots/picks': 'portfolio.manage',
   'PUT /api/tax/settings': 'portfolio.manage',

@@ -45,7 +45,7 @@ STATUS_CACHE_SECONDS = 30.0
 
 
 class BrokerInfo(BaseModel):
-    kind: Literal["simulated", "alpaca"]
+    kind: Literal["simulated", "alpaca", "ibkr"]
     #: Alpaca paper endpoint (ignored by the simulated broker).
     paper: bool
     allow_live: bool

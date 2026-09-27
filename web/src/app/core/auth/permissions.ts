@@ -51,6 +51,7 @@ export const POLICY: Readonly<Record<Permission, Rule>> = {
   'mfa.recovery_codes': { roles: ALL, scopes: ['read'] },
   'password.change': { roles: ALL, scopes: ['read'] },
   'orders.approve': { roles: TRADERS, scopes: ['trade'], sessionOnly: true },
+  'live.manage': { roles: TRADERS, scopes: ['trade'] },
 };
 
 /** True when `me` holds `permission` (false when nobody is signed in). */

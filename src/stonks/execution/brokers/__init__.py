@@ -62,6 +62,11 @@ def make_broker(
     kind = kind or settings.brokers.kind
     if kind == "simulated":
         return SimulatedCosts.from_settings(settings).build_broker(portfolio)
+    if kind == "ibkr":
+        raise BrokerError(
+            "the Interactive Brokers adapter is not built yet (roadmap 19.2); "
+            "keep [brokers] kind = 'simulated' until it lands"
+        )
     if kind == "alpaca":
         cfg = settings.brokers.alpaca
         return AlpacaBroker.connect(

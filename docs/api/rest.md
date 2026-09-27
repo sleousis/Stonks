@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -189,6 +189,15 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/lab/survival-tests` | List Survival Tests | sign-in |  | list[[SurvivalTestInfo](#survivaltestinfo)] |
 | POST | `/api/lab/sweeps` | Start Sweep | `lab.run` | [SweepRequest](#sweeprequest) | [Job](#job) |
 | GET | `/api/lab/sweeps/{job_id}/result` | Get Sweep Result | sign-in |  | [SweepResultView](#sweepresultview) |
+
+## live endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/portfolios/{portfolio_id}/live/account-profile` | Get Account Profile | sign-in |  | [AccountProfileView](#accountprofileview) |
+| PUT | `/api/portfolios/{portfolio_id}/live/account-profile` | Set Account Profile | `live.manage` | [AccountProfileBody](#accountprofilebody) | [AccountProfileView](#accountprofileview) |
+| GET | `/api/portfolios/{portfolio_id}/live/allocation` | Get Live Allocation | sign-in |  | [LiveAllocationView](#liveallocationview) |
+| PUT | `/api/portfolios/{portfolio_id}/live/allocation` | Set Live Allocation | `live.manage` | [LiveAllocationUpdate](#liveallocationupdate) | [LiveAllocationView](#liveallocationview) |
 
 ## market endpoints
 
@@ -420,6 +429,43 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | DELETE | `/api/watchlists/{watchlist_id}` | Delete Watchlist | `portfolio.manage` |  |  |
 
 ## Schemas
+
+### AccountProfileBody
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `account_type` | "cash" \| "margin" | no |  |
+| `allow_short` | boolean | no |  |
+| `base_currency` | string | no |  |
+| `client_class` | "retail" \| "professional" | no |  |
+| `fx_policy` | "refuse" \| "convert" | no |  |
+| `jurisdiction` | "us" \| "eu" \| "uk" | yes |  |
+| `wash_sale_mode` | "warn" \| "block" | no |  |
+
+### AccountProfileView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `account_type` | "cash" \| "margin" | no |  |
+| `allow_short` | boolean | no |  |
+| `base_currency` | string | no |  |
+| `client_class` | "retail" \| "professional" | no |  |
+| `fx_policy` | "refuse" \| "convert" | no |  |
+| `jurisdiction` | "us" \| "eu" \| "uk" | yes |  |
+| `portfolio_id` | string | yes |  |
+| `wash_sale_mode` | "warn" \| "block" | no |  |
+
+### AccountRulesSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | boolean | no |  |
+| `pdt_equity_threshold` | number | no |  |
+| `pdt_max_day_trades` | integer | no |  |
+| `pdt_window_days` | integer | no |  |
+| `settlement_days` | dict[str, integer] | no |  |
+| `short_disclosure_threshold` | number | no |  |
+| `wash_sale_window_days` | integer | no |  |
 
 ### ActionDecision
 
@@ -659,8 +705,14 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 |-------|------|----------|-------------|
 | `allow_live` | boolean | yes |  |
 | `credentials_configured` | boolean | yes |  |
-| `kind` | "simulated" \| "alpaca" | yes |  |
+| `kind` | "simulated" \| "alpaca" \| "ibkr" | yes |  |
 | `paper` | boolean | yes |  |
+
+### CapitalRampSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | boolean | no |  |
 
 ### CashFlowCreate
 
@@ -1144,7 +1196,7 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | `expires_on` | date \| null | yes |  |
 | `halt` | "buys" \| "all" | yes |  |
 | `id` | integer | yes |  |
-| `kind` | "month_loss" \| "week_loss" \| "drawdown" \| "operational" \| "kill" | yes |  |
+| `kind` | "month_loss" \| "week_loss" \| "drawdown" \| "operational" \| "kill" \| "runaway" \| "broker_drift" | yes |  |
 | `portfolio_id` | string \| null | yes |  |
 | `reason` | string | yes |  |
 | `scope` | "global" \| "user" \| "portfolio" | yes |  |
@@ -1583,6 +1635,34 @@ One recorded lab run: what was tested, why, and how it came out.
 | `max_pct_adv` | number \| null | no |  |
 | `min_median_dollar_volume` | number \| null | no |  |
 
+### LiveAllocationUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | number | yes |  |
+| `currency` | string | yes |  |
+| `reason` | string | yes |  |
+
+### LiveAllocationView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | number \| null | yes |  |
+| `currency` | string \| null | yes |  |
+| `portfolio_id` | string | yes |  |
+| `reason` | string \| null | yes |  |
+| `updated_at` | date-time \| null | yes |  |
+| `updated_by` | string \| null | yes |  |
+
+### LiveNotionalCapsSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_day_notional` | number \| null | no |  |
+| `max_global_day_notional` | number \| null | no |  |
+| `max_order_notional` | number \| null | no |  |
+| `max_user_day_notional` | number \| null | no |  |
+
 ### LoginRequest
 
 | Field | Type | Required | Description |
@@ -1598,6 +1678,13 @@ One recorded lab run: what was tested, why, and how it came out.
 | `display_name` | string | yes |  |
 | `next_step` | "enrol" \| "verify" | yes |  |
 | `user_id` | string | yes |  |
+
+### LosingLockSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `lock_days` | integer | no |  |
+| `max_consecutive_losses` | integer \| null | no |  |
 
 ### LotPick
 
@@ -1739,6 +1826,13 @@ Which margin model a book uses, and its rates.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `max_holding_bars` | integer \| null | no |  |
+
+### MaxOrdersPerRunSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_closing_orders` | integer \| null | no |  |
+| `max_opening_orders` | integer \| null | no |  |
 
 ### McptOptions
 
@@ -2626,6 +2720,15 @@ Change the name, the thresholds or switch the rule on or off. The target and the
 | `watchlist_id` | string \| null | yes |  |
 | `window_days` | integer \| null | yes |  |
 
+### PriceBandSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `band_pct` | number \| null | no |  |
+| `delayed_band_pct` | number | no |  |
+| `max_gap_pct` | number \| null | no |  |
+| `nbbo_band_pct` | number | no |  |
+
 ### ProbeView
 
 | Field | Type | Required | Description |
@@ -2872,24 +2975,32 @@ Type: "viewer" \| "trader" \| "admin"
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `account_rules` | [AccountRulesSettings](#accountrulessettings) | no |  |
 | `borrow_check` | [BorrowCheckSettings](#borrowchecksettings) | no |  |
+| `capital_ramp` | [CapitalRampSettings](#capitalrampsettings) | no |  |
 | `circuit_breaker` | [CircuitBreakerSettings](#circuitbreakersettings) | no |  |
 | `drawdown_scaling` | [DrawdownScalingSettings](#drawdownscalingsettings) | no |  |
 | `gross_exposure` | [GrossExposureSettings](#grossexposuresettings) | no |  |
 | `liquidity` | [LiquiditySettings](#liquiditysettings) | no |  |
+| `live_notional_caps` | [LiveNotionalCapsSettings](#livenotionalcapssettings) | no |  |
+| `losing_lock` | [LosingLockSettings](#losinglocksettings) | no |  |
 | `margin_call` | [MarginCallSettings](#margincallsettings) | no |  |
 | `max_holding` | [MaxHoldingSettings](#maxholdingsettings) | no |  |
+| `max_orders_per_run` | [MaxOrdersPerRunSettings](#maxordersperrunsettings) | no |  |
 | `net_exposure` | [NetExposureSettings](#netexposuresettings) | no |  |
 | `operational_halt` | [OperationalHaltSettings](#operationalhaltsettings) | no |  |
 | `option_greek_limits` | [OptionGreekLimitsSettings](#optiongreeklimitssettings) | no |  |
 | `option_margin` | [OptionMarginSettings](#optionmarginsettings) | no |  |
 | `option_max_loss` | [OptionMaxLossSettings](#optionmaxlosssettings) | no |  |
 | `portfolio_vol` | [PortfolioVolSettings](#portfoliovolsettings) | no |  |
+| `price_band` | [PriceBandSettings](#pricebandsettings) | no |  |
 | `risk_per_position` | [RiskPerPositionSettings](#riskperpositionsettings) | no |  |
 | `sector_cap` | [SectorCapSettings](#sectorcapsettings) | no |  |
 | `short_caps` | [ShortCapsSettings](#shortcapssettings) | no |  |
 | `short_option_guard` | [ShortOptionGuardSettings](#shortoptionguardsettings) | no |  |
 | `squeeze_guard` | [SqueezeGuardSettings](#squeezeguardsettings) | no |  |
+| `stop_cooldown` | [StopCooldownSettings](#stopcooldownsettings) | no |  |
+| `stop_guard` | [StopGuardSettings](#stopguardsettings) | no |  |
 
 ### RuleTemplateView
 
@@ -3177,6 +3288,21 @@ One audited status change or intervention (BL-24).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `state` | "done" \| "skipped" \| "todo" | yes |  |
+
+### StopCooldownSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cooldown_days` | integer \| null | no |  |
+| `count_losses` | boolean | no |  |
+
+### StopGuardSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `count_losses` | boolean | no |  |
+| `max_stops` | integer \| null | no |  |
+| `window_days` | integer | no |  |
 
 ### StrategyClassInfo
 
