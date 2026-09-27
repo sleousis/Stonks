@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import type { MarketSessionsView, ScheduledJobView } from '../../api/models';
+import type { MarketSessionsView } from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { formatTime, formatWeekday } from '../../core/format/format';
 import { HaltStateService } from '../../core/halts/halt-state.service';
@@ -19,6 +19,7 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
 import { haltSummary } from '../../core/halts/halt-view';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { humanize } from './param-form/param-spec';
+import { nextJob } from '../../core/schedule/job-labels';
 import { PortfolioPicker } from './portfolio-picker';
 
 /** How often the strip re-reads the schedule (the countdown ticks every second). */
@@ -27,19 +28,7 @@ export const SCHEDULE_POLL_MS = new InjectionToken<number>('SCHEDULE_POLL_MS', {
   factory: () => 5 * 60_000,
 });
 
-/** The job that fires next, from `GET /api/schedule`. */
-export function nextJob(jobs: readonly ScheduledJobView[], now: number): ScheduledJobView | null {
-  let best: ScheduledJobView | null = null;
-  let bestAt = Infinity;
-  for (const j of jobs) {
-    const at = j.next_run_at ? Date.parse(j.next_run_at) : NaN;
-    if (Number.isFinite(at) && at >= now - 60_000 && at < bestAt) {
-      best = j;
-      bestAt = at;
-    }
-  }
-  return best;
-}
+export { nextJob } from '../../core/schedule/job-labels';
 
 /** "2h 05m", "4m 09s", "12s", "now". */
 export function countdown(ms: number): string {

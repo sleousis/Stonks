@@ -55,6 +55,19 @@ export class PortfolioContextService {
   readonly live = computed(() => this.current()?.trading === 'live');
   /** Worth showing a picker: more than one portfolio to choose from. */
   readonly hasChoice = computed(() => this.optionsSignal().length > 1);
+  /**
+   * The user has a portfolio to show (UX-13). Money pages check this before
+   * reading: false only once the list has loaded empty. A server without
+   * the list route (`missing`) keeps the old behaviour and counts as true.
+   */
+  readonly hasBook = computed(() => {
+    const state = this.stateSignal();
+    return state !== 'ready' || this.optionsSignal().length > 0;
+  });
+  /** The list has loaded and is empty: send the trader to open a portfolio. */
+  readonly noBook = computed(
+    () => this.stateSignal() === 'ready' && this.optionsSignal().length === 0,
+  );
 
   /** Read the list once (`force` reads again). Never throws. */
   load(force = false): Promise<void> {

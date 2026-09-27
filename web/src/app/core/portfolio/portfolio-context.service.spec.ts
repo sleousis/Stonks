@@ -69,6 +69,19 @@ describe('PortfolioContextService', () => {
     expect(localStorage.getItem('stonks.portfolio')).toBeNull();
   });
 
+  it('knows when the user has no portfolio (UX-13)', async () => {
+    expect(ctx.noBook()).toBe(false);
+    await load([]);
+    expect(ctx.noBook()).toBe(true);
+    expect(ctx.hasBook()).toBe(false);
+  });
+
+  it('counts a server without the list route as having a book', async () => {
+    await load(null, 404);
+    expect(ctx.hasBook()).toBe(true);
+    expect(ctx.noBook()).toBe(false);
+  });
+
   it('stays hidden on a server without the route', async () => {
     await load(null, 404);
     expect(ctx.state()).toBe('missing');
