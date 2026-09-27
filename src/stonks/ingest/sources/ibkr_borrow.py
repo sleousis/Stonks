@@ -21,8 +21,8 @@ The FTP transport uses the standard library and is injected in tests.
 from __future__ import annotations
 
 import ftplib
-import re
 import io
+import re
 from collections.abc import Callable, Iterable
 from datetime import date, datetime
 from typing import Any
