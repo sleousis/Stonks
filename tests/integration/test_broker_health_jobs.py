@@ -20,11 +20,11 @@ from stonks.store.state import SqliteState
 AT = datetime(2026, 9, 27, 22, tzinfo=UTC)  # a Sunday
 
 
-def _settings(tmp_path, gateways=None) -> Settings:
+def _settings(tmp_path, gateways=None, probe="login") -> Settings:
     s = Settings(
         state={"path": tmp_path / "state.sqlite"},
         notify={"backends": []},
-        brokers={"ibkr": {"gateways": gateways or {}}},
+        brokers={"ibkr": {"gateways": gateways or {}, "health": {"probe": probe}}},
     )
     with SqliteState(s.state.path) as state:
         state.migrate()
@@ -56,7 +56,7 @@ def test_broker_health_probes_a_listening_gateway(tmp_path):
     port = server.getsockname()[1]
     try:
         gw = {"paper": {"host": "127.0.0.1", "port": port, "mode": "paper"}}
-        settings = _settings(tmp_path, gw)
+        settings = _settings(tmp_path, gw, probe="socket")
         out = LOCAL_ACTIONS.get("broker_health")(_ctx(settings, "broker_health"))
     finally:
         server.close()
@@ -66,13 +66,14 @@ def test_broker_health_probes_a_listening_gateway(tmp_path):
     assert row[0]["connected"] == 1
 
 
-def test_broker_health_reports_a_down_gateway(tmp_path):
+@pytest.mark.parametrize("probe_kind", ["socket", "login"])
+def test_broker_health_reports_a_down_gateway(tmp_path, probe_kind):
     probe = socket.socket()
     probe.bind(("127.0.0.1", 0))
     port = probe.getsockname()[1]
     probe.close()  # nothing listens there now
     gw = {"paper": {"host": "127.0.0.1", "port": port, "mode": "paper"}}
-    settings = _settings(tmp_path, gw)
+    settings = _settings(tmp_path, gw, probe=probe_kind)
     settings.brokers.ibkr.health.probe_timeout_seconds = 0.5
     out = LOCAL_ACTIONS.get("broker_health")(_ctx(settings, "broker_health"))
     assert out.status == "failed" and out.detail["down"] == ["paper"] and out.alerted
@@ -86,3 +87,20 @@ def test_the_reminder_is_sent(tmp_path):
     with SqliteState(settings.state.path) as state:
         rows = state.sql("SELECT dedupe_key FROM notification_outbox")
     assert [r["dedupe_key"] for r in rows] == ["ibkr_reauth:2026-W39:pf:pf_default"]
+
+
+def test_login_probe_counts_a_bare_listener_as_down(tmp_path):
+    """A port that accepts but never speaks the TWS API is not a logged-in
+    gateway (roadmap 19.2)."""
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen(1)
+    port = server.getsockname()[1]
+    try:
+        gw = {"paper": {"host": "127.0.0.1", "port": port, "mode": "paper"}}
+        settings = _settings(tmp_path, gw)
+        settings.brokers.ibkr.health.probe_timeout_seconds = 0.5
+        out = LOCAL_ACTIONS.get("broker_health")(_ctx(settings, "broker_health"))
+    finally:
+        server.close()
+    assert out.status == "failed" and out.detail["down"] == ["paper"]

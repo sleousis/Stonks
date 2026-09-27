@@ -21,8 +21,11 @@ belongs to portfolios, so only their books skip or pause. The health
 checks are named ``broker:<gateway>``, outside the operational checks.
 
 :class:`SocketProbe` only checks that the gateway's API port accepts a
-connection. The IBKR adapter (roadmap 19.2) adds a probe that logs in,
-checks the managed account and reads the server time.
+connection. :class:`IbkrLoginProbe` (roadmap 19.2, the job's default) logs
+in through the adapter with the health client id, checks the managed
+account against the gateway's mode and expected account, and reads the
+server time. A wrong account, a login that did not finish or a competing
+session is a real fault.
 
 :func:`send_reauth_reminder` is the Sunday push: approve the IBKR login on
 your phone tonight (the weekly session reset needs a second factor).
@@ -38,6 +41,7 @@ from datetime import UTC, date, datetime
 from typing import Any, Protocol
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock
+from stonks.execution.brokers.ibkr.factory import ClientFactory
 from stonks.execution.brokers.ibkr.settings import (
     GatewayMode,
     IbkrBrokerConfig,
@@ -97,6 +101,38 @@ class SocketProbe:
             return ProbeResult(connected=False, detail=f"{type(exc).__name__}: {exc}")
         latency = (time.perf_counter() - start) * 1000.0
         return ProbeResult(connected=True, detail="port open", latency_ms=latency)
+
+
+class IbkrLoginProbe:
+    """Log in through the IBKR adapter (read only, the health client id)."""
+
+    def __init__(
+        self, config: IbkrBrokerConfig, client_factory: ClientFactory | None = None
+    ) -> None:
+        self.config = config
+        self.client_factory = client_factory
+
+    def probe(self, target: GatewayTarget) -> ProbeResult:
+        from stonks.execution.brokers.ibkr.factory import connect_ibkr, default_client_factory
+
+        start = time.perf_counter()
+        broker = connect_ibkr(
+            self.config,
+            gateway=target.name,
+            role="health",
+            client_factory=self.client_factory or default_client_factory,
+        )
+        try:
+            check = broker.login_check()
+        finally:
+            broker.close()
+        latency = (time.perf_counter() - start) * 1000.0
+        return ProbeResult(
+            connected=check.ok,
+            detail=check.detail,
+            latency_ms=latency if check.ok else None,
+            fault=check.fault,
+        )
 
 
 @dataclass(frozen=True)

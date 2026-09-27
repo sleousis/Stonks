@@ -320,19 +320,30 @@ def connections_sync_action(ctx: RunContext) -> JobOutcome:
 def broker_health_action(ctx: RunContext) -> JobOutcome:
     """Probe every configured IB Gateway (skipped when none is configured)."""
     from stonks.core.clock import FixedClock
-    from stonks.production.broker_health import SocketProbe, check_gateways, gateway_targets
+    from stonks.production.broker_health import (
+        BrokerProbe,
+        IbkrLoginProbe,
+        SocketProbe,
+        check_gateways,
+        gateway_targets,
+    )
     from stonks.store.state import SqliteState
 
     config = ctx.settings.brokers.ibkr
     targets = gateway_targets(config)
     if not targets:
         return JobOutcome("skipped", {"reason": "no_gateways"})
+    probe: BrokerProbe = (
+        IbkrLoginProbe(config)
+        if config.health.probe == "login"
+        else SocketProbe(config.health.probe_timeout_seconds)
+    )
     state = SqliteState(ctx.settings.state.path)
     try:
         checks = check_gateways(
             state,
             targets,
-            SocketProbe(config.health.probe_timeout_seconds),
+            probe,
             config.health,
             clock=FixedClock(ctx.now),
         )

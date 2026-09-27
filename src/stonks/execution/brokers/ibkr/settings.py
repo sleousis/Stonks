@@ -101,6 +101,9 @@ class IbkrHealthSettings(BaseModel):
 
     #: Seconds a probe may take before the gateway counts as down.
     probe_timeout_seconds: float = Field(default=2.0, gt=0)
+    #: ``login`` logs in through the adapter and checks the account (19.2).
+    #: ``socket`` only checks that the API port accepts a connection.
+    probe: Literal["login", "socket"] = "login"
     #: Failed checks in a row before the owners get a high-urgency push.
     alert_after_failures: int = Field(default=2, ge=1)
     #: Trading sessions the gateway may stay down before the auto
@@ -111,6 +114,24 @@ class IbkrHealthSettings(BaseModel):
     calendar: str = "XNYS"
 
 
+class IbkrOrderSettings(BaseModel):
+    """How the adapter shapes orders (roadmap 19.2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The time in force of an order that names none. ``opg`` joins the
+    #: opening auction, the fill the backtest assumes (P21).
+    default_time_in_force: Literal["day", "opg"] = "opg"
+    #: A market order with a reference price goes out as a limit this far
+    #: through the reference (the fat-finger band). 0 sends plain market
+    #: orders for closes only.
+    collar_bps: float = Field(default=100.0, ge=0.0, le=2000.0)
+    #: The longest ``orderRef`` sent as the client id itself. Longer client
+    #: ids go out as a stable hash. The live contract test measures what the
+    #: gateway keeps.
+    order_ref_max_length: int = Field(default=40, ge=24, le=128)
+
+
 class IbkrBrokerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
@@ -118,6 +139,15 @@ class IbkrBrokerConfig(BaseModel):
     allow_live: bool = False
     client_ids: IbkrClientIds = Field(default_factory=IbkrClientIds)
     connect_timeout_seconds: float = Field(default=5.0, gt=0)
+    #: Seconds a request (a submit, a what-if, a snapshot) may take. A submit
+    #: that times out leaves its order ``unknown`` until reconciliation.
+    request_timeout_seconds: float = Field(default=10.0, gt=0)
+    #: Reconnect attempts (backoff with jitter, capped at 60 seconds) stop
+    #: this many seconds after the first failure.
+    reconnect_deadline_seconds: float = Field(default=120.0, gt=0)
+    #: Cached contracts older than this are looked up again.
+    contract_max_age_days: int = Field(default=7, ge=1)
+    orders: IbkrOrderSettings = Field(default_factory=IbkrOrderSettings)
     gateways: dict[str, IbkrGatewayConfig] = Field(default_factory=dict[str, IbkrGatewayConfig])
     health: IbkrHealthSettings = Field(default_factory=IbkrHealthSettings)
 

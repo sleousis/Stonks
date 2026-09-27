@@ -16,7 +16,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 15 | Mostly done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Open: order placement for real providers. |
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
-| 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7. The IBKR adapter (19.2) is next. Design: `docs/design/live-trading.md`. |
+| 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7. The IBKR adapter (19.2) done. Design: `docs/design/live-trading.md`. |
 | 20 | Backend of 20.1 to 20.5 done (API, CLI, MCP). The console screens are next. 20.6 done. |
 | 22 | 22.1 and 22.5 done. The rest is planned. |
 
@@ -437,7 +437,7 @@ A clean week has no unresolved reconciliation drift, no stuck orders, rejections
 | WP | Scope | Owns | Status |
 |----|-------|------|--------|
 | 19.1 Broker seam for live | Stop price, time in force and outside-hours fields on `Order`, new optional broker capabilities (global cancel, account state, what-if margin, executions, quotes), execution ids and fee currency on fills, `orders.broker_ref`, an order state machine with an `unknown` state for timed-out orders and a startup reconciliation gate, a `Clock`. | `core/types.py`, `execution/brokers/base.py`, `execution/reconcile.py`, a new SQLite migration | done (migration 028) |
-| 19.2 IBKR adapter | `IbClient` protocol over `ib_async`, session thread and reconnects, contract resolution with a `conId` cache, order mapping (`orderRef` idempotency, collared opening-auction limits, no outside hours), error mapping, account safety check, `FakeIbGateway`. | `execution/brokers/ibkr/*`, `tests/fakes/ib_gateway.py`, a new SQLite migration | planned |
+| 19.2 IBKR adapter | `IbClient` protocol over `ib_async`, session thread and reconnects, contract resolution with a `conId` cache, order mapping (`orderRef` idempotency, collared opening-auction limits, no outside hours), error mapping, account safety check, `FakeIbGateway`. | `execution/brokers/ibkr/*`, `tests/fakes/ib_gateway.py`, a new SQLite migration | done (migration 029) |
 | 19.3 IBKR connection and borrow | `ibkr` provider with trade and short capabilities, sync, borrow quotes, daily borrow rates into the lake, optional Flex statements. | `connections/providers/ibkr.py`, `execution/brokers/ibkr/{borrow,flex}.py`, `ingest/sources/ibkr_borrow.py`, a new DuckDB migration | planned |
 | 19.4 Gateway deployment | `ibkr-paper` and `ibkr-live` Compose profiles on an internal network, Docker secrets, weekly re-auth reminder, broker health and metrics. | `deploy/compose.yaml`, `deploy/ibkr/*`, `production/broker_health.py`, `scheduling/metrics.py` | done |
 | 19.5 Reconciliation and drift | Start-of-day, submit and end-of-day checks, drift reports, `broker_drift` halt, auto pause on drift, short outage versus fault. | `execution/drift.py`, `production/live/checks.py`, `production/auto_pause.py`, `production/halts.py`, a new SQLite migration | planned |

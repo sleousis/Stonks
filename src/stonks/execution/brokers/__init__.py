@@ -26,6 +26,7 @@ from stonks.execution.brokers.simulated import SimulatedCosts
 
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.config import Settings
+    from stonks.execution.brokers.ibkr.broker import IbkrBroker
 
 __all__ = [
     "AlpacaBroker",
@@ -49,7 +50,7 @@ def make_broker(
     portfolio: Portfolio,
     *,
     kind: BrokerKind | None = None,
-) -> SimulatedBroker | AlpacaBroker:
+) -> SimulatedBroker | AlpacaBroker | IbkrBroker:
     """Build the broker named by ``kind`` (default ``settings.brokers.kind``).
 
     ``simulated`` trades against ``portfolio`` in memory with the costs
@@ -57,16 +58,29 @@ def make_broker(
     configured, else the legacy ``[production]`` slippage/fee); the caller
     must still ``set_prices``. ``alpaca``
     ignores ``portfolio``: the broker account is the source of truth, read
-    it with ``fetch_portfolio()``.
+    it with ``fetch_portfolio()``. ``ibkr`` builds the Interactive Brokers
+    adapter for the default portfolio's gateway (``[brokers.ibkr]``); it
+    connects on first use and checks the account then.
     """
     kind = kind or settings.brokers.kind
     if kind == "simulated":
         return SimulatedCosts.from_settings(settings).build_broker(portfolio)
     if kind == "ibkr":
-        raise BrokerError(
-            "the Interactive Brokers adapter is not built yet (roadmap 19.2); "
-            "keep [brokers] kind = 'simulated' until it lands"
-        )
+        from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
+        from stonks.execution.brokers.ibkr.factory import connect_ibkr, pick_gateway
+        from stonks.store.state import SqliteState
+
+        pick_gateway(settings.brokers.ibkr, portfolio_id=DEFAULT_PORTFOLIO_ID)
+        state = SqliteState(settings.state.path)
+        try:
+            broker = connect_ibkr(
+                settings.brokers.ibkr, portfolio_id=DEFAULT_PORTFOLIO_ID, role="tick", state=state
+            )
+        except Exception:
+            state.close()
+            raise
+        broker.on_close(state.close)
+        return broker
     if kind == "alpaca":
         cfg = settings.brokers.alpaca
         return AlpacaBroker.connect(

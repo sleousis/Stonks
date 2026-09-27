@@ -69,6 +69,17 @@ class BrokerUnavailableError(BrokerError):
     and only a repeated outage pauses auto mode (roadmap 19.4)."""
 
 
+class OrderOutcomeUnknownError(BrokerUnavailableError):
+    """A submit whose outcome is not known: the link dropped or timed out
+    after the order may have left. The caller marks the order ``unknown``
+    (``execution.order_state.mark_unknown``) and sends nothing for it again
+    until reconciliation finds it by client id."""
+
+    def __init__(self, client_id: str, message: str) -> None:
+        self.client_id = client_id
+        super().__init__(message)
+
+
 @dataclass(frozen=True)
 class BrokerAccount:
     """Account-level balances and trading flags, broker-agnostic."""

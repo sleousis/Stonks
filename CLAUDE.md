@@ -161,7 +161,7 @@ uv run python -m stonks.security keygen
 - `option_contracts (contract_id, underlying, expiry, strike, right, style, multiplier, settlement, ...)` and `option_quotes (contract_id, as_of, source, bid, ask, last, volume, open_interest, underlying_price, vendor_iv, vendor_delta..vendor_rho)` (017): option chains, vendor-agnostic. The contract id is `<underlying>:<expiry>:<C|P>:<strike>[:<multiplier>]`.
 - `income_statement_versions`, `balance_sheet_versions`, `cash_flow_statement_versions` (018): every version of a statement row with `known_at`, the time Stonks first saw it. Point-in-time reads pick the version known at the decision, so a restatement cannot leak backward (P12).
 
-**State (SQLite, migrations 001-028):**
+**State (SQLite, migrations 001-029):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -180,6 +180,7 @@ uv run python -m stonks.security keygen
 - 025: lab offload queue (`jobs.executor`, `lab_workers`). 026: `onboarding_steps`, `onboarding_status` (first-run guide) and `watchlists` (per-user ticker lists).
 - 027: `orders.origin` (`strategy` or `manual`), `manual_reason`, `placed_by`, `replaces_client_id`; `price_alert_rules`, `price_alert_state`, `price_alert_events`; `telegram_links`, `telegram_link_codes`, `telegram_bot_state`; `assistant_conversations`, `assistant_messages`, `assistant_pending_actions`; `portfolio_tax_settings`, `tax_lot_picks`; `order_drafts`, `assistant_turns`, `assistant_freezes`, `portfolio_cash_flows`.
 - 028 live broker: `orders.state`, `broker_ref`, `stop_price`, `time_in_force`, `outside_rth`; `fills.broker_exec_id`, `fee_currency`, `fee_fx_rate`; halt kinds `runaway` and `broker_drift`; `live_allocations`, `broker_gateway_status`, `account_profiles`, `settlement_ledger`, `account_restricted`, `product_documents`.
+- 029: `broker_contracts` (IBKR conId cache).
 
 ## Conventions to match
 
