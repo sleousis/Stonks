@@ -18,9 +18,15 @@ import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-tab
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { SOURCE_LABELS } from '../data/data-labels';
 import {
+  ASSET_CLASS_LABEL,
+  DEFAULT_FIELDS,
   KIND_HINT,
   KIND_LABEL,
+  type KindFields,
+  REBALANCE_LABEL,
+  type Rebalance,
   type SpecSource,
   type UniverseForm,
   type UniverseKind,
@@ -32,7 +38,8 @@ import {
 
 /**
  * Stored universes: the list with kind, member count and last refresh, a
- * create form (a JSON spec, or a CSV for lists) and the index history import.
+ * create form (each kind's own fields, a CSV for lists, or the definition
+ * as JSON for advanced use) and the index history import.
  */
 @Component({
   selector: 'app-universes-page',
@@ -66,6 +73,9 @@ export class UniversesPage {
   protected readonly kinds: readonly UniverseKind[] = ['list', 'exchange', 'rule', 'index'];
   protected readonly kindLabel = KIND_LABEL;
   protected readonly kindHint = KIND_HINT;
+  protected readonly rebalances = Object.entries(REBALANCE_LABEL) as [Rebalance, string][];
+  protected readonly assetClasses = Object.entries(ASSET_CLASS_LABEL);
+  protected readonly dataSources = Object.entries(SOURCE_LABELS).filter(([id]) => id !== 'defillama');
   protected readonly universeKey = (u: UniverseView) => u.id;
 
   protected readonly columns: TableColumn<UniverseView>[] = [
@@ -85,7 +95,8 @@ export class UniversesPage {
     name: '',
     description: '',
     kind: 'list',
-    source: 'spec',
+    source: 'fields',
+    fields: { ...DEFAULT_FIELDS },
     specText: specTemplate('list'),
     csv: '',
   });
@@ -97,14 +108,28 @@ export class UniversesPage {
     this.form.update((f) => ({ ...f, ...change }));
   }
 
+  protected patchFields(change: Partial<KindFields>): void {
+    this.form.update((f) => ({ ...f, fields: { ...f.fields, ...change } }));
+  }
+
+  protected toggleAssetClass(id: string, on: boolean): void {
+    const now = this.form().fields.assetClasses.filter((c) => c !== id);
+    this.patchFields({ assetClasses: on ? [...now, id] : now });
+  }
+
   protected setKind(kind: UniverseKind): void {
     this.form.update((f) => ({
       ...f,
       kind,
-      // CSV is for list universes only; a new kind starts from its template.
-      source: kind === 'list' ? f.source : 'spec',
-      specText: specTemplate(kind),
+      // CSV is for list universes only; JSON restarts from the new kind's fields.
+      source: f.source === 'csv' && kind !== 'list' ? 'fields' : f.source,
+      specText: specTemplate(kind, f.fields),
     }));
+  }
+
+  /** Advanced: edit the definition as JSON, starting from the fields. */
+  protected editAsJson(): void {
+    this.form.update((f) => ({ ...f, source: 'json', specText: specTemplate(f.kind, f.fields) }));
   }
 
   protected setSource(source: SpecSource): void {
