@@ -1,9 +1,9 @@
 # Trader console (web UI)
 
 The Angular app in `web/` is the trader console: sign-in, a simple home,
-profile, the first-run guide, watchlists, charts, strategies, orders and
+profile, the first-run guide, watchlists, charts, the calendar, strategies, orders and
 trade costs, insights, notifications, the research pages (paper trading,
-leaderboard and tear sheets, studio, lab, go live) and the admin pages
+leaderboard and tear sheets, screener, studio, lab, go live) and the admin pages
 (overview, health, schedule and backups, data, data quality, universes,
 halts, users). It talks only to the
 REST API (`src/stonks/api/`) through a client generated from the checked-in
@@ -565,7 +565,7 @@ Tickers open `/data?instrument=<id>`.
   asks for a reason, kept in the audit log.
 - The push that tickets wait is high urgency and names only the count and
   the portfolio. It opens `/tickets`. Approvals sits in the main menu for
-  traders (`g f`).
+  traders. It has no `g` shortcut because every letter is taken.
 
 - **Notifications.** `NotificationFeedService` (`core/notify/`) keeps the
   unread count, read quietly every minute while the tab is visible and after
@@ -837,6 +837,33 @@ flowchart LR
 - **Telegram.** `<app-telegram-link>` (`pages/settings/telegram-link.ts`) reads `GET /api/telegram/link`. **Get a link code** shows `/link CODE` once in `<app-one-time-secret>`, with the bot's `t.me` link and the time it runs out. **Check the link** reads the status again. **Unlink** asks first. Without a bot on the server the panel says so and offers nothing.
 - The alert settings table scrolls inside its own box on phones, now that Telegram adds a channel.
 
+## Calendar, news and the screener (20.7, 20.8)
+
+| Page | Route | What it does |
+|---|---|---|
+| Calendar | `/calendar` | Earnings, ex-dividend dates, economic releases and news for your holdings, a watchlist, some tickers or everything |
+| Screener | `/screener` | Filter instruments on price and fundamentals, keep screens, and save one as a universe for the lab |
+
+```mermaid
+flowchart LR
+  S[Whose events: holdings, watchlist, tickers, everything] --> C[GET /api/calendars]
+  S --> N[GET /api/calendars/news]
+  C --> T[Tabs: Earnings, Ex-dividend, Economic]
+  N --> P[News tab: mood per ticker, newest articles]
+  F[Screener form] --> R[POST /api/screener/run] --> M[Matches table]
+  F --> V[Save screen] & U[Save as a universe: rule or snapshot]
+```
+
+- **Calendar.** `pages/calendar/calendar.page.ts`. "Whose events" picks the scope. Watchlists offers one list or all of them, and Tickers waits until you name some. From and To span at most 120 days, checked before any call. The tabs count each calendar. Countries shows on the Economic tab only. A cut read says so. `?ticker=&date=` opens one ticker from that day, which is where the event alerts link. Pure helpers live in `calendar-view.ts`.
+- **News.** `<app-news-panel>` (`pages/calendar/news-panel.ts`) takes the scope as `query`. Everything has no news, so the panel asks for a narrower scope and calls nothing. Each ticker gets a mood card (the 30-day score weighted by articles, in words, a shape and a signed number). Articles link out only over http or https, in a new tab.
+- **Ticket warning.** `<app-earnings-warning>` (`pages/orders/earnings-warning.ts`) sits under the ticker on the order ticket. For a full ticker it calls `GET /api/calendars/earnings-warnings` silently and shows one warning line when the report falls before the next open, with a link to the calendar. A failed check shows nothing and never blocks the ticket.
+- **Event alerts.** `<app-event-alert-kinds>` in the alert settings lists each upcoming-event alert and how far ahead it looks. They are sent as Signals, so the Signals row decides where they reach you. There is no switch per kind yet: the server has no preference for it.
+- **Screener.** `pages/screener/`. Where to look (a universe, a date, asset classes, sectors, exchanges, lowest price and dollar volume), metric filters from `GET /api/screener/metrics` grouped by price and fundamentals, then sort, rows and extra columns. Percent metrics are typed in percent (8 means 8%) and sent as fractions. `screen-form.ts` turns the form into a spec and back, and says what is wrong in words before anything is sent. Results link each ticker to its chart and format each column by the metric's unit.
+- **Saved screens.** Your screens list sits beside the form. Open reads the screen by id and fills the form. Save changes stays off until something changed. Delete asks first.
+- **Save as a universe.** `<app-save-universe-sheet>` asks for a name and a short name (the universe id), then the members: Re-run the screen (rule mode, from a start date, weekly, monthly or quarterly) or Today's matches (snapshot mode, with the survivorship warning). An unchanged saved screen goes by its id, so the universe follows it. The call is silent and a refusal shows in the sheet. The page then shows the saved universe and the server's warnings.
+- `TableColumn.display` gives a column its own text (a unit per column) while sorting still uses `value`.
+- `provideFakeCalendars()` (`src/testing/fake-calendars.ts`) keeps specs of pages that embed a calendar piece free of calendar calls.
+
 ## Shared pieces from the usability pass (18.6)
 
 | Piece | Where | Use it for |
@@ -955,6 +982,8 @@ about the same thing.
 | Drafts (to approve) | `/api/orders/drafts` | none | `draft_order`, `list_order_drafts` |
 | Price alerts | `/api/price-alerts` | `stonks price-alerts` | `list_price_alerts`, `create_price_alert`, `update_price_alert`, `delete_price_alert`, `list_price_alert_events` |
 | Telegram link | `/api/telegram/link` | `stonks telegram` | none |
+| Calendar, News | `/api/calendars`, `/api/calendars/news` | `stonks calendars` | `get_calendar`, `get_news`, `get_earnings_warnings`, `list_event_alert_kinds` |
+| Screener, Your screens, Save as a universe | `/api/screener/*` | `stonks screener` | `run_screen`, `list_screens`, `create_screen`, `save_screen_as_universe`, ... |
 
 "Buys only" was called `flatten` before 1.0. It never closed a position,
 so the old name was misleading. The API, the CLI (`--flatten`) and MCP
@@ -1176,7 +1205,7 @@ automate it.
   returns focus); `?` lists every shortcut; `g` then a key jumps between
   pages (`g m` Today, `g s` strategies, `g o` orders, `g t` trade costs,
   `g z` charts, `g x` watchlists, `g e` insights, `g n` notifications,
-  `g w` paper trading, `g b` leaderboard, `g u` studio, `g l` lab, `g g`
+  `g w` paper trading, `g b` leaderboard, `g f` screener, `g u` studio, `g l` lab, `g g`
   go live, `g y` assistant, `g p` profile, `g ,` settings, `g c` broker connections, `g i`
   glossary, and for admins
   `g d` overview, `g h` health, `g j` schedule, `g a` data, `g q` data

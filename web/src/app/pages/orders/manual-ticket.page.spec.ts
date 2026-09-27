@@ -5,6 +5,7 @@ import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import type { ManualOrderResult } from '../../api/models';
+import { CalendarsService } from '../../api/calendars.service';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
@@ -14,6 +15,7 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
 import { nextRequest, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
 import { ManualTicketPage, orderLines } from './manual-ticket.page';
+import { provideFakeCalendars } from '../../../testing/fake-calendars';
 
 function result(over: Partial<ManualOrderResult> = {}): ManualOrderResult {
   return {
@@ -54,6 +56,7 @@ describe('ManualTicketPage', () => {
         provideRouter([]),
         ...provideApi(),
         provideHttpClientTesting(),
+        provideFakeCalendars(),
         {
           provide: PortfolioContextService,
           useValue: {
@@ -287,6 +290,33 @@ describe('ManualTicketPage', () => {
     expect(el.querySelector<HTMLInputElement>('#mo-ticker')!.value).toBe('BBB.US');
     const sell = el.querySelector('[aria-label="Side"] [aria-checked="true"]');
     expect(sell?.textContent?.trim()).toBe('Sell');
+  });
+
+  it('warns on the ticket when earnings fall before the next open', async () => {
+    setup();
+    const asked: string[][] = [];
+    vi.spyOn(TestBed.inject(CalendarsService), 'earningsWarnings').mockImplementation(
+      async (tickers: readonly string[]) => {
+        asked.push([...tickers]);
+        return {
+          checked: [...tickers],
+          warnings: [
+            {
+              ticker: 'AAA.US',
+              report_date: '2026-10-29',
+              before_after_market: 'before',
+              next_open: '2026-10-29T13:30:00Z',
+            },
+          ],
+        };
+      },
+    );
+    const el = await render({ ticker: 'aaa.us' });
+    await settle();
+    expect(asked).toContainEqual(['AAA.US']);
+    expect(el.querySelector('app-earnings-warning')?.textContent).toContain(
+      'Earnings before the next open.',
+    );
   });
 });
 

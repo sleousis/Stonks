@@ -35,6 +35,11 @@ export interface TableColumn<T> {
   /** Accessor used for display and sorting. */
   value?: (row: T) => CellValue;
   format?: CellFormat;
+  /**
+   * Text for the cell when the formats do not fit (a unit per column, say).
+   * Sorting still uses `value`. Empty values show a dash without calling it.
+   */
+  display?: (row: T) => string;
   /** Defaults to `end` for numeric formats. */
   align?: 'start' | 'end';
   /** Defaults to true. */
@@ -248,6 +253,7 @@ export class DataTable<T extends object> {
   protected display(row: T, col: TableColumn<T>): string {
     const value = this.raw(row, col);
     if (value === null || value === undefined || value === '') return '–';
+    if (col.display) return col.display(row);
     switch (col.format) {
       case 'money':
         return formatMoney(value as number, { currency: col.currency?.(row) });

@@ -34,13 +34,18 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     path: '/tickets',
     label: 'Approvals',
-    key: 'f',
     group: 'Main',
     permission: 'portfolio.trade',
     keywords: ['tickets', 'approve', 'order tickets'],
   },
   { path: '/charts', label: 'Charts', key: 'z', group: 'Main', keywords: ['price'] },
   { path: '/watchlists', label: 'Watchlists', key: 'x', group: 'Main', keywords: ['tickers'] },
+  {
+    path: '/calendar',
+    label: 'Calendar',
+    group: 'Main',
+    keywords: ['earnings', 'dividends', 'economic', 'news', 'sentiment'],
+  },
   {
     path: '/insights',
     label: 'Insights',
@@ -52,6 +57,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
 
   { path: '/paper', label: 'Paper trading', key: 'w', group: 'Research', keywords: ['shadow'] },
   { path: '/leaderboard', label: 'Leaderboard', key: 'b', group: 'Research', keywords: ['rank'] },
+  {
+    path: '/screener',
+    label: 'Screener',
+    key: 'f',
+    group: 'Research',
+    keywords: ['screen', 'filter', 'fundamentals', 'universe'],
+  },
   {
     path: '/studio',
     label: 'Studio',

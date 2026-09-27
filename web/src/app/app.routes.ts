@@ -63,6 +63,9 @@ export const routes: Routes = [
   { path: 'trades', loadChildren: () => import('./pages/trades/trades.routes') },
   // 20: the AI assistant
   { path: 'assistant', loadChildren: () => import('./pages/assistant/assistant.routes') },
+  // 20.7 and 20.8: event calendars and news, the screener
+  { path: 'calendar', loadChildren: () => import('./pages/calendar/calendar.routes') },
+  { path: 'screener', loadChildren: () => import('./pages/screener/screener.routes') },
   {
     path: '**',
     title: 'Not found',

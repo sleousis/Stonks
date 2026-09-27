@@ -1,0 +1,444 @@
+<app-page-header
+  title="Screener"
+  description="Find instruments by price and fundamentals, on the data as it was on a date. Keep a screen, or make it a universe for the lab."
+/>
+
+<div class="layout">
+  <section class="panel builder" aria-labelledby="screen-title">
+    <div class="panel-head">
+      <h2 id="screen-title">{{ open() ? open()!.name : 'New screen' }}</h2>
+      @if (open() && !unchanged()) {
+        <span class="changed">Changed</span>
+      }
+    </div>
+
+    @if (metrics.error(); as err) {
+      <app-error-state
+        title="Could not load the metrics"
+        [error]="err"
+        (retry)="metrics.reload()"
+      />
+    } @else if (!metrics.hasValue()) {
+      <app-loading-state label="Loading the metrics" [rows]="6" />
+    } @else {
+      <form class="panel-body form" novalidate (submit)="$event.preventDefault(); run()">
+        <fieldset class="group">
+          <legend>Where to look</legend>
+          <div class="grid-2">
+            <div class="field">
+              <label for="sc-universe">Start from</label>
+              <select
+                id="sc-universe"
+                class="input"
+                (change)="patch({ universeId: $any($event.target).value })"
+              >
+                <option value="" [selected]="!form().universeId">Every listed instrument</option>
+                @if (universes.hasValue()) {
+                  @for (u of universes.value(); track u.id) {
+                    <option [value]="u.id" [selected]="form().universeId === u.id">
+                      {{ u.name || u.id }}
+                    </option>
+                  }
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="sc-asof">On date</label>
+              <input
+                id="sc-asof"
+                class="input"
+                type="date"
+                aria-describedby="sc-asof-hint"
+                [value]="asOf()"
+                (change)="asOf.set($any($event.target).value)"
+              />
+              <span id="sc-asof-hint" class="hint"
+                >Empty means today. Only data known then counts.</span
+              >
+            </div>
+          </div>
+          <div class="classes" role="group" aria-labelledby="sc-classes-label">
+            <span id="sc-classes-label" class="label">Asset classes</span>
+            <div class="checks">
+              @for (c of assetClasses; track c.value) {
+                <label class="check">
+                  <input
+                    type="checkbox"
+                    [checked]="form().assetClasses.includes(c.value)"
+                    (change)="toggleClass(c.value, $any($event.target).checked)"
+                  />
+                  {{ c.label }}
+                </label>
+              }
+            </div>
+            <span class="hint">None ticked means all.</span>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label for="sc-sectors">Sectors</label>
+              <input
+                id="sc-sectors"
+                class="input"
+                placeholder="Technology, Health Care"
+                [value]="form().sectors"
+                (input)="patch({ sectors: $any($event.target).value })"
+              />
+            </div>
+            <div class="field">
+              <label for="sc-exclude">Leave out sectors</label>
+              <input
+                id="sc-exclude"
+                class="input"
+                placeholder="Utilities"
+                [value]="form().excludeSectors"
+                (input)="patch({ excludeSectors: $any($event.target).value })"
+              />
+            </div>
+            <div class="field">
+              <label for="sc-exchanges">Exchanges</label>
+              <input
+                id="sc-exchanges"
+                class="input"
+                autocapitalize="characters"
+                placeholder="US, LSE"
+                [value]="form().exchanges"
+                (input)="patch({ exchanges: $any($event.target).value })"
+              />
+            </div>
+            <div class="field">
+              <label for="sc-min-price">Lowest price</label>
+              <input
+                id="sc-min-price"
+                class="input num"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="any"
+                [value]="form().minPrice"
+                (input)="patch({ minPrice: $any($event.target).value })"
+              />
+            </div>
+            <div class="field">
+              <label for="sc-min-adv">Lowest daily dollar volume</label>
+              <input
+                id="sc-min-adv"
+                class="input num"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="any"
+                aria-describedby="sc-min-adv-hint"
+                [value]="form().minAdv"
+                (input)="patch({ minAdv: $any($event.target).value })"
+              />
+              <span id="sc-min-adv-hint" class="hint">Average over the last 20 days.</span>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>Filters</legend>
+          @if (form().filters.length === 0) {
+            <p class="hint">No filters yet. Add one to keep only what passes it.</p>
+          }
+          <ul class="filters" aria-label="Metric filters">
+            @for (f of form().filters; track f.key; let i = $index) {
+              <li class="filter">
+                <div class="field metric">
+                  <label [for]="'sc-f-metric-' + f.key">Metric {{ i + 1 }}</label>
+                  <select
+                    class="input"
+                    [id]="'sc-f-metric-' + f.key"
+                    [attr.aria-describedby]="'sc-f-hint-' + f.key"
+                    (change)="editFilter(f.key, { metric: $any($event.target).value })"
+                  >
+                    <option value="" [selected]="!f.metric">Pick a metric</option>
+                    <optgroup label="Price">
+                      @for (m of priceMetrics(); track m.id) {
+                        <option [value]="m.id" [selected]="f.metric === m.id">{{ m.label }}</option>
+                      }
+                    </optgroup>
+                    <optgroup label="Fundamentals">
+                      @for (m of fundamentalMetrics(); track m.id) {
+                        <option [value]="m.id" [selected]="f.metric === m.id">{{ m.label }}</option>
+                      }
+                    </optgroup>
+                  </select>
+                  <span class="hint" [id]="'sc-f-hint-' + f.key"
+                    >{{ metric(f.metric)?.description }} {{ unitHint(f.metric) }}</span
+                  >
+                </div>
+                <div class="field bound">
+                  <label [for]="'sc-f-min-' + f.key">At least</label>
+                  <input
+                    class="input num"
+                    type="number"
+                    inputmode="decimal"
+                    step="any"
+                    [id]="'sc-f-min-' + f.key"
+                    [value]="f.min"
+                    (input)="editFilter(f.key, { min: $any($event.target).value })"
+                  />
+                </div>
+                <div class="field bound">
+                  <label [for]="'sc-f-max-' + f.key">At most</label>
+                  <input
+                    class="input num"
+                    type="number"
+                    inputmode="decimal"
+                    step="any"
+                    [id]="'sc-f-max-' + f.key"
+                    [value]="f.max"
+                    (input)="editFilter(f.key, { max: $any($event.target).value })"
+                  />
+                </div>
+                <button
+                  type="button"
+                  class="btn btn-ghost remove"
+                  [attr.aria-label]="'Remove filter ' + (i + 1)"
+                  (click)="removeFilter(f.key)"
+                >
+                  Remove
+                </button>
+              </li>
+            }
+          </ul>
+          <div>
+            <button
+              type="button"
+              class="btn"
+              [disabled]="form().filters.length >= maxFilters"
+              (click)="addFilter()"
+            >
+              Add a filter
+            </button>
+          </div>
+        </fieldset>
+
+        <fieldset class="group">
+          <legend>Order and columns</legend>
+          <div class="grid-2">
+            <div class="field">
+              <label for="sc-sort">Sort by</label>
+              <select
+                id="sc-sort"
+                class="input"
+                (change)="patch({ sortBy: $any($event.target).value })"
+              >
+                <option value="" [selected]="!form().sortBy">Ticker</option>
+                @for (m of priceMetrics().concat(fundamentalMetrics()); track m.id) {
+                  <option [value]="m.id" [selected]="form().sortBy === m.id">{{ m.label }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="sc-limit">Rows</label>
+              <input
+                id="sc-limit"
+                class="input num"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                step="1"
+                aria-describedby="sc-limit-hint"
+                [value]="form().limit"
+                (input)="patch({ limit: $any($event.target).value })"
+              />
+              <span id="sc-limit-hint" class="hint"
+                >The top rows after sorting. Empty shows all.</span
+              >
+            </div>
+          </div>
+          @if (form().sortBy) {
+            <app-segmented
+              label="Order"
+              [options]="order"
+              [value]="form().descending ? 'desc' : 'asc'"
+              (valueChange)="patch({ descending: $event === 'desc' })"
+            />
+          }
+          <details class="columns">
+            <summary>Also show ({{ form().columns.length }})</summary>
+            <div class="checks">
+              @for (m of priceMetrics().concat(fundamentalMetrics()); track m.id) {
+                <label class="check">
+                  <input
+                    type="checkbox"
+                    [checked]="form().columns.includes(m.id)"
+                    (change)="toggleColumn(m.id, $any($event.target).checked)"
+                  />
+                  {{ m.label }}
+                </label>
+              }
+            </div>
+          </details>
+        </fieldset>
+
+        @if (errors().length) {
+          <ul class="errors" role="alert">
+            @for (e of errors(); track e) {
+              <li>{{ e }}</li>
+            }
+          </ul>
+        }
+
+        <div class="field name">
+          <label for="sc-name">Screen name</label>
+          <input
+            id="sc-name"
+            class="input"
+            maxlength="120"
+            placeholder="e.g. Cheap dividend payers"
+            [value]="screenName()"
+            (input)="screenName.set($any($event.target).value)"
+          />
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn btn-primary" [disabled]="running()">
+            {{ running() ? 'Running…' : 'Run screen' }}
+          </button>
+          @if (open()) {
+            <button
+              type="button"
+              class="btn"
+              [disabled]="saving() || !canSave() || unchanged()"
+              (click)="save()"
+            >
+              Save changes
+            </button>
+            <button
+              type="button"
+              class="btn"
+              [disabled]="saving() || !canSave()"
+              (click)="save(true)"
+            >
+              Save as a new screen
+            </button>
+          } @else {
+            <button type="button" class="btn" [disabled]="saving() || !canSave()" (click)="save()">
+              Save screen
+            </button>
+          }
+          <button type="button" class="btn" [disabled]="!canUniverse()" (click)="saveAsUniverse()">
+            Save as a universe
+          </button>
+          <button type="button" class="btn btn-ghost" (click)="startOver()">Start over</button>
+        </div>
+        <app-permission-note permission="portfolio.manage" />
+        <app-permission-note permission="lab.run" />
+      </form>
+    }
+  </section>
+
+  <section class="panel saved" aria-labelledby="saved-title">
+    <div class="panel-head">
+      <h2 id="saved-title">Your screens</h2>
+    </div>
+    @if (screens.error(); as err) {
+      <app-error-state
+        title="Could not load your screens"
+        [error]="err"
+        (retry)="screens.reload()"
+      />
+    } @else if (!screens.hasValue()) {
+      <app-loading-state label="Loading your screens" [rows]="3" />
+    } @else if (screens.value().length === 0) {
+      <app-empty-state
+        title="No screens yet"
+        message="Build a screen, name it and save it. It waits here for next time."
+      />
+    } @else {
+      <ul class="panel-body screens">
+        @for (s of screens.value(); track s.id) {
+          <li class="screen" [class.current]="open()?.id === s.id">
+            <div class="screen-text">
+              <span class="screen-name">{{ s.name }}</span>
+              <span class="hint">Changed {{ day(s.updated_at) }}</span>
+            </div>
+            <div class="screen-actions">
+              <button
+                type="button"
+                class="btn"
+                [attr.aria-label]="'Open ' + s.name"
+                (click)="openScreen(s)"
+              >
+                Open
+              </button>
+              <button
+                type="button"
+                class="btn btn-ghost"
+                [attr.aria-label]="'Delete ' + s.name"
+                [disabled]="!canSave()"
+                (click)="remove(s)"
+              >
+                Delete
+              </button>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  </section>
+</div>
+
+@if (savedUniverse(); as u) {
+  <section class="panel universe" aria-labelledby="universe-title" role="status">
+    <div class="panel-head">
+      <h2 id="universe-title">Saved as a universe</h2>
+    </div>
+    <div class="panel-body">
+      <p>
+        <strong>{{ u.universe.name || u.universe.id }}</strong>
+        ({{ u.universe.kind === 'rule' ? 're-runs the screen' : "today's matches" }}). Its members
+        appear when the refresh ends. In the lab, pick it under Run on.
+      </p>
+      @for (w of u.warnings ?? []; track w) {
+        <p class="warning">{{ w }}</p>
+      }
+      <a class="btn btn-ghost" routerLink="/lab">Open the lab</a>
+    </div>
+  </section>
+}
+
+<section class="panel results" aria-labelledby="results-title">
+  <div class="panel-head">
+    <h2 id="results-title">Matches</h2>
+    @if (result()) {
+      <span class="summary">{{ resultSummary() }}</span>
+    }
+  </div>
+  @if (running() && !result()) {
+    <app-loading-state label="Running the screen" [rows]="5" />
+  } @else if (result(); as r) {
+    @if (r.truncated) {
+      <p class="note">Only the top rows show. Raise Rows, or leave it empty, to see them all.</p>
+    }
+    @if (r.rows.length === 0) {
+      <app-empty-state
+        title="Nothing passes this screen"
+        message="Loosen a filter, or start from more instruments."
+      />
+    } @else {
+      <app-data-table
+        caption="Instruments that pass the screen"
+        [rows]="r.rows"
+        [columns]="columns()"
+        [rowKey]="rowKey"
+        [pageSize]="50"
+        [busy]="running()"
+      >
+        <ng-template appCell="ticker" [appCellOf]="r.rows" let-row>
+          <a [routerLink]="['/charts', row.ticker]">{{ row.ticker }}</a>
+        </ng-template>
+      </app-data-table>
+    }
+  } @else {
+    <app-empty-state
+      title="Run a screen to see matches"
+      message="Pick where to look, add filters, then Run screen."
+    />
+  }
+</section>
+
+<app-save-universe-sheet />

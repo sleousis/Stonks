@@ -9,6 +9,7 @@ import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { NotificationPrefs } from './notification-prefs';
+import { provideFakeCalendars } from '../../../testing/fake-calendars';
 
 const VIEW: PreferencesView = {
   channels: ['inapp', 'webpush', 'webhook'],
@@ -27,7 +28,12 @@ describe('NotificationPrefs', () => {
   beforeEach(() => {
     allowed = true;
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+      providers: [
+        provideRouter([]),
+        ...provideApi(),
+        provideHttpClientTesting(),
+        provideFakeCalendars(),
+      ],
     });
     controller = TestBed.inject(HttpTestingController);
     const session = TestBed.inject(SessionService);

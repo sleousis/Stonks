@@ -17,7 +17,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
 | 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. 19.2 IBKR adapter and 19.8 tickets and approve mode done. Design: `docs/design/live-trading.md`. |
-| 20 | 20.1 to 20.6 done, backend and console. 20.7 and 20.8 in progress. |
+| 20 | 20.1 to 20.8 done, backend and console. |
 | 22 | All of 22.1 to 22.9 done. Factors: `docs/factors.md`. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
@@ -458,7 +458,7 @@ Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invit
 
 **Status:** the backend of 20.1 to 20.5 is done: services, API, CLI and MCP, with minimal console services. The console screens come next, after the usability pass. 20.6 is planned.
 
-**Console:** the screens for 20.1 to 20.3 and the draft approvals of 20.4 are done: the New order and Drafts tabs under Orders, Price alerts under Notifications, and Telegram in Settings (see `docs/ui.md`).
+**Console:** the screens for 20.1 to 20.3 and the draft approvals of 20.4 are done: the New order and Drafts tabs under Orders, Price alerts under Notifications, and Telegram in Settings (see `docs/ui.md`). The Calendar and Screener pages of 20.7 and 20.8 are done too, with the earnings warning on the order ticket.
 
 **Console, 20.4 and 20.5:** done. The assistant chat (`/assistant`: streamed answers, tool steps, the yes or no step for writes, research only, the trace, unfreeze, conversations, and a clear page when it is off), cash flows (`/insights/cash-flows`), tax settings with lot picks and the yearly CSVs (`/insights/tax`), and time-weighted and money-weighted returns with base-currency values on Insights and Today. See `docs/ui.md`.
 
@@ -476,8 +476,8 @@ Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invit
 | 20.4 AI assistant | An in-app chat that talks to any OpenAI-compatible model endpoint (the owner's own open-source model on the local server through Ollama, vLLM or llama.cpp) and acts through the existing MCP tools as the signed-in user. Write actions need the same confirmations as the console, step-up actions stay in the web app. |
 | 20.5 Currency and tax per portfolio | Each portfolio picks a base currency. FX rates in the lake, values and P&L converted, and yearly tax exports (realized gains per lot with FIFO or specific lots, dividends, withholding) for US and EU rules. |
 | 20.6 Deploy anywhere | The same stack on a cloud VM or a local home server: one Compose file with profiles, a local-server guide (Tailscale, auto start, UPS and power loss, backups off the machine), and a cloud guide, with the lab worker and the model server optional. |
-| 20.7 Calendars and news | Earnings, dividend and economic calendars from EODHD, a news and sentiment panel in the console (the data is already in the lake), a warning on an order ticket when earnings fall before the next open, and alerts on these events. Backend done: lake tables, the EODHD adapter, the daily `calendars_refresh` job, scoped reads, the earnings check and the event alerts, over the API, CLI and MCP (`docs/calendars.md`). The console calendar page, news panel, ticket warning and alert toggles are still open. |
-| 20.8 Screener | Saved screens on fundamentals and price rules, built on the universe rule provider, savable as a universe for the lab, and an MCP tool. Backend done: point-in-time metrics behind a registry, screens as `rule` universes, saved screens, API, CLI and MCP (`docs/universes.md#screener`). The console screener page is still open. |
+| 20.7 Calendars and news | Earnings, dividend and economic calendars from EODHD, a news and sentiment panel in the console (the data is already in the lake), a warning on an order ticket when earnings fall before the next open, and alerts on these events. Backend done: lake tables, the EODHD adapter, the daily `calendars_refresh` job, scoped reads, the earnings check and the event alerts, over the API, CLI and MCP (`docs/calendars.md`). Console done: the calendar page (`/calendar`) with a scope picker, window, countries and tabs, the news and sentiment panel, the earnings warning on the order ticket, and the event alerts in the alert settings (`docs/ui.md`). A switch per alert kind needs a server preference first. |
+| 20.8 Screener | Saved screens on fundamentals and price rules, built on the universe rule provider, savable as a universe for the lab, and an MCP tool. Backend done: point-in-time metrics behind a registry, screens as `rule` universes, saved screens, API, CLI and MCP (`docs/universes.md#screener`). Console done: the screener page (`/screener`) with the metric picker, filters, results, saved screens and Save as a universe in rule or snapshot mode (`docs/ui.md`). |
 
 ## Phase 21: Intraday trading
 
