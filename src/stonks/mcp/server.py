@@ -1,7 +1,9 @@
 """MCP tools and resources over the Stonks REST API (official ``mcp`` SDK).
 
-Tools live in :mod:`stonks.mcp.tools`, one module per safety class
-(``reads``, ``jobs``, ``guarded``, ``studio``, ``connections``). Each tool is a small async
+Tools live in :mod:`stonks.mcp.tools`, one module per area (``reads``,
+``jobs``, ``guarded``, ``studio``, ``connections``, ``notifications``, ...).
+Reads are ``get_*`` / ``list_*`` and queued work is ``run_*``; renamed tools
+keep their old names as deprecated aliases (``ALIASES`` in ``common.py``). Each tool is a small async
 function over :class:`~stonks.mcp.tools.common.ToolContext` returning plain
 JSON-able data; a parameterless read route is just a ``RouteRead`` row.
 ``mcp`` types stay inside ``stonks.mcp``.
@@ -31,7 +33,8 @@ from stonks.mcp.tools.common import ToolContext
 
 INSTRUCTIONS = """Stonks research + trading system. Tools talk to the local REST API started
 with `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,
-signal IC analyses and ingests; follow up with wait_for_job. Status changes,
+sweeps, signal IC analyses and ingests; follow up with wait_for_job, and stop
+one with cancel_job. Check get_golive_report before promote_strategy. Status changes,
 draft register/enable/disable, broker syncs and production ticks need
 confirm=true; call them first without it to get a preview and show it to the
 user before confirming.
@@ -41,7 +44,8 @@ or enable live trading.
 Every tool acts as the user who owns this server's API token (whoami shows the
 user, role and scopes) and sees only that user's portfolios. Actions that need
 a fresh second factor (switching to auto, connecting a broker, resuming the
-kill switch) are refused here; the user does them in the web app."""
+kill switch, restoring a backup) are refused here; the user does them in the
+web app."""
 
 
 def build_server(api: ApiClient, *, max_wait_seconds: float = 600.0) -> MCPServer:

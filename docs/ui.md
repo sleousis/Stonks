@@ -504,6 +504,38 @@ No CLI commands, config keys, environment variables or raw ids in trader
 copy. `npm run lint` runs `scripts/check-copy.mjs`, which fails on
 `stonks <command>`, `STONKS_*`, `[section]` config keys and "command line".
 
+### Words across surfaces
+
+The console uses trader words. The API, CLI and MCP keep the system's
+names. This is the mapping, so a trader, an operator and an agent can talk
+about the same thing.
+
+| Console word | API | CLI | MCP |
+|---|---|---|---|
+| Trading run | `/api/ticks` | `stonks tick` | `run_tick`, `list_ticks`, `get_tick` |
+| Paper trading (stage "Paper", nav "Shadow") | status `shadow`, `/api/shadow/...` | `registry shadow` | `shadow_strategy`, `list_shadow_pnl` |
+| Go live, Live | status `active`, `.../promote` | `registry promote` | `promote_strategy` |
+| Back to paper trading | `.../shadow` | `registry shadow` | `shadow_strategy` |
+| Stop (a strategy) | status `retired`, `.../retire` | `registry retire` | `retire_strategy` |
+| Strategies | `/api/strategies` | `stonks registry` | `*_strategy`, `list_strategies` |
+| Follow a strategy | `POST /api/subscriptions` | none | `subscribe` |
+| Trade costs | `/api/tca` | `stonks tca` | `get_tca_summary`, `list_trade_journal`, `get_order_tca` |
+| Kill switch, "Buys only" | `POST /api/halts/kill`, `buys_only` | `halts kill --buys-only` | `engage_kill_switch` (`buys_only`) |
+| Signal IC | `/api/lab/signal-ic` | `stonks lab ic` | `run_signal_ic` |
+| Trial ledger | `/api/lab/ledger` | none | `list_ledger_runs`, `get_ledger_run` |
+| Notifications (feed) | `/api/notifications` | `python -m stonks.notify` | `list_notifications` |
+| Alerts (Health page) | `/api/alerts` | none | `list_alerts` |
+
+"Buys only" was called `flatten` before 1.0. It never closed a position,
+so the old name was misleading. The API, the CLI (`--flatten`) and MCP
+still accept `flatten` as a deprecated alias. No kill switch closes
+positions: exits go through the strategies that hold them.
+
+Notifications and alerts are two feeds on purpose: notifications are
+yours (signals, fills, halts on your books, pushed to your devices), and
+alerts are system events for the Health page (failed runs, stale data),
+which admins also see without a single recipient.
+
 ## Install and notifications (PWA)
 
 - `public/manifest.webmanifest` and `public/icons/` make the console
