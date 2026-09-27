@@ -13,7 +13,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
@@ -32,6 +32,7 @@ from stonks.store.bars import (
     ParquetBarStore,
     checksums,
 )
+from stonks.store.statement_versions import known_versions
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations_duckdb"
 
@@ -882,16 +883,26 @@ class DuckDBLake:
 
     # ---- financial statements (migration 008) ------------------------------
 
-    def upsert_income_statement(self, df: pd.DataFrame) -> int:
-        return self._upsert_statement(df, "income_statement", _INCOME_STATEMENT_COLS)
+    def upsert_income_statement(self, df: pd.DataFrame, *, known_at: datetime | None = None) -> int:
+        return self._upsert_statement(df, "income_statement", _INCOME_STATEMENT_COLS, known_at)
 
-    def upsert_balance_sheet(self, df: pd.DataFrame) -> int:
-        return self._upsert_statement(df, "balance_sheet", _BALANCE_SHEET_COLS)
+    def upsert_balance_sheet(self, df: pd.DataFrame, *, known_at: datetime | None = None) -> int:
+        return self._upsert_statement(df, "balance_sheet", _BALANCE_SHEET_COLS, known_at)
 
-    def upsert_cash_flow_statement(self, df: pd.DataFrame) -> int:
-        return self._upsert_statement(df, "cash_flow_statement", _CASH_FLOW_STATEMENT_COLS)
+    def upsert_cash_flow_statement(
+        self, df: pd.DataFrame, *, known_at: datetime | None = None
+    ) -> int:
+        return self._upsert_statement(
+            df, "cash_flow_statement", _CASH_FLOW_STATEMENT_COLS, known_at
+        )
 
-    def _upsert_statement(self, df: pd.DataFrame, table: str, cols: tuple[str, ...]) -> int:
+    def _upsert_statement(
+        self,
+        df: pd.DataFrame,
+        table: str,
+        cols: tuple[str, ...],
+        known_at: datetime | None = None,
+    ) -> int:
         """Upsert helper for the three wide financial-statement tables.
 
         Vendors omit line items that don't apply to a given filer (banks
@@ -908,6 +919,12 @@ class DuckDBLake:
         The PK columns must be present and non-NULL; the table's NOT
         NULL constraint catches NULL-valued PKs but the column-presence
         check raises a clearer error before that.
+
+        Every row the upsert changes is also kept as a new version in
+        ``<table>_versions`` (migration 020), stamped ``known_at`` (now, in
+        naive UTC, unless given): the full merged row, so a point-in-time
+        read can pick the version known at a decision (P12). Re-sending the
+        same numbers adds no version.
         """
         if df.empty:
             return 0
@@ -922,7 +939,48 @@ class DuckDBLake:
                 f"{table}: PK columns {_STATEMENT_PK} must be non-null; got NULL in input row(s)"
             )
         widened = df.reindex(columns=list(cols))
-        return self._upsert_preserve_nulls(widened, table=table, cols=cols, pk=_STATEMENT_PK)
+        stamp = known_at if known_at is not None else datetime.now(UTC).replace(tzinfo=None)
+        with self.transaction():
+            count = self._upsert_preserve_nulls(widened, table=table, cols=cols, pk=_STATEMENT_PK)
+            self._record_statement_versions(widened, table, cols, stamp)
+        return count
+
+    def _record_statement_versions(
+        self, df: pd.DataFrame, table: str, cols: tuple[str, ...], known_at: datetime
+    ) -> None:
+        """Append the current row of each upserted period to
+        ``<table>_versions`` unless it equals that period's latest version.
+        A version already stamped ``known_at`` is replaced."""
+        versions = f"{table}_versions"
+        same_key = " AND ".join(
+            f"k.{c} = t.{c}" if c != "period_end" else "CAST(k.period_end AS DATE) = t.period_end"
+            for c in _STATEMENT_PK
+        )
+        unchanged = " AND ".join(f"v.{c} IS NOT DISTINCT FROM t.{c}" for c in cols)
+        keys = _last_per_key(pd.DataFrame(df[list(_STATEMENT_PK)]), _STATEMENT_PK)
+        with self._registered(keys, "_keys"):
+            self.con.execute(
+                f"DELETE FROM {versions} t WHERE t.known_at = ?"
+                f" AND EXISTS (SELECT 1 FROM _keys k WHERE {same_key})",
+                [known_at],
+            )
+            self.con.execute(
+                f"""
+                INSERT INTO {versions} ({", ".join(cols)}, known_at)
+                SELECT {", ".join(f"t.{c}" for c in cols)}, CAST(? AS TIMESTAMP)
+                  FROM {table} t
+                 WHERE EXISTS (SELECT 1 FROM _keys k WHERE {same_key})
+                   AND NOT EXISTS (
+                        SELECT 1
+                          FROM (SELECT *, row_number() OVER (
+                                    PARTITION BY ticker, period_end, frequency
+                                    ORDER BY known_at DESC) AS rn
+                                  FROM {versions}
+                                 WHERE ticker IN (SELECT DISTINCT ticker FROM _keys)) v
+                         WHERE v.rn = 1 AND {unchanged})
+                """,
+                [known_at],
+            )
 
     def _upsert_preserve_nulls(
         self,
@@ -1015,9 +1073,12 @@ class DuckDBLake:
         than ``period_end``: a filing date before the period closed is bad
         data and is clamped.
 
-        Known limit: a restatement that overwrites a row's values in place
-        but keeps the original ``filing_date`` makes the restated numbers
-        look available from the original date.
+        These are the current rows (the latest version of each period). A
+        restatement that keeps the original ``filing_date`` would look
+        available from that date here, so point-in-time reads pick the
+        version known at the decision instead
+        (:meth:`get_statement_versions`, :meth:`get_statements_as_of`,
+        ``PointInTimeLake``).
         """
         table = _statement_table(statement)
         lag = _non_negative_lag(missing_filing_lag_days)
@@ -1035,6 +1096,49 @@ class DuckDBLake:
         ).fetchdf()
         return _dates_to_python(df, ("period_end", "filing_date", "available_date"))
 
+    def get_statement_versions(
+        self,
+        statement: str,
+        ticker: str,
+        *,
+        missing_filing_lag_days: int = 90,
+        python_dates: bool = True,
+    ) -> pd.DataFrame:
+        """Every version of one statement table's rows for ``ticker``
+        (migration 020), oldest period first and, per period, oldest
+        version first: the table's columns, ``known_at`` (when Stonks first
+        saw the version) and ``available_date`` as in
+        :meth:`get_statement_history`. A row written straight to the table
+        without a version reads as its first version, stamped with its
+        filing date. ``python_dates=False`` keeps DuckDB's timestamps."""
+        table = _statement_table(statement)
+        lag = _non_negative_lag(missing_filing_lag_days)
+        versions = f"{table}_versions"
+        df = self.con.execute(
+            f"""
+            WITH v AS (
+                SELECT * FROM {versions} WHERE ticker = ?
+                UNION ALL BY NAME
+                SELECT c.*, CAST(COALESCE(c.filing_date, c.period_end) AS TIMESTAMP) AS known_at
+                  FROM {table} c
+                 WHERE c.ticker = ?
+                   AND NOT EXISTS (SELECT 1 FROM {versions} x
+                                    WHERE x.ticker = c.ticker AND x.period_end = c.period_end
+                                      AND x.frequency = c.frequency)
+            )
+            SELECT *,
+                   CAST(GREATEST(COALESCE(filing_date + INTERVAL 1 DAY,
+                                          period_end + to_days(CAST(? AS INTEGER))),
+                                 period_end) AS DATE) AS available_date
+              FROM v
+             ORDER BY period_end, frequency, known_at
+            """,
+            [ticker, ticker, lag],
+        ).fetchdf()
+        if not python_dates:
+            return df
+        return _dates_to_python(df, ("period_end", "filing_date", "available_date"))
+
     def get_statements_as_of(
         self,
         statement: str,
@@ -1044,17 +1148,24 @@ class DuckDBLake:
         frequency: str | None = None,
         missing_filing_lag_days: int = 90,
         exclude_flagged: bool = False,
+        known_by: datetime | None = None,
     ) -> pd.DataFrame:
         """Rows of :meth:`get_statement_history` whose ``available_date`` is
         on or before ``as_of`` (a date, or a datetime's calendar day),
         newest period first. ``frequency`` (``'Q'`` / ``'A'``) narrows the
         result to one reporting cadence. ``exclude_flagged`` drops periods
-        the statement audit (BL-36) flagged with severity ``error``."""
-        df = self.get_statement_history(
+        the statement audit (BL-36) flagged with severity ``error``.
+
+        Each period reads the version known then (P12,
+        :func:`~stonks.store.statement_versions.known_versions`): seen by
+        ``known_by``, the end of ``as_of``'s day by default."""
+        cutoff = _as_calendar_date(as_of)
+        versions = self.get_statement_versions(
             statement, ticker, missing_filing_lag_days=missing_filing_lag_days
         )
-        cutoff = _as_calendar_date(as_of)
-        mask = df["available_date"].map(lambda d: d <= cutoff).astype(bool)
+        filed = pd.Series(versions["available_date"].map(lambda d: d <= cutoff), dtype=bool)
+        df = known_versions(versions, known_by or day_start(cutoff + timedelta(days=1)), filed)
+        mask = pd.Series(True, index=df.index)
         if frequency is not None:
             mask &= df["frequency"] == frequency
         if exclude_flagged and not df.empty:

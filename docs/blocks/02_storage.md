@@ -29,13 +29,16 @@ lake.get_bars(ticker, interval, start, end)
 lake.aggregate_bars(...)                      # build 1w from 1d, 4h from 1h, ...
 lake.delete_bars(ticker, interval, stamps)    # drop bars (a stored spike)
 lake.upsert_prices(df) / lake.get_prices(...) # daily shims over bars
-lake.get_statement_history(...)               # point in time, from the day after filing_date
+lake.get_statement_history(...)               # current rows, available from the day after filing_date
+lake.get_statement_versions(...)              # every version of each row, with known_at
+lake.get_statements_as_of(...)                # the version known on a day
 lake.get_corporate_actions(tickers)           # splits and dividends
 lake.sql("SELECT ...")                        # escape hatch
 ```
 
 - Every write is an idempotent upsert.
 - Statement upserts use `COALESCE(EXCLUDED.col, table.col)`, so a NULL never wipes a stored value but a real restated value overwrites it.
+- Statement upserts also keep versions. See "Statement versions" below.
 - `read_only=True` opens an existing file without the write lock (lab workers use this on snapshot copies).
 - DuckDB allows one writing process per file. While `stonks serve` runs, it holds the lake.
 
@@ -79,6 +82,28 @@ The copy is checked per ticker and interval (row count and checksum) before the 
 | 013 | `quarantined_bars`; `ingest_runs.quality_json` |
 | 014 | `statement_flags` (statement audit, BL-36) |
 | 015 | `universe_membership` (point-in-time universes, BL-37) |
+| 020 | `income_statement_versions`, `balance_sheet_versions`, `cash_flow_statement_versions` (P12) |
+
+### Statement versions
+
+A vendor can restate a statement and keep the old filing date. The three statement tables hold the latest numbers, so a plain read would show the restated numbers from the old date. That is look-ahead.
+
+Each statement table has a `_versions` twin with the same columns plus `known_at`: the time Stonks first saw that version (naive UTC).
+
+- Every upsert that changes a row adds the full merged row as a new version. Sending the same numbers again adds nothing.
+- `upsert_income_statement(df, known_at=...)` sets the stamp. The default is now.
+- A decision reads, per period, the latest version whose `known_at` and filing date are both at or before it (`store/statement_versions.py`). `PointInTimeLake` and `get_statements_as_of` do this.
+- The first version of a period is taken as filed. It counts from its filing date whenever Stonks saw it, so history loaded late stays usable. A vendor that only sends restated numbers still leaks on the first load.
+- Migration `020` copied the existing rows in as first versions, stamped with their filing date.
+- A row written straight to a statement table, with no version, reads as its first version.
+- A later migration that adds a statement column must add it to the `_versions` table too.
+
+```mermaid
+flowchart LR
+  U[upsert] --> C[income_statement: latest]
+  U --> V[income_statement_versions: every change + known_at]
+  V --> P[PointInTimeLake: version known at the decision]
+```
 
 ### Statement audit and universe membership
 
