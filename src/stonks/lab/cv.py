@@ -48,6 +48,7 @@ __all__ = [
     "CombinatorialPurgedKFold",
     "PurgedKFold",
     "contiguous_runs",
+    "purge_days",
     "purge_horizon",
     "purged_train_mask",
     "trading_dates",
@@ -279,7 +280,7 @@ class CVObjective:
         from stonks.lab.objectives import per_bar_returns
 
         dates = trading_dates(dataset, dataset.train_window)
-        horizon = purge_horizon(dataset, strategy)
+        horizon = purge_days(dataset, strategy)
         positions = np.arange(len(dates))
         splits = PurgedKFold(self.folds, self.embargo_pct).split(positions, positions + horizon)
         scores: list[float] = []
@@ -305,6 +306,21 @@ class CVObjective:
 
     def score(self, strategy: Strategy, dataset: Any) -> float:
         return self.evaluate(strategy, dataset).score
+
+
+def purge_days(dataset: Any, strategy: Any) -> int:
+    """:func:`purge_horizon` in the units the folds use: trading days. An
+    intraday horizon counts the sessions its bars fill (on the 6.5-hour
+    exchange calendar, the longest reading for 24-hour markets), so an
+    hourly run no longer purges one day per bar (BE-60)."""
+    from stonks.backtest.calendar import EXCHANGE_SESSIONS
+
+    bars = purge_horizon(dataset, strategy)
+    interval = getattr(dataset, "interval", Interval.DAY_1)
+    if bars <= 0 or not interval.is_intraday:
+        return bars
+    per_session = EXCHANGE_SESSIONS.periods_per_year(interval) / EXCHANGE_SESSIONS.sessions_per_year
+    return math.ceil(round(bars / per_session, 9))
 
 
 def purge_horizon(dataset: Any, strategy: Any) -> int:

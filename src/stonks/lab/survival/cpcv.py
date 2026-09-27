@@ -11,7 +11,8 @@ once with a model that never saw it.
 Leakage control (principle P9): the training segments of a split are
 purged of the ``h`` trading days before each test group and embargoed for
 ``max(h, ceil(embargo_pct * n))`` days after it, where ``h`` is the
-strategy's effective embargo (``max(embargo_bars, label_horizon_bars)``).
+strategy's effective embargo (``max(embargo_bars, label_horizon_bars)``)
+in trading days: an intraday horizon counts the sessions its bars fill.
 A split's dataset carries the segments as ``train_segments``: a strategy
 that fits on several windows reads ``train_windows``, one that reads only
 ``train_window`` gets the longest segment. The tuner's objective scores
@@ -52,6 +53,7 @@ from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
 from stonks.lab.cv import (
     CombinatorialPurgedKFold,
+    purge_days,
     purge_horizon,
     refit,
     segments_from_indices,
@@ -217,7 +219,7 @@ class CPCVTest:
                 metrics={"n_days": float(len(dates))},
                 notes=f"insufficient data: {len(dates)} trading days for {o.n_groups} groups",
             )
-        horizon = purge_horizon(context, strategy)
+        horizon = purge_days(context, strategy)
         positions = np.arange(len(dates))
         bounds = cv.group_bounds(len(dates))
         splits = [
@@ -242,7 +244,8 @@ class CPCVTest:
             "n_splits": float(cv.n_splits),
             "n_paths": float(cv.n_paths),
             "n_days": float(len(dates)),
-            "purge_bars": float(horizon),
+            "purge_bars": float(purge_horizon(context, strategy)),
+            "purge_days": float(horizon),
             "positive_share": positive,
             "psr0_pooled": pooled,
             "sharpe_mean": float(np.nanmean(sharpes)) if any(np.isfinite(sharpes)) else math.nan,
