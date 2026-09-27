@@ -297,9 +297,11 @@ class LabRunner:
             self._ledger.record_trials(run_id, trials, matrix)
             n_class = self._ledger.n_trials(class_path)
             n_family = self._ledger.n_trials_family(family) if family else 0
+            n_searched = self._ledger.n_trials_searched(class_path, family)
         else:
             n_class = len(trials)
             n_family = len(trials) if family else 0
+            n_searched = len(trials)
         _log.info(
             "lab.tune.done",
             run_id=run_id,
@@ -321,6 +323,7 @@ class LabRunner:
             n_trials_run=len(trials),
             n_trials_class=n_class,
             n_trials_family=n_family,
+            n_trials_searched=n_searched,
         )
         for test in self._suite.tests:
             bind = getattr(test, "bind_tuning", None)

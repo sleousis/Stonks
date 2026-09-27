@@ -144,12 +144,12 @@ class DeflatedSharpeTest:
         return SurvivalReport(test_id=self.id, passed=passed, metrics=metrics, notes=notes)
 
     def trial_count(self, ctx: LabRunContext) -> int:
-        """The trials this run is judged against: with prior runs, the
-        larger of the class's count and the research family's (roadmap
-        22.9, P2), else only this run's."""
+        """The trials this run is judged against: with prior runs, every
+        trial of the class or the research family, each once (roadmap 22.9,
+        P2), else only this run's."""
         if not self.include_prior_runs:
             return ctx.n_trials_run
-        return max(ctx.n_trials_class, ctx.n_trials_family)
+        return max(ctx.n_trials_class, ctx.n_trials_family, ctx.n_trials_searched)
 
     def _fail(self, metrics: dict[str, float], reason: str) -> SurvivalReport:
         return SurvivalReport(
