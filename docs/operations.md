@@ -518,6 +518,21 @@ fallback_pct = 0.10   # distance as a share of the entry when there is no ATR
 - A stop fills at the market after a gap. It limits how long a loss runs while nobody watches, not the size of an overnight gap.
 - The kill switch in stop-all mode cancels the stops too. They come back once trading resumes.
 
+### Intraday risk
+
+These risk rules act only on intraday books, on each event of the intraday engine (roadmap 21.3.2). A daily book never sees them. They never drop or shrink a closing order. All are off by default:
+
+| Rule | Setting under `[production.risk.rules.*]` | Effect |
+|------|-------------------------------------------|--------|
+| `intraday_loss_limit` | `max_loss`, `hard_loss`, `window_minutes` (5), `flatten` | A fall of `max_loss` from the highest mark of the window drops opening orders and opens an `intraday_loss` halt on new buys. A fall of `hard_loss` stops every new order. With `flatten` it also closes every position and the halt stays on buys, so the closes get out. |
+| `intraday_drawdown` | `schedule` | Opening orders are sized by the drawdown from the day's high, like `drawdown_scaling`. |
+| `intraday_order_rate` | `max_orders_per_minute`, `max_orders_per_day` | Opening orders over the cap are dropped, lowest score first, and a `runaway` halt opens. Closes use the room first and always go out. |
+| `intraday_stale_data` | `max_bar_age_seconds` | No opening order when the latest bar of its ticker is older than the limit, or while the stream is stale or reconnecting. |
+
+- Overrides only tighten. A longer loss window is tighter, because it sees a higher peak.
+- The engine checks the halts on every event (`production.intraday_halts.event_verdict`), so a kill switch stops the next order, not the next day. A stop-all kill switch also tells the engine to cancel working orders.
+- Clearing an `intraday_loss` halt needs a reason, like every halt.
+
 ### Order states
 
 Live orders carry a fine state in `orders.state`: `pending`, `submitted`, `accepted`, `partially_filled`, `filled`, `pending_cancel`, `cancelled`, `expired`, `rejected` or `unknown`. The `status` column follows it. An order whose submit or cancel timed out is `unknown`, and nothing is sent for it again until reconciliation finds it at the broker by client id. A submit window stays shut while any order of the portfolio is `unknown`.
@@ -562,7 +577,7 @@ Risk rules run between construction and the broker, configured under `[productio
 | `cash_buffer_fraction` | Buys are clipped so this fraction stays in cash, net of costs. |
 | `min_order_notional` | Smaller buys are dropped. |
 
-Weights use portfolio value before the tick's orders. Sells are never blocked, only clipped to the held quantity, and go before buys. Portfolio and subscription overrides can only tighten the policy. The rules are a registry (`production/rules/`); the newer ones (`risk_per_position`, `portfolio_vol`, `drawdown_scaling`, `liquidity`, `sector_cap`, `max_holding`, `circuit_breaker`, `operational_halt`, `style_exposure`) are set under `[production.risk.rules.<name>]` and stay off until a limit is set there (see `config/default.toml`).
+Weights use portfolio value before the tick's orders. Sells are never blocked, only clipped to the held quantity, and go before buys. Portfolio and subscription overrides can only tighten the policy. The rules are a registry (`production/rules/`); the newer ones (`risk_per_position`, `portfolio_vol`, `drawdown_scaling`, `liquidity`, `sector_cap`, `max_holding`, `circuit_breaker`, `operational_halt`, `style_exposure`, and the [intraday rules](#intraday-risk)) are set under `[production.risk.rules.<name>]` and stay off until a limit is set there (see `config/default.toml`).
 
 ## Halts and the kill switch
 
@@ -585,8 +600,9 @@ flowchart LR
 | `drawdown` | Value is 20% below its peak. | Only when a person clears it. |
 | `operational` | The scheduled health job or `stonks health` finds stale data or a stuck run. | When one of them passes again. |
 | `kill` | A person turns on the kill switch. | Resume with the typed confirmation. |
-| `runaway` | A live run tries to close more positions than `max_orders_per_run.max_closing_orders`. | Only when a person clears it. |
+| `runaway` | A live run tries to close more positions than `max_orders_per_run.max_closing_orders`, or an intraday book goes over `intraday_order_rate`. | Only when a person clears it. |
 | `broker_drift` | Reconciliation finds a difference it cannot explain (roadmap 19.5, not wired yet). | Only when a person clears it. |
+| `intraday_loss` | An intraday book loses more than `intraday_loss_limit.max_loss` within its window (buys), or `hard_loss` (all, unless it flattens). | Only when a person clears it. |
 
 - The breaker limits live in `[production.risk.rules.circuit_breaker]` (`max_month_loss`, `max_week_loss`, `max_drawdown_halt`, `cooldown`). They are off until set. The same rule runs in backtests.
 - Breaker halts block buys. Sells and exits still go through.

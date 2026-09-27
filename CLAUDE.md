@@ -188,7 +188,7 @@ uv run python -m stonks.streaming sources|run|record|replay   # live streams int
 - `earnings_calendar (ticker, period_end, report_date, before_after_market, eps_estimate, eps_actual, ...)`, `dividend_calendar (ticker, ex_date, amount, record_date, pay_date, ...)`, `economic_events (country, event_time, event_type, comparison, actual, previous, estimate, ...)` (020): event calendars, vendor neutral. See `docs/calendars.md`.
 - `borrow_rates (ticker, as_of, source, currency, isin, available_shares, fee_rate_annual, rebate_rate_annual; PK (ticker, as_of, source))` (021): daily stock borrow terms, rates as yearly fractions. Read through `execution.borrow.LakeBorrowSource`.
 
-**State (SQLite, migrations 001-037):**
+**State (SQLite, migrations 001-038):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -216,6 +216,7 @@ uv run python -m stonks.streaming sources|run|record|replay   # live streams int
 - 035: notification categories `price_alert` and `event_alert` on `alerts`, `notification_outbox` and `notification_prefs` (tables rebuilt), and `event_alert_prefs (user_id, topic, enabled)`: per-person switches for `earnings`, `dividends` and `economic` event alerts, on when no row.
 - 036: `orders.oca_group` and `orders.protective` (protective stops, roadmap 19.10).
 - 037: `portfolios.live_stage` (`sim_paper`, `broker_paper`, `live_small`, `live_scale`), `live_stage_changes` (append only, a trigger refuses an unlogged stage write) and `live_gate_days` (roadmap 19.9).
+- 038: halt kind `intraday_loss` on `risk_halts` (rebuilt with `reconcile_reports`, ids and counter kept, roadmap 21.3.2).
 
 ## Conventions to match
 

@@ -18,7 +18,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 17 | Planned. |
 | 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. 19.2 IBKR adapter, 19.3 connection and borrow, 19.5 reconciliation and drift, and 19.8 tickets and approve mode done. Design: `docs/design/live-trading.md`. |
 | 20 | 20.1 to 20.8 done, backend and console. |
-| 21 | 21.1 (streaming data) done, off by default. 21.2 and 21.3 planned in small work packages. Design: `docs/design/intraday.md`. |
+| 21 | 21.1 (streaming data) and 21.3.2 (intraday risk) done, off by default. The rest of 21.2 and 21.3 planned in small work packages. Design: `docs/design/intraday.md`. |
 | 22 | All of 22.1 to 22.9 done. Factors: `docs/factors.md`. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
@@ -495,7 +495,7 @@ Streaming prices (EODHD websockets, IBKR), a live event engine that decides on m
 | 21.2.4 Session rules | Regular hours only, no entries at the open and close edges, flatten before the close, per-ticker trading halts, early closes. | `engine/sessions.py` | planned |
 | 21.2.5 Engine process | The always-on process, scheduler jobs around the session, startup reconcile, restart and state recovery. | `engine/process.py`, `scheduling/jobs.py` | planned |
 | 21.3.1 Intraday strategies | Opening range breakout, VWAP reversion and intraday momentum with hypothesis cards, lab windows by session. | `strategies/examples/intraday_*.py`, `lab/dataset.py` | planned |
-| 21.3.2 Intraday risk | Per-minute loss limit and the `intraday_loss` halt, intraday drawdown scaling, orders per minute cap, stale data gate, kill switch per event. | `production/rules/intraday_*.py`, `production/halts.py`, a new SQLite migration | planned |
+| 21.3.2 Intraday risk | Per-minute loss limit and the `intraday_loss` halt, intraday drawdown scaling, orders per minute cap, stale data gate, kill switch per event. | `production/rules/intraday_*.py`, `production/intraday_halts.py`, `production/halts.py`, SQLite migration 038 | done |
 | 21.3.3 Live marks and P&L | Minute marks from the stream, intraday P&L per book and sleeve, intraday risk snapshots. | `production/intraday_pnl.py`, a new SQLite migration | planned |
 | 21.3.4 Monitoring | Stream and engine metrics, engine dead-man, event to order latency, alerts, a live console panel. | `scheduling/metrics.py`, `api/routers/stream.py`, `web/src/app/pages/live/*` | planned |
 | 21.3.5 Intraday TCA | Spread from recorded quotes, arrival at the next minute, cost calibration for minute trading. | `production/tca.py`, `backtest/costs.py` | planned |
