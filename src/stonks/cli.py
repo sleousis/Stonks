@@ -1992,15 +1992,18 @@ def halts_kill(
     portfolio: str | None = typer.Option(
         None, "--portfolio", help="portfolio id (--scope portfolio)"
     ),
-    flatten: bool = typer.Option(
+    buys_only: bool = typer.Option(
         False,
-        "--flatten",
+        "--buys-only",
         help="only stops buys: sells and exits still go through, and no position is closed",
+    ),
+    flatten: bool = typer.Option(
+        False, "--flatten", hidden=True, help="deprecated name of --buys-only"
     ),
     reason: str = typer.Option(..., "--reason", help="why (audited)"),
     user: str | None = _HALT_USER,
 ) -> None:
-    """Engage the kill switch: no new orders. With --flatten it only stops
+    """Engage the kill switch: no new orders. With --buys-only it only stops
     buys and leaves open positions as they are."""
     from stonks.app.halts import KillSwitchRequest
 
@@ -2012,7 +2015,7 @@ def halts_kill(
             KillSwitchRequest(
                 scope=scope,  # type: ignore[arg-type]
                 portfolio_id=portfolio,
-                flatten=flatten,
+                buys_only=buys_only or flatten,
                 reason=reason,
             ),
         )

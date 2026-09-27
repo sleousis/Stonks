@@ -72,12 +72,12 @@ def test_a_viewer_cannot_use_the_kill_switch(halts, people):
         halts.engage_kill(people["viewer"], KillSwitchRequest(scope="user", reason="r"))
 
 
-def test_a_trader_stops_their_own_books_and_flattens_one(halts, people):
+def test_a_trader_stops_their_own_books_and_stops_buys_on_one(halts, people):
     trader, pf = people["trader"], people["trader_pf"]
     mine = halts.engage_kill(trader, KillSwitchRequest(scope="user", reason="away"))
     assert mine.user_id == trader.user_id and mine.halt == "all"
     flat = halts.engage_kill(
-        trader, KillSwitchRequest(scope="portfolio", portfolio_id=pf, flatten=True, reason="exit")
+        trader, KillSwitchRequest(scope="portfolio", portfolio_id=pf, buys_only=True, reason="exit")
     )
     assert flat.portfolio_id == pf and flat.halt == "buys"
 
@@ -231,14 +231,14 @@ def test_engage_and_list_accept_a_principal(halts, people):
 # ---- escalating the kill switch (TO-07) ------------------------------------------
 
 
-def test_flatten_escalates_to_stop_all(halts, people, settings):
+def test_buys_only_escalates_to_stop_all(halts, people, settings):
     from datetime import UTC, datetime
 
     from stonks.production.halts import active_halts
 
     owner = people["owner"]
     flat = halts.engage_kill(
-        owner, KillSwitchRequest(scope="user", flatten=True, reason="exit slowly")
+        owner, KillSwitchRequest(scope="user", buys_only=True, reason="exit slowly")
     )
     assert flat.halt == "buys"
     stop = halts.engage_kill(owner, KillSwitchRequest(scope="user", reason="fills look wrong"))
@@ -262,7 +262,7 @@ def test_the_escalated_halt_stops_sells_at_the_gate(halts, people, settings):
     from stonks.production.hooks.risk_halts import RiskHaltGate
 
     trader, pf = people["trader"], people["trader_pf"]
-    req = KillSwitchRequest(scope="portfolio", portfolio_id=pf, flatten=True, reason="exit")
+    req = KillSwitchRequest(scope="portfolio", portfolio_id=pf, buys_only=True, reason="exit")
     halts.engage_kill(trader, req)
     halts.engage_kill(
         trader, KillSwitchRequest(scope="portfolio", portfolio_id=pf, reason="stop all")
@@ -281,11 +281,11 @@ def test_the_escalated_halt_stops_sells_at_the_gate(halts, people, settings):
     assert verdict is not None and verdict.halt == "all"
 
 
-def test_flatten_never_downgrades_a_stop_all(halts, people):
+def test_buys_only_never_downgrades_a_stop_all(halts, people):
     owner = people["owner"]
     stop = halts.engage_kill(owner, KillSwitchRequest(scope="global", reason="stop"))
     again = halts.engage_kill(
-        owner, KillSwitchRequest(scope="global", flatten=True, reason="flatten")
+        owner, KillSwitchRequest(scope="global", buys_only=True, reason="flatten")
     )
     assert again.id == stop.id and again.halt == "all"
 
@@ -333,13 +333,13 @@ def test_the_global_kill_switch_cancels_working_broker_orders(live_halts, people
     assert json.loads(row["details_json"])["cancelled"] == ["2026-03-20:bh:UP.US:buy"]
 
 
-def test_flatten_cancels_working_buys_only(live_halts, people, broker, settings):
+def test_buys_only_cancels_working_buys_only(live_halts, people, broker, settings):
     _pending_order(settings, "b1")
     _pending_order(settings, "s1", side="sell")
     broker.set("b1", "pending", 0.0, None)
     broker.set("s1", "pending", 0.0, None, side="sell")
     live_halts.engage_kill(
-        people["owner"], KillSwitchRequest(scope="user", flatten=True, reason="exit")
+        people["owner"], KillSwitchRequest(scope="user", buys_only=True, reason="exit")
     )
     assert broker.cancelled == ["b1"]
     assert _order_status(settings, "s1") == "pending"
@@ -359,3 +359,17 @@ def test_a_broker_failure_never_undoes_the_halt(services, people, settings):
     halts = HaltService(services.context, brokers=broken)
     view = halts.engage_kill(people["owner"], KillSwitchRequest(scope="global", reason="x"))
     assert view.active
+
+
+def test_flatten_is_a_deprecated_alias_of_buys_only():
+    old = KillSwitchRequest.model_validate({"scope": "user", "reason": "r", "flatten": True})
+    assert old.buys_only is True
+    assert KillSwitchRequest(scope="user", reason="r").buys_only is False
+
+
+def test_the_api_takes_the_old_flatten_field(client):
+    r = client.post(
+        "/api/halts/kill", json={"scope": "user", "reason": "r", "flatten": True}, headers=AUTH
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["halt"] == "buys"

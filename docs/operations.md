@@ -269,10 +269,10 @@ flowchart LR
 - The breaker limits live in `[production.risk.rules.circuit_breaker]` (`max_month_loss`, `max_week_loss`, `max_drawdown_halt`, `cooldown`). They are off until set. The same rule runs in backtests.
 - Breaker halts block buys. Sells and exits still go through.
 - The gate also runs on a tick that trades nothing, so a breaker trip is recorded and notified the day it happens.
-- The kill switch has three scopes: `global` (admins), `user` (all your portfolios) and `portfolio` (one of yours). It stops every order, or only buys with `flatten`.
+- The kill switch has three scopes: `global` (admins), `user` (all your portfolios) and `portfolio` (one of yours). It stops every order, or only buys with `buys_only` (sells and exits still go through, and no position is closed). `flatten` is the old, deprecated name of `buys_only` and still works.
 - A `user` kill switch covers every portfolio you own, `pf_default` included when you are its owner.
-- Engaging stop-all while a `flatten` kill switch is on escalates it to stop everything. The old row closes with "escalated to all" and a new one opens. Engaging `flatten` never weakens a stop-all.
-- Engaging also cancels the orders your portfolios still have working at an external broker (only buys with `flatten`), and books the result. A failed cancel is logged and audited but never undoes the halt. Engage again to retry.
+- Engaging stop-all while a buys-only kill switch is on escalates it to stop everything. The old row closes with "escalated to all" and a new one opens. Engaging buys-only never weakens a stop-all.
+- Engaging also cancels the orders your portfolios still have working at an external broker (only buys with `buys_only`), and books the result. A failed cancel is logged and audited but never undoes the halt. Engage again to retry.
 - Resume the kill switch with `POST /api/halts/{id}/resume` and the text `RESUME TRADING`. Clear other halts with `POST /api/halts/{id}/clear` and a reason.
 - Every action writes an `audit_log` row. Every clear also writes a `risk_reset` row in `status_changes`.
 - A trip sends a `risk` notification to the portfolio owner, or to the admins for a global halt.
