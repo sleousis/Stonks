@@ -14,6 +14,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from stonks.api.deps import PageDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
+from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.assistant import (
     ActionDecision,
     AssistantEventView,
@@ -25,6 +26,12 @@ from stonks.app.assistant import (
     TurnView,
     event_view,
 )
+from stonks.app.assistant_research import (
+    ResearchSessionDetailView,
+    ResearchSessionView,
+    ResearchStart,
+)
+from stonks.app.jobs import Job
 from stonks.app.pagination import Page, page_of
 from stonks.assistant.loop import AssistantEvent
 from stonks.auth import Permission
@@ -179,3 +186,49 @@ async def decide_action(
     turn then continues as a new event stream."""
     async for item in _sse(events):
         yield item  # type: ignore[misc]
+
+
+# ---- the research loop (roadmap 22.9) ---------------------------------------------
+
+
+@router.post(
+    "/research",
+    **JOB_CREATED,
+    operation_id="startAssistantResearch",
+    dependencies=needs(Permission.LAB_RUN),
+)
+def start_research(
+    body: ResearchStart, services: ServicesDep, principal: PrincipalDep, response: Response
+) -> Job:
+    """Start a research session: the assistant proposes lab trials for your
+    goal and runs them under the session's budgets. Every proposal is
+    recorded with its hypothesis before it runs, every trial is counted in
+    the trial ledger, and validation windows start after the model's
+    training cutoff. It never registers or promotes a strategy. Follow the
+    job, then read the session."""
+    return accepted(services.research.start(principal, body), response)
+
+
+@router.get(
+    "/research",
+    response_model=Page[ResearchSessionView],
+    operation_id="listAssistantResearch",
+)
+def list_research(
+    services: ServicesDep, principal: PrincipalDep, page: PageDep
+) -> Page[ResearchSessionView]:
+    """Your research sessions, newest first."""
+    return services.research.list(principal, limit=page.limit, offset=page.offset)
+
+
+@router.get(
+    "/research/{session_id}",
+    response_model=ResearchSessionDetailView,
+    operation_id="getAssistantResearch",
+)
+def get_research(
+    session_id: str, services: ServicesDep, principal: PrincipalDep
+) -> ResearchSessionDetailView:
+    """One of your research sessions with every proposal: its hypothesis,
+    whether it ran or why not, and its lab run in the trial ledger."""
+    return services.research.get(principal, session_id)
