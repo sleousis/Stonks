@@ -9602,6 +9602,12 @@ export type TickRequest = {
  */
 export type TickResultView = {
     /**
+     * Broker Mode
+     *
+     * Whose money the default book traded: simulated fills, a broker's paper account, or a live (real money) account.
+     */
+    broker_mode?: 'simulated' | 'paper' | 'live';
+    /**
      * Dry Run
      */
     dry_run: boolean;
@@ -9694,11 +9700,19 @@ export type TickRunWithOrders = {
  */
 export type TickSummary = {
     /**
+     * Broker Mode
+     */
+    broker_mode?: 'simulated' | 'paper' | 'live' | null;
+    /**
      * Deferred Corporate Actions
      */
     deferred_corporate_actions?: Array<{
         [key: string]: unknown;
     }>;
+    /**
+     * Dry Run
+     */
+    dry_run?: boolean | null;
     /**
      * Error
      */

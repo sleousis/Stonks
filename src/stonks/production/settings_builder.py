@@ -12,7 +12,7 @@ from stonks.accounts.models import Portfolio as AccountPortfolio
 from stonks.config import Settings
 from stonks.core.protocols import Broker
 from stonks.core.types import Portfolio
-from stonks.execution.brokers import SimulatedCosts, make_broker
+from stonks.execution.brokers import SimulatedCosts, broker_mode, make_broker
 from stonks.lab.parallel import default_max_workers
 from stonks.notify import Notifier, notifier_from_settings
 from stonks.production.tick import (
@@ -89,6 +89,7 @@ def build_tick_settings(
         risk=p.risk,
         shadow_enabled=p.shadow_enabled,
         broker_kind=settings.brokers.kind,
+        broker_mode=broker_mode(settings),
         dividend_withholding_rate=p.dividend_withholding_rate,
         construction=p.construction,
         model_books=p.model_books,

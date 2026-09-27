@@ -16,6 +16,9 @@ from stonks.core.types import Fill, Order, OrderSide, OrderStatus
 #: Which broker the production tick trades through (``[brokers].kind``).
 #: ``ibkr`` is the Interactive Brokers adapter (roadmap 19.2).
 BrokerKind = Literal["simulated", "alpaca", "ibkr"]
+#: Whose money the default book trades: the in-memory ``simulated`` broker,
+#: a broker's ``paper`` account, or a ``live`` (real money) account.
+BrokerMode = Literal["simulated", "paper", "live"]
 #: The kind of a real-money account (roadmap 19.7).
 AccountType = Literal["cash", "margin"]
 #: The fine state of an order at a live broker (roadmap 19.1). The ledger's

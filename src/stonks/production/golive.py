@@ -356,10 +356,11 @@ def promotion_checklist(period: PaperPeriod) -> dict[str, Any]:
 
 def _status_check(period: PaperPeriod) -> GoLiveCheck:
     ok = period.source != "none"
+    status = _STATUS_WORDS.get(period.status, period.status.capitalize())
     detail = (
-        f"{period.status}: paper period from {period.source} P&L"
+        f"{status}, measured on {_SOURCE_WORDS[period.source]}"
         if ok
-        else f"{period.status}: no paper period"
+        else f"{status}, so it has no paper trading record"
     )
     return GoLiveCheck(name="status", passed=ok, value=None, limit=None, detail=detail)
 
@@ -373,7 +374,7 @@ def _min_days_check(
             passed=period.days >= policy.min_days,
             value=period.days,
             limit=policy.min_days,
-            detail=f"{period.days} paper day(s), need >= {policy.min_days}",
+            detail=f"{_paper_days(period.days)}, needs at least {policy.min_days}",
         )
     trl, source = _min_trl_bars(period, inc)
     if trl is None:
@@ -382,21 +383,24 @@ def _min_days_check(
             passed=False,
             value=period.days,
             limit=inc.min_days,
-            detail=f"{period.days} paper day(s); MinTRL unavailable: {source}",
+            detail=(
+                f"{_paper_days(period.days)}, cannot work out the minimum track record: {source}"
+            ),
         )
     trl_days = (
         inc.min_trl_cap_days if math.isinf(trl) else min(math.ceil(trl), inc.min_trl_cap_days)
     )
     need = max(inc.min_days, trl_days)
-    trl_text = "infinite" if math.isinf(trl) else f"{trl:.1f}"
+    trl_text = "an endless" if math.isinf(trl) else f"a {trl:.0f} day"
     return GoLiveCheck(
         name="min_days",
         passed=period.days >= need,
         value=period.days,
         limit=need,
         detail=(
-            f"{period.days} paper day(s), need >= {need} = max(min_days {inc.min_days}, "
-            f"MinTRL {trl_text} bars from {source}, capped at {inc.min_trl_cap_days})"
+            f"{_paper_days(period.days)}, needs at least {need}: the longer of "
+            f"{inc.min_days} days and {trl_text} minimum track record from {source} "
+            f"(at most {inc.min_trl_cap_days} days)"
         ),
     )
 
@@ -409,9 +413,9 @@ def _max_drawdown_check(period: PaperPeriod, policy: GoLivePolicy) -> GoLiveChec
         value=dd,
         limit=policy.max_drawdown,
         detail=(
-            "no paper snapshots"
+            _NO_PAPER_RESULTS
             if dd is None
-            else f"max drawdown {dd:.2%}, limit {policy.max_drawdown:.2%}"
+            else f"Deepest fall {abs(dd):.2%}, limit {policy.max_drawdown:.2%}"
         ),
     )
 
@@ -420,15 +424,15 @@ def _max_drift_check(period: PaperPeriod, policy: GoLivePolicy) -> GoLiveCheck:
     drift = period.drift
     if drift is not None:
         detail = (
-            f"paper {period.period_return:+.2%} vs backtest {period.expected_return:+.2%} "
-            f"(gap {drift:+.2%}, limit ±{policy.max_drift:.2%})"
+            f"Paper return {period.period_return:+.2%} vs backtest {period.expected_return:+.2%}"
+            f" (gap {drift:+.2%}, limit ±{policy.max_drift:.2%})"
         )
     elif not period.rows:
-        detail = "no paper snapshots"
+        detail = _NO_PAPER_RESULTS
     elif period.expected_return is None:
-        detail = "no finite backtest expectation (oos cagr_oos)"
+        detail = "The out-of-sample backtest has no expected return to compare with"
     else:
-        detail = "paper return undefined (zero starting value)"
+        detail = "Paper return unknown: paper trading started from zero"
     return GoLiveCheck(
         name="max_drift",
         passed=drift is not None and abs(drift) <= policy.max_drift,
@@ -444,25 +448,27 @@ def _min_trades_check(period: PaperPeriod, policy: GoLivePolicy) -> GoLiveCheck:
         passed=period.trades >= policy.min_trades,
         value=period.trades,
         limit=policy.min_trades,
-        detail=f"{period.trades} filled trade(s), need >= {policy.min_trades}",
+        detail=(
+            f"{_count(period.trades, 'paper trade')} filled, needs at least {policy.min_trades}"
+        ),
     )
 
 
 def _survival_check(period: PaperPeriod, policy: GoLivePolicy) -> GoLiveCheck:
     passed_n = sum(1 for r in period.reports if r.passed)
     total_n = len(period.reports)
-    failed_ids = [r.test_id for r in period.reports if not r.passed]
+    failed_ids = [_test_name(r.test_id) for r in period.reports if not r.passed]
     if policy.require_all_survival_passed:
         ok = total_n > 0 and passed_n == total_n
         detail = (
-            "no survival reports"
+            "No robustness tests on record"
             if total_n == 0
-            else f"{passed_n}/{total_n} passed"
-            + (f"; failed: {', '.join(failed_ids)}" if failed_ids else "")
+            else f"{passed_n} of {total_n} robustness tests passed"
+            + (f", failed: {', '.join(failed_ids)}" if failed_ids else "")
         )
     else:
         ok = True
-        detail = f"{passed_n}/{total_n} passed (not required)"
+        detail = f"{passed_n} of {total_n} robustness tests passed (not required)"
     return GoLiveCheck(name="survival", passed=ok, value=passed_n, limit=total_n, detail=detail)
 
 
@@ -479,26 +485,24 @@ def _mc_band_check(period: PaperPeriod) -> GoLiveCheck:
             passed=False,
             value=dd,
             limit=None,
-            detail="Monte Carlo band unavailable: no mc_trades p95_max_dd in survival reports",
+            detail="No Monte Carlo test on record, so there is no band to compare with",
         )
     if dd is None:
-        return GoLiveCheck(
-            name=name, passed=False, value=None, limit=p95, detail="no paper snapshots"
-        )
+        return GoLiveCheck(name=name, passed=False, value=None, limit=p95, detail=_NO_PAPER_RESULTS)
     ok = dd <= p95
-    detail = f"paper drawdown {dd:.2%} vs Monte Carlo p95 {p95:.2%}"
+    detail = f"Paper drawdown {abs(dd):.2%} vs Monte Carlo worst case {p95:.2%}"
     p5 = period.metric("mc_trades", "p05_return")  # mc_trades' metric name
     if p5 is None:
-        detail += "; no Monte Carlo return floor stored (drawdown only)"
+        detail += ", no Monte Carlo return floor on record (drawdown only)"
     else:
         floor = _compound(max(p5, -1.0), period.years)
         live = period.period_return
         if live is None or floor is None:
             ok = False
-            detail += "; paper return undefined against the Monte Carlo return floor"
+            detail += ", paper return unknown so it cannot meet the Monte Carlo floor"
         else:
             ok = ok and live >= floor
-            detail += f"; paper return {live:+.2%} vs Monte Carlo p5 floor {floor:+.2%}"
+            detail += f", paper return {live:+.2%} vs Monte Carlo floor {floor:+.2%}"
     return GoLiveCheck(name=name, passed=ok, value=dd, limit=p95, detail=detail)
 
 
@@ -513,25 +517,30 @@ def _quit_rule_check(period: PaperPeriod, inc: IncubationPolicy) -> GoLiveCheck:
             passed=False,
             value=dd,
             limit=p95,
-            detail="no backtest max drawdown (oos max_drawdown_oos)",
+            detail="No backtest drawdown on record from the out-of-sample test",
         )
     scaled = inc.quit_drawdown_multiple * abs(bt)
     limit = scaled if p95 is None else min(scaled, p95)
-    basis = f"{inc.quit_drawdown_multiple:g}x backtest max {abs(bt):.2%} = {scaled:.2%}"
+    basis = f"{inc.quit_drawdown_multiple:g}x the backtest's worst fall {abs(bt):.2%}"
+    basis += f" = {scaled:.2%}"
     if p95 is not None:
-        basis += f", Monte Carlo p95 {p95:.2%}"
+        basis += f", Monte Carlo worst case {p95:.2%}"
     if dd is None:
         return GoLiveCheck(
-            name=name, passed=False, value=None, limit=limit, detail=f"no paper snapshots ({basis})"
+            name=name,
+            passed=False,
+            value=None,
+            limit=limit,
+            detail=f"{_NO_PAPER_RESULTS} ({basis})",
         )
     ok = dd <= limit
-    verdict = "within" if ok else "quit rule tripped: stop paper trading;"
+    verdict = "Within the quit rule:" if ok else "Quit rule tripped, stop paper trading:"
     return GoLiveCheck(
         name=name,
         passed=ok,
         value=dd,
         limit=limit,
-        detail=f"{verdict} paper drawdown {dd:.2%} vs limit {limit:.2%} ({basis})",
+        detail=f"{verdict} paper drawdown {abs(dd):.2%} vs limit {limit:.2%} ({basis})",
     )
 
 
@@ -546,12 +555,13 @@ def _promotion_preset_check(period: PaperPeriod, inc: IncubationPolicy) -> GoLiv
     stored = {r.test_id for r in period.reports}
     missing = [t for t in required if t not in stored]
     covered = len(required) - len(missing)
+    suite = _suite_name(inc.promotion_preset)
     if not required:
-        detail = f"preset {inc.promotion_preset!r} has no registered tests"
+        detail = f"The {suite} has no tests"
     else:
-        detail = f"{covered}/{len(required)} {inc.promotion_preset!r} preset tests on record"
+        detail = f"{covered} of {len(required)} tests of the {suite} on record"
         if missing:
-            detail += f"; missing: {', '.join(missing)}"
+            detail += f", missing: {', '.join(_test_name(t) for t in missing)}"
     return GoLiveCheck(
         name=name,
         passed=bool(required) and not missing,
@@ -571,11 +581,13 @@ def _nonzero_costs_check(period: PaperPeriod) -> GoLiveCheck:
             passed=False,
             value=None,
             limit=1,
-            detail="no cost model recorded (meta.json manifest.costs)",
+            detail="No trading costs on record for the backtest",
         )
     nonzero = sorted(set(_nonzero_cost_inputs(costs)))
     detail = (
-        f"non-zero cost inputs: {', '.join(nonzero)}" if nonzero else "backtest ran with zero costs"
+        f"The backtest paid {_and_join([_COST_WORDS[k] for k in nonzero])}"
+        if nonzero
+        else "The backtest ran with zero costs"
     )
     return GoLiveCheck(name=name, passed=bool(nonzero), value=len(nonzero), limit=1, detail=detail)
 
@@ -584,9 +596,9 @@ def _hypothesis_check(period: PaperPeriod, inc: IncubationPolicy) -> GoLiveCheck
     text = period.hypothesis
     need = inc.min_hypothesis_chars
     detail = (
-        "no hypothesis recorded (lab run or strategy class)"
+        "No hypothesis written down"
         if not text
-        else f"hypothesis of {len(text)} character(s), need >= {need}"
+        else f"Hypothesis of {_count(len(text), 'character')}, needs at least {need}"
     )
     return GoLiveCheck(
         name="hypothesis_recorded",
@@ -608,14 +620,17 @@ def _backtest_trades_check(period: PaperPeriod, inc: IncubationPolicy) -> GoLive
                 passed=n >= need,
                 value=int(n),
                 limit=need,
-                detail=f"{int(n)} backtest trade(s) ({test_id}), need >= {need}",
+                detail=(
+                    f"{_count(int(n), 'backtest trade')} in the {_TEST_WORDS[test_id]},"
+                    f" needs at least {need}"
+                ),
             )
     return GoLiveCheck(
         name=name,
         passed=False,
         value=None,
         limit=need,
-        detail="no backtest trade count (oos or mc_trades n_trades)",
+        detail="No backtest trade count on record",
     )
 
 
@@ -625,7 +640,11 @@ def _short_borrow_check(period: PaperPeriod, policy: GoLivePolicy) -> GoLiveChec
     need = float(getattr(policy, "min_borrow_fee_annual", MIN_BORROW_FEE_ANNUAL))
     if period.report("cost_stress") is None:
         return GoLiveCheck(
-            name=name, passed=False, value=None, limit=need, detail="no cost_stress report"
+            name=name,
+            passed=False,
+            value=None,
+            limit=need,
+            detail="No cost stress test on record",
         )
     fee = period.metric("cost_stress", "borrow_fee_rate")
     stressed = period.metric("cost_stress", "sharpe_borrow_stress")
@@ -635,18 +654,92 @@ def _short_borrow_check(period: PaperPeriod, policy: GoLivePolicy) -> GoLiveChec
             passed=False,
             value=None,
             limit=need,
-            detail="validated without borrow costs: the lab dataset did not short",
+            detail="Tested without borrow costs: the test data had no short trades",
         )
     failures = []
     if fee < need:
-        failures.append(f"borrow fee {fee:.2%} a year < {need:.2%}")
+        failures.append(f"borrow fee {fee:.2%} a year is below {need:.2%}")
     if not stressed > 0:
-        failures.append(f"Sharpe at the borrow stress {stressed:.2f} <= 0")
-    detail = "; ".join(failures) or f"borrow fee {fee:.2%} a year, stressed Sharpe {stressed:.2f}"
+        failures.append(f"Sharpe {stressed:.2f} at triple the borrow fee is not above zero")
+    detail = (
+        ", ".join(failures).capitalize()
+        if failures
+        else f"Borrow fee {fee:.2%} a year, Sharpe {stressed:.2f} at triple the fee"
+    )
     return GoLiveCheck(name=name, passed=not failures, value=fee, limit=need, detail=detail)
 
 
 # ---- helpers ------------------------------------------------------------------
+
+# Check details are shown to traders as is, so they use the console's words
+# (docs/ui.md, "Words across surfaces"): no status keys, test ids or metric
+# names.
+_STATUS_WORDS = {"shadow": "Paper trading", "active": "Live", "retired": "Stopped"}
+_SOURCE_WORDS: dict[PaperSource, str] = {
+    "shadow": "its paper trading results",
+    "portfolio": "the main portfolio's results",
+    "none": "nothing",
+}
+_TEST_WORDS = {"oos": "out-of-sample test", "mc_trades": "Monte Carlo test"}
+_COST_WORDS = {
+    "fee_flat": "a flat fee",
+    "fee_bps": "a fee",
+    "half_spread_bps": "the spread",
+    "impact_bps": "market impact",
+}
+_NO_PAPER_RESULTS = "No paper trading results yet"
+
+
+def _count(n: int, noun: str) -> str:
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
+
+
+def _and_join(words: list[str]) -> str:
+    """``a, b and c``."""
+    return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
+
+
+def _paper_days(n: int) -> str:
+    return f"{_count(n, 'day')} of paper trading"
+
+
+#: The console's names of the robustness tests
+#: (``web/src/app/shared/lab-results/survival-tests.ts``).
+_TEST_NAMES = {
+    "oos": "Out of sample",
+    "period_stability": "Period stability",
+    "perturbation": "Perturbation",
+    "walk_forward": "Walk-forward",
+    "deflated_sharpe": "Deflated Sharpe",
+    "pbo": "Overfitting (PBO)",
+    "mc_trades": "Monte Carlo trades",
+    "cost_stress": "Cost stress",
+    "plateau": "Parameter plateau",
+    "cross_instrument": "Cross-instrument",
+    "benchmark_relative": "Beats the benchmark",
+    "mcpt": "Monte Carlo permutation",
+    "permutation": "Monte Carlo permutation",
+    "drift": "Drift",
+    "runs_test": "Runs test",
+    "walk_forward_mcpt": "Walk-forward permutation",
+    "cpcv": "Combinatorial purged CV",
+    "crisis": "Crisis periods",
+    "event_study": "Event study",
+    "vs_random": "Beats random entries",
+    "signal_ic": "Signal IC",
+    "pool_correlation": "Pool correlation",
+    "stress": "Stress",
+}
+
+
+def _test_name(test_id: str) -> str:
+    """A robustness test's console name; an unknown id in plain words."""
+    return _TEST_NAMES.get(test_id) or test_id.replace("_", " ").capitalize()
+
+
+def _suite_name(preset: str) -> str:
+    words = preset.replace("_", " ")
+    return "full test suite" if preset == "promotion" else f"{words!r} test suite"
 
 
 def _finite(value: Any) -> float | None:
@@ -675,7 +768,7 @@ def _min_trl_bars(period: PaperPeriod, inc: IncubationPolicy) -> tuple[float | N
     with the reason when it can't be had."""
     report = period.report("oos")
     if report is None:
-        return None, "no oos survival report"
+        return None, "no out-of-sample test on record"
     stored = report.metrics.get("min_trl_bars")
     if (
         not isinstance(stored, bool)
@@ -683,10 +776,10 @@ def _min_trl_bars(period: PaperPeriod, inc: IncubationPolicy) -> tuple[float | N
         and not math.isnan(stored)
         and stored > 0
     ):
-        return float(stored), "oos min_trl_bars"
+        return float(stored), "the out-of-sample test"
     sharpe = _finite(report.metrics.get("sharpe_oos"))
     if sharpe is None:
-        return None, "no finite oos sharpe_oos"
+        return None, "the out-of-sample test has no Sharpe"
     skew = _finite(report.metrics.get("skew"))
     kurt = _finite(report.metrics.get("kurtosis"))  # non-excess (normal = 3)
     try:
@@ -698,10 +791,10 @@ def _min_trl_bars(period: PaperPeriod, inc: IncubationPolicy) -> tuple[float | N
             alpha=inc.min_trl_alpha,
         )
     except ValueError as exc:
-        return None, f"MinTRL undefined for oos sharpe_oos {sharpe:.2f} ({exc})"
+        return None, f"out-of-sample Sharpe {sharpe:.2f} gives none ({exc})"
     if math.isnan(trl) or trl <= 0:
-        return None, f"MinTRL undefined for oos sharpe_oos {sharpe:.2f}"
-    return trl, f"oos sharpe_oos {sharpe:.2f}"
+        return None, f"out-of-sample Sharpe {sharpe:.2f} gives none"
+    return trl, f"the out-of-sample Sharpe {sharpe:.2f}"
 
 
 def _nonzero_cost_inputs(costs: Any) -> list[str]:

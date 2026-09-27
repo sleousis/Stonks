@@ -3992,6 +3992,7 @@ What a test notification queued: its feed id and one delivery per enabled channe
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `broker_mode` | "simulated" \| "paper" \| "live" | no | Whose money the default book traded: simulated fills, a broker's paper account, or a live (real money) account. |
 | `dry_run` | boolean | yes |  |
 | `fills` | integer | yes |  |
 | `orders_placed` | integer | yes |  |
@@ -4026,7 +4027,9 @@ What a test notification queued: its feed id and one delivery per enabled channe
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `broker_mode` | "simulated" \| "paper" \| "live" \| null | no |  |
 | `deferred_corporate_actions` | list[object] | no |  |
+| `dry_run` | boolean \| null | no |  |
 | `error` | string \| null | no |  |
 | `error_type` | string \| null | no |  |
 | `exit_strategy_id` | string \| null | no |  |

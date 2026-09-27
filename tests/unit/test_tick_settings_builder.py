@@ -180,3 +180,25 @@ def test_the_risk_monitor_hook_reads_the_tick_settings():
     assert hook_settings(tick, "risk_monitor", RiskMonitorSettings).enabled is False
     assert hook_settings(tick, "decay", DecaySettings).negative_days == 5
     assert TickSettings(universe=[]).risk_monitor == RiskMonitorSettings()
+
+
+def _gateway(mode: str) -> dict:
+    return {"g": {"host": "h", "port": 4003, "mode": mode, "portfolios": ["pf_default"]}}
+
+
+@pytest.mark.parametrize(
+    ("brokers", "mode"),
+    [
+        ({}, "simulated"),
+        ({"kind": "alpaca"}, "paper"),
+        ({"kind": "alpaca", "alpaca": {"paper": False}}, "paper"),  # live is refused
+        ({"kind": "alpaca", "alpaca": {"paper": False, "allow_live": True}}, "live"),
+        ({"kind": "ibkr"}, "paper"),
+        ({"kind": "ibkr", "ibkr": {"gateways": _gateway("live")}}, "paper"),
+        ({"kind": "ibkr", "ibkr": {"allow_live": True, "gateways": _gateway("paper")}}, "paper"),
+        ({"kind": "ibkr", "ibkr": {"allow_live": True, "gateways": _gateway("live")}}, "live"),
+    ],
+)
+def test_broker_mode_follows_the_broker_settings(brokers, mode):
+    settings = Settings(brokers=brokers)
+    assert build_tick_settings(settings, ["A.US"]).broker_mode == mode

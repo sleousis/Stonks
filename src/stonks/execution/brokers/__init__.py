@@ -15,6 +15,7 @@ from stonks.execution.brokers.base import (
     BrokerAccount,
     BrokerError,
     BrokerKind,
+    BrokerMode,
     BrokerOrderState,
     LiveTradingRefusedError,
     MarketClock,
@@ -33,6 +34,7 @@ __all__ = [
     "BrokerAccount",
     "BrokerError",
     "BrokerKind",
+    "BrokerMode",
     "BrokerOrderState",
     "LiveTradingRefusedError",
     "MarketClock",
@@ -41,8 +43,31 @@ __all__ = [
     "SimulatedBroker",
     "SimulatedCosts",
     "UnsupportedTickerError",
+    "broker_mode",
     "make_broker",
 ]
+
+
+def broker_mode(settings: Settings) -> BrokerMode:
+    """Whose money the default book trades under ``[brokers]``.
+
+    ``simulated`` for the in-memory broker. At Alpaca, ``live`` only when
+    the live endpoint is chosen and allowed (the adapter refuses it
+    otherwise). At IBKR, ``live`` only when the gateway that serves the
+    default portfolio is a live one and ``allow_live`` is set."""
+    from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
+
+    brokers = settings.brokers
+    if brokers.kind == "simulated":
+        return "simulated"
+    if brokers.kind == "alpaca":
+        cfg = brokers.alpaca
+        return "live" if not cfg.paper and cfg.allow_live else "paper"
+    ibkr = brokers.ibkr
+    live = any(
+        gw.mode == "live" and DEFAULT_PORTFOLIO_ID in gw.portfolios for gw in ibkr.gateways.values()
+    )
+    return "live" if live and ibkr.allow_live else "paper"
 
 
 def make_broker(

@@ -416,7 +416,7 @@ describe('StrategyDetailPage', () => {
 
     button(LIFECYCLE.live.label)!.click();
     await ticketReads(false);
-    expect(dialogForm(el)!.textContent).toContain('3 paper day(s), need >= 20');
+    expect(dialogForm(el)!.textContent).toContain('3 days of paper trading, needs at least 20');
     answerDialog(fixture, { reason: 'Try it' });
 
     (await nextRequest(controller, '/api/strategies/momentum-v3/promote', 'POST')).flush(
@@ -525,7 +525,7 @@ describe('StrategyDetailPage', () => {
     it('folds the failing checks under the bar', async () => {
       await load();
       expect(el.querySelector('app-stage-bar details.checks')!.textContent).toContain(
-        '3 paper day(s), need >= 20',
+        '3 days of paper trading, needs at least 20',
       );
     });
 
