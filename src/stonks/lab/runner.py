@@ -110,6 +110,8 @@ class LabRunResult:
     #: Cumulative trials of this strategy class across ledgered runs
     #: (equals ``n_trials_run`` without a ledger).
     n_trials_class: int = 0
+    #: Trials across the run's research family (roadmap 22.9), 0 outside one.
+    n_trials_family: int = 0
     hypothesis: str | None = None
     premortem: str | None = None
     manifest: dict[str, Any] = field(default_factory=dict)
@@ -186,11 +188,14 @@ class LabRunner:
         *,
         hypothesis: str | None = None,
         premortem: str | None = None,
+        family: str | None = None,
     ) -> LabRunResult:
         """``fixed_params`` pin params for tuning (e.g. a
         ``MacroRegimeFilter``'s inner strategy, a ticker); survival tests
         that re-tune keep them pinned, plus the strategy's non-tunable params.
-        ``hypothesis`` / ``premortem`` are recorded before tuning starts."""
+        ``hypothesis`` / ``premortem`` are recorded before tuning starts.
+        ``family`` names the research session the run belongs to (roadmap
+        22.9): tests that count trials see the whole family's count."""
         class_path = f"{strategy_cls.__module__}:{strategy_cls.__name__}"
         dataset, ensured = prepare_dataset(
             dataset, ensurer=self._data_ensurer, strategy=strategy_cls
@@ -217,6 +222,7 @@ class LabRunner:
                     seed=tuner_seed if isinstance(tuner_seed, int) else None,
                     dataset=manifest.get("dataset") or {},
                     manifest=manifest,
+                    family=family,
                 ),
                 run_id=run_id,
             )
@@ -231,7 +237,9 @@ class LabRunner:
                 "configure [backtest.costs] or pass a cost model",
             )
         try:
-            result = self._run(strategy_cls, dataset, fixed_params, run_id, class_path, manifest)
+            result = self._run(
+                strategy_cls, dataset, fixed_params, run_id, class_path, manifest, family
+            )
         except BaseException:
             if self._ledger is not None:
                 try:
@@ -253,6 +261,7 @@ class LabRunner:
         run_id: str,
         class_path: str,
         manifest: dict[str, Any],
+        family: str | None = None,
     ) -> LabRunResult:
         setup = TuningSetup(
             tuner=self._tuner,
@@ -265,8 +274,10 @@ class LabRunner:
         if self._ledger is not None:
             self._ledger.record_trials(run_id, trials, matrix)
             n_class = self._ledger.n_trials(class_path)
+            n_family = self._ledger.n_trials_family(family) if family else 0
         else:
             n_class = len(trials)
+            n_family = len(trials) if family else 0
         _log.info(
             "lab.tune.done",
             run_id=run_id,
@@ -287,6 +298,7 @@ class LabRunner:
             trial_matrix=matrix,
             n_trials_run=len(trials),
             n_trials_class=n_class,
+            n_trials_family=n_family,
         )
         for test in self._suite.tests:
             bind = getattr(test, "bind_tuning", None)
@@ -320,6 +332,7 @@ class LabRunner:
             trial_matrix=matrix,
             n_trials_run=len(trials),
             n_trials_class=n_class,
+            n_trials_family=n_family,
             manifest=manifest,
         )
 
