@@ -12,6 +12,10 @@
 - Sending the approved tickets now (what the ``live_submit`` job does)
   needs ``operations.run``. It still only sends tickets inside their
   window.
+- The CLI passes a bare :class:`Scope` instead of a principal: shell access
+  already implies the machine. The role still has to allow the action, and
+  approving needs :data:`APPROVE_PHRASE` typed at a terminal, the shell's
+  stand-in for a fresh second factor (like ``stonks halts resume``).
 """
 
 from __future__ import annotations
@@ -23,9 +27,11 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from stonks.accounts import Scope
 from stonks.app.context import AppContext
-from stonks.app.errors import ConflictError, NotFoundError
-from stonks.auth.policy import Permission, require
+from stonks.app.errors import ConflictError, NotFoundError, ValidationError
+from stonks.auth.errors import PermissionDenied
+from stonks.auth.policy import POLICY, Permission, require
 from stonks.auth.principal import Principal
 from stonks.production.tickets import (
     Ticket,
@@ -50,6 +56,25 @@ TicketStatusName = Literal[
     "failed",
 ]
 _ID = r"^tkt_[a-f0-9]{8,32}$"
+
+#: What the CLI asks you to type before it approves tickets.
+APPROVE_PHRASE = "APPROVE TICKETS"
+
+#: The caller: a :class:`Principal` (API, MCP) or a bare :class:`Scope` (the CLI).
+Who = Principal | Scope
+
+
+def _allow(who: Who, permission: Permission) -> None:
+    """A principal goes through the policy, step-up included. A bare scope
+    (the CLI) needs a role the policy allows for ``permission``."""
+    if isinstance(who, Principal):
+        require(who, permission)
+    elif who.role not in POLICY[permission].roles:
+        raise PermissionDenied(f"{permission.value} is not allowed for this user")
+
+
+def _scope(who: Who) -> Scope:
+    return who.scope if isinstance(who, Principal) else who
 
 
 class TicketView(BaseModel):
@@ -185,14 +210,14 @@ class TicketService:
 
     def list(
         self,
-        principal: Principal,
+        principal: Who,
         *,
         status: str | None = None,
         portfolio_id: str | None = None,
         tick_id: str | None = None,
     ) -> list[TicketView]:
         """Your tickets, newest first."""
-        require(principal, Permission.READ)
+        _allow(principal, Permission.READ)
         with self._ctx.state() as state:
             names = self._portfolios(state, principal)
             ids = list(names) if portfolio_id is None else [portfolio_id]
@@ -201,8 +226,8 @@ class TicketService:
             tickets = list_tickets(state, portfolio_ids=ids, status=status, tick_id=tick_id)
             return [_view(t, names) for t in tickets]
 
-    def get(self, principal: Principal, ticket_id: str) -> TicketView:
-        require(principal, Permission.READ)
+    def get(self, principal: Who, ticket_id: str) -> TicketView:
+        _allow(principal, Permission.READ)
         with self._ctx.state() as state, _errors():
             names = self._portfolios(state, principal)
             ticket = get_ticket(state, ticket_id)
@@ -219,20 +244,26 @@ class TicketService:
 
     # ---- decisions -----------------------------------------------------------------
 
-    def approve(self, principal: Principal, body: TicketApproval) -> TicketList:
+    def approve(
+        self, principal: Who, body: TicketApproval, *, confirmation: str | None = None
+    ) -> TicketList:
         """Approve tickets that wait for you, all or none (a fresh second
-        factor). An approved ticket is sent in its submit window."""
-        require(principal, Permission.ORDER_APPROVE)
+        factor). An approved ticket is sent in its submit window. The CLI
+        (a bare scope) sends ``confirmation``, which must be
+        :data:`APPROVE_PHRASE`."""
+        _allow(principal, Permission.ORDER_APPROVE)
+        if isinstance(principal, Scope) and (confirmation or "").strip() != APPROVE_PHRASE:
+            raise ValidationError(f"type {APPROVE_PHRASE!r} to approve tickets")
         return self._decide(principal, body.ticket_ids, approve=True, reason=None)
 
-    def reject(self, principal: Principal, ticket_id: str, body: TicketRejection) -> TicketView:
+    def reject(self, principal: Who, ticket_id: str, body: TicketRejection) -> TicketView:
         """Reject a ticket that waits for you, with a reason. Nothing is sent."""
-        require(principal, Permission.PORTFOLIO_TRADE)
+        _allow(principal, Permission.PORTFOLIO_TRADE)
         [view] = self._decide(principal, [ticket_id], approve=False, reason=body.reason).items
         return view
 
     def _decide(
-        self, principal: Principal, ids: list[str], *, approve: bool, reason: str | None
+        self, principal: Who, ids: list[str], *, approve: bool, reason: str | None
     ) -> TicketList:
         with self._ctx.state() as state, _errors():
             names = self._portfolios(state, principal)
@@ -279,12 +310,11 @@ class TicketService:
     # ---- helpers -------------------------------------------------------------------
 
     @staticmethod
-    def _portfolios(state: SqliteState, principal: Principal) -> dict[str, str]:
-        """The portfolios whose tickets the principal may see, with names."""
-        if principal.scope.is_service:
+    def _portfolios(state: SqliteState, principal: Who) -> dict[str, str]:
+        """The portfolios whose tickets the caller may see, with names."""
+        scope = _scope(principal)
+        if scope.is_service:
             rows = state.sql("SELECT id, name FROM portfolios")
         else:
-            rows = state.sql(
-                "SELECT id, name FROM portfolios WHERE owner_id = ?", [principal.user_id]
-            )
+            rows = state.sql("SELECT id, name FROM portfolios WHERE owner_id = ?", [scope.user_id])
         return {r["id"]: r["name"] for r in rows}

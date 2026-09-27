@@ -2442,6 +2442,12 @@ from stonks.cli_orders import app as orders_app  # noqa: E402
 
 app.add_typer(orders_app, name="orders")
 
+# ---- order tickets (roadmap 19.8) ----------------------------------------------
+
+from stonks.cli_tickets import app as tickets_app  # noqa: E402
+
+app.add_typer(tickets_app, name="tickets")
+
 # ---- price alerts -------------------------------------------------------------
 
 from stonks.cli_price_alerts import app as price_alerts_app  # noqa: E402
