@@ -1021,15 +1021,12 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         exit_owner=exit_owner,
         client_id=make_id,
     )
-    # BE-18: a retired strategy exits its own holdings, whatever the others
-    # decided for those tickers, then its subscription ends. A subscription
-    # book exits only its own members; the legacy book any retired owner.
-    members = None if book.legacy else set(book.spec.strategy_weights or {})
-    retired = sorted(
-        sid
-        for sid, st in run.statuses.items()
-        if st == "retired" and (members is None or sid in members)
-    )
+    # BE-18: a retired strategy of this subscription book exits its own
+    # holdings, whatever the others decided for those tickers, then its
+    # subscription ends. The legacy single book keeps its old rule: holdings
+    # whose owners all left active are kept (``no_active_owner``).
+    members = set() if book.legacy else set(book.spec.strategy_weights or {})
+    retired = sorted(sid for sid in members if run.statuses.get(sid) == "retired")
     retired_owned: dict[str, str] = {}
     exits: list[Order] = []
     if retired and run.scoped and held:

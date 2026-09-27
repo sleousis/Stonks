@@ -289,7 +289,8 @@ def _single_winner(
         decided_by=winner,
         winner_return=None if exit_only else picks[0][0],
         exit_only=exit_only,
-        attribution={o.ticker: {winner: 1.0} for o in orders if o.side == "buy"},
+        # every opening order, long or short, is the winner's share (BE-50)
+        attribution={o.ticker: {winner: 1.0} for o in orders if _opens(o, book.portfolio)},
     )
 
 
@@ -419,6 +420,13 @@ def _split_at_zero(orders: Sequence[Order], portfolio: Portfolio, may_short: boo
             continue
         out.append(leg)
     return out
+
+
+def _opens(order: Order, portfolio: Portfolio) -> bool:
+    if order.position_effect is not None:
+        return order.position_effect == "open"
+    held = portfolio.positions.get(order.ticker, 0.0)
+    return held >= 0 if order.side == "buy" else held <= 0
 
 
 def _drop_stale(

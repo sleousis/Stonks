@@ -123,11 +123,13 @@ class SingleWinner(PortfolioConstructor):
             return self.finalize({}, meta={"winner_strategy_id": None, "picks": []})
         winner = ranked[0][1]
         picks = [(r, t) for r, sid, t in ranked if sid == winner]
-        tradable = [t for _, t in picks if inp.tradable(t)]
-        weights = {t: self.settings.max_gross / len(tradable) for t in tradable}
+        tradable = [(r, t) for r, t in picks if inp.tradable(t)]
+        # signed by score: a short pick is a negative weight (BE-50)
+        each = self.settings.max_gross / max(len(tradable), 1)
+        weights = {t: math.copysign(each, r) for r, t in tradable}
         return self.finalize(
             weights,
-            attribution={t: {winner: 1.0} for t in tradable},
+            attribution={t: {winner: 1.0} for _, t in tradable},
             meta={"winner_strategy_id": winner, "picks": picks},
         )
 
