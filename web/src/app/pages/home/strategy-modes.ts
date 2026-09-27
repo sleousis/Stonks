@@ -5,8 +5,8 @@ import { toTraderWords } from '../../shared/governance-labels';
 export { MODES, type ModeOption } from '../../shared/governance-labels';
 
 /**
- * Why auto is off limits for this subscription, in plain words, or null
- * when it may be turned on. The paper-day count comes first (decision
+ * Why the live modes (approve each trade, auto) are off limits for this
+ * subscription, in plain words, or null when they may be turned on. The paper-day count comes first (decision
  * 2026-09-26: 20 trading days in paper), then anything else the server's
  * auto gate reported.
  */
@@ -15,7 +15,7 @@ export function autoBlockedReason(sub: SubscriptionView): string | null {
   const needed = sub.paper_days_required;
   if (sub.paper_days_completed < needed) {
     reasons.push(
-      `Auto unlocks after ${needed} paper trading days. ${sub.paper_days_completed} of ${needed} done.`,
+      `Approve each trade and Auto unlock after ${needed} paper trading days. ${sub.paper_days_completed} of ${needed} done.`,
     );
   }
   for (const blocker of sub.auto_blockers) {

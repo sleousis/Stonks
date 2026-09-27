@@ -178,6 +178,8 @@ READ_TOOLS = {
     "get_model_version_history",
     "list_model_candidates",
     "check_model_swap",
+    "list_tickets",
+    "get_ticket",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {

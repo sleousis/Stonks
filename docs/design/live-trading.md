@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 19. It takes Stonks from simulated paper trading to real orders at Interactive Brokers (IBKR), in stages, with a gate between each stage.
 
-Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2). The rest is proposed. What wave 1 changed against this design is listed in section 11, and what 19.2 changed in section 12.
+Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2) and tickets, approve mode and submit (19.8). The rest is planned.
 
 Owner decisions (2026-09-27):
 
@@ -728,3 +728,34 @@ The IBKR adapter lives in `execution/brokers/ibkr/`. Where it differs from secti
 - **Health.** `broker_health` logs in through the adapter by default (`IbkrLoginProbe`, the health client id, one try within `probe_timeout_seconds`). `[brokers.ibkr.health] probe = "socket"` keeps the port-only check.
 - **Legacy book.** `make_broker(kind="ibkr")` builds the broker of the gateway that lists `pf_default` (or the only gateway). It connects on first use.
 - **Tests.** `tests/fakes/ib_gateway.py` scripts every failure section 8 lists. Properties: no client id is sent twice across crashes, drops, restarts and faults, and reported executions and commissions equal the gateway's. Live contract tests are in `tests/integration/live/test_ibkr_live.py`.
+
+## 13. What 19.8 built
+
+Tickets, approve mode and the submit job. Where it differs from the sections above:
+
+```mermaid
+flowchart LR
+  T[tick after the close] --> G{startup reconcile:<br/>any order unknown?}
+  G -- yes --> N[book decides nothing,<br/>operator alert]
+  G -- no --> D[decide with the live context]
+  D --> W{tickets?}
+  W -- auto, window off --> S[send now, as before]
+  W -- approve, window on,<br/>runaway --> K[order_tickets]
+  K --> A[awaiting approval:<br/>push, Approvals page]
+  A -- approve with a code --> P[approved]
+  K -- auto --> P
+  P --> J[live_submit job,<br/>open minus 20 min]
+  J --> R{startup reconcile,<br/>halts}
+  R -- clear --> O[order sent, fine state]
+  R -- unknown or halt --> H[kept until the deadline,<br/>then expired]
+```
+
+- **When a book uses tickets.** A live book (the default portfolio at an external `[brokers].kind`, or a broker portfolio traded through its connection) writes tickets when it has an `approve` subscription, when `[production.live] submit_in_window = true`, or when a runaway run or an open `runaway` halt holds its orders. Otherwise an auto book still sends at once. `submit_in_window` is off by default, so today's auto books behave as before. Turn it on for the IBKR stages.
+- **One book per broker account.** Approve and auto subscriptions of a portfolio share one book, recorded in `portfolio_runs` as mode `auto`. `auto_subscriptions_json` lists both. An order held for a person is any order of an approve strategy, and any order that is not one auto strategy's own (a constructor's blended order included).
+- **Mode rules.** The ladder is notify, paper, approve, auto. A subscription never starts in approve. Switching to approve, and from approve to auto, needs the auto checklist and a fresh second factor (`subscription.auto_enable`). The existing pauses (broker error, gateway down, inactive strategy) still touch auto rows only: an approve row places nothing without a person anyway.
+- **Ticket table.** Migration 033: `order_tickets` as designed, plus `as_of`, the order's own columns, `hold` (`approve_mode` or `runaway`), `submit_after`, `submitted_at` and `status_reason`. Statuses add `failed` (the broker refused the order). Every change goes through one transition table in `production/tickets.py`. The table is append-only.
+- **Submit window.** `[production.live.submit]`: `calendar` (XNYS), `window_minutes` (20) and `deadline_minutes` (2). A ticket may go out from the next open minus the window until the open minus the deadline, then it expires. The `live_submit` job fires at open minus 20 minutes on every backend, reads the real time (never the fire time) and is never caught up late.
+- **Submit steps.** Per portfolio: open the broker, `startup_reconcile` then `require_reconciled`, then the halts in force now (a halt of new orders holds every ticket, a halt of buys holds the opening ones). Each order row is committed `pending`, sent, then `submitted`. A rejection fails the ticket. A submit with no answer is `unknown` until reconciliation settles it.
+- **The tick.** An external book now runs `startup_reconcile` before it decides and noops (reason `orders_unreconciled`) while an order is `unknown`. It builds `RiskContext.live` with `build_live_context` (quotes for the held and signalled tickers, since the orders do not exist yet). The tick's order rows write the fine `state` with the status, a submit with no answer turns `unknown`, and a sent order turns `submitted`.
+- **Not yet.** The pre-open gap check at submit (19.5), the stage (`broker_paper` or `live`) in the live context (19.9: it is `live` for now), MCP and API tokens approving (never: step-up only), a CLI for tickets (the console approves, `stonks schedule run-now live_submit` sends), and a menu badge with the waiting count (the push and the Approvals page carry it).
+

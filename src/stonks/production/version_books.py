@@ -30,7 +30,7 @@ from stonks.store.state import SqliteState
 
 
 def versions_recorded(state: SqliteState) -> bool:
-    """The state has the model version tables (migration 029)."""
+    """The state has the model version tables (migration 032)."""
     return bool(
         state.sql("SELECT 1 FROM sqlite_master WHERE type='table' AND name='model_versions'")
     )

@@ -4,10 +4,11 @@ the same risk policy, shadow switch, alert routing and broker."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
+from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.accounts.models import Portfolio as AccountPortfolio
 from stonks.config import Settings
 from stonks.core.protocols import Broker
@@ -63,6 +64,29 @@ def connection_traders(state: SqliteState) -> TraderFactory:
     return open_trader
 
 
+def submit_broker_opener(
+    settings: Settings, state: SqliteState, traders: TraderFactory | None = None
+) -> Callable[[str], Broker]:
+    """The broker each portfolio's tickets go to (the ``live_submit`` job,
+    roadmap 19.8): the default portfolio's ``[brokers].kind`` broker when it
+    is external, else the portfolio's trading connection. A portfolio that
+    trades simulated money has no tickets to send and is refused."""
+    open_trader = traders or connection_traders(state)
+
+    def open_broker(portfolio_id: str) -> Broker:
+        if portfolio_id == DEFAULT_PORTFOLIO_ID and settings.brokers.kind != "simulated":
+            return make_broker(settings, Portfolio(cash=0.0))
+        rows = state.sql("SELECT * FROM portfolios WHERE id = ?", [portfolio_id])
+        if not rows:
+            raise ValueError(f"portfolio {portfolio_id!r} not found")
+        account = AccountPortfolio.from_row(rows[0])
+        if account.kind != "broker":
+            raise ValueError(f"portfolio {portfolio_id!r} does not trade at a broker")
+        return open_trader(account)
+
+    return open_broker
+
+
 def build_tick_settings(
     settings: Settings,
     universe: Sequence[str],
@@ -101,6 +125,7 @@ def build_tick_settings(
         scoring_workers=p.scoring_workers or default_max_workers(),
         parallel_min_estimates=p.parallel_min_estimates,
         universe_id=p.universe if isinstance(p.universe, str) and not scoped else None,
+        live=p.live,
     )
 
 

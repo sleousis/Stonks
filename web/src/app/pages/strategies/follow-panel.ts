@@ -21,12 +21,12 @@ import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { ErrorState, LoadingState } from '../../shared/ui/states';
 
-/** How a new follower starts. Auto is never a starting mode. */
+/** How a new follower starts. Approve and auto are never starting modes. */
 export type FollowMode = 'notify' | 'paper';
 
 /** The starting modes, in the same words as Today's switch (UX-31). */
 export const FOLLOW_MODES = MODES.filter(
-  (m): m is ModeOption & { value: FollowMode } => m.value !== 'auto',
+  (m): m is ModeOption & { value: FollowMode } => m.value === 'notify' || m.value === 'paper',
 );
 
 /**

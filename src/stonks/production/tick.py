@@ -79,17 +79,19 @@ from stonks.core.types import Fill, Order, OrderStatus, Portfolio
 from stonks.execution.brokers.base import (
     BrokerKind,
     BrokerMode,
+    MarginPreviewer,
     OrderRejectedError,
     OrderStateSource,
 )
 from stonks.execution.brokers.simulated import SimulatedCosts
+from stonks.execution.order_state import mark_unknown, write_state
 from stonks.execution.orders import SideToken, make_client_id
 from stonks.execution.reconcile import (
     NON_TERMINAL_STATUSES,
     fill_live_values,
     order_live_values,
     reconcile_order,
-    reconcile_orders,
+    startup_reconcile,
 )
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
@@ -137,6 +139,9 @@ from stonks.production.hooks import (
 )
 from stonks.production.hooks.attribution import load_attribution
 from stonks.production.ledger import ledger_columns, ledger_filter
+from stonks.production.live.context import LiveContext
+from stonks.production.live.runaway import runaway_reason
+from stonks.production.live.settings import LiveSettings
 from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.ownership import (
     drop_unowned_crossings,
@@ -151,6 +156,7 @@ from stonks.production.prices import PriceBook, held_tickers, load_history, load
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.ranker import Ranker, SignalSet, StrategyPool
 from stonks.production.risk import RiskPolicy, build_risk_context, needs_risk_context
+from stonks.production.rules import RiskAdjustment, RiskContext
 from stonks.production.shadow import (
     evaluate_books,
     evaluate_shadow_strategies,
@@ -158,6 +164,13 @@ from stonks.production.shadow import (
 )
 from stonks.production.signals import record_signals, signals_recorded
 from stonks.production.tca import annotate_orders, decision_values, tca_recorded
+from stonks.production.tickets import (
+    submit_window,
+    sync_submitted,
+    ticket_hold,
+    tickets_recorded,
+    write_tickets,
+)
 from stonks.production.version_books import (
     VersionBook,
     active_version_books,
@@ -270,6 +283,9 @@ class TickSettings:
     #: as an id): the ranker skips names that are not members on the tick
     #: date (BL-49). ``None`` for a ticker list or a scoped tick.
     universe_id: str | None = None
+    #: ``[production.live]``: live books may decide now and submit in the
+    #: window before the next open (order tickets, roadmap 19.8).
+    live: LiveSettings = field(default_factory=LiveSettings)
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
@@ -779,21 +795,26 @@ def book_strategies(
     active: Collection[str] | None = None,
 ) -> list[str]:
     """The strategies whose signals a book trades. The legacy book trades
-    every scored (active) strategy. A subscription book trades its paper and
-    auto subscriptions, except at a live broker, where only auto ones place
-    orders: paper money must never reach a real account. An auto
-    subscription trades only while its strategy is ``active`` (BE-01;
-    ``active`` names them, ``None`` skips the check)."""
+    every scored (active) strategy. A subscription book trades its paper,
+    approve and auto subscriptions, except at a live broker, where only
+    approve and auto ones place orders: paper money must never reach a real
+    account. An approve or auto subscription trades only while its strategy
+    is ``active`` (BE-01; ``active`` names them, ``None`` skips the check)."""
     if book.legacy or book.spec.strategy_weights is None:
         return list(scored)
     live = trades_live(book, settings)
     modes = book.spec.strategy_modes
+
+    def at_broker(s: str) -> bool:
+        mode = modes.get(s)
+        return mode is not None and mode.trades_live
+
     return [
         s
         for s, w in book.spec.strategy_weights.items()
         if w > 0
-        and (not live or modes.get(s) is Mode.AUTO)
-        and (active is None or modes.get(s) is not Mode.AUTO or s in active)
+        and (not live or at_broker(s))
+        and (active is None or not at_broker(s) or s in active)
     ]
 
 
@@ -880,12 +901,20 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 "client id (OrderStateSource) so crashed submissions can be reconciled"
             )
         if not dry_run:
-            pre = reconcile_orders(broker, state, portfolio_id=portfolio_id)
+            # 19.8: the startup reconciliation gate. Every open order is
+            # synced by client id first; while one stays ``unknown`` (a
+            # submit with no answer) the book decides nothing.
+            pre = startup_reconcile(broker, state, portfolio_id=portfolio_id)
             log.info(
                 "tick.reconciled",
-                orders_checked=pre.orders_checked,
-                fills_inserted=pre.fills_inserted,
+                orders_checked=pre.summary.orders_checked,
+                fills_inserted=pre.summary.fills_inserted,
             )
+            if pre.unresolved:
+                return _unreconciled(run, book, pre.unresolved)
+            if tickets_recorded(state):
+                # sent tickets follow their orders (filled, unfilled, ...)
+                sync_submitted(state, now=datetime.now(UTC))
         portfolio = broker.fetch_portfolio()
     else:
         portfolio = _load_or_seed_portfolio(
@@ -1082,6 +1111,24 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             risk_context = replace(
                 risk_context, margin=margin, borrow=borrow or risk_context.borrow
             )
+    if external:
+        # 19.8: a book at a real broker gives the live safeguards and the
+        # account rules its live context (the account, quotes, the owner's
+        # allocation, today's sent notional). They do nothing without it.
+        base = risk_context or RiskContext(
+            portfolio=portfolio,
+            prices=prices,
+            asset_classes=asset_classes,
+            policy=book.spec.risk,
+            portfolio_id=portfolio_id,
+            as_of=as_of,
+            allow_short=book.spec.allow_short,
+        )
+        live_tickers = {t for scores in signals.values() for t in scores} | set(held)
+        risk_context = replace(
+            base,
+            live=_live_context(run, book, broker, sorted(live_tickers), external_holdings),
+        )
     book_input = BookInput(
         portfolio=portfolio,
         construction=construction,
@@ -1241,13 +1288,16 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             outcomes.append((order, "rejected", None))
             return
         except Exception as exc:
-            # It may or may not have reached the broker: the row stays
-            # pending and the next tick's reconcile settles it by client id.
+            # It may or may not have reached the broker: the row turns
+            # ``unknown`` and nothing is sent for it again until the next
+            # reconciliation settles it by client id (19.8).
             any_failure = True
             log.warning("tick.order.failed", ticker=order.ticker, error=str(exc))
+            mark_unknown(state, order.client_id, f"submit outcome unknown: {exc}"[:500])
             return
         placed += 1
         outcomes.append((order, "pending", None))
+        write_state(state, order.client_id, "submitted")
         try:
             assert isinstance(broker, OrderStateSource)  # checked when the broker opened
             synced = reconcile_order(broker, state, order.client_id, reject_unknown=False)
@@ -1294,17 +1344,33 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             if fill is not None:
                 fills_count += 1
 
-    # Sells first. The first risk pass counted their expected proceeds, so
-    # buys are re-checked against the portfolio as it stands after the
-    # sells: a rejected or unfilled sell must not fund a buy. (An external
-    # broker's portfolio object is not updated by fills, so its buys are
-    # checked against the pre-sell cash: conservative by construction.)
-    place(sells)
-    if buys and not dry_run:
-        second = apply_book_risk(buys, book_input, market, slice_policy)
-        risk_adjustments.extend(second.adjustments)
-        buys = second.orders
-    place(buys)
+    # 19.8: a live book decides now and submits later (order tickets) when
+    # it has an approve subscription, when submit_in_window is on, or when
+    # a runaway run or halt holds its closes for a person.
+    runaway = external and (
+        runaway_reason(risk_adjustments) is not None or _runaway_halted(run, book)
+    )
+    ticket_summary: dict[str, int] | None = None
+    if external and not dry_run and _writes_tickets(run, book, runaway):
+        if buys:  # checked against the pre-sell cash, as at the broker
+            second = apply_book_risk(buys, book_input, market, slice_policy)
+            risk_adjustments.extend(second.adjustments)
+            buys = second.orders
+        ticket_summary = _write_book_tickets(
+            run, book, broker, [*sells, *buys], risk_adjustments, runaway
+        )
+    else:
+        # Sells first. The first risk pass counted their expected proceeds,
+        # so buys are re-checked against the portfolio as it stands after
+        # the sells: a rejected or unfilled sell must not fund a buy. (An
+        # external broker's portfolio object is not updated by fills, so its
+        # buys are checked against the pre-sell cash: conservative.)
+        place(sells)
+        if buys and not dry_run:
+            second = apply_book_risk(buys, book_input, market, slice_policy)
+            risk_adjustments.extend(second.adjustments)
+            buys = second.orders
+        place(buys)
 
     def hooks(after: Portfolio, marks: Mapping[str, float]) -> dict[str, Any]:
         return run_portfolio_hooks(
@@ -1412,6 +1478,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             **({"retired_exits": sorted(retired_owned)} if retired_owned else {}),
             **({"retired_subscriptions_ended": ended} if ended else {}),
             **({"open_order_conflicts": open_conflicts} if open_conflicts else {}),
+            **({"tickets": ticket_summary} if ticket_summary is not None else {}),
             **halted(halt),
             **({"constructor": construction.method} if not book.legacy else {}),
             "orders_placed": placed,
@@ -1422,6 +1489,183 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             **hook_summary,
         },
     )
+
+
+# ---- live books: context, the reconciliation gate and tickets (19.8) ------------------
+
+
+def _live_context(
+    run: _TickRun,
+    book: TickBook,
+    broker: Broker | None,
+    tickers: Sequence[str],
+    external_positions: Mapping[str, float],
+) -> LiveContext:
+    """What the live safeguards see of ``book`` (never raises: a context
+    that cannot be built is empty, and the rules then refuse to open)."""
+    from stonks.production.live.context import build_live_context
+    from stonks.production.rules._common import settings_of
+
+    try:
+        return build_live_context(
+            run.state,
+            book.portfolio_id,
+            run.as_of,
+            broker=broker,
+            tickers=tickers,
+            lake=run.lake,
+            account_settings=settings_of(book.spec.risk, "account_rules"),
+            external_positions=external_positions,
+        )
+    except Exception as exc:
+        run.log.error("tick.live_context_failed", portfolio_id=book.portfolio_id, error=str(exc))
+        return LiveContext(portfolio_id=book.portfolio_id)
+
+
+def _unreconciled(run: _TickRun, book: TickBook, unresolved: Sequence[str]) -> BookResult:
+    """The startup reconciliation gate is shut: orders of the book are still
+    ``unknown`` at the broker, so the book decides nothing this run."""
+    run.log.warning(
+        "tick.orders_unreconciled", portfolio_id=book.portfolio_id, client_ids=list(unresolved)
+    )
+    _safe_notify(
+        run.notifier,
+        Notification(
+            level="warning",
+            title="orders not reconciled",
+            message=(
+                f"{len(unresolved)} order(s) in an unknown state at the broker;"
+                " the book waits for reconciliation"
+            ),
+            fields={
+                "tick_id": run.tick_id,
+                "portfolio_id": book.portfolio_id,
+                "client_ids": list(unresolved)[:10],
+            },
+        ),
+        run.log,
+    )
+    return BookResult(
+        portfolio_id=book.portfolio_id,
+        status="noop",
+        winner_strategy_id=None,
+        orders_placed=0,
+        fills=0,
+        summary={"reason": "orders_unreconciled", "unknown_orders": list(unresolved)},
+    )
+
+
+def _approve_strategies(book: TickBook) -> set[str]:
+    return {s for s, m in book.spec.strategy_modes.items() if m is Mode.APPROVE}
+
+
+def _runaway_halted(run: _TickRun, book: TickBook) -> bool:
+    """A ``runaway`` halt is in force for the book: whatever it lets through
+    waits for a person."""
+    return any(
+        h.kind == "runaway"
+        for h in active_halts(run.state, run.as_of, portfolio_id=book.portfolio_id)
+    )
+
+
+def _writes_tickets(run: _TickRun, book: TickBook, runaway: bool) -> bool:
+    if not tickets_recorded(run.state):
+        return False
+    return run.settings.live.submit_in_window or runaway or bool(_approve_strategies(book))
+
+
+def _write_book_tickets(
+    run: _TickRun,
+    book: TickBook,
+    broker: Broker | None,
+    orders: Sequence[Order],
+    adjustments: Sequence[RiskAdjustment],
+    runaway: bool,
+) -> dict[str, int]:
+    """One ticket per order (an order already in the ledger is left out),
+    with the rules that touched it and the broker's what-if answer. The
+    owner hears when tickets wait for them."""
+    state = run.state
+    fresh = [o for o in orders if _live_order_status(state, o.client_id) is None]
+    approve = _approve_strategies(book)
+    auto = {s for s, m in book.spec.strategy_modes.items() if m is Mode.AUTO}
+    rules = {o.client_id: [a.as_dict() for a in adjustments if a.ticker == o.ticker] for o in fresh}
+    written = write_tickets(
+        state,
+        fresh,
+        portfolio_id=book.portfolio_id,
+        tick_id=run.tick_id,
+        as_of=run.as_of,
+        window=submit_window(run.as_of, run.settings.live.submit),
+        hold=lambda o: ticket_hold(
+            o, approve_strategies=approve, auto_strategies=auto, runaway=runaway
+        ),
+        now=datetime.now(UTC),
+        rules=rules,
+        previews=_what_if(broker, fresh, run.log),
+    )
+    awaiting = sum(t.awaiting_approval for t in written)
+    run.log.info("tick.tickets_written", written=len(written), awaiting_approval=awaiting)
+    if awaiting:
+        _notify_awaiting(run, book.portfolio_id, awaiting)
+    return {
+        "written": len(written),
+        "awaiting_approval": awaiting,
+        "approved": len(written) - awaiting,
+    }
+
+
+def _what_if(broker: Broker | None, orders: Sequence[Order], log: Any) -> dict[str, dict[str, Any]]:
+    """The broker's what-if answer per order, when it can preview one. A
+    failed preview is noted on the ticket, never fatal."""
+    if broker is None or not isinstance(broker, MarginPreviewer):
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for order in orders:
+        try:
+            preview = broker.what_if(order)
+        except Exception as exc:
+            log.warning("tick.what_if_failed", client_id=order.client_id, error=str(exc))
+            out[order.client_id] = {"what_if_error": str(exc)[:200]}
+            continue
+        out[order.client_id] = {
+            "what_if": {
+                "commission": preview.commission,
+                "commission_currency": preview.commission_currency,
+                "initial_margin_change": preview.initial_margin_change,
+                "maintenance_margin_change": preview.maintenance_margin_change,
+                "equity_with_loan_after": preview.equity_with_loan_after,
+                "warning": preview.warning,
+            }
+        }
+    return out
+
+
+def _notify_awaiting(run: _TickRun, portfolio_id: str, count: int) -> None:
+    """A high-urgency push to the owner: how many orders wait, and where.
+    No amounts or tickers leave the server."""
+    from stonks.notify.events import Audience, Event
+    from stonks.notify.router import configured_router
+
+    rows = run.state.sql("SELECT name FROM portfolios WHERE id = ?", [portfolio_id])
+    name = rows[0]["name"] if rows else portfolio_id
+    noun = "order waits" if count == 1 else "orders wait"
+    try:
+        configured_router(run.state).publish(
+            Event(
+                category="order",
+                level="warning",
+                urgency="high",
+                title="Orders wait for your approval",
+                body=f"{count} {noun} for approval in {name}",
+                audience=Audience.owner_of(portfolio_id),
+                dedupe_key=f"tickets:{portfolio_id}:{run.as_of.isoformat()}",
+                deep_link="/tickets",
+                portfolio_id=portfolio_id,
+            )
+        )
+    except Exception as exc:
+        run.log.error("tick.tickets_notify_failed", portfolio_id=portfolio_id, error=str(exc))
 
 
 # ---- interrupted ticks ----------------------------------------------------------------
@@ -1628,7 +1872,8 @@ def load_tick_plan(
         owner_risk = json.loads(row["owner_risk_json"] or "{}")
         own = [s for s in subs if s.portfolio_id == portfolio.id]
         if trades_at_broker(portfolio):
-            add(portfolio, [s for s in own if s.mode is Mode.AUTO], owner_risk, "auto")
+            # approve and auto subscriptions share the broker account's book
+            add(portfolio, [s for s in own if s.mode.trades_live], owner_risk, "auto")
         # The simulated default portfolio keeps its book while it holds
         # positions, so corporate actions apply with no strategy subscribed.
         keep = portfolio.id == DEFAULT_PORTFOLIO_ID and not trades_at_broker(portfolio)
@@ -1796,7 +2041,9 @@ def _record_portfolio_run(
                 halted=halted.get("halt"),
                 error=f"{outcome.summary.get('error_type', 'Error')}: {error}" if error else None,
                 paper_subscriptions=book.subscriptions_in(Mode.PAPER),
-                auto_subscriptions=book.subscriptions_in(Mode.AUTO),
+                auto_subscriptions=sorted(
+                    book.subscriptions_in(Mode.AUTO) + book.subscriptions_in(Mode.APPROVE)
+                ),
             ),
         )
     except Exception as exc:
@@ -2261,14 +2508,15 @@ def _record_order(
     if order.position_effect is not None and "position_effect" in ledger_columns(state, "orders"):
         extra["position_effect"] = order.position_effect  # migration 021
     extra.update(order_live_values(order, ledger_columns(state, "orders")))  # migration 028
+    has_state = "state" in ledger_columns(state, "orders")
+    if has_state:
+        # 19.8: the tick writes the fine state with the status (every
+        # status is also a state). A re-record (a rerun resubmitting a
+        # rejected order) starts the order's life again from that state.
+        extra["state"] = status
     extra_col = "".join(f", {c}" for c in extra)
     extra_val = ", ?" * len(extra)
-    # The tick writes the coarse status. A re-record (a rerun resubmitting a
-    # rejected order) clears the fine state, which is then read from status
-    # (migration 028, execution.order_state).
-    reset_state = (
-        ",\n            state = NULL" if "state" in ledger_columns(state, "orders") else ""
-    )
+    reset_state = ",\n            state = excluded.state" if has_state else ""
     state.execute(
         f"""
         INSERT INTO orders

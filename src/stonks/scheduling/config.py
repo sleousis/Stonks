@@ -99,7 +99,9 @@ def default_jobs() -> list[JobConfig]:
     jobs (``broker_health`` every 5 minutes, ``ibkr_reauth_reminder`` on
     Sunday at 18:00 New York time) skip while no gateway is configured.
     ``model_retrain`` refits the strategies that learn from data every
-    Saturday into candidate versions, and skips when there are none."""
+    Saturday into candidate versions, and skips when there are none.
+    ``live_submit`` (open minus 20 minutes) sends approved order tickets and
+    skips while none is open."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -178,6 +180,15 @@ def default_jobs() -> list[JobConfig]:
             name="calendars_refresh",
             action="calendars_refresh",
             trigger=DailyTriggerConfig(at=time(6, 0)),
+        ),
+        # Approved order tickets go out in the window before the open
+        # (roadmap 19.8). A missed window is never caught up: unsent
+        # tickets expire and the next tick decides afresh.
+        JobConfig(
+            name="live_submit",
+            action="live_submit",
+            trigger=SessionTriggerConfig(anchor="open", offset_minutes=-20),
+            catch_up="none",
         ),
     ]
 

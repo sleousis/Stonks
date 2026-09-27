@@ -177,7 +177,7 @@ uv run python -m stonks.security keygen
 - `income_statement_versions`, `balance_sheet_versions`, `cash_flow_statement_versions` (018): every version of a statement row with `known_at`, the time Stonks first saw it. Point-in-time reads pick the version known at the decision, so a restatement cannot leak backward (P12).
 - `earnings_calendar (ticker, period_end, report_date, before_after_market, eps_estimate, eps_actual, ...)`, `dividend_calendar (ticker, ex_date, amount, record_date, pay_date, ...)`, `economic_events (country, event_time, event_type, comparison, actual, previous, estimate, ...)` (020): event calendars, vendor neutral. See `docs/calendars.md`.
 
-**State (SQLite, migrations 001-032):**
+**State (SQLite, migrations 001-033):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -200,6 +200,7 @@ uv run python -m stonks.security keygen
 - 030 research loop: `lab_runs.family`, `research_sessions`, `research_proposals` (roadmap 22.9).
 - 031: `screens` (per-user saved screener specs).
 - 032 model lifecycle: `model_versions`, `model_version_events` (append only), `model_version_decisions`, `model_version_snapshots` (roadmap 22.6).
+- 033: `order_tickets` (append only) and `approve` as a subscription mode (roadmap 19.8).
 
 ## Conventions to match
 

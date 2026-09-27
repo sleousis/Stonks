@@ -398,6 +398,41 @@ def ibkr_reauth_reminder_action(ctx: RunContext) -> JobOutcome:
     return JobOutcome("succeeded", {"sent": sent})
 
 
+@register_action("live_submit")
+def live_submit_action(ctx: RunContext) -> JobOutcome:
+    """Send the approved order tickets due now (roadmap 19.8). It reads the
+    real time, not the fire time, so a late run never sends late: tickets
+    past their deadline expire instead. Skips while no ticket is open."""
+    from stonks.production.settings_builder import submit_broker_opener
+    from stonks.production.submit import submit_tickets
+    from stonks.production.tickets import open_ticket_count, tickets_recorded
+    from stonks.store.state import SqliteState
+
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        if not tickets_recorded(state) or not open_ticket_count(state):
+            return JobOutcome("skipped", {"reason": "no_open_tickets"})
+        result = submit_tickets(state, submit_broker_opener(ctx.settings, state))
+    finally:
+        state.close()
+    detail = submit_detail(result)
+    return JobOutcome("failed" if result.failed or detail["errors"] else "succeeded", detail)
+
+
+def submit_detail(result: Any) -> dict[str, Any]:
+    """A job run's detail for a :class:`~stonks.production.submit.SubmitResult`."""
+    return {
+        "sent": result.sent,
+        "failed": result.failed,
+        "held": sum(p.held for p in result.portfolios),
+        "expired": len(result.expired),
+        "settled": result.settled,
+        "errors": {
+            p.portfolio_id: p.reason for p in result.portfolios if p.status in ("error", "skipped")
+        },
+    }
+
+
 def _open_lake_members(lake: Any) -> MembersResolver:
     """Members from a lake this action already holds open."""
 

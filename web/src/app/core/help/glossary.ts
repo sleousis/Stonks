@@ -107,6 +107,7 @@ export const TRADING_KEYS = [
   'live',
   'signals_only',
   'auto',
+  'approve',
   'kill_switch',
   'buys_only',
   'circuit_breaker',
@@ -163,6 +164,12 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     short:
       'Orders go to your broker by themselves at each trading run. It opens after enough paper trading days.',
     aliases: ['Auto mode', 'Automatic'],
+  },
+  approve: {
+    term: 'Approve each trade',
+    short:
+      'Real orders wait for you as tickets after each trading run. You approve each one with a code before the open.',
+    aliases: ['Approve mode', 'Approve', 'Approvals', 'Order ticket', 'Order tickets'],
   },
   kill_switch: {
     term: 'Kill switch',

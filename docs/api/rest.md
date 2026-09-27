@@ -282,6 +282,12 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/orders/manual/preview` | Preview Manual Order | `portfolio.trade` | [ManualOrderRequest](#manualorderrequest) | [ManualOrderResult](#manualorderresult) |
 | POST | `/api/orders/{client_id}/cancel` | Cancel Order | `portfolio.trade` | [OrderCancelRequest](#ordercancelrequest) | [OrderCancelResult](#ordercancelresult) |
 | POST | `/api/orders/{client_id}/change` | Change Manual Order | `portfolio.trade` | [ManualOrderChange](#manualorderchange) | [ManualOrderResult](#manualorderresult) |
+| GET | `/api/tickets` | List Tickets | sign-in |  | [Page_TicketView_](#page_ticketview_) |
+| POST | `/api/tickets/approve` | Approve Tickets | `orders.approve` | [TicketApproval](#ticketapproval) | [TicketList](#ticketlist) |
+| POST | `/api/tickets/submit` | Submit Tickets | `operations.run` |  | [TicketSubmitResult](#ticketsubmitresult) |
+| GET | `/api/tickets/summary` | Ticket Summary | sign-in |  | [TicketSummary](#ticketsummary) |
+| GET | `/api/tickets/{ticket_id}` | Get Ticket | sign-in |  | [TicketView](#ticketview) |
+| POST | `/api/tickets/{ticket_id}/reject` | Reject Ticket | `portfolio.trade` | [TicketRejection](#ticketrejection) | [TicketView](#ticketview) |
 
 ## pnl endpoints
 
@@ -2844,6 +2850,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_TicketView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[TicketView](#ticketview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_TokenView_
 
 | Field | Type | Required | Description |
@@ -3047,6 +3062,17 @@ A new paper portfolio of yours (simulated fills on the Stonks ledger). Broker po
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | yes |  |
+
+### PortfolioSubmitView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `failed` | integer | yes |  |
+| `held` | integer | yes |  |
+| `portfolio_id` | string | yes |  |
+| `reason` | string \| null | yes |  |
+| `sent` | integer | yes |  |
+| `status` | "ok" \| "partial" \| "skipped" \| "error" | yes |  |
 
 ### PortfolioSummaryView
 
@@ -4159,7 +4185,7 @@ What this server lets the Studio do.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `mode` | "notify" \| "paper" \| "auto" | no |  |
+| `mode` | "notify" \| "paper" \| "approve" \| "auto" | no |  |
 | `portfolio_id` | string \| null | no |  |
 | `strategy_id` | string | yes |  |
 | `weight` | number | no |  |
@@ -4169,7 +4195,7 @@ What this server lets the Studio do.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `enabled` | boolean \| null | no |  |
-| `mode` | "notify" \| "paper" \| "auto" \| null | no |  |
+| `mode` | "notify" \| "paper" \| "approve" \| "auto" \| null | no |  |
 | `reason` | string \| null | no |  |
 
 ### SubscriptionView
@@ -4181,7 +4207,7 @@ What this server lets the Studio do.
 | `created_at` | date-time | yes |  |
 | `enabled` | boolean | yes |  |
 | `id` | string | yes |  |
-| `mode` | "notify" \| "paper" \| "auto" | yes |  |
+| `mode` | "notify" \| "paper" \| "approve" \| "auto" | yes |  |
 | `paper_days_completed` | integer | yes |  |
 | `paper_days_required` | integer | yes |  |
 | `paused_reason` | string \| null | yes |  |
@@ -4509,6 +4535,78 @@ What a test notification queued: its feed id and one delivery per enabled channe
 | `stale_buys_dropped` | list[string] | no |  |
 | `winner_expected_return` | number \| null | no |  |
 | `winner_strategy_id` | string \| null | no |  |
+
+### TicketApproval
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ticket_ids` | list[string] | yes |  |
+
+### TicketList
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[TicketView](#ticketview)] | yes |  |
+
+### TicketRejection
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reason` | string | yes |  |
+
+### TicketSubmitResult
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `expired` | integer | yes |  |
+| `failed` | integer | yes |  |
+| `portfolios` | list[[PortfolioSubmitView](#portfoliosubmitview)] | yes |  |
+| `sent` | integer | yes |  |
+| `settled` | integer | yes |  |
+
+### TicketSummary
+
+Tickets waiting for you, for the badge in the menu.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `awaiting_approval` | integer | yes |  |
+| `by_portfolio` | dict[str, integer] | yes |  |
+
+### TicketView
+
+One order ticket: the order a live book decided, why, and what became of it.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes | The day the book decided. |
+| `client_id` | string | yes | The order the ticket becomes at the broker. |
+| `created_at` | date-time | yes |  |
+| `decided_at` | date-time \| null | yes |  |
+| `decided_by` | string \| null | yes |  |
+| `decision_reason` | string \| null | yes |  |
+| `expires_at` | date-time | yes | The submit deadline: unsent, it expires. |
+| `hold` | "approve_mode" \| "runaway" \| null | yes | Why it waits for a person (approve mode, or a runaway run). |
+| `id` | string | yes |  |
+| `limit_price` | number \| null | yes |  |
+| `notional` | number \| null | yes | quantity x (limit, else the reference price). |
+| `order_type` | string | yes |  |
+| `portfolio_id` | string | yes |  |
+| `portfolio_name` | string | yes |  |
+| `position_effect` | "open" \| "close" \| null | yes |  |
+| `quantity` | number | yes |  |
+| `reason` | object | yes | Signal score, rank, target weight, trigger. |
+| `reference_price` | number \| null | yes | The price the book decided at. |
+| `rules` | list[object] | yes | The risk and account rules that touched it. |
+| `side` | "buy" \| "sell" | yes |  |
+| `status` | "awaiting_approval" \| "approved" \| "rejected" \| "expired" \| "submitted" \| "filled" \| "unfilled" \| "cancelled" \| "failed" | yes |  |
+| `status_reason` | string \| null | yes |  |
+| `strategy_id` | string \| null | yes |  |
+| `submit_after` | date-time | yes |  |
+| `submitted_at` | date-time \| null | yes |  |
+| `tick_id` | string \| null | yes |  |
+| `ticker` | string | yes |  |
+| `what_if` | object \| null | yes | The broker's preview: commission and margin (when it has one). |
 
 ### TokenCreateRequest
 

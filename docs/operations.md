@@ -57,6 +57,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `ibkr_reauth_reminder`: push to approve the weekly IBKR login | Sunday 18:00 New York | none |
 | `calendars_refresh`: earnings, dividend and economic calendars, then the event alerts (see [calendars](calendars.md)) | 06:00 UTC daily | none |
 | `model_retrain`: refit strategies that learn from data into candidate versions (see [Model lifecycle](model-lifecycle.md)) | Saturday 06:00 UTC | none |
+| `live_submit`: send approved order tickets (see Live trading) | open - 20 min | none |
 
 Session jobs run on NYSE trading days. The two IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty. `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 
@@ -400,6 +401,17 @@ List the gateways under `[brokers.ibkr.gateways.<name>]` (`host`, `port`, `mode`
 - A gateway down for `pause_after_sessions` trading sessions (2), or with a real fault (login refused, wrong account), pauses the auto subscriptions of its portfolios. Resume needs a fresh second factor.
 - A short outage only skips the day. Yesterday's decisions are never sent late.
 - `ibkr_reauth_reminder` pushes on Sunday evening: approve the IBKR login on your phone.
+
+### Tickets and the submit window
+
+A live book can decide after the close and send before the next open (roadmap 19.8). It then writes one order ticket per order instead of sending it.
+
+- Books with an `approve` subscription (Approve each trade) always use tickets. Their owner gets a high-urgency push and approves each ticket on the Approvals page with a fresh code. Rejecting needs a reason.
+- `[production.live] submit_in_window = true` makes auto books use tickets too, already approved by `service:system`. Off by default. Turn it on for the IBKR stages.
+- A runaway run, or an open `runaway` halt, holds every order as a ticket for a person, even in auto.
+- `live_submit` sends the approved tickets from the open minus `[production.live.submit] window_minutes` (20) until the open minus `deadline_minutes` (2). Unsent tickets then expire and the next tick decides afresh. The job is never caught up late.
+- Before sending, and before each tick decides, every open order is reconciled. While one is `unknown` (a submit that got no answer), that portfolio sends and decides nothing. A kill switch or halt in force at submit time holds the tickets it covers.
+- By hand: `POST /api/tickets/submit` (admins) or `stonks schedule run-now live_submit`. Either still sends only tickets inside their window.
 
 ### Allocation and account profile
 

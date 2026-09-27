@@ -647,6 +647,9 @@ CASES: dict[str, Case] = {
     ),
     # order drafts (roadmap 20.4): a stale price answers 409 once permitted
     "list_order_drafts": _c("GET", "/api/orders/drafts"),
+    # order tickets (roadmap 19.8): read-only over MCP
+    "list_tickets": _c("GET", "/api/tickets"),
+    "get_ticket": _c("GET", "/api/tickets/{ticket_id}", lambda i: {"ticket_id": "tkt_none"}),
     "draft_order": _c(
         "POST",
         "/api/orders/drafts",

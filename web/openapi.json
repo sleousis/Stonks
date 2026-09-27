@@ -11700,6 +11700,37 @@
         "title": "Page[TickRun]",
         "type": "object"
       },
+      "Page_TicketView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TicketView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[TicketView]",
+        "type": "object"
+      },
       "Page_TokenView_": {
         "properties": {
           "items": {
@@ -12611,6 +12642,57 @@
           "name"
         ],
         "title": "PortfolioRename",
+        "type": "object"
+      },
+      "PortfolioSubmitView": {
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "held": {
+            "title": "Held",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "sent": {
+            "title": "Sent",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "partial",
+              "skipped",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "status",
+          "sent",
+          "failed",
+          "held",
+          "reason"
+        ],
+        "title": "PortfolioSubmitView",
         "type": "object"
       },
       "PortfolioSummaryView": {
@@ -18354,6 +18436,7 @@
             "enum": [
               "notify",
               "paper",
+              "approve",
               "auto"
             ],
             "title": "Mode",
@@ -18411,6 +18494,7 @@
                 "enum": [
                   "notify",
                   "paper",
+                  "approve",
                   "auto"
                 ],
                 "type": "string"
@@ -18475,6 +18559,7 @@
             "enum": [
               "notify",
               "paper",
+              "approve",
               "auto"
             ],
             "title": "Mode",
@@ -20451,6 +20536,400 @@
           }
         },
         "title": "TickSummary",
+        "type": "object"
+      },
+      "TicketApproval": {
+        "additionalProperties": false,
+        "properties": {
+          "ticket_ids": {
+            "items": {
+              "pattern": "^tkt_[a-f0-9]{8,32}$",
+              "type": "string"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Ticket Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ticket_ids"
+        ],
+        "title": "TicketApproval",
+        "type": "object"
+      },
+      "TicketList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TicketView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "TicketList",
+        "type": "object"
+      },
+      "TicketRejection": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "TicketRejection",
+        "type": "object"
+      },
+      "TicketSubmitResult": {
+        "properties": {
+          "expired": {
+            "title": "Expired",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "portfolios": {
+            "items": {
+              "$ref": "#/components/schemas/PortfolioSubmitView"
+            },
+            "title": "Portfolios",
+            "type": "array"
+          },
+          "sent": {
+            "title": "Sent",
+            "type": "integer"
+          },
+          "settled": {
+            "title": "Settled",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sent",
+          "failed",
+          "expired",
+          "settled",
+          "portfolios"
+        ],
+        "title": "TicketSubmitResult",
+        "type": "object"
+      },
+      "TicketSummary": {
+        "description": "Tickets waiting for you, for the badge in the menu.",
+        "properties": {
+          "awaiting_approval": {
+            "title": "Awaiting Approval",
+            "type": "integer"
+          },
+          "by_portfolio": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Portfolio",
+            "type": "object"
+          }
+        },
+        "required": [
+          "awaiting_approval",
+          "by_portfolio"
+        ],
+        "title": "TicketSummary",
+        "type": "object"
+      },
+      "TicketView": {
+        "description": "One order ticket: the order a live book decided, why, and what\nbecame of it.",
+        "properties": {
+          "as_of": {
+            "description": "The day the book decided.",
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "client_id": {
+            "description": "The order the ticket becomes at the broker.",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "expires_at": {
+            "description": "The submit deadline: unsent, it expires.",
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "hold": {
+            "anyOf": [
+              {
+                "enum": [
+                  "approve_mode",
+                  "runaway"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it waits for a person (approve mode, or a runaway run).",
+            "title": "Hold"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "limit_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit Price"
+          },
+          "notional": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "quantity x (limit, else the reference price).",
+            "title": "Notional"
+          },
+          "order_type": {
+            "title": "Order Type",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "portfolio_name": {
+            "title": "Portfolio Name",
+            "type": "string"
+          },
+          "position_effect": {
+            "anyOf": [
+              {
+                "enum": [
+                  "open",
+                  "close"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Effect"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "reason": {
+            "additionalProperties": true,
+            "description": "Signal score, rank, target weight, trigger.",
+            "title": "Reason",
+            "type": "object"
+          },
+          "reference_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The price the book decided at.",
+            "title": "Reference Price"
+          },
+          "rules": {
+            "description": "The risk and account rules that touched it.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "awaiting_approval",
+              "approved",
+              "rejected",
+              "expired",
+              "submitted",
+              "filled",
+              "unfilled",
+              "cancelled",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
+          "submit_after": {
+            "format": "date-time",
+            "title": "Submit After",
+            "type": "string"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "tick_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tick Id"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          },
+          "what_if": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The broker's preview: commission and margin (when it has one).",
+            "title": "What If"
+          }
+        },
+        "required": [
+          "id",
+          "portfolio_id",
+          "portfolio_name",
+          "tick_id",
+          "as_of",
+          "client_id",
+          "strategy_id",
+          "ticker",
+          "side",
+          "quantity",
+          "order_type",
+          "limit_price",
+          "position_effect",
+          "reference_price",
+          "notional",
+          "what_if",
+          "reason",
+          "rules",
+          "hold",
+          "status",
+          "submit_after",
+          "expires_at",
+          "decided_by",
+          "decided_at",
+          "decision_reason",
+          "submitted_at",
+          "status_reason",
+          "created_at"
+        ],
+        "title": "TicketView",
         "type": "object"
       },
       "TokenCreateRequest": {
@@ -44918,6 +45397,607 @@
           "telegram"
         ],
         "x-permission": "notifications.manage"
+      }
+    },
+    "/api/tickets": {
+      "get": {
+        "description": "Your order tickets, newest first.",
+        "operationId": "listTickets",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "awaiting_approval",
+                    "approved",
+                    "rejected",
+                    "expired",
+                    "submitted",
+                    "filled",
+                    "unfilled",
+                    "cancelled",
+                    "failed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Portfolio Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tick_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tick Id"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_TicketView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Tickets",
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/tickets/approve": {
+      "post": {
+        "description": "Approve tickets that wait for you, all or none. Needs a fresh second\nfactor. Approved tickets are sent in their submit window.",
+        "operationId": "approveTickets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketApproval"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Tickets",
+        "tags": [
+          "orders"
+        ],
+        "x-permission": "orders.approve"
+      }
+    },
+    "/api/tickets/submit": {
+      "post": {
+        "description": "Send the approved tickets inside their window now (the live_submit\njob does this before each open).",
+        "operationId": "submitTickets",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketSubmitResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Submit Tickets",
+        "tags": [
+          "orders"
+        ],
+        "x-permission": "operations.run"
+      }
+    },
+    "/api/tickets/summary": {
+      "get": {
+        "description": "How many of your tickets wait for approval, per portfolio.",
+        "operationId": "getTicketSummary",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ticket Summary",
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/tickets/{ticket_id}": {
+      "get": {
+        "operationId": "getTicket",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Ticket Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Ticket",
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/tickets/{ticket_id}/reject": {
+      "post": {
+        "description": "Reject a ticket that waits for you, with a reason. Nothing is sent.",
+        "operationId": "rejectTicket",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ticket_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Ticket Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketRejection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reject Ticket",
+        "tags": [
+          "orders"
+        ],
+        "x-permission": "portfolio.trade"
       }
     },
     "/api/ticks": {

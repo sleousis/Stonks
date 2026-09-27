@@ -9,6 +9,9 @@ repository (design section 4, decision 2026-09-26).
   an active strategy, an active broker portfolio and at least
   ``MIN_PAPER_DAYS_FOR_AUTO`` paper trading days without a risk breach
   (409 ``auto_blocked`` with every blocker).
+- Switching to ``approve`` (roadmap 19.8, optional: every order waits for
+  a person) asks for the same step-up and checklist. So does approve to
+  auto, which takes the person out of each order.
 - Turning a disabled or paused auto subscription back on (``enabled:
   true``) restarts real orders, so it asks for the same step-up and runs
   the same checklist (UX-02). A paused one is resumed. Turning it off
@@ -40,7 +43,7 @@ from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.store.state import SqliteState
 
-ModeName = Literal["notify", "paper", "auto"]
+ModeName = Literal["notify", "paper", "approve", "auto"]
 
 
 class AutoBlocked(ConflictError):
@@ -148,7 +151,7 @@ class SubscriptionService:
             sub = repo.get(scope, subscription_id)
             if request.mode is not None:
                 mode = Mode(request.mode)
-                if mode is Mode.AUTO and (sub.mode is not Mode.AUTO or sub.auto_paused):
+                if mode.trades_live and (mode is not sub.mode or sub.auto_paused):
                     require(principal, Permission.AUTO_ENABLE)
                 sub = repo.set_mode(scope, sub.id, mode, reason=request.reason)
             restarts = (

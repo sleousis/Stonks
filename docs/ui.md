@@ -496,6 +496,29 @@ Tickers open `/data?instrument=<id>`.
 | Sweep, Signal IC | `/lab/sweeps`, `/lab/signal-ic` | See Lab form above |
 | Glossary | `/help/glossary` | Every term the help tips explain |
 
+## Approvals (19.8)
+
+| Page | Route | What it does |
+|---|---|---|
+| Approvals | `/tickets` | Orders your live books decided after the close that wait for you, one order ticket each, grouped by portfolio and run, with Approve, Reject and Approve all. History lists every ticket and what became of it |
+
+- **Approve each trade** is the optional mode between Paper trading and
+  Auto on Today's mode switch. Turning it on asks for a fresh code, then a
+  ticket (no typed name, since each order still waits for you). The two live
+  modes stay locked, with the reason, until the auto checklist passes.
+- **A ticket** shows the side, ticker, quantity, the price (a limit, or at
+  the open), the price the book decided at, the notional, the strategy and
+  its signal score, the broker's commission estimate when it gave one, why
+  it waits (approve mode, or a runaway run) and the rules that touched it.
+  Brass and LIVE for a portfolio that trades real money.
+- **Approving** calls `StepUpService.ensure()` first, so one code covers a
+  single ticket or a whole run. Approve all shows one ticket for the run
+  (orders, notional, send by) before the code. Reject opens a sheet that
+  asks for a reason, kept in the audit log.
+- The push that tickets wait is high urgency and names only the count and
+  the portfolio. It opens `/tickets`. Approvals sits in the main menu for
+  traders (`g f`).
+
 - **Notifications.** `NotificationFeedService` (`core/notify/`) keeps the
   unread count, read quietly every minute while the tab is visible and after
   any mark-read. `<app-notification-bell>` sits in the top bar and sidebar.
@@ -866,7 +889,8 @@ about the same thing.
 | Stop trading (kill switch), "Stop new buys only" | `POST /api/halts/kill`, `buys_only` | `halts kill --buys-only` | `engage_kill_switch` (`buys_only`) |
 | Update data, Data updates | `/api/ingest/*`, `ingest_runs` | `stonks ingest` | `run_ingest` |
 | Go-live suite | preset `promotion` | `--preset promotion` | `run_lab` (`preset`) |
-| Signals only, Paper trading, Auto (modes) | `notify`, `paper`, `auto` | none | `subscribe` (`mode`) |
+| Signals only, Paper trading, Approve each trade, Auto (modes) | `notify`, `paper`, `approve`, `auto` | none | `subscribe` (`mode`) |
+| Approvals, order tickets | `/api/tickets` | none | `list_tickets`, `get_ticket` |
 | Signal IC | `/api/lab/signal-ic` | `stonks lab ic` | `run_signal_ic` |
 | Trial ledger | `/api/lab/ledger` | none | `list_ledger_runs`, `get_ledger_run` |
 | Notifications (feed) | `/api/notifications` | `python -m stonks.notify` | `list_notifications` |

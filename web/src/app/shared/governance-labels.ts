@@ -108,6 +108,11 @@ export const MODES: readonly ModeOption[] = [
     label: 'Paper trading',
     help: 'It trades simulated money in one of your portfolios.',
   },
+  {
+    value: 'approve',
+    label: 'Approve each trade',
+    help: 'It proposes real orders. Each waits for your approval before it goes to your broker.',
+  },
   { value: 'auto', label: 'Auto', help: 'It places real orders with your broker.' },
 ];
 

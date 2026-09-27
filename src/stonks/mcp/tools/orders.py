@@ -203,6 +203,35 @@ def register(t: ToolContext) -> None:
         approval in the web app, and what became of the others."""
         return items(await t.get("/api/orders/drafts", drop_none({"status": status, "limit": 200})))
 
+    @server.tool(annotations=READ)
+    async def list_tickets(
+        status: Literal[
+            "awaiting_approval",
+            "approved",
+            "rejected",
+            "expired",
+            "submitted",
+            "filled",
+            "unfilled",
+            "cancelled",
+            "failed",
+        ]
+        | None = None,
+        portfolio_id: PortfolioId = None,
+    ) -> dict[str, Any]:
+        """Your order tickets, newest first: the orders a live book decided
+        after the close. Approve mode tickets wait for your approval in the
+        web app (a fresh second factor, never through MCP). Approved ones are
+        sent before the next open."""
+        query = drop_none({"status": status, "portfolio_id": portfolio_id, "limit": 200})
+        return items(await t.get("/api/tickets", query))
+
+    @server.tool(annotations=READ)
+    async def get_ticket(ticket_id: str) -> dict[str, Any]:
+        """One order ticket: the order, why the book wants it, the rules
+        that touched it, and what became of it."""
+        return await t.get(f"/api/tickets/{seg(ticket_id)}")
+
 
 async def _find(t: ToolContext, client_id: str, portfolio_id: str | None) -> Any:
     """The order with ``client_id`` in the portfolio, or ``None``."""

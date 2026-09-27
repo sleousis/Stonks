@@ -354,3 +354,12 @@ def in_process_calendars_refresh(ctx: RunContext) -> JobOutcome:
     )
     status, error, result, job_id = ex.run_job(job, CALENDAR_REFRESH_JOB, CalendarRefreshView)
     return calendar_job_outcome(status, error, result, job_id)
+
+
+@IN_PROCESS_ACTIONS.register("live_submit")
+def in_process_live_submit(ctx: RunContext) -> JobOutcome:
+    """Order tickets live in the state DB only, so every backend sends them
+    the same way (the lake is not needed)."""
+    from stonks.scheduling.local import live_submit_action
+
+    return live_submit_action(ctx)
