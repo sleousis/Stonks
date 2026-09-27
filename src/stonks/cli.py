@@ -2508,6 +2508,14 @@ from stonks.cli_model_versions import register as _register_model_versions  # no
 
 _register_model_versions(registry_app)
 
+# ---- going live: soak report and kill switch drill (roadmap 19.11) ------------
+
+from stonks.cli_live import app as live_app  # noqa: E402
+from stonks.cli_live import register as _register_drill  # noqa: E402
+
+app.add_typer(live_app, name="live")
+_register_drill(halts_app)
+
 # ---- the assistant ------------------------------------------------------------
 
 from stonks.cli_assistant import app as assistant_app  # noqa: E402

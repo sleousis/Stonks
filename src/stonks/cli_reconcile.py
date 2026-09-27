@@ -19,9 +19,7 @@ from rich.table import Table
 
 from stonks.execution.drift import DriftItem
 
-app = typer.Typer(
-    help="Reconcile live portfolios against their broker (roadmap 19.5)", no_args_is_help=True
-)
+app = typer.Typer(help="Reconcile live portfolios against their broker", no_args_is_help=True)
 
 _STATUS_STYLE = {
     "clean": "green",

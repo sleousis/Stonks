@@ -31,10 +31,10 @@ mcp = "run_ingest"
 [[capability]]
 id = "ingest.bulk"
 domain = "data"
-title = "Ingest macro, DeFi TVL and exchanges, derive intervals"
+title = "Ingest macro, DeFi TVL, exchanges and stock borrow rates, derive intervals"
 routes = []
 console = { limited = "operator bulk jobs, run by the scheduler" }
-cli = ["stonks ingest macro", "stonks ingest tvl", "stonks ingest exchanges", "stonks ingest aggregate", "stonks ingest all-intervals"]
+cli = ["stonks ingest macro", "stonks ingest tvl", "stonks ingest exchanges", "stonks ingest borrow", "stonks ingest aggregate", "stonks ingest all-intervals"]
 mcp = { limited = "operator bulk jobs, run by the scheduler" }
 
 [[capability]]
@@ -776,6 +776,33 @@ routes = []
 console = { limited = "operator check through the gateway, run by the scheduler" }
 cli = "stonks reconcile run"
 mcp = { limited = "operator check through the gateway, run by the scheduler" }
+
+[[capability]]
+id = "halts.drill"
+domain = "risk"
+title = "Kill switch drill, dry run on a scratch state"
+routes = []
+console = { limited = "operator drill run from the server shell" }
+cli = "stonks halts drill"
+mcp = { limited = "operator drill run from the server shell" }
+
+[[capability]]
+id = "live.soak_report"
+domain = "risk"
+title = "Paper soak report of a broker portfolio"
+routes = []
+console = { limited = "operator report for the go-live gate, read from the server shell" }
+cli = "stonks live soak-report"
+mcp = { limited = "operator report for the go-live gate, read from the server shell" }
+
+[[capability]]
+id = "live.reconcile"
+domain = "risk"
+title = "Reconcile a portfolio's open orders with its broker now"
+routes = []
+console = { limited = "runbook step run from the server shell" }
+cli = "stonks live reconcile"
+mcp = { limited = "runbook step run from the server shell" }
 
 [[capability]]
 id = "risk.policy"

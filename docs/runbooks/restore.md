@@ -2,6 +2,17 @@
 
 Use this when the lake, the state DB or the artifacts are lost or damaged, when you move Stonks to a new machine, and once a month as a restore drill.
 
+```mermaid
+flowchart LR
+  A[stop every Stonks process] --> B[pick a backup]
+  B --> C[verify it]
+  C --> D[restore into an empty folder]
+  D --> E[db info and health]
+  E --> F[reconcile live books, then start]
+```
+
+With a live or broker paper portfolio, reconcile before the first tick after a restore: `uv run stonks live reconcile --portfolio <id>`. The broker is the source of truth for orders and fills placed after the backup was taken.
+
 ## What a backup holds
 
 `python -m stonks.ops backup` writes one folder, `stonks-<UTC time>Z`, with:
@@ -48,7 +59,7 @@ It re-hashes every file, runs SQLite's `integrity_check`, opens the lake read-on
 
    Without `--data-dir` the restore goes to the configured paths (`STONKS_DATA_DIR` or `[lake]`, `[state]`, `[registry]`). It refuses when they already hold data.
 4. To restore over existing data, add `--force`. The existing files are renamed to `<name>.pre-restore-<time>`, not deleted. If anything fails part way, the restore is rolled back and the old files are moved back.
-5. The restore runs both stores' migrations, so an older backup comes up on the current schema. A backup made by a newer Stonks is refused; restore it with that version.
+5. The restore runs both stores' migrations, so an older backup comes up on the current schema. A backup made by a newer Stonks is refused. Restore it with that version.
 6. Point Stonks at the restored folder (if you used `--data-dir`) and start it. Run `uv run stonks db info` and `uv run stonks health` to check. Strategies load their artifacts from the new folder: the registry stores artifact paths relative to the artifacts folder, and older absolute paths resolve to the same bundle there.
 7. Once you are satisfied, delete the `*.pre-restore-*` files.
 
@@ -65,4 +76,4 @@ Compare row counts with production. Then delete `/tmp/stonks-drill`.
 
 ## Later: off the server
 
-Backups stay on the same machine for now. Roadmap 14.5 adds encrypted off-server copies (restic to B2 or R2) as another `BackupTarget`; the commands above stay the same.
+Backups stay on the same machine for now. Roadmap 14.5 adds encrypted off-server copies (restic to B2 or R2) as another `BackupTarget`. The commands above stay the same.
