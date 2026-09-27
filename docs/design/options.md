@@ -178,6 +178,7 @@ The build follows the sections above, with these differences.
 **Backtest.**
 - A separate engine, `backtest/options_engine.py`, so the stock backtest and its golden results are untouched.
 - Combos fill against the next day's quotes, not the decision day's (P12).
+- The next dividend, used for early assignment and `ctx.next_dividends`, is the next ex-date among dividends declared on or before the day (`declaration_date` in `dividends`, roadmap 17.9). A dividend with no declaration date is not known before its ex-date (P12).
 - Position groups live in the backtest ledger. There is no SQLite table yet, because nothing trades options on paper or live.
 
 **Risk.**

@@ -208,10 +208,18 @@ class OptionsBacktester:
         }
 
     def _next_dividends(self, day: date) -> dict[str, tuple[date, float]]:
+        """The next ex-date and amount per underlying among the dividends
+        declared on or before ``day``. A realised ex-date that was not yet
+        announced, or has no declaration date, stays unknown (P12)."""
         out: dict[str, tuple[date, float]] = {}
         for underlying in self._config.underlyings:
             for event in self._data.actions.for_ticker(underlying):
-                if isinstance(event, Dividend) and event.ex_date > day:
+                if (
+                    isinstance(event, Dividend)
+                    and event.ex_date > day
+                    and event.declared_on is not None
+                    and event.declared_on <= day
+                ):
                     out[underlying] = (event.ex_date, event.amount)
                     break
         return out

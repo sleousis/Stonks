@@ -262,6 +262,52 @@ def test_split_and_dividend_are_applied_to_the_book():
     )
 
 
+def _seen_dividends(declared: date | None, amount: float) -> dict[date, dict]:
+    """Every day's ``ctx.next_dividends`` for a dividend going ex on day 30
+    and declared on ``declared``."""
+    days = business_days(40)
+    base = market(path(days))
+    actions = CorporateActions.from_events(
+        [Dividend("X.US", days[30], amount, declared_on=declared)]
+    )
+    data = OptionMarketData(closes=base.closes, chains=base.chains, actions=actions)
+    seen: dict[date, dict] = {}
+
+    class Watch(OptionStrategy):
+        id = "watch"
+
+        @classmethod
+        def parameter_spec(cls):
+            return []
+
+        def decide(self, ctx):
+            seen[ctx.as_of] = dict(ctx.next_dividends)
+            return []
+
+    OptionsBacktester(Watch(), data, config()).run()
+    return seen
+
+
+def test_next_dividends_use_only_declared_dividends():
+    """P12: a dividend is known from its declaration day, not from the
+    realised ex-date. Shocking a later declaration changes nothing before it."""
+    days = business_days(40)
+    declared = days[20]
+    base = _seen_dividends(declared, 0.5)
+    shocked = _seen_dividends(declared, 5.0)
+    before = [d for d in days if d < declared]
+    assert all(base[d] == {} for d in before)
+    assert all(base[d] == shocked[d] for d in before)
+    assert base[declared] == {"X.US": (days[30], 0.5)}
+    assert shocked[declared] == {"X.US": (days[30], 5.0)}
+
+
+def test_dividend_without_declaration_date_is_never_announced():
+    seen = _seen_dividends(None, 0.5)
+    assert len(seen) > 30
+    assert all(v == {} for v in seen.values())
+
+
 def test_risk_rules_drop_whole_combos_in_the_loop(data):
     cls = resolve_option_strategy("vol_premium_condor")
     rules = RuleSettings.model_validate({"option_max_loss": {"max_loss_per_group": 0.0001}})

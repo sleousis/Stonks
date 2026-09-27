@@ -18,6 +18,9 @@ Data contract
 - ``Dividend.amount`` is the cash paid per share **as the share existed on
   the ex-date** (unadjusted for later splits), in the instrument's quote
   currency.
+- ``Dividend.declared_on`` is the day the company announced it, or
+  ``None`` when the source does not say. Anything that looks ahead to an
+  upcoming dividend reads only the ones declared by the decision day (P12).
 """
 
 from __future__ import annotations
@@ -53,6 +56,9 @@ class Dividend:
     ex_date: date
     #: Cash per share on the ex-date (not adjusted for later splits).
     amount: float
+    #: The declaration day, or ``None`` when unknown. Not part of equality,
+    #: so the same payment compares equal whether or not a source knows it.
+    declared_on: date | None = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         if self.amount < 0:
