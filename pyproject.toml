@@ -136,7 +136,7 @@ known-first-party = ["stonks", "tests", "tools"]
 # Packages listed in ``strict`` are checked in strict mode and may carry no
 # baseline errors at all (the gate refuses them).
 include = ["src/stonks"]
-strict = ["src/stonks/core"]
+strict = ["src/stonks/core", "src/stonks/execution"]
 typeCheckingMode = "basic"
 pythonVersion = "3.12"
 # Analyse as Linux everywhere, so a Windows dev box and CI agree on the

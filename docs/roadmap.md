@@ -7,7 +7,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | Phase | Status |
 |-------|--------|
 | 1 to 8 | Done, except 5.4 end-to-end tests (now 13.14). 8.4 moved to 11.8. |
-| 9 | Waves 1 to 4 done. Wave 5: 9.5.1 to 9.5.5 done, 9.5.6 open. Details under Phase 9. |
+| 9 | Waves 1 to 5 done. Details under Phase 9. |
 | 10 | Done: 10.1 to 10.5. |
 | 11 | Done except parts of 11.6. 11.8 is this docs refresh. |
 | 12 | Mostly done. Open: three runbooks (tick failed, broker unreachable, disk full). |
@@ -203,7 +203,7 @@ Integration 1: realistic costs by default (BL-13), `[lab.parallel]`, the CLI and
 | 9.5.3 Latent regimes (BL-46) | Markov-switching regime filter; VIX term-structure condition. | `features/regimes.py`, `strategies/latent_regime.py`, `features/regime_vix.py`, `ingest/sources/yahoo.py` |
 | 9.5.4 Live monitoring (BL-47) | VaR/ES with violation ratio, alpha-decay monitor, correlation-to-pool test. | `production/risk_metrics.py`, `production/decay.py`, `lab/survival/pool_correlation.py`, `store/migrations_sqlite/019_risk_snapshots.sql` |
 | 9.5.5 Stress (BL-48) | Crisis windows, stress simulation, `VolForecaster` with GARCH (arch, wrapped). | `lab/survival/crisis.py`, `lab/survival/stress.py`, `features/vol_forecast.py` |
-| 9.5.6 Engineering guards (BL-49) | Point-in-time lake proxy, universe membership in engine and ranker, pyright, Hypothesis property tests, vectorised pre-screen. | `store/pit.py`, `lab/vectorized.py`, `pyrightconfig.json`, `backtest/engine.py`, `production/ranker.py`, `.github/workflows/ci.yml`, `tests/property/*` |
+| 9.5.6 Engineering guards (BL-49) | Done. Strategies read the lake through `PointInTimeLake` (`store/pit.py`) in the engine, the ranker and the scoring workers: every read stops at the decision, raw SQL raises. A planted-future test runs every catalogued strategy (`tests/unit/test_pit_catalog.py`). The engine already honoured membership (RS-05); the ranker now skips non-members of a stored tick universe. `lab/vectorized.py`: an opt-in `PrescreenTuner` that ranks a big grid with a fast approximate backtest and runs full backtests only on the best, with a parity test against the engine for `Momentum`. Hypothesis property tests in `tests/property/` (they found a NaN fill price in the sqrt_vol and I-Star impact models, now fixed). `core/` and `execution/` pass pyright strict, and the gate refuses any baseline error under a strict path. | `store/pit.py`, `lab/vectorized.py`, `pyproject.toml` `[tool.pyright]`, `tools/pyright_gate.py`, `backtest/engine.py`, `production/ranker.py`, `tests/property/*` |
 
 ## Phase 10: Repository, docs and data scale
 
@@ -381,7 +381,9 @@ CI enforces each gate at today's value where it is still below the target, so it
 | Coverage `execution/` | 95 | 96.8 | floor 95 |
 | Coverage `auth/` | 95 | 98.5 | floor 95 |
 | Coverage `portfolio/` | 95 | 96.5 | floor 95 |
-| Pyright basic over `src/stonks` | 0 errors | 493 errors, all in the baseline (14 added in step 7: pandas typing noise in untouched files after the statsmodels and arch dependencies came in; errors in new code were fixed) | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
+| Pyright strict over `core/` and `execution/` | 0 errors | 0 | `strict` in `[tool.pyright]`; `tools/pyright_gate.py` fails on any error under a strict path, baselined or not |
+| Pyright basic over `src/stonks` | 0 errors | 489 errors, all in the baseline (9.5.6 fixed 4 and added none) | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
+| Property tests (Hypothesis) | every money-path invariant | orders, ledger, fills, costs, risk rules, price adjustment | `tests/property/`, derandomized in CI (`HYPOTHESIS_PROFILE=deep` for 5000 examples) |
 | Surviving mutants on the money paths | under 10% | 19.8% over six targets (the risk rules still to run in full) | `tools/mutation.py`, weekly and manual (`.github/workflows/mutation.yml`) |
 | Ruff | no ignore without a comment | met | `[tool.ruff.lint]`, every ignore says why |
 | End to end, desktop and 375px phone | every journey passes | 26 passed (13 per viewport), 0 xfail, no known app issue | `uv run pytest -m e2e tests/e2e`, `.github/workflows/e2e.yml` |
@@ -401,7 +403,7 @@ First mutation run per target (cosmic-ray, mutants inside type annotations skipp
 
 "Mutants run" includes incompetent ones (code that no longer runs), which count neither way. The rate is survived over killed plus survived: 205 of 1036, 19.8%. The first run found a real gap: the non-default portfolio branch of `make_client_id` had no unit test (now covered, 47.6% to 9.5%). The risk rules have about 2500 mutants, too many for a local run. The weekly job measures them. Next: kill the surviving fills, orders and ledger mutants with tests until every target is under 10%.
 
-Pyright strict plan. Strict mode comes one package at a time, smallest first, each in its own change that also shrinks the baseline: `core/`, then `execution/`, `auth/`, `portfolio/` and last `production/`. Each step adds the package to `strict` in `[tool.pyright]`. Most strict errors are unknown types from untyped libraries (pandas, alpaca-py, exchange_calendars, pywebpush), so each step adds `pandas-stubs` or a typed wrapper at the seam and uses `dict[str, Any]` instead of bare `dict`. The basic-mode baseline is burned down alongside: pandas `itertuples()` rows, constructor settings read from the base class, and pydantic models built with no arguments.
+Pyright strict plan. Strict mode comes one package at a time, smallest first, each in its own change that also shrinks the baseline: `core/` and `execution/` (done, BL-49), then `auth/`, `portfolio/` and last `production/`. Each step adds the package to `strict` in `[tool.pyright]`. Most strict errors are unknown types from untyped libraries (pandas, alpaca-py, exchange_calendars, pywebpush), so each step adds `pandas-stubs` or a typed wrapper at the seam and uses `dict[str, Any]` instead of bare `dict`. The basic-mode baseline is burned down alongside: pandas `itertuples()` rows, constructor settings read from the base class, and pydantic models built with no arguments.
 
 ## Execution order
 

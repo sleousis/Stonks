@@ -141,7 +141,6 @@
   "src/stonks/store/lake.py::reportOperatorIssue": 1,
   "src/stonks/store/lake.py::reportOptionalSubscript": 7,
   "src/stonks/store/lake.py::reportReturnType": 2,
-  "src/stonks/strategies/_common.py::reportOperatorIssue": 1,
   "src/stonks/strategies/_common.py::reportReturnType": 1,
   "src/stonks/strategies/_wrapping.py::reportAttributeAccessIssue": 1,
   "src/stonks/strategies/base.py::reportGeneralTypeIssues": 1,
