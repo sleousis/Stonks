@@ -50,16 +50,46 @@ Economic releases are market wide. Every scope shows them, filtered by `countrie
 
 ## Event alerts
 
-After each refresh, every active person gets one notification per upcoming event on a ticker they hold or watch:
+After each refresh, every active person gets one notification per upcoming event on a ticker they hold or watch, and per economic release they follow:
 
-| Kind | Looks ahead |
-|---|---|
-| `earnings_upcoming` | 2 days |
-| `ex_dividend_upcoming` | 1 day |
+| Kind | Switch | Looks ahead |
+|---|---|---|
+| `earnings_upcoming` | `earnings` | 2 days |
+| `ex_dividend_upcoming` | `dividends` | 1 day |
+| `economic_release` | `economic` | 1 day |
 
 Alerts use their own `event_alert` category, so you can turn them off for a channel and keep strategy signals. Quiet hours apply as for any alert. Each kind also follows one of your switches in Settings, Alert settings, Upcoming events: `earnings`, `dividends` or `economic`. All are on until you turn one off, and off means none of that kind, not even in the app. The switches are in `GET /api/notifications/preferences` (`event_alerts`), changed with `PUT` on the same route or the MCP tool `set_event_alerts`. `GET /api/calendars/alert-kinds` names each kind's switch (`topic`).
 
-The dedupe key holds the kind, ticker and date, so a second refresh the same day sends nothing new. A new kind is one module in `calendars/alert_kinds/` that names its `topic`. No kind uses `economic` yet: it is ready for economic release alerts.
+The dedupe key holds the kind, ticker and date, so a second refresh the same day sends nothing new. A new kind is one module in `calendars/alert_kinds/` that names its `topic`. A kind that is not about tickers overrides `hits_for`, which gets the person's whole `AlertAudience`.
+
+## Economic release alerts
+
+Releases are market wide, so this kind reads two choices instead of your tickers:
+
+```mermaid
+flowchart LR
+  E[(economic_events)] --> I[Importance from the release name]
+  I --> F{Your countries and threshold}
+  P[(economic_alert_prefs)] --> F
+  F -->|once per release| R[Router: dedupe, quiet hours, channels]
+```
+
+- **Countries.** Until you pick, they follow the base currencies of your portfolios: USD gives `US`, EUR gives `EU` (the euro area), GBP gives `GB`, and so on. With no portfolio it is `US`. Any two or three letter code works.
+- **Importance.** `high` by default, or `medium` (medium and high) or `low` (every release).
+
+The vendor has no importance field, so Stonks rates each release from its name when it reads it (`calendars/importance.py`). High: inflation (CPI, PCE prices), payrolls, unemployment, GDP and rate decisions. Medium: retail sales, PMI, PPI, jobless claims, industrial production, confidence and a few more. Low: the rest. Every economic read now carries this `importance`. A source with its own rating can plug in another `ImportanceRater`.
+
+A release the vendor lists twice (month on month and year on year) is one alert. The dedupe key adds the release name and time, so two releases of one country on one day are two alerts, each sent once. The alert links to `/calendar?country=US&date=...`.
+
+State migration 036 adds `economic_alert_prefs (user_id, countries_json, min_importance)`. No row, or `countries_json` NULL, means the defaults. The switch stays in `event_alert_prefs`.
+
+Change them in Settings, Alert settings, Economic releases, with `PUT /api/notifications/preferences`:
+
+```json
+{"economic_alerts": {"countries": ["US", "DE"], "min_importance": "medium"}}
+```
+
+`{"economic_alerts": {"default_countries": true}}` follows your portfolios again. `GET` on the same route returns `economic_alerts` with your countries, whether they are the default, the threshold and the options the console offers. The MCP tool `set_event_alerts` takes `economic_countries`, `economic_importance` and `economic_default_countries`.
 
 ## Commands
 
@@ -76,7 +106,7 @@ uv run stonks calendars refresh [--source eodhd] [--start ... --end ...] [--no-a
 
 - `GET /api/calendars`, `GET /api/calendars/news`, `GET /api/calendars/earnings-warnings`, `GET /api/calendars/alert-kinds`.
 - `POST /api/calendars/refresh` (operators) queues the refresh job. `GET /api/calendars/refresh/{job_id}/result` returns its result.
-- MCP: `get_calendar`, `get_news`, `get_earnings_warnings`, `list_event_alert_kinds`, and `get_notification_preferences` and `set_event_alerts` for the switches.
+- MCP: `get_calendar`, `get_news`, `get_earnings_warnings`, `list_event_alert_kinds`, and `get_notification_preferences` and `set_event_alerts` for the switches and the economic choices.
 
 ## Adding a source
 

@@ -607,6 +607,14 @@ Tickers open `/data?instrument=<id>`.
   coming up and Economic releases coming up. All are on until you turn one
   off. Off means none of that kind, not even in the app. The feed labels
   them "Price alert" and "Upcoming event".
+- **Economic releases.** Below the switches, "Economic releases" picks the
+  importance (High importance only by default, Medium and high, or All
+  releases) and the countries, one checkbox each. Until you pick, the
+  countries follow the base currencies of your portfolios (US when you have
+  none), and the hint says so. Each change saves at once. The last country
+  cannot be unticked: turn the kind off instead. "Follow my portfolio
+  currencies" goes back to the default. The alert links to
+  `/calendar?country=&date=`, which opens the Economic tab for that country.
 - **Toasts.** Success and info leave after a few seconds and pause while
   hovered or focused. Errors stay until dismissed. The toast layer is a
   manual popover in the top layer, so toasts over a modal stay usable.
@@ -884,7 +892,7 @@ flowchart LR
   F --> V[Save screen] & U[Save as a universe: rule or snapshot]
 ```
 
-- **Calendar.** `pages/calendar/calendar.page.ts`. "Whose events" picks the scope. Watchlists offers one list or all of them, and Tickers waits until you name some. From and To span at most 120 days, checked before any call. The tabs count each calendar. Countries shows on the Economic tab only. A cut read says so. `?ticker=&date=` opens one ticker from that day, which is where the event alerts link. Pure helpers live in `calendar-view.ts`.
+- **Calendar.** `pages/calendar/calendar.page.ts`. "Whose events" picks the scope. Watchlists offers one list or all of them, and Tickers waits until you name some. From and To span at most 120 days, checked before any call. The tabs count each calendar. Countries shows on the Economic tab only. A cut read says so. `?ticker=&date=` opens one ticker from that day, which is where the event alerts link. `?country=&date=` opens the Economic tab for one country, where the economic release alerts link. The Economic tab shows each release's importance. Pure helpers live in `calendar-view.ts`.
 - **News.** `<app-news-panel>` (`pages/calendar/news-panel.ts`) takes the scope as `query`. Everything has no news, so the panel asks for a narrower scope and calls nothing. Each ticker gets a mood card (the 30-day score weighted by articles, in words, a shape and a signed number). Articles link out only over http or https, in a new tab.
 - **Ticket warning.** `<app-earnings-warning>` (`pages/orders/earnings-warning.ts`) sits under the ticker on the order ticket. For a full ticker it calls `GET /api/calendars/earnings-warnings` silently and shows one warning line when the report falls before the next open, with a link to the calendar. A failed check shows nothing and never blocks the ticket.
 - **Event alerts.** `<app-event-alert-kinds>` in the alert settings lists each upcoming-event alert and how far ahead it looks. They are sent as Signals, so the Signals row decides where they reach you. There is no switch per kind yet: the server has no preference for it.
