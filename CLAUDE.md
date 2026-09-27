@@ -43,6 +43,12 @@ uv run stonks universe create ID [--kind list|exchange|rule|index] [--tickers ..
 uv run stonks universe refresh ID | delete ID --yes | import-index INDEX FILE
 uv run stonks universe ensure ID --start ... --end ... [--interval 1d --source eodhd]
 
+# Screener and calendars (docs/universes.md#screener, docs/calendars.md)
+uv run stonks screener metrics | run --spec JSON [--as-of ...] | save NAME --spec JSON | list | delete ID
+uv run stonks screener universe ID (--spec JSON|--screen ID) [--mode rule|snapshot]   # a screen as a universe
+uv run stonks calendars show|news [--scope holdings|watchlists|tickers|all] | earnings-check TICKERS
+uv run stonks calendars refresh [--source eodhd] [--no-alerts]   # also the daily calendars_refresh job
+
 # Lab and registry
 uv run stonks lab run momentum --start 2023-01-01 --end 2025-01-01 --tickers AAPL.US,MSFT.US --preset promotion
 uv run stonks lab run ... --strict | --no-preflight   # data preflight: warnings as errors, or skip it
@@ -142,6 +148,8 @@ uv run python -m stonks.security keygen
 - **`app/`**: the service layer (`services.py` wires lake, state, registry, lab, backtests, ticks, studio, jobs). No business logic in any transport.
 - **`auth/`**: sign-in with passwords, sessions, mandatory TOTP 2FA, recovery codes, API tokens and role permissions (`stonks users`). Every API route declares the permission it needs.
 - **`universes/`**: stored universe definitions (list, exchange, rule, index) behind `UniverseProvider` and `IndexSource` registries, refreshed into point-in-time membership. See `docs/universes.md`.
+- **`screener/`**: `ScreenSpec` (the rule filters plus metric bounds, sort and top N), `ScreenMetric` seam and registry (`metrics/`: price, returns, volatility, valuation and quality), `ScreenData` (point-in-time lake reads), `run_screen`. A `rule` universe's spec is a screen, run at each rebalance. Service in `app/screener.py`.
+- **`calendars/`**: `CalendarStore` over the calendar tables plus news reads, `timing.py` (earnings before the next open), `tracking.py` (held and watched tickers), upcoming-event alerts (`alerts.py`, `alert_kinds/` registry). Ingest via `IngestPipeline.run_calendars` and the EODHD adapter `ingest/sources/eodhd_calendar.py`. Service in `app/calendars.py`. See `docs/calendars.md`.
 - **`api/`**: FastAPI app (`stonks serve`), session or API-token auth with per-route permissions (`STONKS_API_TOKEN` is a legacy credential), background jobs with SSE, OpenAPI contract, serves `web/dist`.
 - **`mcp/`**: `stonks mcp`, an MCP server that talks to the running REST API. Write tools need an explicit confirm.
 - **Phase 20 blocks**: `production/manual.py` (manual orders through the gates, every risk rule and the broker, idempotent by client id, `origin = manual`; the tick never trades manual holdings), `price_alerts/` (rules on tickers or watchlists, the `price_alerts` scheduler job, delivery through the notification router), `telegram/` (the `telegram` channel and a long-polling bot acting as the linked user, env token only), `assistant/` (the `ChatModel` seam, an OpenAI-compatible client for Ollama, vLLM or llama.cpp, an agent loop over the in-process MCP tools as the signed-in user, a tool catalog with a small default set, the safety gate and freeze in `guard.py`, the research loop in `research.py` (proposals under a trial and compute budget, validation after the model's cutoff, never registering), and an eval set in `evals.py`), `production/order_drafts.py` (the assistant only drafts orders, approved in the web app with a fresh second factor), `fx/` (conversion over the lake's `fx_rates`) and `tax/` (FIFO or specific lots, US wash sales, dividends, yearly CSVs).
@@ -150,7 +158,7 @@ uv run python -m stonks.security keygen
 
 ## Canonical schemas (current)
 
-**Lake (DuckDB, migrations 001-019):**
+**Lake (DuckDB, migrations 001-020):**
 - `instruments (id, asset_class, exchange, currency, ipo_date, sector, industry, is_delisted, name, identifiers, GICS, address, ...)`: renamed from `tickers` in 007. `asset_class` in {equity, crypto, commodity, bond}.
 - `bars (ticker, timestamp, interval, open, high, low, close, adj_close, volume; PK (ticker, timestamp, interval))`: OHLCV at any `Interval` code (1m, 5m, 1h, 4h, 1d, 1w, 1mo, ...). `prices` is a read-only view of `interval='1d'`. Write with `upsert_bars` or the daily `upsert_prices` shim. With the Parquet backend the rows live under `<lake dir>/bars` instead of the table.
 - Statements (008, equity only), keyed `(ticker, period_end, frequency)`: `income_statement`, `balance_sheet`, `cash_flow_statement`, each with `filing_date` and `currency`. `upsert_<statement>` reindexes sparse frames and uses `COALESCE(EXCLUDED.col, table.col)`, so a NULL never overwrites a stored value but a real restated value does.
@@ -167,8 +175,9 @@ uv run python -m stonks.security keygen
 - `universe_definitions`, `index_constituent_snapshots`, `index_constituent_changes`, `bar_fetch_ranges` (016): stored universe definitions (list, exchange, rule, index), index history, and the bar ranges already requested so on-demand fetches skip them. See `docs/universes.md`.
 - `option_contracts (contract_id, underlying, expiry, strike, right, style, multiplier, settlement, ...)` and `option_quotes (contract_id, as_of, source, bid, ask, last, volume, open_interest, underlying_price, vendor_iv, vendor_delta..vendor_rho)` (017): option chains, vendor-agnostic. The contract id is `<underlying>:<expiry>:<C|P>:<strike>[:<multiplier>]`.
 - `income_statement_versions`, `balance_sheet_versions`, `cash_flow_statement_versions` (018): every version of a statement row with `known_at`, the time Stonks first saw it. Point-in-time reads pick the version known at the decision, so a restatement cannot leak backward (P12).
+- `earnings_calendar (ticker, period_end, report_date, before_after_market, eps_estimate, eps_actual, ...)`, `dividend_calendar (ticker, ex_date, amount, record_date, pay_date, ...)`, `economic_events (country, event_time, event_type, comparison, actual, previous, estimate, ...)` (020): event calendars, vendor neutral. See `docs/calendars.md`.
 
-**State (SQLite, migrations 001-030):**
+**State (SQLite, migrations 001-031):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -189,6 +198,7 @@ uv run python -m stonks.security keygen
 - 028 live broker: `orders.state`, `broker_ref`, `stop_price`, `time_in_force`, `outside_rth`; `fills.broker_exec_id`, `fee_currency`, `fee_fx_rate`; halt kinds `runaway` and `broker_drift`; `live_allocations`, `broker_gateway_status`, `account_profiles`, `settlement_ledger`, `account_restricted`, `product_documents`.
 - 029: `broker_contracts` (IBKR conId cache).
 - 030 research loop: `lab_runs.family`, `research_sessions`, `research_proposals` (roadmap 22.9).
+- 031: `screens` (per-user saved screener specs).
 
 ## Conventions to match
 

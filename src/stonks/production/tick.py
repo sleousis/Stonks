@@ -2196,12 +2196,12 @@ def _record_order(
         extra.update(decision_values(order))
     if order.position_effect is not None and "position_effect" in ledger_columns(state, "orders"):
         extra["position_effect"] = order.position_effect  # migration 021
-    extra.update(order_live_values(order, ledger_columns(state, "orders")))  # migration 027
+    extra.update(order_live_values(order, ledger_columns(state, "orders")))  # migration 028
     extra_col = "".join(f", {c}" for c in extra)
     extra_val = ", ?" * len(extra)
     # The tick writes the coarse status. A re-record (a rerun resubmitting a
     # rejected order) clears the fine state, which is then read from status
-    # (migration 027, execution.order_state).
+    # (migration 028, execution.order_state).
     reset_state = (
         ",\n            state = NULL" if "state" in ledger_columns(state, "orders") else ""
     )
@@ -2258,7 +2258,7 @@ def _record_fill(
         extra["portfolio_id"] = portfolio_id
     if arrival_price is not None and tca_recorded(state):
         extra["arrival_price"] = arrival_price
-    extra.update(fill_live_values(fill, ledger_columns(state, "fills")))  # migration 027
+    extra.update(fill_live_values(fill, ledger_columns(state, "fills")))  # migration 028
     extra_col = "".join(f", {c}" for c in extra)
     extra_val = ", ?" * len(extra)
     state.execute(

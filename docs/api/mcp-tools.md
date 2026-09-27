@@ -15,10 +15,12 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`check_factor_expression`](#check_factor_expression) | read | no |
 | [`create_draft`](#create_draft) | job | no |
 | [`create_price_alert`](#create_price_alert) | job | no |
+| [`create_screen`](#create_screen) | job | no |
 | [`create_universe`](#create_universe) | guarded | yes |
 | [`create_watchlist`](#create_watchlist) | job | no |
 | [`delete_draft`](#delete_draft) | guarded | yes |
 | [`delete_price_alert`](#delete_price_alert) | guarded | yes |
+| [`delete_screen`](#delete_screen) | guarded | yes |
 | [`delete_universe`](#delete_universe) | guarded | yes |
 | [`disable_draft`](#disable_draft) | guarded | yes |
 | [`draft_order`](#draft_order) | job | no |
@@ -29,11 +31,13 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_api_health`](#get_api_health) | read | no |
 | [`get_bars`](#get_bars) | read | no |
 | [`get_broker`](#get_broker) | read | no |
+| [`get_calendar`](#get_calendar) | read | no |
 | [`get_catalog`](#get_catalog) | read | no |
 | [`get_chart`](#get_chart) | read | no |
 | [`get_connection_accounts`](#get_connection_accounts) | read | no |
 | [`get_coverage`](#get_coverage) | read | no |
 | [`get_draft`](#get_draft) | read | no |
+| [`get_earnings_warnings`](#get_earnings_warnings) | read | no |
 | [`get_factor`](#get_factor) | read | no |
 | [`get_factor_values`](#get_factor_values) | read | no |
 | [`get_fx_rate`](#get_fx_rate) | read | no |
@@ -46,6 +50,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_ledger_run`](#get_ledger_run) | read | no |
 | [`get_live_risk`](#get_live_risk) | read | no |
 | [`get_my_risk_limits`](#get_my_risk_limits) | read | no |
+| [`get_news`](#get_news) | read | no |
 | [`get_order_tca`](#get_order_tca) | read | no |
 | [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
@@ -54,6 +59,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_risk_policy`](#get_risk_policy) | read | no |
 | [`get_rule_schema`](#get_rule_schema) | read | no |
 | [`get_schedule`](#get_schedule) | read | no |
+| [`get_screen`](#get_screen) | read | no |
 | [`get_shadow_pnl`](#get_shadow_pnl) | read | no |
 | [`get_strategy`](#get_strategy) | read | no |
 | [`get_strategy_agreement`](#get_strategy_agreement) | read | no |
@@ -74,6 +80,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_connections`](#list_connections) | read | no |
 | [`list_cost_models`](#list_cost_models) | read | no |
 | [`list_drafts`](#list_drafts) | read | no |
+| [`list_event_alert_kinds`](#list_event_alert_kinds) | read | no |
 | [`list_factors`](#list_factors) | read | no |
 | [`list_fills`](#list_fills) | read | no |
 | [`list_halts`](#list_halts) | read | no |
@@ -89,6 +96,8 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_price_alerts`](#list_price_alerts) | read | no |
 | [`list_research_sessions`](#list_research_sessions) | read | no |
 | [`list_risk_snapshots`](#list_risk_snapshots) | read | no |
+| [`list_screen_metrics`](#list_screen_metrics) | read | no |
+| [`list_screens`](#list_screens) | read | no |
 | [`list_shadow_decisions`](#list_shadow_decisions) | read | no |
 | [`list_shadow_pnl`](#list_shadow_pnl) | read | no |
 | [`list_sources`](#list_sources) | read | no |
@@ -119,9 +128,11 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`run_factor_tearsheet`](#run_factor_tearsheet) | job | no |
 | [`run_ingest`](#run_ingest) | job | no |
 | [`run_lab`](#run_lab) | guarded | yes |
+| [`run_screen`](#run_screen) | read | no |
 | [`run_signal_ic`](#run_signal_ic) | job | no |
 | [`run_sweep`](#run_sweep) | job | no |
 | [`run_tick`](#run_tick) | guarded | yes |
+| [`save_screen_as_universe`](#save_screen_as_universe) | guarded | yes |
 | [`search_instruments`](#search_instruments) | read | no |
 | [`shadow_strategy`](#shadow_strategy) | guarded | yes |
 | [`start_research`](#start_research) | job | no |
@@ -131,6 +142,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`trade_journal`](#trade_journal) | read | no |
 | [`update_draft`](#update_draft) | job | no |
 | [`update_price_alert`](#update_price_alert) | job | no |
+| [`update_screen`](#update_screen) | job | no |
 | [`update_subscription`](#update_subscription) | guarded | yes |
 | [`update_watchlist`](#update_watchlist) | job | no |
 | [`validate_draft`](#validate_draft) | job | no |
@@ -183,6 +195,25 @@ The broker production ticks trade through: kind (simulated/alpaca), paper, allow
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `get_calendar`
+
+Upcoming earnings (with the time of day and the EPS estimate),
+ex-dividend dates and economic releases from ``start`` (default
+today) to ``end`` (default two weeks on, at most 120 days).
+Economic releases are market wide.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `scope` | "holdings" \| "watchlists" \| "tickers" \| "all" | no | `"holdings"` | holdings (default), watchlists, tickers or all |
+| `tickers` | list[string] \| null | no | `null` | instrument ids (scope tickers) |
+| `watchlist_id` | string \| null | no | `null` | one of your watchlists (scope watchlists) |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `start` | date \| null | no | `null` | YYYY-MM-DD |
+| `end` | date \| null | no | `null` | YYYY-MM-DD |
+| `countries` | list[string] \| null | no | `null` | economic events of these ISO alpha-2 codes |
 
 ### `get_catalog`
 
@@ -245,6 +276,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `draft_id` | string | yes |  |  |
+
+### `get_earnings_warnings`
+
+Which of ``tickers`` report earnings before the next open of
+their market. An order placed now fills after the report.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `tickers` | list[string] | yes |  |  |
 
 ### `get_factor`
 
@@ -392,6 +434,21 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
 
+### `get_news`
+
+The newest articles on the scope's tickers and their daily
+sentiment over the last 30 days. Scope all is refused.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `scope` | "holdings" \| "watchlists" \| "tickers" \| "all" | no | `"holdings"` | holdings (default), watchlists, tickers or all |
+| `tickers` | list[string] \| null | no | `null` | instrument ids (scope tickers) |
+| `watchlist_id` | string \| null | no | `null` | one of your watchlists (scope watchlists) |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `limit` | integer | no | `50` |  |
+
 ### `get_order_tca`
 
 One of your orders in full: decision price and context, arrival
@@ -472,6 +529,16 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `limit` | integer | no | `20` | recent runs to show |
+
+### `get_screen`
+
+One of your saved screens with its spec.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `screen_id` | string | yes |  |  |
 
 ### `get_shadow_pnl`
 
@@ -673,6 +740,15 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
+### `list_event_alert_kinds`
+
+The upcoming-event alert kinds (earnings, ex-dividend) and how
+many days ahead each looks by default.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `list_factors`
 
 The factor library: every factor with its family, direction,
@@ -863,6 +939,23 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `since` | string \| null | no | `null` | YYYY-MM-DD |
 | `limit` | integer | no | `50` |  |
 | `offset` | integer | no | `0` |  |
+
+### `list_screen_metrics`
+
+Every metric a screen may filter or sort on: id, group (price or
+fundamental), unit and what it measures.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
+### `list_screens`
+
+Your saved screens, oldest first.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
 
 ### `list_shadow_decisions`
 
@@ -1070,6 +1163,20 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` |  |
 | `offset` | integer | no | `0` |  |
 
+### `run_screen`
+
+Run a screen (or one of your saved ones) on the lake as it was on
+``as_of`` (default today): the matching tickers with the value of
+each metric it uses. Only data known on that day counts.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `spec` | object \| null | no | `null` | the screen: rule filters (asset_classes, sectors, exclude_sectors, exchanges, min_price, min_adv), universe_id to start from a stored universe, filters [{"metric": "pe_ratio", "min": 0, "max": 15}], sort_by, descending, limit and columns. Metric ids come from list_screen_metrics |
+| `screen_id` | string \| null | no | `null` | one of your saved screens |
+| `as_of` | date \| null | no | `null` | YYYY-MM-DD |
+
 ### `search_instruments`
 
 Search instruments in the lake by id/name and asset class.
@@ -1234,6 +1341,17 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `pct` | number \| null | no | `null` | percent move, either way |
 | `window_days` | integer \| null | no | `null` | calendar days the move is measured over |
 | `name` | string \| null | no | `null` |  |
+
+### `create_screen`
+
+Save a screen under a name, unique per person. Needs a trading token.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `name` | string | yes |  | the screen's name |
+| `spec` | object \| null | no | `null` | the screen: rule filters (asset_classes, sectors, exclude_sectors, exchanges, min_price, min_adv), universe_id to start from a stored universe, filters [{"metric": "pe_ratio", "min": 0, "max": 15}], sort_by, descending, limit and columns. Metric ids come from list_screen_metrics |
 
 ### `create_watchlist`
 
@@ -1483,6 +1601,18 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: no.
 | `name` | string \| null | no | `null` |  |
 | `enabled` | boolean \| null | no | `null` |  |
 
+### `update_screen`
+
+Rename one of your saved screens, replace its spec, or both.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `screen_id` | string | yes |  |  |
+| `name` | string \| null | no | `null` |  |
+| `spec` | object \| null | no | `null` | the screen: rule filters (asset_classes, sectors, exclude_sectors, exchanges, min_price, min_adv), universe_id to start from a stored universe, filters [{"metric": "pe_ratio", "min": 0, "max": 15}], sort_by, descending, limit and columns. Metric ids come from list_screen_metrics |
+
 ### `update_watchlist`
 
 Rename one of your watchlists, replace its tickers, or both.
@@ -1586,6 +1716,18 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `alert_id` | string | yes |  |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `delete_screen`
+
+Delete one of your saved screens. Universes made from it stay.
+Without confirm=true returns a preview.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `screen_id` | string | yes |  |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `delete_universe`
@@ -1887,6 +2029,25 @@ Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes*
 | `as_of` | date \| null | no | `null` | YYYY-MM-DD; default today |
 | `tickers` | list[string] \| null | no | `null` | override [production].universe |
 | `asset_class` | "equity" \| "crypto" \| "commodity" \| "bond" \| null | no | `null` |  |
+
+### `save_screen_as_universe`
+
+Store a screen as a universe for the lab and queue its refresh
+(follow up with wait_for_job). Without confirm=true returns a preview.
+
+Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `universe_id` | string | yes |  | new universe id, e.g. cheap_tech |
+| `spec` | object \| null | no | `null` | the screen: rule filters (asset_classes, sectors, exclude_sectors, exchanges, min_price, min_adv), universe_id to start from a stored universe, filters [{"metric": "pe_ratio", "min": 0, "max": 15}], sort_by, descending, limit and columns. Metric ids come from list_screen_metrics |
+| `screen_id` | string \| null | no | `null` | one of your saved screens |
+| `mode` | "rule" \| "snapshot" | no | `"rule"` | rule reruns the screen at each rebalance (point in time); snapshot stores today's matches |
+| `start` | date \| null | no | `null` | YYYY-MM-DD |
+| `end` | date \| null | no | `null` | YYYY-MM-DD |
+| `rebalance` | "weekly" \| "monthly" \| "quarterly" | no | `"monthly"` |  |
+| `name` | string \| null | no | `null` |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `shadow_strategy`
 

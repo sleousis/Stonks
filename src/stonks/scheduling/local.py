@@ -435,3 +435,42 @@ def universes_refresh_action(ctx: RunContext) -> JobOutcome:
                     step |= {"ensure": "failed", "ensure_error": f"{exc}"}
             results[uid] = step
     return universes_outcome(results)
+
+
+@register_action("calendars_refresh")
+def calendars_refresh_action(ctx: RunContext) -> JobOutcome:
+    """The event calendars and the upcoming-event notifications, in this
+    process (roadmap 20.7)."""
+    from stonks.app.calendars import CalendarRefreshRequest
+    from stonks.calendars.alerts import check_event_alerts
+    from stonks.ingest.wiring import build_ingest_pipeline
+    from stonks.notify.router import configured_router
+    from stonks.scheduling.api_backend import calendar_job_outcome, calendar_refresh_body
+    from stonks.store.lake import DuckDBLake
+    from stonks.store.state import SqliteState
+
+    request = CalendarRefreshRequest.model_validate(calendar_refresh_body(ctx))
+    assert request.start is not None and request.end is not None
+    source = build_source(request.source, ctx.settings.sources)
+    with DuckDBLake(ctx.settings.lake.path) as lake:
+        lake.migrate()
+        result = build_ingest_pipeline(ctx.settings, source, lake).run_calendars(
+            request.start,
+            request.end,
+            tickers=request.tickers,
+            countries=request.countries,
+            kinds=request.kinds,
+        )
+        view: dict[str, Any] = {
+            "run_id": result.run_id,
+            "status": result.status,
+            "calendars_ok": result.tickers_ok,
+            "calendars_failed": result.tickers_failed,
+        }
+        if request.alerts:
+            with SqliteState(ctx.settings.state.path) as state:
+                report = check_event_alerts(
+                    lake, configured_router(state), ctx.fire.as_of, days_ahead=request.alert_days
+                )
+            view["alerts"] = {"sent": report.sent}
+    return calendar_job_outcome("succeeded", None, view, f"ingest_run_{result.run_id}")

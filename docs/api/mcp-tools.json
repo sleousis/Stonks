@@ -519,6 +519,47 @@
     },
     {
       "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Save a screen under a name, unique per person. Needs a trading token.",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "description": "the screen's name",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the screen: rule filters (asset_classes, sectors, exclude_sectors, exchanges, min_price, min_adv), universe_id to start from a stored universe, filters [{\"metric\": \"pe_ratio\", \"min\": 0, \"max\": 15}], sort_by, descending, limit and columns. Metric ids come from list_screen_metrics",
+            "title": "Spec"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "create_screenArguments",
+        "type": "object"
+      },
+      "name": "create_screen",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
         "destructive": true,
         "idempotent": true,
         "open_world": false,
@@ -712,6 +753,36 @@
         "type": "object"
       },
       "name": "delete_price_alert",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Delete one of your saved screens. Universes made from it stay.\nWithout confirm=true returns a preview.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "screen_id": {
+            "title": "Screen Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "screen_id"
+        ],
+        "title": "delete_screenArguments",
+        "type": "object"
+      },
+      "name": "delete_screen",
       "needs_confirm": true
     },
     {
@@ -1210,6 +1281,125 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Upcoming earnings (with the time of day and the EPS estimate),\nex-dividend dates and economic releases from ``start`` (default\ntoday) to ``end`` (default two weeks on, at most 120 days).\nEconomic releases are market wide.",
+      "input_schema": {
+        "properties": {
+          "countries": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "economic events of these ISO alpha-2 codes",
+            "title": "Countries"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "End"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "scope": {
+            "default": "holdings",
+            "description": "holdings (default), watchlists, tickers or all",
+            "enum": [
+              "holdings",
+              "watchlists",
+              "tickers",
+              "all"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Start"
+          },
+          "tickers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "instrument ids (scope tickers)",
+            "title": "Tickers"
+          },
+          "watchlist_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your watchlists (scope watchlists)",
+            "title": "Watchlist Id"
+          }
+        },
+        "title": "get_calendarArguments",
+        "type": "object"
+      },
+      "name": "get_calendar",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Strategy classes that can be backtested or tuned, with their parameter\nspecs, plus the valid bar intervals and asset classes.",
       "input_schema": {
         "properties": {},
@@ -1411,6 +1601,35 @@
         "type": "object"
       },
       "name": "get_draft",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Which of ``tickers`` report earnings before the next open of\ntheir market. An order placed now fills after the report.",
+      "input_schema": {
+        "properties": {
+          "tickers": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Tickers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tickers"
+        ],
+        "title": "get_earnings_warningsArguments",
+        "type": "object"
+      },
+      "name": "get_earnings_warnings",
       "needs_confirm": false
     },
     {
@@ -1815,6 +2034,87 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "The newest articles on the scope's tickers and their daily\nsentiment over the last 30 days. Scope all is refused.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "scope": {
+            "default": "holdings",
+            "description": "holdings (default), watchlists, tickers or all",
+            "enum": [
+              "holdings",
+              "watchlists",
+              "tickers",
+              "all"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "tickers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "instrument ids (scope tickers)",
+            "title": "Tickers"
+          },
+          "watchlist_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your watchlists (scope watchlists)",
+            "title": "Watchlist Id"
+          }
+        },
+        "title": "get_newsArguments",
+        "type": "object"
+      },
+      "name": "get_news",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One of your orders in full: decision price and context, arrival\nand fill prices, the shortfall split and the notes.",
       "input_schema": {
         "properties": {
@@ -2006,6 +2306,30 @@
         "type": "object"
       },
       "name": "get_schedule",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One of your saved screens with its spec.",
+      "input_schema": {
+        "properties": {
+          "screen_id": {
+            "title": "Screen Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "screen_id"
+        ],
+        "title": "get_screenArguments",
+        "type": "object"
+      },
+      "name": "get_screen",
       "needs_confirm": false
     },
     {
@@ -2882,6 +3206,22 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "The upcoming-event alert kinds (earnings, ex-dividend) and how\nmany days ahead each looks by default.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_event_alert_kindsArguments",
+        "type": "object"
+      },
+      "name": "list_event_alert_kinds",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "The factor library: every factor with its family, direction,\nformula and hypothesis, plus the sets and families to filter by.",
       "input_schema": {
         "properties": {
@@ -3613,6 +3953,38 @@
         "type": "object"
       },
       "name": "list_risk_snapshots",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Every metric a screen may filter or sort on: id, group (price or\nfundamental), unit and what it measures.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_screen_metricsArguments",
+        "type": "object"
+      },
+      "name": "list_screen_metrics",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your saved screens, oldest first.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_screensArguments",
+        "type": "object"
+      },
+      "name": "list_screens",
       "needs_confirm": false
     },
     {
@@ -5927,6 +6299,65 @@
     {
       "annotations": {
         "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Run a screen (or one of your saved ones) on the lake as it was on\n``as_of`` (default today): the matching tickers with the value of\neach metric it uses. Only data known on that day counts.",
+      "input_schema": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "As Of"
+          },
+          "screen_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your saved screens",
+            "title": "Screen Id"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the screen: rule filters (asset_classes, sectors, exclude_sectors, exchanges, min_price, min_adv), universe_id to start from a stored universe, filters [{\"metric\": \"pe_ratio\", \"min\": 0, \"max\": 15}], sort_by, descending, limit and columns. Metric ids come from list_screen_metrics",
+            "title": "Spec"
+          }
+        },
+        "title": "run_screenArguments",
+        "type": "object"
+      },
+      "name": "run_screen",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
         "idempotent": false,
         "open_world": false,
         "read_only": false
@@ -6402,6 +6833,125 @@
         "type": "object"
       },
       "name": "run_tick",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Store a screen as a universe for the lab and queue its refresh\n(follow up with wait_for_job). Without confirm=true returns a preview.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "End"
+          },
+          "mode": {
+            "default": "rule",
+            "description": "rule reruns the screen at each rebalance (point in time); snapshot stores today's matches",
+            "enum": [
+              "rule",
+              "snapshot"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "rebalance": {
+            "default": "monthly",
+            "enum": [
+              "weekly",
+              "monthly",
+              "quarterly"
+            ],
+            "title": "Rebalance",
+            "type": "string"
+          },
+          "screen_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your saved screens",
+            "title": "Screen Id"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the screen: rule filters (asset_classes, sectors, exclude_sectors, exchanges, min_price, min_adv), universe_id to start from a stored universe, filters [{\"metric\": \"pe_ratio\", \"min\": 0, \"max\": 15}], sort_by, descending, limit and columns. Metric ids come from list_screen_metrics",
+            "title": "Spec"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Start"
+          },
+          "universe_id": {
+            "description": "new universe id, e.g. cheap_tech",
+            "title": "Universe Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe_id"
+        ],
+        "title": "save_screen_as_universeArguments",
+        "type": "object"
+      },
+      "name": "save_screen_as_universe",
       "needs_confirm": true
     },
     {
@@ -7022,6 +7572,58 @@
         "type": "object"
       },
       "name": "update_price_alert",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Rename one of your saved screens, replace its spec, or both.",
+      "input_schema": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "screen_id": {
+            "title": "Screen Id",
+            "type": "string"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the screen: rule filters (asset_classes, sectors, exclude_sectors, exchanges, min_price, min_adv), universe_id to start from a stored universe, filters [{\"metric\": \"pe_ratio\", \"min\": 0, \"max\": 15}], sort_by, descending, limit and columns. Metric ids come from list_screen_metrics",
+            "title": "Spec"
+          }
+        },
+        "required": [
+          "screen_id"
+        ],
+        "title": "update_screenArguments",
+        "type": "object"
+      },
+      "name": "update_screen",
       "needs_confirm": false
     },
     {

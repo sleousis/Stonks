@@ -72,6 +72,8 @@ The CLI opens the stores itself and reuses the services for lab and registry wor
 | `ingest` | `DataSource` adapters (`eodhd`, `yahoo`, `defillama`), bar quality checks and quarantine, idempotent upserts, on-demand fetching of missing bars (`ensure.py`). |
 | `auth` | Sign-in, sessions, TOTP 2FA, recovery codes, API tokens and role permissions (`stonks users`). |
 | `universes` | Stored universe definitions (list, exchange, rule, index) refreshed into point-in-time membership. See [universes](universes.md). |
+| `screener` | Screens on price and fundamental metrics, point in time, behind a metric registry. A `rule` universe runs a screen at each rebalance. See [universes](universes.md#screener). |
+| `calendars` | Earnings, dividend and economic calendars, the earnings check before the next open, and upcoming-event alerts. See [calendars](calendars.md). |
 | `store` | `DuckDBLake` (market data) and `SqliteState` (everything that changes), migrations, the `BarStore` seam. |
 | `features` | Optional indicator and scoring helpers that strategies call. |
 | `factors` | Factor registry and library, an expression language compiled to DuckDB SQL, cached panels, tear sheets and model datasets. See [factors](factors.md). |
@@ -227,5 +229,5 @@ Switch: set `[lake.bars] backend = "parquet"`, stop `stonks serve`, run `uv run 
 ## More
 
 - [Operations](operations.md), [deploy](deploy.md), [capacity](capacity.md), [runbooks](runbooks/)
-- [Principles](principles.md), [strategies](strategies/README.md), [web console](ui.md), [universes and on-demand data](universes.md)
+- [Principles](principles.md), [strategies](strategies/README.md), [web console](ui.md), [universes and on-demand data](universes.md), [calendars and news](calendars.md)
 - Block notes (history and details): [ingestion](blocks/01_ingestion.md), [storage](blocks/02_storage.md), [lab](blocks/03_strategy_lab.md), [registry](blocks/04_strategy_store.md), [tick](blocks/05_production_tick.md)

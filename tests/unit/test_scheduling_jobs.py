@@ -30,6 +30,7 @@ BUILTIN = {
     "report",
     "universes_refresh",
     "price_alerts",
+    "calendars_refresh",
 }
 
 
@@ -48,6 +49,7 @@ def test_default_jobs_build():
         "price_alerts",
         "broker_health",
         "ibkr_reauth_reminder",
+        "calendars_refresh",
     }
     tick = by_name["tick"]
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))

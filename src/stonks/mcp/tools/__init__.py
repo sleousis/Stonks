@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from stonks.mcp.tools import (
+    calendars,
     cash_flows,
     connections,
     factors,
@@ -17,6 +18,7 @@ from stonks.mcp.tools import (
     reads,
     research,
     risk,
+    screener,
     studio,
     subscriptions,
     tax,
@@ -46,6 +48,8 @@ MODULES = (
     notifications,
     workspace,
     research,
+    calendars,
+    screener,
 )
 
 

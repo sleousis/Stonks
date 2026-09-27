@@ -202,6 +202,11 @@ def _seed_own_rows(app, path, user_id: str, role: Role, tag: str) -> dict[str, s
             " VALUES (?, ?, ?, '[\"UP.US\"]', ?, ?)",
             [f"wl_{tag.lower()}", user_id, f"{tag}LIST", now, now],
         )
+        state.execute(
+            "INSERT INTO screens (id, owner_id, name, spec_json, created_at, updated_at)"
+            " VALUES (?, ?, ?, '{}', ?, ?)",
+            [f"scr_{tag.lower()}", user_id, f"{tag}SCREEN", now, now],
+        )
     job = services.runner.store.create("backtest", {"marker": f"{tag}JOB"}, owner_id=user_id)
     conn = services.connections.connect_with_keys(
         session_principal(user_id, role).scope,
@@ -214,6 +219,7 @@ def _seed_own_rows(app, path, user_id: str, role: Role, tag: str) -> dict[str, s
         "job": job.id,
         "connection": conn.id,
         "watchlist": f"wl_{tag.lower()}",
+        "screen": f"scr_{tag.lower()}",
     }
 
 
@@ -384,6 +390,36 @@ CASES: dict[str, Case] = {
         "GET", "/api/watchlists/{watchlist_id}", lambda i: {"watchlist_id": i["watchlist"]}
     ),
     "get_my_risk_limits": _c("GET", "/api/risk/limits"),
+    "get_calendar": _c("GET", "/api/calendars", lambda i: {"portfolio_id": i["portfolio"]}),
+    "get_news": _c("GET", "/api/calendars/news", lambda i: {"portfolio_id": i["portfolio"]}),
+    "get_earnings_warnings": _c(
+        "GET", "/api/calendars/earnings-warnings", lambda i: {"tickers": ["UP.US"]}
+    ),
+    "list_event_alert_kinds": _c("GET", "/api/calendars/alert-kinds"),
+    "list_screen_metrics": _c("GET", "/api/screener/metrics"),
+    "run_screen": _c("POST", "/api/screener/run", lambda i: {"screen_id": i["screen"]}),
+    "list_screens": _c("GET", "/api/screener/screens"),
+    "get_screen": _c(
+        "GET", "/api/screener/screens/{screen_id}", lambda i: {"screen_id": i["screen"]}
+    ),
+    "create_screen": _c(
+        "POST", "/api/screener/screens", lambda i: {"name": "x", "spec": {"limit": 0}}
+    ),
+    "update_screen": _c(
+        "PATCH",
+        "/api/screener/screens/{screen_id}",
+        lambda i: {"screen_id": i["screen"], "spec": {"limit": 3}},
+    ),
+    "delete_screen": _c(
+        "DELETE",
+        "/api/screener/screens/{screen_id}",
+        lambda i: {"screen_id": i["screen"], "confirm": True},
+    ),
+    "save_screen_as_universe": _c(
+        "POST",
+        "/api/screener/universes",
+        lambda i: {"universe_id": "BAD ID", "spec": {}, "confirm": True},
+    ),
     "create_watchlist": _c("POST", "/api/watchlists", lambda i: {"name": "x", "tickers": ["=bad"]}),
     "update_watchlist": _c(
         "PATCH",

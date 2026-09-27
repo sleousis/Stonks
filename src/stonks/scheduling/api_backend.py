@@ -380,3 +380,52 @@ def api_universes_refresh(ctx: RunContext) -> JobOutcome:
             step |= ensure_step(e_status, e_error, e_result)
         results[uid] = step
     return universes_outcome(results)
+
+
+# ---- calendars (roadmap 20.7) ----------------------------------------------------
+
+
+def calendar_refresh_body(ctx: RunContext) -> dict[str, Any]:
+    """The ``calendars_refresh`` job's request: the calendars from
+    ``days_back`` (default 7) before the fire's date to ``days_ahead``
+    (default 35) after it, for the whole market unless ``params.tickers``
+    names some, then the upcoming-event notifications."""
+    day = ctx.fire.as_of
+    body: dict[str, Any] = {
+        "start": (day - timedelta(days=int(ctx.params.get("days_back", 7)))).isoformat(),
+        "end": (day + timedelta(days=int(ctx.params.get("days_ahead", 35)))).isoformat(),
+        "source": str(ctx.params.get("source", "eodhd")),
+        "alerts": bool(ctx.params.get("alerts", True)),
+    }
+    for key in ("tickers", "countries", "kinds", "alert_days"):
+        if ctx.params.get(key):
+            body[key] = ctx.params[key]
+    return body
+
+
+def calendar_job_outcome(
+    status: str, error: str | None, result: Mapping[str, Any] | None, job_id: str
+) -> JobOutcome:
+    detail: dict[str, Any] = {"job_id": job_id, "job_status": status}
+    if error:
+        detail["error"] = error
+    if result is not None:
+        detail |= {
+            k: result.get(k) for k in ("run_id", "status", "calendars_ok", "calendars_failed")
+        }
+        if result.get("alerts"):
+            detail["alerts_sent"] = result["alerts"].get("sent")
+    ok = status == "succeeded" and (result or {}).get("status") != "error"
+    return JobOutcome("succeeded" if ok else "failed", detail)
+
+
+@API_ACTIONS.register("calendars_refresh")
+def api_calendars_refresh(ctx: RunContext) -> JobOutcome:
+    """Refresh the event calendars through the API (a lake-writer job)."""
+    job_id, status, error, result = _run_job(
+        _executor(ctx),
+        "/api/calendars/refresh",
+        calendar_refresh_body(ctx),
+        "/api/calendars/refresh/{job_id}/result",
+    )
+    return calendar_job_outcome(status, error, result, job_id)

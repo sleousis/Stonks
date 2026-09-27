@@ -11,6 +11,7 @@ from stonks.api.routers import (
     auth,
     backups,
     brokers,
+    calendars,
     cash_flows,
     catalog,
     charts,
@@ -38,6 +39,7 @@ from stonks.api.routers import (
     price_alerts,
     risk,
     schedule,
+    screener,
     shadow,
     signals,
     sources,
@@ -100,6 +102,8 @@ API_ROUTERS: list[APIRouter] = [
     tax.router,
     tax.fx_router,
     live.router,
+    calendars.router,
+    screener.router,
 ]
 
 #: Routers that always need a principal, even for reads on loopback.

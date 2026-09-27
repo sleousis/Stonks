@@ -74,7 +74,7 @@ class JobConfig(BaseModel):
     name: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_.-]+$")
     #: A registered job action (``ingest_prices``, ``tick``, ``health``,
     #: ``report``, ``universes_refresh``, ``backup``, ``connections_sync``,
-    #: ``price_alerts``).
+    #: ``price_alerts``, ``calendars_refresh``).
     action: str
     trigger: TriggerConfig
     params: dict[str, Any] = Field(default_factory=dict)
@@ -163,6 +163,13 @@ def default_jobs() -> list[JobConfig]:
             action="ibkr_reauth_reminder",
             trigger=DailyTriggerConfig(at=time(18, 0), timezone="America/New_York", weekdays=[6]),
             catch_up="none",
+        ),
+        # Earnings, dividend and economic calendars, then the upcoming-event
+        # notifications (roadmap 20.7). Needs a paid EODHD plan.
+        JobConfig(
+            name="calendars_refresh",
+            action="calendars_refresh",
+            trigger=DailyTriggerConfig(at=time(6, 0)),
         ),
     ]
 

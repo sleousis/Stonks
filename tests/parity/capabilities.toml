@@ -1448,3 +1448,102 @@ routes = ["PUT /api/portfolios/{portfolio_id}/live/allocation", "PUT /api/portfo
 console = ["setLiveAllocation", "setAccountProfile"]
 cli = { limited = "needs a fresh second factor, done in the web app" }
 mcp = { limited = "needs a fresh second factor, done in the web app" }
+
+# ---- calendars and news (roadmap 20.7) ----------------------------------------------
+
+[[capability]]
+id = "calendars.read"
+domain = "data"
+title = "Earnings, ex-dividend dates and economic releases for your holdings, a watchlist, tickers or all"
+routes = ["GET /api/calendars"]
+console = { gap = "20.7", note = "calendar page with scope picker" }
+cli = "stonks calendars show"
+mcp = "get_calendar"
+
+[[capability]]
+id = "calendars.news"
+domain = "data"
+title = "News and daily sentiment of your holdings, a watchlist or tickers"
+routes = ["GET /api/calendars/news"]
+console = { gap = "20.7", note = "news and sentiment panel" }
+cli = "stonks calendars news"
+mcp = "get_news"
+
+[[capability]]
+id = "calendars.earnings_warnings"
+domain = "trading"
+title = "Earnings before the next open, the order ticket's warning"
+routes = ["GET /api/calendars/earnings-warnings"]
+console = { gap = "20.7", note = "warning line on the order ticket" }
+cli = "stonks calendars earnings-check"
+mcp = "get_earnings_warnings"
+
+[[capability]]
+id = "calendars.alert_kinds"
+domain = "notifications"
+title = "Upcoming-event alert kinds and how far ahead each looks"
+routes = ["GET /api/calendars/alert-kinds"]
+console = { gap = "20.7", note = "event alert toggles in notification settings" }
+cli = { limited = "the kinds are fixed modules, docs/calendars.md lists them" }
+mcp = "list_event_alert_kinds"
+
+[[capability]]
+id = "calendars.refresh"
+domain = "ops"
+title = "Refresh the event calendars and send upcoming-event alerts (the scheduler's calendars_refresh job)"
+routes = ["POST /api/calendars/refresh", "GET /api/calendars/refresh/{job_id}/result"]
+console = { limited = "an operator job the scheduler runs every morning" }
+cli = "stonks calendars refresh"
+mcp = { limited = "an operator job the scheduler runs every morning" }
+
+# ---- screener (roadmap 20.8) --------------------------------------------------------
+
+[[capability]]
+id = "screener.metrics"
+domain = "universes"
+title = "Metrics a screen may filter or sort on"
+routes = ["GET /api/screener/metrics"]
+console = { gap = "20.8", note = "screener page" }
+cli = "stonks screener metrics"
+mcp = "list_screen_metrics"
+
+[[capability]]
+id = "screener.run"
+domain = "universes"
+title = "Run a screen on price and fundamental metrics, point in time"
+routes = ["POST /api/screener/run"]
+console = { gap = "20.8", note = "screener page" }
+cli = "stonks screener run"
+mcp = "run_screen"
+
+[[capability]]
+id = "screener.screens"
+domain = "universes"
+title = "Your saved screens: list, save, read and change"
+routes = [
+  "GET /api/screener/screens",
+  "POST /api/screener/screens",
+  "GET /api/screener/screens/{screen_id}",
+  "PATCH /api/screener/screens/{screen_id}",
+]
+console = { gap = "20.8", note = "screener page" }
+cli = ["stonks screener list", "stonks screener save"]
+mcp = ["list_screens", "create_screen", "get_screen", "update_screen"]
+
+[[capability]]
+id = "screener.delete"
+domain = "universes"
+title = "Delete a saved screen"
+routes = ["DELETE /api/screener/screens/{screen_id}"]
+console = { gap = "20.8", note = "screener page" }
+cli = "stonks screener delete"
+mcp = "delete_screen"
+
+[[capability]]
+id = "screener.universe"
+domain = "universes"
+title = "Store a screen as a universe for the lab (rule or snapshot)"
+routes = ["POST /api/screener/universes"]
+console = { gap = "20.8", note = "save as universe on the screener page" }
+cli = "stonks screener universe"
+mcp = "save_screen_as_universe"

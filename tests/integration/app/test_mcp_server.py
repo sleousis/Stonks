@@ -166,6 +166,14 @@ READ_TOOLS = {
     "get_factor",
     "check_factor_expression",
     "get_factor_values",
+    "get_calendar",
+    "get_news",
+    "get_earnings_warnings",
+    "list_event_alert_kinds",
+    "list_screen_metrics",
+    "run_screen",
+    "list_screens",
+    "get_screen",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -187,6 +195,7 @@ JOB_TOOLS = {
     "create_price_alert",
     "draft_order",
     "start_research",
+    "create_screen",
 }
 # Overwrite a draft's fields; no confirm (a draft is never traded).
 EDIT_TOOLS = {
@@ -195,6 +204,7 @@ EDIT_TOOLS = {
     "cancel_job",
     "update_watchlist",
     "update_price_alert",
+    "update_screen",
 }
 GUARDED_TOOLS = {
     "create_universe",
@@ -218,6 +228,8 @@ GUARDED_TOOLS = {
     "change_order",
     "cancel_order",
     "delete_price_alert",
+    "save_screen_as_universe",
+    "delete_screen",
 }
 
 

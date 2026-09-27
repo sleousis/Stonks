@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -82,6 +82,17 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/brokers` | Get Broker Info | sign-in |  | [BrokerInfo](#brokerinfo) |
 | GET | `/api/brokers/alpaca/status` | Get Alpaca Status | sign-in |  | [AlpacaStatus](#alpacastatus) |
 | GET | `/api/brokers/gateways` | Get Broker Gateways | `data.read` |  | [GatewayHealthView](#gatewayhealthview) |
+
+## calendars endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/calendars` | Get Calendar | sign-in |  | [CalendarView](#calendarview) |
+| GET | `/api/calendars/alert-kinds` | List Event Alert Kinds | sign-in |  | list[[EventAlertKindView](#eventalertkindview)] |
+| GET | `/api/calendars/earnings-warnings` | Get Earnings Warnings | sign-in |  | [EarningsWarningsView](#earningswarningsview) |
+| GET | `/api/calendars/news` | Get News | sign-in |  | [NewsView](#newsview) |
+| POST | `/api/calendars/refresh` | Refresh Calendars | `operations.run` | [CalendarRefreshRequest](#calendarrefreshrequest) | [Job](#job) |
+| GET | `/api/calendars/refresh/{job_id}/result` | Get Refresh Result | sign-in |  | [CalendarRefreshView](#calendarrefreshview) |
 
 ## catalog endpoints
 
@@ -317,6 +328,19 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/schedule` | Get Schedule | sign-in |  | [ScheduleView](#scheduleview) |
 | POST | `/api/schedule/{job}/run-now` | Run Now | `operations.run` | [RunNowRequest](#runnowrequest) | [RunNowView](#runnowview) |
+
+## screener endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/screener/metrics` | List Metrics | sign-in |  | list[[MetricView](#metricview)] |
+| POST | `/api/screener/run` | Run Screen | `data.read` | [ScreenRunRequest](#screenrunrequest) | [ScreenResult](#screenresult) |
+| GET | `/api/screener/screens` | List Screens | sign-in |  | [Page_SavedScreenView_](#page_savedscreenview_) |
+| POST | `/api/screener/screens` | Create Screen | `portfolio.manage` | [SavedScreenCreate](#savedscreencreate) | [SavedScreenView](#savedscreenview) |
+| GET | `/api/screener/screens/{screen_id}` | Get Screen | sign-in |  | [SavedScreenView](#savedscreenview) |
+| PATCH | `/api/screener/screens/{screen_id}` | Update Screen | `portfolio.manage` | [SavedScreenUpdate](#savedscreenupdate) | [SavedScreenView](#savedscreenview) |
+| DELETE | `/api/screener/screens/{screen_id}` | Delete Screen | `portfolio.manage` |  |  |
+| POST | `/api/screener/universes` | Save As Universe | `lab.run` | [ScreenUniverseRequest](#screenuniverserequest) | [ScreenUniverseView](#screenuniverseview) |
 
 ## shadow endpoints
 
@@ -742,6 +766,45 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `kind` | "simulated" \| "alpaca" \| "ibkr" | yes |  |
 | `paper` | boolean | yes |  |
 
+### CalendarRefreshRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alert_days` | dict[str, integer] \| null | no |  |
+| `alerts` | boolean | no |  |
+| `countries` | list[string] \| null | no |  |
+| `end` | date \| null | no |  |
+| `kinds` | list["earnings" \| "dividends" \| "economic"] | no |  |
+| `source` | "eodhd" \| "yahoo" \| "defillama" | no |  |
+| `start` | date \| null | no |  |
+| `tickers` | list[string] \| null | no |  |
+
+### CalendarRefreshView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alerts` | [EventAlertSummary](#eventalertsummary) \| null | no |  |
+| `calendars_failed` | integer | yes |  |
+| `calendars_ok` | integer | yes |  |
+| `end` | date | yes |  |
+| `failed` | list[string] | yes |  |
+| `run_id` | integer | yes |  |
+| `start` | date | yes |  |
+| `status` | string | yes |  |
+
+### CalendarView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dividends` | list[[DividendEvent](#dividendevent)] | yes |  |
+| `earnings` | list[[EarningsEvent](#earningsevent)] | yes |  |
+| `economic` | list[[EconomicEvent](#economicevent)] | yes |  |
+| `end` | date | yes |  |
+| `scope` | "all" \| "holdings" \| "watchlists" \| "tickers" | yes |  |
+| `start` | date | yes |  |
+| `tickers` | list[string] \| null | yes |  |
+| `truncated` | boolean | no |  |
+
 ### CapitalRampSettings
 
 | Field | Type | Required | Description |
@@ -959,6 +1022,19 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 | `remote_error` | string \| null | yes |  |
 | `remote_removed` | boolean \| null | yes |  |
 
+### DividendEvent
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | number \| null | no |  |
+| `currency` | string \| null | no |  |
+| `declaration_date` | date \| null | no |  |
+| `ex_date` | date | yes |  |
+| `name` | string \| null | no |  |
+| `pay_date` | date \| null | no |  |
+| `record_date` | date \| null | no |  |
+| `ticker` | string | yes |  |
+
 ### Draft
 
 | Field | Type | Required | Description |
@@ -1058,6 +1134,53 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 |-------|------|----------|-------------|
 | `schedule` | list[list[any]] \| null | no |  |
 
+### EarningsEvent
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `before_after_market` | "before" \| "during" \| "after" \| null | no |  |
+| `currency` | string \| null | no |  |
+| `eps_actual` | number \| null | no |  |
+| `eps_difference` | number \| null | no |  |
+| `eps_estimate` | number \| null | no |  |
+| `name` | string \| null | no |  |
+| `period_end` | date | yes |  |
+| `report_date` | date | yes |  |
+| `surprise_percent` | number \| null | no |  |
+| `ticker` | string | yes |  |
+
+### EarningsWarning
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `before_after_market` | "before" \| "during" \| "after" \| null | no |  |
+| `name` | string \| null | no |  |
+| `next_open` | date-time | yes |  |
+| `report_date` | date | yes |  |
+| `ticker` | string | yes |  |
+
+### EarningsWarningsView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `checked` | list[string] | yes |  |
+| `warnings` | list[[EarningsWarning](#earningswarning)] | yes |  |
+
+### EconomicEvent
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `actual` | number \| null | no |  |
+| `change` | number \| null | no |  |
+| `change_pct` | number \| null | no |  |
+| `comparison` | "mom" \| "qoq" \| "yoy" \| "none" | yes |  |
+| `country` | string | yes |  |
+| `estimate` | number \| null | no |  |
+| `event_time` | date-time | yes |  |
+| `event_type` | string | yes |  |
+| `period` | string \| null | no |  |
+| `previous` | number \| null | no |  |
+
 ### EnrolStartView
 
 | Field | Type | Required | Description |
@@ -1105,6 +1228,22 @@ What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing
 |-------|------|----------|-------------|
 | `timestamp` | date-time | yes |  |
 | `value` | number | yes |  |
+
+### EventAlertKindView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `default_days_ahead` | integer | yes |  |
+| `kind` | string | yes |  |
+| `label` | string | yes |  |
+
+### EventAlertSummary
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `people` | integer | yes |  |
+| `repeats` | integer | yes |  |
+| `sent` | integer | yes |  |
 
 ### Exposure
 
@@ -2133,6 +2272,26 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `tool_calls` | list[[ToolCallView](#toolcallview)] | no |  |
 | `tool_name` | string \| null | no |  |
 
+### MetricFilter
+
+Keep a ticker when ``min <= value <= max``. A ticker with no value for the metric fails the filter.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max` | number \| null | no |  |
+| `metric` | string | yes |  |
+| `min` | number \| null | no |  |
+
+### MetricView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string | yes |  |
+| `group` | "price" \| "fundamental" | yes |  |
+| `id` | string | yes |  |
+| `label` | string | yes |  |
+| `unit` | "ratio" \| "percent" \| "money" | yes |  |
+
 ### MfaCodeRequest
 
 | Field | Type | Required | Description |
@@ -2169,6 +2328,26 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 |-------|------|----------|-------------|
 | `max_net` | number \| null | no |  |
 | `min_net` | number \| null | no |  |
+
+### NewsItem
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `published_at` | date-time | yes |  |
+| `sentiment` | number \| null | no |  |
+| `source_name` | string \| null | no |  |
+| `tags` | list[string] | no |  |
+| `ticker` | string | yes |  |
+| `title` | string | yes |  |
+| `url` | string \| null | no |  |
+
+### NewsView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[NewsItem](#newsitem)] | yes |  |
+| `sentiment` | list[[SentimentDay](#sentimentday)] | yes |  |
+| `tickers` | list[string] | yes |  |
 
 ### NoteRequest
 
@@ -2542,6 +2721,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[RiskSnapshotView](#risksnapshotview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_SavedScreenView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[SavedScreenView](#savedscreenview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -3415,6 +3603,32 @@ Type: "viewer" \| "trader" \| "admin"
 | `run_key` | string | yes |  |
 | `status` | string | no |  |
 
+### SavedScreenCreate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes |  |
+| `spec` | [ScreenSpec](#screenspec) | yes |  |
+
+### SavedScreenUpdate
+
+Rename, replace the spec, or both. Unset fields stay.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string \| null | no |  |
+| `spec` | [ScreenSpec](#screenspec) \| null | no |  |
+
+### SavedScreenView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | date-time | yes |  |
+| `id` | string | yes |  |
+| `name` | string | yes |  |
+| `spec` | [ScreenSpec](#screenspec) | yes |  |
+| `updated_at` | date-time | yes |  |
+
 ### ScheduleView
 
 | Field | Type | Required | Description |
@@ -3453,11 +3667,94 @@ Type: "viewer" \| "trader" \| "admin"
 | `started_at` | date-time | yes |  |
 | `status` | string | yes |  |
 
+### ScreenResult
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `candidates` | integer | yes |  |
+| `matched` | integer | yes |  |
+| `metrics` | list[string] | yes |  |
+| `rows` | list[[ScreenRow](#screenrow)] | yes |  |
+| `truncated` | boolean | yes |  |
+
+### ScreenRow
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `exchange` | string \| null | no |  |
+| `name` | string \| null | no |  |
+| `sector` | string \| null | no |  |
+| `ticker` | string | yes |  |
+| `values` | dict[str, number \| null] | yes |  |
+
+### ScreenRunRequest
+
+Run ``spec``, or one of your saved screens by ``screen_id``.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+| `screen_id` | string \| null | no |  |
+| `spec` | [ScreenSpec](#screenspec) \| null | no |  |
+
+### ScreenSpec
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `adv_window_bars` | integer | no |  |
+| `asset_classes` | list["equity" \| "crypto" \| "commodity" \| "bond"] \| null | no |  |
+| `columns` | list[string] | no |  |
+| `descending` | boolean | no |  |
+| `exchanges` | list[string] \| null | no |  |
+| `exclude_sectors` | list[string] | no |  |
+| `filters` | list[[MetricFilter](#metricfilter)] | no |  |
+| `limit` | integer \| null | no |  |
+| `min_adv` | number \| null | no |  |
+| `min_price` | number \| null | no |  |
+| `sectors` | list[string] \| null | no |  |
+| `sort_by` | string \| null | no |  |
+| `universe_id` | string \| null | no |  |
+
+### ScreenUniverseRequest
+
+Store a screen (``spec`` or ``screen_id``) as a universe.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string \| null | no |  |
+| `end` | date \| null | no |  |
+| `mode` | "rule" \| "snapshot" | no |  |
+| `name` | string \| null | no |  |
+| `rebalance` | "weekly" \| "monthly" \| "quarterly" | no |  |
+| `refresh` | boolean | no |  |
+| `screen_id` | string \| null | no |  |
+| `spec` | [ScreenSpec](#screenspec) \| null | no |  |
+| `start` | date \| null | no |  |
+| `universe_id` | string | yes |  |
+
+### ScreenUniverseView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `refresh_job` | [Job](#job) \| null | no |  |
+| `universe` | [UniverseView](#universeview) | yes |  |
+| `warnings` | list[string] | no |  |
+
 ### SectorCapSettings
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `max_weight_per_sector` | number \| null | no |  |
+
+### SentimentDay
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `article_count` | integer \| null | no |  |
+| `day` | date | yes |  |
+| `sentiment` | number \| null | no |  |
+| `ticker` | string | yes |  |
 
 ### SessionTimesView
 
