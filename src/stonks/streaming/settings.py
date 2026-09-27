@@ -134,6 +134,9 @@ class StreamingSettings(BaseModel):
     backfill_source: str = "eodhd"
     #: Shorter gaps are not backfilled.
     min_gap_seconds: float = Field(default=60.0, ge=0)
+    #: A gap is backfilled this long after data flows again, so the vendor
+    #: has finished the minute the stream came back in.
+    backfill_delay_seconds: float = Field(default=120.0, ge=0)
     backoff: StreamBackoffSettings = Field(default_factory=StreamBackoffSettings)
     eodhd: EodhdStreamSettings = Field(default_factory=EodhdStreamSettings)
     ibkr: IbkrStreamSettings = Field(default_factory=IbkrStreamSettings)
