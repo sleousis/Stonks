@@ -38,6 +38,7 @@ __all__ = [
     "MARKET",
     "STYLE_FACTORS",
     "FactorModel",
+    "cross_section_returns",
     "fit_pca_model",
     "fit_style_model",
     "model_exposures",
@@ -149,6 +150,35 @@ def returns_style_exposures(returns: pd.DataFrame) -> pd.DataFrame:
 # ---- fitting -----------------------------------------------------------------------
 
 
+def _design(b: np.ndarray, factor_names: Sequence[str]) -> tuple[np.ndarray, list[str]]:
+    """``[1, B]`` with the market in front, less any column collinear with
+    the ones before it (a full set of sector dummies is the market)."""
+    design = np.column_stack([np.ones(b.shape[0]), b])
+    labels = [MARKET, *factor_names]
+    if np.linalg.matrix_rank(design) < design.shape[1]:
+        keep: list[int] = []
+        for j in range(design.shape[1]):
+            if np.linalg.matrix_rank(design[:, [*keep, j]]) == len(keep) + 1:
+                keep.append(j)
+        design = design[:, keep]
+        labels = [labels[j] for j in keep]
+    return design, labels
+
+
+def cross_section_returns(returns: pd.Series, exposures: pd.DataFrame) -> dict[str, float]:
+    """One bar's factor returns: ``returns`` (index tickers) regressed on
+    ``[1, exposures]`` over the names that have a return. Empty when there
+    are too few names (fewer than factors plus two)."""
+    r = pd.to_numeric(returns, errors="coerce").astype(float)
+    r = r[np.isfinite(r)]
+    b = exposures.reindex(r.index).fillna(0.0)
+    if len(r) < b.shape[1] + 3:
+        return {}
+    design, labels = _design(b.to_numpy(dtype=float), [str(c) for c in b.columns])
+    coef, *_ = np.linalg.lstsq(design, r.to_numpy(), rcond=None)
+    return dict(zip(labels, coef.tolist(), strict=True))
+
+
 def _specific(residuals: np.ndarray, total_var: np.ndarray) -> np.ndarray:
     var = np.var(residuals, axis=0, ddof=1) if residuals.shape[0] > 1 else np.zeros(0)
     floor = SPECIFIC_FLOOR * max(float(np.mean(total_var)), 1e-18)
@@ -200,17 +230,7 @@ def fit_style_model(
     n_rows, n_cols = x.shape
     names = tuple(tickers) if tickers is not None else tuple(str(i) for i in range(n_cols))
     b = np.asarray(exposures, dtype=float).reshape(n_cols, -1)
-    design = np.column_stack([np.ones(n_cols), b])
-    labels = [MARKET, *factor_names]
-    # keep the columns that add information (drop ones collinear with others)
-    rank = np.linalg.matrix_rank(design)
-    if rank < design.shape[1]:
-        keep: list[int] = []
-        for j in range(design.shape[1]):
-            if np.linalg.matrix_rank(design[:, [*keep, j]]) == len(keep) + 1:
-                keep.append(j)
-        design = design[:, keep]
-        labels = [labels[j] for j in keep]
+    design, labels = _design(b, factor_names)
     factor_returns, *_ = np.linalg.lstsq(design, x.T, rcond=None)  # (K+1) x T
     factor_returns = factor_returns.T
     residuals = x - factor_returns @ design.T

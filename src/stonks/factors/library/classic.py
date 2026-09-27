@@ -64,4 +64,18 @@ def factors() -> list[Factor]:
                 "market tops."
             ),
         ),
+        ExpressionFactor(
+            "size_dv_60",
+            "Log(Mean($close*$volume, 60))",
+            description="log of the 60-bar mean dollar volume, a size proxy",
+            family="size",
+            direction=-1,
+            hypothesis=(
+                "Small, thinly traded names carry more liquidity and information risk, "
+                "so they should earn a premium (Banz 1981, Amihud 2002). Dollar volume "
+                "stands in for market cap, which the lake may not hold point in time. "
+                "Fails in flights to quality, when large liquid names lead. The style "
+                "risk model uses it as its size exposure."
+            ),
+        ),
     ]
