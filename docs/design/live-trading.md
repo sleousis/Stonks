@@ -173,7 +173,7 @@ The new capabilities are `runtime_checkable` protocols in `execution/brokers/bas
 3. Otherwise it submits and stores IBKR's `permId` as `broker_order_id`. `orderId` is per API client and resets, so it is never stored as the key.
 4. `reqCompletedOrders` and `reqExecutions` only reach back about a day. So an order must be settled the same session. The end-of-day check (section 6) enforces it, and the next morning's IBKR Flex statement is the backstop for older gaps.
 
-**API client ids.** Each process role uses a fixed TWS API client id (`[brokers.ibkr] client_ids`: tick and submit 11, sync 12, health 13). The gateway's master API client id is set to the tick's id, so it sees orders from every client, and manual orders from TWS show up there too.
+**API client ids.** Each process role uses a fixed TWS API client id (`[brokers.ibkr] client_ids`: tick and submit 11, sync 12, health 13, reconcile 14). The gateway's master API client id is set to the tick's id, so it sees orders from every client, and manual orders from TWS show up there too.
 
 ### Fills and commissions
 

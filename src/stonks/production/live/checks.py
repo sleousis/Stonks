@@ -514,7 +514,8 @@ def _outage_sessions(state: SqliteState, portfolio_id: str, day: date) -> int:
     outage reports, today's included."""
     days = {day}
     for r in state.sql(
-        f"SELECT status, as_of FROM {TABLE} WHERE portfolio_id = ? ORDER BY taken_at DESC, id",
+        f"SELECT status, as_of FROM {TABLE} WHERE portfolio_id = ?"
+        " ORDER BY taken_at DESC, rowid DESC",
         [portfolio_id],
     ):
         if r["status"] != "outage":
@@ -662,7 +663,7 @@ def list_reports(
         where = f" WHERE portfolio_id IN ({','.join('?' for _ in portfolio_ids)})"
         params += list(portfolio_ids)
     rows = state.sql(
-        f"SELECT * FROM {TABLE}{where} ORDER BY taken_at DESC, id LIMIT ?", [*params, limit]
+        f"SELECT * FROM {TABLE}{where} ORDER BY taken_at DESC, rowid DESC LIMIT ?", [*params, limit]
     )
     return [ReconcileReport.from_row(r) for r in rows]
 
