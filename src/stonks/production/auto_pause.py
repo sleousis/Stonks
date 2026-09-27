@@ -67,7 +67,7 @@ def pause_auto(
     with state.transaction():
         rows = state.sql(
             f"SELECT id FROM subscriptions WHERE id IN ({marks}) AND portfolio_id = ?"
-            " AND mode = 'auto' AND paused_reason IS NULL ORDER BY id",
+            " AND mode IN ('approve', 'auto') AND paused_reason IS NULL ORDER BY id",
             [*ids, portfolio_id],
         )
         paused = [r["id"] for r in rows]
@@ -101,7 +101,7 @@ def pause_auto_for_strategy(
     if not state.sql("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'subscriptions'"):
         return []
     rows = state.sql(
-        "SELECT id, portfolio_id FROM subscriptions WHERE strategy_id = ? AND mode = 'auto'"
+        "SELECT id, portfolio_id FROM subscriptions WHERE strategy_id = ? AND mode IN ('approve', 'auto')"
         " AND paused_reason IS NULL AND portfolio_id IS NOT NULL ORDER BY portfolio_id, id",
         [strategy_id],
     )

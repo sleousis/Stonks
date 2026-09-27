@@ -178,7 +178,7 @@ class Subscription:
 
     @property
     def auto_paused(self) -> bool:
-        return self.mode is Mode.AUTO and self.paused_reason is not None
+        return self.mode.trades_live and self.paused_reason is not None
 
     @classmethod
     def from_row(cls, row: Any) -> Subscription:

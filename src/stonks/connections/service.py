@@ -823,7 +823,7 @@ class ConnectionService:
         marks = ",".join("?" for _ in portfolio_ids)
         cur = self._state.execute(
             "UPDATE subscriptions SET paused_reason = ?, updated_at = ?"
-            f" WHERE mode = 'auto' AND paused_reason IS NULL AND portfolio_id IN ({marks})",
+            f" WHERE mode IN ('approve', 'auto') AND paused_reason IS NULL AND portfolio_id IN ({marks})",
             [reason, _iso(now), *portfolio_ids],
         )
         return int(cur.rowcount or 0)

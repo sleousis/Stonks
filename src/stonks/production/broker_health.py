@@ -368,7 +368,7 @@ def _pause(state: SqliteState, target: GatewayTarget, why: str, now: datetime) -
         ids = [
             r["id"]
             for r in state.sql(
-                "SELECT id FROM subscriptions WHERE portfolio_id = ? AND mode = 'auto'"
+                "SELECT id FROM subscriptions WHERE portfolio_id = ? AND mode IN ('approve', 'auto')"
                 " AND paused_reason IS NULL ORDER BY id",
                 [pid],
             )
