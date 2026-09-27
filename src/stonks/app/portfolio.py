@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, date, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -147,7 +147,7 @@ def totals_suppressed(owner_ids: set[str], viewer_id: str) -> bool:
 
 
 Trading = Literal["paper", "live"]
-BrokerKind = Literal["simulated", "alpaca", "connection"]
+BrokerKind = Literal["simulated", "alpaca", "ibkr", "connection"]
 
 PortfolioName = Annotated[
     str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)
@@ -183,7 +183,8 @@ class TradingModeView(BaseModel):
     )
     broker: BrokerKind = Field(
         description="simulated (the Stonks ledger), alpaca (the configured account, default "
-        "portfolio only) or connection (a linked broker account, synced read-only)."
+        "portfolio only), ibkr (the IB Gateway that serves the default portfolio) or "
+        "connection (a linked broker account, synced read-only)."
     )
     detail: str
 
@@ -299,14 +300,19 @@ class PortfolioService:
         return self._modes(books)
 
     def _modes(self, books: list[AccountPortfolio]) -> list[TradingModeView]:
-        brokers = self._ctx.settings.brokers
+        from stonks.execution.brokers import broker_mode
+
+        settings = self._ctx.settings
+        brokers = settings.brokers
         out: list[TradingModeView] = []
         for p in books:
-            if p.id == DEFAULT_PORTFOLIO_ID and brokers.kind == "alpaca":
-                live = not brokers.alpaca.paper and brokers.alpaca.allow_live
-                trading: Trading = "live" if live else "paper"
-                broker: BrokerKind = "alpaca"
-                detail = f"orders go to the Alpaca {'live' if live else 'paper'} account"
+            trading: Trading
+            broker: BrokerKind
+            if p.id == DEFAULT_PORTFOLIO_ID and brokers.kind in ("alpaca", "ibkr"):
+                # the one answer the order paths use (manual orders, step-up)
+                trading = "live" if broker_mode(settings) == "live" else "paper"
+                broker = brokers.kind
+                detail = _default_book_detail(settings, trading)
             elif p.kind == "broker":
                 trading, broker = "live", "connection"
                 detail = "mirrors a real broker account through its connection (read-only sync)"
@@ -552,3 +558,15 @@ def _position(
 def _single(values: set[str | None]) -> str | None:
     """The one value every element shares, else ``None``."""
     return next(iter(values)) if len(values) == 1 else None
+
+
+def _default_book_detail(settings: Any, trading: Trading) -> str:
+    """Where the default book's orders go at Alpaca or an IB Gateway."""
+    brokers = settings.brokers
+    if brokers.kind == "alpaca":
+        return f"orders go to the Alpaca {trading} account"
+    for name, gw in brokers.ibkr.gateways.items():
+        if DEFAULT_PORTFOLIO_ID in gw.portfolios:
+            note = " (live trading not allowed)" if gw.mode == "live" and trading == "paper" else ""
+            return f"orders go to the {gw.mode} IB Gateway {name!r}{note}"
+    return "no IB Gateway lists the default portfolio"

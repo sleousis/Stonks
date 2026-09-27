@@ -72,6 +72,27 @@ def test_the_default_book_follows_the_alpaca_endpoint(client, settings, paper, a
     assert (mode["trading"], mode["broker"]) == (trading, "alpaca")
 
 
+@pytest.mark.parametrize(
+    ("gateway", "allow_live", "trading"),
+    [("live", True, "live"), ("paper", True, "paper"), ("live", False, "paper")],
+)
+def test_the_default_book_follows_its_ib_gateway(client, settings, gateway, allow_live, trading):
+    from stonks.execution.brokers.ibkr.settings import IbkrGatewayConfig
+
+    settings.brokers.kind = "ibkr"
+    settings.brokers.ibkr.allow_live = allow_live
+    settings.brokers.ibkr.gateways = {
+        "main": IbkrGatewayConfig(
+            host="127.0.0.1", port=4001, mode=gateway, portfolios=[DEFAULT_PORTFOLIO_ID]
+        )
+    }
+    [mode] = client.get("/api/portfolios/trading-modes", headers=AUTH).json()["items"]
+    assert (mode["trading"], mode["broker"]) == (trading, "ibkr")
+    assert gateway in mode["detail"]
+    [book] = client.get("/api/portfolios", headers=AUTH).json()["items"]
+    assert book["trading"] == trading
+
+
 def test_create_and_rename_your_own_portfolio(client, settings, people):
     alice = people["alice"]["headers"]
     made = client.post(

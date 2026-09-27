@@ -4937,7 +4937,7 @@ Whether a portfolio trades paper or live money, and through what.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `broker` | "simulated" \| "alpaca" \| "connection" | yes | simulated (the Stonks ledger), alpaca (the configured account, default portfolio only) or connection (a linked broker account, synced read-only). |
+| `broker` | "simulated" \| "alpaca" \| "ibkr" \| "connection" | yes | simulated (the Stonks ledger), alpaca (the configured account, default portfolio only), ibkr (the IB Gateway that serves the default portfolio) or connection (a linked broker account, synced read-only). |
 | `detail` | string | yes |  |
 | `name` | string | yes |  |
 | `portfolio_id` | string | yes |  |
