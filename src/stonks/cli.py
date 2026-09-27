@@ -1072,6 +1072,9 @@ def pnl(
     strategy: str | None = typer.Option(
         None, "--strategy", help="show a shadow strategy's virtual P&L instead of the real one"
     ),
+    portfolio: str = typer.Option(
+        "pf_default", "--portfolio", help="which portfolio (any, the shell is admin)"
+    ),
 ) -> None:
     """Daily P&L from portfolio snapshots, one row per tick as_of: value,
     change since the previous row (blank when more than 4 days apart, see
@@ -1082,7 +1085,7 @@ def pnl(
     since_d = date.fromisoformat(since) if since else None
     state = SqliteState(settings.state.path)
     try:
-        rows = load_pnl(state, since=since_d, strategy_id=strategy)
+        rows = load_pnl(state, since=since_d, strategy_id=strategy, portfolio_id=portfolio)
     finally:
         state.close()
 
@@ -1093,7 +1096,7 @@ def pnl(
     def pct(x: float | None) -> str:
         return "-" if x is None else f"{x:+.2%}"
 
-    title = f"P&L ({'shadow ' + strategy if strategy else 'portfolio'})"
+    title = f"P&L ({'shadow ' + strategy if strategy else 'portfolio ' + portfolio})"
     table = Table(title=title)
     for col in ("date", "days", "value", "change", "daily", "cumulative", "drawdown"):
         table.add_column(col, justify="right")
@@ -1152,6 +1155,15 @@ def serve(
     )
 
 
+def _choice(flag: str, choices: tuple[str, ...]):
+    def check(value: str | None) -> str | None:
+        if value is not None and value not in choices:
+            raise typer.BadParameter(f"{flag} must be one of {list(choices)}, got {value!r}")
+        return value
+
+    return check
+
+
 # ---- users ------------------------------------------------------------------
 
 users_app = typer.Typer(
@@ -1208,6 +1220,78 @@ def users_reset_password(
     svc = _auth_service(_settings())
     user = _users_call(lambda: svc.set_password_by_email(email, read_new_password()))
     console.print(f"password reset for {user.id}; their sessions were signed out")
+
+
+_ROLES = ("viewer", "trader", "admin")
+
+
+@users_app.command("create")
+def users_create(
+    email: str = typer.Option(..., "--email", help="their sign-in email"),
+    name: str = typer.Option(..., "--name", help="the name the console shows"),
+    role: str = typer.Option(
+        "trader", "--role", callback=_choice("--role", _ROLES), help="viewer | trader | admin"
+    ),
+) -> None:
+    """Add a person. They set up their second factor at the first sign-in."""
+    from stonks.accounts import Role
+    from stonks.auth.prompt import read_new_password
+
+    svc = _auth_service(_settings())
+    info = _users_call(
+        lambda: svc.create_user_from_shell(
+            email=email, display_name=name, role=Role(role), password=read_new_password()
+        )
+    )
+    console.print(f"created {info.user.id} ({info.user.email}, {info.user.role.value})")
+
+
+@users_app.command("set-role")
+def users_set_role(
+    email: str = typer.Option(..., "--email", help="the person's sign-in email"),
+    role: str = typer.Option(
+        ..., "--role", callback=_choice("--role", _ROLES), help="viewer | trader | admin"
+    ),
+) -> None:
+    """Change a person's role. The last active admin keeps theirs."""
+    from stonks.accounts import Role
+
+    svc = _auth_service(_settings())
+    info = _users_call(lambda: svc.update_user_from_shell(email, role=Role(role)))
+    console.print(f"{info.user.id} is now {info.user.role.value}")
+
+
+@users_app.command("disable")
+def users_disable(
+    email: str = typer.Option(..., "--email", help="the person's sign-in email"),
+) -> None:
+    """Stop a person signing in: their sessions and API tokens are revoked
+    and their auto subscriptions pause."""
+    svc = _auth_service(_settings())
+    info = _users_call(lambda: svc.update_user_from_shell(email, status="disabled"))
+    console.print(f"{info.user.id} is disabled")
+
+
+@users_app.command("enable")
+def users_enable(
+    email: str = typer.Option(..., "--email", help="the person's sign-in email"),
+) -> None:
+    """Let a disabled person sign in again."""
+    svc = _auth_service(_settings())
+    info = _users_call(lambda: svc.update_user_from_shell(email, status="active"))
+    console.print(f"{info.user.id} is active")
+
+
+@users_app.command("reset-2fa")
+def users_reset_2fa(
+    email: str = typer.Option(..., "--email", help="the person's sign-in email"),
+) -> None:
+    """Clear a person's second factor and recovery codes, and sign them out
+    everywhere. They set up a new one at the next sign-in. This is how a
+    sole admin who lost the authenticator gets back in."""
+    svc = _auth_service(_settings())
+    user_id = _users_call(lambda: svc.reset_mfa_from_shell(email))
+    console.print(f"second factor cleared for {user_id}; they enrol again at the next sign-in")
 
 
 @users_app.command("list")
@@ -1289,15 +1373,6 @@ def lab_ic(ctx: typer.Context) -> None:
 _LAB_TUNERS = ("grid", "random")
 _LAB_OBJECTIVES = ("sharpe", "cagr", "final_return", "cv_sharpe", "cv_cagr", "cv_final_return")
 _LAB_COST_MODELS = ("config", "zero", "realistic")
-
-
-def _choice(flag: str, choices: tuple[str, ...]):
-    def check(value: str | None) -> str | None:
-        if value is not None and value not in choices:
-            raise typer.BadParameter(f"{flag} must be one of {list(choices)}, got {value!r}")
-        return value
-
-    return check
 
 
 def _preset_choices() -> tuple[str, ...]:
