@@ -363,3 +363,94 @@ def test_the_api_takes_the_old_flatten_field(client):
     )
     assert r.status_code == 201, r.text
     assert r.json()["halt"] == "buys"
+
+
+# ---- IBKR: the kill switch while a tick holds the gateway (roadmap 19.17) ----------------
+
+TICK_ORDER = "2026-09-28:t1:s1:AAPL.US:buy"
+
+
+@pytest.fixture
+def ibkr_tick():
+    """A running tick at a fake IB Gateway: client 11 connected, one working
+    buy it placed. The API builds its brokers on client 16."""
+    from stonks.core.types import Order
+    from stonks.execution.brokers.ibkr.factory import connect_ibkr
+    from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
+    from tests.fakes.ib_gateway import FakeIbGateway
+
+    gw = FakeIbGateway()
+    config = IbkrBrokerConfig(
+        gateways={"paper": {"host": "gw", "port": 1, "mode": "paper", "portfolios": ["pf_default"]}}
+    )
+
+    def build(role):
+        return connect_ibkr(config, role=role, client_factory=lambda ep: gw.session(ep.client_id))
+
+    tick = build("tick")
+    tick.place_order(Order(client_id=TICK_ORDER, ticker="AAPL.US", side="buy", quantity=5.0,
+                           order_type="limit", limit_price=1.0, time_in_force="day"))  # fmt: skip
+    return gw, tick, build
+
+
+def _ibkr_halts(services, build):
+    return HaltService(
+        services.context, brokers=lambda pid: build("api") if pid == "pf_default" else None
+    )
+
+
+def test_the_global_kill_switch_cancels_a_running_ticks_orders(services, people, settings,
+                                                               ibkr_tick):  # fmt: skip
+    gw, _tick, build = ibkr_tick
+    _pending_order(settings, TICK_ORDER)
+    _ibkr_halts(services, build).engage_kill(
+        people["owner"], KillSwitchRequest(scope="global", reason="runaway")
+    )
+    # the single cancel needs client 11, which the tick holds: the global
+    # cancel stops it anyway
+    assert gw.global_cancels == 1
+    assert gw.trade(TICK_ORDER).status == "Cancelled"
+    assert _order_status(settings, TICK_ORDER) == "cancelled"
+    [row] = _audit(settings, "kill_switch.cancel_orders")
+    assert json.loads(row["details_json"]) == {"cancelled": [TICK_ORDER], "failed": []}
+    # every API session was given back
+    assert not any(s.connected for s in gw.sessions if s.client_id == 16)
+
+
+def test_a_buys_only_kill_never_cancels_everything(services, people, settings, ibkr_tick):
+    gw, _tick, build = ibkr_tick
+    _pending_order(settings, TICK_ORDER)
+    _ibkr_halts(services, build).engage_kill(
+        people["owner"], KillSwitchRequest(scope="global", buys_only=True, reason="exit")
+    )
+    assert gw.global_cancels == 0
+    assert _order_status(settings, TICK_ORDER) == "pending"
+    [row] = _audit(settings, "kill_switch.cancel_orders")
+    assert json.loads(row["details_json"])["failed"] == [TICK_ORDER]
+
+
+def test_once_the_tick_is_done_the_kill_switch_cancels_one_by_one(services, people, settings,
+                                                                  ibkr_tick):  # fmt: skip
+    gw, tick, build = ibkr_tick
+    tick.close()
+    _pending_order(settings, TICK_ORDER)
+    _ibkr_halts(services, build).engage_kill(
+        people["owner"], KillSwitchRequest(scope="global", buys_only=True, reason="exit")
+    )
+    assert gw.global_cancels == 0
+    assert gw.cancels_by == [(11, 1)]
+    assert _order_status(settings, TICK_ORDER) == "cancelled"
+
+
+def test_a_portfolio_kill_cancels_everything_only_when_it_covers_the_gateway(
+    services, people, settings, ibkr_tick
+):
+    gw, _tick, build = ibkr_tick
+    _pending_order(settings, TICK_ORDER)
+    _ibkr_halts(services, build).engage_kill(
+        people["owner"],
+        KillSwitchRequest(scope="portfolio", portfolio_id="pf_default", reason="stop"),
+    )
+    # the gateway serves only pf_default, so cancelling all of it is safe
+    assert gw.global_cancels == 1
+    assert _order_status(settings, TICK_ORDER) == "cancelled"

@@ -15,12 +15,12 @@ next reconcile.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from stonks.core.types import OrderSide
-from stonks.execution.brokers.base import OrderCanceller, OrderStateSource
+from stonks.execution.brokers.base import GlobalCanceller, OrderCanceller, OrderStateSource
 from stonks.execution.reconcile import NON_TERMINAL_STATUSES, reconcile_order
 from stonks.logging import get_logger
 from stonks.production.ledger import ledger_filter
@@ -51,12 +51,17 @@ def cancel_working_orders(
     portfolio_id: str,
     sides: Sequence[OrderSide] = ("buy", "sell"),
     openings_only: bool = False,
+    global_fallback: bool = False,
     now: datetime | None = None,
 ) -> CancelSummary:
     """Cancel ``portfolio_id``'s working orders on ``sides`` at ``broker``.
     ``openings_only`` (a reduce-only halt, BE-12): only orders that open a
     position, by their recorded effect (a buy with none opens), so queued
-    covers and sells of longs still go through."""
+    covers and sells of longs still go through. ``global_fallback``: when
+    some cancels fail and the broker offers ``cancel_all``, cancel every
+    order at the broker once, then sync the failed rows again (the kill
+    switch while a tick owns the orders at IBKR, roadmap 19.17). The caller
+    decides it is safe: every order at that broker is to go."""
     if not isinstance(broker, OrderCanceller) or not isinstance(broker, OrderStateSource):
         _log.warning("cancel.unsupported", portfolio_id=portfolio_id)
         return CancelSummary(unsupported=True)
@@ -96,6 +101,11 @@ def cancel_working_orders(
             cancelled.append(client_id)
         else:
             not_cancelled.append(client_id)
+    if failed and global_fallback and isinstance(broker, GlobalCanceller):
+        failed, rescued = _cancel_all_then_sync(
+            broker.cancel_all, broker, state, failed, portfolio_id, now
+        )
+        cancelled.extend(rescued)
     _log.warning(
         "cancel.done",
         portfolio_id=portfolio_id,
@@ -106,6 +116,43 @@ def cancel_working_orders(
     return CancelSummary(
         cancelled=tuple(cancelled), not_cancelled=tuple(not_cancelled), failed=tuple(failed)
     )
+
+
+def _cancel_all_then_sync(
+    cancel_all: Callable[[], int],
+    broker: OrderStateSource,
+    state: SqliteState,
+    failed: list[str],
+    portfolio_id: str,
+    now: datetime,
+) -> tuple[list[str], list[str]]:
+    """One global cancel, then each failed row synced again. Returns the
+    rows still failed and the ones now cancelled."""
+    try:
+        count = cancel_all()
+    except Exception as exc:
+        _log.warning("cancel.global_failed", portfolio_id=portfolio_id, error=str(exc))
+        return failed, []
+    _log.warning("cancel.global_fallback", portfolio_id=portfolio_id, open_orders=count)
+    still: list[str] = []
+    rescued: list[str] = []
+    for client_id in failed:
+        try:
+            reconcile_order(broker, state, client_id, now=now, reject_unknown=False)
+        except Exception as exc:
+            _log.warning("cancel.order_failed", client_id=client_id, error=str(exc))
+            still.append(client_id)
+            continue
+        rows = state.sql("SELECT status FROM orders WHERE client_id = ?", [client_id])
+        if rows and rows[0]["status"] == "cancelled":
+            state.execute(
+                "UPDATE orders SET status_reason = ? WHERE client_id = ?",
+                [CANCEL_REASON, client_id],
+            )
+            rescued.append(client_id)
+        else:
+            still.append(client_id)
+    return still, rescued
 
 
 def _has_effect(state: SqliteState) -> bool:

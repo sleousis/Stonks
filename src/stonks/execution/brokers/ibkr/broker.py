@@ -34,6 +34,16 @@ Prices: every price read from IBKR (quotes, fills, average fill prices) is
 divided by the contract's price magnifier, and every price sent (limits,
 stops, what-if orders) multiplied by it, so Stonks works in the currency's
 major unit (pounds, not the pence London quotes in; roadmap 19.16).
+
+Client ids (roadmap 19.17): each process role has its own API client id.
+IBKR keeps in sync only the orders a client placed itself, unless it is
+the gateway's master client. So a broker that is not the master reads open
+orders with ``reqAllOpenOrders`` (``IbClient.all_open_trades``). IBKR lets
+only the placing client (or the master) cancel an order: another client's
+order is cancelled through a short session under that client's id
+(``owner_client``), and fails with ``OrderOwnedElsewhereError`` while
+that id is busy (a tick is running). ``cancel_all`` (``reqGlobalCancel``)
+works from any client.
 """
 
 from __future__ import annotations
@@ -74,7 +84,11 @@ from stonks.execution.brokers.ibkr.contracts import (
     ticker_for_contract,
     to_major,
 )
-from stonks.execution.brokers.ibkr.errors import classify, to_broker_error
+from stonks.execution.brokers.ibkr.errors import (
+    OrderOwnedElsewhereError,
+    classify,
+    to_broker_error,
+)
 from stonks.execution.brokers.ibkr.orders import broker_ref, to_ib_order
 from stonks.execution.brokers.ibkr.settings import GatewayMode, IbkrOrderSettings
 from stonks.execution.brokers.ibkr.status import ibkr_state
@@ -124,8 +138,22 @@ class IbkrBroker:
         ref_lookup: Callable[[str], str | None] | None = None,
         stage_lookup: Callable[[], str | None] | None = None,
         clock: Clock = SYSTEM_CLOCK,
+        client_id: int | None = None,
+        master_client_id: int | None = None,
+        owner_client: Callable[[int], IbClient | None] | None = None,
+        portfolios: Sequence[str] = (),
     ) -> None:
         self.client = client
+        #: This session's API client id and the gateway's master client id.
+        #: Unknown (``None``) counts as the master: the client's own view is
+        #: taken as every order.
+        self.client_id = client_id
+        self.master_client_id = master_client_id
+        #: A fresh, unconnected client under another Stonks client id, to
+        #: cancel an order that id placed (``None``: not a Stonks id).
+        self._owner_client = owner_client
+        #: The portfolios the gateway serves (``[brokers.ibkr.gateways]``).
+        self.portfolios: tuple[str, ...] = tuple(portfolios)
         self.mode: GatewayMode = mode
         self.expected_account = account_id
         self.allow_live = allow_live
@@ -407,12 +435,13 @@ class IbkrBroker:
     def cancel_order(self, client_id: str) -> bool:
         self._ensure_may_trade()
         ref = self.broker_ref(client_id)
-        open_trades = self._guard("open orders", self.client.open_trades)
-        trade = next((t for t in open_trades if t.order_ref == ref), None)
+        trade = next((t for t in self._open_trades() if t.order_ref == ref), None)
         if trade is None:
             return False
         if ibkr_state(trade.status, filled=trade.filled) in TERMINAL:
             return False
+        if not self._may_cancel(trade):
+            return self._cancel_as_owner(trade, client_id)
         try:
             self.client.cancel_order(trade.order_id)
         except IbApiError as exc:
@@ -425,11 +454,57 @@ class IbkrBroker:
         _log.info("ibkr.order.cancel_requested", client_id=client_id)
         return True
 
+    @property
+    def is_master(self) -> bool:
+        """Whether this session is the gateway's master client (or its
+        client id is unknown, as in older wiring)."""
+        return self.client_id is None or self.client_id == self.master_client_id
+
+    def _may_cancel(self, trade: IbTrade) -> bool:
+        return self.is_master or trade.client_id is None or trade.client_id == self.client_id
+
+    def _cancel_as_owner(self, trade: IbTrade, client_id: str) -> bool:
+        """Cancel another client's order in a short session under that
+        client's id. While the id is connected elsewhere (the tick is
+        running), raise ``OrderOwnedElsewhereError``."""
+        owner = trade.client_id
+        client = (
+            self._owner_client(owner)
+            if self._owner_client is not None and owner is not None
+            else None
+        )
+        if client is None:
+            raise OrderOwnedElsewhereError(
+                f"order {client_id} was placed by API client {owner}, and IBKR lets only that "
+                "client cancel it. Cancel it there, or stop everything with the kill switch"
+            )
+        try:
+            client.connect()
+            client.cancel_order(trade.order_id)
+        except (ConnectionError, TimeoutError) as exc:
+            raise OrderOwnedElsewhereError(
+                f"order {client_id} was placed by API client {owner}, which is connected now "
+                f"(a tick is running?), and IBKR lets only that client cancel it: {exc}"
+            ) from exc
+        except IbApiError as exc:
+            if classify(exc.code) == "not_found":
+                return False
+            raise to_broker_error(exc, action=f"cancel of {client_id}") from exc
+        finally:
+            close = getattr(client, "close", None)
+            try:
+                close() if callable(close) else client.disconnect()
+            except Exception as exc:  # the cancel's outcome matters more
+                _log.warning("ibkr.owner_session.close_failed", error=str(exc))
+        _log.info("ibkr.order.cancel_requested", client_id=client_id, as_client=owner)
+        return True
+
     def cancel_all(self) -> int:
-        """Cancel every working order in the account, hand-placed ones too
-        (the kill switch in stop-all mode). Returns how many were open."""
+        """Cancel every working order in the account, hand-placed ones and
+        other clients' too (the kill switch in stop-all mode). Works from
+        any client id. Returns how many were open."""
         self.ensure_ready()
-        count = len(self._guard("open orders", self.client.open_trades))
+        count = len(self._open_trades())
         self._guard("global cancel", self.client.global_cancel)
         _log.warning("ibkr.orders.global_cancel", open_orders=count)
         return count
@@ -441,7 +516,7 @@ class IbkrBroker:
         placed by hand and has no client id."""
         account = self.account_id
         out: list[BrokerOpenOrder] = []
-        for t in self._guard("open orders", self.client.open_trades):
+        for t in self._open_trades():
             if t.account and t.account != account:
                 continue
             state = self._state_of(t, t.filled)
@@ -564,6 +639,13 @@ class IbkrBroker:
 
     # ---- internals ------------------------------------------------------------------
 
+    def _open_trades(self) -> Sequence[IbTrade]:
+        """Every open order of the account. The master client's own view
+        holds them all. Any other client asks with ``reqAllOpenOrders``."""
+        if self.is_master:
+            return self._guard("open orders", self.client.open_trades)
+        return self._guard("open orders", self.client.all_open_trades)
+
     def _guard[T](self, action: str, fn: Callable[[], T]) -> T:
         try:
             return fn()
@@ -584,9 +666,15 @@ class IbkrBroker:
         )
 
     def _find_trade(self, ref: str) -> IbTrade | None:
-        for t in self._guard("open orders", self.client.open_trades):
+        for t in self._open_trades():
             if t.order_ref == ref:
                 return t
+        if self.is_master and self.client_id is not None and ref not in self._refs:
+            # not sent by this process: another client's order, and the
+            # gateway's master setting may be missing, so ask every client
+            for t in self._guard("open orders", self.client.all_open_trades):
+                if t.order_ref == ref:
+                    return t
         completed = [
             t for t in self._guard("completed orders", self.client.completed_trades)
             if t.order_ref == ref

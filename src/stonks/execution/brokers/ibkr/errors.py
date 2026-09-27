@@ -41,6 +41,7 @@ ErrorKind = Literal[
 ERROR_KINDS: dict[int, ErrorKind] = {
     502: "unavailable",  # could not connect
     504: "unavailable",  # not connected
+    326: "unavailable",  # the client id is already in use
     1100: "link_lost",  # the gateway lost its link to IBKR
     1101: "link_restored",  # restored, market data lost
     1102: "link_restored",  # restored, data kept
@@ -64,6 +65,11 @@ ERROR_KINDS: dict[int, ErrorKind] = {
     161: "not_found",  # cancel of an order that is not open
     200: "not_found",  # no security definition found
 }
+
+
+class OrderOwnedElsewhereError(BrokerError):
+    """IBKR lets only the API client that placed an order (or the master
+    client) cancel it, and that client id is busy (roadmap 19.17)."""
 
 
 def classify(code: int) -> ErrorKind:

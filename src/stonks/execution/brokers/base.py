@@ -391,3 +391,18 @@ CAPABILITIES: tuple[tuple[str, type], ...] = (
 def broker_capabilities(broker: object) -> frozenset[str]:
     """The optional capabilities ``broker`` implements, by name."""
     return frozenset(name for name, proto in CAPABILITIES if isinstance(broker, proto))
+
+
+def close_broker(broker: object | None) -> None:
+    """Close a broker built for one request (its gateway session, say).
+    A broker without ``close`` has nothing to release. Never raises: the
+    request's outcome matters more than the close."""
+    close = getattr(broker, "close", None)
+    if not callable(close):
+        return
+    try:
+        close()
+    except Exception as exc:
+        from stonks.logging import get_logger
+
+        get_logger("stonks.execution.brokers").warning("broker.close_failed", error=str(exc))

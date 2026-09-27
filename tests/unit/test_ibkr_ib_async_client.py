@@ -84,6 +84,8 @@ class FakeIB:
         self.shortable: dict[int, tuple[float, float]] = {}
         self.mkt_requests: list = []
         self.mkt_cancels: list = []
+        self.all_open: list[Trade] = []
+        self.all_open_calls = 0
 
     def isConnected(self):
         return self.connected
@@ -180,6 +182,10 @@ class FakeIB:
 
     def reqGlobalCancel(self):
         self.global_cancels += 1
+
+    async def reqAllOpenOrdersAsync(self):
+        self.all_open_calls += 1
+        return self.all_open
 
 
 def client(ib: FakeIB | None = None, **kw) -> tuple[IbAsyncClient, FakeIB]:
@@ -431,3 +437,29 @@ def test_to_order_carries_the_oca_group():
     assert (o.ocaGroup, o.ocaType) == ("stk-oca-1", 2)
     plain = to_order(_req())
     assert plain.ocaGroup == ""
+
+
+def test_all_open_trades_reads_every_clients_orders(pair):
+    """Roadmap 19.17: ``reqAllOpenOrders`` with the placing client id."""
+    c, ib = pair
+    c.connect()
+    order = Order(orderId=4, clientId=11, permId=77, action="BUY", totalQuantity=3,
+                  orderRef="tick-ref", tif="DAY", account="DU1")  # fmt: skip
+    ib.all_open = [Trade(AAPL, order, OrderStatus(orderId=4, status="Submitted"), [], [])]
+    (t,) = c.all_open_trades()
+    assert (t.order_ref, t.client_id, t.perm_id, t.order_id) == ("tick-ref", 11, 77, 4)
+    assert ib.all_open_calls == 1
+
+
+def test_cancel_prefers_this_clients_order_on_an_id_clash(pair):
+    """Order ids are per client: a master sees two orders with id 1."""
+    c, ib = pair
+    c.connect()
+    theirs = Order(orderId=1, clientId=16, action="BUY", totalQuantity=1, orderRef="a")
+    mine = Order(orderId=1, clientId=11, action="BUY", totalQuantity=1, orderRef="b")
+    for o in (theirs, mine):
+        ib.trades.append(Trade(AAPL, o, OrderStatus(orderId=1, status="Submitted"), [], []))
+    cancelled: list[str] = []
+    ib.cancelOrder = lambda order: cancelled.append(order.orderRef)
+    c.cancel_order(1)
+    assert cancelled == ["b"]

@@ -150,6 +150,45 @@ order_ref_max_length = 40       # longer client ids go out as a stable hash
 - No username, password or token goes in TOML. The optional Flex statements token is `STONKS_IBKR_FLEX_TOKEN` in `deploy/.env`.
 - `account_type = "cash"` is the default and trades long only. Set `"margin"` on a gateway only for a margin account. Its short sales are then checked against IBKR's locate first.
 
+## Client ids and the master client
+
+Each Stonks process talks to the gateway under its own API client id. IBKR lets one session hold a client id at a time, so the API can act while a tick runs.
+
+| Role | Client id | What it does |
+|------|-----------|--------------|
+| tick | 11 | places the tick's orders (the master) |
+| sync | 12 | reads cash, positions and executions |
+| health | 13 | the login probe, read only |
+| reconcile | 14 | the reconciliation checks |
+| stream | 15 | live prices, read only |
+| api | 16 | the kill switch and manual orders |
+
+Change them under `[brokers.ibkr.client_ids]`. They must all differ.
+
+IBKR keeps each client in sync with its own orders only. The master client sees every order. Set it once, in each gateway:
+
+1. Open the gateway over VNC (see [One-off manual login](#one-off-manual-login-over-vnc)).
+2. In IB Gateway, go to Configure, Settings, API, Settings.
+3. Set **Master API client ID** to `11` (the tick's id) and press OK.
+4. The setting is stored inside the container. It survives the daily restart, but a recreated container (an image update, `--force-recreate`) loses it. Set it again then.
+
+Without it Stonks still works, only a bit slower: the tick asks every client (`reqAllOpenOrders`) for an order it did not send, such as a manual order.
+
+If you pick another master, tell Stonks in TOML:
+
+```toml
+[brokers.ibkr]
+master_client_id = 11   # the default: the tick's id
+```
+
+The other clients read every open order with IBKR's `reqAllOpenOrders`, so the API still sees the tick's orders.
+
+IBKR lets only the client that placed an order cancel it. So from the API:
+
+- A manual order (client 16) is cancelled at once.
+- A tick's order is cancelled in a short session as client 11, when no tick is running.
+- While a tick runs, a stop-all kill switch that covers every portfolio of the gateway cancels every order with IBKR's global cancel. That includes orders you placed by hand in TWS. A buys-only kill never does this. Press it again once the tick is done.
+
 ## Link a portfolio (the ibkr connection)
 
 A trader links a broker portfolio to a gateway through a connection. The connection holds only the gateway's name, never a login.
@@ -158,7 +197,7 @@ A trader links a broker portfolio to a gateway through a connection. The connect
 2. The trader connects provider `ibkr` with the field `gateway` set to a gateway name, for example `paper`.
 3. Stonks checks the account the gateway is logged in to and links a broker portfolio to it.
 
-The sync reads cash, positions and the day's executions every few minutes (API client id 12). An auto book trades through the same gateway (client id 11). The account can also hold your own trades. Stonks only trades what it opened, and your holdings stay external.
+The sync reads cash, positions and the day's executions every few minutes (API client id 12). An auto book trades through the same gateway (client id 11). Manual orders from the web app use client id 16. The account can also hold your own trades. Stonks only trades what it opened, and your holdings stay external.
 
 ## Optional Flex statements
 

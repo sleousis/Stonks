@@ -99,6 +99,16 @@ class IbkrClientIds(BaseModel):
     reconcile: int = Field(default=14, ge=0)
     #: Live prices for the streaming source (roadmap 21.1). Read only.
     stream: int = Field(default=15, ge=0)
+    #: The API process: the kill switch and manual orders (roadmap 19.17).
+    #: Its own id, so it connects while a tick holds the tick's.
+    api: int = Field(default=16, ge=0)
+
+    @model_validator(mode="after")
+    def _distinct(self) -> IbkrClientIds:
+        ids = self.model_dump()
+        if len(set(ids.values())) != len(ids):
+            raise ValueError(f"[brokers.ibkr.client_ids] must all differ, got {ids}")
+        return self
 
 
 class IbkrHealthSettings(BaseModel):
@@ -170,6 +180,11 @@ class IbkrBrokerConfig(BaseModel):
     #: Real-money orders need this and a live stage. Off by default.
     allow_live: bool = False
     client_ids: IbkrClientIds = Field(default_factory=IbkrClientIds)
+    #: The "Master API client ID" set in IB Gateway's API settings. That
+    #: client sees every order, whichever client placed it. Unset means the
+    #: tick's id, the setup ``deploy/ibkr/README.md`` asks for. The other
+    #: clients read every open order with ``reqAllOpenOrders`` (19.17).
+    master_client_id: int | None = Field(default=None, ge=0)
     connect_timeout_seconds: float = Field(default=5.0, gt=0)
     #: Seconds a request (a submit, a what-if, a snapshot) may take. A submit
     #: that times out leaves its order ``unknown`` until reconciliation.
@@ -188,6 +203,13 @@ class IbkrBrokerConfig(BaseModel):
     @classmethod
     def _no_secrets(cls, data: Any) -> Any:
         return _refuse_secrets(data, "brokers.ibkr")
+
+    @property
+    def master_id(self) -> int:
+        """The master client id in force (the tick's when unset)."""
+        if self.master_client_id is None:
+            return self.client_ids.tick
+        return self.master_client_id
 
     @model_validator(mode="after")
     def _one_gateway_per_portfolio(self) -> IbkrBrokerConfig:

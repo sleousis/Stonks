@@ -183,3 +183,63 @@ def test_a_split_adjusted_partial_fill_gets_no_fake_delta_at_reconcile(state):
     [fill] = fills_for(state, "2026-03-17:x:AAPL.US:buy")
     assert (fill["quantity"], fill["price"]) == (8.0, 50.0)
     assert order_row(state, "2026-03-17:x:AAPL.US:buy")["quantity"] == 20.0
+
+
+class GlobalCancellingBroker(CancellingBroker):
+    """Single cancels can fail (another client owns the order), but a
+    global cancel reaches every working order (roadmap 19.17)."""
+
+    def __init__(self, *, global_fails: bool = False) -> None:
+        super().__init__()
+        self.global_cancels = 0
+        self.global_fails = global_fails
+
+    def cancel_all(self) -> int:
+        if self.global_fails:
+            raise RuntimeError("gateway down")
+        self.global_cancels += 1
+        working = [c for c, o in self.book.items() if o.status in ("pending", "partially_filled")]
+        for client_id in working:
+            self.book[client_id] = replace(self.book[client_id], status="cancelled")
+        return len(working)
+
+
+def test_the_global_fallback_cancels_what_single_cancels_could_not(state):
+    broker = GlobalCancellingBroker()
+    broker.cancel_errors = {"b1"}
+    insert_order(state, "b1")
+    insert_order(state, "b2")
+    _pf_default(state)
+    broker.set("b1", "pending", 0.0, None)
+    broker.set("b2", "pending", 0.0, None)
+
+    summary = cancel_working_orders(broker, state, portfolio_id="pf_default", global_fallback=True)
+
+    assert broker.global_cancels == 1
+    assert sorted(summary.cancelled) == ["b1", "b2"] and summary.failed == ()
+    assert order_row(state, "b1")["status"] == "cancelled"
+    assert order_row(state, "b1")["status_reason"] == CANCEL_REASON
+
+
+def test_no_global_cancel_without_the_fallback_or_failures(state):
+    broker = GlobalCancellingBroker()
+    broker.cancel_errors = {"b1"}
+    insert_order(state, "b1")
+    _pf_default(state)
+    broker.set("b1", "pending", 0.0, None)
+    summary = cancel_working_orders(broker, state, portfolio_id="pf_default")
+    assert summary.failed == ("b1",) and broker.global_cancels == 0
+    broker.cancel_errors = set()
+    cancel_working_orders(broker, state, portfolio_id="pf_default", global_fallback=True)
+    assert broker.global_cancels == 0
+
+
+def test_a_failed_global_cancel_leaves_the_rows_failed(state):
+    broker = GlobalCancellingBroker(global_fails=True)
+    broker.cancel_errors = {"b1"}
+    insert_order(state, "b1")
+    _pf_default(state)
+    broker.set("b1", "pending", 0.0, None)
+    summary = cancel_working_orders(broker, state, portfolio_id="pf_default", global_fallback=True)
+    assert summary.failed == ("b1",)
+    assert order_row(state, "b1")["status"] == "pending"

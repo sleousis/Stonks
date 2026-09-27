@@ -131,3 +131,21 @@ def test_ibkr_kind_needs_a_gateway(tmp_path):
         assert broker.client.endpoint.client_id == 11  # the tick's id
     finally:
         broker.close()
+
+
+def test_make_broker_gives_the_api_its_own_ibkr_client_id(tmp_path):
+    """Roadmap 19.17: the kill switch and manual orders build the broker
+    with ``ibkr_role="api"`` (client id 16), so they connect while a tick
+    holds client id 11."""
+    from stonks.config import Settings
+    from stonks.execution.brokers import make_broker
+
+    state = {"path": str(tmp_path / "state.sqlite")}
+    gateways = {"paper": {"host": "ib-gateway-paper", "port": 4004, "mode": "paper"}}
+    settings = Settings(state=state, brokers={"kind": "ibkr", "ibkr": {"gateways": gateways}})
+    broker = make_broker(settings, Portfolio(cash=0.0), ibkr_role="api")
+    try:
+        assert broker.client.endpoint.client_id == 16  # type: ignore[union-attr]
+        assert broker.master_client_id == 11  # type: ignore[union-attr]
+    finally:
+        broker.close()  # type: ignore[union-attr]

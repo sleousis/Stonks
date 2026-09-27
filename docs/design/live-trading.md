@@ -173,7 +173,7 @@ The new capabilities are `runtime_checkable` protocols in `execution/brokers/bas
 3. Otherwise it submits and stores IBKR's `permId` as `broker_order_id`. `orderId` is per API client and resets, so it is never stored as the key.
 4. `reqCompletedOrders` and `reqExecutions` only reach back about a day. So an order must be settled the same session. The end-of-day check (section 6) enforces it, and the next morning's IBKR Flex statement is the backstop for older gaps.
 
-**API client ids.** Each process role uses a fixed TWS API client id (`[brokers.ibkr] client_ids`: tick and submit 11, sync 12, health 13, reconcile 14). The gateway's master API client id is set to the tick's id, so it sees orders from every client, and manual orders from TWS show up there too.
+**API client ids.** Each process role uses a fixed TWS API client id (`[brokers.ibkr] client_ids`: tick and submit 11, sync 12, health 13, reconcile 14, stream 15, api 16). The gateway's master API client id is set to the tick's id, so it sees orders from every client, and manual orders from TWS show up there too. Section 18 covers the API's own id.
 
 ### Fills and commissions
 
@@ -904,3 +904,23 @@ flowchart LR
 - **Drift streak.** A drift report records `summary.drift_streak`, the drift reports in a row including this one. The stage gate reads it. The stage never moves by itself (owner decision): drift halts buys, pauses auto and alerts, and a person demotes the stage when they want to.
 - **Metrics.** `stonks_reconcile_drift_items{portfolio, severity}` (material or warning, unexplained items of the latest check), `stonks_reconcile_last_status{portfolio, status}` and `stonks_reconcile_last_check_timestamp_seconds{portfolio}`. Labels name the portfolio, never the account.
 - **Mutation testing.** `execution/drift.py` is the `drift` target of `tools/mutation.py`.
+
+## 22. What 19.17 built
+
+The review found that every IBKR broker the API built used the tick's client id (11). IBKR lets one session hold a client id at a time. So while a tick ran, the kill switch and manual orders could not connect. 19.17 gives the API its own session.
+
+```mermaid
+flowchart LR
+  T[tick, client 11<br/>the master] -->|places| O[(orders at IBKR)]
+  A[API, client 16<br/>kill switch, manual orders] -->|reqAllOpenOrders| O
+  A -->|own orders: cancelOrder| O
+  A -->|tick's order, tick idle:<br/>short session as 11| O
+  A -->|tick running, stop-all kill:<br/>reqGlobalCancel| O
+```
+
+- **A new role.** `api` has client id 16 (`[brokers.ibkr] client_ids`). The kill switch and manual orders build their broker with it (`make_broker(..., ibkr_role="api")`, and `open_trader(..., session="api")` for linked IBKR portfolios). The ids must all differ, or the settings are refused.
+- **The master client.** `[brokers.ibkr] master_client_id` names the "Master API client ID" set in IB Gateway. Unset, it is the tick's id. The owner sets it once in the gateway (`deploy/ibkr/README.md`). The master keeps every order in sync. Any other client reads open orders with `reqAllOpenOrders` (`IbClient.all_open_trades`), so the API, sync and reconcile sessions see the tick's orders. The tick also asks every client for an order it did not send when its own view lacks it, so a missing master setting (a recreated gateway container loses it) never makes a manual order read as gone.
+- **Who may cancel.** IBKR lets only the client that placed an order cancel it. A broker that is the master also tries its own cancel (the fake allows it, and a refusal from the gateway comes back as an error). `IbTrade.client_id` carries the placing client. The API cancels its own manual orders at once. For an order of another Stonks client id, it opens a short session under that id (one try), cancels, and closes it. While that id is busy (a tick is running), the cancel fails with `OrderOwnedElsewhereError`. An error 10147 (not your order) is never read as "nothing to cancel".
+- **The kill switch while a tick runs.** Single cancels of the tick's orders fail then. A stop-all kill that covers every portfolio of the gateway (a global kill, or one naming all of them) falls back to one `reqGlobalCancel` and syncs the failed rows again. It also cancels orders placed by hand in TWS, as stop-all always meant. A buys-only kill never cancels everything: its failures are audited, and pressing again once the tick is done cancels them one by one.
+- **Closed after use.** The kill switch and each manual order request close the broker they built, so the next request can open client id 16 again.
+- **Tests.** `FakeIbGateway` models ownership: `session(client_id)` opens another client of the same gateway, a busy id answers 326, `open_trades` holds a client's own orders (every order for the master), and `cancel_order` of another client's order answers 10147 unless the caller is the master. No migration.

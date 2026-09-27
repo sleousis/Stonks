@@ -3,15 +3,19 @@
 :func:`connect_ibkr` picks the gateway (by name, by the portfolio it
 serves, or the only one), gives the process role its fixed API client id
 (``[brokers.ibkr] client_ids``: tick 11, sync 12, health 13,
-reconcile 14, stream 15), and wires the contract cache, the
+reconcile 14, stream 15, api 16), and wires the contract cache, the
 ``orderRef`` lookup and the portfolio's live stage (roadmap 19.9) to the
-state DB when one is given. Nothing connects until the broker is first used, so a gateway that
+state DB when one is given. The broker knows the gateway's master client
+id (``master_client_id``, the tick's by default) and can open a short
+session under another Stonks client id to cancel an order that id placed
+(roadmap 19.17). Nothing connects until the broker is first used, so a gateway that
 is down fails that call, nothing else.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from datetime import timedelta
 from typing import Literal
 
@@ -30,7 +34,7 @@ from stonks.execution.brokers.ibkr.contracts import (
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig, IbkrGatewayConfig
 from stonks.store.state import SqliteState
 
-Role = Literal["tick", "sync", "health", "reconcile", "stream"]
+Role = Literal["tick", "sync", "health", "reconcile", "stream", "api"]
 ClientFactory = Callable[[IbEndpoint], IbClient]
 
 
@@ -71,6 +75,22 @@ def endpoint_for(config: IbkrBrokerConfig, gateway: IbkrGatewayConfig, role: Rol
         reconnect_deadline=0.0 if health else config.reconnect_deadline_seconds,
         readonly=health or role == "stream",
     )
+
+
+def owner_sessions(
+    config: IbkrBrokerConfig, endpoint: IbEndpoint, client_factory: ClientFactory
+) -> Callable[[int], IbClient | None]:
+    """A fresh client under another Stonks client id, to cancel an order
+    that id placed. One try: a busy id means that process is running. Ids
+    outside ``client_ids`` (TWS's 0, someone else's) get ``None``."""
+    ours = set(config.client_ids.model_dump().values()) - {endpoint.client_id}
+
+    def open_as(client_id: int) -> IbClient | None:
+        if client_id not in ours:
+            return None
+        return client_factory(replace(endpoint, client_id=client_id, reconnect_deadline=0.0))
+
+    return open_as
 
 
 def default_client_factory(endpoint: IbEndpoint) -> IbClient:
@@ -123,7 +143,8 @@ def connect_ibkr(
     _, gw = pick_gateway(config, gateway=gateway, portfolio_id=portfolio_id)
     kind: AccountType = account_type or gw.account_type
     served = portfolio_id or (gw.portfolios[0] if len(gw.portfolios) == 1 else None)
-    client = client_factory(endpoint_for(config, gw, role))
+    endpoint = endpoint_for(config, gw, role)
+    client = client_factory(endpoint)
     cache = SqliteContractCache(state) if state is not None else MemoryContractCache()
     resolver = ContractResolver(
         client,
@@ -146,6 +167,12 @@ def connect_ibkr(
             stage_lookup(state, served) if state is not None and served is not None else None
         ),
         clock=clock,
+        client_id=endpoint.client_id,
+        master_client_id=config.master_id,
+        owner_client=None
+        if endpoint.readonly
+        else owner_sessions(config, endpoint, client_factory),
+        portfolios=gw.portfolios,
     )
     if kind == "margin":
         broker.borrow = IbkrBorrowSource(broker, fees=borrow_fees)

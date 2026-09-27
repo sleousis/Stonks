@@ -124,6 +124,9 @@ class IbTrade:
     reason: str | None = None
     #: Who cancelled it, when IBKR says (roadmap 19.16).
     cancel_origin: CancelOrigin | None = None
+    #: The API client id that placed the order (0 for TWS, ``None`` when
+    #: unknown). Only that client, or the master client, may cancel it.
+    client_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -238,9 +241,20 @@ class IbClient(Protocol):
 
     def cancel_order(self, order_id: int) -> None: ...
 
-    def global_cancel(self) -> None: ...
+    def global_cancel(self) -> None:
+        """``reqGlobalCancel``: cancel every open order of the account,
+        whichever client placed it."""
+        ...
 
-    def open_trades(self) -> Sequence[IbTrade]: ...
+    def open_trades(self) -> Sequence[IbTrade]:
+        """The open orders this client keeps in sync: its own, or every
+        order when it is the gateway's master client."""
+        ...
+
+    def all_open_trades(self) -> Sequence[IbTrade]:
+        """``reqAllOpenOrders``: a snapshot of every open order, whichever
+        client placed it (roadmap 19.17)."""
+        ...
 
     def completed_trades(self) -> Sequence[IbTrade]:
         """Orders completed in the current session (about a day back)."""

@@ -272,6 +272,13 @@ def test_trader_is_an_ibkr_broker_bound_to_the_account(gw, state):
         conn.trader("U999")
 
 
+def test_the_apis_trader_uses_the_api_client_id(gw, state):
+    """Roadmap 19.17: manual orders open the trader with session "api"."""
+    trader = opened(gw, state=state, session="api").trader(ACCOUNT)
+    assert gw.endpoints[-1].client_id == 16
+    assert trader.client_id == 16 and not trader.is_master
+
+
 def test_trader_without_a_configured_account_checks_the_one_it_was_given(state):
     g = FakeIbGateway(["DU2222222"])
     conn = opened(g, gateway="other", state=state)
