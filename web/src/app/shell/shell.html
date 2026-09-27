@@ -5,7 +5,7 @@
     <router-outlet />
   </main>
 } @else {
-  <header class="topbar">
+  <header class="topbar" [attr.data-tone]="halts.killOn() ? 'kill' : null">
     <button
       type="button"
       class="btn btn-ghost btn-icon"
@@ -47,7 +47,7 @@
   </header>
 
   <div class="frame">
-    <aside class="sidebar">
+    <aside class="sidebar" [attr.data-tone]="halts.killOn() ? 'kill' : null">
       <span class="sidebar-head">
         <a routerLink="/" class="brand"><ng-container *ngTemplateOutlet="brand" /></a>
         @if (session.me()) {
@@ -112,23 +112,7 @@
 
 <ng-template #footer>
   <div class="sidebar-foot">
-    @if (session.me(); as me) {
-      <a routerLink="/profile" class="token-status set">
-        <span class="dot" aria-hidden="true"></span>
-        <span class="who">
-          <span class="who-name">{{ me.display_name }}</span>
-          <span class="who-role"
-            >{{ roleLabel[me.role] }}{{ me.via === 'session' ? '' : ', API token' }}</span
-          >
-        </span>
-      </a>
-      <button type="button" class="btn btn-ghost theme-toggle" (click)="signOut()">Sign out</button>
-    } @else {
-      <a routerLink="/login" class="token-status">
-        <span class="dot" aria-hidden="true"></span>
-        Read-only. Sign in
-      </a>
-    }
+    <app-account-menu (navigate)="closeDrawer()" (signOut)="signOut()" />
     <button type="button" class="btn btn-ghost theme-toggle" (click)="theme.toggle()">
       <ng-container *ngTemplateOutlet="themeIcon" />
       {{ theme.resolved() === 'dark' ? 'Light theme' : 'Dark theme' }}
@@ -172,8 +156,15 @@
   }
 </ng-template>
 
-<app-command-palette />
-<app-shortcut-help />
+<!-- Loaded on first use (UX-44): the first Ctrl+K, ?, or step-up request brings them in. -->
+@defer (when shortcuts.paletteOpen()) {
+  <app-command-palette />
+}
+@defer (when shortcuts.helpOpen()) {
+  <app-shortcut-help />
+}
 <app-confirm-dialog />
-<app-step-up-dialog />
+@defer (when !!stepUp.request()) {
+  <app-step-up-dialog />
+}
 <app-toast-outlet />

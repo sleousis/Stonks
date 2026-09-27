@@ -2,33 +2,37 @@ import { DestroyRef, inject } from '@angular/core';
 import { Router } from '@angular/router';
 
 import { TicksService } from '../api/ticks.service';
+import type { Permission } from '../core/auth/permissions';
+import { SessionService } from '../core/auth/session.service';
 import { type PaletteCommand, CommandRegistry } from '../core/commands/command-registry';
 import { type KeySequence, ShortcutsService } from '../core/commands/shortcuts.service';
 import { ConfirmService } from '../core/confirm/confirm.service';
+import { StopTradingService } from '../core/halts/stop-trading.service';
 import { GLOSSARY_PATH } from '../core/help/glossary';
 import { JobsService } from '../core/jobs/jobs.service';
 import { ToastService } from '../core/notify/toast.service';
 import { ThemeService } from '../core/theme/theme.service';
-import { NAV_ITEMS } from './nav-items';
+import { type NavItem, NAV_ITEMS, navItemVisible, navViewer } from './nav-items';
 
-/** Pages below the top level that traders jump to directly. */
-const SUB_PAGES: readonly { path: string; label: string; keywords: string[] }[] = [
-  { path: '/orders/ticks', label: 'Ticks', keywords: ['runs', 'history'] },
+/**
+ * Pages below the top level that traders jump to directly, named as their
+ * tabs name them (UX-41). Trade costs is a tab under Orders, so it left the
+ * nav but keeps its palette entry and `g t`.
+ */
+const SUB_PAGES: readonly (Omit<NavItem, 'group'> & { keywords: readonly string[] })[] = [
+  { path: '/orders/ticks', label: 'Trading runs', keywords: ['runs', 'history', 'orders'] },
   { path: '/orders/fills', label: 'Fills', keywords: ['executions', 'trades'] },
+  { path: '/trades', label: 'Trade costs', key: 't', keywords: ['costs', 'journal', 'slippage'] },
 ];
 
 export const DRY_RUN_TICK = 'action.dry-run-tick';
 export const NEW_BACKTEST = 'action.new-backtest';
 
-/** Action shortcuts: `n` then a key. Page shortcuts come from NAV_ITEMS (`g` then a key). */
-const ACTION_SEQUENCES: readonly KeySequence[] = [
-  { prefix: 'n', key: 'b', label: 'New backtest', commandId: NEW_BACKTEST },
-  { prefix: 'n', key: 't', label: 'Try a dry run', commandId: DRY_RUN_TICK },
-];
-
 /**
  * Registers the palette's pages and global actions and the keyboard
- * sequences for them. Called once from the shell's constructor.
+ * sequences for them. Called once from the shell's constructor. Words and
+ * scope match the nav: pages and actions the user may not use are left out,
+ * and that follows the signed-in user as it changes.
  */
 export function registerShellCommands(): void {
   const registry = inject(CommandRegistry);
@@ -39,17 +43,22 @@ export function registerShellCommands(): void {
   const confirm = inject(ConfirmService);
   const toasts = inject(ToastService);
   const theme = inject(ThemeService);
+  const viewer = navViewer(inject(SessionService));
+  const stopTrading = inject(StopTradingService);
   const destroyRef = inject(DestroyRef);
 
   const go = (path: string) => () => void router.navigateByUrl(path);
+  const allowedTo = (permission: Permission) => () => viewer.can(permission);
+  const shows = (item: NavItem) => () => navItemVisible(item, viewer);
 
   const pages: PaletteCommand[] = [
     ...NAV_ITEMS.map((item) => ({
       id: `page.${item.path}`,
       label: item.label,
       group: 'Pages' as const,
-      keywords: [item.group],
-      hint: `g ${item.key}`,
+      keywords: [...(item.keywords ?? [])],
+      hint: item.key ? `g ${item.key}` : undefined,
+      visible: shows(item),
       run: go(item.path),
     })),
     ...SUB_PAGES.map((p) => ({
@@ -57,6 +66,7 @@ export function registerShellCommands(): void {
       label: p.label,
       group: 'Pages' as const,
       keywords: p.keywords,
+      hint: p.key ? `g ${p.key}` : undefined,
       run: go(p.path),
     })),
   ];
@@ -88,8 +98,9 @@ export function registerShellCommands(): void {
       id: DRY_RUN_TICK,
       label: 'Try a dry run',
       group: 'Actions',
-      keywords: ['tick', 'dry run', 'simulate', 'orders'],
+      keywords: ['trading run', 'dry run', 'practice', 'orders'],
       hint: 'n t',
+      visible: allowedTo('operations.run'),
       run: dryRunTick,
     },
     {
@@ -98,7 +109,16 @@ export function registerShellCommands(): void {
       group: 'Actions',
       keywords: ['lab', 'test', 'simulate'],
       hint: 'n b',
+      visible: allowedTo('lab.run'),
       run: go('/lab'),
+    },
+    {
+      id: 'action.stop-trading',
+      label: 'Stop trading',
+      group: 'Actions',
+      keywords: ['kill switch', 'halt', 'emergency'],
+      visible: allowedTo('killswitch.user'),
+      run: () => stopTrading.open.set(true),
     },
     {
       id: 'action.theme',
@@ -119,14 +139,41 @@ export function registerShellCommands(): void {
       id: 'action.glossary',
       label: 'Open the glossary',
       group: 'Actions',
-      keywords: ['help', 'metrics', 'definitions', 'sharpe'],
+      keywords: ['help', 'metrics', 'definitions', 'words'],
       run: () => void router.navigateByUrl(GLOSSARY_PATH),
     },
   ];
 
+  const pageSequences: KeySequence[] = [...NAV_ITEMS, ...SUB_PAGES].flatMap((item) =>
+    item.key
+      ? [
+          {
+            prefix: 'g' as const,
+            key: item.key,
+            label: item.label,
+            path: item.path,
+            visible: 'group' in item ? shows(item) : undefined,
+          },
+        ]
+      : [],
+  );
+
   registry.register([...pages, ...actions], destroyRef);
   shortcuts.setSequences([
-    ...NAV_ITEMS.map((i) => ({ prefix: 'g' as const, key: i.key, label: i.label, path: i.path })),
-    ...ACTION_SEQUENCES,
+    ...pageSequences,
+    {
+      prefix: 'n',
+      key: 'b',
+      label: 'New backtest',
+      commandId: NEW_BACKTEST,
+      visible: allowedTo('lab.run'),
+    },
+    {
+      prefix: 'n',
+      key: 't',
+      label: 'Try a dry run',
+      commandId: DRY_RUN_TICK,
+      visible: allowedTo('operations.run'),
+    },
   ]);
 }

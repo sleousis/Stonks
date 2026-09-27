@@ -21,10 +21,10 @@ import {
 } from '@angular/router';
 import { filter, skip } from 'rxjs';
 
-import type { Role } from '../api/models';
 import { AuthTokenService } from '../core/auth/auth-token.service';
 import { SessionService } from '../core/auth/session.service';
 import { StepUpDialog } from '../core/auth/step-up-dialog';
+import { StepUpService } from '../core/auth/step-up.service';
 import { ShortcutsService } from '../core/commands/shortcuts.service';
 import { HaltStateService } from '../core/halts/halt-state.service';
 import { ConnectivityService } from '../core/pwa/connectivity.service';
@@ -36,6 +36,7 @@ import { OfflinePage } from '../shared/ui/offline-page';
 import { SessionStrip } from '../shared/ui/session-strip';
 import { ShortcutHelp } from '../shared/ui/shortcut-help';
 import { ToastOutlet } from '../shared/ui/toast-outlet';
+import { AccountMenu } from './account-menu';
 import { Nav } from './nav';
 import { registerShellCommands } from './shell-commands';
 
@@ -44,7 +45,9 @@ import { registerShellCommands } from './shell-commands';
  * with a menu button that opens the navigation in a drawer. Also hosts the
  * confirm dialog, toasts, the command palette (Ctrl+K) and the shortcut cheat
  * sheet (?), forwards key presses to ShortcutsService, and moves focus to
- * the page heading after each navigation.
+ * the page heading after each navigation. The palette, the cheat sheet and
+ * the step-up prompt load on first use (`@defer`), so the first screen
+ * ships less code. The rail turns red while a kill switch is on.
  */
 @Component({
   selector: 'app-shell',
@@ -54,6 +57,7 @@ import { registerShellCommands } from './shell-commands';
     RouterOutlet,
     RouterLink,
     Nav,
+    AccountMenu,
     ConfirmDialog,
     ToastOutlet,
     CommandPalette,
@@ -72,6 +76,10 @@ export class Shell {
   protected readonly theme = inject(ThemeService);
   protected readonly auth = inject(AuthTokenService);
   protected readonly session = inject(SessionService);
+  /** The halt state: the rail turns red while a kill switch is on (UX-51). */
+  protected readonly halts = inject(HaltStateService);
+  /** The step-up prompt's requests: the dialog loads on the first one (UX-44). */
+  protected readonly stepUp = inject(StepUpService);
   protected readonly shortcuts = inject(ShortcutsService);
   protected readonly connectivity = inject(ConnectivityService);
   private readonly router = inject(Router);
@@ -80,11 +88,6 @@ export class Shell {
   private readonly main = viewChild.required<ElementRef<HTMLElement>>('main');
 
   protected readonly drawerOpen = signal(false);
-  protected readonly roleLabel: Readonly<Record<Role, string>> = {
-    viewer: 'Viewer',
-    trader: 'Trader',
-    admin: 'Admin',
-  };
   /** Pages with `data: { bare: true }` (sign-in) render without the app frame. */
   protected readonly bare = signal(false);
   protected readonly modKey = /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? '')
@@ -94,7 +97,7 @@ export class Shell {
   constructor() {
     registerShellCommands();
     // ops: keep the halt state in the session strip current
-    inject(HaltStateService).watch(inject(DestroyRef));
+    this.halts.watch(inject(DestroyRef));
     // The deepest route's data decides, before its component is created.
     this.router.events
       .pipe(

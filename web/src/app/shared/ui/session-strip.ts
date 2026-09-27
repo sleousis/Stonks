@@ -15,6 +15,7 @@ import type { MarketSessionsView, ScheduledJobView } from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { formatTime, formatWeekday } from '../../core/format/format';
 import { HaltStateService } from '../../core/halts/halt-state.service';
+import { StopTradingService } from '../../core/halts/stop-trading.service';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import {
@@ -236,7 +237,10 @@ function runTime(iso: string, now: number): string {
       }
     </div>
     @if (canKill()) {
-      <app-kill-sheet [(open)]="sheetOpen" />
+      <!-- Loaded once the page is idle (or at the first tap), so it is ready before it is needed. -->
+      @defer (on idle; when sheetOpen()) {
+        <app-kill-sheet [(open)]="sheetOpen" />
+      }
     }
   `,
   styles: `
@@ -538,7 +542,7 @@ export class SessionStrip {
   protected readonly canKill = computed(() => this.session.can('killswitch.user'));
   /** Real money on the shown portfolio: the Stop control wears the brass ring. */
   protected readonly live = this.portfolios.live;
-  protected readonly sheetOpen = signal(false);
+  protected readonly sheetOpen = inject(StopTradingService).open;
 
   protected readonly phase = computed(() => {
     const market = this.market();

@@ -96,6 +96,11 @@
   }
 }
 
+// A kill switch is on: a red rule along the rail's edge, as the strip turns red.
+.topbar[data-tone='kill'] {
+  box-shadow: inset 0 -3px 0 var(--color-loss);
+}
+
 .topbar-actions {
   display: flex;
   align-items: center;
@@ -178,6 +183,10 @@
     > .sidebar-head > .brand {
       padding: var(--space-1) var(--space-3) var(--space-2);
     }
+
+    &[data-tone='kill'] {
+      box-shadow: inset -3px 0 0 var(--color-loss);
+    }
   }
 }
 
@@ -205,50 +214,6 @@ main.bare {
   gap: var(--space-1);
   margin-top: auto;
   padding-top: var(--space-4);
-}
-
-.who {
-  display: grid;
-  min-width: 0;
-  line-height: var(--leading-tight);
-}
-.who-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-ink);
-  font-weight: var(--weight-semibold);
-}
-.who-role {
-  color: var(--color-ink-3);
-}
-
-.token-status {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 32px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-xs);
-  color: var(--color-ink-2);
-  text-decoration: none;
-
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    border: 1.5px solid var(--color-ink-3);
-  }
-
-  &.set .dot {
-    border-color: var(--color-gain);
-    background: var(--color-gain);
-  }
-
-  &:hover {
-    background: var(--color-surface-2);
-  }
 }
 
 .theme-toggle {

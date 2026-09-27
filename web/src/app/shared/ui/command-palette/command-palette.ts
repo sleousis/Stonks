@@ -13,11 +13,14 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 
-import type { InstrumentView, Job, StrategySummary } from '../../../api/models';
+import type { InstrumentView, Job } from '../../../api/models';
 import { SearchService } from '../../../api/search.service';
 import { CommandRegistry, commandScore } from '../../../core/commands/command-registry';
 import { ShortcutsService } from '../../../core/commands/shortcuts.service';
 import { formatAgo } from '../../../core/format/format';
+import { jobLabel } from '../../../core/schedule/job-labels';
+import { strategyKindName } from '../../../pages/strategies/strategy-format';
+import { STATUS_WORDS } from '../../governance-labels';
 
 export interface PaletteItem {
   id: string;
@@ -44,19 +47,26 @@ export function jobPath(kind: string): string {
   return '/';
 }
 
-export function jobLabel(kind: string): string {
-  const labels: Record<string, string> = {
-    backtest: 'Backtest',
-    lab_run: 'Lab run',
-    tick: 'Tick',
-    ingest: 'Ingest',
-  };
-  return labels[kind] ?? kind.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+/** Background job kinds that are not scheduled actions. */
+const JOB_KIND_LABELS: Readonly<Record<string, string>> = {
+  backtest: 'Backtest',
+  lab_run: 'Lab run',
+  ingest: 'Data update',
+};
+
+/** A background job's kind in trader words (UX-41): "Trading run", never "Tick". */
+export function jobKindLabel(kind: string): string {
+  return JOB_KIND_LABELS[kind] ?? jobLabel({ action: kind, name: kind });
 }
 
 function jobStrategy(job: Job): string | null {
   const ref = job.params['strategy'] as { strategy_id?: string; class_path?: string } | undefined;
-  return ref?.strategy_id ?? ref?.class_path?.split(/[:.]/).at(-1) ?? null;
+  return ref?.strategy_id ?? (ref?.class_path ? kindName(ref.class_path) : null);
+}
+
+/** "Momentum strategy" from a class path, never the class path itself. */
+function kindName(classPath: string): string {
+  return strategyKindName(classPath.replace(/:/g, '.'));
 }
 
 /**
@@ -249,7 +259,7 @@ export class CommandPalette {
 
   private commandItems(group: 'Pages' | 'Actions', q: string): PaletteItem[] {
     return this.registry
-      .commands()
+      .available()
       .filter((c) => c.group === group)
       .map((c) => ({ c, score: commandScore(q, c.label, c.keywords) }))
       .filter((x) => x.score > 0)
@@ -261,14 +271,17 @@ export class CommandPalette {
     if (!this.strategies.hasValue()) return [];
     return this.strategies
       .value()
-      .items.map((s) => ({ s, score: commandScore(q, s.id, [className(s)]) }))
+      .items.map((s) => ({
+        s,
+        score: commandScore(q, s.id, [kindName(s.class_path), STATUS_WORDS[s.status]]),
+      }))
       .filter((x) => x.score > 0)
       .sort((a, b) => b.score - a.score)
       .map(({ s }) => ({
         id: `strategy.${s.id}`,
         group: 'Strategies',
         label: s.id,
-        detail: `${capitalize(s.status)} · ${className(s)}`,
+        detail: `${STATUS_WORDS[s.status]} · ${kindName(s.class_path)}`,
         run: () => void this.router.navigate(['/strategies', s.id]),
       }));
   }
@@ -289,7 +302,7 @@ export class CommandPalette {
     return this.jobs
       .value()
       .items.map((j) => {
-        const label = jobLabel(j.kind);
+        const label = jobKindLabel(j.kind);
         const strategy = jobStrategy(j);
         const title = strategy ? `${label}: ${strategy}` : label;
         return { j, title, score: commandScore(q, title, [j.id, j.kind, j.status]) };
@@ -303,10 +316,6 @@ export class CommandPalette {
         run: () => void this.router.navigateByUrl(jobPath(j.kind)),
       }));
   }
-}
-
-function className(s: StrategySummary): string {
-  return s.class_path.split(/[:.]/).at(-1) ?? s.class_path;
 }
 
 function capitalize(s: string): string {
