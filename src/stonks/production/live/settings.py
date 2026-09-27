@@ -37,6 +37,35 @@ class SubmitSettings(BaseModel):
         return self
 
 
+class StageGateSettings(BaseModel):
+    """``[production.live.stages]``: what each stage gate asks for (roadmap
+    19.9, design section 1). A promotion needs every check to pass. A dirty
+    week raises an alert but never changes the stage or the allocation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Gate 1 (sim_paper to broker_paper): paper days every live
+    #: subscription must have finished (the auto gate's 20).
+    min_paper_days: int = Field(default=20, ge=0)
+    #: Gate 2 (broker_paper to live_small): sessions recorded in broker_paper.
+    min_broker_paper_sessions: int = Field(default=20, ge=0)
+    #: ... and the last this many sessions all clean (4 weeks).
+    broker_paper_clean_sessions: int = Field(default=20, ge=0)
+    #: Gate 3 (live_small to live_scale): sessions recorded in live_small (8 weeks).
+    min_live_small_sessions: int = Field(default=40, ge=0)
+    #: ... the last this many sessions all clean (6 weeks).
+    live_small_clean_sessions: int = Field(default=30, ge=0)
+    #: ... at least this many filled live orders.
+    min_live_fills: int = Field(default=30, ge=0)
+    #: A clean session rejects fewer than this share of the orders sent.
+    max_reject_rate: float = Field(default=0.02, ge=0, le=1)
+    #: A tracking error vs the model book (annualised) above this fails a
+    #: gate. ``None``: reported only.
+    max_tracking_error: float | None = Field(default=None, gt=0)
+    #: Sessions in a week, for the bad-week alert.
+    week_sessions: int = Field(default=5, ge=1, le=10)
+
+
 class LiveSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -53,3 +82,4 @@ class LiveSettings(BaseModel):
     #: use tickets.
     submit_in_window: bool = False
     submit: SubmitSettings = Field(default_factory=SubmitSettings)
+    stages: StageGateSettings = Field(default_factory=StageGateSettings)
