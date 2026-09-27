@@ -47,6 +47,15 @@ describe('TradingDayService', () => {
     expect(day.jobs().length).toBe(1);
   });
 
+  it('is settled after the first read even when it fails', async () => {
+    overview.mockRejectedValueOnce(new Error('no scheduler'));
+    const day = create();
+    expect(day.settled()).toBe(false);
+    await day.load();
+    expect(day.settled()).toBe(true);
+    expect(day.loaded()).toBe(false);
+  });
+
   it('counts a trading run once its time passes, then reads the schedule again', async () => {
     overview
       .mockResolvedValueOnce(

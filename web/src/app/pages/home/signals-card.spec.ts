@@ -74,9 +74,31 @@ describe('SignalsCard', () => {
       providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
     });
     controller = TestBed.inject(HttpTestingController);
+    // The strip reads the schedule. Here it has been read: nothing to wait for.
+    TestBed.inject(TradingDayService)['settledSignal'].set(true);
   });
 
   afterEach(() => controller.verify());
+
+  it('keeps the loading rows until the schedule is read, so nothing jumps', async () => {
+    TestBed.inject(TradingDayService)['settledSignal'].set(false);
+    const fixture = TestBed.createComponent(SignalsCard);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/notifications')).flush({ items: [], unread_count: 0 });
+    (await nextRequest(controller, '/api/ticks')).flush({
+      items: [],
+      total: 0,
+      limit: 10,
+      offset: 0,
+    });
+    await tick();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('app-loading-state')).not.toBeNull();
+    TestBed.inject(TradingDayService)['settledSignal'].set(true);
+    fixture.detectChanges();
+    expect(el.querySelector('app-loading-state')).toBeNull();
+  });
 
   it('lists today signals, marks new ones, and marks them read', async () => {
     const counter = TestBed.inject(NotificationFeedService);

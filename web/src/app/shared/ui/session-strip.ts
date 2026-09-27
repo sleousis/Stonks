@@ -156,7 +156,7 @@ function runTime(iso: string, now: number): string {
     @let halt = halted();
     @let day = phase();
     <div aria-live="polite">
-      @if (halt || next() || noRun() || day || portfolios.hasChoice() || canKill()) {
+      @if (halt || next() || noRun() || day || waiting() || portfolios.hasChoice() || canKill()) {
         <div class="strip" [attr.data-tone]="halt?.tone ?? 'calm'">
           @if (halt) {
             <p class="halt" role="region" aria-label="Trading halted">
@@ -186,6 +186,12 @@ function runTime(iso: string, now: number): string {
                   <span class="t-time num">{{ t.close }}</span>
                 </div>
               }
+            } @else if (waiting()) {
+              <!-- Holds the phase's place until the schedule is read, so pages do not jump. -->
+              <p class="phase hold" aria-hidden="true">
+                <span class="lamp"></span><span class="phase-label">Market</span>
+                <span class="phase-event muted">Opens <span class="num">00:00</span></span>
+              </p>
             }
             @if (portfolios.hasChoice()) {
               <span class="pick"><app-portfolio-picker /></span>
@@ -203,6 +209,11 @@ function runTime(iso: string, now: number): string {
               </a>
             } @else if (noRun()) {
               <a class="next none muted" routerLink="/ops/schedule">No trading run scheduled</a>
+            } @else if (waiting()) {
+              <span class="next hold" aria-hidden="true">
+                <span class="job">Trading run</span>
+                <span class="clock num">0h 00m</span>
+              </span>
             }
             @if (other(); as o) {
               <a class="other muted" routerLink="/ops/schedule" [attr.aria-label]="o.aria">
@@ -389,6 +400,9 @@ function runTime(iso: string, now: number): string {
       max-width: 100%;
     }
 
+    .hold {
+      visibility: hidden;
+    }
     .next {
       display: inline-flex;
       gap: var(--space-2);
@@ -572,6 +586,8 @@ export class SessionStrip {
 
   /** The schedule loaded and holds no trading run: say so plainly. */
   protected readonly noRun = computed(() => this.day.loaded() && !this.next());
+  /** Signed in and the schedule not read yet: hold the strip's height. */
+  protected readonly waiting = computed(() => this.session.canRead() && !this.day.settled());
 
   /** Admins also see the next system job, quieter, before the trading run. */
   protected readonly other = computed(() => {

@@ -240,6 +240,20 @@ describe('SessionStrip', () => {
     expect(el.querySelector('a.next .job')!.textContent).toBe('Trading run');
   });
 
+  it('holds the phase and countdown places until the schedule is read', async () => {
+    let answer!: (v: unknown) => void;
+    overview.mockReturnValue(new Promise((r) => (answer = r)));
+    const fixture = await render();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('.hold').length).toBe(2);
+    expect(el.querySelector('.hold')!.getAttribute('aria-hidden')).toBe('true');
+    answer(schedule());
+    await tick();
+    fixture.detectChanges();
+    expect(el.querySelector('.hold')).toBeNull();
+    expect(el.querySelector('a.next .job')!.textContent).toBe('Trading run');
+  });
+
   it('says so plainly when no trading run is scheduled', async () => {
     overview.mockResolvedValue({ ...schedule(), jobs: [job('health', '2026-09-26T19:00:00Z')] });
     const el = await renderEl();

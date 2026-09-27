@@ -63,6 +63,7 @@ describe('HomePage', () => {
       providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
     });
     controller = TestBed.inject(HttpTestingController);
+    TestBed.inject(TradingDayService)['settledSignal'].set(true);
   });
 
   afterEach(() => controller.verify());
@@ -260,6 +261,7 @@ describe('HomePage', () => {
 
     it('reloads when the next trading run starts, before the minute is up', async () => {
       const day = TestBed.inject(TradingDayService);
+      day['settledSignal'].set(true);
       day['jobsSignal'].set([
         {
           action: 'connections_sync',

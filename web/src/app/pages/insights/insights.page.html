@@ -1,4 +1,4 @@
-<app-page-header title="Insights" [description]="description()">
+<app-page-header title="Insights" [description]="description">
   <app-updated-ago [at]="auto.updatedAt()" />
   <app-export-button actions kind="pnl" label="P&amp;L CSV" [ghost]="true" />
   <app-export-button actions kind="snapshots" label="Snapshots CSV" [ghost]="true" />
@@ -46,6 +46,7 @@
       [detail]="insights.hasValue() ? insights.value().risk.concentration.largest : null"
     />
   </section>
+  <p class="as-of">{{ asOf() }}</p>
 
   @if (insights.hasValue()) {
     @let i = insights.value();

@@ -28,6 +28,7 @@ export class TradingDayService {
   private readonly jobsSignal = signal<readonly ScheduledJobView[]>([]);
   private readonly marketSignal = signal<MarketSessionsView | null>(null);
   private readonly loadedSignal = signal(false);
+  private readonly settledSignal = signal(false);
   private readonly passed = signal(0);
   private timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -35,6 +36,8 @@ export class TradingDayService {
   readonly market = this.marketSignal.asReadonly();
   /** True once a read succeeded: an empty `jobs` then means nothing is scheduled. */
   readonly loaded = this.loadedSignal.asReadonly();
+  /** True once the first read finished, well or not: a page stops waiting for it. */
+  readonly settled = this.settledSignal.asReadonly();
   /** Goes up by one each time a scheduled trading run's start time passes. */
   readonly runsPassed = this.passed.asReadonly();
   /** A trading run is scheduled at all (any time ahead). */
@@ -54,6 +57,8 @@ export class TradingDayService {
       this.arm();
     } catch {
       // No scheduler or signed out: nothing to show.
+    } finally {
+      this.settledSignal.set(true);
     }
   }
 

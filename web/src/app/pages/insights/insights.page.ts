@@ -169,8 +169,12 @@ export class InsightsPage {
     formatPercent(value, { digits: 1, signed });
   protected readonly num = (value: number | null | undefined) => formatNumber(value, { digits: 2 });
 
-  protected readonly description = computed(() => {
-    if (!this.insights.hasValue()) return 'Where your money sits and which strategies agree.';
+  /** The header stays the same while the page loads, so nothing below it jumps. */
+  protected readonly description = 'Where your money sits, how it did and which strategies agree.';
+
+  /** Where the figures come from, under the tiles once they load. */
+  protected readonly asOf = computed(() => {
+    if (!this.insights.hasValue()) return '';
     const i = this.insights.value();
     const from = i.source === 'sync' ? 'the last broker sync' : 'the last trading run';
     return i.taken_at

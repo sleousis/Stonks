@@ -102,7 +102,8 @@ interface BlotterRow {
       </div>
       @if (feed.error(); as err) {
         <app-error-state title="Could not load signals" [error]="err" (retry)="feed.reload()" />
-      } @else if (!feed.hasValue()) {
+      } @else if (!feed.hasValue() || !day.settled()) {
+        <!-- Waits for the schedule too, so the next run does not push the list down. -->
         <app-loading-state label="Loading signals" [rows]="3" />
       } @else if (rows().length === 0 && !next()) {
         <app-empty-state
@@ -284,7 +285,7 @@ interface BlotterRow {
 export class SignalsCard {
   private readonly api = inject(NotificationsService);
   private readonly ticksApi = inject(TicksService);
-  private readonly day = inject(TradingDayService);
+  protected readonly day = inject(TradingDayService);
   private readonly watch = inject(WatchlistContextService);
   private readonly counter = inject(NotificationFeedService);
 

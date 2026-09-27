@@ -5,7 +5,7 @@
   display: grid;
   gap: var(--space-3);
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-2);
 
   .tile-value {
     grid-column: 1 / -1;
@@ -130,5 +130,17 @@
 
   @include bp.coarse {
     min-height: var(--touch-min);
+  }
+}
+
+/* Room for two lines before the text arrives, so the panels below stay put. */
+.as-of {
+  min-height: calc(2 * var(--leading-body) * var(--text-sm));
+  margin: 0 0 var(--space-3);
+  color: var(--color-ink-3);
+  font-size: var(--text-sm);
+
+  @include bp.from-desktop {
+    min-height: calc(var(--leading-body) * var(--text-sm));
   }
 }
