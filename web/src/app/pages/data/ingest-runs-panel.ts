@@ -14,12 +14,13 @@ import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-tab
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { kindLabel, runStatusLabel, sourceLabel } from './data-labels';
 import { INGEST_KINDS } from './ingest-request';
 
 const PAGE_SIZE = 15;
 const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
 
-/** Ingest run history: status, counts and the vendor's error text. */
+/** Data update history: what ran, how it ended, counts and the provider's error text. */
 @Component({
   selector: 'app-ingest-runs-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -39,9 +40,9 @@ const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
   template: `
     <section class="panel" aria-labelledby="runs-title">
       <div class="panel-head">
-        <h2 id="runs-title">Ingest history</h2>
+        <h2 id="runs-title">Data updates</h2>
         @if (page(); as p) {
-          <span class="muted num count">{{ p.total }} runs</span>
+          <span class="muted num count">{{ p.total }} {{ p.total === 1 ? 'update' : 'updates' }}</span>
         }
       </div>
       <div class="filters">
@@ -55,19 +56,19 @@ const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
           >
             <option value="">Any status</option>
             @for (s of statuses; track s) {
-              <option [value]="s">{{ s }}</option>
+              <option [value]="s">{{ statusLabel(s) }}</option>
             }
           </select>
         </div>
         <div class="field">
-          <label for="runs-kind">Kind</label>
+          <label for="runs-kind">What</label>
           <select
             id="runs-kind"
             class="input"
             [value]="kind()"
             (change)="kind.set($any($event.target).value)"
           >
-            <option value="">Any kind</option>
+            <option value="">Anything</option>
             @for (k of kinds; track k.value) {
               <option [value]="k.value">{{ k.label }}</option>
             }
@@ -76,21 +77,25 @@ const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
       </div>
       @let p = page();
       @if (list.error(); as err) {
-        <app-error-state title="Could not load ingest runs" [error]="err" (retry)="list.reload()" />
+        <app-error-state
+          title="Could not load data updates"
+          [error]="err"
+          (retry)="list.reload()"
+        />
       } @else if (!p) {
-        <app-loading-state label="Loading ingest runs" [rows]="5" />
+        <app-loading-state label="Loading data updates" [rows]="5" />
       } @else if (p.items.length === 0) {
         <app-empty-state
-          title="No ingest runs"
+          title="No data updates"
           [message]="
             status() || kind()
-              ? 'No runs match these filters.'
-              : 'Runs appear here after an ingest, from Run ingest or the daily schedule.'
+              ? 'No updates match these filters.'
+              : 'Updates appear here after Update data or the daily schedule runs.'
           "
         />
       } @else {
         <app-data-table
-          caption="Ingest runs, newest first"
+          caption="Data updates, newest first"
           [rows]="p.items"
           [columns]="columns"
           [rowKey]="key"
@@ -101,7 +106,7 @@ const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
           (pageChange)="offset.set($event.offset)"
         >
           <ng-template appCell="status" [appCellOf]="p.items" let-run>
-            <app-status-pill [status]="run.status ?? 'unknown'" />
+            <app-status-pill [status]="run.status ?? 'unknown'" [label]="statusLabel(run.status)" />
           </ng-template>
           <ng-template appCell="error" [appCellOf]="p.items" let-run>
             @if (run.error) {
@@ -147,16 +152,16 @@ export class IngestRunsPanel {
   protected readonly page = keepLatest(this.list);
 
   protected readonly columns: TableColumn<IngestRunView>[] = [
-    { key: 'id', label: 'Run', mobile: 'title', value: (r) => `#${r.id}`, sortable: false },
-    { key: 'started_at', label: 'Started', format: 'datetime' },
-    { key: 'source', label: 'Source', mobile: 'hide' },
-    { key: 'kind', label: 'Kind' },
+    { key: 'started_at', label: 'Started', format: 'datetime', mobile: 'title' },
+    { key: 'kind', label: 'What', value: (r) => kindLabel(r.kind) },
+    { key: 'source', label: 'Source', value: (r) => sourceLabel(r.source), mobile: 'hide' },
     { key: 'status', label: 'Status' },
-    { key: 'tickers_ok', label: 'Ok', format: 'number' },
+    { key: 'tickers_ok', label: 'Updated', format: 'number' },
     { key: 'tickers_failed', label: 'Failed', format: 'number' },
     { key: 'error', label: 'Error', sortable: false },
   ];
   protected readonly key = (r: IngestRunView) => String(r.id);
+  protected readonly statusLabel = runStatusLabel;
 
   reload(): void {
     this.list.reload();

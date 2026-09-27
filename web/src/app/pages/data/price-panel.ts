@@ -115,7 +115,7 @@ export function pointTime(bar: BarView, interval: string): string {
       } @else if (bars.value().bars.length === 0) {
         <app-empty-state
           [title]="'No ' + interval() + ' bars for ' + ticker() + ' in this range'"
-          message="Widen the dates, choose another interval, or ingest this ticker below."
+          message="Widen the dates, choose another interval, or update this ticker's data below."
         />
       } @else {
         @if (stats(); as s) {
@@ -160,7 +160,7 @@ export class PricePanel {
   readonly ticker = model<string | null>(null);
   readonly interval = model('1d');
   readonly intervals = input<readonly string[]>(['1d']);
-  /** Bump to refetch (after an ingest). */
+  /** Bump to refetch (after a data update). */
   readonly refresh = input(0);
 
   protected readonly start = signal(yearAgo());

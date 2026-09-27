@@ -19,9 +19,9 @@ import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { JobProgress, JobResult } from '../../shared/ui/job-progress';
 import { PermissionNote } from '../../shared/ui/permission-note';
-import { ErrorState } from '../../shared/ui/states';
-import { StatusPill } from '../../shared/ui/status-pill';
+import { sourceLabel, updateOutcome } from './data-labels';
 import {
   EMPTY_INGEST_FORM,
   INGEST_KINDS,
@@ -35,19 +35,20 @@ import {
 const FALLBACK_SOURCES: readonly IngestSource[] = ['eodhd'];
 
 /**
- * "Run ingest": a form, a confirm step, then the job's live progress. Needs
- * `operations.run` (admins); others see the button off with the reason. A
- * failed result load after the job succeeds shows an inline error with Retry.
+ * "Update data": a form, a confirm step, then the job's live progress in
+ * <app-job-progress> (Cancel while queued). Needs `operations.run` (admins);
+ * others see the button off with the reason. A failed result read after the
+ * job succeeds shows an inline error with Try again.
  */
 @Component({
   selector: 'app-ingest-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, StatusPill, PermissionNote, ErrorState],
+  imports: [ReactiveFormsModule, JobProgress, PermissionNote],
   styleUrl: './ingest-panel.scss',
   template: `
     <section class="panel" aria-labelledby="ingest-title">
       <div class="panel-head">
-        <h2 id="ingest-title">Run ingest</h2>
+        <h2 id="ingest-title">Update data</h2>
       </div>
       <form class="panel-body form-grid form-grid-2" [formGroup]="form" (ngSubmit)="run()">
         <div class="field">
@@ -55,7 +56,7 @@ const FALLBACK_SOURCES: readonly IngestSource[] = ['eodhd'];
           <select id="ingest-source" class="input" formControlName="source">
             @for (s of sourceOptions(); track s.id) {
               <option [value]="s.id">
-                {{ s.id }}{{ s.default ? ' (default)' : ''
+                {{ sourceName(s.id) }}{{ s.default ? ' (default)' : ''
                 }}{{ s.configured ? '' : ' (not configured)' }}
               </option>
             }
@@ -136,49 +137,29 @@ const FALLBACK_SOURCES: readonly IngestSource[] = ['eodhd'];
             [disabled]="busy() || !allowed()"
             [attr.aria-busy]="busy()"
           >
-            {{ busy() ? 'Ingest running…' : 'Run ingest' }}
+            {{ busy() ? 'Updating…' : 'Update data' }}
           </button>
           <app-permission-note permission="operations.run" />
         </div>
       </form>
 
       @if (job(); as j) {
-        <div class="job" aria-live="polite">
-          <div class="job-head">
-            <app-status-pill [status]="j.status() ?? 'queued'" />
-            @if (j.status() === 'queued') {
-              <button
-                type="button"
-                class="btn btn-ghost"
-                [disabled]="cancelling()"
-                (click)="cancel(j)"
-              >
-                {{ cancelling() ? 'Cancelling…' : 'Cancel' }}
-              </button>
-            }
-          </div>
-          <label class="progress-label" for="ingest-progress">
-            {{ j.message() || (j.done() ? 'Finished' : 'Working…') }}
-            <span class="num">{{ percent(j.progress()) }}</span>
-          </label>
-          <progress id="ingest-progress" max="1" [value]="j.progress()"></progress>
-          @if (j.error(); as e) {
-            <p class="job-error" role="alert">{{ e }}</p>
+        <app-job-progress label="Data update" [handle]="j" [result]="resultRead">
+          @if (j.status() === 'queued') {
+            <button
+              jobActions
+              type="button"
+              class="btn btn-ghost"
+              [disabled]="cancelling()"
+              (click)="cancel(j)"
+            >
+              {{ cancelling() ? 'Cancelling…' : 'Cancel' }}
+            </button>
           }
-          @if (resultError(); as err) {
-            <app-error-state
-              title="The ingest finished, but its result could not load"
-              [error]="err"
-              (retry)="reloadResult()"
-            />
+          @if (resultRead.value(); as r) {
+            <p class="job-result">{{ outcome(r) }}</p>
           }
-          @if (result(); as r) {
-            <p class="job-result">
-              Run #{{ r.run_id }} {{ r.status }}: {{ r.tickers_ok }} ok,
-              {{ r.tickers_failed }} failed.
-            </p>
-          }
-        </div>
+        </app-job-progress>
       }
     </section>
   `,
@@ -195,7 +176,7 @@ export class IngestPanel {
   protected readonly allowed = computed(() => this.session.can('operations.run'));
 
   readonly intervals = input<readonly { code: string; is_intraday: boolean }[]>([]);
-  /** Emits after an ingest job ends, so the page can refresh coverage and history. */
+  /** Emits after a data update ends, so the page can refresh coverage and history. */
   readonly finished = output<void>();
 
   protected readonly kinds = INGEST_KINDS;
@@ -229,19 +210,15 @@ export class IngestPanel {
   protected readonly problems = signal<string[]>([]);
   protected readonly starting = signal(false);
   protected readonly job = signal<JobHandle | null>(null);
-  protected readonly result = signal<IngestResultView | null>(null);
-  /** The job succeeded but GET result failed (GETs are not toasted). */
-  protected readonly resultError = signal<unknown>(null);
+  /** The update's result; a failed read offers Try again. */
+  protected readonly resultRead = new JobResult<IngestResultView>();
   protected readonly cancelling = signal(false);
-  private resultJobId: string | null = null;
   protected readonly busy = computed(() => {
     const j = this.job();
     return this.starting() || (!!j && !j.done());
   });
-
-  protected percent(p: number): string {
-    return `${Math.round(p * 100)}%`;
-  }
+  protected readonly outcome = updateOutcome;
+  protected readonly sourceName = sourceLabel;
 
   /** Validate, confirm, start the job and follow it to the end. */
   async run(): Promise<void> {
@@ -253,15 +230,14 @@ export class IngestPanel {
     const request = buildIngestRequest(value);
     const kindLabel = INGEST_KINDS.find((k) => k.value === request.kind)?.label ?? request.kind;
     const ok = await this.confirm.confirm({
-      title: `Run ${kindLabel.toLowerCase()} ingest?`,
+      title: `Update ${kindLabel.toLowerCase()}?`,
       message: describeIngest(request),
-      confirmLabel: 'Run ingest',
+      confirmLabel: 'Update data',
     });
     if (!ok) return;
 
     this.starting.set(true);
-    this.result.set(null);
-    this.resultError.set(null);
+    this.resultRead.reset();
     try {
       const started = await this.ingestApi.start(request);
       const handle = this.jobs.track(started.id, this.destroyRef);
@@ -269,12 +245,12 @@ export class IngestPanel {
       this.starting.set(false);
       const last = await handle.finished;
       if (last?.status === 'succeeded') {
-        await this.loadResult(started.id);
-      } else if (last?.status === 'failed') {
-        this.toasts.error(last.error ?? 'The ingest job failed.', 'Ingest failed');
+        const result = await this.resultRead.load(() => this.ingestApi.result(started.id));
+        if (result) this.toasts.success(updateOutcome(result), 'Data update finished');
       } else if (last?.status === 'cancelled') {
-        this.toasts.info('Cancelled the ingest.');
+        this.toasts.info('Cancelled the data update.');
       }
+      // A failure shows once, in the job line.
       this.finished.emit();
     } catch {
       // The error interceptor already showed the API's message.
@@ -283,33 +259,12 @@ export class IngestPanel {
     }
   }
 
-  /** Retry after the result GET failed. */
-  protected async reloadResult(): Promise<void> {
-    if (this.resultJobId) await this.loadResult(this.resultJobId);
-  }
-
-  private async loadResult(jobId: string): Promise<void> {
-    this.resultJobId = jobId;
-    this.resultError.set(null);
-    try {
-      const result = await this.ingestApi.result(jobId);
-      this.result.set(result);
-      this.toasts.success(
-        `Ingest run #${result.run_id} finished: ${result.tickers_ok} ok, ${result.tickers_failed} failed.`,
-        'Ingest finished',
-      );
-    } catch (err) {
-      // GET failures are not toasted, so say it here with a Retry.
-      this.resultError.set(err);
-    }
-  }
-
-  /** Cancel a queued ingest, after asking. */
+  /** Cancel a queued update, after asking. */
   protected async cancel(j: JobHandle): Promise<void> {
     const ok = await this.confirm.confirm({
-      title: 'Cancel this ingest?',
+      title: 'Cancel this data update?',
       message: 'It has not started yet and will not run.',
-      confirmLabel: 'Cancel job',
+      confirmLabel: 'Cancel update',
       cancelLabel: 'Keep running',
       tone: 'danger',
     });

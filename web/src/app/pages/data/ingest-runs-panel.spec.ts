@@ -47,7 +47,8 @@ describe('data panels', () => {
     });
     await settle(fixture);
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
-    expect(text).toContain('Run ingest');
+    expect(text).toContain('Update data');
+    expect(text).not.toMatch(/ingest/i);
     expect(text).not.toMatch(/stonks|command line/);
   });
 
