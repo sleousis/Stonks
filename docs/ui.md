@@ -566,6 +566,11 @@ Tickers open `/data?instrument=<id>`.
 - The push that tickets wait is high urgency and names only the count and
   the portfolio. It opens `/tickets`. Approvals sits in the main menu for
   traders. It has no `g` shortcut because every letter is taken.
+- The Approvals item shows a badge with the tickets that wait
+  (`TicketCountService` in `core/tickets/`, read quietly from
+  `/api/tickets/summary` every minute while the tab is visible). The page
+  updates it after each decision. The number is hidden from screen readers
+  and the link's label says it, for example "Approvals, 3 tickets waiting".
 
 - **Notifications.** `NotificationFeedService` (`core/notify/`) keeps the
   unread count, read quietly every minute while the tab is visible and after

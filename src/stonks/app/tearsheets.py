@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+import pandas as pd
+
 from stonks.app.catalog import CatalogService, class_path_of
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError, ValidationError
@@ -123,14 +125,27 @@ def render_backtest_tear_sheet(
 
 def _factor_attribution(lake: Any, request: BacktestRequest, report: Any, title: str) -> str:
     """The factor attribution section of ``report``; empty (logged) when
-    the universe gives no factor returns."""
+    the universe gives no factor returns. A stored universe counts each
+    name only while it was a member (22.10)."""
     try:
         universe = list(request.universe)
+        membership = None
+        universe_id = None
         if not universe and request.universe_id:
-            universe = lake.members_between(request.universe_id, request.start, request.end)
+            universe_id = request.universe_id
+            universe = lake.members_between(universe_id, request.start, request.end)
+            spans = lake.get_universe_membership(universe_id)
+            membership = pd.DataFrame(spans[["ticker", "start_date", "end_date"]])
         if not universe:
             return ""
-        factors = style_factor_returns(lake, universe, request.start, request.end)
+        factors = style_factor_returns(
+            lake,
+            universe,
+            request.start,
+            request.end,
+            membership=membership,
+            universe_id=universe_id,
+        )
         returns = returns_from_curve(report.equity_dates, report.equity_curve)
         return render_factor_attribution_section(attribute_returns(returns, factors), title)
     except Exception as exc:  # attribution is extra: the tear sheet still renders

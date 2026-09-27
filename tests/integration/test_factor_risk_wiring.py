@@ -10,6 +10,7 @@ import pandas as pd
 import pytest
 
 import stonks.factors.style as style_mod
+from stonks.accounts.models import Mode
 from stonks.backtest.engine import BacktestConfig, Backtester
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.config import RiskPolicy
@@ -48,7 +49,7 @@ def calls(monkeypatch):
     return seen
 
 
-def _tick_weights(tmp_path, lake, construction, monkeypatch):
+def _tick_weights(tmp_path, lake, construction, monkeypatch, risk_overrides=None):
     folder = tmp_path / "tick"
     folder.mkdir()
     state = SqliteState(folder / "state.sqlite")
@@ -62,12 +63,17 @@ def _tick_weights(tmp_path, lake, construction, monkeypatch):
         )
         seed_status(registry, sid, "active")
     people = People(state)
-    people.book(
-        people.trader("Alice"),
-        "Style",
-        dict.fromkeys(_strategies(), 1.0),
-        construction=construction,
-    )
+    alice = people.trader("Alice")
+    pid = people.book(alice, "Style", {}, construction=construction)
+    for sid in _strategies():
+        people.subs.subscribe(
+            alice,
+            strategy_id=sid,
+            mode=Mode.PAPER,
+            portfolio_id=pid,
+            weight=1.0,
+            risk_overrides=risk_overrides,
+        )
     captured = []
 
     class Capture(PostTickHook):
@@ -155,3 +161,40 @@ def test_a_backtest_with_the_rule_reads_exposures(lakes, calls):  # noqa: F811
     )
     _backtest(past, construction=ConstructionSettings(method="erc"), risk=policy)
     assert calls
+
+
+def test_a_strategy_override_alone_gets_the_tick_exposures(
+    lakes,  # noqa: F811
+    tmp_path,
+    monkeypatch,
+    calls,
+):
+    """22.10: the book's own policy leaves the rule off, one strategy's
+    override turns it on, and the tick still reads exposures for it."""
+    past, _ = lakes
+    overrides = {"rules": {"style_exposure": {"max_abs_exposure": 5.0}}}
+    _tick_weights(tmp_path, past, {"method": "erc"}, monkeypatch, risk_overrides=overrides)
+    assert calls and all(pd.Timestamp(as_of).date() == DAY for _, as_of in calls)
+
+
+def test_the_risk_context_reads_exposures_for_an_override(lakes, tmp_path, calls):  # noqa: F811
+    past, _ = lakes
+    state = SqliteState(tmp_path / "state.sqlite")
+    state.migrate()
+    on = RiskPolicy(
+        rules=RuleSettings.model_validate({"style_exposure": {"max_abs_exposure": 0.5}})
+    )
+    try:
+        ctx = build_risk_context(
+            past,
+            state,
+            Portfolio(cash=1.0),
+            {"A.US": 1.0},
+            DAY,
+            policy=RiskPolicy(),
+            universe=UNIVERSE,
+            overrides=(on,),
+        )
+    finally:
+        state.close()
+    assert ctx.factor_exposures is not None and calls

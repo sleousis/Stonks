@@ -48,6 +48,7 @@ from stonks.registry.versions import ModelVersionRegistry
 from stonks.store.state import SqliteState
 from stonks.strategies._wrapping import import_strategy_class
 from stonks.strategies.base import strategy_data_tickers
+from stonks.strategies.costs import bind_costs
 
 if TYPE_CHECKING:
     from stonks.store.lake import DuckDBLake
@@ -300,6 +301,7 @@ def _fit_one(base: LabDataset, task: _FitTask) -> dict[str, Any]:
             train_end=task.end - timedelta(days=1),
             reference_tickers=(),
         ).with_references(strategy_data_tickers(strategy))
+        bind_costs(strategy, getattr(dataset, "costs", None))
         strategy.fit(dataset)
         out.mkdir(parents=True, exist_ok=True)
         strategy.save(out)

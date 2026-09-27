@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   linkedSignal,
   resource,
@@ -17,6 +18,7 @@ import { ConfirmService } from '../../core/confirm/confirm.service';
 import { formatDate, formatDateTime, formatMoney, formatNumber } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { TicketCountService } from '../../core/tickets/ticket-count.service';
 import { strategyDisplayName } from '../../shared/strategy-names';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { HelpTip } from '../../shared/ui/help-tip';
@@ -365,6 +367,7 @@ export class TicketsPage {
   private readonly toasts = inject(ToastService);
   private readonly portfolios = inject(PortfolioContextService);
   private readonly rejectSheet = viewChild.required(RejectSheet);
+  private readonly ticketCount = inject(TicketCountService);
 
   protected readonly views = [
     { value: 'waiting', label: 'Waiting for you' },
@@ -388,6 +391,10 @@ export class TicketsPage {
   protected readonly history = computed(() =>
     this.items().filter((t) => t.status !== 'awaiting_approval'),
   );
+  /** The nav badge follows what this page shows (22.10). */
+  private readonly badge = effect(() => {
+    if (this.list.hasValue()) this.ticketCount.set(this.waiting().length);
+  });
   protected readonly groups = computed<Group[]>(() => {
     const byKey = new Map<string, Group>();
     for (const t of this.waiting()) {

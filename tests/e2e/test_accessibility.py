@@ -57,6 +57,11 @@ ADMIN_PAGES = (
     "/notifications/price-alerts",
     "/ops/models",
     f"/strategies/{ACTIVE_IDS['AAA.US']}?tab=versions",
+    # merged since: calendars, the screener, factors and the research loop
+    "/calendar",
+    "/screener",
+    "/lab/factors",
+    "/lab/research",
 )
 TRADER_PAGES = (
     "/",
@@ -76,6 +81,8 @@ TRADER_PAGES = (
     "/orders/new",
     "/orders/drafts",
     "/notifications/price-alerts",
+    "/calendar",
+    "/screener",
 )
 
 

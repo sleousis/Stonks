@@ -10,7 +10,12 @@ import pandas as pd
 import pytest
 
 from stonks.factors.registry import get_factor
-from stonks.factors.style import STYLE_FACTOR_IDS, style_exposures, style_factor_returns
+from stonks.factors.style import (
+    STYLE_FACTOR_IDS,
+    sector_labels,
+    style_exposures,
+    style_factor_returns,
+)
 from stonks.store.lake import DuckDBLake
 from stonks.store.pit import PointInTimeLake
 
@@ -121,3 +126,86 @@ def test_style_factor_returns_ignore_later_bars(lake, shocked):
     base = style_factor_returns(lake, TICKERS, date(2024, 2, 1), AS_OF)
     after = style_factor_returns(shocked, TICKERS, date(2024, 2, 1), AS_OF)
     pd.testing.assert_frame_equal(base, after)
+
+
+# ---- 22.10: point-in-time sectors and membership ---------------------------------
+
+
+def _relabel(db: DuckDBLake, ticker: str, sector: str, known_at: datetime) -> None:
+    db.upsert_instrument_profile(
+        pd.DataFrame([{"id": ticker, "asset_class": "equity", "sector": sector}]),
+        known_at=known_at,
+    )
+
+
+@pytest.fixture
+def relabeled(tmp_path):
+    """The base lake, with S00 moving from Energy to Tech at a known time
+    and S01 recorded as Tech from the start."""
+    db = _lake(tmp_path / "lake.duckdb")
+    _relabel(db, "S01.US", "Tech", datetime(2020, 1, 1))
+    _relabel(db, "S00.US", "Energy", datetime(2020, 1, 1))
+    _relabel(db, "S00.US", "Tech", datetime(2024, 3, 1, 15))
+    yield db
+    db.close()
+
+
+def test_sector_labels_are_the_ones_known_on_each_day(relabeled):
+    days = pd.DatetimeIndex(["2023-06-01", "2024-02-29", "2024-03-01", "2024-03-04"])
+    got = sector_labels(relabeled, ["S00.US", "S01.US", "S03.US"], days)
+    assert got["S00.US"].tolist() == ["Energy", "Energy", "Tech", "Tech"]
+    assert got["S01.US"].tolist() == ["Tech"] * 4
+    assert got["S03.US"].tolist() == ["Energy"] * 4  # no versions: the static label
+
+
+def test_sector_labels_count_the_first_version_from_the_start(tmp_path):
+    db = _lake(tmp_path / "lake.duckdb")
+    try:
+        _relabel(db, "S00.US", "Utilities", datetime(2025, 1, 1))
+        got = sector_labels(db, ["S00.US"], pd.DatetimeIndex(["2023-06-01"]))
+        assert got["S00.US"].tolist() == ["Utilities"]
+    finally:
+        db.close()
+
+
+def test_a_later_reclassification_does_not_change_past_factor_returns(lake, relabeled):
+    """Look-ahead: S00 is relabeled on 2024-03-01. Factor returns before the
+    change match a lake that never saw it, and differ after it."""
+    base = style_factor_returns(lake, TICKERS, date(2024, 2, 1), AS_OF)
+    moved = style_factor_returns(relabeled, TICKERS, date(2024, 2, 1), AS_OF)
+    before = base.index[base.index <= pd.Timestamp("2024-03-01")]
+    pd.testing.assert_frame_equal(base.loc[before], moved.loc[before])
+    after = base.index[base.index > pd.Timestamp("2024-03-04")]
+    assert not np.allclose(
+        base.loc[after, "sector:Energy"], moved.loc[after, "sector:Energy"], equal_nan=True
+    )
+
+
+def test_a_reclassification_after_the_window_changes_nothing(lake, tmp_path):
+    db = _lake(tmp_path / "later.duckdb")
+    try:
+        _relabel(db, "S00.US", "Energy", datetime(2020, 1, 1))
+        _relabel(db, "S00.US", "Tech", datetime(2024, 6, 1))
+        base = style_factor_returns(lake, TICKERS, date(2024, 2, 1), AS_OF)
+        pd.testing.assert_frame_equal(
+            base, style_factor_returns(db, TICKERS, date(2024, 2, 1), AS_OF)
+        )
+    finally:
+        db.close()
+
+
+def test_factor_returns_count_only_members(lake):
+    """S11 joins on 2024-03-01: before that the cross-section is the other
+    eleven names, as if it were not in the universe."""
+    join = date(2024, 3, 1)
+    spans = pd.DataFrame(
+        [{"ticker": t, "start_date": date(2020, 1, 1), "end_date": None} for t in TICKERS[:-1]]
+        + [{"ticker": TICKERS[-1], "start_date": join, "end_date": None}]
+    )
+    got = style_factor_returns(lake, TICKERS, date(2024, 2, 1), AS_OF, membership=spans)
+    without = style_factor_returns(lake, TICKERS[:-1], date(2024, 2, 1), AS_OF)
+    everyone = style_factor_returns(lake, TICKERS, date(2024, 2, 1), AS_OF)
+    early = got.index[got.index < pd.Timestamp(join)]
+    pd.testing.assert_frame_equal(got.loc[early], without.loc[early])
+    late = got.index[got.index > pd.Timestamp("2024-03-04")]
+    pd.testing.assert_frame_equal(got.loc[late], everyone.loc[late])

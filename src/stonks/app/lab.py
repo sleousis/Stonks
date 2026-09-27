@@ -67,6 +67,7 @@ from stonks.lab.universe_data import prepare_dataset
 from stonks.logging import get_logger
 from stonks.registry.artifact import update_meta
 from stonks.registry.store import StrategyRegistry
+from stonks.strategies.costs import bind_costs
 from stonks.universes.base import UNIVERSE_ID_PATTERN
 from stonks.universes.store import UniverseStore
 
@@ -885,6 +886,8 @@ def backtest_report(
     """Backtest ``strategy`` for a request carrying a window and
     :class:`BacktestOptions`; the report has its trade ledger attached."""
     interval = _parse_interval(request.interval)
+    # 22.10: a cost-aware strategy decides with the costs this backtest charges
+    bind_costs(strategy, lab_costs(settings, request.cost_model))
     cost_model = _backtest_cost_model(settings, request)
     if _backtest_costs_zero(settings, request):
         _log.warning(

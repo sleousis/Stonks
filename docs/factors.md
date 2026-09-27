@@ -175,6 +175,11 @@ It is off by default. Opening orders are scaled down until every style fits. Whe
 
 Every backtest tear sheet (`stonks report --backtest`) ends with a factor attribution. The book's daily returns are regressed on the style factor returns of its universe. Each line shows how much of the return came from the market, each style and the sectors, and what is left is specific. Returns are summed, so the lines add up to the total. The factor returns are point in time: each day's move is explained by the exposures known the day before.
 
+Two more rules keep it point in time (22.10):
+
+- **Sectors as known then.** Each profile ingest that changes a sector adds a row to `instrument_sector_versions` with the time Stonks saw it. A day uses the latest label known by then. The first label of a name counts on earlier days too, since it is the oldest one there is. A name with no rows keeps its `instruments.sector`.
+- **Members only.** With a stored universe (`--universe-id`), a name counts on a day only while it was a member, on that day and the day before.
+
 ## API and MCP
 
 | Route | MCP tool |

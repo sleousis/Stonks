@@ -173,18 +173,23 @@ def build_risk_context(
     volumes: Mapping[str, float] | None = None,
     history_bars: int = HISTORY_BARS,
     portfolio_id: str = DEFAULT_PORTFOLIO_ID,
+    overrides: Sequence[RiskPolicy | None] = (),
 ) -> RiskContext:
     """A full ``RiskContext`` for held, priced and ``universe`` tickers: the
     last ``history_bars`` adjusted bars (one query), asset classes and
     sectors, ``portfolio_id``'s equity curve and each holding's entry date
-    (from that portfolio's fills only)."""
+    (from that portfolio's fills only).
+
+    ``overrides`` are the per-strategy policies the context also serves:
+    style exposures are read when ``policy`` or any of them turns the style
+    exposure rule on (22.10)."""
     from stonks.production.pnl import load_pnl
 
     held = [t for t, q in portfolio.positions.items() if abs(q) > 1e-12]
     tickers = sorted({*held, *prices, *universe})
     profiles = _profiles(lake, tickers)
     exposures = None
-    if policy is not None and wants_exposures(policy):
+    if any(p is not None and wants_exposures(p) for p in (policy, *overrides)):
         from stonks.factors.style import safe_style_exposures
 
         exposures = safe_style_exposures(lake, tickers, as_of)
