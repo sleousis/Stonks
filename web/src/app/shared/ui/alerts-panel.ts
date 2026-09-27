@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, input, resource, signal } f
 
 import { AlertsService } from '../../api/alerts.service';
 import { formatAgo, formatDateTime } from '../../core/format/format';
+import { keepLatest } from './data-table/keep-latest';
 import { EmptyState, ErrorState, LoadingState } from './states';
 import { type PillTone, StatusPill } from './status-pill';
 
@@ -23,7 +24,8 @@ export function levelPill(level: string | null | undefined): { tone: PillTone; l
 
 /**
  * Recent system alerts (data gaps, failed runs, broker trouble), newest
- * first, one server page at a time. Made for the Health page:
+ * first, one server page at a time. The shown page stays, dimmed, while the
+ * next one loads. Made for the Health page, whose Refresh calls `reload()`:
  *
  *   <app-alerts-panel />
  */
@@ -36,18 +38,18 @@ export function levelPill(level: string | null | undefined): { tone: PillTone; l
       <div class="panel-head">
         <h2 id="alerts-title">System alerts</h2>
       </div>
+      @let page = shown();
       @if (alerts.error(); as err) {
         <app-error-state title="Could not load alerts" [error]="err" (retry)="alerts.reload()" />
-      } @else if (!alerts.hasValue()) {
+      } @else if (!page) {
         <app-loading-state label="Loading alerts" [rows]="4" />
-      } @else if (alerts.value().items.length === 0) {
+      } @else if (page.items.length === 0) {
         <app-empty-state
           title="No alerts"
           message="Problems the server notices, like missing data, a failed run or a broker it cannot reach, show here."
         />
       } @else {
-        @let page = alerts.value();
-        <ul class="alerts">
+        <ul class="alerts" [attr.aria-busy]="alerts.isLoading()" [class.busy]="alerts.isLoading()">
           @for (a of page.items; track a.id) {
             <li>
               <div class="top">
@@ -76,7 +78,7 @@ export function levelPill(level: string | null | undefined): { tone: PillTone; l
             <button
               type="button"
               class="btn"
-              [disabled]="page.offset === 0"
+              [disabled]="page.offset === 0 || alerts.isLoading()"
               (click)="offset.set(max(0, page.offset - limit()))"
             >
               Newer
@@ -88,7 +90,7 @@ export function levelPill(level: string | null | undefined): { tone: PillTone; l
             <button
               type="button"
               class="btn"
-              [disabled]="page.offset + page.items.length >= page.total"
+              [disabled]="page.offset + page.items.length >= page.total || alerts.isLoading()"
               (click)="offset.set(page.offset + limit())"
             >
               Older
@@ -107,6 +109,10 @@ export function levelPill(level: string | null | undefined): { tone: PillTone; l
       margin: 0;
       padding: 0;
       list-style: none;
+      transition: opacity var(--dur) var(--ease);
+    }
+    .alerts.busy {
+      opacity: 0.55;
     }
     .alerts li {
       display: grid;
@@ -157,8 +163,15 @@ export class AlertsPanel {
     params: () => ({ limit: this.limit(), offset: this.offset() }),
     loader: ({ params }) => this.api.list(params),
   });
+  /** The last loaded page stays on screen while the next one loads. */
+  protected readonly shown = keepLatest(this.alerts);
   protected readonly max = Math.max;
   protected readonly pill = levelPill;
+
+  /** Load the current page again (the Health page's Refresh). */
+  reload(): void {
+    this.alerts.reload();
+  }
 
   protected ago(value: string): string {
     return formatAgo(value);
