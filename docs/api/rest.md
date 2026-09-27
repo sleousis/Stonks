@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tca](#tca-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tca](#tca-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -261,6 +261,19 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 |--------|------|---------|------|---------|----------|
 | GET | `/api/schedule` | Get Schedule | sign-in |  | [ScheduleView](#scheduleview) |
 | POST | `/api/schedule/{job}/run-now` | Run Now | `operations.run` | [RunNowRequest](#runnowrequest) | [RunNowView](#runnowview) |
+
+## screener endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/screener/metrics` | List Metrics | sign-in |  | list[[MetricView](#metricview)] |
+| POST | `/api/screener/run` | Run Screen | `data.read` | [ScreenRunRequest](#screenrunrequest) | [ScreenResult](#screenresult) |
+| GET | `/api/screener/screens` | List Screens | sign-in |  | [Page_SavedScreenView_](#page_savedscreenview_) |
+| POST | `/api/screener/screens` | Create Screen | `portfolio.manage` | [SavedScreenCreate](#savedscreencreate) | [SavedScreenView](#savedscreenview) |
+| GET | `/api/screener/screens/{screen_id}` | Get Screen | sign-in |  | [SavedScreenView](#savedscreenview) |
+| PATCH | `/api/screener/screens/{screen_id}` | Update Screen | `portfolio.manage` | [SavedScreenUpdate](#savedscreenupdate) | [SavedScreenView](#savedscreenview) |
+| DELETE | `/api/screener/screens/{screen_id}` | Delete Screen | `portfolio.manage` |  |  |
+| POST | `/api/screener/universes` | Save As Universe | `lab.run` | [ScreenUniverseRequest](#screenuniverserequest) | [ScreenUniverseView](#screenuniverseview) |
 
 ## shadow endpoints
 
@@ -1663,6 +1676,26 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `user_id` | string | yes |  |
 | `via` | "session" \| "token" \| "legacy" \| "cli" \| "scheduler" | yes |  |
 
+### MetricFilter
+
+Keep a ticker when ``min <= value <= max``. A ticker with no value for the metric fails the filter.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max` | number \| null | no |  |
+| `metric` | string | yes |  |
+| `min` | number \| null | no |  |
+
+### MetricView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string | yes |  |
+| `group` | "price" \| "fundamental" | yes |  |
+| `id` | string | yes |  |
+| `label` | string | yes |  |
+| `unit` | "ratio" \| "percent" \| "money" | yes |  |
+
 ### MfaCodeRequest
 
 | Field | Type | Required | Description |
@@ -1924,6 +1957,15 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[RiskSnapshotView](#risksnapshotview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_SavedScreenView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[SavedScreenView](#savedscreenview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -2552,6 +2594,32 @@ Type: "viewer" \| "trader" \| "admin"
 | `run_key` | string | yes |  |
 | `status` | string | no |  |
 
+### SavedScreenCreate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes |  |
+| `spec` | [ScreenSpec](#screenspec) | yes |  |
+
+### SavedScreenUpdate
+
+Rename, replace the spec, or both. Unset fields stay.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string \| null | no |  |
+| `spec` | [ScreenSpec](#screenspec) \| null | no |  |
+
+### SavedScreenView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | date-time | yes |  |
+| `id` | string | yes |  |
+| `name` | string | yes |  |
+| `spec` | [ScreenSpec](#screenspec) | yes |  |
+| `updated_at` | date-time | yes |  |
+
 ### ScheduleView
 
 | Field | Type | Required | Description |
@@ -2589,6 +2657,80 @@ Type: "viewer" \| "trader" \| "admin"
 | `scheduled_for` | date-time | yes |  |
 | `started_at` | date-time | yes |  |
 | `status` | string | yes |  |
+
+### ScreenResult
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `candidates` | integer | yes |  |
+| `matched` | integer | yes |  |
+| `metrics` | list[string] | yes |  |
+| `rows` | list[[ScreenRow](#screenrow)] | yes |  |
+| `truncated` | boolean | yes |  |
+
+### ScreenRow
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `exchange` | string \| null | no |  |
+| `name` | string \| null | no |  |
+| `sector` | string \| null | no |  |
+| `ticker` | string | yes |  |
+| `values` | dict[str, number \| null] | yes |  |
+
+### ScreenRunRequest
+
+Run ``spec``, or one of your saved screens by ``screen_id``.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+| `screen_id` | string \| null | no |  |
+| `spec` | [ScreenSpec](#screenspec) \| null | no |  |
+
+### ScreenSpec
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `adv_window_bars` | integer | no |  |
+| `asset_classes` | list["equity" \| "crypto" \| "commodity" \| "bond"] \| null | no |  |
+| `columns` | list[string] | no |  |
+| `descending` | boolean | no |  |
+| `exchanges` | list[string] \| null | no |  |
+| `exclude_sectors` | list[string] | no |  |
+| `filters` | list[[MetricFilter](#metricfilter)] | no |  |
+| `limit` | integer \| null | no |  |
+| `min_adv` | number \| null | no |  |
+| `min_price` | number \| null | no |  |
+| `sectors` | list[string] \| null | no |  |
+| `sort_by` | string \| null | no |  |
+| `universe_id` | string \| null | no |  |
+
+### ScreenUniverseRequest
+
+Store a screen (``spec`` or ``screen_id``) as a universe.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string \| null | no |  |
+| `end` | date \| null | no |  |
+| `mode` | "rule" \| "snapshot" | no |  |
+| `name` | string \| null | no |  |
+| `rebalance` | "weekly" \| "monthly" \| "quarterly" | no |  |
+| `refresh` | boolean | no |  |
+| `screen_id` | string \| null | no |  |
+| `spec` | [ScreenSpec](#screenspec) \| null | no |  |
+| `start` | date \| null | no |  |
+| `universe_id` | string | yes |  |
+
+### ScreenUniverseView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `refresh_job` | [Job](#job) \| null | no |  |
+| `universe` | [UniverseView](#universeview) | yes |  |
+| `warnings` | list[string] | no |  |
 
 ### SectorCapSettings
 

@@ -3543,6 +3543,53 @@ export type MeView = {
 };
 
 /**
+ * MetricFilter
+ *
+ * Keep a ticker when ``min <= value <= max``. A ticker with no value
+ * for the metric fails the filter.
+ */
+export type MetricFilter = {
+    /**
+     * Max
+     */
+    max?: number | null;
+    /**
+     * Metric
+     */
+    metric: string;
+    /**
+     * Min
+     */
+    min?: number | null;
+};
+
+/**
+ * MetricView
+ */
+export type MetricView = {
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Group
+     */
+    group: 'price' | 'fundamental';
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Unit
+     */
+    unit: 'ratio' | 'percent' | 'money';
+};
+
+/**
  * MfaCodeRequest
  */
 export type MfaCodeRequest = {
@@ -4168,6 +4215,28 @@ export type PageRiskSnapshotView = {
      * Items
      */
     items: Array<RiskSnapshotView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[SavedScreenView]
+ */
+export type PageSavedScreenView = {
+    /**
+     * Items
+     */
+    items: Array<SavedScreenView>;
     /**
      * Limit
      */
@@ -5776,6 +5845,53 @@ export type RunNowView = {
 };
 
 /**
+ * SavedScreenCreate
+ */
+export type SavedScreenCreate = {
+    /**
+     * Name
+     */
+    name: string;
+    spec: ScreenSpec;
+};
+
+/**
+ * SavedScreenUpdate
+ *
+ * Rename, replace the spec, or both. Unset fields stay.
+ */
+export type SavedScreenUpdate = {
+    /**
+     * Name
+     */
+    name?: string | null;
+    spec?: ScreenSpec | null;
+};
+
+/**
+ * SavedScreenView
+ */
+export type SavedScreenView = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    spec: ScreenSpec;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
  * ScheduleView
  */
 export type ScheduleView = {
@@ -5882,6 +5998,196 @@ export type ScheduledRunView = {
      * Status
      */
     status: string;
+};
+
+/**
+ * ScreenResult
+ */
+export type ScreenResult = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Candidates
+     */
+    candidates: number;
+    /**
+     * Matched
+     */
+    matched: number;
+    /**
+     * Metrics
+     */
+    metrics: Array<string>;
+    /**
+     * Rows
+     */
+    rows: Array<ScreenRow>;
+    /**
+     * Truncated
+     */
+    truncated: boolean;
+};
+
+/**
+ * ScreenRow
+ */
+export type ScreenRow = {
+    /**
+     * Exchange
+     */
+    exchange?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Sector
+     */
+    sector?: string | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Values
+     */
+    values: {
+        [key: string]: number | null;
+    };
+};
+
+/**
+ * ScreenRunRequest
+ *
+ * Run ``spec``, or one of your saved screens by ``screen_id``.
+ */
+export type ScreenRunRequest = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+    /**
+     * Screen Id
+     */
+    screen_id?: string | null;
+    spec?: ScreenSpec | null;
+};
+
+/**
+ * ScreenSpec
+ */
+export type ScreenSpec = {
+    /**
+     * Adv Window Bars
+     */
+    adv_window_bars?: number;
+    /**
+     * Asset Classes
+     */
+    asset_classes?: Array<'equity' | 'crypto' | 'commodity' | 'bond'> | null;
+    /**
+     * Columns
+     */
+    columns?: Array<string>;
+    /**
+     * Descending
+     */
+    descending?: boolean;
+    /**
+     * Exchanges
+     */
+    exchanges?: Array<string> | null;
+    /**
+     * Exclude Sectors
+     */
+    exclude_sectors?: Array<string>;
+    /**
+     * Filters
+     */
+    filters?: Array<MetricFilter>;
+    /**
+     * Limit
+     */
+    limit?: number | null;
+    /**
+     * Min Adv
+     */
+    min_adv?: number | null;
+    /**
+     * Min Price
+     */
+    min_price?: number | null;
+    /**
+     * Sectors
+     */
+    sectors?: Array<string> | null;
+    /**
+     * Sort By
+     */
+    sort_by?: string | null;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
+};
+
+/**
+ * ScreenUniverseRequest
+ *
+ * Store a screen (``spec`` or ``screen_id``) as a universe.
+ */
+export type ScreenUniverseRequest = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * End
+     */
+    end?: string | null;
+    /**
+     * Mode
+     */
+    mode?: 'rule' | 'snapshot';
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Rebalance
+     */
+    rebalance?: 'weekly' | 'monthly' | 'quarterly';
+    /**
+     * Refresh
+     */
+    refresh?: boolean;
+    /**
+     * Screen Id
+     */
+    screen_id?: string | null;
+    spec?: ScreenSpec | null;
+    /**
+     * Start
+     */
+    start?: string | null;
+    /**
+     * Universe Id
+     */
+    universe_id: string;
+};
+
+/**
+ * ScreenUniverseView
+ */
+export type ScreenUniverseView = {
+    refresh_job?: Job | null;
+    universe: UniverseView;
+    /**
+     * Warnings
+     */
+    warnings?: Array<string>;
 };
 
 /**
@@ -14102,6 +14408,362 @@ export type RunScheduledJobNowResponses = {
 };
 
 export type RunScheduledJobNowResponse = RunScheduledJobNowResponses[keyof RunScheduledJobNowResponses];
+
+export type ListScreenMetricsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/screener/metrics';
+};
+
+export type ListScreenMetricsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListScreenMetricsError = ListScreenMetricsErrors[keyof ListScreenMetricsErrors];
+
+export type ListScreenMetricsResponses = {
+    /**
+     * Response Listscreenmetrics
+     *
+     * Successful Response
+     */
+    200: Array<MetricView>;
+};
+
+export type ListScreenMetricsResponse = ListScreenMetricsResponses[keyof ListScreenMetricsResponses];
+
+export type RunScreenData = {
+    body: ScreenRunRequest;
+    path?: never;
+    query?: never;
+    url: '/api/screener/run';
+};
+
+export type RunScreenErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RunScreenError = RunScreenErrors[keyof RunScreenErrors];
+
+export type RunScreenResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScreenResult;
+};
+
+export type RunScreenResponse = RunScreenResponses[keyof RunScreenResponses];
+
+export type ListScreensData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/screener/screens';
+};
+
+export type ListScreensErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListScreensError = ListScreensErrors[keyof ListScreensErrors];
+
+export type ListScreensResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageSavedScreenView;
+};
+
+export type ListScreensResponse = ListScreensResponses[keyof ListScreensResponses];
+
+export type CreateScreenData = {
+    body: SavedScreenCreate;
+    path?: never;
+    query?: never;
+    url: '/api/screener/screens';
+};
+
+export type CreateScreenErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CreateScreenError = CreateScreenErrors[keyof CreateScreenErrors];
+
+export type CreateScreenResponses = {
+    /**
+     * Successful Response
+     */
+    201: SavedScreenView;
+};
+
+export type CreateScreenResponse = CreateScreenResponses[keyof CreateScreenResponses];
+
+export type DeleteScreenData = {
+    body?: never;
+    path: {
+        /**
+         * Screen Id
+         */
+        screen_id: string;
+    };
+    query?: never;
+    url: '/api/screener/screens/{screen_id}';
+};
+
+export type DeleteScreenErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type DeleteScreenError = DeleteScreenErrors[keyof DeleteScreenErrors];
+
+export type DeleteScreenResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteScreenResponse = DeleteScreenResponses[keyof DeleteScreenResponses];
+
+export type GetScreenData = {
+    body?: never;
+    path: {
+        /**
+         * Screen Id
+         */
+        screen_id: string;
+    };
+    query?: never;
+    url: '/api/screener/screens/{screen_id}';
+};
+
+export type GetScreenErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetScreenError = GetScreenErrors[keyof GetScreenErrors];
+
+export type GetScreenResponses = {
+    /**
+     * Successful Response
+     */
+    200: SavedScreenView;
+};
+
+export type GetScreenResponse = GetScreenResponses[keyof GetScreenResponses];
+
+export type UpdateScreenData = {
+    body: SavedScreenUpdate;
+    path: {
+        /**
+         * Screen Id
+         */
+        screen_id: string;
+    };
+    query?: never;
+    url: '/api/screener/screens/{screen_id}';
+};
+
+export type UpdateScreenErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateScreenError = UpdateScreenErrors[keyof UpdateScreenErrors];
+
+export type UpdateScreenResponses = {
+    /**
+     * Successful Response
+     */
+    200: SavedScreenView;
+};
+
+export type UpdateScreenResponse = UpdateScreenResponses[keyof UpdateScreenResponses];
+
+export type SaveScreenAsUniverseData = {
+    body: ScreenUniverseRequest;
+    path?: never;
+    query?: never;
+    url: '/api/screener/universes';
+};
+
+export type SaveScreenAsUniverseErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SaveScreenAsUniverseError = SaveScreenAsUniverseErrors[keyof SaveScreenAsUniverseErrors];
+
+export type SaveScreenAsUniverseResponses = {
+    /**
+     * Successful Response
+     */
+    201: ScreenUniverseView;
+};
+
+export type SaveScreenAsUniverseResponse = SaveScreenAsUniverseResponses[keyof SaveScreenAsUniverseResponses];
 
 export type ListShadowDecisionsData = {
     body?: never;

@@ -157,6 +157,10 @@ READ_TOOLS = {
     "get_news",
     "get_earnings_warnings",
     "list_event_alert_kinds",
+    "list_screen_metrics",
+    "run_screen",
+    "list_screens",
+    "get_screen",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -174,9 +178,16 @@ JOB_TOOLS = {
     "add_journal_note",
     "mark_notifications_read",
     "create_watchlist",
+    "create_screen",
 }
 # Overwrite a draft's fields; no confirm (a draft is never traded).
-EDIT_TOOLS = {"update_draft", "edit_journal_note", "cancel_job", "update_watchlist"}
+EDIT_TOOLS = {
+    "update_draft",
+    "edit_journal_note",
+    "cancel_job",
+    "update_watchlist",
+    "update_screen",
+}
 GUARDED_TOOLS = {
     "create_universe",
     "refresh_universe",
@@ -195,6 +206,8 @@ GUARDED_TOOLS = {
     "subscribe",
     "update_subscription",
     "delete_draft",
+    "save_screen_as_universe",
+    "delete_screen",
 }
 
 

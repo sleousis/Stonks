@@ -1206,3 +1206,55 @@ routes = ["POST /api/calendars/refresh", "GET /api/calendars/refresh/{job_id}/re
 console = { limited = "an operator job the scheduler runs every morning" }
 cli = "stonks calendars refresh"
 mcp = { limited = "an operator job the scheduler runs every morning" }
+
+# ---- screener (roadmap 20.8) --------------------------------------------------------
+
+[[capability]]
+id = "screener.metrics"
+domain = "universes"
+title = "Metrics a screen may filter or sort on"
+routes = ["GET /api/screener/metrics"]
+console = { gap = "20.8", note = "screener page" }
+cli = "stonks screener metrics"
+mcp = "list_screen_metrics"
+
+[[capability]]
+id = "screener.run"
+domain = "universes"
+title = "Run a screen on price and fundamental metrics, point in time"
+routes = ["POST /api/screener/run"]
+console = { gap = "20.8", note = "screener page" }
+cli = "stonks screener run"
+mcp = "run_screen"
+
+[[capability]]
+id = "screener.screens"
+domain = "universes"
+title = "Your saved screens: list, save, read and change"
+routes = [
+  "GET /api/screener/screens",
+  "POST /api/screener/screens",
+  "GET /api/screener/screens/{screen_id}",
+  "PATCH /api/screener/screens/{screen_id}",
+]
+console = { gap = "20.8", note = "screener page" }
+cli = ["stonks screener list", "stonks screener save"]
+mcp = ["list_screens", "create_screen", "get_screen", "update_screen"]
+
+[[capability]]
+id = "screener.delete"
+domain = "universes"
+title = "Delete a saved screen"
+routes = ["DELETE /api/screener/screens/{screen_id}"]
+console = { gap = "20.8", note = "screener page" }
+cli = "stonks screener delete"
+mcp = "delete_screen"
+
+[[capability]]
+id = "screener.universe"
+domain = "universes"
+title = "Store a screen as a universe for the lab (rule or snapshot)"
+routes = ["POST /api/screener/universes"]
+console = { gap = "20.8", note = "save as universe on the screener page" }
+cli = "stonks screener universe"
+mcp = "save_screen_as_universe"

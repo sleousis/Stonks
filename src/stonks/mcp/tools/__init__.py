@@ -13,6 +13,7 @@ from stonks.mcp.tools import (
     notifications,
     reads,
     risk,
+    screener,
     studio,
     subscriptions,
     tca,
@@ -36,6 +37,7 @@ MODULES = (
     notifications,
     workspace,
     calendars,
+    screener,
 )
 
 

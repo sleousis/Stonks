@@ -35,7 +35,7 @@ MIN_REASON = 12  # "operator only" is fine, "n/a" alone is not
 #: filling a gap lowers it, and adding one needs a reviewer to raise it.
 #: Raised for the roadmap 20.7 and 20.8 console pages (calendars, news, the
 #: order ticket's earnings warning, event alert toggles, the screener).
-MAX_TRACKED_GAPS = 4
+MAX_TRACKED_GAPS = 9
 
 #: The argparse scheduler mounted under Typer shows up as one leaf.
 ARGPARSE_LEAVES = {"stonks schedule": ROOT / "src" / "stonks" / "scheduling" / "__main__.py"}
