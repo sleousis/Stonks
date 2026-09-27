@@ -208,6 +208,23 @@
   margin: 0 var(--space-4) var(--space-3);
 }
 
+// Over the candidate cap: nothing ran, and this says how to narrow it.
+.cap {
+  margin: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-loss);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.job-note {
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+  overflow-wrap: anywhere;
+}
+
 .universe .panel-body {
   display: grid;
   justify-items: start;

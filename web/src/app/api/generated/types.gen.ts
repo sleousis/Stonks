@@ -9931,6 +9931,10 @@ export type ScreenResult = {
      */
     as_of: string;
     /**
+     * Cached
+     */
+    cached?: boolean;
+    /**
      * Candidates
      */
     candidates: number;
@@ -9995,6 +9999,38 @@ export type ScreenRunRequest = {
      */
     screen_id?: string | null;
     spec?: ScreenSpec | null;
+};
+
+/**
+ * ScreenSize
+ *
+ * How big a screen is before any metric is read, and how to run it.
+ */
+export type ScreenSize = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Candidates
+     */
+    candidates: number;
+    /**
+     * Job Threshold
+     */
+    job_threshold: number;
+    /**
+     * Max Candidates
+     */
+    max_candidates: number;
+    /**
+     * Over Cap
+     */
+    over_cap: boolean;
+    /**
+     * Use Job
+     */
+    use_job: boolean;
 };
 
 /**
@@ -21857,6 +21893,93 @@ export type RunScheduledJobNowResponses = {
 
 export type RunScheduledJobNowResponse = RunScheduledJobNowResponses[keyof RunScheduledJobNowResponses];
 
+export type SubmitScreenJobData = {
+    body: ScreenRunRequest;
+    path?: never;
+    query?: never;
+    url: '/api/screener/jobs';
+};
+
+export type SubmitScreenJobErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SubmitScreenJobError = SubmitScreenJobErrors[keyof SubmitScreenJobErrors];
+
+export type SubmitScreenJobResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type SubmitScreenJobResponse = SubmitScreenJobResponses[keyof SubmitScreenJobResponses];
+
+export type GetScreenJobResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/screener/jobs/{job_id}/result';
+};
+
+export type GetScreenJobResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetScreenJobResultError = GetScreenJobResultErrors[keyof GetScreenJobResultErrors];
+
+export type GetScreenJobResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScreenResult;
+};
+
+export type GetScreenJobResultResponse = GetScreenJobResultResponses[keyof GetScreenJobResultResponses];
+
 export type ListScreenMetricsData = {
     body?: never;
     path?: never;
@@ -22171,6 +22294,47 @@ export type UpdateScreenResponses = {
 };
 
 export type UpdateScreenResponse = UpdateScreenResponses[keyof UpdateScreenResponses];
+
+export type SizeScreenData = {
+    body: ScreenRunRequest;
+    path?: never;
+    query?: never;
+    url: '/api/screener/size';
+};
+
+export type SizeScreenErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SizeScreenError = SizeScreenErrors[keyof SizeScreenErrors];
+
+export type SizeScreenResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScreenSize;
+};
+
+export type SizeScreenResponse = SizeScreenResponses[keyof SizeScreenResponses];
 
 export type SaveScreenAsUniverseData = {
     body: ScreenUniverseRequest;

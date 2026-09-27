@@ -408,7 +408,28 @@
       <span class="summary">{{ resultSummary() }}</span>
     }
   </div>
-  @if (running() && !result()) {
+  @if (capMessage(); as cap) {
+    <p class="cap" role="alert">{{ cap }}</p>
+  }
+  @if (job(); as j) {
+    <app-job-progress label="Screen" [handle]="j" [result]="jobRead">
+      @if (!j.done()) {
+        <button
+          jobActions
+          type="button"
+          class="btn btn-ghost"
+          [disabled]="cancelling()"
+          (click)="cancelJob(j)"
+        >
+          {{ cancelling() ? 'Cancelling…' : 'Cancel' }}
+        </button>
+      }
+      @if (jobNote(); as note) {
+        <p class="job-note">{{ note }}</p>
+      }
+    </app-job-progress>
+  }
+  @if (running() && !result() && !job()) {
     <app-loading-state label="Running the screen" [rows]="5" />
   } @else if (result(); as r) {
     @if (r.truncated) {
@@ -433,7 +454,7 @@
         </ng-template>
       </app-data-table>
     }
-  } @else {
+  } @else if (!capMessage() && job()?.status() !== 'running' && job()?.status() !== 'queued') {
     <app-empty-state
       title="Run a screen to see matches"
       message="Pick where to look, add filters, then Run screen."

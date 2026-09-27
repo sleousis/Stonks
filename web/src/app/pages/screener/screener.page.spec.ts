@@ -5,25 +5,37 @@ import { provideRouter } from '@angular/router';
 
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
+import { JobsService } from '../../core/jobs/jobs.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { TRADER, problem } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
-import { METRICS, RESULT, SAVED } from '../../../testing/screener-fixtures';
+import {
+  METRICS,
+  RESULT,
+  SAVED,
+  controlledJob,
+  screenSize,
+} from '../../../testing/screener-fixtures';
 import { ScreenerPage } from './screener.page';
 
 describe('ScreenerPage', () => {
   let http: HttpTestingController;
   const confirm = vi.fn();
+  let job = controlledJob('job_1');
+  const track = vi.fn(() => job.handle);
 
   beforeEach(async () => {
     confirm.mockReset();
+    job = controlledJob('job_1');
+    track.mockClear();
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
         ...provideApi(),
         provideHttpClientTesting(),
         { provide: ConfirmService, useValue: { confirm } },
+        { provide: JobsService, useValue: { track } },
       ],
     });
     http = TestBed.inject(HttpTestingController);
@@ -86,6 +98,9 @@ describe('ScreenerPage', () => {
     type(root, '#sc-sort', 'dividend_yield', 'change');
     fixture.detectChanges();
     button(root, 'Run screen').click();
+    const size = await nextRequest(http, '/api/screener/size', 'POST');
+    expect(size.request.body.spec.universe_id).toBe('sp500');
+    size.flush(screenSize(120));
     const req = await nextRequest(http, '/api/screener/run', 'POST');
     expect(req.request.body).toEqual({
       as_of: null,
@@ -116,6 +131,76 @@ describe('ScreenerPage', () => {
     expect(root.querySelector('.errors')?.textContent).toContain('Pick a metric for each filter');
     await tick(5);
     http.expectNone((r) => r.url === '/api/screener/run');
+    http.expectNone((r) => r.url === '/api/screener/size');
+  });
+
+  it('runs a large screen as a background job with progress', async () => {
+    const fixture = await render();
+    const root = el(fixture);
+    button(root, 'Run screen').click();
+    (await nextRequest(http, '/api/screener/size', 'POST')).flush(
+      screenSize(4200, { use_job: true }),
+    );
+    const submit = await nextRequest(http, '/api/screener/jobs', 'POST');
+    expect(submit.request.body).toEqual({ as_of: null, spec: { limit: 50 } });
+    submit.flush({ id: 'job_1', kind: 'screen_run', status: 'queued', progress: 0 });
+    await settle(fixture);
+    expect(track).toHaveBeenCalledWith('job_1', expect.anything());
+    expect(root.textContent).toContain('4,200 candidates');
+    job.step(0.5, 'metric price (1 of 2)');
+    fixture.detectChanges();
+    const bar = root.querySelector<HTMLProgressElement>('progress');
+    expect(bar?.value).toBe(0.5);
+    expect(root.textContent).toContain('metric price (1 of 2)');
+    expect(button(root, 'Cancel')).toBeTruthy();
+    http.expectNone((r) => r.url === '/api/screener/run');
+    job.end('succeeded');
+    (await nextRequest(http, '/api/screener/jobs/job_1/result')).flush(RESULT);
+    await settle(fixture);
+    expect(root.textContent).toContain('2 matches out of 120, on 2026-09-25.');
+    expect(root.querySelector('progress')).toBeNull();
+  });
+
+  it('cancels a running screen job', async () => {
+    const fixture = await render();
+    const root = el(fixture);
+    button(root, 'Run screen').click();
+    (await nextRequest(http, '/api/screener/size', 'POST')).flush(
+      screenSize(4200, { use_job: true }),
+    );
+    (await nextRequest(http, '/api/screener/jobs', 'POST')).flush({
+      id: 'job_1',
+      kind: 'screen_run',
+      status: 'queued',
+      progress: 0,
+    });
+    await settle(fixture);
+    job.step(0.2, 'metric price (1 of 2)');
+    fixture.detectChanges();
+    button(root, 'Cancel').click();
+    (await nextRequest(http, '/api/jobs/job_1/cancel', 'POST')).flush({
+      id: 'job_1',
+      status: 'cancelled',
+    });
+    job.end('cancelled');
+    await settle(fixture);
+    http.expectNone((r) => r.url === '/api/screener/jobs/job_1/result');
+    expect(root.textContent).toContain('Run a screen to see matches');
+  });
+
+  it('explains the candidate cap and runs nothing over it', async () => {
+    const fixture = await render();
+    const root = el(fixture);
+    button(root, 'Run screen').click();
+    (await nextRequest(http, '/api/screener/size', 'POST')).flush(
+      screenSize(25000, { over_cap: true }),
+    );
+    await settle(fixture);
+    const alert = root.querySelector('.results [role=alert]');
+    expect(alert?.textContent).toContain('25,000 candidates');
+    expect(alert?.textContent).toContain('10,000');
+    expect(alert?.textContent).toContain('Narrow it');
+    http.expectNone((r) => r.url === '/api/screener/run' || r.url === '/api/screener/jobs');
   });
 
   it('saves a new screen, then saves changes to it', async () => {

@@ -302,7 +302,7 @@ class Services:
             factors=FactorService(context, runner),
             options=OptionsService(context, runner),
             calendars=CalendarService(context, runner),
-            screener=ScreenerService(context, universes),
+            screener=ScreenerService(context, universes, runner),
         )
         services.schedule.bind(services)
         return services

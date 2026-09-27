@@ -1697,6 +1697,19 @@ cli = "stonks screener run"
 mcp = "run_screen"
 
 [[capability]]
+id = "screener.jobs"
+domain = "universes"
+title = "Size a screen and run a large one as a background job with progress"
+routes = [
+  "POST /api/screener/size",
+  "POST /api/screener/jobs",
+  "GET /api/screener/jobs/{job_id}/result",
+]
+console = ["sizeScreen", "submitScreenJob", "getScreenJobResult"]
+cli = { limited = "the CLI runs a screen directly, with the same candidate cap" }
+mcp = { limited = "run_screen runs directly, with the same candidate cap" }
+
+[[capability]]
 id = "screener.screens"
 domain = "universes"
 title = "Your saved screens: list, save, read and change"
