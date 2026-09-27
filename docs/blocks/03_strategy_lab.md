@@ -121,7 +121,7 @@ Other rules:
 
 - `lab/cv.py` holds `PurgedKFold` and `CombinatorialPurgedKFold`. Both drop train samples whose labels overlap a test block (purge) and the samples right after it (embargo).
 - With 6 groups and 2 test groups, CPCV makes 15 splits that chain into 5 full backtest paths.
-- The `cpcv` test lays the groups over the whole dataset window. Each split is re-tuned (when the lab run bound a tuner) and fitted on its purged training segments, then backtested on its test groups. It passes when at least 60% of the path Sharpes are positive and the pooled PSR is at least 0.9.
+- The `cpcv` test lays the groups over the whole dataset window. Each split is re-tuned (when the lab run bound a tuner) and fitted on its purged training segments, then backtested on its test groups. It passes when at least 60% of the path Sharpes are positive and the pooled PSR is at least 0.9. Every held-out day is in every path, so the pooled PSR is taken on the bar-by-bar mean of the paths, and each day counts once.
 - A split's dataset carries its segments as `LabDataset.train_segments`. `train_windows` lists them. A strategy that reads only `train_window` gets the longest segment, so it never trains on a test block.
 - `features/labels.py`: triple-barrier labels (EWMA volatility widths, high and low touches), label concurrency, average uniqueness and the sequential bootstrap.
 - `features/ml.py`: `bet_size(p)` turns a probability into a size in 0.1 steps (0 at p = 0.5), `break_even_probability(tp, sl)` is `sl / (tp + sl)`, and `Classifier.fit` takes `sample_weight`.

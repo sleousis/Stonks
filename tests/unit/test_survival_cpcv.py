@@ -73,6 +73,32 @@ def test_planted_edge_passes_on_every_path(edge_lake):
     assert {f"sharpe_path_{i}" for i in range(5)} <= set(m)
 
 
+def test_identical_paths_pool_to_one_path_psr(edge_lake):
+    """BE-08: every held-out day sits in every path, so a strategy with no
+    fit (identical paths) pools to exactly one path's PSR."""
+    test = build_survival_test("cpcv", {"max_workers": 1})
+    report = test.run(WeekdaySignal({"weekday": 2}), dataset_for(edge_lake, TICKERS))
+    m = report.metrics
+    assert m["psr0_pooled"] == pytest.approx(m["psr0_path_0"])
+    assert m["psr0_path_0"] == pytest.approx(m["psr0_path_4"])
+
+
+def test_a_path_psr_of_0_8_does_not_pool_past_the_gate():
+    """BE-08: five copies of one path must not shrink the PSR's error."""
+    import numpy as np
+
+    from stonks.lab.survival.cpcv import pooled_psr
+    from stonks.lab.survival.walk_forward import psr0
+
+    rng = np.random.default_rng(1)
+    x = rng.normal(0.0, 0.01, 500)
+    x = x - x.mean() + 0.00038
+    single = psr0(x)
+    assert 0.75 < single < 0.85
+    assert pooled_psr([x] * 5) == pytest.approx(single)
+    assert pooled_psr([x] * 5) < 0.9
+
+
 def test_losing_edge_fails(losing_lake):
     test = build_survival_test("cpcv", {"max_workers": 1})
     report = test.run(WeekdaySignal({"weekday": 2}), dataset_for(losing_lake, TICKERS))
