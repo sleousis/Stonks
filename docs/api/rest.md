@@ -456,6 +456,25 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `tracking_error` | number \| null | yes |  |
 | `up_capture` | number \| null | yes |  |
 
+### BorrowCheckSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `borrow` | [BorrowSettings](#borrowsettings) \| null | no |  |
+| `enabled` | boolean | no |  |
+| `max_borrow_fee` | number \| null | no |  |
+
+### BorrowSettings
+
+``FlatBorrow`` knobs: the general-collateral fee per asset class and the tickers that are hard to borrow or not borrowable at all.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `fee_rate_annual` | dict[str, number] | no |  |
+| `hard` | list[string] | no |  |
+| `hard_fee_rate_annual` | number | no |  |
+| `none` | list[string] | no |  |
+
 ### BrokerInfo
 
 | Field | Type | Required | Description |
@@ -813,6 +832,12 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | `status` | string | yes |  |
 | `strategy_id` | string | yes |  |
 
+### GrossExposureSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_gross` | number \| null | no |  |
+
 ### HaltView
 
 | Field | Type | Required | Description |
@@ -1145,6 +1170,36 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `next_step` | "enrol" \| "verify" | yes |  |
 | `user_id` | string | yes |  |
 
+### MarginCallSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `buffer` | number | no |  |
+| `enabled` | boolean | no |  |
+| `margin` | [MarginSettings](#marginsettings) | no |  |
+
+### MarginRates
+
+Requirement rates, as fractions of a position's market value.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `initial_long` | number | no |  |
+| `initial_short` | number | no |  |
+| `maintenance_long` | number | no |  |
+| `maintenance_short` | number | no |  |
+
+### MarginSettings
+
+Which margin model a book uses, and its rates.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `debit_rate_annual` | number | no |  |
+| `model` | "cash" \| "reg_t" | no |  |
+| `overrides` | dict[str, [MarginRates](#marginrates)] | no |  |
+| `rates` | [MarginRates](#marginrates) | no |  |
+
 ### MarkReadRequest
 
 | Field | Type | Required | Description |
@@ -1222,6 +1277,13 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `method` | "totp" \| "recovery_code" | yes |  |
 | `recovery_codes` | list[string] \| null | no |  |
 | `recovery_codes_left` | integer | yes |  |
+
+### NetExposureSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_net` | number \| null | no |  |
+| `min_net` | number \| null | no |  |
 
 ### NoteRequest
 
@@ -1725,14 +1787,20 @@ Type: "viewer" \| "trader" \| "admin"
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `borrow_check` | [BorrowCheckSettings](#borrowchecksettings) | no |  |
 | `circuit_breaker` | [CircuitBreakerSettings](#circuitbreakersettings) | no |  |
 | `drawdown_scaling` | [DrawdownScalingSettings](#drawdownscalingsettings) | no |  |
+| `gross_exposure` | [GrossExposureSettings](#grossexposuresettings) | no |  |
 | `liquidity` | [LiquiditySettings](#liquiditysettings) | no |  |
+| `margin_call` | [MarginCallSettings](#margincallsettings) | no |  |
 | `max_holding` | [MaxHoldingSettings](#maxholdingsettings) | no |  |
+| `net_exposure` | [NetExposureSettings](#netexposuresettings) | no |  |
 | `operational_halt` | [OperationalHaltSettings](#operationalhaltsettings) | no |  |
 | `portfolio_vol` | [PortfolioVolSettings](#portfoliovolsettings) | no |  |
 | `risk_per_position` | [RiskPerPositionSettings](#riskperpositionsettings) | no |  |
 | `sector_cap` | [SectorCapSettings](#sectorcapsettings) | no |  |
+| `short_caps` | [ShortCapsSettings](#shortcapssettings) | no |  |
+| `squeeze_guard` | [SqueezeGuardSettings](#squeezeguardsettings) | no |  |
 
 ### RuleTemplateView
 
@@ -1851,6 +1919,13 @@ How one shadow strategy was evaluated during the tick.
 | `strategy_id` | string | yes |  |
 | `total_value` | number \| null | yes |  |
 
+### ShortCapsSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_short_total` | number \| null | no |  |
+| `max_short_weight` | number \| null | no |  |
+
 ### ShortfallView
 
 Implementation shortfall of one order. Costs are positive, in bps of the filled quantity's value at the decision price; ``null`` while an input is not known yet.
@@ -1937,6 +2012,17 @@ Implementation shortfall of one order. Costs are positive, in bps of the filled 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `spec` | object | yes |  |
+
+### SqueezeGuardSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `atr_multiple` | number \| null | no |  |
+| `borrow` | [BorrowSettings](#borrowsettings) \| null | no |  |
+| `max_adverse_pct` | number \| null | no |  |
+| `max_borrow_fee` | number \| null | no |  |
+| `spike_bars` | integer | no |  |
+| `spike_pct` | number \| null | no |  |
 
 ### StartPortalRequest
 
