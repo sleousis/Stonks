@@ -310,7 +310,7 @@ def firing_event(firing: Firing) -> Event:
     """The notification for one firing: the owner only, deduped by rule,
     ticker and observation."""
     return Event(
-        category="signal",
+        category="price_alert",
         title=firing.title,
         body=firing.detail,
         audience=Audience.users(firing.owner_id),

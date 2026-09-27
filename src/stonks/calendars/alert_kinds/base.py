@@ -55,6 +55,10 @@ class EventAlertKind(ABC):
     kind: ClassVar[str]
     #: Plain words for the console.
     label: ClassVar[str]
+    #: The person's switch this kind follows, a key of
+    #: :data:`stonks.notify.prefs.EVENT_ALERT_TOPICS` (earnings, dividends,
+    #: economic). Several kinds may share one switch.
+    topic: ClassVar[str]
     #: How far ahead to look when a rule does not say.
     default_days_ahead: ClassVar[int]
 

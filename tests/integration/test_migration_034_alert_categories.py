@@ -69,7 +69,9 @@ def test_unknown_categories_are_still_refused(state):
 def test_indexes_survive_the_rebuild(state):
     names = {
         r["name"]
-        for r in state.sql("SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL")
+        for r in state.sql(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL"
+        )
     }
     assert {
         "idx_alerts_level",

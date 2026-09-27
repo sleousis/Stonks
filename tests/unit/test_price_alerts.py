@@ -77,7 +77,7 @@ def test_firing_event_goes_to_the_owner_only_with_a_dedupe_key():
     event = firing_event(fired)
     assert event.audience.user_ids == ("usr_a",)
     assert event.dedupe_key == "price:pal_1:UP.US:2026-04-01"
-    assert event.category == "signal" and event.deep_link == "/alerts"
+    assert event.category == "price_alert" and event.deep_link == "/alerts"
 
 
 # ---- one run ----------------------------------------------------------------------------
