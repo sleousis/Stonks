@@ -165,8 +165,8 @@ class DecisionStep:
     @property
     def asset_classes(self) -> dict[str, str]:
         if self._asset_classes is None:
-            reader = getattr(self.lake, "get_asset_classes", None)
-            found = reader(self.universe) if callable(reader) else {}
+            reader: Any = getattr(self.lake, "get_asset_classes", None)
+            found: Any = reader(self.universe) if callable(reader) else {}
             self._asset_classes = {t: str(found.get(t) or "equity") for t in self.universe}
         return dict(self._asset_classes)
 
