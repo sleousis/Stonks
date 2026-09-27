@@ -138,7 +138,7 @@ uv run python -m stonks.security keygen
 
 ## Canonical schemas (current)
 
-**Lake (DuckDB, migrations 001-017):**
+**Lake (DuckDB, migrations 001-019):**
 - `instruments (id, asset_class, exchange, currency, ipo_date, sector, industry, is_delisted, name, identifiers, GICS, address, ...)`: renamed from `tickers` in 007. `asset_class` in {equity, crypto, commodity, bond}.
 - `bars (ticker, timestamp, interval, open, high, low, close, adj_close, volume; PK (ticker, timestamp, interval))`: OHLCV at any `Interval` code (1m, 5m, 1h, 4h, 1d, 1w, 1mo, ...). `prices` is a read-only view of `interval='1d'`. Write with `upsert_bars` or the daily `upsert_prices` shim. With the Parquet backend the rows live under `<lake dir>/bars` instead of the table.
 - Statements (008, equity only), keyed `(ticker, period_end, frequency)`: `income_statement`, `balance_sheet`, `cash_flow_statement`, each with `filing_date` and `currency`. `upsert_<statement>` reindexes sparse frames and uses `COALESCE(EXCLUDED.col, table.col)`, so a NULL never overwrites a stored value but a real restated value does.
@@ -146,7 +146,7 @@ uv run python -m stonks.security keygen
 - Per-class profiles (007): `crypto_profiles`, `bond_profiles`, `bond_yield_history`, `commodity_contracts`. No FK enforcement.
 - `macro_indicators (country_iso, indicator, observation_date, period, country_name, value)` (009): ISO alpha-3 country, `lower_snake_case` indicator (open set), `period` in {annual, quarterly, monthly} or NULL.
 - `defi_tvl (chain, observation_date, tvl_usd, source)` (011).
-- `fx_rates (base_currency, quote_currency, observation_date, rate, source)` (017): daily FX closes, `rate` = quote units per one base unit. Read through `stonks.fx.FxRates` (latest on or before the day, inverse pair, cross through USD). See `docs/tax.md`.
+- 017 and 018: reserved for the options work. `fx_rates (base_currency, quote_currency, observation_date, rate, source)` (019): daily FX closes, `rate` = quote units per one base unit. Read through `stonks.fx.FxRates` (latest on or before the day, inverse pair, cross through USD). See `docs/tax.md`.
 - `lake_settings (key, value)` (012): today only `bars_backend`.
 - `quarantined_bars (id, run_id, ticker, timestamp, interval, OHLCV, reasons, source, quarantined_at)` and `ingest_runs.quality_json` (013).
 - `ingest_runs (id, source, kind, started_at, finished_at, tickers_ok, tickers_failed, status, error, quality_json)`.

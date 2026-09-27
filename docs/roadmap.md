@@ -458,7 +458,7 @@ Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invit
 - 20.2: `price_alerts/`, `app/price_alerts.py`, `/api/price-alerts`, `stonks price-alerts`, five MCP tools, and the `price_alerts` scheduler job after the price ingest. Live prices can call the same check once intraday lands.
 - 20.3: `telegram/` (the channel, the long-polling bot, one-time link codes), `/api/telegram`, `stonks telegram`. Off unless `[telegram] enabled` and `STONKS_TELEGRAM_BOT_TOKEN` are set.
 - 20.4: `assistant/` (the `ChatModel` seam, an OpenAI-compatible client, the agent loop over the MCP tools, conversations), `/api/assistant` with streamed answers. Off unless `[assistant] base_url` is set.
-- 20.5: lake `fx_rates` (017) from EODHD forex, `fx/`, base-currency values in the portfolio, P&L, insights and TCA views, and `tax/` with the yearly CSV exports (`/api/tax`, `stonks tax`, `stonks ingest fx`). See `docs/tax.md`.
+- 20.5: lake `fx_rates` (019) from EODHD forex, `fx/`, base-currency values in the portfolio, P&L, insights and TCA views, and `tax/` with the yearly CSV exports (`/api/tax`, `stonks tax`, `stonks ingest fx`). See `docs/tax.md`.
 
 | WP | Scope |
 |----|-------|
