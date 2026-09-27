@@ -180,6 +180,11 @@ READ_TOOLS = {
     "check_model_swap",
     "list_tickets",
     "get_ticket",
+    "get_live_stage",
+    "get_live_gate_report",
+    "get_live_allocation",
+    "get_live_rules",
+    "get_broker_gateways",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {

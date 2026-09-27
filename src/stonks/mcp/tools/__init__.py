@@ -12,6 +12,7 @@ from stonks.mcp.tools import (
     halts,
     insights,
     jobs,
+    live,
     model_versions,
     notifications,
     orders,
@@ -52,6 +53,7 @@ MODULES = (
     research,
     calendars,
     screener,
+    live,
 )
 
 

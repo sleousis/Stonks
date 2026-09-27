@@ -1312,6 +1312,22 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "IB Gateway health: connected or not, the last good check, and the\nauto books of yours a gateway outage paused.",
+      "input_schema": {
+        "properties": {},
+        "title": "get_broker_gatewaysArguments",
+        "type": "object"
+      },
+      "name": "get_broker_gateways",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Upcoming earnings (with the time of day and the EPS estimate),\nex-dividend dates and economic releases from ``start`` (default\ntoday) to ``end`` (default two weeks on, at most 120 days).\nEconomic releases are market wide.",
       "input_schema": {
         "properties": {
@@ -2020,6 +2036,56 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "How much Stonks may trade in a live portfolio, set by hand by its\nowner (amount null: not set, so nothing opens).",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "description": "a portfolio id of yours (pf_...)",
+            "title": "Portfolio Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id"
+        ],
+        "title": "get_live_allocationArguments",
+        "type": "object"
+      },
+      "name": "get_live_allocation",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "What a promotion to the next stage needs, checked now. A check\nwith passed = null has no data yet and does not block. Promoting is\ndone in the web app with a fresh second factor, never here.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "description": "a portfolio id of yours (pf_...)",
+            "title": "Portfolio Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id"
+        ],
+        "title": "get_live_gate_reportArguments",
+        "type": "object"
+      },
+      "name": "get_live_gate_report",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One of your portfolios on its latest tick day: one-day 95% and\n99% VaR and expected shortfall (fractions of value, loss positive),\nthe rolling VaR violation ratio (1.0 is right, outside 0.5 to 1.5\nmeans the risk model is off) with its Kupiec p-value, and per\nstrategy sleeve the same plus the alpha-decay check against the\nbacktest's IR.",
       "input_schema": {
         "properties": {
@@ -2040,6 +2106,61 @@
         "type": "object"
       },
       "name": "get_live_risk",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Which live safeguards and account rules act on a live portfolio,\nwith their settings as its book follows them.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "description": "a portfolio id of yours (pf_...)",
+            "title": "Portfolio Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id"
+        ],
+        "title": "get_live_rulesArguments",
+        "type": "object"
+      },
+      "name": "get_live_rules",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "A portfolio's live stage (sim_paper, broker_paper, live_small,\nlive_scale), its stage changes, and the last sessions' gate metrics:\norders sent, rejected and stuck, fills with no commission, the TCA\ngap, the book's and the model book's returns, and drift.",
+      "input_schema": {
+        "properties": {
+          "days": {
+            "default": 30,
+            "title": "Days",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "description": "a portfolio id of yours (pf_...)",
+            "title": "Portfolio Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id"
+        ],
+        "title": "get_live_stageArguments",
+        "type": "object"
+      },
+      "name": "get_live_stage",
       "needs_confirm": false
     },
     {

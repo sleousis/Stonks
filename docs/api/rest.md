@@ -224,7 +224,12 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | PUT | `/api/portfolios/{portfolio_id}/live/account-profile` | Set Account Profile | `live.manage` | [AccountProfileBody](#accountprofilebody) | [AccountProfileView](#accountprofileview) |
 | GET | `/api/portfolios/{portfolio_id}/live/allocation` | Get Live Allocation | sign-in |  | [LiveAllocationView](#liveallocationview) |
 | PUT | `/api/portfolios/{portfolio_id}/live/allocation` | Set Live Allocation | `live.manage` | [LiveAllocationUpdate](#liveallocationupdate) | [LiveAllocationView](#liveallocationview) |
+| GET | `/api/portfolios/{portfolio_id}/live/gate-report` | Get Live Gate Report | `data.read` |  | [GateReportView](#gatereportview) |
+| POST | `/api/portfolios/{portfolio_id}/live/preview` | Preview Live Orders | `portfolio.trade` |  | [LivePreviewView](#livepreviewview) |
 | GET | `/api/portfolios/{portfolio_id}/live/rules` | Get Live Rules | `data.read` |  | [LiveRulesView](#liverulesview) |
+| GET | `/api/portfolios/{portfolio_id}/live/stage` | Get Live Stage | `data.read` |  | [LiveStageView](#livestageview) |
+| POST | `/api/portfolios/{portfolio_id}/live/stage/demote` | Demote Live Stage | `portfolio.trade` | [StageDemoteBody](#stagedemotebody) | [LiveStageView](#livestageview) |
+| POST | `/api/portfolios/{portfolio_id}/live/stage/promote` | Promote Live Stage | `live.manage` | [StagePromoteBody](#stagepromotebody) | [LiveStageView](#livestageview) |
 
 ## market endpoints
 
@@ -538,6 +543,17 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `approve` | boolean | yes | true runs the action, false drops it. |
+
+### AdjustmentView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `adjusted_quantity` | number | yes |  |
+| `original_quantity` | number | yes |  |
+| `reason` | string | yes |  |
+| `rule` | string | yes |  |
+| `side` | string | yes |  |
+| `ticker` | string | yes |  |
 
 ### AgreementView
 
@@ -1445,6 +1461,49 @@ One go-live check that failed (``GoLiveCheck`` without ``passed``).
 | `quote_currency` | string | yes |  |
 | `rate` | number \| null | yes |  |
 
+### GateCheckView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `detail` | string | yes |  |
+| `name` | string | yes |  |
+| `passed` | boolean \| null | yes |  |
+| `required` | any | no |  |
+| `value` | any | no |  |
+
+### GateDayView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `clean` | boolean | yes |  |
+| `drift_items` | integer \| null | yes |  |
+| `fills` | integer | yes |  |
+| `fills_missing_commission` | integer | yes |  |
+| `live_return` | number \| null | yes |  |
+| `model_return` | number \| null | yes |  |
+| `orders_filled` | integer | yes |  |
+| `orders_refused` | integer | yes |  |
+| `orders_rejected` | integer | yes |  |
+| `orders_sent` | integer | yes |  |
+| `reject_rate` | number | yes |  |
+| `session_date` | date | yes |  |
+| `stage` | "sim_paper" \| "broker_paper" \| "live_small" \| "live_scale" | yes |  |
+| `stuck_orders` | integer | yes |  |
+| `tca_gap_bps` | number \| null | yes |  |
+| `tca_orders` | integer | yes |  |
+
+### GateReportView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `checks` | list[[GateCheckView](#gatecheckview)] | yes |  |
+| `computed_at` | date-time | yes |  |
+| `from_stage` | "sim_paper" \| "broker_paper" \| "live_small" \| "live_scale" | yes |  |
+| `metrics` | object | yes |  |
+| `passed` | boolean | yes |  |
+| `portfolio_id` | string | yes |  |
+| `target` | "sim_paper" \| "broker_paper" \| "live_small" \| "live_scale" \| null | yes |  |
+
 ### GatewayHealthView
 
 | Field | Type | Required | Description |
@@ -2059,6 +2118,23 @@ One recorded lab run: what was tested, why, and how it came out.
 | `max_order_notional` | number \| null | no |  |
 | `max_user_day_notional` | number \| null | no |  |
 
+### LivePreviewView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `account` | [PreviewAccountView](#previewaccountview) \| null | yes |  |
+| `adjustments` | list[[AdjustmentView](#adjustmentview)] | yes |  |
+| `allocation` | number \| null | yes |  |
+| `as_of` | date | yes |  |
+| `notes` | list[string] | yes |  |
+| `orders` | list[[PreviewOrderView](#previeworderview)] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `reason` | string \| null | yes |  |
+| `stage` | "sim_paper" \| "broker_paper" \| "live_small" \| "live_scale" | yes |  |
+| `status` | string | yes |  |
+| `transmitted` | boolean | yes |  |
+| `what_if_available` | boolean | yes |  |
+
 ### LiveRuleView
 
 | Field | Type | Required | Description |
@@ -2076,6 +2152,17 @@ One recorded lab run: what was tested, why, and how it came out.
 | `portfolio_id` | string | yes |  |
 | `profile_set` | boolean | yes |  |
 | `safeguards` | list[[LiveRuleView](#liveruleview)] | yes |  |
+
+### LiveStageView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `days` | list[[GateDayView](#gatedayview)] | yes |  |
+| `history` | list[[StageChangeView](#stagechangeview)] | yes |  |
+| `next_stage` | "sim_paper" \| "broker_paper" \| "live_small" \| "live_scale" \| null | yes |  |
+| `portfolio_id` | string | yes |  |
+| `real_money` | boolean | yes |  |
+| `stage` | "sim_paper" \| "broker_paper" \| "live_small" \| "live_scale" | yes |  |
 
 ### LoginRequest
 
@@ -3203,6 +3290,36 @@ The BL-37 data preflight of a lab run. A run only starts with no errors, so a re
 | `ok` | boolean | yes |  |
 | `skipped` | boolean | yes |  |
 
+### PreviewAccountView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `account_type` | string | yes |  |
+| `available_funds` | number | yes |  |
+| `buying_power` | number | yes |  |
+| `cash` | number | yes |  |
+| `currency` | string | yes |  |
+| `equity` | number | yes |  |
+| `settled_cash` | number | yes |  |
+
+### PreviewOrderView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `adjustments` | list[[AdjustmentView](#adjustmentview)] | yes |  |
+| `client_id` | string | yes |  |
+| `limit_price` | number \| null | yes |  |
+| `notional` | number \| null | yes |  |
+| `order_type` | string | yes |  |
+| `position_effect` | string \| null | yes |  |
+| `quantity` | number | yes |  |
+| `side` | string | yes |  |
+| `strategy_id` | string \| null | yes |  |
+| `ticker` | string | yes |  |
+| `time_in_force` | string \| null | yes |  |
+| `what_if` | [WhatIfView](#whatifview) \| null | yes |  |
+| `what_if_error` | string \| null | yes |  |
+
 ### PriceAlertCreate
 
 A rule on one ticker (``ticker``) or on one of your watchlists (``watchlist_id``), not both.
@@ -4023,6 +4140,34 @@ Implementation shortfall of one order. Costs are positive, in bps of the filled 
 | `max_borrow_fee` | number \| null | no |  |
 | `spike_bars` | integer | no |  |
 | `spike_pct` | number \| null | no |  |
+
+### StageChangeView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `actor` | string | yes |  |
+| `created_at` | date-time | yes |  |
+| `direction` | "promote" \| "demote" | yes |  |
+| `from_stage` | "sim_paper" \| "broker_paper" \| "live_small" \| "live_scale" | yes |  |
+| `gate_report` | object \| null | yes |  |
+| `id` | integer | yes |  |
+| `reason` | string | yes |  |
+| `to_stage` | "sim_paper" \| "broker_paper" \| "live_small" \| "live_scale" | yes |  |
+
+### StageDemoteBody
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reason` | string | yes |  |
+| `to_stage` | "sim_paper" \| "broker_paper" \| "live_small" \| "live_scale" | yes |  |
+
+### StagePromoteBody
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `confirm` | string | yes |  |
+| `reason` | string | yes |  |
+| `to_stage` | "sim_paper" \| "broker_paper" \| "live_small" \| "live_scale" | yes |  |
 
 ### StartPortalRequest
 
@@ -4898,6 +5043,17 @@ Your own webhook (a public ``https`` URL). Write-only: responses show its scheme
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `url` | password \| null | no |  |
+
+### WhatIfView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `commission` | number \| null | yes |  |
+| `commission_currency` | string \| null | yes |  |
+| `equity_with_loan_after` | number | yes |  |
+| `initial_margin_change` | number | yes |  |
+| `maintenance_margin_change` | number | yes |  |
+| `warning` | string \| null | yes |  |
 
 ### stonks__app__brokers__BrokerAccountView
 
