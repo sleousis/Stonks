@@ -17,6 +17,9 @@ Rules, from ``docs/design/live-trading.md`` section 2:
 - ``stop`` needs ``stop_price``. ``gtc`` is only for stops. Opening-auction
   (``opg``) orders are market or limit only.
 - ``outside_rth`` is refused in this phase. ``account`` is always set.
+- An intraday book (``intraday=True``, roadmap 21.2.3) sends day orders:
+  no time in force means ``day``, never the opening auction, and ``opg``
+  or ``gtc`` are refused. ``ioc`` stays allowed.
 - An order with an ``oca_group`` (a protective stop and the exits of its
   position, roadmap 19.10) goes out with OCA type 2: a fill of one reduces
   the others by the filled quantity, and IBKR blocks an overfill.
@@ -87,7 +90,20 @@ def collar_price(reference: float, side: str, collar_bps: float, tick: float) ->
     return snap_price(reference * factor, tick, side=side)
 
 
-def _time_in_force(order: Order, is_stop: bool, settings: IbkrOrderSettings) -> TimeInForce:
+#: What an intraday book may send: orders that end with the session.
+INTRADAY_TIFS: frozenset[TimeInForce] = frozenset({"day", "ioc"})
+
+
+def _time_in_force(
+    order: Order, is_stop: bool, settings: IbkrOrderSettings, *, intraday: bool = False
+) -> TimeInForce:
+    if intraday:
+        tif = order.time_in_force or "day"
+        if tif not in INTRADAY_TIFS:
+            raise OrderRejectedError(
+                f"{order.client_id}: an intraday book sends day orders only, not {tif}"
+            )
+        return tif
     tif = order.time_in_force or ("day" if is_stop else settings.default_time_in_force)
     if tif == "gtc" and not is_stop:
         raise OrderRejectedError(f"{order.client_id}: good-till-cancelled is only for stop orders")
@@ -102,9 +118,11 @@ def to_ib_order(
     *,
     account: str,
     settings: IbkrOrderSettings,
+    intraday: bool = False,
 ) -> IbOrderRequest:
     """The IBKR order for ``order`` on the contract ``spec`` describes.
-    Raises ``OrderRejectedError`` for anything this phase does not send."""
+    ``intraday`` sends a day order (see the module doc). Raises
+    ``OrderRejectedError`` for anything this phase does not send."""
     if order.outside_rth:
         raise OrderRejectedError(f"{order.client_id}: orders outside regular hours are refused")
     if not account:
@@ -112,7 +130,7 @@ def to_ib_order(
     shares = whole_shares(order)
     tick = spec.tick_size
     is_stop = order.order_type in ("stop", "stop_limit")
-    tif = _time_in_force(order, is_stop, settings)
+    tif = _time_in_force(order, is_stop, settings, intraday=intraday)
     limit: float | None = None
     aux: float | None = None
     order_type: IbOrderType
