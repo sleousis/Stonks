@@ -22,7 +22,7 @@ from stonks.production.live.settings import LiveSettings
 from stonks.production.portfolio_runs import list_runs
 from stonks.production.submit import submit_tickets
 from stonks.production.tick import TickSettings, load_tick_plan, run_tick
-from stonks.production.tickets import decide_tickets, list_tickets
+from stonks.production.tickets import decide_tickets, list_tickets, set_ticket_status
 
 DAY1, DAY2 = modes.DAY1, modes.DAY2
 #: The window before the open after DAY1 (New York summer time).
@@ -264,3 +264,21 @@ def test_a_provider_outage_at_submit_leaves_the_tickets(world):
     result = _submit(world, IN_WINDOW)
     assert result.portfolios[0].status == "error"
     assert list_tickets(world.state, portfolio_ids=[world.live])[0].status == "approved"
+
+
+def test_the_next_tick_settles_a_sent_ticket(world):
+    settings = replace(modes.SETTINGS, live=LiveSettings(submit_in_window=True))
+    _tick(world, DAY1, settings)
+    [ticket] = list_tickets(world.state, portfolio_ids=[world.live])
+    set_ticket_status(world.state, ticket.id, "submitted", now=IN_WINDOW)
+    world.state.execute(
+        "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status, state,"
+        " created_at, updated_at, portfolio_id) VALUES (?, 'UP.US', 'buy', 1, 'market',"
+        " 'cancelled', 'expired', 'x', 'x', ?)",
+        [ticket.client_id, world.live],
+    )
+    _tick(world, DAY2, settings)
+    settled = [
+        t for t in list_tickets(world.state, portfolio_ids=[world.live]) if t.id == ticket.id
+    ]
+    assert settled[0].status == "unfilled"  # the opening auction did not fill it

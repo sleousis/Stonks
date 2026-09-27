@@ -161,6 +161,7 @@ from stonks.production.signals import record_signals, signals_recorded
 from stonks.production.tca import annotate_orders, decision_values, tca_recorded
 from stonks.production.tickets import (
     submit_window,
+    sync_submitted,
     ticket_hold,
     tickets_recorded,
     write_tickets,
@@ -869,6 +870,9 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             )
             if pre.unresolved:
                 return _unreconciled(run, book, pre.unresolved)
+            if tickets_recorded(state):
+                # sent tickets follow their orders (filled, unfilled, ...)
+                sync_submitted(state, now=datetime.now(UTC))
         portfolio = broker.fetch_portfolio()
     else:
         portfolio = _load_or_seed_portfolio(
