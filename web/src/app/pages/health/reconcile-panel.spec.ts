@@ -81,7 +81,12 @@ describe('ReconcilePanel', () => {
   async function render(reports: ReconcileReportView[]): Promise<HTMLElement> {
     fixture = TestBed.createComponent(ReconcilePanel);
     fixture.detectChanges();
-    (await nextRequest(http, '/api/reconcile/reports')).flush(reports);
+    (await nextRequest(http, '/api/reconcile/reports')).flush({
+      items: reports,
+      total: reports.length,
+      limit: 10,
+      offset: 0,
+    });
     await tick();
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
