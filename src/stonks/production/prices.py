@@ -9,7 +9,7 @@ months-old price).
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
@@ -118,21 +118,41 @@ def load_history(
     }
 
 
-def drop_stale_buys(
-    orders: Sequence[Order], fresh: Collection[str]
+def drop_stale_opens(
+    orders: Sequence[Order],
+    fresh: Collection[str],
+    positions: Mapping[str, float] | None = None,
 ) -> tuple[list[Order], list[str]]:
-    """Split off buys of tickers without a fresh close; sells always pass.
-    Returns (kept orders, tickers whose buys were dropped)."""
+    """Split off opening orders (buys and short sales) of tickers without a
+    fresh close; closes (sells of longs, covers of shorts) always pass, so a
+    stale holding can still be exited (BE-11). An order's position effect
+    decides; without one the held quantity does (a buy opens unless it
+    covers a short, a sell opens only from flat or short). Without
+    ``positions`` every buy opens and every sell closes.
+    Returns (kept orders, tickers whose opening orders were dropped)."""
     kept: list[Order] = []
     dropped: list[str] = []
     for order in orders:
-        if order.side == "buy" and order.ticker not in fresh:
+        if order.ticker not in fresh and _opens(order, positions):
             dropped.append(order.ticker)
             continue
         kept.append(order)
     if dropped:
-        _log.info("prices.stale_buys_dropped", tickers=dropped)
+        _log.info("prices.stale_opens_dropped", tickers=dropped)
     return kept, dropped
+
+
+#: The old name (buys were the only opening orders before shorts).
+drop_stale_buys = drop_stale_opens
+
+
+def _opens(order: Order, positions: Mapping[str, float] | None) -> bool:
+    if order.position_effect is not None:
+        return order.position_effect == "open"
+    if positions is None:
+        return order.side == "buy"
+    qty = positions.get(order.ticker, 0.0)
+    return qty >= 0 if order.side == "buy" else qty <= 1e-12
 
 
 def held_tickers(positions: dict[str, float]) -> list[str]:

@@ -41,7 +41,7 @@ from stonks.core.types import Fill, Order, Portfolio
 from stonks.execution.orders import make_client_id
 from stonks.logging import get_logger
 from stonks.production.corporate_actions import apply_corporate_actions
-from stonks.production.prices import drop_stale_buys, held_tickers
+from stonks.production.prices import drop_stale_opens, held_tickers
 from stonks.production.risk import RiskContext, apply_risk, model_book_risk_context
 from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
@@ -178,7 +178,9 @@ def _evaluate_one(
 
     orders: list[Order] = []
     if picks or held_tickers(portfolio.positions):
-        proposed, _ = drop_stale_buys(strategy.decide(picks, portfolio, prices, as_of), fresh)
+        proposed, _ = drop_stale_opens(
+            strategy.decide(picks, portfolio, prices, as_of), fresh, portfolio.positions
+        )
         risk_result = apply_risk(
             proposed,
             portfolio,

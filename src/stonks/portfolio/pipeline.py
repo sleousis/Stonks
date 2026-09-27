@@ -9,7 +9,7 @@ orders of one book:
 3. run the registered :class:`~stonks.portfolio.base.PortfolioConstructor`
    (``[production.construction].method``, per portfolio);
 4. turn the target book into orders;
-5. drop buys of tickers without a fresh price, then apply the risk rules.
+5. drop opening orders of tickers without a fresh price, then apply the risk rules.
 
 Step 4 has two routes:
 
@@ -74,7 +74,7 @@ from stonks.portfolio.base import (
 from stonks.portfolio.orders import orders_from_targets
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.portfolio.signals import SignalContext, normalize
-from stonks.production.prices import drop_stale_buys
+from stonks.production.prices import drop_stale_opens
 from stonks.production.risk import RiskAdjustment, RiskContext, RiskResult, apply_risk
 
 _log = get_logger("stonks.portfolio.pipeline")
@@ -158,7 +158,7 @@ class PipelineResult:
     orders: list[Order]
     target_book: TargetBook
     adjustments: list[RiskAdjustment] = field(default_factory=list)
-    #: Tickers whose buys were dropped for a stale price.
+    #: Tickers whose opening orders were dropped for a stale price.
     stale_buys: list[str] = field(default_factory=list)
     #: ``single_winner``: the strategy whose ``decide`` made the orders.
     decided_by: str | None = None
@@ -270,7 +270,7 @@ def _single_winner(
     proposed = decider.decide(picks, book.portfolio, dict(market.prices), market.as_of)
     if book.allow_short:
         proposed = _split_at_zero(proposed, book.portfolio, _supports_short(decider))
-    kept, stale = _drop_stale(proposed, market)
+    kept, stale = _drop_stale(proposed, market, book.portfolio)
     risk = apply_book_risk(kept, book, market, book.risk_overrides.get(winner))
     # Orders a risk rule created (e.g. a max_holding forced sell) keep the
     # rule's client id and no strategy; the winner's own orders take its ids.
@@ -346,7 +346,7 @@ def _from_targets(
                 order, strategy_id=owner, client_id=make_id(owner, order.ticker, side_token(order))
             )
         )
-    kept, stale = _drop_stale(owned, market)
+    kept, stale = _drop_stale(owned, market, book.portfolio)
     risk = apply_book_risk(kept, book, market)
     return PipelineResult(
         orders=list(risk.orders),
@@ -421,10 +421,14 @@ def _split_at_zero(orders: Sequence[Order], portfolio: Portfolio, may_short: boo
     return out
 
 
-def _drop_stale(orders: Sequence[Order], market: MarketView) -> tuple[list[Order], list[str]]:
+def _drop_stale(
+    orders: Sequence[Order], market: MarketView, portfolio: Portfolio
+) -> tuple[list[Order], list[str]]:
+    """Opening orders on tickers without a fresh price are dropped; closes
+    always go (BE-11)."""
     if market.buyable is None:
         return list(orders), []
-    return drop_stale_buys(orders, market.buyable)
+    return drop_stale_opens(orders, market.buyable, portfolio.positions)
 
 
 def _held(portfolio: Portfolio) -> list[str]:
