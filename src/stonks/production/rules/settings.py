@@ -14,6 +14,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from stonks.production.rules._account_settings import AccountRulesSettings, longer_cycles
 from stonks.production.rules.borrow_check import BorrowCheckSettings
 from stonks.production.rules.capital_ramp import CapitalRampSettings
 from stonks.production.rules.circuit_breaker import CircuitBreakerSettings, Cooldown
@@ -33,6 +34,7 @@ from stonks.production.rules.short_caps import ShortCapsSettings
 from stonks.production.rules.squeeze_guard import SqueezeGuardSettings
 
 __all__ = [
+    "AccountRulesSettings",
     "BorrowCheckSettings",
     "CapitalRampSettings",
     "CircuitBreakerSettings",
@@ -81,6 +83,8 @@ class RuleSettings(BaseModel):
     live_notional_caps: LiveNotionalCapsSettings = LiveNotionalCapsSettings()
     price_band: PriceBandSettings = PriceBandSettings()
     max_orders_per_run: MaxOrdersPerRunSettings = MaxOrdersPerRunSettings()
+    # The account rules engine (roadmap 19.7), off by default.
+    account_rules: AccountRulesSettings = AccountRulesSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -183,6 +187,15 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
     "max_orders_per_run": {
         "max_opening_orders": _min_optional,
         "max_closing_orders": _min_optional,
+    },
+    "account_rules": {
+        "enabled": _either,
+        "settlement_days": longer_cycles,
+        "pdt_equity_threshold": max,
+        "pdt_max_day_trades": min,
+        "pdt_window_days": max,
+        "wash_sale_window_days": max,
+        "short_disclosure_threshold": min,
     },
 }
 

@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from hypothesis import given
 from hypothesis import strategies as st
 
+from stonks.accounts.rules import AccountProfile, AccountRuleInputs
 from stonks.execution.brokers.base import LiveAccountState, Quote
 from stonks.production.live.context import LiveContext
 from stonks.production.risk import apply_risk
@@ -26,7 +27,8 @@ NOW = datetime(2026, 9, 28, 13, 0, tzinfo=UTC)
 LIVE_RULES = [
     r
     for r in registered_rules()
-    if r.name in {"capital_ramp", "live_notional_caps", "price_band", "max_orders_per_run"}
+    if r.name
+    in {"capital_ramp", "live_notional_caps", "price_band", "max_orders_per_run", "account_rules"}
 ]
 
 
@@ -57,10 +59,23 @@ def live_cases(draw):
         currency="USD",
         account_type="cash",
     )
+    held = pick(None, account)
+    profile = AccountProfile(
+        portfolio_id="pf_live",
+        jurisdiction=pick("us", "eu", "uk"),
+        account_type=pick("cash", "margin"),
+    )
+    rules_inputs = AccountRuleInputs(
+        profile=profile,
+        as_of=ctx.as_of or NOW.date(),
+        account=held,
+        restricted=pick({}, {TICKERS[0]: "owner list"}),
+    )
     live = LiveContext(
         portfolio_id="pf_live",
         allocation=pick(None, 0.0, 500.0, 50_000.0),
-        account=pick(None, account),
+        account=held,
+        account_rules=pick(None, rules_inputs),
         quotes=quotes,
         sent_today=pick(0.0, 900.0),
     )
@@ -72,6 +87,7 @@ def live_cases(draw):
             "max_day_notional": pick(None, 2_000.0),
         },
         price_band={"band_pct": 0.02, "max_gap_pct": pick(None, 0.05)},
+        account_rules={"enabled": True},
         max_orders_per_run={
             "max_opening_orders": pick(None, 0, 2),
             "max_closing_orders": pick(None, 0, 1),
