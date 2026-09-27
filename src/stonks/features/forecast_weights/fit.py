@@ -163,9 +163,7 @@ def fit_forecast_weights(
     rows = net.dropna()
     fit_end = closes.index[-1] if len(closes) else None
     sigma_annual = (
-        float(sigma.loc[rows.index].mean()) * math.sqrt(periods_per_year)
-        if len(rows)
-        else math.nan
+        float(sigma.loc[rows.index].mean()) * math.sqrt(periods_per_year) if len(rows) else math.nan
     )
     gross = net + forecasts.div(FORECAST_TARGET * sigma, axis=0).diff().abs() * cost
     stats = {}
@@ -209,9 +207,7 @@ def fit_forecast_weights(
         )
         return make("too_costly", 1.0, rules)
 
-    weights = estimator.estimate(
-        WeightInput(rows[kept], {n: stats[n][1] for n in kept})
-    )
+    weights = estimator.estimate(WeightInput(rows[kept], {n: stats[n][1] for n in kept}))
     if len(kept) < 2:
         fdm = 1.0
     elif fdm_mode == "estimate":

@@ -94,6 +94,5 @@ class HandcraftWeights(ForecastWeightEstimator):
         costs = {r: float(cost_sr.get(r, 0.0)) for r in base}
         mean_cost = sum(costs.values()) / len(costs)
         return {
-            r: w * max(0.0, 1.0 + self.cost_slope * (mean_cost - costs[r]))
-            for r, w in base.items()
+            r: w * max(0.0, 1.0 + self.cost_slope * (mean_cost - costs[r])) for r, w in base.items()
         }

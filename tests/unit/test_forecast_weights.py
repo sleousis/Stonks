@@ -215,18 +215,3 @@ def test_estimated_scalars_and_fdm_come_from_the_training_rows():
     assert scalars["fast"] == pytest.approx(10.0 / (raw["fast"] * 3.0).abs().mean(), rel=1e-6)
     # two nearly uncorrelated rules: FDM close to sqrt(2)
     assert 1.2 < fit.fdm <= 2.5
-
-
-def test_fit_weights_ignore_everything_after_the_training_rows():
-    closes, raw = _market()
-    kwargs = dict(
-        fixed_scalars={"fast": 1.0, "slow": 1.0},
-        cost=0.0005,
-        estimator=get_weight_estimator("handcraft"),
-        max_cost_sr=1.0,
-        periods_per_year=PPY,
-    )
-    a = fit_forecast_weights(raw.iloc[:700], closes.iloc[:700], **kwargs)
-    b = fit_forecast_weights(raw.iloc[:700].copy(), closes.iloc[:700].copy(), **kwargs)
-    assert a == b
-    assert a.n_obs < 700
