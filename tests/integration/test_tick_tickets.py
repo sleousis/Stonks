@@ -157,6 +157,26 @@ def test_a_kill_switch_holds_the_submit(world):
     assert list_tickets(world.state, portfolio_ids=[world.live])[0].status == "approved"
 
 
+@pytest.mark.parametrize("ended", ["cancelled", "rejected", "expired"])
+def test_an_order_that_ended_is_never_sent_again_under_its_client_id(world, ended):
+    settings = replace(modes.SETTINGS, live=LiveSettings(submit_in_window=True))
+    _tick(world, DAY1, settings)
+    [ticket] = list_tickets(world.state, portfolio_ids=[world.live])
+    status = "cancelled" if ended == "expired" else ended
+    world.state.execute(
+        "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status, state,"
+        " created_at, updated_at, portfolio_id) VALUES (?, 'UP.US', 'buy', 1, 'market', ?, ?,"
+        " 'x', 'x', ?)",
+        [ticket.client_id, status, ended, world.live],
+    )
+    result = _submit(world, IN_WINDOW)
+    assert result.sent == 0 and result.portfolios[0].failed == 1
+    assert "place_order" not in world.book.calls and world.book.orders == {}
+    [after] = list_tickets(world.state, portfolio_ids=[world.live])
+    assert after.status == "failed" and ended in (after.status_reason or "")
+    assert _live_row(world, ticket.client_id) == (status, ended)
+
+
 class _Blind:
     """A trader that cannot look one order up (the broker times out on it)."""
 

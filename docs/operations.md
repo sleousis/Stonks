@@ -520,7 +520,7 @@ fallback_pct = 0.10   # distance as a share of the entry when there is no ATR
 
 ### Order states
 
-Live orders carry a fine state in `orders.state`: `pending`, `submitted`, `accepted`, `partially_filled`, `filled`, `pending_cancel`, `cancelled`, `expired`, `rejected` or `unknown`. The `status` column follows it. An order whose submit or cancel timed out is `unknown`, and nothing is sent for it again until reconciliation finds it at the broker by client id. A submit window stays shut while any order of the portfolio is `unknown`.
+Live orders carry a fine state in `orders.state`: `pending`, `submitted`, `accepted`, `partially_filled`, `filled`, `pending_cancel`, `cancelled`, `expired`, `rejected` or `unknown`. The `status` column follows it. An order whose submit or cancel timed out is `unknown`, and nothing is sent for it again until reconciliation finds it at the broker by client id. A submit window stays shut while any order of the portfolio is `unknown`. A client id names one order for good: a ticket whose order is already `cancelled`, `rejected` or `expired` fails and is never sent again under that id, a resume included.
 
 `uv run stonks live reconcile --portfolio <id>` syncs a portfolio's open orders and fills with its broker now, the way the tick and `live_submit` do before they act. It only reads the broker. It exits 1 while an order is still unknown.
 

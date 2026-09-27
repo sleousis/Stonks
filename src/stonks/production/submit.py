@@ -30,6 +30,7 @@ from stonks.core.clock import SYSTEM_CLOCK, Clock, today
 from stonks.core.protocols import Broker
 from stonks.execution.brokers.base import OrderRejectedError, OrderStateSource
 from stonks.execution.order_state import (
+    TERMINAL,
     ReconciliationPendingError,
     current_state,
     mark_unknown,
@@ -119,6 +120,11 @@ def submit_tickets(
     return result
 
 
+#: Order states that end an order without a full fill. A ticket whose
+#: client id is in one of them is never sent again.
+ENDED: frozenset[str] = TERMINAL - {"filled"}
+
+
 def _submit_portfolio(
     state: SqliteState,
     portfolio_id: str,
@@ -188,7 +194,15 @@ def _send(
     order = ticket.order
     cid = order.client_id
     existing = current_state(state, cid)
-    if existing is not None and existing not in ("rejected", "cancelled"):
+    if existing in ENDED:
+        # A client id names one order for good. Sending an order that was
+        # cancelled, rejected or expired again under the same id (after a
+        # resume, say) would bring it back: the person decides anew.
+        reason = f"order {cid} is already {existing}; it is never sent again"
+        _log.warning("submit.ended_order", client_id=cid, state=existing)
+        set_ticket_status(state, ticket.id, "failed", now=clock.now(), reason=reason)
+        return "failed"
+    if existing is not None:
         set_ticket_status(state, ticket.id, "submitted", now=clock.now())
         return "known"
     with state.transaction():
