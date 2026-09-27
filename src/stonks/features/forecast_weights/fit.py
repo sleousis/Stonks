@@ -34,8 +34,9 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
+import numpy as np
 import pandas as pd
 
 from stonks.features.forecast import cap_forecast
@@ -118,18 +119,24 @@ def rule_net_returns(
     return gross - positions.diff().abs() * cost
 
 
+def _col(frame: pd.DataFrame, name: str) -> pd.Series:
+    return cast(pd.Series, frame[name])
+
+
 def _sharpe(x: pd.Series, periods_per_year: float) -> float:
-    sd = float(x.std(ddof=1)) if len(x) > 1 else math.nan
+    values = x.to_numpy(dtype=float)
+    sd = float(np.std(values, ddof=1)) if len(values) > 1 else math.nan
     if not sd > 0:
         return math.nan
-    return float(x.mean()) / sd * math.sqrt(periods_per_year)
+    return float(np.mean(values)) / sd * math.sqrt(periods_per_year)
 
 
 def _scalar(raw: pd.Series, fixed: float, mode: str, min_obs: int) -> float:
-    history = raw.dropna().abs()
-    if mode != "estimate" or len(history) < min_obs or not float(history.mean()) > 0:
+    history = np.abs(raw.dropna().to_numpy(dtype=float))
+    mean_abs = float(np.mean(history)) if len(history) else 0.0
+    if mode != "estimate" or len(history) < min_obs or not mean_abs > 0:
         return float(fixed)
-    return FORECAST_TARGET / float(history.mean())
+    return FORECAST_TARGET / mean_abs
 
 
 def fit_forecast_weights(
@@ -154,18 +161,20 @@ def fit_forecast_weights(
         raise ValueError(f"cost must be >= 0, got {cost}")
     names = [str(c) for c in raw.columns]
     min_obs = max(2, int(min_obs))
-    scalars = {n: _scalar(raw[n], fixed_scalars[n], scalar_mode, min_obs) for n in names}
+    scalars = {n: _scalar(_col(raw, n), fixed_scalars[n], scalar_mode, min_obs) for n in names}
     forecasts = pd.DataFrame(
-        {n: cap_forecast(raw[n].astype(float) * scalars[n]) for n in names}, index=raw.index
+        {n: cap_forecast(_col(raw, n).astype(float) * scalars[n]) for n in names}, index=raw.index
     )
-    sigma = ewma_vol(closes.astype(float).pct_change(), span=vol_span)
+    sigma = cast(pd.Series, ewma_vol(closes.astype(float).pct_change(), span=vol_span))
     net = rule_net_returns(forecasts, closes, sigma, cost)
     rows = net.dropna()
     fit_end = closes.index[-1] if len(closes) else None
     sigma_annual = (
-        float(sigma.loc[rows.index].mean()) * math.sqrt(periods_per_year) if len(rows) else math.nan
+        float(np.mean(sigma.loc[rows.index].to_numpy(dtype=float))) * math.sqrt(periods_per_year)
+        if len(rows)
+        else math.nan
     )
-    gross = net + forecasts.div(FORECAST_TARGET * sigma, axis=0).diff().abs() * cost
+    gross = rule_net_returns(forecasts, closes, sigma, 0.0).loc[rows.index]
     stats = {}
     for n in names:
         turnover = forecast_turnover(forecasts.loc[rows.index, n], periods_per_year)
@@ -173,8 +182,8 @@ def fit_forecast_weights(
         stats[n] = (
             turnover,
             cost_sr,
-            _sharpe(gross.loc[rows.index, n], periods_per_year),
-            _sharpe(rows[n], periods_per_year),
+            _sharpe(_col(gross, n), periods_per_year),
+            _sharpe(_col(rows, n), periods_per_year),
         )
 
     def make(status: FitStatus, fdm: float, rules: tuple[RuleFit, ...]) -> ForecastWeightFit:
@@ -207,7 +216,8 @@ def fit_forecast_weights(
         )
         return make("too_costly", 1.0, rules)
 
-    weights = estimator.estimate(WeightInput(rows[kept], {n: stats[n][1] for n in kept}))
+    kept_rows = cast(pd.DataFrame, rows[kept])
+    weights = estimator.estimate(WeightInput(kept_rows, {n: stats[n][1] for n in kept}))
     if len(kept) < 2:
         fdm = 1.0
     elif fdm_mode == "estimate":

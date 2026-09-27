@@ -270,9 +270,9 @@ class ForecastBlend(ForecastTrendStrategy):
     # ---- evaluation ----------------------------------------------------------------
 
     def _ticker_forecast(self, ticker: str, bars: pd.DataFrame, asset_class: str) -> float | None:
-        stamps = pd.to_datetime(bars["timestamp"])
-        start = period_start(pd.Timestamp(stamps.iloc[-1]), str(self.params["refit"]))
-        fit = self._fit(ticker, bars[(stamps < start).to_numpy()], asset_class)
+        stamps = pd.DatetimeIndex(pd.to_datetime(bars["timestamp"]))
+        start = period_start(cast(pd.Timestamp, stamps[-1]), str(self.params["refit"]))
+        fit = self._fit(ticker, bars.iloc[: int((stamps < start).sum())], asset_class)
         self._fits[ticker] = fit
         weights = fit.weights
         if not weights:

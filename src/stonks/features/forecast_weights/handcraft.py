@@ -24,7 +24,7 @@ from collections.abc import Mapping
 
 import numpy as np
 import pandas as pd
-from scipy.cluster.hierarchy import linkage, to_tree
+from scipy.cluster.hierarchy import linkage
 from scipy.spatial.distance import squareform
 
 from stonks.features.forecast_weights.base import (
@@ -72,16 +72,21 @@ class HandcraftWeights(ForecastWeightEstimator):
     def _tree_weights(corr: np.ndarray, rules: list[str]) -> dict[str, float]:
         dist = np.sqrt(np.clip((1.0 - corr) / 2.0, 0.0, None))
         np.fill_diagonal(dist, 0.0)
-        root = to_tree(linkage(squareform(dist, checks=False), method="average"))
-        weights = np.zeros(len(rules))
-        stack = [(root, 1.0)]
+        tree = linkage(squareform(dist, checks=False), method="average")
+        n = len(rules)
+        # node k < n is rule k, node n + j merges tree[j, 0] and tree[j, 1]
+        members: dict[int, list[int]] = {k: [k] for k in range(n)}
+        for j, row in enumerate(tree):
+            members[n + j] = members[int(row[0])] + members[int(row[1])]
+        weights = np.zeros(n)
+        stack = [(2 * n - 2, 1.0)]
         while stack:
             node, w = stack.pop()
-            if node.is_leaf():
-                weights[node.id] += w
+            if node < n:
+                weights[node] += w
                 continue
-            left, right = node.get_left(), node.get_right()
-            li, ri = left.pre_order(), right.pre_order()
+            left, right = (int(x) for x in tree[node - n, :2])
+            li, ri = members[left], members[right]
             nl = effective_count(corr[np.ix_(li, li)])
             nr = effective_count(corr[np.ix_(ri, ri)])
             stack.append((left, w * nl / (nl + nr)))
