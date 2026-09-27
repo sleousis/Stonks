@@ -42,7 +42,7 @@ import re
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from stonks.accounts.audit import AuditLog
@@ -51,12 +51,15 @@ from stonks.config import RiskPolicy
 from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderSide, OrderStatus, Portfolio
 from stonks.execution.brokers.base import OrderCanceller, OrderRejectedError, OrderStateSource
+from stonks.execution.order_state import mark_unknown, unknown_orders, write_state
 from stonks.execution.orders import classify_all
 from stonks.execution.reconcile import NON_TERMINAL_STATUSES, reconcile_order, reconcile_orders
 from stonks.logging import get_logger
 from stonks.production.hooks import GateContext, run_gates
+from stonks.production.live.context import LiveContext
 from stonks.production.prices import load_prices
 from stonks.production.risk import apply_risk, build_risk_context, needs_risk_context
+from stonks.production.rules import RiskContext
 from stonks.production.tca import expected_cost_bps
 from stonks.production.tick import (
     TickSettings,
@@ -200,6 +203,14 @@ def place_manual_order(
             )
         if not preview:
             reconcile_orders(book.broker, state, portfolio_id=book.portfolio_id)
+        # 19.8: the reconciliation gate. While an order of the book is still
+        # ``unknown`` at the broker, nothing new is sent (as in the tick).
+        unresolved = unknown_orders(state, book.portfolio_id)
+        if unresolved:
+            raise ManualOrderRefused(
+                f"{len(unresolved)} order(s) of this book are in an unknown state at the "
+                "broker; wait until they are reconciled"
+            )
         portfolio = book.broker.fetch_portfolio()
     else:
         portfolio = _load_or_seed_portfolio(state, book.initial_cash, book.portfolio_id)
@@ -264,6 +275,23 @@ def place_manual_order(
             cost_model=tick.costs,
             volumes=priced.volumes,
             portfolio_id=book.portfolio_id,
+        )
+    if external:
+        # 19.8: a book at a real broker gives the live safeguards and the
+        # account rules their live context, as the tick does. They do
+        # nothing without it.
+        context = replace(
+            context
+            or RiskContext(
+                portfolio=portfolio,
+                prices=prices,
+                asset_classes=asset_classes,
+                policy=book.risk,
+                portfolio_id=book.portfolio_id,
+                as_of=as_of,
+                allow_short=book.allow_short,
+            ),
+            live=_live_context(state, lake, book, as_of, sorted({order.ticker, *held})),
         )
     costs: dict[str, Any] = (
         {"cost_model": tick.costs}
@@ -409,14 +437,17 @@ def _place_at_broker(
         )
         return replace(result, status="rejected", reason=str(exc))
     except Exception as exc:
-        # It may or may not have reached the broker: the row stays pending
-        # and the next reconcile settles it by client id.
+        # It may or may not have reached the broker: the row turns
+        # ``unknown`` and the reconciliation gate stays shut until the next
+        # reconcile settles it by client id (19.8, as in the tick).
         _log.warning("manual_order.submit_failed", client_id=decided.client_id, error=str(exc))
+        mark_unknown(state, decided.client_id, f"submit outcome unknown: {exc}"[:500])
         return replace(
             result,
             status="pending",
             reason="the broker did not confirm the order; it is checked again at the next sync",
         )
+    write_state(state, decided.client_id, "submitted")
     try:
         reconcile_order(broker, state, decided.client_id, reject_unknown=False)
     except Exception as exc:
@@ -429,6 +460,31 @@ def _place_at_broker(
         reason=row["status_reason"],
         fill_price=_avg_fill(state, decided.client_id),
     )
+
+
+def _live_context(
+    state: SqliteState, lake: Any, book: ManualBook, as_of: date, tickers: list[str]
+) -> LiveContext:
+    """What the live safeguards see of ``book`` (never raises: a context that
+    cannot be built is empty, and the rules then refuse to open)."""
+    from stonks.production.live.context import build_live_context
+    from stonks.production.rules._common import settings_of
+
+    try:
+        return build_live_context(
+            state,
+            book.portfolio_id,
+            as_of,
+            broker=book.broker,
+            tickers=tickers,
+            lake=lake,
+            account_settings=settings_of(book.risk, "account_rules"),
+        )
+    except Exception as exc:
+        _log.error(
+            "manual_order.live_context_failed", portfolio_id=book.portfolio_id, error=str(exc)
+        )
+        return LiveContext(portfolio_id=book.portfolio_id)
 
 
 # ---- cancel and change -----------------------------------------------------------------
@@ -515,6 +571,17 @@ def change_manual_order(
         raise ManualOrderRefused(
             f"the broker did not cancel {client_id} (it is {cancelled.status}); nothing replaced it"
         )
+    if cancelled.status != "cancelled":
+        # The cancel was only requested: the original can still fill, so a
+        # replacement now could double the position.
+        raise ManualOrderRefused(
+            f"the cancel of {client_id} is not confirmed yet (it is {cancelled.status}); "
+            "change it again once it shows cancelled"
+        )
+    filled = _filled_quantity(state, client_id)
+    new_qty = float(quantity if quantity is not None else row["quantity"]) - filled
+    if new_qty <= _QTY_EPS:
+        raise ManualOrderRefused(f"{filled:g} filled before the cancel; nothing replaced it")
     return place_manual_order(
         state,
         lake,

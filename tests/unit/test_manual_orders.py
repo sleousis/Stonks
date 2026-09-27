@@ -483,3 +483,100 @@ def test_snapshot_date_is_the_order_day(state, lake, tick, portfolio_id, owner):
     )
     snap = state.sql("SELECT as_of, tick_id FROM portfolio_snapshots")[0]
     assert snap["as_of"] == date(2026, 4, 2).isoformat() and snap["tick_id"] is None
+
+
+
+# ---- review 2026-09-27: live safeguards and the reconcile gate on broker books ----------
+
+
+def test_live_safeguards_apply_to_a_broker_book(state, lake, tick, portfolio_id, owner):
+    from stonks.production.rules.settings import RuleSettings
+
+    risk = RiskPolicy(
+        rules=RuleSettings.model_validate({"live_notional_caps": {"max_order_notional": 100.0}})
+    )
+    book = _book(portfolio_id, owner, broker=WorkingBroker(), risk=risk)
+    with pytest.raises(ManualOrderRefused):
+        place_manual_order(
+            state,
+            lake,
+            _order(portfolio_id, owner, order_type="limit", limit_price=95.0),
+            book,
+            tick,
+            now=NOW,
+        )
+    assert state.sql("SELECT client_id FROM orders") == []
+
+
+def test_unknown_orders_shut_the_gate_for_manual_orders(state, lake, tick, portfolio_id, owner):
+    state.execute(
+        "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status, state,"
+        " broker_order_id, created_at, updated_at, portfolio_id) VALUES"
+        " ('t:1', 'UP.US', 'buy', 1, 'market', 'pending', 'unknown', 'b-x', ?, ?, ?)",
+        [NOW.isoformat(), NOW.isoformat(), portfolio_id],
+    )
+
+    class Blind(WorkingBroker):
+        def get_order_state(self, client_id: str):
+            if client_id == "t:1":
+                raise TimeoutError("no answer")
+            return super().get_order_state(client_id)
+
+    book = _book(portfolio_id, owner, broker=Blind())
+    with pytest.raises(ManualOrderRefused, match="unknown"):
+        place_manual_order(
+            state,
+            lake,
+            _order(portfolio_id, owner, order_type="limit", limit_price=95.0),
+            book,
+            tick,
+            now=NOW,
+        )
+
+
+def test_a_submit_with_no_answer_marks_the_order_unknown(state, lake, tick, portfolio_id, owner):
+    class Silent(WorkingBroker):
+        def place_order(self, order: Order):
+            raise TimeoutError("gateway went quiet")
+
+    book = _book(portfolio_id, owner, broker=Silent())
+    out = place_manual_order(
+        state,
+        lake,
+        _order(portfolio_id, owner, order_type="limit", limit_price=95.0),
+        book,
+        tick,
+        now=NOW,
+    )
+    row = state.sql("SELECT state FROM orders WHERE client_id = ?", [out.client_id])[0]
+    assert row["state"] == "unknown"
+
+
+def test_change_waits_for_a_confirmed_cancel(state, lake, tick, portfolio_id, owner):
+    class SlowCancel(WorkingBroker):
+        def cancel_order(self, client_id: str) -> bool:
+            return client_id in self.orders  # requested, still working
+
+    broker = SlowCancel()
+    book = _book(portfolio_id, owner, broker=broker)
+    first = place_manual_order(
+        state,
+        lake,
+        _order(portfolio_id, owner, order_type="limit", limit_price=95.0, client_key="c"),
+        book,
+        tick,
+        now=NOW,
+    )
+    with pytest.raises(ManualOrderRefused, match="not confirmed"):
+        change_manual_order(
+            state,
+            lake,
+            first.client_id,
+            book,
+            tick,
+            actor=f"user:{owner}",
+            reason="lower",
+            quantity=6.0,
+            now=NOW,
+        )
+    assert list(broker.orders) == [first.client_id]
