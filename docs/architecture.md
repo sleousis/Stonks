@@ -107,6 +107,15 @@ New behaviour plugs in behind a seam. Most are registries, so a new one is one n
 | `Broker` | `core/protocols.py`, `execution/brokers/` | simulated, alpaca |
 | `BrokerConnection` | `connections/base.py` | alpaca, snaptrade, fake |
 | Notification channel | `notify/channels.py` | webpush, email, webhook |
+| `PricingModel` | `options/pricing/` (registry) | Black-Scholes, Black-76, American approximations (QuantLib) |
+| Option structure | `options/structures/` (registry) | covered call, cash-secured put, verticals, iron condor |
+| `AssignmentModel` | `options/assignment.py` | early assignment before dividends and deep in the money |
+
+### One instrument model
+
+Every tradable thing has one description in `core/instruments.py`: an `InstrumentSpec` with its symbol, asset class, kind (spot, option, future), currency, exchange, tick size, lot size, multiplier and, for derivatives, the underlying, expiry, strike and right. A stock is a spot spec with multiplier 1 and no expiry. Brokers keep their own keys in `broker_ids` (for example the IBKR contract id), so an adapter can cache lookups without leaking its types. `InstrumentBook` resolves any symbol to its spec. The option view (`core/options.py`: intrinsic value, OCC symbol, split adjustment) converts to and from a spec.
+
+Multi-leg orders are explicit: a `ComboOrder` in `core/combos.py` is a parent order whose legs fill as one unit, all or none. The options backtest fills them from quotes, and a broker with combo orders (IBKR) can map the parent onto one native order.
 
 ## The daily loop
 

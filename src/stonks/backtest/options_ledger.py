@@ -34,6 +34,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Literal
 
+from stonks.core.instruments import InstrumentBook, InstrumentSpec
 from stonks.core.options import OptionContract, adjust_for_split
 from stonks.core.types import Portfolio
 
@@ -93,6 +94,14 @@ class OptionLedger:
     def positions(self) -> dict[str, float]:
         """Every position: shares by ticker, options by contract id."""
         return {**self.shares, **self.options}
+
+    def instrument_book(self) -> InstrumentBook:
+        """Every held instrument in the general model (shares are spot
+        instruments with multiplier 1)."""
+        book = InstrumentBook(InstrumentSpec.for_option(c) for c in self.contracts.values())
+        for ticker in self.shares:
+            book.add(InstrumentSpec.spot(ticker))
+        return book
 
     def option_value(self, marks: Mapping[str, float]) -> float:
         return sum(

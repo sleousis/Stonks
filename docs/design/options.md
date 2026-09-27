@@ -165,6 +165,7 @@ The build follows the sections above, with these differences.
 - A synthetic source (`options/synthetic.py`) prices chains from closes for hermetic tests. Its results are never evidence.
 
 **Contracts and valuation.**
+- Contracts are one case of a general `InstrumentSpec` (`core/instruments.py`), the model every instrument uses, with broker ids for the IBKR contract cache. Combo orders are general too (`core/combos.py`).
 - The contract id adds the multiplier only when it is not 100 (`AAPL.US:2026-01-16:C:100:150`). Style and settlement travel with the contract, not in the id.
 - `core/types.py` is unchanged. `Portfolio.total_value` gets no multiplier map. Instead the options ledger hands risk code a portfolio whose option prices are per contract (mark times multiplier), so the equity comes out right.
 - Splits adjust contracts by OCC rules (whole-number splits multiply contracts, other ratios change the deliverable) instead of closing the position.
