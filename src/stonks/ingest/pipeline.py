@@ -59,6 +59,8 @@ _SOFT_FAIL_EXCEPTIONS = (
 
 DateRanges = Mapping[str, Sequence[tuple[date, date]]]
 
+_PRICE_COLUMNS = ("open", "high", "low", "close")
+
 
 @dataclass(frozen=True)
 class IngestRunResult:
@@ -455,9 +457,18 @@ class IngestPipeline:
         """Split ``frame`` into the rows to store and the number sent to
         quarantine. Daily frames carry ``date``; the checker and the
         quarantine table work on ``timestamp``."""
-        if frame.empty or not self._quality.config.enabled:
-            quality.bars_checked += len(frame)
+        if frame.empty:
             return frame, 0
+        if not self._quality.config.enabled:
+            quality.bars_checked += len(frame)
+            # a row with a missing price never overwrites a stored bar,
+            # even with the checker off (BE-37)
+            missing = frame[list(_PRICE_COLUMNS)].isna().any(axis=1)
+            if missing.any():
+                self._log.warning(
+                    "bars.missing_price_dropped", ticker=ticker, rows=int(missing.sum())
+                )
+            return frame[~missing], 0
         if "timestamp" in frame.columns:
             timed = frame
         else:

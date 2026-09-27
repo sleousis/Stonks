@@ -111,3 +111,25 @@ def test_fallback_rows_are_checked_for_drift_too(lake):
     adj = _adj(lake)
     assert adj[date(2025, 6, 2)] == pytest.approx(98.0)
     assert adj[date(2025, 6, 16)] == pytest.approx(100.0)
+
+
+def test_a_row_with_null_prices_never_overwrites_a_bar_with_quality_off(lake):
+    """BE-37: with the checker off, a vendor row with missing prices is
+    dropped (and logged), never stored over a good bar."""
+    from stonks.ingest.quality import BarQualityChecker
+    from stonks.ingest.quality_config import DataQualityConfig
+
+    seed_daily_bars(lake, "A.US", date(2025, 6, 2), date(2025, 6, 13), close=100.0)
+    empty = RawPriceBar(
+        ticker="A.US", date=date(2025, 6, 13), open=None, high=None, low=None,
+        close=None, adj_close=None, volume=None,
+    )  # fmt: skip
+    result = IngestPipeline(
+        FakeListingSource(prices={"A.US": [empty]}),
+        lake,
+        quality=BarQualityChecker(DataQualityConfig(enabled=False)),
+        clock=_clock,
+    ).run_prices(["A.US"], since=date(2025, 6, 13), until=date(2025, 6, 13))
+    assert result.status == "ok"
+    stored = lake.get_prices("A.US", date(2025, 6, 13), date(2025, 6, 13))
+    assert stored["close"].tolist() == [pytest.approx(100.0)]

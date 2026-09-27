@@ -192,8 +192,10 @@ Every `ingest prices` and `ingest intraday` batch is checked before it is stored
 - **Stored spikes**: a daily ingest stores one bar at a time, so a bad tick is stored before the next bar shows it up. When the next batch takes its move back, the stored bar moves to `quarantined_bars` and leaves `bars`.
 - **Warnings** (kept): extreme moves that stick, stale series, flat price streaks, zero-volume streaks, calendar gaps (a day whose only bar was quarantined counts), and `no_data` when the source returned nothing.
 - **Unfinished bars**: a daily bar whose session has not closed yet is dropped. The next ingest after the close stores it.
+- **Checker off**: with `[ingest.quality] enabled = false` nothing is quarantined, but a row with a missing price is still dropped and logged. It never overwrites a stored bar.
+- **Adjustment basis**: a daily batch whose `adj_close / close` differs from the stored bars it overlaps means a split or dividend. The older stored bars are scaled onto the new basis, and the summary lists the ticker under `readjusted` (see [universes.md](universes.md)).
 
-Each run stores a summary in `ingest_runs.quality_json` and alerts when it quarantines a bar, when 5 or more tickers warn, or when a fallback source supplied data. Thresholds use the defaults in `ingest/quality_config.py`; `[ingest.quality]` and `[ingest.fallback]` are not read from the config file yet, and no command wires a fallback source today. Triage: [runbooks/data-stale.md](runbooks/data-stale.md).
+Each run stores a summary in `ingest_runs.quality_json` and alerts when it quarantines a bar, when 5 or more tickers warn, or when a fallback source supplied data. Set the thresholds under `[ingest.quality]`. Set a fallback source per primary under `[ingest.fallback]`, for example `sources = { eodhd = "yahoo" }`. Every ingest command, the scheduled ingest and the ensurer use both. Triage: [runbooks/data-stale.md](runbooks/data-stale.md).
 
 ## Alerts
 
@@ -224,7 +226,7 @@ Orders the risk rules clip or drop are not alerts; they are listed under `risk_a
 
 ## Push and per-user notifications
 
-Per-user notifications go through an outbox: the router writes one in-app `alerts` row and one delivery per channel (Web Push, the user's webhook, email), with dedupe, preferences and quiet hours in the user's time zone. The delivery worker sends them with retries and dead letters. The tick does not enqueue signals into the outbox yet (its `notification_enqueue` hook only logs), so today `notify test` is the way to exercise it.
+Per-user notifications go through an outbox: the router writes one in-app `alerts` row and one delivery per channel (Web Push, the user's webhook, email), with dedupe, preferences and quiet hours in the user's time zone. The delivery worker sends them with retries and dead letters. The tick's `notification_enqueue` hook queues each notify subscription's signals of the day (entries, exits, increases and decreases). `notify test` sends a test notification to one user.
 
 ```bash
 uv run python -m stonks.notify vapid-keygen             # prints STONKS_VAPID_PUBLIC_KEY / _PRIVATE_KEY
