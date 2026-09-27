@@ -6,6 +6,7 @@ import pytest
 
 from stonks.backtest.costs import CostModelSettings
 from stonks.config import Settings
+from stonks.lab.parallel import default_max_workers
 from stonks.notify import CompositeNotifier
 from stonks.production.settings_builder import build_tick_runtime, build_tick_settings
 from stonks.production.tick import TickSettings
@@ -40,7 +41,16 @@ def test_build_tick_settings_maps_every_production_field():
         risk=settings.production.risk,
         shadow_enabled=False,
         broker_kind="simulated",
+        scoring_workers=default_max_workers(),  # scoring_workers = 0: every core
     )
+
+
+def test_scoring_workers_reach_the_tick_settings():
+    settings = _settings()
+    settings.production.scoring_workers = 3
+    settings.production.parallel_min_estimates = 50
+    built = build_tick_settings(settings, ["A.US"])
+    assert (built.scoring_workers, built.parallel_min_estimates) == (3, 50)
 
 
 def test_dividend_withholding_rate_reaches_the_tick_settings():
