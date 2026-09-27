@@ -156,13 +156,19 @@ from stonks.backtest.fills import (
     lagged_market_stats,
     market_stats_from_row,
 )
-from stonks.backtest.report import BacktestReport, compute_report, periods_per_year
+from stonks.backtest.report import (
+    BacktestReport,
+    ExposurePoint,
+    ShortBookReport,
+    compute_report,
+    periods_per_year,
+)
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.corporate_actions import CorporateActionsProvider, Split
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
 from stonks.core.timeutil import as_datetime, day_end, day_start
-from stonks.core.types import AssetClass, Order
+from stonks.core.types import AssetClass, Order, Portfolio
 from stonks.execution.orders import SideToken, classify, classify_all
 from stonks.logging import get_logger
 from stonks.store.corporate_actions import LakeCorporateActions
@@ -300,6 +306,7 @@ class Backtester:
         equity_curve: list[float] = []
         last_close: dict[str, float] = {}
         pending: list[Order] = []
+        exposure: list[ExposurePoint] = []
 
         bars_since_rebalance: int | None = None
         for as_of, bars in bars_by_ts.items():
@@ -340,17 +347,29 @@ class Backtester:
             equity_dates.append(as_of)
             equity_curve.append(portfolio.total_value(marks))
             self._equity.append((as_of, equity_curve[-1]))
+            if self._config.allow_short:
+                exposure.append(_exposure(as_of, portfolio, marks, equity_curve[-1]))
 
         if pending:
             _log.debug("unfilled_orders_at_end", count=len(pending))
         strategy_id = ",".join(s.id for s in self._strategies) or "empty"
-        return compute_report(
+        report = compute_report(
             strategy_id,
             equity_dates,
             equity_curve,
             periods_per_year=periods_per_year(self._config.interval, set(asset_classes.values())),
             corporate_actions=applied,
             sessions_per_year=calendar_for_universe(set(asset_classes.values())).sessions_per_year,
+        )
+        if not self._config.allow_short:
+            return report
+        return replace(
+            report,
+            short_book=ShortBookReport(
+                financing=tuple(getattr(self._broker, "financing", ())),
+                forced_orders=tuple(self.forced_orders),
+                exposure=tuple(exposure),
+            ),
         )
 
     # ---- internals ----------------------------------------------------------
@@ -876,3 +895,15 @@ def _as_date(value) -> date:
     if isinstance(value, date):
         return value
     return pd.Timestamp(value).date()
+
+
+def _exposure(
+    as_of: datetime, portfolio: Portfolio, marks: Mapping[str, float], equity: float
+) -> ExposurePoint:
+    """Long and short value as fractions of ``equity`` (0 when it is not
+    positive)."""
+    if not equity > 0:
+        return ExposurePoint(as_of, 0.0, 0.0)
+    return ExposurePoint(
+        as_of, portfolio.long_value(marks) / equity, portfolio.short_value(marks) / equity
+    )

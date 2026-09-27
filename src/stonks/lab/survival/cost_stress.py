@@ -25,6 +25,14 @@ data" note (there is nothing to stress).
 When the dataset has no costs (``None`` or all zero) the 1x level is
 ``CostModelSettings.realistic()`` and the report notes it.
 
+Shorts (roadmap 16.4): on a dataset that may short (``shorting`` set),
+every level also multiplies the borrow fees, and one more backtest charges
+normal costs with ``borrow_stress_multiplier`` (3x) the borrow fees. Its
+Sharpe (``sharpe_borrow_stress``) must stay above 0. The report adds the
+equity borrow fee of the 1x level (``borrow_fee_rate``) and the financing
+the 1x backtest paid; the go-live gate reads both. A long-only dataset
+gets exactly the report it always did.
+
 The grid backtests run on the lab process pool (``lab.parallel``, via
 ``_reruns``); the few bisection steps run in-process. Backtests are
 deterministic, so the report does not depend on ``max_workers``.
@@ -88,6 +96,12 @@ class CostStressOptions(BaseModel):
         ge=0.0,
         le=1.0,
         description="Most of the cost-free Sharpe that costs may eat, as a fraction.",
+    )
+    #: Borrow-fee multiple of the extra short-book backtest (see the module doc).
+    borrow_stress_multiplier: float = Field(
+        default=3.0,
+        gt=1.0,
+        description="Borrow fee multiple a book that shorts must survive at normal costs.",
     )
     #: Worker processes; ``None`` means ``lab.parallel.default_max_workers()``.
     max_workers: int | None = Field(default=None, ge=1)
@@ -200,20 +214,41 @@ class CostStressTest:
         realistic = not _has_costs(dataset_costs)
         base_costs = CostModelSettings.realistic() if realistic else dataset_costs
         assert base_costs is not None
+        shorting = getattr(context, "shorting", None)
         levels = sorted({*opts.multipliers, opts.max_break_even})
         _log.info("cost_stress.start", levels=levels, realistic=realistic)
 
-        def reruns(ms: list[float]) -> list[RerunResult]:
+        def rerun(m: float, borrow: float | None = None) -> Rerun:
+            if shorting is None:
+                return Rerun(costs=scale_costs(base_costs, m), override_costs=True)
+            return Rerun(
+                costs=scale_costs(base_costs, m),
+                override_costs=True,
+                shorting=shorting.scaled(m if borrow is None else borrow),
+                override_shorting=True,
+            )
+
+        def run(batch: list[Rerun]) -> list[RerunResult]:
             return run_reruns(
                 strategy,
                 context,
-                [Rerun(costs=scale_costs(base_costs, m), override_costs=True) for m in ms],
-                max_workers=opts.max_workers if len(ms) > 1 else 1,
+                batch,
+                max_workers=opts.max_workers if len(batch) > 1 else 1,
                 log_prefix="cost_stress",
             )
 
-        results = dict(zip(levels, reruns(levels), strict=True))
+        def reruns(ms: list[float]) -> list[RerunResult]:
+            return run([rerun(m) for m in ms])
+
+        batch = [rerun(m) for m in levels]
+        if shorting is not None:
+            batch.append(rerun(1.0, borrow=opts.borrow_stress_multiplier))
+        ran = run(batch)
+        borrow_stress = ran.pop() if shorting is not None else None
+        results = dict(zip(levels, ran, strict=True))
         errors = [f"{m:g}x: {r.error}" for m, r in results.items() if not r.ok]
+        if borrow_stress is not None and not borrow_stress.ok:
+            errors.append(f"borrow {opts.borrow_stress_multiplier:g}x: {borrow_stress.error}")
         base = results[1.0]
         costs_note = "no dataset costs, 1x = CostModelSettings.realistic()" if realistic else ""
         if errors or base.n_round_trips == 0:
@@ -256,6 +291,11 @@ class CostStressTest:
             failures.append(f"break-even multiple {break_even:.2f} < {opts.min_break_even:g}")
         if cost_sr > cost_sr_limit:
             failures.append(f"speed limit: cost Sharpe {cost_sr:.3f} > {cost_sr_limit:.3f}")
+        if borrow_stress is not None and not borrow_stress.sharpe > 0:
+            failures.append(
+                f"sharpe at {opts.borrow_stress_multiplier:g}x borrow fees "
+                f"{borrow_stress.sharpe:.3f} <= 0"
+            )
 
         metrics = {_label(m): grid[m] for m in opts.multipliers}
         metrics.update(
@@ -269,6 +309,15 @@ class CostStressTest:
                 "used_realistic_costs": float(realistic),
             }
         )
+        if shorting is not None and borrow_stress is not None:
+            metrics.update(
+                {
+                    "sharpe_borrow_stress": float(borrow_stress.sharpe),
+                    "borrow_stress_multiplier": float(opts.borrow_stress_multiplier),
+                    "borrow_fee_rate": float(shorting.equity_fee_rate()),
+                    "financing_paid": float(base.financing_paid),
+                }
+            )
         verdict = "; ".join(failures) if failures else "edge survives the cost stress"
         return SurvivalReport(
             test_id=self.id,

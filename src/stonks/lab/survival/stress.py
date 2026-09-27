@@ -30,6 +30,18 @@ paths beat) no deeper than ``max_drawdown_limit`` (-30%).
 
 Paths run as ``lab.parallel.run_tasks`` tasks. Every draw is made up front
 from ``seed``, so the report is the same for any worker count.
+
+Short squeeze (roadmap 16.4)
+----------------------------
+On a dataset that may short (``shorting`` set) the test also replays the
+real validation window with a squeeze. It backtests the window once, takes
+the short round trip with the largest notional, and lifts that ticker's
+prices from the bar after the entry by ``squeeze_jump`` (50%), spread
+evenly in log terms over ``squeeze_bars`` (3) bars and held there. The
+squeezed backtest's maximum drawdown must stay above
+``max_squeeze_drawdown`` (-30%). A book without short trades has nothing
+to squeeze and the scenario only reports that. A long-only dataset never
+runs it, so its report is unchanged.
 """
 
 from __future__ import annotations
@@ -140,6 +152,32 @@ def resample_window(
     return out
 
 
+def squeeze_bars(bars: pd.DataFrame, start: int, jump: float, n_bars: int) -> pd.DataFrame:
+    """``bars`` with every price from row ``start`` on multiplied by
+    ``(1 + jump) ** (min(k + 1, n_bars) / n_bars)`` for the ``k``-th
+    squeezed row: the rise is spread evenly in log terms over ``n_bars``
+    rows and then held. Earlier rows are unchanged."""
+    out = bars.reset_index(drop=True).copy()
+    if start >= len(out):
+        return out
+    k = np.arange(len(out) - start)
+    factor = (1.0 + jump) ** (np.minimum(k + 1, n_bars) / n_bars)
+    for column in ("open", "high", "low", "close", "adj_close"):
+        if column in out.columns:
+            values = out[column].to_numpy(dtype=float).copy()
+            values[start:] = values[start:] * factor
+            out[column] = values
+    return out
+
+
+def _fresh(strategy: Strategy) -> Strategy:
+    """A copy of ``strategy`` from its saved state (no carried memo)."""
+    handle = PortableStrategy(strategy)
+    clone = PortableStrategy.__new__(PortableStrategy)
+    clone.__setstate__(handle.__getstate__())
+    return clone.strategy
+
+
 @dataclass(frozen=True)
 class _PathRun:
     context: Any
@@ -195,6 +233,11 @@ class StressTest:
         max_drawdown_limit: float = Field(default=-0.3, le=0.0)
         max_workers: int | None = Field(default=None, ge=1)
         seed: int = 0
+        #: The short-squeeze scenario (see the module doc).
+        short_squeeze: bool = True
+        squeeze_jump: float = Field(default=0.5, gt=0.0)
+        squeeze_bars: int = Field(default=3, ge=1)
+        max_squeeze_drawdown: float = Field(default=-0.3, le=0.0)
 
     def __init__(self, options: StressTest.Options | None = None) -> None:
         self.options = options or StressTest.Options()
@@ -243,6 +286,14 @@ class StressTest:
             "max_dd_median": float(np.median(drawdowns)),
         }
         failures = []
+        if o.short_squeeze and getattr(context, "shorting", None) is not None:
+            squeeze = self._squeeze(strategy, context, window, interval, history)
+            metrics.update(squeeze)
+            dd = squeeze.get("squeeze_max_dd")
+            if dd is not None and dd < o.max_squeeze_drawdown:
+                failures.append(
+                    f"short squeeze drawdown {dd:.1%} beyond {o.max_squeeze_drawdown:.0%}"
+                )
         if not p5 > o.min_p5_sharpe:
             failures.append(f"5th-percentile Sharpe {p5:.2f} <= {o.min_p5_sharpe:g}")
         if dd95 < o.max_drawdown_limit:
@@ -255,6 +306,46 @@ class StressTest:
             metrics=metrics,
             notes="; ".join(failures) or f"{o.method}, {len(results)} paths",
         )
+
+    def _squeeze(
+        self,
+        strategy: Strategy,
+        context: Any,
+        window: tuple[date, date],
+        interval: Interval,
+        history: dict[str, tuple[pd.DataFrame, int]],
+    ) -> dict[str, float]:
+        """Metrics of the short-squeeze scenario (see the module doc)."""
+        o = self.options
+        coarser = _coarser_intervals(context, interval)
+
+        def backtest(frames: dict[str, pd.DataFrame]) -> Any:
+            # both runs read back-adjusted bars, so they differ only by the squeeze
+            tickers = data_tickers(context)
+            with _modified_lake(context.lake, tickers, frames, interval, coarser) as lake:
+                dataset = dataclasses.replace(context, lake=lake)
+                return run_backtest(_fresh(strategy), dataset, window, lake=lake)
+
+        base = backtest({t: b for t, (b, _) in history.items()})
+        shorts = [t for t in base.trades if t.side == "short" and t.ticker in history]
+        if not shorts:
+            return {"squeeze_n_shorts": 0.0}
+        target = max(shorts, key=lambda t: (t.entry_px * t.qty, t.ticker))
+        bars, _ = history[target.ticker]
+        stamps = pd.to_datetime(bars["timestamp"], utc=True)
+        entry = pd.Timestamp(target.entry_ts)
+        entry = entry.tz_localize("UTC") if entry.tzinfo is None else entry.tz_convert("UTC")
+        start = int((stamps <= entry).sum())
+        frames = {t: b for t, (b, _) in history.items()}
+        frames[target.ticker] = squeeze_bars(bars, start, o.squeeze_jump, o.squeeze_bars)
+        squeezed = backtest(frames)
+        return {
+            "squeeze_n_shorts": float(len(shorts)),
+            "squeeze_jump": float(o.squeeze_jump),
+            "squeeze_return": float(squeezed.final_return),
+            "squeeze_max_dd": float(squeezed.max_drawdown),
+            "squeeze_loss": float(base.final_return - squeezed.final_return),
+        }
 
     def _draw_paths(
         self, history: dict[str, tuple[pd.DataFrame, int]], window: tuple[date, date]

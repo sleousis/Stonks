@@ -66,6 +66,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from stonks.backtest.costs import CostModelSettings
     from stonks.backtest.fills import ExecutionSettings
     from stonks.backtest.report import BacktestReport
+    from stonks.backtest.shorting import ShortingSettings
     from stonks.portfolio.settings import ConstructionSettings
     from stonks.store.lake import DuckDBLake
 
@@ -130,6 +131,9 @@ class LabDataset:
     #: Non-contiguous training windows of a CV fold (see the module doc).
     #: Empty for an ordinary dataset.
     train_segments: tuple[tuple[date, date], ...] = ()
+    #: Short selling for every backtest on this dataset (roadmap 16.4): the
+    #: margin model and borrow fees. ``None`` (the default): long-only.
+    shorting: ShortingSettings | None = None
     #: Stitched walk-forward OOS backtest, set by the walk-forward test for
     #: the tests after it (``mc_trades``). Never copied by ``replace``.
     stitched_oos_report: BacktestReport | None = field(

@@ -8,6 +8,10 @@ Every report carries its benchmark (BL-22): a ``BenchmarkedReport`` whose
 ``benchmark`` is computed by ``stonks.backtest.benchmark`` on the same bars
 and timestamps, from ``getattr(dataset, "benchmark", "auto")`` unless the
 caller passes ``benchmark=`` (``"none"`` turns it off).
+
+A dataset with ``shorting`` set (roadmap 16.4) backtests a book that may
+short: the config allows shorts and the broker gets the margin model and
+the borrow fees.
 """
 
 from __future__ import annotations
@@ -53,6 +57,7 @@ def backtest_config(
         threshold=0.0,
         construction=getattr(dataset, "construction", None),
         universe_id=getattr(dataset, "universe_id", None),
+        allow_short=getattr(dataset, "shorting", None) is not None,
     )
 
 
@@ -61,11 +66,13 @@ def lab_broker(dataset: Any) -> SimulatedBroker:
     model and execution settings (fill model, settlement)."""
     costs = getattr(dataset, "costs", None)
     execution = getattr(dataset, "execution", None) or ExecutionSettings()
-    return SimulatedBroker.from_execution(
+    broker = SimulatedBroker.from_execution(
         Portfolio(cash=LAB_INITIAL_CASH, positions={}),
         execution,
         cost_model=costs.build() if costs is not None else None,
     )
+    shorting = getattr(dataset, "shorting", None)
+    return broker if shorting is None else shorting.enable(broker)
 
 
 def run_backtest(
