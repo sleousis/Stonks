@@ -279,7 +279,18 @@
           [pageSize]="historyPageSize"
           [busy]="history.isLoading()"
           (pageChange)="historyOffset.set($event.offset)"
-        />
+        >
+          <!-- A snapshot from a trading run links to that run, by its date (UX-27). -->
+          <ng-template appCell="taken_at" [appCellOf]="hp.items" let-snap>
+            @if (snap.tick_id) {
+              <a class="cell-link" [routerLink]="['/orders/ticks', snap.tick_id]">{{
+                snap.taken_at | dateTime
+              }}</a>
+            } @else {
+              {{ snap.taken_at | dateTime }}
+            }
+          </ng-template>
+        </app-data-table>
       }
     </section>
   </div>

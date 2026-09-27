@@ -1,5 +1,6 @@
 import type { PortfolioRef } from '../../api/portfolios.service';
 import { formatNumber } from '../../core/format/format';
+import { humanize } from '../../shared/ui/param-form/param-spec';
 
 /** Basis points to one decimal ("12.3 bps"), or "n/a" while not known yet. */
 export function formatBps(value: number | null | undefined): string {
@@ -24,12 +25,6 @@ const TRIGGERS: Record<string, string> = {
 export function triggerLabel(trigger: string | null | undefined): string {
   if (!trigger) return 'Not recorded';
   return TRIGGERS[trigger] ?? humanize(trigger);
-}
-
-/** `target_weight` to "Target weight". */
-export function humanize(key: string): string {
-  const text = key.replace(/[_-]+/g, ' ').trim();
-  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /** A portfolio's name from the picker's list, or null when the list does not name it. */

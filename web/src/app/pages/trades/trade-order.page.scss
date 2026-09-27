@@ -90,6 +90,21 @@ dd {
   color: var(--color-ink-3);
   font-size: var(--text-xs);
   overflow-wrap: anywhere;
+
+  summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--control-h);
+    cursor: pointer;
+
+    @include bp.phone {
+      min-height: var(--touch-min);
+    }
+
+    @include bp.coarse {
+      min-height: var(--touch-min);
+    }
+  }
 }
 
 .reason {

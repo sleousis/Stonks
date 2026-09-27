@@ -137,6 +137,10 @@ describe('InsightsPage', () => {
     expect(seen.some((u) => u.includes('/api/portfolio/snapshots') && u.includes('limit=20'))).toBe(
       true,
     );
+    // Each snapshot names its run by date, linked, never by its raw id (UX-27).
+    const table = el.querySelector('section[aria-labelledby="history-title"] table')!;
+    expect(table.textContent).not.toContain('t7');
+    expect(table.querySelector('a[href="/orders/ticks/t7"]')?.textContent).toMatch(/2026/);
   });
 
   it('shows totals across every book to admins only', async () => {

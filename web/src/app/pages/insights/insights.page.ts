@@ -20,9 +20,10 @@ import type {
 import { PortfolioService } from '../../api/portfolio.service';
 import { SessionService } from '../../core/auth/session.service';
 import { formatDateTime, formatMoney, formatNumber, formatPercent } from '../../core/format/format';
+import { DateTimePipe } from '../../shared/format.pipes';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
-import { DataTable, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { ExportButton } from '../../shared/ui/export-button';
@@ -86,6 +87,8 @@ export function agreementLine(h: HoldingAgreement): string {
     Segmented,
     StatTile,
     DataTable,
+    TableCell,
+    DateTimePipe,
     HelpTip,
     UpdatedAgo,
     LoadingState,
@@ -203,7 +206,6 @@ export class InsightsPage {
       format: 'number',
       value: (s) => Object.keys(s.positions).length,
     },
-    { key: 'tick_id', label: 'Trading run', mobile: 'hide', sortable: false },
   ];
   protected readonly snapshotKey = (s: SnapshotView) => String(s.id);
   protected readonly sliceKey = (s: AllocationSlice) => s.key;
