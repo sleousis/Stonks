@@ -49,6 +49,8 @@ from stonks.store.pit import PointInTimeLake
 __all__ = [
     "PanelRequest",
     "evaluate",
+    "evaluate_long",
+    "latest_values",
     "membership_frame",
     "panel_from_lake",
     "prepare_bars",
@@ -188,6 +190,19 @@ def prepare_bars(
 # ---- evaluating -----------------------------------------------------------------------
 
 
+def evaluate_long(node: Node, prepared: pd.DataFrame) -> pd.DataFrame:
+    """``ticker, timestamp, value`` of ``node`` for every member row of a
+    :func:`prepare_bars` frame."""
+    con = duckdb.connect()
+    try:
+        con.register("factor_bars", prepared)
+        long = con.execute(compile_sql(node, "factor_bars")).fetchdf()
+    finally:
+        con.close()
+    long["timestamp"] = pd.to_datetime(long["timestamp"])
+    return long
+
+
 def evaluate(
     node: Node,
     prepared: pd.DataFrame,
@@ -200,13 +215,7 @@ def evaluate(
     empty = pd.DataFrame(index=pd.DatetimeIndex([], name="timestamp"), columns=list(columns))
     if prepared.empty:
         return empty.astype(float)
-    con = duckdb.connect()
-    try:
-        con.register("factor_bars", prepared)
-        long = con.execute(compile_sql(node, "factor_bars")).fetchdf()
-    finally:
-        con.close()
-    long["timestamp"] = pd.to_datetime(long["timestamp"])
+    long = evaluate_long(node, prepared)
     if start is not None:
         long = long[long["timestamp"] >= pd.Timestamp(start)]
     wide = long.pivot_table(
@@ -234,6 +243,41 @@ def panel_from_lake(node: Node, lake: Any, request: PanelRequest) -> pd.DataFram
         "factor.panel", expression=str(node), tickers=len(request.universe), rows=len(prepared)
     )
     return evaluate(node, prepared, request.universe, start=day_start(request.start))
+
+
+def latest_values(
+    node: Node,
+    lake: Any,
+    tickers: Sequence[str],
+    as_of: Any,
+    *,
+    interval: Interval = Interval.DAY_1,
+    max_age_days: int = 10,
+) -> dict[str, float]:
+    """``{ticker: value}`` at each ticker's last bar on or before ``as_of``
+    (read through ``lake``, a point-in-time view in a backtest). A ticker
+    whose last bar is older than ``max_age_days`` (delisted, halted) or
+    whose value is empty is left out."""
+    if not tickers:
+        return {}
+    at = as_of if isinstance(as_of, datetime) else day_start(as_of)
+    warm = warmup_days(lookback(node), interval) + max_age_days
+    hi = at if interval.is_intraday else day_end(at.date())
+    raw = read_bars(lake, tickers, interval, day_start(at.date() - timedelta(days=warm)), hi)
+    if raw.empty:
+        return {}
+    actions = LakeCorporateActions(lake).load(list(tickers))
+    long = evaluate_long(node, prepare_bars(raw, actions))
+    if long.empty:
+        return {}
+    last = long.sort_values("timestamp").groupby("ticker", sort=False).tail(1)
+    oldest = pd.Timestamp(at) - pd.Timedelta(days=max_age_days + 1)
+    out: dict[str, float] = {}
+    for row in last.itertuples(index=False):
+        value = row.value
+        if row.timestamp >= oldest and value is not None and math.isfinite(value):
+            out[str(row.ticker)] = float(value)
+    return out
 
 
 def membership_frame(spans: Mapping[str, Sequence[tuple[date, date | None]]]) -> pd.DataFrame:
