@@ -14,6 +14,7 @@ _TIMING = {"before": "before the open", "after": "after the close", "during": "d
 class EarningsUpcoming(EventAlertKind):
     kind = "earnings_upcoming"
     label = "Earnings coming up"
+    topic = "earnings"
     default_days_ahead = 2
 
     def hits(

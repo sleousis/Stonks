@@ -12,6 +12,7 @@ from stonks.calendars.store import CalendarStore
 class ExDividendUpcoming(EventAlertKind):
     kind = "ex_dividend_upcoming"
     label = "Ex-dividend date coming up"
+    topic = "dividends"
     default_days_ahead = 1
 
     def hits(

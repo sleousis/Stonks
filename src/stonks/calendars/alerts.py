@@ -3,9 +3,11 @@
 :func:`check_event_alerts` runs after each calendar refresh: for every
 active person it finds the events of each registered
 :class:`~stonks.calendars.alert_kinds.base.EventAlertKind` on the tickers
-they hold or watch, and sends one notification per event. The dedupe key
-holds the kind, ticker and date, so a second refresh the same day sends
-nothing new.
+they hold or watch, and sends one notification per event in the
+``event_alert`` category. A person who turned a kind's switch off
+(:class:`~stonks.notify.prefs.EventAlertPrefStore`, by the kind's
+``topic``) gets none of that kind. The dedupe key holds the kind, ticker
+and date, so a second refresh the same day sends nothing new.
 
 Hook for the price alert engine (roadmap 20.2): :func:`alert_kinds` lists
 the kinds and :func:`event_hits` evaluates one for any tickers, so a rule
@@ -29,6 +31,7 @@ from stonks.calendars.store import CalendarStore
 from stonks.calendars.tracking import active_people, tracked_tickers
 from stonks.logging import get_logger
 from stonks.notify.events import Audience, Event
+from stonks.notify.prefs import EventAlertPrefStore
 from stonks.notify.router import NotificationRouter
 from stonks.store.lake import DuckDBLake
 
@@ -83,12 +86,14 @@ class EventAlertReport:
     sent: int = 0
     #: Hits a person had already been told about.
     repeats: int = 0
+    #: Hits not sent because the person turned that kind off.
+    muted: int = 0
     by_kind: dict[str, int] = field(default_factory=dict)
 
 
 def _event(user_id: str, hit: EventHit) -> Event:
     return Event(
-        category="signal",
+        category="event_alert",
         title=hit.title,
         body=hit.body,
         audience=Audience.users(user_id),
@@ -110,17 +115,22 @@ def check_event_alerts(
     store = CalendarStore(lake)
     report = EventAlertReport()
     overrides = dict(days_ahead or {})
+    switches = EventAlertPrefStore(router.state)
     for user_id in active_people(router.state):
         tickers = tracked_tickers(router.state, user_id)
         if not tickers:
             continue
         report.people += 1
+        wanted = switches.switches(user_id)
         for kind in alert_kinds():
             days = overrides.get(kind.kind, kind.default_days_ahead)
             if days <= 0:
                 continue
             for hit in kind.hits(store, tickers, today, days):
                 report.hits += 1
+                if not wanted.get(kind.topic, True):
+                    report.muted += 1
+                    continue
                 result = router.publish(_event(user_id, hit))
                 if result.notification_ids:
                     report.sent += 1
@@ -133,5 +143,6 @@ def check_event_alerts(
         hits=report.hits,
         sent=report.sent,
         repeats=report.repeats,
+        muted=report.muted,
     )
     return report

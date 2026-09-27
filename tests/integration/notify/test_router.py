@@ -181,6 +181,28 @@ def test_preferences_turn_channels_off_and_on(state, users, router, clock):
     assert [d["channel"] for d in _deliveries(state)] == ["webhook"]
 
 
+def test_price_and_event_alerts_switch_off_apart_from_signals(state, users, router, clock):
+    alice = users["alice"].id
+    add_device(state, alice, "psh_1")
+    PreferenceStore(state).set(
+        alice,
+        [Preference("price_alert", "webpush", False), Preference("event_alert", "webpush", False)],
+        now=clock(),
+    )
+    for category in ("price_alert", "event_alert", "signal"):
+        router.publish(_event(Audience.users(alice), category=category, dedupe_key=category))
+    [delivery] = _deliveries(state)
+    [row] = state.sql(
+        "SELECT category FROM notification_outbox WHERE id = ?", [delivery["notification_id"]]
+    )
+    assert row["category"] == "signal"
+    # the feed still gets all three, and each key is deduped as before
+    assert state.sql("SELECT COUNT(*) FROM alerts WHERE user_id = ?", [alice])[0][0] == 3
+    assert router.publish(
+        _event(Audience.users(alice), category="price_alert", dedupe_key="price_alert")
+    ).deduped_user_ids == (alice,)
+
+
 def test_strategy_specific_preference_wins(state, users, router, clock):
     alice = users["alice"].id
     add_device(state, alice, "psh_1")

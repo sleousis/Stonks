@@ -27,7 +27,12 @@ from urllib.parse import urlsplit
 from stonks.accounts import AccountsError, AuditLog, NotFound, Scope
 from stonks.notify.base import redact_url
 from stonks.notify.channels import channel_defaults, channel_names
-from stonks.notify.prefs import Preference, PreferenceStore
+from stonks.notify.prefs import (
+    EVENT_ALERT_TOPICS,
+    EventAlertPrefStore,
+    Preference,
+    PreferenceStore,
+)
 from stonks.notify.settings import OutboxSettings
 from stonks.security.netguard import UnsafeAddress, check_public_host
 from stonks.store.state import SqliteState
@@ -69,6 +74,17 @@ class NotificationPreferences:
     channels: tuple[str, ...] = field(default_factory=tuple)
     #: ``(channel, default_enabled, fallback)`` for every channel.
     channel_defaults: tuple[tuple[str, bool, bool], ...] = field(default_factory=tuple)
+    #: One switch per upcoming-event alert kind, in display order.
+    event_alerts: tuple[EventAlertSwitch, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class EventAlertSwitch:
+    """Whether a person gets one kind of upcoming-event alert at all."""
+
+    topic: str
+    label: str
+    enabled: bool
 
 
 @dataclass(frozen=True)
@@ -323,14 +339,30 @@ def get_preferences(state: SqliteState, scope: Scope) -> NotificationPreferences
         channel_defaults=tuple(
             (name, enabled, fallback) for name, (enabled, fallback) in channel_defaults().items()
         ),
+        event_alerts=tuple(
+            EventAlertSwitch(topic, EVENT_ALERT_TOPICS[topic], enabled)
+            for topic, enabled in EventAlertPrefStore(state).switches(user_id).items()
+        ),
     )
 
 
 def update_preferences(
-    state: SqliteState, scope: Scope, preferences: Iterable[Preference]
+    state: SqliteState,
+    scope: Scope,
+    preferences: Iterable[Preference],
+    *,
+    event_alerts: Mapping[str, bool] | None = None,
 ) -> NotificationPreferences:
+    """Channel switches per category (and strategy), and the per-kind event
+    alert switches. Only what is given changes."""
     user_id = _person(state, scope)
     prefs = list(preferences)
+    switches = dict(event_alerts or {})
+    for topic in switches:
+        if topic not in EVENT_ALERT_TOPICS:
+            raise AccountsError(
+                f"unknown event alert kind {topic!r}; choose from {list(EVENT_ALERT_TOPICS)}"
+            )
     known = set(channel_names())
     for p in prefs:
         if p.channel not in known:
@@ -340,14 +372,15 @@ def update_preferences(
         ):
             raise AccountsError(f"unknown strategy {p.strategy_id!r}")
     with state.transaction():
-        PreferenceStore(state).set(user_id, prefs, now=_now())
-        AuditLog(state).record(
-            scope.actor,
-            "notify.prefs.update",
-            "user",
-            user_id,
-            details={"changes": [[p.category, p.strategy_id, p.channel, p.enabled] for p in prefs]},
-        )
+        now = _now()
+        PreferenceStore(state).set(user_id, prefs, now=now)
+        EventAlertPrefStore(state).set(user_id, switches, now=now)
+        details: dict[str, Any] = {
+            "changes": [[p.category, p.strategy_id, p.channel, p.enabled] for p in prefs]
+        }
+        if switches:
+            details["event_alerts"] = switches
+        AuditLog(state).record(scope.actor, "notify.prefs.update", "user", user_id, details=details)
     return get_preferences(state, scope)
 
 

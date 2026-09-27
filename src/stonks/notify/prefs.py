@@ -4,19 +4,34 @@ Resolution for (user, category, strategy, channel): the most specific row
 wins, ``(category, strategy)`` over ``(category, any strategy)``, else the
 channel's default. The in-app feed isn't configurable: it always gets a row.
 
+Upcoming-event alerts also have one switch per kind (earnings, dividends,
+economic releases) in :class:`EventAlertPrefStore`. Off means the person
+gets no alert of that kind at all, not even in the app. Every kind is on
+until the person turns it off. Which channels carry the kinds left on is
+the ``event_alert`` category's channel preference, like any other category.
+
 This is the storage layer and takes a bare ``user_id``; the scoped entry
 points (who may change whose settings) are in :mod:`stonks.notify.service`.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
 from stonks.notify.events import CATEGORIES, Category
 from stonks.notify.quiet import QuietHours, parse_hhmm
 from stonks.store.state import SqliteState
+
+#: Each event alert switch in plain words, in display order. An
+#: ``EventAlertKind`` names one of these as its ``topic``. An open set:
+#: a new topic is one entry here, with no table change.
+EVENT_ALERT_TOPICS: dict[str, str] = {
+    "earnings": "Earnings coming up",
+    "dividends": "Ex-dividend dates coming up",
+    "economic": "Economic releases coming up",
+}
 
 
 @dataclass(frozen=True)
@@ -152,3 +167,40 @@ class PreferenceStore:
             " updated_at = excluded.updated_at",
             [user_id, *values.values(), _iso(now)],
         )
+
+
+class EventAlertPrefStore:
+    """Per-person switches for the upcoming-event alert kinds. No row means on."""
+
+    def __init__(self, state: SqliteState) -> None:
+        self._state = state
+
+    def switches(self, user_id: str) -> dict[str, bool]:
+        """Every topic, in display order, with the person's choice or on."""
+        rows = self._state.sql(
+            "SELECT topic, enabled FROM event_alert_prefs WHERE user_id = ?", [user_id]
+        )
+        chosen = {r["topic"]: bool(r["enabled"]) for r in rows}
+        return {topic: chosen.get(topic, True) for topic in EVENT_ALERT_TOPICS}
+
+    def enabled(self, user_id: str, topic: str) -> bool:
+        rows = self._state.sql(
+            "SELECT enabled FROM event_alert_prefs WHERE user_id = ? AND topic = ?",
+            [user_id, topic],
+        )
+        return bool(rows[0]["enabled"]) if rows else True
+
+    def set(self, user_id: str, switches: Mapping[str, bool], *, now: datetime) -> None:
+        unknown = sorted(set(switches) - set(EVENT_ALERT_TOPICS))
+        if unknown:
+            raise ValueError(
+                f"unknown event alert kind {unknown[0]!r}; choose from {list(EVENT_ALERT_TOPICS)}"
+            )
+        with self._state.transaction():
+            for topic, enabled in switches.items():
+                self._state.execute(
+                    "INSERT INTO event_alert_prefs (user_id, topic, enabled, updated_at)"
+                    " VALUES (?, ?, ?, ?) ON CONFLICT(user_id, topic) DO UPDATE SET"
+                    " enabled = excluded.enabled, updated_at = excluded.updated_at",
+                    [user_id, topic, int(bool(enabled)), _iso(now)],
+                )

@@ -88,6 +88,21 @@ async def test_the_feed_can_be_read_and_marked_read(mcp, test_client):
 
 
 @pytest.mark.anyio
+async def test_event_alert_switches_read_and_change_with_a_confirm(mcp):
+    prefs = await call(mcp, "get_notification_preferences")
+    assert [e["topic"] for e in prefs["event_alerts"]] == ["earnings", "dividends", "economic"]
+    preview = await call(mcp, "set_event_alerts", {"earnings": False})
+    assert preview["applied"] is False
+    assert {e["topic"]: e["enabled"] for e in preview["event_alerts"]}["earnings"] is True
+    done = await call(mcp, "set_event_alerts", {"earnings": False, "confirm": True})
+    assert done["applied"] is True
+    assert {e["topic"]: e["enabled"] for e in done["event_alerts"]}["earnings"] is False
+    err = await call_error(mcp, "set_event_alerts", {"confirm": True})
+    assert "at least one" in err.lower()
+    await call(mcp, "set_event_alerts", {"earnings": True, "confirm": True})
+
+
+@pytest.mark.anyio
 async def test_run_lab_on_a_stored_universe_fetches_missing_data_first(mcp, settings, source):
     with DuckDBLake(settings.lake.path) as lake:
         UniverseStore(lake).save(

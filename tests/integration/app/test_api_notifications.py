@@ -189,6 +189,47 @@ def test_preferences_round_trip(client):
     assert bad.status_code == 422
 
 
+def test_event_alert_switches_round_trip(client):
+    body = client.get("/api/notifications/preferences", headers=AUTH).json()
+    assert [(e["topic"], e["enabled"]) for e in body["event_alerts"]] == [
+        ("earnings", True),
+        ("dividends", True),
+        ("economic", True),
+    ]
+    assert all(e["label"] for e in body["event_alerts"])
+
+    updated = client.put(
+        "/api/notifications/preferences",
+        json={
+            "event_alerts": [{"topic": "earnings", "enabled": False}],
+            "preferences": [{"category": "price_alert", "channel": "webpush", "enabled": False}],
+        },
+        headers=AUTH,
+    )
+    assert updated.status_code == 200, updated.text
+    got = updated.json()
+    assert {e["topic"]: e["enabled"] for e in got["event_alerts"]}["earnings"] is False
+    assert {
+        "category": "price_alert",
+        "channel": "webpush",
+        "enabled": False,
+        "strategy_id": None,
+    } in (got["preferences"])
+    only_switch = client.put(
+        "/api/notifications/preferences",
+        json={"event_alerts": [{"topic": "earnings", "enabled": True}]},
+        headers=AUTH,
+    )
+    assert only_switch.status_code == 200, only_switch.text
+    assert all(e["enabled"] for e in only_switch.json()["event_alerts"])
+    bad = client.put(
+        "/api/notifications/preferences",
+        json={"event_alerts": [{"topic": "gossip", "enabled": False}]},
+        headers=AUTH,
+    )
+    assert bad.status_code == 422
+
+
 def test_quiet_hours(client):
     resp = client.put(
         "/api/notifications/quiet-hours", json={"start": "22:00", "end": "07:00"}, headers=AUTH

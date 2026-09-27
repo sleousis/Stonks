@@ -4065,12 +4065,17 @@
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "topic": {
+            "title": "Topic",
+            "type": "string"
           }
         },
         "required": [
           "kind",
           "label",
-          "default_days_ahead"
+          "default_days_ahead",
+          "topic"
         ],
         "title": "EventAlertKindView",
         "type": "object"
@@ -4096,6 +4101,49 @@
           "repeats"
         ],
         "title": "EventAlertSummary",
+        "type": "object"
+      },
+      "EventAlertSwitchItem": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "topic": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Topic",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "enabled"
+        ],
+        "title": "EventAlertSwitchItem",
+        "type": "object"
+      },
+      "EventAlertSwitchView": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "topic": {
+            "title": "Topic",
+            "type": "string"
+          }
+        },
+        "required": [
+          "topic",
+          "label",
+          "enabled"
+        ],
+        "title": "EventAlertSwitchView",
         "type": "object"
       },
       "Exposure": {
@@ -13307,7 +13355,9 @@
               "signal",
               "order",
               "risk",
-              "system"
+              "system",
+              "price_alert",
+              "event_alert"
             ],
             "title": "Category",
             "type": "string"
@@ -13344,7 +13394,16 @@
         "type": "object"
       },
       "PreferencesUpdate": {
+        "description": "Only what is given changes.",
         "properties": {
+          "event_alerts": {
+            "items": {
+              "$ref": "#/components/schemas/EventAlertSwitchItem"
+            },
+            "maxItems": 20,
+            "title": "Event Alerts",
+            "type": "array"
+          },
           "preferences": {
             "items": {
               "$ref": "#/components/schemas/PreferenceItem"
@@ -13354,9 +13413,6 @@
             "type": "array"
           }
         },
-        "required": [
-          "preferences"
-        ],
         "title": "PreferencesUpdate",
         "type": "object"
       },
@@ -13374,6 +13430,13 @@
               "type": "string"
             },
             "title": "Channels",
+            "type": "array"
+          },
+          "event_alerts": {
+            "items": {
+              "$ref": "#/components/schemas/EventAlertSwitchView"
+            },
+            "title": "Event Alerts",
             "type": "array"
           },
           "preferences": {
@@ -26742,7 +26805,7 @@
     },
     "/api/calendars/alert-kinds": {
       "get": {
-        "description": "The upcoming-event alert kinds (earnings, ex-dividend) and how many\ndays ahead each looks by default.",
+        "description": "The upcoming-event alert kinds (earnings, ex-dividend), how many\ndays ahead each looks by default, and the notification switch it follows.",
         "operationId": "listEventAlertKinds",
         "responses": {
           "200": {

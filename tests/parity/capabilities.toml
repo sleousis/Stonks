@@ -937,11 +937,20 @@ cli = { limited = "the CLI prints its own errors" }
 mcp = "list_alerts"
 
 [[capability]]
+id = "notifications.preferences"
+domain = "notifications"
+title = "Channel switches per category and event alert switches"
+routes = ["GET /api/notifications/preferences", "PUT /api/notifications/preferences"]
+console = ["getNotificationPreferences", "updateNotificationPreferences"]
+cli = { limited = "personal settings stay in the console" }
+mcp = ["get_notification_preferences", "set_event_alerts"]
+
+[[capability]]
 id = "notifications.settings"
 domain = "notifications"
-title = "Preferences, quiet hours, personal webhook"
-routes = ["GET /api/notifications/preferences", "PUT /api/notifications/preferences", "PUT /api/notifications/quiet-hours", "PUT /api/notifications/webhook"]
-console = ["getNotificationPreferences", "updateNotificationPreferences", "setQuietHours", "setNotificationWebhook"]
+title = "Quiet hours, personal webhook"
+routes = ["PUT /api/notifications/quiet-hours", "PUT /api/notifications/webhook"]
+console = ["setQuietHours", "setNotificationWebhook"]
 cli = { limited = "personal settings stay in the console" }
 mcp = { limited = "an agent must never redirect or silence alerts" }
 

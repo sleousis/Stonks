@@ -1274,6 +1274,7 @@ What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing
 | `default_days_ahead` | integer | yes |  |
 | `kind` | string | yes |  |
 | `label` | string | yes |  |
+| `topic` | string | yes |  |
 
 ### EventAlertSummary
 
@@ -1282,6 +1283,21 @@ What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing
 | `people` | integer | yes |  |
 | `repeats` | integer | yes |  |
 | `sent` | integer | yes |  |
+
+### EventAlertSwitchItem
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | boolean | yes |  |
+| `topic` | string | yes |  |
+
+### EventAlertSwitchView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `enabled` | boolean | yes |  |
+| `label` | string | yes |  |
+| `topic` | string | yes |  |
 
 ### Exposure
 
@@ -3198,16 +3214,19 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers and n
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `category` | "signal" \| "order" \| "risk" \| "system" | yes |  |
+| `category` | "signal" \| "order" \| "risk" \| "system" \| "price_alert" \| "event_alert" | yes |  |
 | `channel` | string | yes |  |
 | `enabled` | boolean | yes |  |
 | `strategy_id` | string \| null | no |  |
 
 ### PreferencesUpdate
 
+Only what is given changes.
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `preferences` | list[[PreferenceItem](#preferenceitem)] | yes |  |
+| `event_alerts` | list[[EventAlertSwitchItem](#eventalertswitchitem)] | no |  |
+| `preferences` | list[[PreferenceItem](#preferenceitem)] | no |  |
 
 ### PreferencesView
 
@@ -3215,6 +3234,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers and n
 |-------|------|----------|-------------|
 | `channel_defaults` | list[[ChannelDefaultView](#channeldefaultview)] | no |  |
 | `channels` | list[string] | yes |  |
+| `event_alerts` | list[[EventAlertSwitchView](#eventalertswitchview)] | no |  |
 | `preferences` | list[[PreferenceItem](#preferenceitem)] | yes |  |
 | `quiet_end` | string \| null | yes |  |
 | `quiet_start` | string \| null | yes |  |

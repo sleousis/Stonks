@@ -97,10 +97,12 @@ CATEGORIES: dict[str, tuple[str, frozenset[str]]] = {
         ),
     ),
     "alerts": (
-        "alerts: your feed, price alerts and when they fired",
+        "alerts: your feed, price alerts and when they fired, event alert switches",
         frozenset(
             {
                 "list_alerts",
+                "get_notification_preferences",
+                "set_event_alerts",
                 "list_price_alert_events",
                 "create_price_alert",
                 "update_price_alert",

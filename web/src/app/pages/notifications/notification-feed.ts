@@ -27,6 +27,8 @@ export const FEED_PAGE = 30;
 
 const CATEGORY_LABELS: Record<string, string> = {
   signal: 'Signal',
+  price_alert: 'Price alert',
+  event_alert: 'Upcoming event',
   order: 'Order',
   risk: 'Risk',
   system: 'System',

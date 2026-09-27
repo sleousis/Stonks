@@ -14,7 +14,6 @@ import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { ApiError } from '../../core/http/api-error';
-import { EventAlertKinds } from './event-alert-kinds';
 import { PermissionNote } from './permission-note';
 import { ErrorState, LoadingState } from './states';
 
@@ -22,6 +21,8 @@ type Category = PreferenceItem['category'];
 
 const CATEGORIES: readonly { value: Category; label: string }[] = [
   { value: 'signal', label: 'Signals' },
+  { value: 'price_alert', label: 'Price alerts' },
+  { value: 'event_alert', label: 'Upcoming events' },
   { value: 'order', label: 'Orders and fills' },
   { value: 'risk', label: 'Risk alerts' },
   { value: 'system', label: 'System' },
@@ -45,7 +46,7 @@ const ALWAYS_ON = 'inapp';
 @Component({
   selector: 'app-notification-prefs',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LoadingState, ErrorState, PermissionNote, EventAlertKinds],
+  imports: [LoadingState, ErrorState, PermissionNote],
   template: `
     <section class="panel" aria-labelledby="prefs-title">
       <div class="panel-head">
@@ -117,13 +118,34 @@ const ALWAYS_ON = 'inapp';
             </div>
           }
 
-          <app-event-alert-kinds />
+          @if (eventAlerts().length) {
+            <fieldset class="quiet">
+              <legend>Upcoming events</legend>
+              <p class="hint">
+                Alerts before events on what you hold or watch. Turn a kind off and you get none of
+                it, not even in the app.
+              </p>
+              <div class="kinds">
+                @for (e of eventAlerts(); track e.topic) {
+                  <label class="kind">
+                    <input
+                      type="checkbox"
+                      [checked]="e.enabled"
+                      [disabled]="locked()"
+                      (change)="setEventAlert(e.topic, $event)"
+                    />
+                    <span>{{ e.label }}</span>
+                  </label>
+                }
+              </div>
+            </fieldset>
+          }
 
           <fieldset class="quiet">
             <legend>Quiet hours</legend>
             <p class="hint">
-              Signals and fills wait for a morning summary. Risk alerts always come through. Times
-              are in {{ view()?.timezone }}.
+              Signals, fills, price alerts and upcoming events wait for a morning summary. Risk
+              alerts always come through. Times are in {{ view()?.timezone }}.
             </p>
             <div class="times">
               <div class="field">
@@ -302,6 +324,23 @@ const ALWAYS_ON = 'inapp';
       font-size: var(--text-xs);
       color: var(--color-ink-3);
     }
+    .kinds {
+      display: grid;
+      gap: var(--space-1);
+    }
+    .kind {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-height: var(--touch-min);
+      font-size: var(--text-sm);
+      cursor: pointer;
+    }
+    .kind input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--color-primary);
+    }
     .times {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -338,6 +377,8 @@ export class NotificationPrefs {
   protected readonly channels = computed(
     () => this.view()?.channels.filter((c) => c !== ALWAYS_ON) ?? [],
   );
+  /** One switch per kind of upcoming-event alert (earnings, dividends, economic). */
+  protected readonly eventAlerts = computed(() => this.view()?.event_alerts ?? []);
   protected readonly quietStart = linkedSignal(() => this.view()?.quiet_start ?? '');
   protected readonly quietEnd = linkedSignal(() => this.view()?.quiet_end ?? '');
   protected readonly quietError = signal<string | null>(null);
@@ -368,6 +409,15 @@ export class NotificationPrefs {
     const enabled = box.checked;
     const saved = await this.save(() =>
       this.api.updatePreferences({ preferences: [{ category, channel, enabled }] }),
+    );
+    if (!saved) box.checked = !enabled;
+  }
+
+  protected async setEventAlert(topic: string, event: Event): Promise<void> {
+    const box = event.target as HTMLInputElement;
+    const enabled = box.checked;
+    const saved = await this.save(() =>
+      this.api.updatePreferences({ event_alerts: [{ topic, enabled }] }),
     );
     if (!saved) box.checked = !enabled;
   }

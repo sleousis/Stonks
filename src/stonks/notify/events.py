@@ -17,7 +17,10 @@ from typing import Literal, get_args
 
 from stonks.notify.base import NotificationLevel
 
-Category = Literal["signal", "order", "risk", "system"]
+#: ``price_alert``: a price rule fired (roadmap 20.2). ``event_alert``: an
+#: upcoming earnings report, ex-dividend date or economic release (20.7).
+#: Each has its own switches, apart from strategy signals.
+Category = Literal["signal", "order", "risk", "system", "price_alert", "event_alert"]
 Urgency = Literal["low", "normal", "high"]
 AudienceKind = Literal["users", "owner", "admins", "subscribers"]
 
@@ -31,9 +34,11 @@ DEEP_LINK_MAX = 512
 DEDUPE_KEY_MAX = 200
 
 #: How long a push service keeps an undelivered message (design: signals
-#: 12 h, risk 24 h).
+#: 12 h, risk 24 h). A price move is stale sooner than an event days away.
 TTL_SECONDS: dict[str, int] = {
     "signal": 12 * 3600,
+    "price_alert": 12 * 3600,
+    "event_alert": 24 * 3600,
     "order": 24 * 3600,
     "risk": 24 * 3600,
     "system": 24 * 3600,

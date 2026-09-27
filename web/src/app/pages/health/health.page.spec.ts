@@ -91,9 +91,7 @@ describe('HealthPage', () => {
       .match((r) => r.url.split('?')[0] === '/api/brokers/gateways')
       .forEach((r) => r.flush({ configured: false, gateways: [] }));
     // And the reconcile panel (its own spec covers it).
-    http
-      .match((r) => r.url.split('?')[0] === '/api/reconcile/reports')
-      .forEach((r) => r.flush([]));
+    http.match((r) => r.url.split('?')[0] === '/api/reconcile/reports').forEach((r) => r.flush([]));
     await tick();
     fixture.detectChanges();
   }

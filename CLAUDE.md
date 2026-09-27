@@ -185,7 +185,7 @@ uv run python -m stonks.streaming sources|run|record|replay   # live streams int
 - `earnings_calendar (ticker, period_end, report_date, before_after_market, eps_estimate, eps_actual, ...)`, `dividend_calendar (ticker, ex_date, amount, record_date, pay_date, ...)`, `economic_events (country, event_time, event_type, comparison, actual, previous, estimate, ...)` (020): event calendars, vendor neutral. See `docs/calendars.md`.
 - `borrow_rates (ticker, as_of, source, currency, isin, available_shares, fee_rate_annual, rebate_rate_annual; PK (ticker, as_of, source))` (021): daily stock borrow terms, rates as yearly fractions. Read through `execution.borrow.LakeBorrowSource`.
 
-**State (SQLite, migrations 001-034):**
+**State (SQLite, migrations 001-035):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -210,6 +210,7 @@ uv run python -m stonks.streaming sources|run|record|replay   # live streams int
 - 032 model lifecycle: `model_versions`, `model_version_events` (append only), `model_version_decisions`, `model_version_snapshots` (roadmap 22.6).
 - 033: `order_tickets` (append only) and `approve` as a subscription mode (roadmap 19.8).
 - 034: `reconcile_reports (id, portfolio_id, kind, as_of, taken_at, status, items_json, explained_json, external_json, summary_json, detail, halt_id, paused_json)`: each check of a live portfolio against its broker, kind in {sod, submit, eod, adhoc}, status in {clean, warn, drift, outage, fault} (roadmap 19.5).
+- 035: notification categories `price_alert` and `event_alert` on `alerts`, `notification_outbox` and `notification_prefs` (tables rebuilt), and `event_alert_prefs (user_id, topic, enabled)`: per-person switches for `earnings`, `dividends` and `economic` event alerts, on when no row.
 
 ## Conventions to match
 

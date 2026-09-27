@@ -4,7 +4,7 @@ dates of what they hold or watch, once per event."""
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 
 import pytest
 
@@ -13,6 +13,7 @@ from stonks.calendars.alerts import alert_kinds, check_event_alerts, event_hits
 from stonks.calendars.store import CalendarStore
 from stonks.calendars.tracking import tracked_tickers
 from stonks.ingest.calendar_schemas import DividendEventRow, EarningsEventRow
+from stonks.notify.prefs import EVENT_ALERT_TOPICS, EventAlertPrefStore
 from stonks.notify.router import NotificationRouter
 
 TODAY = date(2026, 10, 28)
@@ -74,6 +75,14 @@ def test_kinds_are_discovered():
     assert [k.kind for k in alert_kinds()] == ["earnings_upcoming", "ex_dividend_upcoming"]
 
 
+def test_every_kind_names_a_switch():
+    assert {k.kind: k.topic for k in alert_kinds()} == {
+        "earnings_upcoming": "earnings",
+        "ex_dividend_upcoming": "dividends",
+    }
+    assert all(k.topic in EVENT_ALERT_TOPICS for k in alert_kinds())
+
+
 def test_event_hits_for_any_tickers(events):
     [hit] = event_hits("earnings_upcoming", events, ["AAPL.US"], TODAY)
     assert hit.title == "AAPL.US: earnings tomorrow"
@@ -108,10 +117,23 @@ def test_check_sends_each_event_once(state, lake, people, events):
         "AAPL.US: earnings tomorrow",
         "KO.US: ex-dividend tomorrow",
     }
-    assert all(r["category"] == "signal" for r in rows)
+    assert all(r["category"] == "event_alert" for r in rows)
 
 
 def test_a_kind_can_be_turned_off(state, lake, people, events):
     router = NotificationRouter(state, channels={})
     report = check_event_alerts(lake, router, TODAY, days_ahead={"ex_dividend_upcoming": 0})
     assert report.by_kind == {"earnings_upcoming": 2}
+
+
+def test_a_person_can_turn_a_kind_off_for_themselves(state, lake, people, events):
+    EventAlertPrefStore(state).set(people["bob"].id, {"earnings": False}, now=datetime.now(UTC))
+    router = NotificationRouter(state, channels={})
+    report = check_event_alerts(lake, router, TODAY)
+    # alice still hears about AAPL earnings; bob only about the KO ex-dividend date
+    assert (report.sent, report.muted) == (2, 1)
+    rows = state.sql("SELECT user_id, title FROM notification_outbox ORDER BY id")
+    assert {(r["user_id"], r["title"]) for r in rows} == {
+        (people["alice"].id, "AAPL.US: earnings tomorrow"),
+        (people["bob"].id, "KO.US: ex-dividend tomorrow"),
+    }

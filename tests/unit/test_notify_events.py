@@ -18,7 +18,9 @@ from stonks.notify.channels import (
 )
 from stonks.notify.events import (
     BODY_MAX,
+    CATEGORIES,
     TITLE_MAX,
+    TTL_SECONDS,
     Audience,
     Event,
     Message,
@@ -48,6 +50,14 @@ def test_urgency_defaults_follow_category_and_level():
 def test_ttl_by_category():
     assert _event().ttl_seconds == 12 * 3600
     assert _event(category="risk").ttl_seconds == 24 * 3600
+    assert _event(category="price_alert").ttl_seconds == 12 * 3600
+    assert _event(category="event_alert").ttl_seconds == 24 * 3600
+
+
+def test_price_and_event_alerts_have_their_own_categories():
+    assert {"price_alert", "event_alert"} <= set(CATEGORIES)
+    assert set(TTL_SECONDS) == set(CATEGORIES)
+    assert _event(category="price_alert").urgency == "normal"
 
 
 def test_text_is_single_line_and_capped():
