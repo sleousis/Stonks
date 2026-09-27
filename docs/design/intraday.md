@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 21. It takes Stonks from one decision a day to decisions on minute bars, with live prices, a live event engine, intraday strategies, and the risk and monitoring an always-on loop needs.
 
-Status: 21.1 (streaming data) built. 21.2 and 21.3 are planned and split into small work packages (section 9).
+Status: 21.1 (streaming data) and 21.3.3 (live marks and P&L) built. The rest of 21.2 and 21.3 is planned and split into small work packages (section 9).
 
 Owner decisions this page follows:
 
@@ -102,6 +102,7 @@ flowchart LR
 
 - **Strategies**: a few reference strategies that declare minute intervals (opening range breakout, VWAP reversion, intraday time-series momentum), each with a hypothesis card (P1) and lab support on sessions (walk-forward by session, embargo in bars, P9).
 - **Risk**: registered `RiskRule`s and halts for the intraday loop (section 6).
+- **Live marks and P&L** (built, section 10): the latest mark per ticker, intraday P&L per book and strategy sleeve, and intraday risk snapshots every few minutes.
 - **Monitoring**: stream and engine health on the metrics endpoint, a dead-man on the engine heartbeat, event-to-order latency, a live panel in the console, and alerts.
 
 ## 4. Session rules
@@ -164,7 +165,7 @@ Shared files (`config.py`, `config/default.toml`, `cli.py`, router mounts, the M
 | 21.2.5 Engine process | The always-on process, scheduler jobs to start before the open and stop after the close, startup reconcile, restart and state recovery, the runner inside it. | `engine/process.py`, `scheduling/jobs.py` (jobs) |
 | 21.3.1 Intraday strategies | Opening range breakout, VWAP reversion and intraday momentum with hypothesis cards, lab windows by session. | `strategies/examples/intraday_*.py`, `lab/dataset.py` (session windows) |
 | 21.3.2 Intraday risk | The per-minute loss limit and `intraday_loss` halt kind, intraday drawdown scaling, orders per minute cap, the stale data gate, the kill switch per event. | `production/rules/intraday_*.py`, `production/halts.py`, a new SQLite migration |
-| 21.3.3 Live marks and P&L | Minute marks from the stream, intraday P&L per book and strategy sleeve, intraday risk snapshots. | `production/intraday_pnl.py`, a new SQLite migration |
+| 21.3.3 Live marks and P&L (built) | Minute marks from the stream, intraday P&L per book and strategy sleeve, intraday risk snapshots. | `production/intraday_pnl.py`, SQLite migration 038 |
 | 21.3.4 Monitoring | Stream and engine metrics on `/metrics`, the engine dead-man, latency from event to order, alerts, a live panel in the console. | `scheduling/metrics.py`, `api/routers/stream.py`, `web/src/app/pages/live/*` |
 | 21.3.5 Intraday TCA | Spread from recorded quotes, arrival at the next minute, cost model calibration for minute trading. | `production/tca.py` (additions), `backtest/costs.py` (additions) |
 
@@ -174,3 +175,25 @@ Waves:
 2. 21.2.1, 21.2.4 and 21.3.1 in parallel.
 3. 21.2.2, 21.2.3 and 21.3.2.
 4. 21.2.5, 21.3.3, 21.3.4 and 21.3.5.
+
+## 10. What 21.3.3 built
+
+```mermaid
+flowchart LR
+  RUN[StreamRunner] -- every event --> MB[MarkBook<br/>latest mark per ticker]
+  DRV[EventDriver] -- bar close --> TR[IntradayPnlTracker]
+  TR --> MB
+  ST[(portfolio_snapshots<br/>position_attribution<br/>orders, fills)] --> TR
+  TR -- every 5 minutes --> IS[(intraday_snapshots)]
+  IS --> SVC[IntradayPnlService] --> API[GET /api/risk/intraday] --> MCP[list_intraday_snapshots]
+```
+
+- `production/intraday_pnl.py`:
+  - `MarkBook`: the latest mark per ticker. A runner subscriber (call it with any event) and a driver handler. A trade sets the mark, a live quote its last trade or mid, a bar its close at the bar's end. A delayed quote and an older event never move it.
+  - `PositionLedger`: one day of one book at average cost. Start positions are priced at the prior close (`lake_reference_prices` reads the lake), or at their first mark when there is none. A fill that reduces a position realises P&L, one that goes through zero opens the rest at the fill price. `realised + unrealised - fees` equals the change in value.
+  - `IntradayPnlTracker`: a driver handler. On each bar close it marks the bars, books the day's fills whose time has come (so a replay never sees a later fill early, P12), and moves each book's high-water P&L. Every `snapshot_minutes` (5) and on `finish` it stores one row per book. A book is the whole portfolio or a strategy's sleeve (start positions from `position_attribution`, fills of the strategy's orders). The day's high is read back after a restart.
+  - `IntradayPnlSettings` (`enabled`, `snapshot_minutes`, `stale_mark_seconds`), to mount as `[production.intraday_pnl]` in the integration step.
+- SQLite migration 038: `intraday_snapshots`, one row per book and moment, unique on `(portfolio_id, strategy_id, at)`.
+- `app/intraday_pnl.py` (`IntradayPnlService`), `GET /api/risk/intraday` (`data.read`, scoped to your portfolios, paged, `day`, `strategy_id`, `all_books`) and the MCP tool `list_intraday_snapshots`.
+- Tests: the ledger math, and replays of recorded streams through the `replay` source and the driver (marks, fills in time, snapshots every five minutes, the high-water mark, restart, stale marks).
+- Not yet: the engine process (21.2.5) that registers the tracker, and the console panel (21.3.4). The trading day is the UTC date of the bar close, which fits US and European sessions.

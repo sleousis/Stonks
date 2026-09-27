@@ -484,7 +484,7 @@ Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invit
 
 Streaming prices (EODHD websockets, IBKR), a live event engine that decides on minute bars, intraday strategies with realistic fills and session rules, intraday risk (per-minute loss limits, halts), and the monitoring an always-on intraday loop needs. Design: `docs/design/intraday.md`.
 
-**Status:** 21.1 done. Real intraday trading still waits for live daily trading to be stable.
+**Status:** 21.1 and 21.3.3 done. Real intraday trading still waits for live daily trading to be stable.
 
 | WP | Scope | Owns | Status |
 |----|-------|------|--------|
@@ -496,7 +496,7 @@ Streaming prices (EODHD websockets, IBKR), a live event engine that decides on m
 | 21.2.5 Engine process | The always-on process, scheduler jobs around the session, startup reconcile, restart and state recovery. | `engine/process.py`, `scheduling/jobs.py` | planned |
 | 21.3.1 Intraday strategies | Opening range breakout, VWAP reversion and intraday momentum with hypothesis cards, lab windows by session. | `strategies/examples/intraday_*.py`, `lab/dataset.py` | planned |
 | 21.3.2 Intraday risk | Per-minute loss limit and the `intraday_loss` halt, intraday drawdown scaling, orders per minute cap, stale data gate, kill switch per event. | `production/rules/intraday_*.py`, `production/halts.py`, a new SQLite migration | planned |
-| 21.3.3 Live marks and P&L | Minute marks from the stream, intraday P&L per book and sleeve, intraday risk snapshots. | `production/intraday_pnl.py`, a new SQLite migration | planned |
+| 21.3.3 Live marks and P&L | Minute marks from the stream, intraday P&L per book and sleeve, intraday risk snapshots. Done: the `MarkBook` (a runner subscriber and driver handler), realised P&L from fills at average cost and unrealised from marks, per portfolio and strategy sleeve, `intraday_snapshots` every five minutes with the drawdown from the day's high, `GET /api/risk/intraday` and the MCP tool `list_intraday_snapshots`. The console panel comes with 21.3.4. | `production/intraday_pnl.py`, SQLite migration 038 | done |
 | 21.3.4 Monitoring | Stream and engine metrics, engine dead-man, event to order latency, alerts, a live console panel. | `scheduling/metrics.py`, `api/routers/stream.py`, `web/src/app/pages/live/*` | planned |
 | 21.3.5 Intraday TCA | Spread from recorded quotes, arrival at the next minute, cost calibration for minute trading. | `production/tca.py`, `backtest/costs.py` | planned |
 
