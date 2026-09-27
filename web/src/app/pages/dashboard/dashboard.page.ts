@@ -7,6 +7,7 @@ import { PortfolioService } from '../../api/portfolio.service';
 import { StrategiesService } from '../../api/strategies.service';
 import { TicksService } from '../../api/ticks.service';
 import {
+  formatDate,
   formatDateTime,
   formatDuration,
   formatMoney,
@@ -20,7 +21,9 @@ import { CHECK_TITLES } from '../health/health-state';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { DateTimePipe } from '../../shared/format.pipes';
 import { PageHeader } from '../../shared/ui/page-header';
+import { humanize } from '../../shared/ui/param-form/param-spec';
 import { StatTile } from '../../shared/ui/stat-tile';
+import { NoBook, bookState } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
@@ -33,8 +36,7 @@ export function checkTitle(name: string): string {
   if (CHECK_TITLES[name]) return CHECK_TITLES[name];
   if (name.startsWith(FRESHNESS_PREFIX))
     return `Freshness of ${name.slice(FRESHNESS_PREFIX.length)}`;
-  const words = name.replace(/[_:]+/g, ' ').trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
+  return humanize(name.replace(/:+/g, ' '));
 }
 
 /**
@@ -60,6 +62,7 @@ export function checkTitle(name: string): string {
     LoadingState,
     EmptyState,
     ErrorState,
+    NoBook,
   ],
   templateUrl: './dashboard.page.html',
   styleUrl: './dashboard.page.scss',
@@ -75,12 +78,17 @@ export class DashboardPage {
   protected readonly live = this.portfolioCtx.live;
 
   // The picked portfolio is in the params so a new pick reloads these.
+  // With no portfolio at all (UX-13) nothing asks for one.
+  protected readonly book = computed(() => bookState(this.portfolioCtx));
+  private readonly bookParams = computed(() =>
+    this.book() === 'ready' ? { portfolio: this.portfolioCtx.selectedId() } : undefined,
+  );
   protected readonly portfolio = resource({
-    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    params: () => this.bookParams(),
     loader: () => this.portfolioApi.get(),
   });
   protected readonly pnl = resource({
-    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    params: () => this.bookParams(),
     loader: () => this.portfolioApi.pnl(),
   });
   protected readonly ticks = resource({
@@ -119,7 +127,7 @@ export class DashboardPage {
   protected readonly dayChange = computed(() => {
     const row = this.latest();
     if (!row || row.daily_change == null) return null;
-    return `${formatMoney(row.daily_change, { signed: true, currency: this.currency() })} (${formatPercent(row.daily_return, { signed: true })}) on ${row.day}`;
+    return `${formatMoney(row.daily_change, { signed: true, currency: this.currency() })} (${formatPercent(row.daily_return, { signed: true })}) on ${formatDate(row.day)}`;
   });
   protected readonly dayTone = computed(() => toneClass(this.latest()?.daily_change));
 

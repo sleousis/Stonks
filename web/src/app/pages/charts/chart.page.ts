@@ -21,6 +21,7 @@ import { PriceChart } from '../../shared/chart/price-chart';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
 import { SideTag } from '../../shared/ui/side-tag';
+import { NoBook } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { WatchlistFilter } from '../../shared/ui/watchlist-filter';
 import {
@@ -62,6 +63,7 @@ const SIGNAL_WORDS: Record<string, string> = {
     LoadingState,
     EmptyState,
     ErrorState,
+    NoBook,
   ],
   templateUrl: './chart.page.html',
   styleUrl: './chart.page.scss',
@@ -76,6 +78,8 @@ export class ChartPage {
   private readonly portfolioCtx = inject(PortfolioContextService);
   protected readonly watch = inject(WatchlistContextService);
   protected readonly session = inject(SessionService);
+  /** No portfolio at all: the fills panel offers to open one (UX-13). */
+  protected readonly noBook = this.portfolioCtx.noBook;
 
   protected readonly ranges = RANGES;
   protected readonly averages = AVERAGES;

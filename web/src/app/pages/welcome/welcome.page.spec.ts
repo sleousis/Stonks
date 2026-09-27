@@ -47,12 +47,13 @@ describe('WelcomePage', () => {
 
   afterEach(() => http.verify());
 
-  async function render(me = TRADER, view = guide({ account: 'done' })) {
+  async function render(me = TRADER, view = guide({ account: 'done' }), step?: string) {
     const session = TestBed.inject(SessionService);
     const loading = session.load();
     (await nextRequest(http, '/api/auth/me')).flush(me);
     await loading;
     const fixture = TestBed.createComponent(WelcomePage);
+    if (step) fixture.componentRef.setInput('step', step);
     fixture.detectChanges();
     (await nextRequest(http, '/api/portfolios')).flush(page([]));
     (await nextRequest(http, '/api/onboarding')).flush(view);
@@ -100,6 +101,23 @@ describe('WelcomePage', () => {
     expect(el.querySelector('.step.open .step-title')?.textContent).toContain('Pick a portfolio');
     expect(el.textContent).toContain('1 of 5 done');
     expect(el.textContent).not.toContain('Your install');
+  });
+
+  it('opens the step named in the link, so "Open a paper portfolio" lands on it (UX-13)', async () => {
+    const fixture = await render(
+      TRADER,
+      guide({ account: 'done', portfolio: 'skipped' }),
+      'portfolio',
+    );
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('.step.open .step-title')?.textContent).toContain('Pick a portfolio');
+    expect(el.querySelector('#wp-name')).not.toBeNull();
+  });
+
+  it('ignores an unknown step in the link', async () => {
+    const fixture = await render(TRADER, guide({ account: 'done' }), 'nope');
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('.step.open .step-title')?.textContent).toContain('Pick a portfolio');
   });
 
   it('skips a step and keeps the choice on the server', async () => {

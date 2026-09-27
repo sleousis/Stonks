@@ -39,6 +39,8 @@ describe('RiskPage', () => {
           useValue: {
             selectedId: selected,
             live: signal(false),
+            state: () => 'ready',
+            noBook: () => false,
             query: () => (selected() ? { portfolio_id: selected() } : {}),
           },
         },
@@ -94,7 +96,7 @@ describe('RiskPage', () => {
     const text = el.textContent ?? '';
     expect(text).toContain('2.00%');
     expect(text).toContain('3.30%');
-    expect(text).toContain('3 misses, 1.2 times the expected rate (p 0.61)');
+    expect(text).toContain('3 misses, 1.2 times the expected rate');
     expect(text).not.toContain('Treat these numbers with care');
   });
 
@@ -130,5 +132,14 @@ describe('RiskPage', () => {
   it('words misses without a ratio', async () => {
     await flushAll();
     expect(violationText(1, null, null)).toBe('1 miss');
+  });
+
+  it('never shows a raw p-value, and says plainly when misses beat chance (UX-69)', async () => {
+    await flushAll();
+    expect(el.textContent).not.toMatch(/\(p \d/);
+    expect(violationText(3, 1.2, 0.61)).toBe('3 misses, 1.2 times the expected rate');
+    expect(violationText(9, 3, 0.01)).toBe(
+      '9 misses, 3 times the expected rate, more often than chance explains',
+    );
   });
 });

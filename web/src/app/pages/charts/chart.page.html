@@ -142,12 +142,16 @@
         <div class="panel-head">
           <h2 id="fills-title">Your fills</h2>
         </div>
-        @if (fills().length === 0) {
+        @if (noBook()) {
+          <app-no-book
+            message="Your fills of this ticker show on the chart once you have a portfolio."
+          />
+        } @else if (fills().length === 0) {
           <p class="panel-body muted">
             {{
               chart.value().portfolio_id
                 ? 'No fills of this ticker in this portfolio yet.'
-                : 'Open a portfolio to see your fills here.'
+                : 'Your fills show here once this portfolio trades it.'
             }}
           </p>
         } @else {

@@ -29,6 +29,7 @@ import { ExportButton } from '../../shared/ui/export-button';
 import { PageHeader } from '../../shared/ui/page-header';
 import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
 import { StatTile } from '../../shared/ui/stat-tile';
+import { NoBook, bookState } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { InsightsNav } from './insights-nav';
 
@@ -90,6 +91,7 @@ export function agreementLine(h: HoldingAgreement): string {
     LoadingState,
     EmptyState,
     ErrorState,
+    NoBook,
   ],
   templateUrl: './insights.page.html',
   styleUrl: './insights.page.scss',
@@ -104,12 +106,17 @@ export class InsightsPage {
   protected readonly live = this.portfolioCtx.live;
   protected readonly canSeeTotals = computed(() => this.session.can('portfolio.totals'));
 
+  /** With no portfolio at all (UX-13) nothing asks for one. */
+  protected readonly book = computed(() => bookState(this.portfolioCtx));
+  private readonly bookParams = computed(() =>
+    this.book() === 'ready' ? { portfolio: this.portfolioCtx.selectedId() } : undefined,
+  );
   protected readonly insights = resource({
-    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    params: () => this.bookParams(),
     loader: () => this.insightsApi.get(),
   });
   protected readonly agreement = resource({
-    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    params: () => this.bookParams(),
     loader: () => this.insightsApi.agreement(),
   });
   protected readonly totals = resource({
@@ -122,11 +129,14 @@ export class InsightsPage {
     computation: () => 0,
   });
   protected readonly history = resource({
-    params: () => ({
-      portfolio: this.portfolioCtx.selectedId(),
-      limit: HISTORY_PAGE,
-      offset: this.historyOffset(),
-    }),
+    params: () =>
+      this.book() === 'ready'
+        ? {
+            portfolio: this.portfolioCtx.selectedId(),
+            limit: HISTORY_PAGE,
+            offset: this.historyOffset(),
+          }
+        : undefined,
     loader: ({ params }) =>
       this.portfolioApi.snapshots({ limit: params.limit, offset: params.offset }),
   });
@@ -148,6 +158,10 @@ export class InsightsPage {
     return formatMoney(value, { currency: this.currency() });
   }
   protected readonly moneyFormat = (value: number) => this.money(value);
+  /** A change in money always carries its sign: "+$120.00" (UX-58). */
+  protected signedMoney(value: number | null | undefined): string {
+    return formatMoney(value, { signed: true, currency: this.currency() });
+  }
   protected readonly pct = (value: number | null | undefined, signed = false) =>
     formatPercent(value, { digits: 1, signed });
   protected readonly num = (value: number | null | undefined) => formatNumber(value, { digits: 2 });
@@ -165,7 +179,7 @@ export class InsightsPage {
     if (!this.insights.hasValue()) return null;
     const day = this.insights.value().pnl.find((p) => p.period === '1d');
     if (!day || day.change == null) return null;
-    return `${this.money(day.change)} today (${this.pct(day.change_pct, true)})`;
+    return `${this.signedMoney(day.change)} today (${this.pct(day.change_pct, true)})`;
   });
 
   protected readonly betaDetail = computed(() => {

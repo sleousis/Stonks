@@ -46,7 +46,15 @@ export function categoryLabel(category: string | null): string {
 @Component({
   selector: 'app-notification-feed',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, Segmented, StatusPill, PermissionNote, LoadingState, EmptyState, ErrorState],
+  imports: [
+    RouterLink,
+    Segmented,
+    StatusPill,
+    PermissionNote,
+    LoadingState,
+    EmptyState,
+    ErrorState,
+  ],
   template: `
     <section class="panel" aria-labelledby="feed-title">
       <div class="panel-head head">
@@ -57,7 +65,10 @@ export function categoryLabel(category: string | null): string {
           }
         </h2>
         <div class="tools">
-          <app-segmented label="Show" [options]="filters" [value]="show()"
+          <app-segmented
+            label="Show"
+            [options]="filters"
+            [value]="show()"
             (valueChange)="setShow($event)"
           />
           <button
@@ -288,7 +299,6 @@ export class NotificationFeed {
     effect(() => {
       if (this.feed.hasValue()) this.counter.set(this.feed.value().unread_count);
     });
-
   }
 
   protected setShow(value: 'all' | 'unread'): void {
