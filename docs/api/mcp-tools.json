@@ -2231,6 +2231,30 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "One reconcile report: every unexplained drift item, what the check\nexplained itself, and the owner's own positions and orders it kept\napart (never drift).",
+      "input_schema": {
+        "properties": {
+          "report_id": {
+            "title": "Report Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_id"
+        ],
+        "title": "get_reconcile_reportArguments",
+        "type": "object"
+      },
+      "name": "get_reconcile_report",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One research session with every proposal: its hypothesis, whether\nit ran or why not, and its lab run in the trial ledger.",
       "input_schema": {
         "properties": {
@@ -3853,6 +3877,42 @@
         "type": "object"
       },
       "name": "list_price_alerts",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "The latest checks of your live portfolios against their brokers,\nnewest first. Status clean, warn (an alert only), drift (opened the\nbroker_drift halt and paused auto), outage (the day was skipped) or\nfault (auto paused).",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 20,
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          }
+        },
+        "title": "list_reconcile_reportsArguments",
+        "type": "object"
+      },
+      "name": "list_reconcile_reports",
       "needs_confirm": false
     },
     {
