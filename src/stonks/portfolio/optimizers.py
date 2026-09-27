@@ -189,6 +189,9 @@ class MeanVarianceCosts(PortfolioConstructor):
     - An infeasible turnover cap (the book already breaks a limit) is
       dropped for that decision and ``meta["turnover_relaxed"]`` is set.
       Any other solver failure holds the current weights.
+    - Every held name counts, shorts too. A held name the covariance can't
+      model (no history) keeps its current weight rather than being closed
+      in one step (``meta["held_unmodelled"]``, BE-34).
     """
 
     Settings = MeanVarianceSettings
@@ -201,7 +204,7 @@ class MeanVarianceCosts(PortfolioConstructor):
     def target_weights(self, inp: ConstructionInput) -> TargetBook:
         s: MeanVarianceSettings = self.settings  # type: ignore[assignment]
         chosen, combined, attribution = top_candidates(inp, s.top_n)
-        held = [t for t, q in inp.portfolio.positions.items() if q > 0 and inp.tradable(t)]
+        held = [t for t, q in inp.portfolio.positions.items() if abs(q) > 1e-12 and inp.tradable(t)]
         cov = covariance_for(inp, list(chosen) + held, s)
         meta: dict = {
             "covariance": cov.source,
@@ -224,6 +227,13 @@ class MeanVarianceCosts(PortfolioConstructor):
         weights = {
             t: float(x) for t, x in zip(cov.tickers, w, strict=True) if x != 0 and math.isfinite(x)
         }
+        unmodelled = sorted(set(held) - set(cov.tickers))
+        if unmodelled:
+            equity = inp.portfolio.total_value(inp.prices)
+            if equity > 0:
+                for t in unmodelled:
+                    weights[t] = inp.portfolio.positions[t] * inp.prices[t] / equity
+            meta["held_unmodelled"] = unmodelled
         return self.finalize(weights, attribution, meta)
 
     def _problem(

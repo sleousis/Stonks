@@ -165,6 +165,30 @@ def test_held_name_without_signal_is_sold_gradually_under_costs() -> None:
     assert book.weights.get("OLD", 0.0) == pytest.approx(0.3, abs=1e-4)
 
 
+def test_be34_a_held_short_respects_the_turnover_cap() -> None:
+    vols = {"A": 0.2, "SHORT": 0.2}
+    positions = {"SHORT": -30.0}  # -300 of 1300 - 300 = 1000 equity: weight -0.3
+    c = get_constructor(
+        "mean_variance_costs",
+        long_only=False,
+        ic=0.05,
+        trade_aversion=1.0,
+        spread_cost=0.0,
+        turnover_limit=0.2,
+    )
+    book = c.target_weights(_inp({"A": 1.0}, vols, positions=positions, cash=1300.0))
+    # covered gradually, not in one step
+    assert book.weights.get("SHORT", 0.0) < -0.05
+
+
+def test_be34_a_held_name_without_history_is_held_not_dumped() -> None:
+    vols = {"A": 0.2}  # NEW has no volatility: it can't be modelled
+    positions = {"NEW": 20.0}  # 200 of 1000
+    c = get_constructor("mean_variance_costs", ic=0.05, trade_aversion=1.0, turnover_limit=0.2)
+    book = c.target_weights(_inp({"A": 1.0}, vols, positions=positions, cash=800.0))
+    assert book.weights.get("NEW", 0.0) == pytest.approx(0.2, abs=1e-6)
+
+
 def test_infeasible_turnover_is_relaxed_not_crashed() -> None:
     vols = {"A": 0.2, "OLD": 0.2}
     c = get_constructor(
