@@ -12,7 +12,13 @@ from typing import Any
 
 from stonks.accounts.audit import AuditLog, iso_now
 from stonks.accounts.book import partial_risk_policy
-from stonks.accounts.models import AccountsError, Portfolio, PortfolioKind, PortfolioStatus
+from stonks.accounts.models import (
+    AccountsError,
+    NotFound,
+    Portfolio,
+    PortfolioKind,
+    PortfolioStatus,
+)
 from stonks.accounts.scope import Scope, owned_portfolio
 from stonks.store.state import SqliteState
 
@@ -105,8 +111,17 @@ class PortfolioRepository:
             )
         return self.get(scope, portfolio_id)
 
-    def rename(self, scope: Scope, portfolio_id: str, name: str) -> Portfolio:
+    def _editable(self, scope: Scope, portfolio_id: str) -> Portfolio:
+        """A portfolio its owner may change: a broker portfolio's paper
+        account belongs to the tick and reads as missing (BE-53)."""
         before = self.get(scope, portfolio_id)
+        row = self._state.sql("SELECT paper_of FROM portfolios WHERE id = ?", [portfolio_id])
+        if row and row[0]["paper_of"] is not None and not scope.is_service:
+            raise NotFound(f"portfolio {portfolio_id!r} not found")
+        return before
+
+    def rename(self, scope: Scope, portfolio_id: str, name: str) -> Portfolio:
+        before = self._editable(scope, portfolio_id)
         with self._state.transaction():
             self._state.execute("UPDATE portfolios SET name = ? WHERE id = ?", [name, portfolio_id])
             self._audit.record(
@@ -120,7 +135,7 @@ class PortfolioRepository:
         return self.get(scope, portfolio_id)
 
     def set_status(self, scope: Scope, portfolio_id: str, status: PortfolioStatus) -> Portfolio:
-        before = self.get(scope, portfolio_id)
+        before = self._editable(scope, portfolio_id)
         with self._state.transaction():
             self._state.execute(
                 "UPDATE portfolios SET status = ? WHERE id = ?", [status, portfolio_id]
