@@ -24,7 +24,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, ClassVar
 
 import numpy as np
@@ -81,7 +81,7 @@ def bars_for(minutes: float, interval: str) -> int:
 def _naive_utc(when: datetime) -> datetime:
     if when.tzinfo is None:
         return when
-    return pd.Timestamp(when).tz_convert("UTC").tz_localize(None).to_pydatetime()
+    return when.astimezone(UTC).replace(tzinfo=None)
 
 
 def _stamps(frame: pd.DataFrame) -> pd.Series:
@@ -240,7 +240,7 @@ class IntradayStrategy(BaseStrategy):
         today = finite & (ts >= session.open).to_numpy() & (ts < session.close).to_numpy()
         if not today.any():
             return None
-        bars = frame[today].reset_index(drop=True)
+        bars = frame.loc[today].reset_index(drop=True)
         bar_minutes = interval.seconds / 60
         elapsed = (ts[today] - session.open).dt.total_seconds().to_numpy(
             dtype=float
