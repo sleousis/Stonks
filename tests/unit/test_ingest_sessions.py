@@ -57,3 +57,21 @@ def test_drop_open_sessions_keeps_closed_rows():
     frame = pd.DataFrame({"date": [date(2025, 6, 30), date(2025, 7, 1)], "close": [1.0, 2.0]})
     out = drop_open_sessions(frame, SESSIONS, "A.US", datetime(2025, 7, 1, 15, tzinfo=UTC))
     assert out["date"].tolist() == [date(2025, 6, 30)]
+
+
+def test_the_session_cache_is_bounded():
+    """BE-62: a long-running server asks for many ranges; the cache keeps
+    only the most recent ones."""
+    from datetime import timedelta
+
+    from stonks.ingest.sessions import MarketSessionCloses
+
+    sessions = MarketSessionCloses(max_entries=8)
+    start = date(2024, 1, 1)
+    for i in range(30):
+        sessions.closes("A.US", start, start + timedelta(days=i))
+    assert len(sessions._cache) <= 8
+    # a recent range is still served from the cache
+    key_count = len(sessions._cache)
+    sessions.closes("A.US", start, start + timedelta(days=29))
+    assert len(sessions._cache) == key_count
