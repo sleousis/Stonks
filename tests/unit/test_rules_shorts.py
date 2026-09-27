@@ -600,3 +600,33 @@ def test_be05_a_short_sale_without_a_price_is_dropped() -> None:
     )
     assert result.orders == []
     assert any(a.rule == "no_price" for a in result.adjustments)
+
+
+# ---- BE-45: a holding with no price is not worth 0 -----------------------------------------
+
+
+def test_be45_an_unpriced_holding_carries_its_last_close_and_trips_no_breaker() -> None:
+    # 100 A held at 50 (last close in the history), no price today: the book
+    # is worth 15,000 + 5,000, not 15,000, so no 25 % drawdown from 20,000.
+    history = {"A": _bars([50.0] * 10)}
+    result = _run(
+        [_o("buy", 10, "B", effect="open")],
+        Portfolio(cash=15_000.0, positions={"A": 100.0}),
+        {"B": 10.0},
+        _policy(circuit_breaker={"max_drawdown_halt": 0.10}),
+        history=history,
+        equity_curve=_curve_from(20_000.0, 20_000.0),
+    )
+    assert [(o.ticker, o.side) for o in result.orders] == [("B", "buy")]
+
+
+def test_be45_an_unmarkable_holding_skips_drawdown_scaling() -> None:
+    result = _run(
+        [_o("buy", 10, "B", effect="open")],
+        Portfolio(cash=15_000.0, positions={"A": 100.0}),
+        {"B": 10.0},
+        _policy(drawdown_scaling={"schedule": [(0.10, 0.5)]}),
+        equity_curve=_curve_from(20_000.0, 20_000.0),
+    )
+    [buy] = result.orders
+    assert buy.quantity == 10

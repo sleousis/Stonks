@@ -49,6 +49,30 @@ def history(ctx: RiskContext, ticker: str) -> pd.DataFrame | None:
     return frame if not frame.empty else None
 
 
+def marks(ctx: RiskContext) -> dict[str, float] | None:
+    """The context's prices, a held ticker with none carried at its last
+    close in the history (BE-45). ``None`` when a holding still has no
+    mark: the book's value is unknown, so value-based rules skip rather
+    than read the holding as worth 0."""
+    out = {t: float(p) for t, p in ctx.prices.items() if p is not None and math.isfinite(p)}
+    for ticker in ctx.portfolio.unmarked(out):
+        if abs(ctx.portfolio.positions.get(ticker, 0.0)) <= EPS:
+            continue
+        frame = history(ctx, ticker)
+        last = float(frame["close"].iloc[-1]) if frame is not None else math.nan
+        if not (math.isfinite(last) and last > 0):
+            _log.warning("risk.unmarked_holding", ticker=ticker)
+            return None
+        out[ticker] = last
+    return out
+
+
+def book_value(ctx: RiskContext) -> float | None:
+    """The book's value at :func:`marks`, or ``None`` when unknown."""
+    prices = marks(ctx)
+    return None if prices is None else ctx.portfolio.total_value(prices)
+
+
 def last_atr(ctx: RiskContext, ticker: str, bars: int = ATR_BARS) -> float | None:
     """Wilder ATR over ``bars`` at the last bar, or ``None`` without enough."""
     frame = history(ctx, ticker)

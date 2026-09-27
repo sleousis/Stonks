@@ -47,6 +47,7 @@ from stonks.production.rules._common import (
     history,
     is_opening_order,
     largest_scale,
+    marks,
     positions_after_sells,
     scale_opens,
     settings_of,
@@ -86,10 +87,13 @@ class PortfolioVol(RiskRule):
         settings: PortfolioVolSettings | None = settings_of(ctx.policy, self.name)
         if settings is None or not settings.active:
             return list(orders), []
-        equity = ctx.portfolio.total_value(dict(ctx.prices))
         buys = [o for o in orders if is_opening_order(o, ctx) and _price(ctx, o.ticker)]
         if not buys:
             return list(orders), []
+        prices = marks(ctx)
+        if prices is None:  # a holding has no mark: the book can't be sized (BE-45)
+            return list(orders), []
+        equity = ctx.portfolio.total_value(prices)
         if equity <= 0:
             return scale_opens(orders, ctx, 0.0, self.name, "no positive portfolio value")
 
@@ -118,7 +122,7 @@ class PortfolioVol(RiskRule):
 
         usable = [t for t in returns.columns if counts[t] >= MIN_RETURNS]
         held = positions_after_sells(orders, ctx)
-        h = np.array([held.get(t, 0.0) * _price(ctx, t) / equity for t in usable])
+        h = np.array([held.get(t, 0.0) * prices.get(t, 0.0) / equity for t in usable])
         d = np.zeros(len(usable))
         for order in buys:
             signed = order.quantity if order.side == "buy" else -order.quantity
