@@ -24,9 +24,10 @@ from stonks.connections.settings import ConnectionsConfig
 from stonks.core.types import Order
 from stonks.execution.brokers.base import OrderRejectedError
 from stonks.execution.brokers.ibkr.broker import IbkrBroker
+from stonks.execution.brokers.ibkr.client import IbExecution
 from stonks.execution.brokers.ibkr.flex import FlexClient
 from stonks.execution.brokers.ibkr.settings import IbkrFlexSettings
-from tests.fakes.ib_gateway import AAPL, BRKB, MSFT, T0, FakeIbGateway, stock
+from tests.fakes.ib_gateway import AAPL, BRKB, MSFT, T0, VOD, FakeIbGateway, stock
 
 ACCOUNT = "DU1234567"
 TOYOTA = stock(4321, "7203", currency="JPY", primary="TSEJ")
@@ -149,6 +150,21 @@ def test_activities_include_every_execution_manual_ones_too(gw):
     sell = acts["exec:0002.0001"]
     assert (sell.ticker, sell.quantity, sell.amount) == ("MSFT.US", -5.0, 1500.0)
     assert opened(gw).activities(ACCOUNT, T0.date() + timedelta(days=1)) == []
+
+
+def test_london_activities_are_in_pounds(gw):
+    # IBKR reports a London execution in pence (magnifier 100, roadmap 19.16)
+    manual = gw.add_manual_order(VOD, 5)
+    gw._executions.append(
+        IbExecution(
+            exec_id="0003.0001", order_ref="", perm_id=manual.perm_id, contract=VOD.contract,
+            side="SLD", shares=5, price=150.0, time=T0, account=ACCOUNT,
+        )
+    )  # fmt: skip
+    acts = {a.provider_activity_id: a for a in opened(gw).activities(ACCOUNT, T0.date())}
+    sell = acts["exec:0003.0001"]
+    assert (sell.ticker, sell.price, sell.currency) == ("VOD.LSE", 1.5, "GBP")
+    assert sell.amount == pytest.approx(7.5)
 
 
 FLEX = """<FlexQueryResponse queryName="q" type="AF"><FlexStatements count="1">

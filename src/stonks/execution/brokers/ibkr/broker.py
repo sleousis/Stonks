@@ -29,6 +29,11 @@ is unknown (the link dropped, no answer) raises
 ``OrderOutcomeUnknownError``: the caller marks the order ``unknown`` and
 nothing is sent for it until reconciliation finds it. ``place_order``
 never returns a fill: fills come from executions (``executions``).
+
+Prices: every price read from IBKR (quotes, fills, average fill prices) is
+divided by the contract's price magnifier, and every price sent (limits,
+stops, what-if orders) multiplied by it, so Stonks works in the currency's
+major unit (pounds, not the pence London quotes in; roadmap 19.16).
 """
 
 from __future__ import annotations
@@ -64,7 +69,11 @@ from stonks.execution.brokers.ibkr.client import (
     IbExecution,
     IbTrade,
 )
-from stonks.execution.brokers.ibkr.contracts import ContractResolver, ticker_for_contract
+from stonks.execution.brokers.ibkr.contracts import (
+    ContractResolver,
+    ticker_for_contract,
+    to_major,
+)
 from stonks.execution.brokers.ibkr.errors import classify, to_broker_error
 from stonks.execution.brokers.ibkr.orders import broker_ref, to_ib_order
 from stonks.execution.brokers.ibkr.settings import GatewayMode, IbkrOrderSettings
@@ -139,6 +148,9 @@ class IbkrBroker:
         self._account: str | None = None
         self._checked_connects = -1
         self._seen_execs: set[str] = set()
+        #: orderRefs this process asked IBKR to cancel (a cancel we sent
+        #: is never an expiry, even when IBKR names no origin)
+        self._cancels_sent: set[str] = set()
         self._closers: list[Callable[[], object]] = []
 
     def on_close(self, fn: Callable[[], object]) -> None:
@@ -288,7 +300,13 @@ class IbkrBroker:
         if order.side == "sell" and order.position_effect == "open":
             self._check_short(order)
         resolved = self.resolver.resolve(order.ticker)
-        request = to_ib_order(order, resolved.spec(), account=account, settings=self.order_settings)
+        request = to_ib_order(
+            order,
+            resolved.spec(),
+            account=account,
+            settings=self.order_settings,
+            price_magnifier=resolved.price_magnifier,
+        )
         try:
             self.client.place_order(resolved.contract, request)
         except IbApiError as exc:
@@ -349,6 +367,8 @@ class IbkrBroker:
         execs = [e for e in self._guard("executions", self.client.executions) if e.order_ref == ref]
         exec_qty = sum(e.shares for e in execs)
         exec_avg = sum(e.shares * e.price for e in execs) / exec_qty if exec_qty > 0 else None
+        if exec_avg is not None:
+            exec_avg = to_major(exec_avg, self.price_magnifier(execs[0].contract))
         if trade is None:
             if not execs:
                 return None
@@ -367,10 +387,11 @@ class IbkrBroker:
                 state="unknown",
             )
         filled = max(trade.filled, exec_qty)
-        avg = trade.avg_fill_price if trade.filled >= exec_qty else exec_avg
-        state: OrderState = ibkr_state(
-            trade.status, filled=filled, time_in_force=_TIF_BACK.get(trade.tif or "")
-        )
+        trade_avg = trade.avg_fill_price
+        if trade_avg is not None:
+            trade_avg = to_major(trade_avg, self.price_magnifier(trade.contract))
+        avg = trade_avg if trade.filled >= exec_qty else exec_avg
+        state: OrderState = self._state_of(trade, filled)
         return BrokerOrderState(
             client_id=client_id,
             broker_order_id=str(trade.perm_id),
@@ -400,6 +421,7 @@ class IbkrBroker:
             raise to_broker_error(exc, action=f"cancel of {client_id}") from exc
         except (ConnectionError, TimeoutError) as exc:
             raise to_broker_error(exc, action=f"cancel of {client_id}") from exc
+        self._cancels_sent.add(ref)
         _log.info("ibkr.order.cancel_requested", client_id=client_id)
         return True
 
@@ -422,7 +444,7 @@ class IbkrBroker:
         for t in self._guard("open orders", self.client.open_trades):
             if t.account and t.account != account:
                 continue
-            state = ibkr_state(t.status, filled=t.filled, time_in_force=_TIF_BACK.get(t.tif or ""))
+            state = self._state_of(t, t.filled)
             if state in TERMINAL:
                 continue
             out.append(
@@ -452,7 +474,13 @@ class IbkrBroker:
         caller must never let a buy through on it."""
         account = self.account_id
         resolved = self.resolver.resolve(order.ticker)
-        request = to_ib_order(order, resolved.spec(), account=account, settings=self.order_settings)
+        request = to_ib_order(
+            order,
+            resolved.spec(),
+            account=account,
+            settings=self.order_settings,
+            price_magnifier=resolved.price_magnifier,
+        )
         answer = self._guard(
             f"what-if of {order.client_id}",
             lambda: self.client.what_if(resolved.contract, request),
@@ -477,6 +505,7 @@ class IbkrBroker:
     def quotes(self, tickers: Sequence[str]) -> Mapping[str, Quote]:
         self.ensure_ready()
         contracts: dict[int, str] = {}
+        magnifiers: dict[int, int] = {}
         wanted: list[IbContract] = []
         for ticker in tickers:
             try:
@@ -485,6 +514,7 @@ class IbkrBroker:
                 _log.warning("ibkr.quote.unsupported", ticker=ticker, error=str(exc))
                 continue
             contracts[resolved.con_id] = ticker
+            magnifiers[resolved.con_id] = resolved.price_magnifier
             wanted.append(resolved.contract)
         if not wanted:
             return {}
@@ -503,6 +533,8 @@ class IbkrBroker:
             last, bid, ask = _opt_price(s.last), _opt_price(s.bid), _opt_price(s.ask)
             if ticker is None or (last is None and bid is None and ask is None):
                 continue
+            mag = magnifiers.get(s.con_id, 1)
+            last, bid, ask = (None if p is None else to_major(p, mag) for p in (last, bid, ask))
             out[ticker] = Quote(
                 ticker=ticker,
                 last=last,
@@ -520,6 +552,19 @@ class IbkrBroker:
             return fn()
         except (IbApiError, ConnectionError, TimeoutError) as exc:
             raise to_broker_error(exc, action=action) from exc
+
+    def _state_of(self, trade: IbTrade, filled: float) -> OrderState:
+        """Our state for ``trade``. Who cancelled it is IBKR's word when it
+        gives one, else ``trader`` when this broker sent the cancel."""
+        origin = trade.cancel_origin
+        if origin is None and trade.order_ref in self._cancels_sent:
+            origin = "trader"
+        return ibkr_state(
+            trade.status,
+            filled=filled,
+            time_in_force=_TIF_BACK.get(trade.tif or ""),
+            cancel_origin=origin,
+        )
 
     def _find_trade(self, ref: str) -> IbTrade | None:
         for t in self._guard("open orders", self.client.open_trades):
@@ -539,6 +584,27 @@ class IbkrBroker:
             _log.info("ibkr.contract.unmapped", con_id=contract.con_id)
             return contract.symbol
         return ticker
+
+    def price_magnifier(self, contract: IbContract) -> int:
+        """IBKR price units per currency unit for ``contract`` (100 for a
+        London stock in pence). The cached contract's, else the one a lookup
+        of its ticker finds. A contract we cannot resolve counts as 1."""
+        cached = self.resolver.cache.by_con_id(contract.con_id)
+        if cached is not None:
+            return cached.price_magnifier
+        ticker = ticker_for_contract(contract)
+        if ticker is None:
+            return 1
+        try:
+            resolved = self.resolver.resolve(ticker)
+        except (BrokerError, UnsupportedTickerError) as exc:
+            _log.warning("ibkr.contract.magnifier_unknown", con_id=contract.con_id, error=str(exc))
+            return 1
+        return resolved.price_magnifier if resolved.con_id == contract.con_id else 1
+
+    def to_major(self, price: float, contract: IbContract) -> float:
+        """An IBKR price of ``contract`` in the currency's major unit."""
+        return to_major(price, self.price_magnifier(contract))
 
     def _client_id_for(self, ref: str) -> str:
         known = self._refs.get(ref)
@@ -569,7 +635,7 @@ class IbkrBroker:
             ticker=self._ticker_of(e.contract),
             side=_side(e.side),
             quantity=e.shares,
-            price=e.price,
+            price=self.to_major(e.price, e.contract),
             executed_at=e.time,
             commission=e.commission,
             commission_currency=e.commission_currency,

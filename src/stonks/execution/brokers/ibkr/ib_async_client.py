@@ -17,6 +17,10 @@ account values, what-if answers and ticker snapshots.
   ``PendingSubmit``) or rejects it. No answer in time raises
   ``TimeoutError``, which the broker turns into an unknown outcome.
 - Requests other than submits and cancels go through a token bucket.
+- ``ib_async`` drops the completed status of a completed order, which
+  says who cancelled it. The client keeps it by ``permId`` as the decoder
+  hands it over, so ``IbTrade.cancel_origin`` can tell a cancel by hand
+  from an expiry (roadmap 19.16).
 """
 
 from __future__ import annotations
@@ -51,6 +55,7 @@ from stonks.execution.brokers.ibkr.client import (
 )
 from stonks.execution.brokers.ibkr.errors import classify, is_info
 from stonks.execution.brokers.ibkr.session import LoopThread, TokenBucket, retry_until
+from stonks.execution.brokers.ibkr.status import cancel_origin
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.execution.brokers.ibkr.client")
@@ -91,6 +96,27 @@ class IbAsyncClient:
         self._req_errors: dict[int, tuple[int, str]] = {}
         self.ib: Any = self._thread.call(ib_factory, endpoint.request_timeout)
         self.ib.errorEvent += self._on_error
+        #: permId -> IBKR's completed status text (who cancelled it)
+        self._completed_status: dict[int, str] = {}
+        self._keep_completed_status()
+
+    def _keep_completed_status(self) -> None:
+        """Wrap the decoder's ``completedOrder`` callback to keep the
+        completed status ``ib_async`` drops."""
+        wrapper = getattr(self.ib, "wrapper", None)
+        original = getattr(wrapper, "completedOrder", None)
+        if wrapper is None or not callable(original):
+            return
+
+        def completed_order(contract: Any, order: Any, order_state: Any) -> None:
+            text = str(getattr(order_state, "completedStatus", "") or "")
+            perm = int(getattr(order, "permId", 0) or 0)
+            if perm and text:
+                with self._lock:
+                    self._completed_status[perm] = text
+            original(contract, order, order_state)
+
+        wrapper.completedOrder = completed_order
 
     # ---- session ---------------------------------------------------------------------
 
@@ -203,7 +229,12 @@ class IbAsyncClient:
 
     def completed_trades(self) -> Sequence[IbTrade]:
         found = self._run(lambda: self.ib.reqCompletedOrdersAsync(False))
-        return [from_trade(t) for t in _items(found)]
+        with self._lock:
+            texts = dict(self._completed_status)
+        return [
+            from_trade(t, completed_status=texts.get(int(t.order.permId or 0)))
+            for t in _items(found)
+        ]
 
     def executions(self) -> Sequence[IbExecution]:
         self._run(self.ib.reqExecutionsAsync)
@@ -401,7 +432,9 @@ def to_order(req: IbOrderRequest) -> IbAsyncOrder:
     return order
 
 
-def from_trade(t: Any) -> IbTrade:
+def from_trade(t: Any, *, completed_status: str | None = None) -> IbTrade:
+    """Our trade for an ``ib_async`` trade. ``completed_status``: IBKR's
+    completed status text, which names who cancelled it."""
     order, status = t.order, t.orderStatus
     filled = _opt(status.filled) or 0.0
     if filled <= 0:
@@ -425,6 +458,7 @@ def from_trade(t: Any) -> IbTrade:
         tif=_text(order.tif),
         account=_text(order.account),
         reason=reason,
+        cancel_origin=cancel_origin(completed_status),
     )
 
 

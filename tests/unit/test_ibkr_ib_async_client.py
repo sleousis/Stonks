@@ -369,6 +369,42 @@ def test_completed_trades_use_the_filled_quantity_and_log_reason(pair):
     )
 
 
+class Wrapper:
+    """The slice of ``ib_async.Wrapper`` the decoder calls for a completed order."""
+
+    def __init__(self, ib: FakeIB) -> None:
+        self.ib = ib
+
+    def completedOrder(self, contract, order, order_state):
+        self.ib.completed.append(
+            Trade(contract, order, OrderStatus(orderId=order.orderId, status=order_state.status))
+        )
+
+
+def test_completed_trades_carry_the_cancel_origin():
+    # roadmap 19.16: ib_async drops the completed status, so the client
+    # keeps it by permId as the decoder hands it over
+    ib = FakeIB()
+    ib.wrapper = Wrapper(ib)  # type: ignore[attr-defined]
+    c, _ = client(ib)
+    try:
+        c.connect()
+        by_hand = Order(orderId=4, permId=11, action="BUY", totalQuantity=5, orderRef="a",
+                        tif="OPG")  # fmt: skip
+        expired = Order(orderId=5, permId=12, action="BUY", totalQuantity=5, orderRef="b",
+                        tif="OPG")  # fmt: skip
+        ib.wrapper.completedOrder(  # type: ignore[attr-defined]
+            AAPL, by_hand, OrderState(status="Cancelled", completedStatus="Cancelled by Trader")
+        )
+        ib.wrapper.completedOrder(  # type: ignore[attr-defined]
+            AAPL, expired, OrderState(status="Cancelled", completedStatus="Cancelled by System")
+        )
+        origins = {t.order_ref: t.cancel_origin for t in c.completed_trades()}
+        assert origins == {"a": "trader", "b": "system"}
+    finally:
+        c.close()
+
+
 def test_from_trade_without_fills():
     order = Order(orderId=1, action="BUY", totalQuantity=2, orderRef="")
     t = from_trade(Trade(AAPL, order, OrderStatus(orderId=1, status="Submitted", permId=4), [], []))

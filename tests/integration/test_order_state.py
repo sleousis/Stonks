@@ -12,7 +12,7 @@ import pytest
 from stonks.core.clock import FakeClock
 from stonks.core.types import Portfolio
 from stonks.execution.brokers.base import BrokerOrderState
-from stonks.execution.brokers.ibkr.status import ibkr_state
+from stonks.execution.brokers.ibkr.status import cancel_origin, ibkr_state
 from stonks.execution.order_state import (
     IllegalTransitionError,
     ReconciliationPendingError,
@@ -167,3 +167,42 @@ def test_a_fill_moves_the_state_through_the_table(state):
 )
 def test_ibkr_statuses_map_onto_the_machine(status, filled, tif, expected):
     assert ibkr_state(status, filled=filled, time_in_force=tif) == expected
+
+
+@pytest.mark.parametrize(
+    ("origin", "filled", "tif", "expected"),
+    [
+        # roadmap 19.16: a cancel by hand is a cancel, even in the auction
+        ("trader", 0.0, "opg", "cancelled"),
+        ("trader", 0.0, "day", "cancelled"),
+        # IBKR or the exchange ended it unfilled: expired
+        ("system", 0.0, "opg", "expired"),
+        ("system", 0.0, "day", "expired"),
+        # some fills: always cancelled (the fills stand)
+        ("system", 2.0, "opg", "cancelled"),
+        # no origin reported: the auction rule of 19.2
+        (None, 0.0, "opg", "expired"),
+        (None, 0.0, "day", "cancelled"),
+    ],
+)
+def test_ibkr_cancel_origin_decides_cancelled_or_expired(origin, filled, tif, expected):
+    assert ibkr_state("Cancelled", filled=filled, time_in_force=tif, cancel_origin=origin) == (
+        expected
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Cancelled by Trader", "trader"),
+        ("cancelled by user", "trader"),
+        ("Cancelled by System", "system"),
+        ("Expired", "system"),
+        ("Cancelled by Exchange", "system"),
+        ("Filled Size: 100", None),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_ibkr_cancel_origin_from_the_completed_status(text, expected):
+    assert cancel_origin(text) == expected

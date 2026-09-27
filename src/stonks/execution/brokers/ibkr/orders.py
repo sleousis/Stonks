@@ -20,6 +20,9 @@ Rules, from ``docs/design/live-trading.md`` section 2:
 - An order with an ``oca_group`` (a protective stop and the exits of its
   position, roadmap 19.10) goes out with OCA type 2: a fill of one reduces
   the others by the filled quantity, and IBKR blocks an overfill.
+- Prices arrive in the currency's major unit and leave in IBKR's price
+  unit: times the contract's ``price_magnifier`` (pounds to pence for
+  London), snapped on IBKR's own tick grid (roadmap 19.16).
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ from stonks.core.instruments import InstrumentSpec
 from stonks.core.types import Order, TimeInForce
 from stonks.execution.brokers.base import OrderRejectedError
 from stonks.execution.brokers.ibkr.client import IbOrderRequest, IbOrderType, IbTif
+from stonks.execution.brokers.ibkr.contracts import to_ib_price
 from stonks.execution.brokers.ibkr.settings import IbkrOrderSettings
 
 #: The prefix of a hashed order reference.
@@ -102,15 +106,23 @@ def to_ib_order(
     *,
     account: str,
     settings: IbkrOrderSettings,
+    price_magnifier: int = 1,
 ) -> IbOrderRequest:
     """The IBKR order for ``order`` on the contract ``spec`` describes.
-    Raises ``OrderRejectedError`` for anything this phase does not send."""
+    ``spec`` and the order's prices are in the major unit, and the request
+    is in IBKR's (times ``price_magnifier``). Raises ``OrderRejectedError``
+    for anything this phase does not send."""
     if order.outside_rth:
         raise OrderRejectedError(f"{order.client_id}: orders outside regular hours are refused")
     if not account:
         raise OrderRejectedError(f"{order.client_id}: no IBKR account to trade")
     shares = whole_shares(order)
-    tick = spec.tick_size
+    mag = max(1, price_magnifier)
+    tick = to_ib_price(spec.tick_size, mag)
+
+    def ib(price: float) -> float:
+        return to_ib_price(price, mag)
+
     is_stop = order.order_type in ("stop", "stop_limit")
     tif = _time_in_force(order, is_stop, settings)
     limit: float | None = None
@@ -120,7 +132,7 @@ def to_ib_order(
         reference = order.decision_price
         if reference is not None and settings.collar_bps > 0:
             order_type = "LMT"
-            limit = collar_price(reference, order.side, settings.collar_bps, tick)
+            limit = collar_price(ib(reference), order.side, settings.collar_bps, tick)
         elif order.position_effect == "close":
             order_type = "MKT"
         else:
@@ -131,17 +143,17 @@ def to_ib_order(
     elif order.order_type == "limit":
         assert order.limit_price is not None  # Order checks it
         order_type = "LMT"
-        limit = snap_price(order.limit_price, tick, side=order.side)
+        limit = snap_price(ib(order.limit_price), tick, side=order.side)
     else:
         if order.stop_price is None:
             raise OrderRejectedError(f"{order.client_id}: a stop order needs stop_price")
-        aux = snap_price(order.stop_price, tick, side=None)
+        aux = snap_price(ib(order.stop_price), tick, side=None)
         if order.order_type == "stop":
             order_type = "STP"
         else:
             assert order.limit_price is not None
             order_type = "STP LMT"
-            limit = snap_price(order.limit_price, tick, side=order.side)
+            limit = snap_price(ib(order.limit_price), tick, side=order.side)
     return IbOrderRequest(
         action="BUY" if order.side == "buy" else "SELL",
         total_quantity=float(shares),

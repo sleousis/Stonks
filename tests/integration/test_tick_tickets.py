@@ -228,6 +228,63 @@ def test_a_runaway_halt_holds_even_an_auto_books_closes(world):
     assert [cid for cid in world.book.orders if "sell" in cid] == []
 
 
+def test_a_hard_to_borrow_short_waits_for_a_person_even_in_auto(world, monkeypatch):
+    """Roadmap 19.16: an auto book with the window off sends its other
+    orders at once and holds the hard to borrow short as a ticket."""
+    import stonks.production.tick as tick_module
+    from stonks.connections.providers import fake
+    from stonks.core.types import Order
+    from stonks.execution.borrow import BorrowSettings, FlatBorrow
+
+    short_id = f"2026-03-17:{world.live}:bh_up:DOWN.US:short"
+    real = tick_module.build_orders
+
+    def with_a_short(*args, **kw):
+        result = real(*args, **kw)
+        if not any(world.live in o.client_id for o in result.orders):
+            return result
+        short = Order(short_id, "DOWN.US", "sell", 10, strategy_id="bh_up",
+                      position_effect="open", decision_price=80.0)  # fmt: skip
+        return replace(result, orders=[*result.orders, short])
+
+    monkeypatch.setattr(tick_module, "build_orders", with_a_short)
+    monkeypatch.setattr(
+        fake.FakeTrader, "borrow", FlatBorrow(BorrowSettings(hard=("DOWN.US",))), raising=False
+    )
+    result = _tick(world, DAY1)
+
+    assert list(world.book.orders) == [f"2026-03-17:{world.live}:bh_up:UP.US:buy"]
+    [ticket] = list_tickets(world.state, portfolio_ids=[world.live])
+    assert (ticket.client_id, ticket.hold, ticket.status) == (
+        short_id, "hard_to_borrow", "awaiting_approval",
+    )  # fmt: skip
+    [live] = [r for r in result.portfolios if r.portfolio_id == world.live]
+    assert live.summary["tickets"] == {"written": 1, "awaiting_approval": 1, "approved": 0}
+    assert live.summary["hard_to_borrow"] == [short_id]
+
+
+def test_an_easy_to_borrow_short_is_not_held(world, monkeypatch):
+    import stonks.production.tick as tick_module
+    from stonks.connections.providers import fake
+    from stonks.core.types import Order
+    from stonks.execution.borrow import FlatBorrow
+
+    real = tick_module.build_orders
+
+    def with_a_short(*args, **kw):
+        result = real(*args, **kw)
+        if not any(world.live in o.client_id for o in result.orders):
+            return result
+        short = Order(f"2026-03-17:{world.live}:bh_up:DOWN.US:short", "DOWN.US", "sell", 10,
+                      strategy_id="bh_up", position_effect="open")  # fmt: skip
+        return replace(result, orders=[*result.orders, short])
+
+    monkeypatch.setattr(tick_module, "build_orders", with_a_short)
+    monkeypatch.setattr(fake.FakeTrader, "borrow", FlatBorrow(), raising=False)
+    _tick(world, DAY1)
+    assert list_tickets(world.state, portfolio_ids=[world.live]) == []
+
+
 # ---- the fine order state -------------------------------------------------------------
 
 

@@ -16,6 +16,12 @@ The answer is a :class:`ResolvedContract`. ``spec()`` gives the shared
 id), so no IBKR type leaves this package. The cache is SQLite
 ``broker_contracts`` (migration 029) or memory in tests. Positions map back
 by ``conId`` (:meth:`ContractResolver.ticker_for`).
+
+Price units (roadmap 19.16): IBKR quotes some markets in a minor unit. A
+London stock trades in pence, so its ``price_magnifier`` is 100: IBKR's
+price 123.45 is 1.2345 GBP. Stonks always works in the currency's major
+unit. :func:`to_major` turns an IBKR price into ours and :func:`to_ib_price`
+ours into IBKR's. ``spec().tick_size`` is in the major unit too.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Any, Protocol
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock
@@ -96,6 +103,20 @@ class InstrumentProfile:
 InstrumentLookup = Callable[[str], InstrumentProfile | None]
 
 
+def to_major(price: float, magnifier: int) -> float:
+    """An IBKR price in the currency's major unit (pence to pounds at 100)."""
+    if magnifier <= 1:
+        return price
+    return float(Decimal(str(price)) / Decimal(magnifier))
+
+
+def to_ib_price(price: float, magnifier: int) -> float:
+    """A price in the major unit as IBKR reads it (pounds to pence at 100)."""
+    if magnifier <= 1:
+        return price
+    return float(Decimal(str(price)) * Decimal(magnifier))
+
+
 @dataclass(frozen=True)
 class ResolvedContract:
     ticker: str
@@ -110,12 +131,14 @@ class ResolvedContract:
         return self.contract.con_id
 
     def spec(self) -> InstrumentSpec:
+        """The shared instrument spec. The tick size is in the currency's
+        major unit (IBKR's minimum tick over the price magnifier)."""
         c = self.contract
         return InstrumentSpec.spot(
             self.ticker,
             currency=c.currency,
             exchange=c.primary_exchange or c.exchange,
-            tick_size=self.min_tick,
+            tick_size=to_major(self.min_tick, self.price_magnifier),
         ).with_broker_id(BROKER, str(c.con_id))
 
 

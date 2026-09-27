@@ -28,6 +28,10 @@ IbAction = Literal["BUY", "SELL"]
 IbOrderType = Literal["MKT", "LMT", "STP", "STP LMT"]
 #: IBKR's time in force codes the adapter sends.
 IbTif = Literal["DAY", "GTC", "OPG", "IOC"]
+#: Who cancelled an order, as IBKR reports it: ``trader`` a person (in TWS,
+#: the portal or through the API), ``system`` IBKR or the exchange (an
+#: unfilled auction order, a day order at the close).
+CancelOrigin = Literal["trader", "system"]
 
 
 class IbApiError(RuntimeError):
@@ -118,6 +122,8 @@ class IbTrade:
     account: str | None = None
     #: The last error IBKR sent for this order (a rejection's reason).
     reason: str | None = None
+    #: Who cancelled it, when IBKR says (roadmap 19.16).
+    cancel_origin: CancelOrigin | None = None
 
 
 @dataclass(frozen=True)

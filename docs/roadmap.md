@@ -16,7 +16,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 15 | Mostly done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Open: order placement for real providers. |
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
-| 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. 19.2 IBKR adapter, 19.3 connection and borrow, 19.5 reconciliation and drift, and 19.8 tickets and approve mode done. Design: `docs/design/live-trading.md`. |
+| 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. 19.2 IBKR adapter, 19.3 connection and borrow, 19.5 reconciliation and drift, 19.8 tickets and approve mode, and 19.16 broker edge cases done. Design: `docs/design/live-trading.md`. |
 | 20 | 20.1 to 20.9 done, backend and console. |
 | 21 | 21.1 streaming data, 21.2.1 event driver, 21.2.4 session rules and 21.3.1 intraday strategies done, off by default. The rest of 21.2 and 21.3 in small work packages. Design: `docs/design/intraday.md`. |
 | 22 | All of 22.1 to 22.9 done. Factors: `docs/factors.md`. |
@@ -452,6 +452,7 @@ A clean week has no unresolved reconciliation drift, no stuck orders, rejections
 | 19.11 Live tests, drills and runbooks | Live contract tests against the paper account (DU only: place and cancel a far limit, what-if, quotes, executions, reconnect), the paper soak report (`stonks live soak-report`), a manual reconcile (`stonks live reconcile`), the kill switch dry run (`stonks halts drill`, scratch state and simulated broker), runbooks for broker outage, stuck order, drift, re-auth, the kill switch and restore. No `kill_switch_drills` table yet: keep the drill's `--json-out` report. | `tests/integration/live/test_ibkr_live.py`, `production/soak.py`, `production/drills.py`, `app/drills.py`, `cli_live.py`, `docs/runbooks/*` | done |
 | 19.12 Go live | Run the stages and gates. Operations only. | none | planned |
 | 19.13 Margin accounts | Follow-up after the cash account runs well: a margin profile with longs and shorts at IBKR, borrow and locates through the adapter, buying power from what-if margin, the pattern day trader rule in force. The seams are ready (`account_type`, `short_permission`, `buying_power`, `reg_sho`). | `accounts/rules/*`, `execution/brokers/ibkr/*` | planned |
+| 19.16 Broker edge cases | London and other pence-quoted markets in pounds (every price through the contract's price magnifier), hard to borrow short sales held as approval tickets even in auto, opening-auction orders cancelled by hand read as `cancelled` (not `expired`), a live test that measures how long an `orderRef` the gateway keeps. | `execution/brokers/ibkr/{contracts,orders,broker,status,ib_async_client}.py`, `production/{tickets,tick}.py`, `execution/borrow.py`, a new SQLite migration | done (migration 039) |
 
 Waves: 19.1, 19.4, 19.6 and 19.7 first (done), then 19.2 and 19.8, then 19.3, 19.5, 19.9 and 19.10, then 19.11 and 19.12, then 19.13. Approve each trade is an optional mode, not a stage. The owner provides the IBKR account and its paper account, a secondary API username with IBKR Mobile for 2FA, market data subscriptions, the account type and client class, the capital to allocate, and 1 GB more VM memory per gateway.
 

@@ -50,6 +50,16 @@ class BorrowQuote:
         return self.status != "none"
 
 
+def is_hard_to_borrow(quote: BorrowQuote | None, *, fee_rate: float) -> bool:
+    """Whether a short sale on ``quote`` is hard to borrow: the source marks
+    it ``hard`` (IBKR's shortable level between 1.5 and 2.5, say) or its fee
+    is at or above ``fee_rate`` (a yearly fraction). No quote, or no
+    locate, is not hard to borrow: that short is refused outright."""
+    if quote is None or not quote.shortable:
+        return False
+    return quote.status == "hard" or quote.fee_rate_annual >= fee_rate
+
+
 def daily_fee(quantity: float, price: float, quote: BorrowQuote, days: float = 1.0) -> float:
     """Borrow fee for ``days`` calendar days on ``|quantity|`` shares."""
     return abs(quantity) * price * quote.fee_rate_annual * days / DAY_COUNT

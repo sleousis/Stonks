@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from stonks.execution.brokers.ibkr.client import (
+    CancelOrigin,
     IbAccountValue,
     IbApiError,
     IbConnectionError,
@@ -113,6 +114,7 @@ class FakeIbGateway:
         self.lookups: list[IbContractQuery] = []
         self.cancels: list[int] = []
         self.global_cancels = 0
+        self.what_ifs: list[tuple[IbContract, IbOrderRequest]] = []
 
     # ---- scripting -----------------------------------------------------------------
 
@@ -191,9 +193,19 @@ class FakeIbGateway:
                 return
         raise AssertionError(f"no execution {exec_id}")
 
-    def auction_no_fill(self, order_ref: str) -> None:
+    def auction_no_fill(self, order_ref: str, *, origin: CancelOrigin | None = None) -> None:
+        """The auction ended without a fill. ``origin``: what IBKR reports
+        as the canceller (``None``: it reports nothing)."""
         t = self.trade(order_ref)
-        self._put(replace(t, status="Cancelled"))
+        self._put(replace(t, status="Cancelled", cancel_origin=origin))
+
+    def cancel_by_hand(self, order_ref: str) -> None:
+        """Someone cancelled the order in TWS or the portal."""
+        t = self.trade(order_ref)
+        self._put(replace(t, status="Cancelled", cancel_origin="trader"))
+
+    def set_cancel_origin(self, order_ref: str, origin: CancelOrigin | None) -> None:
+        self._put(replace(self.trade(order_ref), cancel_origin=origin))
 
     def set_status(self, order_ref: str, status: str, reason: str | None = None) -> None:
         t = self.trade(order_ref)
@@ -342,7 +354,7 @@ class FakeIbGateway:
             if t.order_id == order_id and t.status not in TERMINAL:
                 self.cancels.append(order_id)
                 status = "PendingCancel" if self.cancel_leaves_pending else "Cancelled"
-                self._put(replace(t, status=status))
+                self._put(replace(t, status=status, cancel_origin="trader"))
                 return
         raise IbApiError(135, f"Can't find order with id = {order_id}")
 
@@ -375,6 +387,7 @@ class FakeIbGateway:
 
     def what_if(self, contract: IbContract, order: IbOrderRequest) -> IbWhatIf:
         self._need_connection()
+        self.what_ifs.append((contract, order))
         if self.what_if_timeout:
             raise TimeoutError("what-if timed out")
         if self.what_if_result is not None:
