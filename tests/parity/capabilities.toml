@@ -1,0 +1,1053 @@
+# Surface parity (roadmap 18.7): every capability and where it is reachable.
+#
+# One [[capability]] per thing a person can do. Each surface is one of:
+#   "entry" or ["entry", ...]   present, and checked by tests/unit/test_surface_parity.py
+#                               console: operationIds the hand-written console imports
+#                               cli: "stonks <group> <command>" or "python -m stonks.<module> <sub>"
+#                               mcp: MCP tool names
+#   { limited = "why" }         left out on purpose, with the reason
+#   { gap = "WP", note = "" }   a known gap. The count may only go down (see the test)
+#
+# Every OpenAPI operation sits in exactly one capability's `routes`, or in
+# [infra_routes] with a reason.
+
+schema_version = 1
+
+[infra_routes]
+"GET /api/health/live" = "liveness probe for the container healthcheck, no client"
+"GET /api/health/ready" = "readiness probe Compose waits for, no client"
+
+# ---- data and ingest -------------------------------------------------------------
+
+[[capability]]
+id = "ingest.start"
+domain = "data"
+title = "Start an ingest (prices, intraday, fundamentals, metadata) and read its result"
+routes = ["POST /api/ingest/runs", "GET /api/ingest/jobs/{job_id}/result"]
+console = ["startIngest", "getIngestResult"]
+cli = ["stonks ingest prices", "stonks ingest intraday", "stonks ingest fundamentals", "stonks ingest metadata"]
+mcp = "run_ingest"
+
+[[capability]]
+id = "ingest.bulk"
+domain = "data"
+title = "Ingest macro, DeFi TVL and exchanges, derive intervals"
+routes = []
+console = { limited = "operator bulk jobs, run by the scheduler" }
+cli = ["stonks ingest macro", "stonks ingest tvl", "stonks ingest exchanges", "stonks ingest aggregate", "stonks ingest all-intervals"]
+mcp = { limited = "operator bulk jobs, run by the scheduler" }
+
+[[capability]]
+id = "ingest.runs"
+domain = "data"
+title = "Ingest run history"
+routes = ["GET /api/ingest/runs"]
+console = "listIngestRuns"
+cli = { limited = "the CLI prints each run it starts" }
+mcp = "list_ingest_runs"
+
+[[capability]]
+id = "data.sources"
+domain = "data"
+title = "Data sources and which is configured"
+routes = ["GET /api/sources"]
+console = "listDataSources"
+cli = { limited = "the config file and --source name them" }
+mcp = "list_sources"
+
+[[capability]]
+id = "market.instruments"
+domain = "data"
+title = "Search instruments"
+routes = ["GET /api/market/instruments"]
+console = "listInstruments"
+cli = { limited = "research reads live in the console and MCP" }
+mcp = "search_instruments"
+
+[[capability]]
+id = "market.bars"
+domain = "data"
+title = "Read bars"
+routes = ["GET /api/market/bars"]
+console = "getBars"
+cli = { limited = "research reads live in the console and MCP" }
+mcp = "get_bars"
+
+[[capability]]
+id = "market.coverage"
+domain = "data"
+title = "Data coverage"
+routes = ["GET /api/market/coverage"]
+console = "listCoverage"
+cli = "stonks db info"
+mcp = "get_coverage"
+
+[[capability]]
+id = "catalog"
+domain = "data"
+title = "Strategy classes, intervals and asset classes"
+routes = ["GET /api/catalog/strategies", "GET /api/catalog/intervals", "GET /api/catalog/asset-classes"]
+console = ["listStrategyClasses", "listIntervals", "listAssetClasses"]
+cli = { limited = "help text and docs name them" }
+mcp = "get_catalog"
+
+[[capability]]
+id = "statements.audit"
+domain = "data"
+title = "Run the statement audit"
+routes = []
+console = { limited = "runs after every fundamentals ingest" }
+cli = "stonks audit statements"
+mcp = { limited = "runs after every fundamentals ingest" }
+
+[[capability]]
+id = "statements.flags"
+domain = "data"
+title = "Statement audit flags"
+routes = ["GET /api/statements/flags"]
+console = "listStatementFlags"
+cli = "stonks audit statements"
+mcp = "list_statement_flags"
+
+[[capability]]
+id = "lake.admin"
+domain = "data"
+title = "Lake init, table info, move bars to Parquet"
+routes = []
+console = { limited = "operator only, needs the lake lock" }
+cli = ["stonks db init", "python -m stonks.store.bars_migrate"]
+mcp = { limited = "operator only, needs the lake lock" }
+
+# ---- universes -------------------------------------------------------------------
+
+[[capability]]
+id = "universes.read"
+domain = "universes"
+title = "List and show universes"
+routes = ["GET /api/universes", "GET /api/universes/{universe_id}"]
+console = ["listUniverses", "getUniverse"]
+cli = ["stonks universe list", "stonks universe show"]
+mcp = ["list_universes", "get_universe"]
+
+[[capability]]
+id = "universes.members"
+domain = "universes"
+title = "Members on a date"
+routes = ["GET /api/universes/{universe_id}/members"]
+console = "getUniverseMembers"
+cli = "stonks universe members"
+mcp = "get_universe_members"
+
+[[capability]]
+id = "universes.create"
+domain = "universes"
+title = "Create a universe"
+routes = ["POST /api/universes"]
+console = "createUniverse"
+cli = "stonks universe create"
+mcp = "create_universe"
+
+[[capability]]
+id = "universes.delete"
+domain = "universes"
+title = "Delete a universe"
+routes = ["DELETE /api/universes/{universe_id}"]
+console = "deleteUniverse"
+cli = "stonks universe delete"
+mcp = "delete_universe"
+
+[[capability]]
+id = "universes.refresh"
+domain = "universes"
+title = "Refresh membership"
+routes = ["POST /api/universes/{universe_id}/refresh", "GET /api/universes/refresh/{job_id}/result"]
+console = ["refreshUniverse", "getUniverseRefreshResult"]
+cli = "stonks universe refresh"
+mcp = "refresh_universe"
+
+[[capability]]
+id = "universes.ensure"
+domain = "universes"
+title = "Fetch a universe's missing bars"
+routes = ["POST /api/universes/{universe_id}/ensure", "GET /api/universes/ensure/{job_id}/result"]
+console = ["ensureUniverseData", "getUniverseEnsureResult"]
+cli = "stonks universe ensure"
+mcp = "ensure_universe_data"
+
+[[capability]]
+id = "universes.index_history"
+domain = "universes"
+title = "Import index history"
+routes = ["POST /api/universes/index-history"]
+console = "importIndexHistory"
+cli = "stonks universe import-index"
+mcp = "import_index_history"
+
+# ---- lab and research --------------------------------------------------------------
+
+[[capability]]
+id = "lab.backtest"
+domain = "lab"
+title = "Backtest without tuning, on tickers or a stored universe"
+routes = ["POST /api/lab/backtests", "GET /api/lab/backtests/{job_id}/result"]
+console = ["startBacktest", "getBacktestResult"]
+cli = "stonks report"
+mcp = "run_backtest"
+
+[[capability]]
+id = "lab.run"
+domain = "lab"
+title = "Lab run: tune, fit, survival suite, on tickers or a stored universe"
+routes = ["POST /api/lab/runs", "GET /api/lab/runs/{job_id}/result"]
+console = ["startLabRun", "getLabRunResult"]
+cli = "stonks lab run"
+mcp = "run_lab"
+
+[[capability]]
+id = "lab.ensure_result"
+domain = "lab"
+title = "The data job a lab run with ensure_data chains first"
+routes = ["GET /api/lab/ensure/{job_id}/result"]
+console = { limited = "the lab result names the data job, whose report is a detail for agents" }
+cli = { limited = "stonks lab run --ensure-data prints what it fetched" }
+mcp = "wait_for_job"
+
+[[capability]]
+id = "lab.sweep"
+domain = "lab"
+title = "Sweep every strategy"
+routes = ["POST /api/lab/sweeps", "GET /api/lab/sweeps/{job_id}/result"]
+console = ["startSweep", "getSweepResult"]
+cli = "stonks lab sweep"
+mcp = "run_sweep"
+
+[[capability]]
+id = "lab.signal_ic"
+domain = "lab"
+title = "Signal IC and event study"
+routes = ["POST /api/lab/signal-ic", "GET /api/lab/signal-ic/{job_id}/result"]
+console = ["startSignalIc", "getSignalIcResult"]
+cli = "stonks lab ic"
+mcp = "run_signal_ic"
+
+[[capability]]
+id = "lab.survival_tests"
+domain = "lab"
+title = "Survival test catalog"
+routes = ["GET /api/lab/survival-tests"]
+console = "listSurvivalTests"
+cli = { limited = "stonks lab run --help names the tests" }
+mcp = "list_survival_tests"
+
+[[capability]]
+id = "lab.survival_presets"
+domain = "lab"
+title = "Survival presets"
+routes = ["GET /api/lab/survival-presets"]
+console = "listSurvivalPresets"
+cli = { limited = "stonks lab run --preset names them" }
+mcp = "list_survival_presets"
+
+[[capability]]
+id = "lab.cost_models"
+domain = "lab"
+title = "Cost model presets"
+routes = ["GET /api/lab/cost-models"]
+console = "listCostModels"
+cli = { limited = "the config file sets the cost model" }
+mcp = "list_cost_models"
+
+[[capability]]
+id = "lab.ledger"
+domain = "lab"
+title = "Trial ledger: past lab runs, trials, hypothesis, premortem"
+routes = ["GET /api/lab/ledger", "GET /api/lab/ledger/{run_id}"]
+console = ["listLedgerRuns", "getLedgerRun"]
+cli = { limited = "research reads live in the console and MCP" }
+mcp = ["list_ledger_runs", "get_ledger_run"]
+
+[[capability]]
+id = "lab.report"
+domain = "lab"
+title = "Static HTML report"
+routes = []
+console = { limited = "a file artifact, the console shows the same data live" }
+cli = "stonks report"
+mcp = { limited = "a file artifact, the console shows the same data live" }
+
+# ---- jobs --------------------------------------------------------------------------
+
+[[capability]]
+id = "jobs.read"
+domain = "jobs"
+title = "Jobs: list and detail"
+routes = ["GET /api/jobs", "GET /api/jobs/{job_id}"]
+console = ["listJobs", "getJob"]
+cli = { limited = "n/a: the CLI runs its work in process" }
+mcp = ["list_jobs", "get_job"]
+
+[[capability]]
+id = "jobs.cancel"
+domain = "jobs"
+title = "Cancel a job"
+routes = ["POST /api/jobs/{job_id}/cancel"]
+console = "cancelJob"
+cli = { limited = "n/a: Ctrl-C stops work the CLI runs" }
+mcp = "cancel_job"
+
+[[capability]]
+id = "jobs.progress"
+domain = "jobs"
+title = "Live job progress"
+routes = ["GET /api/jobs/{job_id}/events", "POST /api/jobs/{job_id}/stream-token"]
+console = "createStreamToken"
+cli = { limited = "n/a: the CLI prints progress itself" }
+mcp = { limited = "server-sent events do not fit MCP, wait_for_job polls" }
+
+# ---- strategies and governance ------------------------------------------------------
+
+[[capability]]
+id = "strategies.list"
+domain = "strategies"
+title = "List strategies and counts by stage"
+routes = ["GET /api/strategies", "GET /api/strategies/summary"]
+console = ["listStrategies", "getStrategySummary"]
+cli = "stonks registry list"
+mcp = "list_strategies"
+
+[[capability]]
+id = "strategies.detail"
+domain = "strategies"
+title = "Strategy detail"
+routes = ["GET /api/strategies/{strategy_id}"]
+console = "getStrategy"
+cli = "stonks registry show"
+mcp = "get_strategy"
+
+[[capability]]
+id = "strategies.history"
+domain = "strategies"
+title = "Status history"
+routes = ["GET /api/strategies/{strategy_id}/history"]
+console = "getStrategyHistory"
+cli = "stonks registry history"
+mcp = "get_strategy_history"
+
+[[capability]]
+id = "strategies.promote"
+domain = "strategies"
+title = "Go live (promote through the gate or override)"
+routes = ["POST /api/strategies/{strategy_id}/promote"]
+console = "promoteStrategy"
+cli = "stonks registry promote"
+mcp = "promote_strategy"
+
+[[capability]]
+id = "strategies.demote"
+domain = "strategies"
+title = "Back to paper trading, stop"
+routes = ["POST /api/strategies/{strategy_id}/shadow", "POST /api/strategies/{strategy_id}/retire"]
+console = ["shadowStrategy", "retireStrategy"]
+cli = ["stonks registry shadow", "stonks registry retire"]
+mcp = ["shadow_strategy", "retire_strategy"]
+
+[[capability]]
+id = "strategies.golive"
+domain = "strategies"
+title = "Go-live report: the paper period against the gate"
+routes = ["GET /api/strategies/{strategy_id}/golive"]
+console = "getGoLiveReport"
+cli = "stonks golive check"
+mcp = "get_golive_report"
+
+[[capability]]
+id = "shadow.decisions"
+domain = "strategies"
+title = "Paper trading decisions"
+routes = ["GET /api/shadow/decisions"]
+console = "listShadowDecisions"
+cli = { limited = "research reads live in the console and MCP" }
+mcp = "list_shadow_decisions"
+
+[[capability]]
+id = "shadow.pnl"
+domain = "strategies"
+title = "Paper trading P&L, all or one"
+routes = ["GET /api/shadow/pnl", "GET /api/shadow/strategies/{strategy_id}/pnl"]
+console = ["listShadowPnl", "getShadowPnl"]
+cli = "stonks pnl"
+mcp = ["list_shadow_pnl", "get_shadow_pnl"]
+
+# ---- studio -------------------------------------------------------------------------
+
+[[capability]]
+id = "studio.authoring"
+domain = "studio"
+title = "Templates, rule schema, validate a spec"
+routes = ["GET /api/studio/templates", "GET /api/studio/schema", "POST /api/studio/spec/validate"]
+console = ["listStudioTemplates", "getRuleSpecSchema", "validateRuleSpec"]
+cli = { limited = "the Studio is an authoring UI, the CLI names classes" }
+mcp = ["list_studio_templates", "get_rule_schema", "validate_rule_spec"]
+
+[[capability]]
+id = "studio.drafts"
+domain = "studio"
+title = "Drafts: list, get, create, update"
+routes = ["GET /api/studio/drafts", "POST /api/studio/drafts", "GET /api/studio/drafts/{draft_id}", "PATCH /api/studio/drafts/{draft_id}"]
+console = ["listDrafts", "createDraft", "getDraft", "updateDraft"]
+cli = { limited = "the Studio is an authoring UI, the CLI names classes" }
+mcp = ["list_drafts", "create_draft", "get_draft", "update_draft"]
+
+[[capability]]
+id = "studio.delete"
+domain = "studio"
+title = "Delete a draft"
+routes = ["DELETE /api/studio/drafts/{draft_id}"]
+console = "deleteDraft"
+cli = { limited = "the Studio is an authoring UI, the CLI names classes" }
+mcp = "delete_draft"
+
+[[capability]]
+id = "studio.research"
+domain = "studio"
+title = "Validate, backtest and lab-run a draft"
+routes = ["POST /api/studio/drafts/{draft_id}/validate", "POST /api/studio/drafts/{draft_id}/backtests", "POST /api/studio/drafts/{draft_id}/lab-runs"]
+console = ["validateDraft", "startDraftBacktest", "startDraftLabRun"]
+cli = { limited = "the Studio is an authoring UI, the CLI names classes" }
+mcp = ["validate_draft", "run_draft_backtest", "run_draft_lab"]
+
+[[capability]]
+id = "studio.lifecycle"
+domain = "studio"
+title = "Register, enable and disable a draft"
+routes = ["POST /api/studio/drafts/{draft_id}/register", "POST /api/studio/drafts/{draft_id}/enable", "POST /api/studio/drafts/{draft_id}/disable"]
+console = ["registerDraft", "enableDraft", "disableDraft"]
+cli = { limited = "the Studio is an authoring UI, the CLI names classes" }
+mcp = ["register_draft", "enable_draft", "disable_draft"]
+
+[[capability]]
+id = "studio.capabilities"
+domain = "studio"
+title = "What the Studio allows on this server"
+routes = ["GET /api/studio/capabilities"]
+console = "getStudioCapabilities"
+cli = { limited = "the config file sets it" }
+mcp = "get_studio_capabilities"
+
+# ---- trading runs and orders --------------------------------------------------------
+
+[[capability]]
+id = "ticks.run"
+domain = "trading"
+title = "Run a trading run (dry or real)"
+routes = ["POST /api/ticks", "GET /api/ticks/jobs/{job_id}/result"]
+console = ["startTick", "getTickResult"]
+cli = "stonks tick"
+mcp = "run_tick"
+
+[[capability]]
+id = "ticks.read"
+domain = "trading"
+title = "Trading run history and detail"
+routes = ["GET /api/ticks", "GET /api/ticks/{tick_id}"]
+console = ["listTicks", "getTick"]
+cli = "stonks report"
+mcp = ["list_ticks", "get_tick"]
+
+[[capability]]
+id = "orders.list"
+domain = "trading"
+title = "Orders"
+routes = ["GET /api/orders"]
+console = "listOrders"
+cli = "stonks report"
+mcp = "list_orders"
+
+[[capability]]
+id = "orders.fills"
+domain = "trading"
+title = "Fills, with the order side"
+routes = ["GET /api/orders/fills"]
+console = "listFills"
+cli = "stonks report"
+mcp = "list_fills"
+
+[[capability]]
+id = "brokers.info"
+domain = "trading"
+title = "Broker in use (kind, paper, live allowed)"
+routes = ["GET /api/brokers"]
+console = "getBrokerInfo"
+cli = { limited = "the config file names the broker" }
+mcp = "get_broker"
+
+[[capability]]
+id = "brokers.alpaca"
+domain = "trading"
+title = "Alpaca account status"
+routes = ["GET /api/brokers/alpaca/status"]
+console = "getAlpacaStatus"
+cli = { limited = "admin diagnostic, Alpaca is not in use" }
+mcp = { limited = "admin diagnostic, Alpaca is not in use" }
+
+# ---- portfolio and P&L ------------------------------------------------------------
+
+[[capability]]
+id = "portfolio.current"
+domain = "portfolio"
+title = "Current portfolio"
+routes = ["GET /api/portfolio"]
+console = "getPortfolio"
+cli = "stonks report"
+mcp = "get_portfolio"
+
+[[capability]]
+id = "portfolio.snapshots"
+domain = "portfolio"
+title = "Portfolio snapshots"
+routes = ["GET /api/portfolio/snapshots"]
+console = "listPortfolioSnapshots"
+cli = { limited = "stonks pnl shows the value over time" }
+mcp = "list_portfolio_snapshots"
+
+[[capability]]
+id = "portfolio.pnl"
+domain = "portfolio"
+title = "Daily P&L of one portfolio"
+routes = ["GET /api/pnl"]
+console = "getPnl"
+cli = "stonks pnl"
+mcp = "get_pnl"
+
+[[capability]]
+id = "portfolio.totals"
+domain = "portfolio"
+title = "Admin totals (cash, value)"
+routes = ["GET /api/portfolio/totals"]
+console = "getPortfolioTotals"
+cli = { limited = "admin reads live in the console and MCP" }
+mcp = "get_portfolio_totals"
+
+[[capability]]
+id = "portfolios.list"
+domain = "portfolio"
+title = "My portfolios"
+routes = ["GET /api/portfolios"]
+console = "listPortfolios"
+cli = { limited = "trader reads live in the console and MCP" }
+mcp = "list_portfolios"
+
+[[capability]]
+id = "portfolios.trading_modes"
+domain = "portfolio"
+title = "Paper or live per portfolio, and the broker"
+routes = ["GET /api/portfolios/trading-modes"]
+console = { limited = "the portfolio list already carries paper or live" }
+cli = { limited = "trader reads live in the console and MCP" }
+mcp = "list_trading_modes"
+
+[[capability]]
+id = "portfolios.write"
+domain = "portfolio"
+title = "Create and rename a portfolio"
+routes = ["POST /api/portfolios", "PATCH /api/portfolios/{portfolio_id}"]
+console = ["createPortfolio", "renamePortfolio"]
+cli = { limited = "traders manage their own portfolios in the console" }
+mcp = { limited = "a person opens a book, an assistant should not" }
+
+# ---- insights ----------------------------------------------------------------------
+
+[[capability]]
+id = "insights.portfolio"
+domain = "insights"
+title = "Portfolio insights: allocation, exposure, beta, synced accounts"
+routes = ["GET /api/insights"]
+console = "getInsights"
+cli = { limited = "trader reads live in the console and MCP" }
+mcp = "get_insights"
+
+[[capability]]
+id = "insights.agreement"
+domain = "insights"
+title = "Strategy agreement with each holding"
+routes = ["GET /api/insights/agreement"]
+console = "getStrategyAgreement"
+cli = { limited = "trader reads live in the console and MCP" }
+mcp = "get_strategy_agreement"
+
+[[capability]]
+id = "insights.totals"
+domain = "insights"
+title = "Admin allocation totals"
+routes = ["GET /api/insights/totals"]
+console = "getInsightsTotals"
+cli = { limited = "admin reads live in the console and MCP" }
+mcp = "get_insights_totals"
+
+# ---- trade costs ---------------------------------------------------------------------
+
+[[capability]]
+id = "tca.summary"
+domain = "tca"
+title = "Shortfall summary"
+routes = ["GET /api/tca/summary"]
+console = "getTcaSummary"
+cli = "stonks tca summary"
+mcp = "get_tca_summary"
+
+[[capability]]
+id = "tca.journal"
+domain = "tca"
+title = "Trade journal"
+routes = ["GET /api/tca/journal"]
+console = "listJournal"
+cli = "stonks tca journal"
+mcp = "list_trade_journal"
+
+[[capability]]
+id = "tca.order"
+domain = "tca"
+title = "One order as a ticket"
+routes = ["GET /api/tca/orders/{client_id}"]
+console = "getOrderTca"
+cli = "stonks tca order"
+mcp = "get_order_tca"
+
+[[capability]]
+id = "tca.notes"
+domain = "tca"
+title = "Add and edit journal notes"
+routes = ["POST /api/tca/orders/{client_id}/notes", "PUT /api/tca/notes/{note_id}"]
+console = ["addJournalNote", "updateJournalNote"]
+cli = ["stonks tca note", "stonks tca edit-note"]
+mcp = ["add_journal_note", "edit_journal_note"]
+
+[[capability]]
+id = "tca.refresh"
+domain = "tca"
+title = "Fill post-trade open and close prices"
+routes = []
+console = { limited = "operator or scheduled job" }
+cli = "stonks tca refresh"
+mcp = { limited = "operator or scheduled job" }
+
+# ---- risk and halts ------------------------------------------------------------------
+
+[[capability]]
+id = "halts.read"
+domain = "risk"
+title = "List halts, one halt"
+routes = ["GET /api/halts", "GET /api/halts/{halt_id}"]
+console = ["listHalts", "getHalt"]
+cli = "stonks halts list"
+mcp = "list_halts"
+
+[[capability]]
+id = "halts.kill"
+domain = "risk"
+title = "Kill switch (stop all, or buys only)"
+routes = ["POST /api/halts/kill"]
+console = "engageKillSwitch"
+cli = "stonks halts kill"
+mcp = "engage_kill_switch"
+
+[[capability]]
+id = "halts.resume"
+domain = "risk"
+title = "Resume the kill switch"
+routes = ["POST /api/halts/{halt_id}/resume"]
+console = "resumeKillSwitch"
+cli = "stonks halts resume"
+mcp = { limited = "step-up: a token cannot pass a second factor" }
+
+[[capability]]
+id = "halts.clear"
+domain = "risk"
+title = "Clear a breaker or operational halt"
+routes = ["POST /api/halts/{halt_id}/clear"]
+console = "clearHalt"
+cli = "stonks halts clear"
+mcp = { limited = "turning a safety stop off stays with a person" }
+
+[[capability]]
+id = "risk.policy"
+domain = "risk"
+title = "Risk policy"
+routes = ["GET /api/risk/policy"]
+console = "getRiskPolicy"
+cli = { limited = "the config file sets the policy" }
+mcp = "get_risk_policy"
+
+[[capability]]
+id = "risk.live"
+domain = "risk"
+title = "Live risk: VaR, ES and violations against limits"
+routes = ["GET /api/risk/live"]
+console = "getLiveRisk"
+cli = { limited = "trader reads live in the console and MCP" }
+mcp = "get_live_risk"
+
+[[capability]]
+id = "risk.snapshots"
+domain = "risk"
+title = "Risk snapshots over time"
+routes = ["GET /api/risk/snapshots"]
+console = "listRiskSnapshots"
+cli = { limited = "trader reads live in the console and MCP" }
+mcp = "list_risk_snapshots"
+
+# ---- schedule and ops -------------------------------------------------------------------
+
+[[capability]]
+id = "schedule.read"
+domain = "ops"
+title = "Schedule: jobs, next and last run, market session"
+routes = ["GET /api/schedule"]
+console = "getSchedule"
+cli = ["stonks schedule next", "stonks schedule runs"]
+mcp = "get_schedule"
+
+[[capability]]
+id = "schedule.run_now"
+domain = "ops"
+title = "Run a scheduled job now"
+routes = ["POST /api/schedule/{job}/run-now"]
+console = "runScheduledJobNow"
+cli = "stonks schedule run-now"
+mcp = { limited = "admin operation, run_tick and run_ingest carry their own guards" }
+
+[[capability]]
+id = "schedule.daemon"
+domain = "ops"
+title = "Scheduler daemon, deadline watchdog, metrics"
+routes = []
+console = { limited = "operator process, metrics are scraped by Prometheus" }
+cli = ["stonks schedule run", "stonks schedule check", "stonks schedule metrics"]
+mcp = { limited = "operator process, metrics are scraped by Prometheus" }
+
+# ---- backups ---------------------------------------------------------------------------
+
+[[capability]]
+id = "backups.create"
+domain = "backups"
+title = "Back up now"
+routes = ["POST /api/backups", "GET /api/backups/jobs/{job_id}/result"]
+console = ["startBackup", "getBackupResult"]
+cli = "stonks backup backup"
+mcp = { limited = "admin operation kept to people" }
+
+[[capability]]
+id = "backups.list"
+domain = "backups"
+title = "Backups on disk"
+routes = ["GET /api/backups"]
+console = "listBackups"
+cli = "stonks backup list"
+mcp = { limited = "admin operation kept to people" }
+
+[[capability]]
+id = "backups.verify"
+domain = "backups"
+title = "Verify a backup"
+routes = ["POST /api/backups/{backup_id}/verify"]
+console = "verifyBackup"
+cli = "stonks backup verify"
+mcp = { limited = "admin operation kept to people" }
+
+[[capability]]
+id = "backups.restore"
+domain = "backups"
+title = "Staged restore"
+routes = ["POST /api/backups/{backup_id}/restore", "GET /api/backups/restores/{job_id}/result"]
+console = ["restoreBackup", "getRestoreResult"]
+cli = "stonks backup restore"
+mcp = { limited = "step-up: a token cannot pass a second factor" }
+
+[[capability]]
+id = "backups.operator"
+domain = "backups"
+title = "Prune, restic snapshot restore, check-restore"
+routes = []
+console = { limited = "operator and off-server scripts" }
+cli = ["stonks backup prune", "stonks backup restore-snapshot", "stonks backup check-restore"]
+mcp = { limited = "operator and off-server scripts" }
+
+# ---- notifications and push ----------------------------------------------------------
+
+[[capability]]
+id = "notifications.feed"
+domain = "notifications"
+title = "Notification feed, mark read"
+routes = ["GET /api/notifications", "POST /api/notifications/read"]
+console = ["listNotifications", "markNotificationsRead"]
+cli = { limited = "a personal feed lives in the console and MCP" }
+mcp = ["list_notifications", "mark_notifications_read"]
+
+[[capability]]
+id = "notifications.test"
+domain = "notifications"
+title = "Send yourself a test notification"
+routes = ["POST /api/notifications/test"]
+console = "sendTestNotification"
+cli = "python -m stonks.notify test"
+mcp = { limited = "checking a phone gets alerts is a person's check" }
+
+[[capability]]
+id = "alerts"
+domain = "notifications"
+title = "System alerts"
+routes = ["GET /api/alerts"]
+console = "listAlerts"
+cli = { limited = "the CLI prints its own errors" }
+mcp = "list_alerts"
+
+[[capability]]
+id = "notifications.settings"
+domain = "notifications"
+title = "Preferences, quiet hours, personal webhook"
+routes = ["GET /api/notifications/preferences", "PUT /api/notifications/preferences", "PUT /api/notifications/quiet-hours", "PUT /api/notifications/webhook"]
+console = ["getNotificationPreferences", "updateNotificationPreferences", "setQuietHours", "setNotificationWebhook"]
+cli = { limited = "personal settings stay in the console" }
+mcp = { limited = "an agent must never redirect or silence alerts" }
+
+[[capability]]
+id = "push.devices"
+domain = "notifications"
+title = "Push devices and the VAPID key"
+routes = ["GET /api/push/vapid-key", "GET /api/push/subscriptions", "POST /api/push/subscriptions", "DELETE /api/push/subscriptions", "DELETE /api/push/subscriptions/{device_id}"]
+console = ["getVapidKey", "listPushSubscriptions", "createPushSubscription", "deletePushSubscription", "deletePushDevice"]
+cli = { limited = "n/a: push devices are browsers" }
+mcp = { limited = "n/a: push devices are browsers" }
+
+[[capability]]
+id = "notifications.operator"
+domain = "notifications"
+title = "Delivery pass, VAPID keygen"
+routes = []
+console = { limited = "operator only" }
+cli = ["python -m stonks.notify deliver", "python -m stonks.notify vapid-keygen"]
+mcp = { limited = "operator only" }
+
+# ---- broker connections ------------------------------------------------------------------
+
+[[capability]]
+id = "connections.providers"
+domain = "connections"
+title = "Broker providers"
+routes = ["GET /api/connections/providers"]
+console = "listProviders"
+cli = "python -m stonks.connections providers"
+mcp = { limited = "only needed to connect, which MCP cannot do" }
+
+[[capability]]
+id = "connections.read"
+domain = "connections"
+title = "Connections, detail, accounts"
+routes = ["GET /api/connections", "GET /api/connections/{connection_id}", "GET /api/connections/{connection_id}/accounts"]
+console = ["listConnections", "getConnection", "listConnectionAccounts"]
+cli = ["python -m stonks.connections list", "python -m stonks.connections accounts"]
+mcp = ["list_connections", "get_connection_accounts"]
+
+[[capability]]
+id = "connections.connect"
+domain = "connections"
+title = "Connect by keys or the provider's sign-in page"
+routes = ["POST /api/connections/keys", "POST /api/connections/portal", "GET /api/connections/callback"]
+console = ["connectWithKeys", "startConnectionPortal", "completeConnectionPortal"]
+cli = ["python -m stonks.connections connect", "python -m stonks.connections callback"]
+mcp = { limited = "step-up and secrets: a token cannot pass a second factor" }
+
+[[capability]]
+id = "connections.link"
+domain = "connections"
+title = "Link an account to a portfolio"
+routes = ["POST /api/connections/{connection_id}/link"]
+console = "linkConnectionAccount"
+cli = "python -m stonks.connections link"
+mcp = { limited = "part of connecting, which MCP cannot do" }
+
+[[capability]]
+id = "connections.sync"
+domain = "connections"
+title = "Sync now"
+routes = ["POST /api/connections/{connection_id}/sync"]
+console = "syncConnection"
+cli = "python -m stonks.connections sync"
+mcp = "sync_connection"
+
+[[capability]]
+id = "connections.disconnect"
+domain = "connections"
+title = "Disconnect"
+routes = ["DELETE /api/connections/{connection_id}"]
+console = "deleteConnection"
+cli = "python -m stonks.connections disconnect"
+mcp = { limited = "step-up: a token cannot pass a second factor" }
+
+[[capability]]
+id = "connections.operator"
+domain = "connections"
+title = "Import env keys, rotate sealing keys"
+routes = []
+console = { limited = "operator only" }
+cli = ["python -m stonks.connections import-env", "python -m stonks.connections rotate-keys"]
+mcp = { limited = "operator only" }
+
+# ---- accounts ----------------------------------------------------------------------------
+
+[[capability]]
+id = "auth.session"
+domain = "accounts"
+title = "Sign in, 2FA enrol and verify, sign out, session check"
+routes = ["POST /api/auth/login", "POST /api/auth/logout", "GET /api/auth/check", "POST /api/auth/mfa/enrol", "POST /api/auth/mfa/enrol/confirm", "POST /api/auth/mfa/verify"]
+console = ["login", "logout", "checkAuth", "startMfaEnrolment", "confirmMfaEnrolment", "verifyMfa"]
+cli = { limited = "n/a: browser session flows" }
+mcp = { limited = "n/a: browser session flows" }
+
+[[capability]]
+id = "auth.me"
+domain = "accounts"
+title = "Who am I"
+routes = ["GET /api/auth/me"]
+console = "getMe"
+cli = { limited = "n/a: the shell is admin" }
+mcp = "whoami"
+
+[[capability]]
+id = "auth.password"
+domain = "accounts"
+title = "Change your own password"
+routes = ["POST /api/auth/password"]
+console = "changePassword"
+cli = { limited = "needs the old password and a session" }
+mcp = { limited = "step-up: a token cannot pass a second factor" }
+
+[[capability]]
+id = "auth.recovery_codes"
+domain = "accounts"
+title = "New recovery codes"
+routes = ["POST /api/auth/recovery-codes"]
+console = "regenerateRecoveryCodes"
+cli = { limited = "step-up: needs a signed-in session" }
+mcp = { limited = "step-up: a token cannot pass a second factor" }
+
+[[capability]]
+id = "auth.tokens"
+domain = "accounts"
+title = "API tokens: list, create, revoke"
+routes = ["GET /api/auth/tokens", "POST /api/auth/tokens", "DELETE /api/auth/tokens/{token_id}"]
+console = ["listApiTokens", "createApiToken", "revokeApiToken"]
+cli = { limited = "a token is made in a signed-in session" }
+mcp = { limited = "a token must never mint tokens" }
+
+[[capability]]
+id = "users.list"
+domain = "accounts"
+title = "List users"
+routes = ["GET /api/auth/users"]
+console = "listUsers"
+cli = "stonks users list"
+mcp = { limited = "user admin is refused over MCP" }
+
+[[capability]]
+id = "users.manage"
+domain = "accounts"
+title = "Create a user, change role or status"
+routes = ["POST /api/auth/users", "PATCH /api/auth/users/{user_id}"]
+console = ["createUser", "updateUser"]
+cli = ["stonks users create", "stonks users set-role", "stonks users disable", "stonks users enable"]
+mcp = { limited = "step-up: user admin is refused over MCP" }
+
+[[capability]]
+id = "users.reset_mfa"
+domain = "accounts"
+title = "Reset a user's 2FA"
+routes = ["DELETE /api/auth/users/{user_id}/mfa"]
+console = "resetUserMfa"
+cli = "stonks users reset-2fa"
+mcp = { limited = "step-up: user admin is refused over MCP" }
+
+[[capability]]
+id = "users.reset_password"
+domain = "accounts"
+title = "Reset a user's password (admin)"
+routes = ["POST /api/auth/users/{user_id}/password"]
+console = "resetUserPassword"
+cli = ["stonks users reset-password", "python -m stonks.auth reset-password"]
+mcp = { limited = "step-up: user admin is refused over MCP" }
+
+[[capability]]
+id = "users.bootstrap"
+domain = "accounts"
+title = "Bootstrap admin, master key"
+routes = []
+console = { limited = "operator setup before anyone can sign in" }
+cli = ["stonks users bootstrap", "python -m stonks.auth bootstrap-admin", "python -m stonks.security keygen"]
+mcp = { limited = "operator setup before anyone can sign in" }
+
+[[capability]]
+id = "subscriptions.list"
+domain = "accounts"
+title = "My subscriptions"
+routes = ["GET /api/subscriptions"]
+console = "listSubscriptions"
+cli = { limited = "traders follow strategies in the console" }
+mcp = "list_subscriptions"
+
+[[capability]]
+id = "subscriptions.create"
+domain = "accounts"
+title = "Follow a strategy"
+routes = ["POST /api/subscriptions"]
+console = "subscribe"
+cli = { limited = "traders follow strategies in the console" }
+mcp = "subscribe"
+
+[[capability]]
+id = "subscriptions.update"
+domain = "accounts"
+title = "Change a subscription (on or off, notify, paper or auto)"
+routes = ["PATCH /api/subscriptions/{subscription_id}"]
+console = "updateSubscription"
+cli = { limited = "traders follow strategies in the console" }
+mcp = "update_subscription"
+
+# ---- health --------------------------------------------------------------------------------
+
+[[capability]]
+id = "health.report"
+domain = "health"
+title = "Health report"
+routes = ["GET /api/health/report"]
+console = "getHealthReport"
+cli = "stonks health"
+mcp = "get_health_report"
+
+[[capability]]
+id = "health.run"
+domain = "health"
+title = "Run health checks now (opens or clears the operational halt)"
+routes = ["POST /api/health/run"]
+console = "runHealthChecks"
+cli = "stonks health"
+mcp = { limited = "changing a safety stop stays with a person" }
+
+[[capability]]
+id = "health.api"
+domain = "health"
+title = "API up and version"
+routes = ["GET /api/health"]
+console = "getHealth"
+cli = { limited = "n/a: the CLI is the server" }
+mcp = "get_api_health"
+
+# ---- servers --------------------------------------------------------------------------------
+
+[[capability]]
+id = "servers"
+domain = "ops"
+title = "Run the API with the console, and the MCP server"
+routes = []
+console = { limited = "n/a: these commands start the servers" }
+cli = ["stonks serve", "stonks mcp"]
+mcp = { limited = "n/a: these commands start the servers" }

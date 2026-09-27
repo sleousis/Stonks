@@ -172,10 +172,10 @@
         <label class="check span-all">
           <input
             type="checkbox"
-            [checked]="flatten()"
-            (change)="flatten.set($any($event.target).checked)"
+            [checked]="buysOnly()"
+            (change)="buysOnly.set($any($event.target).checked)"
           />
-          Flatten: stop buys only, let sells and exits through
+          Buys only: stop buys, let sells and exits through. No position is closed.
         </label>
       </div>
       <div class="form-actions">

@@ -68,6 +68,8 @@ describe('LabPage with ?strategy=', () => {
     if (path === '/api/lab/cost-models') return req.flush([]);
     if (path === '/api/jobs') return req.flush({ items: [], total: 0, limit: 20, offset: 0 });
     if (path === '/api/lab/survival-tests') return req.flush([]);
+    if (path === '/api/lab/survival-presets') return req.flush([]);
+    if (path === '/api/universes') return req.flush({ items: [], total: 0, limit: 200, offset: 0 });
     const m = /^\/api\/strategies\/([^/]+)$/.exec(path);
     if (m) {
       const s = strategies[decodeURIComponent(m[1])];

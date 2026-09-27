@@ -90,7 +90,7 @@ export class HaltsPage {
     () => this.portfolios.current()?.id ?? 'pf_default',
   );
   protected readonly reason = signal('');
-  protected readonly flatten = signal(false);
+  protected readonly buysOnly = signal(false);
   protected readonly submitted = signal(false);
   protected readonly engaging = signal(false);
 
@@ -165,8 +165,8 @@ export class HaltsPage {
         : `portfolio ${this.portfolioName(this.portfolioId().trim())}`;
     const ok = await this.confirm.confirm({
       title: 'Turn on the kill switch?',
-      message: this.flatten()
-        ? `New buys stop for ${target}. Sells and exits still go out so positions can close.`
+      message: this.buysOnly()
+        ? `New buys stop for ${target}. Sells and exits still go out. No position is closed.`
         : `Every new order stops for ${target} until someone resumes trading.`,
       confirmLabel: 'Engage kill switch',
       tone: 'danger',
@@ -175,7 +175,7 @@ export class HaltsPage {
     const body: KillSwitchRequest = {
       scope,
       reason: this.reason().trim(),
-      flatten: this.flatten(),
+      buys_only: this.buysOnly(),
       portfolio_id: scope === 'portfolio' ? this.portfolioId().trim() : null,
     };
     this.engaging.set(true);

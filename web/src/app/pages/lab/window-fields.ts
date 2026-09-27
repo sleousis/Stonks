@@ -9,29 +9,31 @@ import type { FormErrors, WindowForm } from './lab-requests';
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @let p = idPrefix();
-    <div class="field tickers">
-      <label [for]="p + '-tickers'">Tickers</label>
-      <textarea
-        class="input"
-        rows="2"
-        autocapitalize="characters"
-        autocomplete="off"
-        spellcheck="false"
-        placeholder="AAPL.US, MSFT.US"
-        [id]="p + '-tickers'"
-        [value]="value().tickers"
-        [attr.aria-invalid]="!!errors()['tickers']"
-        [attr.aria-describedby]="p + '-tickers-hint'"
-        (input)="patch.emit({ tickers: $any($event.target).value })"
-      ></textarea>
-      @if (errors()['tickers']; as e) {
-        <span class="error" [id]="p + '-tickers-hint'">{{ e }}</span>
-      } @else {
-        <span class="hint" [id]="p + '-tickers-hint'">
-          Separate with commas, spaces or new lines. Each needs price history in our data.
-        </span>
-      }
-    </div>
+    @if (showTickers()) {
+      <div class="field tickers">
+        <label [for]="p + '-tickers'">Tickers</label>
+        <textarea
+          class="input"
+          rows="2"
+          autocapitalize="characters"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="AAPL.US, MSFT.US"
+          [id]="p + '-tickers'"
+          [value]="value().tickers"
+          [attr.aria-invalid]="!!errors()['tickers']"
+          [attr.aria-describedby]="p + '-tickers-hint'"
+          (input)="patch.emit({ tickers: $any($event.target).value })"
+        ></textarea>
+        @if (errors()['tickers']; as e) {
+          <span class="error" [id]="p + '-tickers-hint'">{{ e }}</span>
+        } @else {
+          <span class="hint" [id]="p + '-tickers-hint'">
+            Separate with commas, spaces or new lines. Each needs price history in our data.
+          </span>
+        }
+      </div>
+    }
     <div class="row">
       <div class="field">
         <label [for]="p + '-start'">Start</label>
@@ -124,6 +126,8 @@ export class WindowFields {
   readonly errors = input<FormErrors>({});
   readonly intervals = input<readonly IntervalInfo[]>([]);
   readonly idPrefix = input('window');
+  /** Hidden when a stored universe replaces the typed tickers. */
+  readonly showTickers = input(true);
   readonly patch = output<Partial<WindowForm>>();
 
   /** Falls back to daily bars while the catalog loads (or if it failed). */

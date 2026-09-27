@@ -3,6 +3,7 @@ import type {
   LabRunRequest,
   McptOptions,
   StrategyClassInfo,
+  SurvivalPresetInfo,
   WalkForwardConfig,
 } from '../../api/models';
 import { type ParamValues, paramErrors, paramPayload } from '../../shared/ui/param-form/param-spec';
@@ -80,6 +81,10 @@ export interface LabRunForm extends WindowForm, BenchmarkForm {
   registerIfPasses: boolean;
   hypothesis: string;
   premortem: string;
+  /** A stored universe to run on instead of the typed tickers ('' = tickers). */
+  universeId: string;
+  /** Fetch the bars the run needs that our data lacks, first (a stored universe only). */
+  ensureData: boolean;
 }
 
 export const PICKABLE_TESTS = SURVIVAL_TESTS.filter((t) => t.id !== 'permutation');
@@ -92,7 +97,11 @@ export interface SuiteInfo {
   tests: readonly SurvivalTestName[];
 }
 
-/** The server's named suites (`SUITE_PRESETS` in lab/survival/registry.py). */
+/**
+ * The named suites with the console's words for them. The tests here are a
+ * fallback while `GET /api/lab/survival-presets` loads: `suitesFromPresets`
+ * puts the server's lists in.
+ */
 export const SUITES: readonly SuiteInfo[] = [
   {
     id: 'quick',
@@ -140,6 +149,26 @@ export const SUITES: readonly SuiteInfo[] = [
     tests: [],
   },
 ];
+
+const KNOWN_TESTS = new Set<string>(SURVIVAL_TESTS.map((t) => t.id));
+
+/**
+ * `suites` with each named suite's tests taken from the API's presets, so
+ * the form shows what the server will really run. Suites the API does not
+ * name keep their fallback tests; tests the console has no words for yet
+ * are left out of the list (the server still runs them).
+ */
+export function suitesFromPresets(
+  presets: readonly SurvivalPresetInfo[],
+  suites: readonly SuiteInfo[] = SUITES,
+): SuiteInfo[] {
+  return suites.map((s) => {
+    const preset = presets.find((p) => p.name === s.id);
+    if (s.id === 'custom' || !preset) return s;
+    const tests = preset.tests.filter((t): t is SurvivalTestName => KNOWN_TESTS.has(t));
+    return { ...s, tests };
+  });
+}
 
 export function defaultWindow(today = new Date()): Pick<WindowForm, 'start' | 'end'> {
   const end = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
@@ -195,12 +224,17 @@ export function defaultLabRunForm(today?: Date): LabRunForm {
     premortem: '',
     benchmark: 'default',
     benchmarkTicker: '',
+    universeId: '',
+    ensureData: false,
   };
 }
 
 /** The tests the run will do, in suite order. */
-export function suiteTests(f: Pick<LabRunForm, 'suite' | 'tests'>): SurvivalTestName[] {
-  if (f.suite !== 'custom') return [...(SUITES.find((s) => s.id === f.suite)?.tests ?? [])];
+export function suiteTests(
+  f: Pick<LabRunForm, 'suite' | 'tests'>,
+  suites: readonly SuiteInfo[] = SUITES,
+): SurvivalTestName[] {
+  if (f.suite !== 'custom') return [...(suites.find((s) => s.id === f.suite)?.tests ?? [])];
   return PICKABLE_TESTS.map((t) => t.id).filter((id) => f.tests.includes(id));
 }
 
@@ -271,9 +305,15 @@ export function backtestErrors(f: BacktestForm, cls: StrategyClassInfo | null): 
  * Field → message; `opt.<test>.<field>` keys are advanced test options,
  * checked against `catalog` (from `GET /api/lab/survival-tests`).
  */
-export function labRunErrors(f: LabRunForm, catalog: OptionCatalog = {}): FormErrors {
+export function labRunErrors(
+  f: LabRunForm,
+  catalog: OptionCatalog = {},
+  suites: readonly SuiteInfo[] = SUITES,
+): FormErrors {
   const e = { ...windowErrors(f), ...benchmarkErrors(f) };
-  const tests = suiteTests(f);
+  // A stored universe replaces the typed tickers.
+  if (f.universeId) delete e['tickers'];
+  const tests = suiteTests(f, suites);
   if (!isInt(f.budget) || f.budget < 1 || f.budget > 1000) e['budget'] = 'Between 1 and 1000.';
   if (!isInt(f.seed)) e['seed'] = 'Enter a whole number.';
   if (!isNum(f.trainRatio) || f.trainRatio <= 0 || f.trainRatio >= 1)
@@ -338,12 +378,15 @@ export function buildBacktestRequest(
   return body;
 }
 
-export function buildLabRunRequest(f: LabRunForm, catalog: OptionCatalog = {}): LabRunRequest {
-  const tests = suiteTests(f);
+export function buildLabRunRequest(
+  f: LabRunForm,
+  catalog: OptionCatalog = {},
+  suites: readonly SuiteInfo[] = SUITES,
+): LabRunRequest {
+  const tests = suiteTests(f, suites);
   const body: LabRunRequest = {
     // The tuner searches the class's parameter space; params are ignored.
     strategy: { class_path: f.classPath },
-    universe: parseTickers(f.tickers),
     start: f.start,
     end: f.end,
     interval: f.interval,
@@ -353,6 +396,12 @@ export function buildLabRunRequest(f: LabRunForm, catalog: OptionCatalog = {}): 
     objective: f.objective,
     train_ratio: f.trainRatio ?? 0.7,
   };
+  if (f.universeId) {
+    body.universe_id = f.universeId;
+    if (f.ensureData) body.ensure_data = true;
+  } else {
+    body.universe = parseTickers(f.tickers);
+  }
   if (f.suite === 'custom') body.survival_tests = tests;
   else body.preset = f.suite;
 

@@ -321,7 +321,14 @@ folds the rest into "All figures".
 ### Lab form
 
 The lab-run form sends a named suite (`preset`: quick, standard,
-promotion) unless the trader picks custom tests (`survival_tests`).
+promotion) unless the trader picks custom tests (`survival_tests`). The
+tests each suite runs come from `GET /api/lab/survival-presets`
+(`suitesFromPresets` in `pages/lab/lab-requests.ts`); the console's own
+lists stand in only while that loads. With stored universes, "Run on"
+picks one instead of typed tickers (`universe_id`), and "Fetch missing
+data first" sends `ensure_data`: the server fetches the missing prices in
+a data job before tuning, and the result says so when `ensure_job_id` is
+set.
 Registering defaults to `register_if_passes` (the promotion suite, a
 required hypothesis); "Always" sends `register_strategy`. Walk-forward,
 MCPT and the per-test "advanced options" start blank, meaning "the test's
@@ -332,14 +339,23 @@ options schema gives labels, defaults, bounds and choices
 change. Field errors show next to the field, and the advanced panel opens
 when one of its fields is wrong.
 
-The Lab has three screens, linked at the top of each: Backtest and lab run
-(`/lab`), Sweep (`/lab/sweeps`) and Signal IC (`/lab/signal-ic`). A sweep
+The Lab has four screens, linked at the top of each: Backtest and lab run
+(`/lab`), Sweep (`/lab/sweeps`), Signal IC (`/lab/signal-ic`) and Trial
+ledger (`/lab/ledger`). A sweep
 runs every strategy, or the ones picked, on typed tickers or a saved
 universe, and `<app-sweep-result>` ranks the rows best first. Signal IC
 shows how well a strategy's scores ranked the moves that followed, per
 look-ahead (`<app-signal-ic-result>`). Both follow the job with
 `<app-job-progress>` and show a failed result load inline with Retry
 (`pages/lab/job-follower.ts`). The Lab history lists and opens them too.
+
+The trial ledger lists every recorded lab run from `GET /api/lab/ledger`
+(server-paged, filtered by `?strategy=`): strategy, hypothesis, trials run
+and failed, best score and verdict. `/lab/ledger/:runId` shows one run from
+`GET /api/lab/ledger/{run_id}`: the hypothesis and premortem, the data,
+every trial, and the strategy's trial count across all runs, with one line
+on why it matters (more trials make a good result more likely to be luck).
+A lab run's result links to it.
 
 ### Formatting and copy
 
@@ -393,8 +409,8 @@ Tickers open `/data?instrument=<id>`.
 
 | Page | Route | What it does |
 |---|---|---|
-| Halts | `/ops/halts` | Active and past halts, the kill switch (global or one portfolio, reason, flatten), Resume and Clear |
-| Schedule and backups | `/ops/schedule` | Jobs with next and last run, recent runs and Run now. Backup jobs and Back up now |
+| Halts | `/ops/halts` | Active and past halts, the kill switch (global or one portfolio, reason, buys only), Resume and Clear |
+| Schedule and backups | `/ops/schedule` | Jobs with next and last run, recent runs and Run now. Every backup on disk with its size, Back up now, Verify and a staged Restore (admins) |
 | Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
 | Universes | `/universes`, `/universes/:id` | List, create (JSON spec or CSV), index history import, members on a date, Refresh and Ensure data |
 
@@ -414,14 +430,22 @@ Tickers open `/data?instrument=<id>`.
 - Refresh, Ensure data and Back up now return a job. Pages follow it with
   `JobsService.track()` and show `<app-job-progress>`.
 - Run now on a tick job needs the job name typed, like a tick.
+- **Run checks now** on Health (admins, `operations.run`) calls
+  `POST /api/health/run`. It asks first, because stale data or a stuck run
+  opens the operational halt and passing checks clear it. Then it reloads
+  the report and `HaltStateService`.
 - The backup list comes from `GET /api/backups`: every backup on disk,
   also those made from the command line, with its size. Verify is
   `POST /api/backups/{id}/verify`. Restore is
   `POST /api/backups/{id}/restore` with `{"confirmation": "RESTORE <id>"}`
-  and a fresh second factor. It returns a job. The restore is staged: the
-  server restores into a new folder and never touches the live data. The
-  job result (`GET /api/backups/restores/{job_id}/result`) says where the
-  data went and how to switch to it.
+  and a fresh second factor (`StepUpService.ensure()` first, and the
+  session interceptor asks again on 403 `step_up_required`). It returns a
+  job. The restore is staged: the server restores into a new folder and
+  never touches the live data. The job result
+  (`GET /api/backups/restores/{job_id}/result`) says where the data went
+  and how to switch to it, shown above the list with Verify's outcome.
+  Only admins load the list (`operations.run`, and `backups.restore` for
+  Restore).
 - `GET /api/schedule` also returns `market`: the calendar, `is_open`, and
   `today` and `next` sessions, each with `pre_open` (30 minutes before the
   open), `open` and `close` in UTC. `today` is null on days the market is

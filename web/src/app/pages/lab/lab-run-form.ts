@@ -11,7 +11,12 @@ import {
 } from '@angular/core';
 
 import { LabService } from '../../api/lab.service';
-import type { IntervalInfo, LabRunRequest, StrategyClassInfo } from '../../api/models';
+import type {
+  IntervalInfo,
+  LabRunRequest,
+  StrategyClassInfo,
+  UniverseView,
+} from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { PermissionNote } from '../../shared/ui/permission-note';
@@ -31,6 +36,7 @@ import {
   defaultLabRunForm,
   labRunErrors,
   suiteTests,
+  suitesFromPresets,
 } from './lab-requests';
 import { StrategyPicker } from './strategy-picker';
 import type { StrategyPreset } from './strategy-preset';
@@ -65,6 +71,8 @@ const OWN_SECTION: readonly SurvivalTestName[] = ['mcpt'];
 export class LabRunFormView {
   readonly classes = input.required<readonly StrategyClassInfo[]>();
   readonly intervals = input<readonly IntervalInfo[]>([]);
+  /** Stored universes a run may use instead of typed tickers. */
+  readonly universes = input<readonly UniverseView[]>([]);
   /** A registered strategy to re-run: its class (the tuner searches the parameters again). */
   readonly preset = input<StrategyPreset | null>(null);
   readonly busy = input(false);
@@ -81,7 +89,11 @@ export class LabRunFormView {
     this.testCatalog.hasValue() ? optionCatalog(this.testCatalog.value(), OWN_SECTION) : {},
   );
 
-  protected readonly suites = SUITES;
+  /** The server's named suites; the console's own lists stand in while they load. */
+  private readonly presets = resource({ loader: () => this.lab.survivalPresets() });
+  protected readonly suites = computed(() =>
+    this.presets.hasValue() ? suitesFromPresets(this.presets.value()) : SUITES,
+  );
   protected readonly pickable = PICKABLE_TESTS;
   protected readonly form = linkedSignal<StrategyPreset | null, LabRunForm>({
     source: this.preset,
@@ -114,10 +126,13 @@ export class LabRunFormView {
 
   /** The tests this run will do, with their labels. */
   protected readonly suiteTests = computed(() =>
-    suiteTests(this.form()).map((id) => SURVIVAL_TESTS.find((t) => t.id === id)!),
+    suiteTests(this.form(), this.suites()).map((id) => SURVIVAL_TESTS.find((t) => t.id === id)!),
   );
-  protected readonly suiteInfo = computed(() => SUITES.find((s) => s.id === this.form().suite)!);
-  protected readonly runs = (id: SurvivalTestName) => suiteTests(this.form()).includes(id);
+  protected readonly suiteInfo = computed(() =>
+    this.suites().find((s) => s.id === this.form().suite)!,
+  );
+  protected readonly runs = (id: SurvivalTestName) =>
+    suiteTests(this.form(), this.suites()).includes(id);
 
   /** Tests in the suite that take advanced options. */
   protected readonly optionTests = computed(() =>
@@ -137,7 +152,9 @@ export class LabRunFormView {
     this.optionTests().reduce((n, t) => n + t.filled, 0),
   );
 
-  private readonly allErrors = computed(() => labRunErrors(this.form(), this.catalog()));
+  private readonly allErrors = computed(() =>
+    labRunErrors(this.form(), this.catalog(), this.suites()),
+  );
   protected readonly errors = computed(() => (this.tried() ? this.allErrors() : {}));
   protected readonly errorCount = computed(() => Object.keys(this.errors()).length);
   protected readonly optionErrorCount = computed(
@@ -166,7 +183,7 @@ export class LabRunFormView {
     this.form.update((f) => ({
       ...f,
       suite,
-      tests: suite === 'custom' && f.suite !== 'custom' ? suiteTests(f) : f.tests,
+      tests: suite === 'custom' && f.suite !== 'custom' ? suiteTests(f, this.suites()) : f.tests,
     }));
   }
 
@@ -177,6 +194,11 @@ export class LabRunFormView {
       register: on,
       suite: on && f.suite === 'quick' ? 'promotion' : f.suite,
     }));
+  }
+
+  /** '' runs on the typed tickers; fetching missing data is only for a stored universe. */
+  protected setUniverse(universeId: string): void {
+    this.form.update((f) => ({ ...f, universeId, ensureData: universeId ? f.ensureData : false }));
   }
 
   protected toggleTest(id: SurvivalTestName, on: boolean): void {
@@ -211,6 +233,6 @@ export class LabRunFormView {
     const errors = Object.keys(this.allErrors());
     if (errors.some((k) => k.startsWith('opt.'))) this.optionsOpen.set(true);
     if (errors.length) return;
-    this.submitted.emit(buildLabRunRequest(this.form(), this.catalog()));
+    this.submitted.emit(buildLabRunRequest(this.form(), this.catalog(), this.suites()));
   }
 }
