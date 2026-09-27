@@ -52,7 +52,7 @@ from stonks.assistant.model import (
 )
 from stonks.assistant.prompt import PROMPT_VERSION, system_prompt
 from stonks.assistant.settings import AssistantConfig
-from stonks.assistant.store import ConversationStore, PendingAction
+from stonks.assistant.store import ConversationStore, PendingAction, WriteCheck
 from stonks.assistant.tools import ToolBridge, ToolInfo, ToolOutcome
 from stonks.logging import get_logger
 
@@ -69,9 +69,6 @@ UNRESOLVED = (
     "instrument that tool returned in this conversation."
 )
 TITLE_CHARS = 60
-
-#: Checks one more write; returns why it is refused (a burst), or None.
-WriteCheck = Callable[[], "str | None"]
 
 _META_SPECS = (
     ToolSpec(
@@ -127,7 +124,7 @@ class AgentLoop:
         self._config = config
         self._clock = clock
         self._gate = gate or Gate(research_only=False, order_tools=False)
-        self._write_check = write_check or (lambda: None)
+        self._write_check: WriteCheck = write_check or (lambda _state: None)
         self._owner_id = owner_id
         self._trace: list[dict[str, Any]] = []
         self._draft_ids: list[str] = []
@@ -163,7 +160,11 @@ class AgentLoop:
             raise ActionConflict(f"action {action.id} was already decided")
         refusal = None
         if approve:
-            refusal = RESEARCH_ONLY if self._gate.research_only else self._write_check()
+            refusal = (
+                RESEARCH_ONLY
+                if self._gate.research_only
+                else self._store.run_check(self._write_check)
+            )
         if refusal is not None:
             self._tool_message(conversation_id, action, {"ok": False, "error": refusal})
             self._store.finish(action.id, "failed", {"error": refusal})
@@ -326,16 +327,22 @@ class AgentLoop:
             outcome = ToolOutcome(ok=False, error=RESEARCH_ONLY)
         elif name == "draft_order" and not self._resolved(conversation_id, arguments):
             outcome = ToolOutcome(ok=False, error=UNRESOLVED)
-        elif writes and (refusal := self._write_check()) is not None:
-            outcome = ToolOutcome(ok=False, error=refusal)
         elif runs_at_once:
             if name == "draft_order":
                 arguments["retry_key"] = f"{conversation_id}:{tool_call.id}"
-            outcome = await self._run_tool(info.name, arguments, deadline)
+            reserved: PendingAction | None = None
             if writes:
-                action = self._store.add_action(conversation_id, tool_call.id, name, arguments)
-                status = "done" if outcome.ok else "failed"
-                self._store.finish(action.id, status, _payload(outcome))
+                # counted before it runs, in one transaction with the check
+                reserved, refusal = self._store.reserve_action(
+                    conversation_id, tool_call.id, name, arguments, check=self._write_check
+                )
+            if refusal is not None:
+                outcome = ToolOutcome(ok=False, error=refusal)
+            else:
+                outcome = await self._run_tool(info.name, arguments, deadline)
+                if reserved is not None:
+                    status = "done" if outcome.ok else "failed"
+                    self._store.finish(reserved.id, status, _payload(outcome))
         else:
             preview: Any = None
             if info.destructive and info.takes_confirm:
@@ -346,7 +353,15 @@ class AgentLoop:
                     yield self._result_event(tool_call.id, name, shown)
                     return
                 preview = shown.content
-            action = self._store.add_action(conversation_id, tool_call.id, info.name, arguments)
+            action, refusal = self._store.reserve_action(
+                conversation_id, tool_call.id, info.name, arguments, check=self._write_check
+            )
+            if action is None:
+                outcome = ToolOutcome(ok=False, error=refusal or "Not run.")
+                self._answer(conversation_id, tool_call, _payload(outcome))
+                self._note(name, arguments, outcome)
+                yield self._result_event(tool_call.id, name, outcome)
+                return
             self._trace.append({"tool": name, "arguments": arguments, "pending_action": action.id})
             text, clipped = _clip(preview, self._config.max_tool_result_chars)
             yield AssistantEvent(
