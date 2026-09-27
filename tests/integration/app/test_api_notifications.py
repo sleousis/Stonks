@@ -230,6 +230,52 @@ def test_event_alert_switches_round_trip(client):
     assert bad.status_code == 422
 
 
+def test_economic_alert_choices_round_trip(client):
+    body = client.get("/api/notifications/preferences", headers=AUTH).json()
+    econ = body["economic_alerts"]
+    # the owner's pf_default is in USD: the United States, high importance only
+    assert (econ["countries"], econ["default_countries"], econ["min_importance"]) == (
+        ["US"],
+        True,
+        "high",
+    )
+    assert {"value": "EU", "label": "Euro area"} in econ["country_options"]
+    assert [o["value"] for o in econ["importance_options"]] == ["low", "medium", "high"]
+
+    updated = client.put(
+        "/api/notifications/preferences",
+        json={"economic_alerts": {"countries": ["us", "DE"], "min_importance": "medium"}},
+        headers=AUTH,
+    )
+    assert updated.status_code == 200, updated.text
+    econ = updated.json()["economic_alerts"]
+    assert (econ["countries"], econ["default_countries"], econ["min_importance"]) == (
+        ["US", "DE"],
+        False,
+        "medium",
+    )
+    back = client.put(
+        "/api/notifications/preferences",
+        json={"economic_alerts": {"default_countries": True}},
+        headers=AUTH,
+    ).json()["economic_alerts"]
+    assert (back["countries"], back["default_countries"], back["min_importance"]) == (
+        ["US"],
+        True,
+        "medium",
+    )
+    for bad in (
+        {"countries": []},
+        {"countries": ["NOT-A-CODE"]},
+        {"min_importance": "urgent"},
+        {"countries": ["US"], "default_countries": True},
+    ):
+        resp = client.put(
+            "/api/notifications/preferences", json={"economic_alerts": bad}, headers=AUTH
+        )
+        assert resp.status_code == 422, bad
+
+
 def test_quiet_hours(client):
     resp = client.put(
         "/api/notifications/quiet-hours", json={"start": "22:00", "end": "07:00"}, headers=AUTH

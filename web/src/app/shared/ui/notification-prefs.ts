@@ -141,6 +141,67 @@ const ALWAYS_ON = 'inapp';
             </fieldset>
           }
 
+          @if (economic(); as econ) {
+            <fieldset class="quiet" aria-describedby="econ-hint">
+              <legend>Economic releases</legend>
+              <p id="econ-hint" class="hint">
+                An alert the day before each release, such as inflation, jobs or a rate decision.
+                @if (econ.default_countries) {
+                  The countries follow the currencies of your portfolios until you pick your own.
+                }
+                @if (!economicOn()) {
+                  Turn on Economic releases coming up to get them.
+                }
+              </p>
+              <div class="field">
+                <label for="econ-importance">Importance</label>
+                <select
+                  id="econ-importance"
+                  class="input"
+                  [disabled]="locked()"
+                  (change)="setImportance($event)"
+                >
+                  @for (o of econ.importance_options ?? []; track o.value) {
+                    <option [value]="o.value" [selected]="o.value === econ.min_importance">
+                      {{ o.label }}
+                    </option>
+                  }
+                </select>
+              </div>
+              <fieldset class="quiet">
+                <legend class="sub">Countries</legend>
+                <div class="countries">
+                  @for (c of countryChoices(); track c.value) {
+                    <label class="kind">
+                      <input
+                        type="checkbox"
+                        [checked]="c.chosen"
+                        [disabled]="locked()"
+                        (change)="setCountry(c.value, $event)"
+                      />
+                      <span>{{ c.label }}</span>
+                    </label>
+                  }
+                </div>
+              </fieldset>
+              @if (countryError(); as err) {
+                <p class="error" role="alert">{{ err }}</p>
+              }
+              @if (!econ.default_countries) {
+                <div class="actions">
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    [disabled]="locked()"
+                    (click)="followPortfolios()"
+                  >
+                    Follow my portfolio currencies
+                  </button>
+                </div>
+              }
+            </fieldset>
+          }
+
           <fieldset class="quiet">
             <legend>Quiet hours</legend>
             <p class="hint">
@@ -328,6 +389,18 @@ const ALWAYS_ON = 'inapp';
       display: grid;
       gap: var(--space-1);
     }
+    .quiet legend.sub {
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
+    }
+    .countries {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+      gap: 0 var(--space-3);
+    }
+    .field select {
+      max-width: 20rem;
+    }
     .kind {
       display: inline-flex;
       align-items: center;
@@ -379,6 +452,28 @@ export class NotificationPrefs {
   );
   /** One switch per kind of upcoming-event alert (earnings, dividends, economic). */
   protected readonly eventAlerts = computed(() => this.view()?.event_alerts ?? []);
+  /** Countries and importance threshold of economic release alerts. */
+  protected readonly economic = computed(() => this.view()?.economic_alerts ?? null);
+  protected readonly economicOn = computed(
+    () => this.eventAlerts().find((e) => e.topic === 'economic')?.enabled ?? true,
+  );
+  /** The offered countries, plus any chosen code the list does not name. */
+  protected readonly countryChoices = computed(() => {
+    const econ = this.economic();
+    if (!econ) return [];
+    const chosen = new Set(econ.countries);
+    const offered = (econ.country_options ?? []).map((o) => ({
+      value: o.value,
+      label: o.label,
+      chosen: chosen.has(o.value),
+    }));
+    const known = new Set(offered.map((o) => o.value));
+    const extra = econ.countries
+      .filter((c) => !known.has(c))
+      .map((c) => ({ value: c, label: c, chosen: true }));
+    return [...offered, ...extra];
+  });
+  protected readonly countryError = signal<string | null>(null);
   protected readonly quietStart = linkedSignal(() => this.view()?.quiet_start ?? '');
   protected readonly quietEnd = linkedSignal(() => this.view()?.quiet_end ?? '');
   protected readonly quietError = signal<string | null>(null);
@@ -420,6 +515,40 @@ export class NotificationPrefs {
       this.api.updatePreferences({ event_alerts: [{ topic, enabled }] }),
     );
     if (!saved) box.checked = !enabled;
+  }
+
+  protected async setImportance(event: Event): Promise<void> {
+    const select = event.target as HTMLSelectElement;
+    const before = this.economic()?.min_importance ?? 'high';
+    const value = select.value as typeof before;
+    const saved = await this.save(() =>
+      this.api.updatePreferences({ economic_alerts: { min_importance: value } }),
+    );
+    if (!saved) select.value = before;
+  }
+
+  protected async setCountry(code: string, event: Event): Promise<void> {
+    const box = event.target as HTMLInputElement;
+    const current = this.economic()?.countries ?? [];
+    const next = box.checked ? [...current, code] : current.filter((c) => c !== code);
+    if (next.length === 0) {
+      box.checked = true;
+      this.countryError.set('Keep at least one country, or turn off Economic releases coming up.');
+      return;
+    }
+    this.countryError.set(null);
+    const saved = await this.save(() =>
+      this.api.updatePreferences({ economic_alerts: { countries: next } }),
+    );
+    if (!saved) box.checked = !box.checked;
+  }
+
+  protected async followPortfolios(): Promise<void> {
+    this.countryError.set(null);
+    const saved = await this.save(() =>
+      this.api.updatePreferences({ economic_alerts: { default_countries: true } }),
+    );
+    if (saved) this.toasts.success('Economic alerts follow your portfolio currencies again.');
   }
 
   protected async saveQuiet(): Promise<void> {

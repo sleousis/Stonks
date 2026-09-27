@@ -2078,6 +2078,24 @@
         "title": "ChartView",
         "type": "object"
       },
+      "ChoiceOption": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "ChoiceOption",
+        "type": "object"
+      },
       "CircuitBreakerSettings": {
         "additionalProperties": false,
         "properties": {
@@ -3800,6 +3818,95 @@
         "title": "EarningsWarningsView",
         "type": "object"
       },
+      "EconomicAlertsUpdate": {
+        "description": "Economic release alerts. Only what is given changes.",
+        "properties": {
+          "countries": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 30,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Countries"
+          },
+          "default_countries": {
+            "default": false,
+            "title": "Default Countries",
+            "type": "boolean"
+          },
+          "min_importance": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Importance"
+          }
+        },
+        "title": "EconomicAlertsUpdate",
+        "type": "object"
+      },
+      "EconomicAlertsView": {
+        "description": "Which economic releases alert you. Turned on or off by the\n``economic`` switch in ``event_alerts``.",
+        "properties": {
+          "countries": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Countries",
+            "type": "array"
+          },
+          "country_options": {
+            "items": {
+              "$ref": "#/components/schemas/ChoiceOption"
+            },
+            "title": "Country Options",
+            "type": "array"
+          },
+          "default_countries": {
+            "title": "Default Countries",
+            "type": "boolean"
+          },
+          "importance_options": {
+            "items": {
+              "$ref": "#/components/schemas/ChoiceOption"
+            },
+            "title": "Importance Options",
+            "type": "array"
+          },
+          "min_importance": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Min Importance",
+            "type": "string"
+          }
+        },
+        "required": [
+          "countries",
+          "default_countries",
+          "min_importance"
+        ],
+        "title": "EconomicAlertsView",
+        "type": "object"
+      },
       "EconomicEvent": {
         "properties": {
           "actual": {
@@ -3867,6 +3974,16 @@
           },
           "event_type": {
             "title": "Event Type",
+            "type": "string"
+          },
+          "importance": {
+            "default": "low",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Importance",
             "type": "string"
           },
           "period": {
@@ -14718,6 +14835,16 @@
       "PreferencesUpdate": {
         "description": "Only what is given changes.",
         "properties": {
+          "economic_alerts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EconomicAlertsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "event_alerts": {
             "items": {
               "$ref": "#/components/schemas/EventAlertSwitchItem"
@@ -14753,6 +14880,16 @@
             },
             "title": "Channels",
             "type": "array"
+          },
+          "economic_alerts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EconomicAlertsView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "event_alerts": {
             "items": {

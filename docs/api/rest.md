@@ -927,6 +927,13 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `ticker` | string | yes |  |
 | `truncated` | boolean | yes |  |
 
+### ChoiceOption
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `label` | string | yes |  |
+| `value` | string | yes |  |
+
 ### CircuitBreakerSettings
 
 | Field | Type | Required | Description |
@@ -1232,6 +1239,28 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `checked` | list[string] | yes |  |
 | `warnings` | list[[EarningsWarning](#earningswarning)] | yes |  |
 
+### EconomicAlertsUpdate
+
+Economic release alerts. Only what is given changes.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `countries` | list[string] \| null | no |  |
+| `default_countries` | boolean | no |  |
+| `min_importance` | "low" \| "medium" \| "high" \| null | no |  |
+
+### EconomicAlertsView
+
+Which economic releases alert you. Turned on or off by the ``economic`` switch in ``event_alerts``.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `countries` | list[string] | yes |  |
+| `country_options` | list[[ChoiceOption](#choiceoption)] | no |  |
+| `default_countries` | boolean | yes |  |
+| `importance_options` | list[[ChoiceOption](#choiceoption)] | no |  |
+| `min_importance` | "low" \| "medium" \| "high" | yes |  |
+
 ### EconomicEvent
 
 | Field | Type | Required | Description |
@@ -1244,6 +1273,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `estimate` | number \| null | no |  |
 | `event_time` | date-time | yes |  |
 | `event_type` | string | yes |  |
+| `importance` | "low" \| "medium" \| "high" | no |  |
 | `period` | string \| null | no |  |
 | `previous` | number \| null | no |  |
 
@@ -3493,6 +3523,7 @@ Only what is given changes.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `economic_alerts` | [EconomicAlertsUpdate](#economicalertsupdate) \| null | no |  |
 | `event_alerts` | list[[EventAlertSwitchItem](#eventalertswitchitem)] | no |  |
 | `preferences` | list[[PreferenceItem](#preferenceitem)] | no |  |
 
@@ -3502,6 +3533,7 @@ Only what is given changes.
 |-------|------|----------|-------------|
 | `channel_defaults` | list[[ChannelDefaultView](#channeldefaultview)] | no |  |
 | `channels` | list[string] | yes |  |
+| `economic_alerts` | [EconomicAlertsView](#economicalertsview) \| null | no |  |
 | `event_alerts` | list[[EventAlertSwitchView](#eventalertswitchview)] | no |  |
 | `preferences` | list[[PreferenceItem](#preferenceitem)] | yes |  |
 | `quiet_end` | string \| null | yes |  |

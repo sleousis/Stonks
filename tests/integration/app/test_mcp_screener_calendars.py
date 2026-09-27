@@ -89,6 +89,10 @@ async def test_calendar_tools(mcp):
     warn = await call(mcp, "get_earnings_warnings", {"tickers": ["AAA.US"]})
     assert warn["warnings"] == []
     kinds = await call(mcp, "list_event_alert_kinds")
-    assert {k["kind"] for k in kinds["items"]} == {"earnings_upcoming", "ex_dividend_upcoming"}
+    assert {k["kind"] for k in kinds["items"]} == {
+        "earnings_upcoming",
+        "economic_release",
+        "ex_dividend_upcoming",
+    }
     refused = await call_error(mcp, "get_news", {"scope": "all"})
     assert "tickers" in refused

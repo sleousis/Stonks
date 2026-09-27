@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
+from stonks.calendars.importance import ImportanceRater, default_rater
 from stonks.calendars.models import (
     DividendEvent,
     EarningsEvent,
@@ -112,8 +113,9 @@ def _ticker_clause(tickers: Sequence[str] | None, column: str) -> tuple[str, lis
 class CalendarStore:
     """Reads and writes the calendars on an open lake."""
 
-    def __init__(self, lake: DuckDBLake) -> None:
+    def __init__(self, lake: DuckDBLake, *, rater: ImportanceRater | None = None) -> None:
         self._lake = lake
+        self._rater = rater or default_rater()
 
     # ---- writes ----------------------------------------------------------------
 
@@ -230,7 +232,7 @@ class CalendarStore:
         out = []
         for r in _records(df):
             r["event_time"] = r["event_time"].replace(tzinfo=UTC)
-            out.append(EconomicEvent(**r))
+            out.append(EconomicEvent(**r, importance=self._rater.rate(r["event_type"])))
         return out
 
     def news(

@@ -72,12 +72,17 @@ def events(lake):
 
 
 def test_kinds_are_discovered():
-    assert [k.kind for k in alert_kinds()] == ["earnings_upcoming", "ex_dividend_upcoming"]
+    assert [k.kind for k in alert_kinds()] == [
+        "earnings_upcoming",
+        "economic_release",
+        "ex_dividend_upcoming",
+    ]
 
 
 def test_every_kind_names_a_switch():
     assert {k.kind: k.topic for k in alert_kinds()} == {
         "earnings_upcoming": "earnings",
+        "economic_release": "economic",
         "ex_dividend_upcoming": "dividends",
     }
     assert all(k.topic in EVENT_ALERT_TOPICS for k in alert_kinds())

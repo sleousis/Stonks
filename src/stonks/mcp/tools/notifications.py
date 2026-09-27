@@ -1,13 +1,14 @@
 """Notification tools: read your in-app feed (signals, fills, halts,
 failed runs) and mark items read, read your notification settings, and
 turn the upcoming-event alert kinds (earnings, dividends, economic
-releases) on or off with ``confirm=true``. Channel switches, quiet hours
+releases) on or off and pick the countries and importance of economic
+release alerts with ``confirm=true``. Channel switches, quiet hours
 and the webhook stay in the console: a token must never redirect your
 alerts or silence risk alerts."""
 
 # No ``from __future__ import annotations`` (see common.py).
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
@@ -72,24 +73,68 @@ def register(t: ToolContext) -> None:
         earnings: Switch = None,
         dividends: Switch = None,
         economic: Switch = None,
+        economic_countries: Annotated[
+            list[str] | None,
+            Field(
+                max_length=30,
+                description="countries for economic release alerts, such as US, EU, DE",
+            ),
+        ] = None,
+        economic_default_countries: Annotated[
+            bool,
+            Field(description="true: follow your portfolios' base currencies again"),
+        ] = False,
+        economic_importance: Annotated[
+            Literal["low", "medium", "high"] | None,
+            Field(description="the lowest importance of release that alerts you"),
+        ] = None,
         confirm: Confirm = False,
     ) -> dict[str, Any]:
         """Turn kinds of upcoming-event alerts on or off for yourself:
         earnings coming up, ex-dividend dates coming up, economic releases
-        coming up. Off means none of that kind, not even in the app. Without
-        confirm=true returns your current switches and changes nothing."""
+        coming up. Off means none of that kind, not even in the app. Also
+        picks the countries and the importance threshold (low, medium, high)
+        of economic release alerts. Without confirm=true returns your
+        current choices and changes nothing."""
         wanted = drop_none({"earnings": earnings, "dividends": dividends, "economic": economic})
-        if not wanted:
-            raise ToolError("set at least one of earnings, dividends or economic")
+        econ = drop_none(
+            {
+                "countries": economic_countries,
+                "default_countries": economic_default_countries or None,
+                "min_importance": economic_importance,
+            }
+        )
+        if not wanted and not econ:
+            raise ToolError(
+                "set at least one of earnings, dividends, economic or an economic_* choice"
+            )
         if not confirm:
             current = await t.get("/api/notifications/preferences")
             return {
                 "preview": True,
                 "applied": False,
                 "event_alerts": current["event_alerts"],
-                "would_set": wanted,
+                "economic_alerts": _economic_view(current),
+                "would_set": {**wanted, **({"economic_alerts": econ} if econ else {})},
                 "next_step": CONFIRM_HINT,
             }
-        body = {"event_alerts": [{"topic": k, "enabled": v} for k, v in wanted.items()]}
+        body: dict[str, Any] = {
+            "event_alerts": [{"topic": k, "enabled": v} for k, v in wanted.items()]
+        }
+        if econ:
+            body["economic_alerts"] = econ
         updated = await t.put("/api/notifications/preferences", body)
-        return {"preview": False, "applied": True, "event_alerts": updated["event_alerts"]}
+        return {
+            "preview": False,
+            "applied": True,
+            "event_alerts": updated["event_alerts"],
+            "economic_alerts": _economic_view(updated),
+        }
+
+
+def _economic_view(prefs: dict[str, Any]) -> dict[str, Any] | None:
+    """The economic choices without the long option lists."""
+    econ = prefs.get("economic_alerts")
+    if not econ:
+        return None
+    return {k: econ[k] for k in ("countries", "default_countries", "min_importance")}

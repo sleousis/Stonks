@@ -7,6 +7,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
+from stonks.calendars.importance import Importance
 from stonks.ingest.calendar_schemas import Comparison, ReportTiming
 
 
@@ -46,6 +47,9 @@ class EconomicEvent(BaseModel):
     estimate: float | None = None
     change: float | None = None
     change_pct: float | None = None
+    #: How much the release tends to move markets, rated from its type
+    #: when read (:mod:`stonks.calendars.importance`).
+    importance: Importance = "low"
 
 
 class NewsItem(BaseModel):

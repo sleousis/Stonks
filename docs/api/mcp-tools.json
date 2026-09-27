@@ -7849,7 +7849,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Turn kinds of upcoming-event alerts on or off for yourself:\nearnings coming up, ex-dividend dates coming up, economic releases\ncoming up. Off means none of that kind, not even in the app. Without\nconfirm=true returns your current switches and changes nothing.",
+      "description": "Turn kinds of upcoming-event alerts on or off for yourself:\nearnings coming up, ex-dividend dates coming up, economic releases\ncoming up. Off means none of that kind, not even in the app. Also\npicks the countries and the importance threshold (low, medium, high)\nof economic release alerts. Without confirm=true returns your\ncurrent choices and changes nothing.",
       "input_schema": {
         "properties": {
           "confirm": {
@@ -7896,6 +7896,47 @@
             "default": null,
             "description": "true: on, false: off, omit: leave as is",
             "title": "Economic"
+          },
+          "economic_countries": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 30,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "countries for economic release alerts, such as US, EU, DE",
+            "title": "Economic Countries"
+          },
+          "economic_default_countries": {
+            "default": false,
+            "description": "true: follow your portfolios' base currencies again",
+            "title": "Economic Default Countries",
+            "type": "boolean"
+          },
+          "economic_importance": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the lowest importance of release that alerts you",
+            "title": "Economic Importance"
           }
         },
         "title": "set_event_alertsArguments",

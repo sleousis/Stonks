@@ -1,6 +1,7 @@
 import {
   addDays,
   comparisonLabel,
+  importanceLabel,
   daysBetween,
   parseCountries,
   parseTickers,
@@ -68,6 +69,9 @@ describe('calendar view helpers', () => {
     expect(timingLabel(null)).toBe('Time not given');
     expect(comparisonLabel('yoy')).toBe('Year on year');
     expect(comparisonLabel('none')).toBe('Level');
+    expect(importanceLabel('high')).toBe('High');
+    expect(importanceLabel('medium')).toBe('Medium');
+    expect(importanceLabel('low')).toBe('Low');
   });
 
   it('puts sentiment in words', () => {

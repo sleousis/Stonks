@@ -103,6 +103,27 @@ async def test_event_alert_switches_read_and_change_with_a_confirm(mcp):
 
 
 @pytest.mark.anyio
+async def test_economic_alert_choices_change_with_a_confirm(mcp):
+    prefs = await call(mcp, "get_notification_preferences")
+    assert prefs["economic_alerts"]["min_importance"] == "high"
+    args = {"economic_countries": ["US", "GB"], "economic_importance": "medium"}
+    preview = await call(mcp, "set_event_alerts", args)
+    assert preview["applied"] is False
+    assert preview["economic_alerts"]["min_importance"] == "high"
+    assert preview["would_set"]["economic_alerts"]["countries"] == ["US", "GB"]
+    done = await call(mcp, "set_event_alerts", {**args, "confirm": True})
+    assert done["economic_alerts"] == {
+        "countries": ["US", "GB"],
+        "default_countries": False,
+        "min_importance": "medium",
+    }
+    back = await call(
+        mcp, "set_event_alerts", {"economic_default_countries": True, "confirm": True}
+    )
+    assert back["economic_alerts"]["default_countries"] is True
+
+
+@pytest.mark.anyio
 async def test_run_lab_on_a_stored_universe_fetches_missing_data_first(mcp, settings, source):
     with DuckDBLake(settings.lake.path) as lake:
         UniverseStore(lake).save(

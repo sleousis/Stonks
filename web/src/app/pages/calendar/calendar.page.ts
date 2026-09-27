@@ -23,6 +23,7 @@ import {
   type CalendarScope,
   addDays,
   comparisonLabel,
+  importanceLabel,
   parseCountries,
   parseTickers,
   scopeQuery,
@@ -48,6 +49,7 @@ const DEFAULT_DAYS = 30;
  * watchlist, some tickers or the whole market, and the news on them.
  *
  * `?ticker=&date=` (the event alerts link here) show one ticker from that day.
+ * `?country=&date=` (the economic release alerts) show that country's releases.
  */
 @Component({
   selector: 'app-calendar-page',
@@ -325,6 +327,8 @@ export class CalendarPage implements OnInit {
   /** Deep link from an event alert: one ticker, from that day. */
   readonly ticker = input<string>();
   readonly date = input<string>();
+  /** Deep link from an economic release alert: that country's releases. */
+  readonly country = input<string>();
 
   protected readonly scopes = SCOPES;
   protected readonly scope = signal<CalendarScope>('holdings');
@@ -436,6 +440,7 @@ export class CalendarPage implements OnInit {
     { key: 'event_time', label: 'Time', format: 'datetime' },
     { key: 'event_type', label: 'Release', mobile: 'title' },
     { key: 'country', label: 'Country' },
+    { key: 'importance', label: 'Importance', value: (e) => importanceLabel(e.importance) },
     { key: 'period', label: 'Period', mobile: 'hide' },
     { key: 'actual', label: 'Actual', format: 'number' },
     { key: 'estimate', label: 'Estimate', format: 'number' },
@@ -466,6 +471,12 @@ export class CalendarPage implements OnInit {
       this.scope.set('tickers');
       this.tickersText.set(tickers.join(', '));
       this.tickers.set(tickers);
+    }
+    const countries = parseCountries(this.country() ?? '');
+    if (countries.length) {
+      this.tab.set('economic');
+      this.countriesText.set(countries.join(', '));
+      this.countries.set(countries);
     }
     const d = this.date();
     if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
