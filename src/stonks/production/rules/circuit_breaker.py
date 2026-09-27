@@ -34,7 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from stonks.core.types import Order
 from stonks.production.rules import RiskAdjustment, RiskContext, RiskRule, register_rule
-from stonks.production.rules._common import scale_buys, settings_of
+from stonks.production.rules._common import scale_opens, settings_of
 
 BreakerKind = Literal["month_loss", "week_loss", "drawdown"]
 Cooldown = Literal["rest_of_month", "none"]
@@ -192,4 +192,4 @@ class CircuitBreaker(RiskRule):
         if not trips:
             return list(orders), []
         reason = "circuit breaker: " + "; ".join(t.reason for t in trips)
-        return scale_buys(orders, ctx, 0.0, self.name, reason)
+        return scale_opens(orders, ctx, 0.0, self.name, reason)

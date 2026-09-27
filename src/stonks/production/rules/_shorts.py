@@ -15,7 +15,7 @@ from datetime import UTC, date, datetime
 
 from stonks.core.types import Order
 from stonks.production.rules import EPS, RiskAdjustment, RiskContext
-from stonks.production.rules._common import adjustment
+from stonks.production.rules._common import adjustment, is_opening
 
 
 def decision_day(ctx: RiskContext) -> date:
@@ -25,13 +25,6 @@ def decision_day(ctx: RiskContext) -> date:
 
 def signed(order: Order) -> float:
     return order.quantity if order.side == "buy" else -order.quantity
-
-
-def is_opening(order: Order, positions: Mapping[str, float]) -> bool:
-    if order.position_effect is not None:
-        return order.position_effect == "open"
-    held = positions.get(order.ticker, 0.0)
-    return held >= 0 if order.side == "buy" else held <= 0
 
 
 def price(ctx: RiskContext, ticker: str) -> float | None:

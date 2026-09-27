@@ -545,3 +545,58 @@ def test_be04_max_holding_covers_an_old_short() -> None:
     [cover] = result.orders
     assert cover.client_id == "2026-03-20:risk.max_holding:X:cover"
     assert (cover.side, cover.quantity, cover.position_effect) == ("buy", 100.0, "close")
+
+
+# ---- BE-05: halts and scaling act on every opening order -------------------------------------
+
+
+def _curve_from(*values: float) -> list[tuple[date, float]]:
+    start = AS_OF - timedelta(days=len(values) + 1)
+    return [(start + timedelta(days=i), v) for i, v in enumerate(values)]
+
+
+def test_be05_an_operational_halt_drops_short_sales_and_keeps_covers() -> None:
+    stale = {"X": _bars([50.0] * 30, end=AS_OF - timedelta(days=30))}
+    orders = [_o("sell", 10, "Y", effect="open"), _o("buy", 20, effect="close")]
+    result = _run(
+        orders,
+        Portfolio(cash=15_000.0, positions={"X": -100.0}),
+        {"X": 50.0, "Y": 20.0},
+        _policy(operational_halt={"max_bar_age_days": 3}),
+        history=stale,
+    )
+    assert [(o.ticker, o.side) for o in result.orders] == [("X", "buy")]
+
+
+def test_be05_a_circuit_breaker_drops_short_sales() -> None:
+    result = _run(
+        [_o("sell", 10, "Y", effect="open"), _o("buy", 20, effect="close")],
+        Portfolio(cash=15_000.0, positions={"X": -100.0}),
+        {"X": 50.0, "Y": 20.0},
+        _policy(circuit_breaker={"max_drawdown_halt": 0.10}),
+        equity_curve=_curve_from(100_000.0, 60_000.0),
+    )
+    assert [(o.ticker, o.side) for o in result.orders] == [("X", "buy")]
+
+
+def test_be05_drawdown_scaling_scales_short_sales_too() -> None:
+    result = _run(
+        [_o("sell", 100, "Y", effect="open")],
+        Portfolio(cash=15_000.0, positions={"X": -100.0}),
+        {"X": 50.0, "Y": 20.0},
+        _policy(drawdown_scaling={"schedule": [(0.10, 0.5)]}),
+        equity_curve=_curve_from(20_000.0, 20_000.0),
+    )
+    [short] = result.orders
+    assert short.quantity == pytest.approx(50.0)
+
+
+def test_be05_a_short_sale_without_a_price_is_dropped() -> None:
+    result = _run(
+        [_o("sell", 10, "Y", effect="open")],
+        Portfolio(cash=15_000.0, positions={}),
+        {},
+        _policy(),
+    )
+    assert result.orders == []
+    assert any(a.rule == "no_price" for a in result.adjustments)
