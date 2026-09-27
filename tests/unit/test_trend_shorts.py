@@ -8,6 +8,7 @@ from stonks.backtest.engine import BacktestConfig, Backtester
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.types import Portfolio
 from stonks.execution.margin import MarginSettings
+from stonks.strategies.examples.ath_trend import AllTimeHighTrend
 from stonks.strategies.examples.ewmac_trend import EWMACTrend
 from stonks.strategies.examples.tsmom import TimeSeriesMomentum
 from tests.unit.trend_helpers import DATES, LAST, build_lake, trend
@@ -28,6 +29,11 @@ def test_short_mode_is_off_by_default():
         assert s.short_capable is True
         assert s.supports_short is False
         assert "short_mode" not in s.params
+
+
+def test_ath_trend_has_no_short_side():
+    with pytest.raises(ValueError, match="short_mode"):
+        AllTimeHighTrend({"short_mode": "short"})
 
 
 def test_short_mode_returns_the_negative_forecast(lake):

@@ -323,14 +323,14 @@ Every trader gets a simple experience: connect a broker for insights, pick strat
 
 ## Phase 16: Short selling
 
-**Status:** 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. Design and what changed from it: `docs/design/shorting.md`.
+**Status:** 16.1 to 16.4 done, off by default. Design and what changed from it: `docs/design/shorting.md`.
 
 | WP | Scope |
 |----|-------|
 | 16.1 Engine and broker | Negative positions in the portfolio, an order position effect (open or close, split at zero), short fills in the simulated broker, borrow costs, margin requirements, and short-sale availability checks. Opt-in per strategy and per portfolio; long-only behaviour stays identical by default. |
 | 16.2 Risk rules for shorts | Gross and net exposure limits, per-position short caps, and squeeze protection (stop on adverse moves), as registered risk rules. |
-| 16.3 Strategies that short | Let strategies emit short signals behind an opt-in; re-enable the short legs of the neurotrader888 ports and the long/short books from the book research. |
-| 16.4 Validation for shorts | Backtests, permutation tests and reports handle long/short books; borrow-cost stress tests. |
+| 16.3 Strategies that short | Done. A `short_mode` param on short-capable strategies (off by default). The ranker keeps short scores for books that may short. `equal_weight_top_n` and `vol_target` have long/short modes with gross and net limits and dollar or beta neutrality. EWMAC and TSMOM short down trends, and two new strategies trade long/short: `ls_momentum` and `pairs_reversion`. The neurotrader888 short legs are not re-enabled yet. |
+| 16.4 Validation for shorts | Done. The backtest report shows financing, forced orders, exposure over time and long and short P&L. The trade Monte Carlo and runs test read short round trips. `cost_stress` multiplies borrow fees and adds a 3x borrow stress, `stress` adds a short-squeeze scenario, and go-live checks that a short strategy was validated with realistic borrow costs. |
 
 ## Phase 17: Options
 

@@ -57,6 +57,8 @@ class AllTimeHighTrend(ForecastTrendStrategy):
     label_horizon_bars = 63
     required_history_bars = 252
     applicable_asset_classes: ClassVar[tuple[AssetClass, ...]] = ("equity", "crypto")
+    #: The book's system has no short side, so ``short_mode`` stays ``flat``.
+    short_capable: ClassVar[bool] = False
 
     @classmethod
     def parameter_spec(cls):
