@@ -153,6 +153,10 @@ READ_TOOLS = {
     "list_watchlists",
     "get_watchlist",
     "get_my_risk_limits",
+    "get_calendar",
+    "get_news",
+    "get_earnings_warnings",
+    "list_event_alert_kinds",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {

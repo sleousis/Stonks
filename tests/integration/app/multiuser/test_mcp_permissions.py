@@ -380,6 +380,12 @@ CASES: dict[str, Case] = {
         "GET", "/api/watchlists/{watchlist_id}", lambda i: {"watchlist_id": i["watchlist"]}
     ),
     "get_my_risk_limits": _c("GET", "/api/risk/limits"),
+    "get_calendar": _c("GET", "/api/calendars", lambda i: {"portfolio_id": i["portfolio"]}),
+    "get_news": _c("GET", "/api/calendars/news", lambda i: {"portfolio_id": i["portfolio"]}),
+    "get_earnings_warnings": _c(
+        "GET", "/api/calendars/earnings-warnings", lambda i: {"tickers": ["UP.US"]}
+    ),
+    "list_event_alert_kinds": _c("GET", "/api/calendars/alert-kinds"),
     "create_watchlist": _c("POST", "/api/watchlists", lambda i: {"name": "x", "tickers": ["=bad"]}),
     "update_watchlist": _c(
         "PATCH",

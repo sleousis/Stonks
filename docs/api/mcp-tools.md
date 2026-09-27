@@ -23,11 +23,13 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_api_health`](#get_api_health) | read | no |
 | [`get_bars`](#get_bars) | read | no |
 | [`get_broker`](#get_broker) | read | no |
+| [`get_calendar`](#get_calendar) | read | no |
 | [`get_catalog`](#get_catalog) | read | no |
 | [`get_chart`](#get_chart) | read | no |
 | [`get_connection_accounts`](#get_connection_accounts) | read | no |
 | [`get_coverage`](#get_coverage) | read | no |
 | [`get_draft`](#get_draft) | read | no |
+| [`get_earnings_warnings`](#get_earnings_warnings) | read | no |
 | [`get_golive_report`](#get_golive_report) | read | no |
 | [`get_health_report`](#get_health_report) | read | no |
 | [`get_insights`](#get_insights) | read | no |
@@ -37,6 +39,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_ledger_run`](#get_ledger_run) | read | no |
 | [`get_live_risk`](#get_live_risk) | read | no |
 | [`get_my_risk_limits`](#get_my_risk_limits) | read | no |
+| [`get_news`](#get_news) | read | no |
 | [`get_order_tca`](#get_order_tca) | read | no |
 | [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
@@ -62,6 +65,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_connections`](#list_connections) | read | no |
 | [`list_cost_models`](#list_cost_models) | read | no |
 | [`list_drafts`](#list_drafts) | read | no |
+| [`list_event_alert_kinds`](#list_event_alert_kinds) | read | no |
 | [`list_fills`](#list_fills) | read | no |
 | [`list_halts`](#list_halts) | read | no |
 | [`list_ingest_runs`](#list_ingest_runs) | read | no |
@@ -150,6 +154,25 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
 
+### `get_calendar`
+
+Upcoming earnings (with the time of day and the EPS estimate),
+ex-dividend dates and economic releases from ``start`` (default
+today) to ``end`` (default two weeks on, at most 120 days).
+Economic releases are market wide.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `scope` | "holdings" \| "watchlists" \| "tickers" \| "all" | no | `"holdings"` | holdings (default), watchlists, tickers or all |
+| `tickers` | list[string] \| null | no | `null` | instrument ids (scope tickers) |
+| `watchlist_id` | string \| null | no | `null` | one of your watchlists (scope watchlists) |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `start` | date \| null | no | `null` | YYYY-MM-DD |
+| `end` | date \| null | no | `null` | YYYY-MM-DD |
+| `countries` | list[string] \| null | no | `null` | economic events of these ISO alpha-2 codes |
+
 ### `get_catalog`
 
 Strategy classes that can be backtested or tuned, with their parameter
@@ -211,6 +234,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `draft_id` | string | yes |  |  |
+
+### `get_earnings_warnings`
+
+Which of ``tickers`` report earnings before the next open of
+their market. An order placed now fills after the report.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `tickers` | list[string] | yes |  |  |
 
 ### `get_golive_report`
 
@@ -318,6 +352,21 @@ that are looser than the system and so change nothing.
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `get_news`
+
+The newest articles on the scope's tickers and their daily
+sentiment over the last 30 days. Scope all is refused.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `scope` | "holdings" \| "watchlists" \| "tickers" \| "all" | no | `"holdings"` | holdings (default), watchlists, tickers or all |
+| `tickers` | list[string] \| null | no | `null` | instrument ids (scope tickers) |
+| `watchlist_id` | string \| null | no | `null` | one of your watchlists (scope watchlists) |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `limit` | integer | no | `50` |  |
 
 ### `get_order_tca`
 
@@ -562,6 +611,15 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
+
+### `list_event_alert_kinds`
+
+The upcoming-event alert kinds (earnings, ex-dividend) and how
+many days ahead each looks by default.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
 
 ### `list_fills`
 

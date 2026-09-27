@@ -815,6 +815,125 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Upcoming earnings (with the time of day and the EPS estimate),\nex-dividend dates and economic releases from ``start`` (default\ntoday) to ``end`` (default two weeks on, at most 120 days).\nEconomic releases are market wide.",
+      "input_schema": {
+        "properties": {
+          "countries": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "economic events of these ISO alpha-2 codes",
+            "title": "Countries"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "End"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "scope": {
+            "default": "holdings",
+            "description": "holdings (default), watchlists, tickers or all",
+            "enum": [
+              "holdings",
+              "watchlists",
+              "tickers",
+              "all"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Start"
+          },
+          "tickers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "instrument ids (scope tickers)",
+            "title": "Tickers"
+          },
+          "watchlist_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your watchlists (scope watchlists)",
+            "title": "Watchlist Id"
+          }
+        },
+        "title": "get_calendarArguments",
+        "type": "object"
+      },
+      "name": "get_calendar",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Strategy classes that can be backtested or tuned, with their parameter\nspecs, plus the valid bar intervals and asset classes.",
       "input_schema": {
         "properties": {},
@@ -1016,6 +1135,35 @@
         "type": "object"
       },
       "name": "get_draft",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Which of ``tickers`` report earnings before the next open of\ntheir market. An order placed now fills after the report.",
+      "input_schema": {
+        "properties": {
+          "tickers": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Tickers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tickers"
+        ],
+        "title": "get_earnings_warningsArguments",
+        "type": "object"
+      },
+      "name": "get_earnings_warnings",
       "needs_confirm": false
     },
     {
@@ -1277,6 +1425,87 @@
         "type": "object"
       },
       "name": "get_my_risk_limits",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "The newest articles on the scope's tickers and their daily\nsentiment over the last 30 days. Scope all is refused.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "scope": {
+            "default": "holdings",
+            "description": "holdings (default), watchlists, tickers or all",
+            "enum": [
+              "holdings",
+              "watchlists",
+              "tickers",
+              "all"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "tickers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "instrument ids (scope tickers)",
+            "title": "Tickers"
+          },
+          "watchlist_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your watchlists (scope watchlists)",
+            "title": "Watchlist Id"
+          }
+        },
+        "title": "get_newsArguments",
+        "type": "object"
+      },
+      "name": "get_news",
       "needs_confirm": false
     },
     {
@@ -2242,6 +2471,22 @@
         "type": "object"
       },
       "name": "list_drafts",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "The upcoming-event alert kinds (earnings, ex-dividend) and how\nmany days ahead each looks by default.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_event_alert_kindsArguments",
+        "type": "object"
+      },
+      "name": "list_event_alert_kinds",
       "needs_confirm": false
     },
     {

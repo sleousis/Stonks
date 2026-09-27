@@ -58,6 +58,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'POST /api/backups': 'operations.run',
   'POST /api/backups/{backup_id}/restore': 'backups.restore',
   'POST /api/backups/{backup_id}/verify': 'operations.run',
+  'POST /api/calendars/refresh': 'operations.run',
   'POST /api/connections/{connection_id}/link': 'portfolio.manage',
   'POST /api/connections/{connection_id}/sync': 'portfolio.manage',
   'POST /api/connections/keys': 'connection.manage',

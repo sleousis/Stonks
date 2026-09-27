@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from stonks.mcp.tools import (
+    calendars,
     connections,
     guarded,
     halts,
@@ -34,6 +35,7 @@ MODULES = (
     risk,
     notifications,
     workspace,
+    calendars,
 )
 
 

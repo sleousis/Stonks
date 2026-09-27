@@ -2128,6 +2128,12 @@ from stonks.cli_tca import app as tca_app  # noqa: E402
 
 app.add_typer(tca_app, name="tca")
 
+# ---- event calendars and news (roadmap 20.7) --------------------------------
+
+from stonks.cli_calendars import app as calendars_app  # noqa: E402
+
+app.add_typer(calendars_app, name="calendars")
+
 golive_app = typer.Typer(help="Go-live gate for paper-traded strategies")
 app.add_typer(golive_app, name="golive")
 

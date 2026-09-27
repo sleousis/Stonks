@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tca](#tca-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tca](#tca-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -64,6 +64,17 @@ Tags: [alerts](#alerts-endpoints) · [auth](#auth-endpoints) · [backups](#backu
 |--------|------|---------|------|---------|----------|
 | GET | `/api/brokers` | Get Broker Info | sign-in |  | [BrokerInfo](#brokerinfo) |
 | GET | `/api/brokers/alpaca/status` | Get Alpaca Status | sign-in |  | [AlpacaStatus](#alpacastatus) |
+
+## calendars endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/calendars` | Get Calendar | sign-in |  | [CalendarView](#calendarview) |
+| GET | `/api/calendars/alert-kinds` | List Event Alert Kinds | sign-in |  | list[[EventAlertKindView](#eventalertkindview)] |
+| GET | `/api/calendars/earnings-warnings` | Get Earnings Warnings | sign-in |  | [EarningsWarningsView](#earningswarningsview) |
+| GET | `/api/calendars/news` | Get News | sign-in |  | [NewsView](#newsview) |
+| POST | `/api/calendars/refresh` | Refresh Calendars | `operations.run` | [CalendarRefreshRequest](#calendarrefreshrequest) | [Job](#job) |
+| GET | `/api/calendars/refresh/{job_id}/result` | Get Refresh Result | sign-in |  | [CalendarRefreshView](#calendarrefreshview) |
 
 ## catalog endpoints
 
@@ -571,6 +582,45 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `kind` | "simulated" \| "alpaca" | yes |  |
 | `paper` | boolean | yes |  |
 
+### CalendarRefreshRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alert_days` | dict[str, integer] \| null | no |  |
+| `alerts` | boolean | no |  |
+| `countries` | list[string] \| null | no |  |
+| `end` | date \| null | no |  |
+| `kinds` | list["earnings" \| "dividends" \| "economic"] | no |  |
+| `source` | "eodhd" \| "yahoo" \| "defillama" | no |  |
+| `start` | date \| null | no |  |
+| `tickers` | list[string] \| null | no |  |
+
+### CalendarRefreshView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alerts` | [EventAlertSummary](#eventalertsummary) \| null | no |  |
+| `calendars_failed` | integer | yes |  |
+| `calendars_ok` | integer | yes |  |
+| `end` | date | yes |  |
+| `failed` | list[string] | yes |  |
+| `run_id` | integer | yes |  |
+| `start` | date | yes |  |
+| `status` | string | yes |  |
+
+### CalendarView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `dividends` | list[[DividendEvent](#dividendevent)] | yes |  |
+| `earnings` | list[[EarningsEvent](#earningsevent)] | yes |  |
+| `economic` | list[[EconomicEvent](#economicevent)] | yes |  |
+| `end` | date | yes |  |
+| `scope` | "all" \| "holdings" \| "watchlists" \| "tickers" | yes |  |
+| `start` | date | yes |  |
+| `tickers` | list[string] \| null | yes |  |
+| `truncated` | boolean | no |  |
+
 ### ChannelDefaultView
 
 | Field | Type | Required | Description |
@@ -732,6 +782,19 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 | `remote_error` | string \| null | yes |  |
 | `remote_removed` | boolean \| null | yes |  |
 
+### DividendEvent
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | number \| null | no |  |
+| `currency` | string \| null | no |  |
+| `declaration_date` | date \| null | no |  |
+| `ex_date` | date | yes |  |
+| `name` | string \| null | no |  |
+| `pay_date` | date \| null | no |  |
+| `record_date` | date \| null | no |  |
+| `ticker` | string | yes |  |
+
 ### Draft
 
 | Field | Type | Required | Description |
@@ -828,6 +891,53 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 |-------|------|----------|-------------|
 | `schedule` | list[list[any]] \| null | no |  |
 
+### EarningsEvent
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `before_after_market` | "before" \| "during" \| "after" \| null | no |  |
+| `currency` | string \| null | no |  |
+| `eps_actual` | number \| null | no |  |
+| `eps_difference` | number \| null | no |  |
+| `eps_estimate` | number \| null | no |  |
+| `name` | string \| null | no |  |
+| `period_end` | date | yes |  |
+| `report_date` | date | yes |  |
+| `surprise_percent` | number \| null | no |  |
+| `ticker` | string | yes |  |
+
+### EarningsWarning
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `before_after_market` | "before" \| "during" \| "after" \| null | no |  |
+| `name` | string \| null | no |  |
+| `next_open` | date-time | yes |  |
+| `report_date` | date | yes |  |
+| `ticker` | string | yes |  |
+
+### EarningsWarningsView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `checked` | list[string] | yes |  |
+| `warnings` | list[[EarningsWarning](#earningswarning)] | yes |  |
+
+### EconomicEvent
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `actual` | number \| null | no |  |
+| `change` | number \| null | no |  |
+| `change_pct` | number \| null | no |  |
+| `comparison` | "mom" \| "qoq" \| "yoy" \| "none" | yes |  |
+| `country` | string | yes |  |
+| `estimate` | number \| null | no |  |
+| `event_time` | date-time | yes |  |
+| `event_type` | string | yes |  |
+| `period` | string \| null | no |  |
+| `previous` | number \| null | no |  |
+
 ### EnrolStartView
 
 | Field | Type | Required | Description |
@@ -875,6 +985,22 @@ What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing
 |-------|------|----------|-------------|
 | `timestamp` | date-time | yes |  |
 | `value` | number | yes |  |
+
+### EventAlertKindView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `default_days_ahead` | integer | yes |  |
+| `kind` | string | yes |  |
+| `label` | string | yes |  |
+
+### EventAlertSummary
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `people` | integer | yes |  |
+| `repeats` | integer | yes |  |
+| `sent` | integer | yes |  |
 
 ### Exposure
 
@@ -1566,6 +1692,26 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 |-------|------|----------|-------------|
 | `max_net` | number \| null | no |  |
 | `min_net` | number \| null | no |  |
+
+### NewsItem
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `published_at` | date-time | yes |  |
+| `sentiment` | number \| null | no |  |
+| `source_name` | string \| null | no |  |
+| `tags` | list[string] | no |  |
+| `ticker` | string | yes |  |
+| `title` | string | yes |  |
+| `url` | string \| null | no |  |
+
+### NewsView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[NewsItem](#newsitem)] | yes |  |
+| `sentiment` | list[[SentimentDay](#sentimentday)] | yes |  |
+| `tickers` | list[string] | yes |  |
 
 ### NoteRequest
 
@@ -2449,6 +2595,15 @@ Type: "viewer" \| "trader" \| "admin"
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `max_weight_per_sector` | number \| null | no |  |
+
+### SentimentDay
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `article_count` | integer \| null | no |  |
+| `day` | date | yes |  |
+| `sentiment` | number \| null | no |  |
+| `ticker` | string | yes |  |
 
 ### SessionTimesView
 

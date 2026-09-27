@@ -573,6 +573,119 @@ export type BrokerInfo = {
 };
 
 /**
+ * CalendarRefreshRequest
+ */
+export type CalendarRefreshRequest = {
+    /**
+     * Alert Days
+     */
+    alert_days?: {
+        [key: string]: number;
+    } | null;
+    /**
+     * Alerts
+     */
+    alerts?: boolean;
+    /**
+     * Countries
+     */
+    countries?: Array<string> | null;
+    /**
+     * End
+     */
+    end?: string | null;
+    /**
+     * Kinds
+     */
+    kinds?: Array<'earnings' | 'dividends' | 'economic'>;
+    /**
+     * Source
+     */
+    source?: 'eodhd' | 'yahoo' | 'defillama';
+    /**
+     * Start
+     */
+    start?: string | null;
+    /**
+     * Tickers
+     */
+    tickers?: Array<string> | null;
+};
+
+/**
+ * CalendarRefreshView
+ */
+export type CalendarRefreshView = {
+    alerts?: EventAlertSummary | null;
+    /**
+     * Calendars Failed
+     */
+    calendars_failed: number;
+    /**
+     * Calendars Ok
+     */
+    calendars_ok: number;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Failed
+     */
+    failed: Array<string>;
+    /**
+     * Run Id
+     */
+    run_id: number;
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * Status
+     */
+    status: string;
+};
+
+/**
+ * CalendarView
+ */
+export type CalendarView = {
+    /**
+     * Dividends
+     */
+    dividends: Array<DividendEvent>;
+    /**
+     * Earnings
+     */
+    earnings: Array<EarningsEvent>;
+    /**
+     * Economic
+     */
+    economic: Array<EconomicEvent>;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Scope
+     */
+    scope: 'all' | 'holdings' | 'watchlists' | 'tickers';
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * Tickers
+     */
+    tickers: Array<string> | null;
+    /**
+     * Truncated
+     */
+    truncated?: boolean;
+};
+
+/**
  * ChannelDefaultView
  */
 export type ChannelDefaultView = {
@@ -990,6 +1103,44 @@ export type DisconnectView = {
 };
 
 /**
+ * DividendEvent
+ */
+export type DividendEvent = {
+    /**
+     * Amount
+     */
+    amount?: number | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Declaration Date
+     */
+    declaration_date?: string | null;
+    /**
+     * Ex Date
+     */
+    ex_date: string;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Pay Date
+     */
+    pay_date?: string | null;
+    /**
+     * Record Date
+     */
+    record_date?: string | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+};
+
+/**
  * Draft
  */
 export type Draft = {
@@ -1273,6 +1424,138 @@ export type DrawdownScalingSettings = {
 };
 
 /**
+ * EarningsEvent
+ */
+export type EarningsEvent = {
+    /**
+     * Before After Market
+     */
+    before_after_market?: 'before' | 'during' | 'after' | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Eps Actual
+     */
+    eps_actual?: number | null;
+    /**
+     * Eps Difference
+     */
+    eps_difference?: number | null;
+    /**
+     * Eps Estimate
+     */
+    eps_estimate?: number | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Period End
+     */
+    period_end: string;
+    /**
+     * Report Date
+     */
+    report_date: string;
+    /**
+     * Surprise Percent
+     */
+    surprise_percent?: number | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+};
+
+/**
+ * EarningsWarning
+ */
+export type EarningsWarning = {
+    /**
+     * Before After Market
+     */
+    before_after_market?: 'before' | 'during' | 'after' | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Next Open
+     */
+    next_open: string;
+    /**
+     * Report Date
+     */
+    report_date: string;
+    /**
+     * Ticker
+     */
+    ticker: string;
+};
+
+/**
+ * EarningsWarningsView
+ */
+export type EarningsWarningsView = {
+    /**
+     * Checked
+     */
+    checked: Array<string>;
+    /**
+     * Warnings
+     */
+    warnings: Array<EarningsWarning>;
+};
+
+/**
+ * EconomicEvent
+ */
+export type EconomicEvent = {
+    /**
+     * Actual
+     */
+    actual?: number | null;
+    /**
+     * Change
+     */
+    change?: number | null;
+    /**
+     * Change Pct
+     */
+    change_pct?: number | null;
+    /**
+     * Comparison
+     */
+    comparison: 'mom' | 'qoq' | 'yoy' | 'none';
+    /**
+     * Country
+     */
+    country: string;
+    /**
+     * Estimate
+     */
+    estimate?: number | null;
+    /**
+     * Event Time
+     */
+    event_time: string;
+    /**
+     * Event Type
+     */
+    event_type: string;
+    /**
+     * Period
+     */
+    period?: string | null;
+    /**
+     * Previous
+     */
+    previous?: number | null;
+};
+
+/**
  * EnrolStartView
  */
 export type EnrolStartView = {
@@ -1396,6 +1679,42 @@ export type EquityPoint = {
      * Value
      */
     value: number;
+};
+
+/**
+ * EventAlertKindView
+ */
+export type EventAlertKindView = {
+    /**
+     * Default Days Ahead
+     */
+    default_days_ahead: number;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
+ * EventAlertSummary
+ */
+export type EventAlertSummary = {
+    /**
+     * People
+     */
+    people: number;
+    /**
+     * Repeats
+     */
+    repeats: number;
+    /**
+     * Sent
+     */
+    sent: number;
 };
 
 /**
@@ -3285,6 +3604,58 @@ export type NetExposureSettings = {
      * Min Net
      */
     min_net?: number | null;
+};
+
+/**
+ * NewsItem
+ */
+export type NewsItem = {
+    /**
+     * Published At
+     */
+    published_at: string;
+    /**
+     * Sentiment
+     */
+    sentiment?: number | null;
+    /**
+     * Source Name
+     */
+    source_name?: string | null;
+    /**
+     * Tags
+     */
+    tags?: Array<string>;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Url
+     */
+    url?: string | null;
+};
+
+/**
+ * NewsView
+ */
+export type NewsView = {
+    /**
+     * Items
+     */
+    items: Array<NewsItem>;
+    /**
+     * Sentiment
+     */
+    sentiment: Array<SentimentDay>;
+    /**
+     * Tickers
+     */
+    tickers: Array<string>;
 };
 
 /**
@@ -5521,6 +5892,28 @@ export type SectorCapSettings = {
      * Max Weight Per Sector
      */
     max_weight_per_sector?: number | null;
+};
+
+/**
+ * SentimentDay
+ */
+export type SentimentDay = {
+    /**
+     * Article Count
+     */
+    article_count?: number | null;
+    /**
+     * Day
+     */
+    day: string;
+    /**
+     * Sentiment
+     */
+    sentiment?: number | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
 };
 
 /**
@@ -9100,6 +9493,334 @@ export type GetAlpacaStatusResponses = {
 };
 
 export type GetAlpacaStatusResponse = GetAlpacaStatusResponses[keyof GetAlpacaStatusResponses];
+
+export type GetCalendarData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Scope
+         *
+         * holdings (default), watchlists, tickers or all
+         */
+        scope?: 'all' | 'holdings' | 'watchlists' | 'tickers';
+        /**
+         * Watchlist Id
+         *
+         * one of your watchlists (scope watchlists)
+         */
+        watchlist_id?: string | null;
+        /**
+         * Portfolio Id
+         *
+         * one of your portfolios (scope holdings)
+         */
+        portfolio_id?: string | null;
+        /**
+         * Tickers
+         *
+         * comma-separated instrument ids
+         */
+        tickers?: string | null;
+        /**
+         * Start
+         */
+        start?: string | null;
+        /**
+         * End
+         */
+        end?: string | null;
+        /**
+         * Countries
+         *
+         * economic events of these ISO alpha-2 codes
+         */
+        countries?: string | null;
+    };
+    url: '/api/calendars';
+};
+
+export type GetCalendarErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetCalendarError = GetCalendarErrors[keyof GetCalendarErrors];
+
+export type GetCalendarResponses = {
+    /**
+     * Successful Response
+     */
+    200: CalendarView;
+};
+
+export type GetCalendarResponse = GetCalendarResponses[keyof GetCalendarResponses];
+
+export type ListEventAlertKindsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/calendars/alert-kinds';
+};
+
+export type ListEventAlertKindsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListEventAlertKindsError = ListEventAlertKindsErrors[keyof ListEventAlertKindsErrors];
+
+export type ListEventAlertKindsResponses = {
+    /**
+     * Response Listeventalertkinds
+     *
+     * Successful Response
+     */
+    200: Array<EventAlertKindView>;
+};
+
+export type ListEventAlertKindsResponse = ListEventAlertKindsResponses[keyof ListEventAlertKindsResponses];
+
+export type GetEarningsWarningsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Tickers
+         *
+         * comma-separated instrument ids
+         */
+        tickers?: string | null;
+    };
+    url: '/api/calendars/earnings-warnings';
+};
+
+export type GetEarningsWarningsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetEarningsWarningsError = GetEarningsWarningsErrors[keyof GetEarningsWarningsErrors];
+
+export type GetEarningsWarningsResponses = {
+    /**
+     * Successful Response
+     */
+    200: EarningsWarningsView;
+};
+
+export type GetEarningsWarningsResponse = GetEarningsWarningsResponses[keyof GetEarningsWarningsResponses];
+
+export type GetNewsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Scope
+         *
+         * holdings (default), watchlists, tickers or all
+         */
+        scope?: 'all' | 'holdings' | 'watchlists' | 'tickers';
+        /**
+         * Watchlist Id
+         *
+         * one of your watchlists (scope watchlists)
+         */
+        watchlist_id?: string | null;
+        /**
+         * Portfolio Id
+         *
+         * one of your portfolios (scope holdings)
+         */
+        portfolio_id?: string | null;
+        /**
+         * Tickers
+         *
+         * comma-separated instrument ids
+         */
+        tickers?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/calendars/news';
+};
+
+export type GetNewsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetNewsError = GetNewsErrors[keyof GetNewsErrors];
+
+export type GetNewsResponses = {
+    /**
+     * Successful Response
+     */
+    200: NewsView;
+};
+
+export type GetNewsResponse = GetNewsResponses[keyof GetNewsResponses];
+
+export type RefreshCalendarsData = {
+    body: CalendarRefreshRequest;
+    path?: never;
+    query?: never;
+    url: '/api/calendars/refresh';
+};
+
+export type RefreshCalendarsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RefreshCalendarsError = RefreshCalendarsErrors[keyof RefreshCalendarsErrors];
+
+export type RefreshCalendarsResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type RefreshCalendarsResponse = RefreshCalendarsResponses[keyof RefreshCalendarsResponses];
+
+export type GetCalendarRefreshResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/calendars/refresh/{job_id}/result';
+};
+
+export type GetCalendarRefreshResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetCalendarRefreshResultError = GetCalendarRefreshResultErrors[keyof GetCalendarRefreshResultErrors];
+
+export type GetCalendarRefreshResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: CalendarRefreshView;
+};
+
+export type GetCalendarRefreshResultResponse = GetCalendarRefreshResultResponses[keyof GetCalendarRefreshResultResponses];
 
 export type ListAssetClassesData = {
     body?: never;
