@@ -1270,7 +1270,8 @@
           "kind": {
             "enum": [
               "simulated",
-              "alpaca"
+              "alpaca",
+              "ibkr"
             ],
             "title": "Kind",
             "type": "string"
@@ -3498,7 +3499,9 @@
               "week_loss",
               "drawdown",
               "operational",
-              "kill"
+              "kill",
+              "runaway",
+              "broker_drift"
             ],
             "title": "Kind",
             "type": "string"

@@ -6,6 +6,8 @@ export const HALT_KIND_LABEL: Record<HaltView['kind'], string> = {
   week_loss: 'Weekly loss',
   drawdown: 'Drawdown',
   operational: 'Operational',
+  runaway: 'Runaway orders',
+  broker_drift: 'Broker drift',
 };
 
 export const HALT_STOPS_LABEL: Record<HaltView['halt'], string> = {

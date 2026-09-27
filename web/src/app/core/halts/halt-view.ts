@@ -7,6 +7,8 @@ const KIND_TEXT: Record<HaltView['kind'], string> = {
   week_loss: 'weekly loss breaker',
   drawdown: 'drawdown breaker',
   operational: 'operational halt',
+  runaway: 'runaway order halt',
+  broker_drift: 'broker drift halt',
 };
 
 export interface HaltSummary {

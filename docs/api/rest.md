@@ -614,7 +614,7 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 |-------|------|----------|-------------|
 | `allow_live` | boolean | yes |  |
 | `credentials_configured` | boolean | yes |  |
-| `kind` | "simulated" \| "alpaca" | yes |  |
+| `kind` | "simulated" \| "alpaca" \| "ibkr" | yes |  |
 | `paper` | boolean | yes |  |
 
 ### CapitalRampSettings
@@ -1046,7 +1046,7 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | `expires_on` | date \| null | yes |  |
 | `halt` | "buys" \| "all" | yes |  |
 | `id` | integer | yes |  |
-| `kind` | "month_loss" \| "week_loss" \| "drawdown" \| "operational" \| "kill" | yes |  |
+| `kind` | "month_loss" \| "week_loss" \| "drawdown" \| "operational" \| "kill" \| "runaway" \| "broker_drift" | yes |  |
 | `portfolio_id` | string \| null | yes |  |
 | `reason` | string | yes |  |
 | `scope` | "global" \| "user" \| "portfolio" | yes |  |

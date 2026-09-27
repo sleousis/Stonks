@@ -45,6 +45,7 @@ from stonks.logging import get_logger
 from stonks.production.halts import (
     Halt,
     HaltError,
+    HaltKind,
     clear_halt,
     escalate_halt,
     get_halt,
@@ -106,7 +107,7 @@ class ClearHaltRequest(BaseModel):
 
 class HaltView(BaseModel):
     id: int
-    kind: Literal["month_loss", "week_loss", "drawdown", "operational", "kill"]
+    kind: HaltKind
     scope: KillScope
     user_id: str | None
     portfolio_id: str | None

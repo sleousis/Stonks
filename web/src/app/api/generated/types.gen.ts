@@ -673,7 +673,7 @@ export type BrokerInfo = {
     /**
      * Kind
      */
-    kind: 'simulated' | 'alpaca';
+    kind: 'simulated' | 'alpaca' | 'ibkr';
     /**
      * Paper
      */
@@ -1845,7 +1845,7 @@ export type HaltView = {
     /**
      * Kind
      */
-    kind: 'month_loss' | 'week_loss' | 'drawdown' | 'operational' | 'kill';
+    kind: 'month_loss' | 'week_loss' | 'drawdown' | 'operational' | 'kill' | 'runaway' | 'broker_drift';
     /**
      * Portfolio Id
      */
