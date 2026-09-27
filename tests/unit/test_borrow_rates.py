@@ -26,6 +26,8 @@ BRK B|USD|BERKSHIRE HATHAWAY INC-CL B|72063691|US0846707026|4.5700|0.2500|350000
 GME|USD|GAMESTOP CORP-CLASS A|36285627|US36467W1099|-12.3100|16.8200|15000|BBG000BB5BF6|
 NOPE|USD|NOTHING LEFT INC|1|US0000000001|0.0000|55.0000|0||
 BAD|USD|BROKEN ROW|2|
+049323AB4|USD|CB ATLAS FINL 06.625% 27|557991763|XXXXXXX3AB46|3.63|0.25|300000||
+XYZ|USD|MASKED ISIN INC|3|XXXXXXX51012|3.63|0.25|100000||
 #EOF|5
 """
 
@@ -41,7 +43,8 @@ DAY = date(2026, 9, 28)
 def test_parse_short_stock_file_maps_symbols_rates_and_availability():
     rows = parse_short_stock_file(USA, "usa")
     by = {r.ticker: r for r in rows}
-    assert set(by) == {"AAPL.US", "BRK-B.US", "GME.US", "NOPE.US"}
+    assert set(by) == {"AAPL.US", "BRK-B.US", "GME.US", "NOPE.US", "XYZ.US"}
+    assert by["XYZ.US"].isin is None  # masked in the file
     aapl = by["AAPL.US"]
     assert aapl.as_of == DAY
     assert aapl.fee_rate_annual == pytest.approx(0.0025)  # percent -> fraction
@@ -86,7 +89,7 @@ def test_source_fetches_through_the_injected_transport():
     source = IbkrBorrowDataSource(fetch_text=fetch)
     rows = list(source.fetch_borrow_rates("usa"))
     assert asked == ["usa.txt"]
-    assert len(rows) == 4
+    assert len(rows) == 5
     with pytest.raises(UnsupportedCapabilityError):
         source.fetch_prices("AAPL.US")
     with pytest.raises(DataSourceError):
@@ -119,7 +122,7 @@ def test_pipeline_writes_the_lake_idempotently_and_soft_fails_per_market(tmp_pat
     again = pipe.run_borrow_rates(["usa"])
     assert again.status == "ok"
     df = lake.get_borrow_rates(as_of=DAY)
-    assert len(df) == 5
+    assert len(df) == 6
     rate = lake.borrow_rate("GME.US", DAY)
     assert rate is not None
     assert rate["fee_rate_annual"] == pytest.approx(0.1682)

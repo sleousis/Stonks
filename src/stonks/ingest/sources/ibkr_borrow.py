@@ -21,6 +21,7 @@ The FTP transport uses the standard library and is injected in tests.
 from __future__ import annotations
 
 import ftplib
+import re
 import io
 from collections.abc import Callable, Iterable
 from datetime import date, datetime
@@ -57,6 +58,11 @@ SHORT_STOCK_MARKETS: dict[str, str] = {
 }
 
 TextFetcher = Callable[[str], str]
+
+#: The symbol part of a stock ticker we name (``AAPL``, ``BRK-B``, ``BT-A``).
+_LISTED = re.compile(r"^[A-Z0-9]{1,6}(-[A-Z0-9]{1,3})?$")
+#: An ISIN. The file masks some (``XXXXXXX3AB46``): those are dropped.
+_ISIN = re.compile(r"^(?!XX)[A-Z]{2}[A-Z0-9]{9}[0-9]$")
 
 
 class ShortStockFileError(DataSourceError):
@@ -135,9 +141,10 @@ def _row(
     if symbol is None or fee is None or fee < 0:
         return None
     ticker = ticker_for_symbol(symbol, suffix)
-    if ticker is None:
-        return None
+    if ticker is None or not _LISTED.match(ticker.rpartition(".")[0]):
+        return None  # a bond CUSIP or an odd listing: not a stock we name
     currency = (cell("CUR") or "").upper()
+    isin = cell("ISIN")
     return BorrowRateRow(
         ticker=ticker,
         as_of=day,
@@ -145,7 +152,7 @@ def _row(
         rebate_rate_annual=_percent(cell("REBATERATE")),
         available_shares=_available(cell("AVAILABLE")),
         currency=currency if len(currency) == 3 and currency.isalpha() else None,
-        isin=cell("ISIN"),
+        isin=isin if isin is not None and _ISIN.match(isin.upper()) else None,
         source=source,
     )
 
