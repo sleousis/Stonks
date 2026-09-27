@@ -51,6 +51,9 @@ class TearSheet:
 
     title: str
     report: Any
+    #: Extra HTML sections shown after the tear sheet, already escaped
+    #: (e.g. :func:`stonks.reporting.forecast_weights.strategy_report_sections`).
+    sections: tuple[str, ...] = ()
 
 
 # ---- data --------------------------------------------------------------------------
@@ -362,6 +365,7 @@ def render_tear_sheet(sheet: TearSheet) -> str:
         f"<h3>Benchmark statistics</h3>{bench_html}"
         f"{short_html}"
         "</section>"
+        f"{''.join(sheet.sections)}"
     )
 
 

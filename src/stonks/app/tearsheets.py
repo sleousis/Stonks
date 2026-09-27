@@ -22,6 +22,7 @@ from stonks.app.lab import BACKTEST_JOB, BacktestRequest, backtest_report
 from stonks.app.strategies import StrategyRef, StrategyService
 from stonks.lab.catalog import resolve_strategy
 from stonks.production.universe import EmptyUniverseError, window_tickers
+from stonks.reporting.forecast_weights import strategy_report_sections
 from stonks.reporting.tearsheet import TearSheet, render_tear_sheet_page
 
 __all__ = ["TearSheetWindow", "render_backtest_tear_sheet", "tear_sheet_request"]
@@ -96,7 +97,8 @@ def render_backtest_tear_sheet(
         report, _ = backtest_report(context.settings, strategy, request, lake)
     ref = request.strategy
     title = ref.strategy_id or f"{ref.class_path} {ref.params or ''}".strip()
-    return render_tear_sheet_page(TearSheet(title=title, report=report))
+    sections = tuple(strategy_report_sections(strategy))
+    return render_tear_sheet_page(TearSheet(title=title, report=report, sections=sections))
 
 
 def _backtest_job(context: AppContext, target: str) -> dict[str, Any] | None:
