@@ -6390,10 +6390,19 @@
               "prices",
               "intraday",
               "fundamentals",
-              "metadata"
+              "metadata",
+              "borrow"
             ],
             "title": "Kind",
             "type": "string"
+          },
+          "markets": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Markets",
+            "type": "array"
           },
           "since": {
             "anyOf": [

@@ -1758,7 +1758,8 @@ An index constituent history as CSV (``date,ticker,action`` with ``add``, ``remo
 |-------|------|----------|-------------|
 | `exchange` | string \| null | no |  |
 | `interval` | string \| null | no |  |
-| `kind` | "prices" \| "intraday" \| "fundamentals" \| "metadata" | yes |  |
+| `kind` | "prices" \| "intraday" \| "fundamentals" \| "metadata" \| "borrow" | yes |  |
+| `markets` | list[string] | no |  |
 | `since` | date \| null | no |  |
 | `source` | "eodhd" \| "yahoo" \| "defillama" | no |  |
 | `tickers` | list[string] | no |  |
