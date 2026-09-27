@@ -44,10 +44,12 @@ from stonks.scheduling.jobs import (
     JobOutcome,
     MembersResolver,
     RunContext,
+    borrow_markets,
     closed_day_outcome,
     ensure_window,
     job_is_scoped,
     job_universe,
+    no_gateways,
     retrain_body,
     retrain_outcome,
     universes_outcome,
@@ -153,6 +155,30 @@ def ingest_metadata_action(ctx: RunContext) -> JobOutcome:
         result = build_ingest_pipeline(
             ctx.settings, source, lake, source_factory=build_source
         ).run_metadata(universe)
+    detail = {
+        "ingest_run_id": result.run_id,
+        "ingest_status": result.status,
+        "tickers_ok": result.tickers_ok,
+        "tickers_failed": result.tickers_failed,
+    }
+    return JobOutcome("failed" if result.status == "error" else "succeeded", detail)
+
+
+@register_action("ingest_borrow")
+def ingest_borrow_action(ctx: RunContext) -> JobOutcome:
+    """IBKR's short stock files into ``borrow_rates`` (``stonks ingest
+    borrow``, roadmap 19.14). Skipped while no IB Gateway is configured."""
+    from stonks.ingest.sources.ibkr_borrow import IbkrBorrowDataSource
+    from stonks.ingest.wiring import build_ingest_pipeline
+    from stonks.store.lake import DuckDBLake
+
+    markets = borrow_markets(ctx)
+    if markets is None:
+        return no_gateways()
+    source = IbkrBorrowDataSource.from_config(ctx.settings.sources.ibkr_borrow)
+    with DuckDBLake(ctx.settings.lake.path) as lake:
+        lake.migrate()
+        result = build_ingest_pipeline(ctx.settings, source, lake).run_borrow_rates(markets)
     detail = {
         "ingest_run_id": result.run_id,
         "ingest_status": result.status,

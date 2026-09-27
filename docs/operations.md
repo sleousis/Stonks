@@ -47,6 +47,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `universes_refresh`: refresh stored universes and fill their recent bars | close + 20 min | none |
 | `ingest_metadata`: splits, dividends and other metadata for the universe, from Yahoo | close + 25 min | none |
 | `ingest_prices`: last 7 days of daily bars for `[production].universe` | close + 30 min | 60 min |
+| `ingest_borrow`: IBKR's short stock files into `borrow_rates` (`[sources.ibkr_borrow] markets`) | close + 35 min | none |
 | `price_alerts`: every person's price alerts against the new closes | close + 40 min | none |
 | `tick` | close + 45 min | 60 min |
 | `report`: `reports/latest.html` next to the state DB | close + 90 min | none |
@@ -413,6 +414,8 @@ A live book can decide after the close and send before the next open (roadmap 19
 - A runaway run, or an open `runaway` halt, holds every order as a ticket for a person, even in auto.
 - `live_submit` sends the approved tickets from the open minus `[production.live.submit] window_minutes` (20) until the open minus `deadline_minutes` (2). Unsent tickets then expire and the next tick decides afresh. The job is never caught up late.
 - Before sending, and before each tick decides, every open order is reconciled. While one is `unknown` (a submit that got no answer), that portfolio sends and decides nothing. A kill switch or halt in force at submit time holds the tickets it covers.
+- Before sending, the window runs the `submit` reconcile check and stores its report. It sends only when the check is `clean` or `warn` and no order is `unknown`. Drift opens the `broker_drift` halt as usual.
+- The pre-open gap check: with `price_band` on, an opening ticket whose latest pre-open quote moved more than `max_gap_pct` (else `band_pct`) since the decision is held, and the owner gets a push. An opening ticket with no quote is held too. Closes always go out. A held ticket stays approved and expires at the deadline.
 - By hand: `POST /api/tickets/submit` (admins) or `stonks schedule run-now live_submit`. Either still sends only tickets inside their window.
 - From the shell: `stonks tickets list|show|approve|reject`. The operator sees every ticket, `--user` acts as one person within their role. Approving asks you to type `APPROVE TICKETS` at a terminal and refuses a pipe or a script. API tokens and MCP still cannot approve.
 
@@ -625,6 +628,8 @@ flowchart LR
 ## Financing of short books
 
 A portfolio with `allow_short` trades on margin. Each tick its paper broker charges the borrow fee of every short and interest on negative cash for the calendar days since the last charge. The tick keeps that date in `financing_accruals` and each charge in `financing_charges`, both written with the snapshot. A book with no stored date starts from its latest snapshot. A dry run charges nothing.
+
+A short book at IBKR (a margin gateway) reads borrow from the broker instead of the settings. The short rules ask IBKR whether a name can be borrowed and how many shares are on offer, and take the fee from the lake's `borrow_rates`. The `ingest_borrow` job fills that table each trading day while a gateway is configured.
 
 ## Model books (shadow mode)
 

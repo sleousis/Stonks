@@ -54,6 +54,7 @@ def test_default_jobs_build():
         "calendars_refresh",
         "model_retrain",
         "live_submit",
+        "ingest_borrow",
     }
     tick = by_name["tick"]
     # 19.8: approved tickets go out before the open, never caught up late

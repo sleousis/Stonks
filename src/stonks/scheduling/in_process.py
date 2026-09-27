@@ -39,10 +39,12 @@ from stonks.scheduling.jobs import (
     JobExecutor,
     JobOutcome,
     RunContext,
+    borrow_markets,
     build_job_specs,
     closed_day_outcome,
     job_is_scoped,
     job_universe,
+    no_gateways,
     retrain_body,
     universes_outcome,
 )
@@ -138,6 +140,19 @@ def in_process_ingest_metadata(ctx: RunContext) -> JobOutcome:
             }
         )
     )
+    return ingest_job_outcome(*ex.run_job(job, INGEST_JOB, IngestResultView))
+
+
+@IN_PROCESS_ACTIONS.register("ingest_borrow")
+def in_process_ingest_borrow(ctx: RunContext) -> JobOutcome:
+    """Like the ``api`` action, on the server's ``lake_write`` lane."""
+    from stonks.app.ingest import INGEST_JOB, IngestRequest, IngestResultView
+
+    markets = borrow_markets(ctx)
+    if markets is None:
+        return no_gateways()
+    ex = _executor(ctx)
+    job = ex.services.ingest.submit(IngestRequest(kind="borrow", markets=markets))
     return ingest_job_outcome(*ex.run_job(job, INGEST_JOB, IngestResultView))
 
 

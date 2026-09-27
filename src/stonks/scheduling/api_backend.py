@@ -38,10 +38,12 @@ from stonks.scheduling.jobs import (
     JobOutcome,
     MembersResolver,
     RunContext,
+    borrow_markets,
     closed_day_outcome,
     ensure_window,
     job_is_scoped,
     job_universe,
+    no_gateways,
     retrain_body,
     retrain_outcome,
     universes_outcome,
@@ -264,6 +266,22 @@ def api_ingest_metadata(ctx: RunContext) -> JobOutcome:
     }
     job_id, status, error, result = _run_job(
         ex, "/api/ingest/runs", body, "/api/ingest/jobs/{job_id}/result"
+    )
+    return ingest_job_outcome(status, error, result, job_id)
+
+
+@API_ACTIONS.register("ingest_borrow")
+def api_ingest_borrow(ctx: RunContext) -> JobOutcome:
+    """IBKR's short stock files into ``borrow_rates`` through the API (a
+    lake writer). Skipped while no IB Gateway is configured."""
+    markets = borrow_markets(ctx)
+    if markets is None:
+        return no_gateways()
+    job_id, status, error, result = _run_job(
+        _executor(ctx),
+        "/api/ingest/runs",
+        {"kind": "borrow", "markets": markets},
+        "/api/ingest/jobs/{job_id}/result",
     )
     return ingest_job_outcome(status, error, result, job_id)
 
