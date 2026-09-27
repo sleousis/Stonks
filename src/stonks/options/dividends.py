@@ -29,6 +29,8 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import TYPE_CHECKING, Any
 
+import pandas as pd
+
 from stonks.options.rates import RateCurve
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -75,16 +77,9 @@ class FlatDividendYield(DividendForecast):
 
 
 def _day(value: Any) -> date | None:
-    if value is None:
-        return None
-    try:
-        if value != value:  # NaN / NaT
-            return None
-    except TypeError:  # pragma: no cover - defensive
-        return None
-    if hasattr(value, "date") and callable(value.date):
-        return value.date()
-    return value if isinstance(value, date) else None
+    """A lake date cell (date, timestamp, NaT or None) as a date."""
+    stamp = pd.to_datetime(value, errors="coerce")
+    return None if pd.isna(stamp) else stamp.date()
 
 
 class KnownDividendForecast(DividendForecast):
