@@ -13,6 +13,10 @@ import {
 import { HaltsService } from '../../api/halts.service';
 import type { HaltView } from '../../api/models';
 import { SessionService } from '../auth/session.service';
+import { PortfolioContextService } from '../portfolio/portfolio-context.service';
+import { type HaltScope, haltScopeText, haltSummary } from './halt-view';
+
+export { haltScopeText } from './halt-view';
 
 /** How often the app re-reads active halts for the banner. */
 export const HALT_POLL_MS = new InjectionToken<number>('HALT_POLL_MS', {
@@ -20,31 +24,40 @@ export const HALT_POLL_MS = new InjectionToken<number>('HALT_POLL_MS', {
   factory: () => 60_000,
 });
 
-/** "Global", "Portfolio pf_default", "User usr_owner". */
-export function haltScopeText(h: Pick<HaltView, 'scope' | 'portfolio_id' | 'user_id'>): string {
-  if (h.scope === 'portfolio') return `Portfolio ${h.portfolio_id ?? ''}`.trim();
-  if (h.scope === 'user') return `User ${h.user_id ?? ''}`.trim();
-  return 'Global';
-}
-
 /**
- * Active halts, shared by the halts page and the app-wide banner. Polls
- * quietly (no error toasts) and refreshes right after any halt action.
+ * Active halts, shared by the halts page, the session strip and the Stop
+ * trading sheet. Polls quietly (no error toasts) and refreshes right after
+ * any halt action.
  */
 @Injectable({ providedIn: 'root' })
 export class HaltStateService {
   private readonly api = inject(HaltsService);
   private readonly pollMs = inject(HALT_POLL_MS);
   private readonly session = inject(SessionService);
+  private readonly portfolios = inject(PortfolioContextService);
   private readonly injector = inject(Injector);
 
   private readonly halts = signal<readonly HaltView[]>([]);
   private timer: ReturnType<typeof setInterval> | null = null;
+  /** Numbers each read; only the newest one may write (UX-52). */
+  private sequence = 0;
 
   /** Every active halt from the last read. */
   readonly active = this.halts.asReadonly();
   /** Active kill switches, the ones the banner warns about. */
   readonly kills = computed(() => this.halts().filter((h) => h.kind === 'kill' && h.active));
+  /** A kill switch is on somewhere the user can see. */
+  readonly killOn = computed(() => this.kills().length > 0);
+
+  /** Who a halt covers, with portfolio names and "Your portfolios" (UX-17). */
+  readonly scopeText = computed(() => {
+    const names = new Map(this.portfolios.options().map((p) => [p.id, p.name] as const));
+    const meId = this.session.me()?.user_id ?? null;
+    return (h: HaltScope) => haltScopeText(h, names, meId);
+  });
+
+  /** The banner's words for the active halts, or null. */
+  readonly summary = computed(() => haltSummary(this.halts(), this.scopeText()));
 
   /**
    * Start polling until `destroyRef` goes (the shell's lifetime). Reads
@@ -66,11 +79,17 @@ export class HaltStateService {
     });
   }
 
-  /** Re-read active halts. A failed read keeps the last known state. */
+  /**
+   * Re-read active halts. A failed read keeps the last known state, and an
+   * answer that arrives after a newer read started is dropped, so a slow
+   * old read never brings back a kill switch that was just resumed.
+   */
   async refresh(): Promise<void> {
     if (!this.session.canRead()) return;
+    const mine = ++this.sequence;
     try {
-      this.halts.set(await this.api.list(false, true));
+      const list = await this.api.list(false, true);
+      if (mine === this.sequence) this.halts.set(list);
     } catch {
       // Offline or signed out: keep what we had rather than hiding a live kill switch.
     }
