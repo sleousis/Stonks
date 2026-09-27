@@ -598,6 +598,41 @@ def ingest_tvl(
     _print_result(result)
 
 
+@ingest_app.command("fx")
+def ingest_fx(
+    pairs: str = typer.Option(
+        ..., "--pairs", help="comma-separated currency pairs, e.g. EURUSD,GBPUSD (base then quote)"
+    ),
+    since: str | None = typer.Option(
+        None, "--since", help="earliest day (YYYY-MM-DD)", callback=_validate_iso_date
+    ),
+    source_id: str = typer.Option(
+        DEFAULT_SOURCE_ID,
+        "--source",
+        help=f"data source ({'|'.join(SOURCE_IDS)}); FX rates are served by eodhd",
+        callback=_validate_source,
+    ),
+) -> None:
+    """Pull daily FX rates into ``fx_rates`` (roadmap 20.5). Each pair is
+    one unit of the ``ingest_runs`` row, so a bad pair never blocks the rest."""
+    from stonks.ingest.fx import parse_pairs
+
+    try:
+        pair_list = parse_pairs(pairs)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--pairs") from None
+    if not pair_list:
+        raise typer.BadParameter("--pairs requires at least one pair", param_hint="--pairs")
+    settings = _settings()
+    source = _build_source(settings, source_id)
+    since_d = date.fromisoformat(since) if since else None
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        pipeline = build_ingest_pipeline(settings, source, lake)
+        result = pipeline.run_fx_rates(pair_list, since=since_d)
+    _print_result(result)
+
+
 @ingest_app.command("aggregate")
 def ingest_aggregate(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
@@ -2315,6 +2350,30 @@ def mcp_server() -> None:
         typer.echo(f"stonks mcp: {exc}", err=True)
         raise typer.Exit(code=2) from None
 
+
+# ---- manual orders ------------------------------------------------------------
+
+from stonks.cli_orders import app as orders_app  # noqa: E402
+
+app.add_typer(orders_app, name="orders")
+
+# ---- price alerts -------------------------------------------------------------
+
+from stonks.cli_price_alerts import app as price_alerts_app  # noqa: E402
+
+app.add_typer(price_alerts_app, name="price-alerts")
+
+# ---- Telegram bot (roadmap 20.3) --------------------------------------------
+
+from stonks.cli_telegram import app as telegram_app  # noqa: E402
+
+app.add_typer(telegram_app, name="telegram")
+
+# ---- tax exports (roadmap 20.5) ---------------------------------------------
+
+from stonks.cli_tax import app as tax_app  # noqa: E402
+
+app.add_typer(tax_app, name="tax")
 
 if __name__ == "__main__":
     app()

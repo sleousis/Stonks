@@ -153,6 +153,11 @@ READ_TOOLS = {
     "list_watchlists",
     "get_watchlist",
     "get_my_risk_limits",
+    "list_price_alerts",
+    "list_price_alert_events",
+    "get_tax_settings",
+    "list_tax_lot_picks",
+    "get_fx_rate",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -170,9 +175,16 @@ JOB_TOOLS = {
     "add_journal_note",
     "mark_notifications_read",
     "create_watchlist",
+    "create_price_alert",
 }
 # Overwrite a draft's fields; no confirm (a draft is never traded).
-EDIT_TOOLS = {"update_draft", "edit_journal_note", "cancel_job", "update_watchlist"}
+EDIT_TOOLS = {
+    "update_draft",
+    "edit_journal_note",
+    "cancel_job",
+    "update_watchlist",
+    "update_price_alert",
+}
 GUARDED_TOOLS = {
     "create_universe",
     "refresh_universe",
@@ -191,6 +203,10 @@ GUARDED_TOOLS = {
     "subscribe",
     "update_subscription",
     "delete_draft",
+    "place_order",
+    "change_order",
+    "cancel_order",
+    "delete_price_alert",
 }
 
 

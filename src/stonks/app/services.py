@@ -10,6 +10,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from stonks.app.alerts import AlertService
+from stonks.app.assistant import AssistantService
 from stonks.app.backups import BackupService
 from stonks.app.brokers import BrokerConnector, BrokerService
 from stonks.app.catalog import CatalogService, LabCatalogSource, StrategySource
@@ -20,6 +21,7 @@ from stonks.app.ingest import IngestService
 from stonks.app.insights import InsightsService
 from stonks.app.jobs import Job, JobRunner, JobStore
 from stonks.app.lab import LabService
+from stonks.app.manual_orders import ManualOrdersService
 from stonks.app.market import MarketDataService
 from stonks.app.notifications import NotificationsAppService
 from stonks.app.operations import OperationsService
@@ -27,12 +29,14 @@ from stonks.app.orders import OrdersService
 from stonks.app.ownership import check_owner, owner_filter, owner_of
 from stonks.app.pagination import Page
 from stonks.app.portfolio import PortfolioService
+from stonks.app.price_alerts import PriceAlertService
 from stonks.app.schedule import ScheduleService
 from stonks.app.signals import SignalService
 from stonks.app.strategies import StrategyService
 from stonks.app.stream_tokens import IssuedStreamToken, StreamTokenSigner
 from stonks.app.studio import RuleStrategySource, StudioService, user_strategies_dir
 from stonks.app.subscriptions import SubscriptionService
+from stonks.app.telegram import TelegramService
 from stonks.app.ticks import TickService
 from stonks.app.trial_ledger import TrialLedgerService
 from stonks.app.universes import UniverseService
@@ -174,6 +178,8 @@ class Services:
     strategies: StrategyService
     market: MarketDataService
     orders: OrdersService
+    manual_orders: ManualOrdersService
+    price_alerts: PriceAlertService
     ingest: IngestService
     ticks: TickService
     lab: LabService
@@ -191,6 +197,8 @@ class Services:
     subscriptions: SubscriptionService
     insights: InsightsService
     ledger: TrialLedgerService
+    assistant: AssistantService
+    telegram: TelegramService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -234,6 +242,8 @@ class Services:
             strategies=strategies,
             market=MarketDataService(context),
             orders=orders,
+            manual_orders=ManualOrdersService(context),
+            price_alerts=PriceAlertService(context),
             ingest=IngestService(context, runner),
             ticks=TickService(context, orders, runner),
             lab=lab,
@@ -255,6 +265,8 @@ class Services:
             subscriptions=SubscriptionService(context),
             insights=InsightsService(context, portfolio),
             ledger=TrialLedgerService(context),
+            assistant=AssistantService(context),
+            telegram=TelegramService(context),
         )
         services.schedule.bind(services)
         return services

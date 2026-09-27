@@ -7,6 +7,7 @@ from fastapi import APIRouter
 
 from stonks.api.routers import (
     alerts,
+    assistant,
     auth,
     backups,
     brokers,
@@ -22,6 +23,7 @@ from stonks.api.routers import (
     jobs,
     lab,
     ledger,
+    manual_orders,
     market,
     notifications,
     onboarding,
@@ -29,6 +31,7 @@ from stonks.api.routers import (
     pnl,
     portfolio,
     portfolios,
+    price_alerts,
     risk,
     schedule,
     shadow,
@@ -37,7 +40,9 @@ from stonks.api.routers import (
     statements,
     strategies,
     studio,
+    tax,
     tca,
+    telegram,
     ticks,
     universes,
     watchlists,
@@ -53,6 +58,7 @@ API_ROUTERS: list[APIRouter] = [
     market.router,
     ingest.router,
     orders.router,
+    manual_orders.router,
     ticks.router,
     lab.router,
     ledger.router,
@@ -79,8 +85,13 @@ API_ROUTERS: list[APIRouter] = [
     insights.router,
     onboarding.router,
     watchlists.router,
+    price_alerts.router,
     charts.router,
     exports.router,
+    assistant.router,
+    telegram.router,
+    tax.router,
+    tax.fx_router,
 ]
 
 #: Routers that always need a principal, even for reads on loopback.
