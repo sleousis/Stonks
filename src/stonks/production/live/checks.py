@@ -14,7 +14,10 @@ Kinds:
   Nothing is sent unless it passes.
 - ``eod`` (close plus 15 minutes, before the tick decides): also flags
   orders sent today that are not terminal and executions with no
-  commission yet.
+  commission yet. It compares the broker's cash and settled cash change
+  since the last end-of-day check with what Stonks can explain, and the
+  broker's statement (IBKR Flex, when configured) with Stonks' fills
+  (roadmap 19.15).
 - ``adhoc``: by hand (``stonks reconcile run``).
 
 What a check does with its finding:
@@ -37,13 +40,14 @@ import json
 import secrets
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock
 from stonks.core.corporate_actions import CorporateActions
 from stonks.core.protocols import Broker
 from stonks.execution.brokers.base import (
+    AccountReader,
     BrokerError,
     LiveTradingRefusedError,
     OpenOrderSource,
@@ -52,12 +56,18 @@ from stonks.execution.brokers.base import (
 )
 from stonks.execution.drift import (
     WORKING,
+    BookedFill,
+    BrokerStatement,
+    CashFlows,
     DriftItem,
     LedgerOrder,
+    cash_drift,
+    cash_tolerance,
     eod_items,
     order_drift,
     position_drift,
     report_status,
+    statement_drift,
 )
 from stonks.execution.order_state import IllegalTransitionError, current_state, state_from_status
 from stonks.execution.reconcile import (
@@ -74,8 +84,9 @@ from stonks.production.auto_pause import (
     pause_portfolio_auto,
 )
 from stonks.production.halts import halts_enabled, notify_trip, trip_halt
-from stonks.production.live.settings import LiveSettings
+from stonks.production.live.settings import LiveSettings, ReconcileSettings
 from stonks.production.ownership import owned_positions
+from stonks.production.rules._account_settings import AccountRulesSettings
 from stonks.store.state import SqliteState
 
 if TYPE_CHECKING:
@@ -109,6 +120,8 @@ CHECK_KINDS: tuple[str, ...] = ("sod", "submit", "eod", "adhoc")
 CHECK_STATUSES: tuple[str, ...] = ("clean", "warn", "drift", "outage", "fault")
 
 Publish = Callable[[Any], Any]
+#: Reads the broker's official statements (IBKR Flex). Raises on failure.
+StatementSource = Callable[[], Sequence[BrokerStatement]]
 
 
 @dataclass(frozen=True)
@@ -168,6 +181,17 @@ class CheckResult:
         )
 
 
+@dataclass(frozen=True)
+class _Account:
+    """What the end-of-day comparisons know about the broker account."""
+
+    account_id: str | None
+    #: Every Stonks portfolio that trades in the account.
+    portfolios: tuple[str, ...]
+    statements: StatementSource | None
+    settlement: AccountRulesSettings
+
+
 @dataclass
 class _Inspection:
     items: list[DriftItem]
@@ -195,16 +219,32 @@ def run_check(
     as_of: date | None = None,
     actions: CorporateActions | None = None,
     publish: Publish | None = None,
+    statements: StatementSource | None = None,
+    account_id: str | None = None,
+    account_portfolios: Sequence[str] | None = None,
+    settlement: AccountRulesSettings | None = None,
 ) -> CheckResult:
     """Reconcile ``portfolio_id`` against ``broker``, store the report and
     act on it (module doc). Broker failures never raise: they become an
-    ``outage`` or ``fault`` report."""
+    ``outage`` or ``fault`` report.
+
+    The end-of-day check also reads ``statements`` (the broker's official
+    record, statements of other accounts than ``account_id`` ignored) and
+    explains the account's cash with the fills of every portfolio in
+    ``account_portfolios`` (``portfolio_id`` alone by default), settled on
+    the ``settlement`` cycles."""
     settings = settings or LiveSettings()
     day = as_of or clock.now().date()
     report_id = f"rec_{secrets.token_hex(8)}"
     detail: str | None = None
+    account = _Account(
+        account_id=account_id,
+        portfolios=tuple(account_portfolios or (portfolio_id,)),
+        statements=statements,
+        settlement=settlement or AccountRulesSettings(),
+    )
     try:
-        found = _inspect(state, broker, portfolio_id, kind, settings, clock, day, actions)
+        found = _inspect(state, broker, portfolio_id, kind, settings, clock, day, actions, account)
         status: CheckStatus = report_status(found.items)
     except (
         BrokerError,
@@ -225,6 +265,10 @@ def run_check(
     halt_created = False
     paused: list[str] = []
     if status == "drift":
+        found.summary["drift_streak"] = _drift_streak(state, portfolio_id) + 1
+        # ``drift_streak`` is recorded for the stage gate to read. The stage
+        # never moves by itself (owner decision): drift halts buys, pauses
+        # auto and alerts, and a person demotes the stage if they want to.
         halt_id, halt_created = _open_drift_halt(
             state, portfolio_id, kind, report_id, open_items, day, publish
         )
@@ -301,6 +345,7 @@ def _inspect(
     clock: Clock,
     day: date,
     actions: CorporateActions | None,
+    account: _Account,
 ) -> _Inspection:
     start = startup_reconcile(broker, state, portfolio_id=portfolio_id, clock=clock)
     summary: dict[str, Any] = _summary_dict(start.summary)
@@ -321,7 +366,337 @@ def _inspect(
             stuck=_stuck_orders(state, portfolio_id, day),
             missing_commission=_missing_commissions(state, portfolio_id, day),
         )
+        found, notes = _eod_comparisons(
+            state, broker, portfolio_id, settings.reconcile, clock, day, actions, account
+        )
+        items += found
+        summary.update(notes)
     return _Inspection(_dedupe(items), explained, external, summary)
+
+
+# ---- end of day: statement and cash (roadmap 19.15) ---------------------------------------
+
+
+def _eod_comparisons(
+    state: SqliteState,
+    broker: Broker,
+    portfolio_id: str,
+    rs: ReconcileSettings,
+    clock: Clock,
+    day: date,
+    actions: CorporateActions | None,
+    account: _Account,
+) -> tuple[list[DriftItem], dict[str, Any]]:
+    notes: dict[str, Any] = {}
+    items: list[DriftItem] = []
+    read: list[BrokerStatement] = []
+    if account.statements is not None and (rs.compare_statement or rs.compare_cash):
+        try:
+            read = [
+                s
+                for s in account.statements()
+                if not account.account_id or not s.account_id or s.account_id == account.account_id
+            ]
+            notes["statement"] = {"status": "ok", "statements": len(read)}
+        except Exception as exc:  # optional: a statement outage never fails a check
+            error = f"{type(exc).__name__}: {exc}"[:300]
+            notes["statement"] = {"status": "failed", "error": error}
+            _log.warning("reconcile.statement_failed", portfolio_id=portfolio_id, error=error)
+    if rs.compare_statement:
+        items += _statement_items(state, portfolio_id, read, rs.commission_tolerance)
+    if rs.compare_cash and isinstance(broker, AccountReader):
+        cash_items, notes["cash"] = _cash_items(
+            state, broker, portfolio_id, rs, clock, day, actions, account, read
+        )
+        items += cash_items
+    return items, notes
+
+
+def _order_refs(state: SqliteState, portfolio_ids: Sequence[str]) -> set[str]:
+    """Every reference the broker may report for the portfolios' orders."""
+    marks = ",".join("?" for _ in portfolio_ids)
+    refs: set[str] = set()
+    for r in state.sql(
+        f"SELECT client_id, broker_ref FROM orders WHERE portfolio_id IN ({marks})",
+        list(portfolio_ids),
+    ):
+        refs.add(str(r["client_id"]))
+        if r["broker_ref"]:
+            refs.add(str(r["broker_ref"]))
+    return refs
+
+
+def _booked_fills(
+    state: SqliteState,
+    portfolio_ids: Sequence[str],
+    start: date | None = None,
+    end: date | None = None,
+) -> list[BookedFill]:
+    """Fills booked from broker executions, filled from ``start`` to ``end``."""
+    marks = ",".join("?" for _ in portfolio_ids)
+    sql = (
+        "SELECT f.broker_exec_id, f.ticker, f.quantity, f.fee, f.fee_currency, o.side"
+        " FROM fills f JOIN orders o ON o.client_id = f.order_client_id"
+        f" WHERE f.portfolio_id IN ({marks}) AND f.broker_exec_id IS NOT NULL"
+    )
+    params: list[Any] = list(portfolio_ids)
+    if start is not None and end is not None:
+        sql += " AND substr(f.filled_at, 1, 10) BETWEEN ? AND ?"
+        params += [start.isoformat(), end.isoformat()]
+    return [
+        BookedFill(
+            exec_id=str(r["broker_exec_id"]),
+            ticker=str(r["ticker"]),
+            quantity=float(r["quantity"]) * (1.0 if r["side"] == "buy" else -1.0),
+            # no commission reported yet: nothing to compare
+            fee=float(r["fee"] or 0.0) if r["fee_currency"] else None,
+            fee_currency=r["fee_currency"],
+        )
+        for r in state.sql(sql + " ORDER BY f.id", params)
+    ]
+
+
+def _statement_items(
+    state: SqliteState,
+    portfolio_id: str,
+    statements: Sequence[BrokerStatement],
+    commission_tolerance: float,
+) -> list[DriftItem]:
+    """The statements' executions of the portfolio's own orders against
+    its booked fills over the same days. Hand trades are left out."""
+    if not statements:
+        return []
+    refs = _order_refs(state, [portfolio_id])
+    items: list[DriftItem] = []
+    for s in statements:
+        if s.from_date is None or s.to_date is None:
+            continue
+        booked = _booked_fills(state, [portfolio_id], s.from_date, s.to_date)
+        ids = {b.exec_id for b in booked}
+        mine = [e for e in s.executions if e.exec_id in ids or (e.order_ref or "") in refs]
+        items += statement_drift(mine, booked, commission_tolerance=commission_tolerance)
+    return items
+
+
+def _cash_items(
+    state: SqliteState,
+    broker: AccountReader,
+    portfolio_id: str,
+    rs: ReconcileSettings,
+    clock: Clock,
+    day: date,
+    actions: CorporateActions | None,
+    account: _Account,
+    statements: Sequence[BrokerStatement],
+) -> tuple[list[DriftItem], dict[str, Any]]:
+    """Cash and settled cash: the broker's change since the last end-of-day
+    check against what Stonks can explain. The owner's own trades move the
+    same cash, so only a statement can explain those."""
+    live = broker.fetch_account()
+    now = clock.now()
+    note: dict[str, Any] = {
+        "currency": live.currency,
+        "cash": live.cash,
+        "settled_cash": live.settled_cash,
+        "equity": live.equity,
+        "taken_at": now.isoformat(timespec="seconds"),
+        "as_of": day.isoformat(),
+        "compared": False,
+    }
+    before = _cash_baseline(state, portfolio_id, day)
+    if before is None:
+        note["reason"] = "the first end-of-day check: this one is the baseline"
+        return [], note
+    if before.get("currency") != live.currency:
+        note["reason"] = "the account's base currency changed: this one is the new baseline"
+        return [], note
+    since = _utc(datetime.fromisoformat(str(before["taken_at"])))
+    start_day = date.fromisoformat(str(before["as_of"]))
+    trades, fees = _fill_cash(state, account.portfolios, since, now)
+    settled_trades = _settled_fill_cash(state, account, live.currency, start_day, day)
+    owned = {_root(t) for pid in account.portfolios for t in owned_positions(state, pid, actions)}
+    refs = _order_refs(state, account.portfolios)
+    booked = {b.exec_id for b in _booked_fills(state, account.portfolios)}
+    known = _statement_flows(statements, live.currency, start_day, day, owned, refs, booked)
+    flows = CashFlows(trades=trades, fees=fees, dividends=known[0], external=known[1])
+    settled = CashFlows(trades=settled_trades, dividends=known[2], external=known[3])
+    tolerance = cash_tolerance(
+        live.equity, minimum=rs.cash_tolerance, fraction=rs.cash_tolerance_fraction
+    )
+    material = rs.cash_is_drift
+    items = cash_drift(
+        "cash",
+        live.currency,
+        float(before["cash"]),
+        live.cash,
+        flows,
+        tolerance=tolerance,
+        material=material,
+    ) + cash_drift(
+        "settled_cash",
+        live.currency,
+        float(before["settled_cash"]),
+        live.settled_cash,
+        settled,
+        tolerance=tolerance,
+        material=material,
+    )
+    note.update(
+        compared=True,
+        since=before["taken_at"],
+        tolerance=tolerance,
+        flows=_flows_dict(flows),
+        settled_flows=_flows_dict(settled),
+        statement_flows=bool(statements),
+        skipped_foreign=known[4],
+    )
+    return items, note
+
+
+def _flows_dict(flows: CashFlows) -> dict[str, float]:
+    return {
+        "trades": flows.trades,
+        "fees": flows.fees,
+        "dividends": flows.dividends,
+        "external": flows.external,
+        "total": flows.total,
+    }
+
+
+def _utc(when: datetime) -> datetime:
+    return when if when.tzinfo is not None else when.replace(tzinfo=UTC)
+
+
+def _root(ticker: str) -> str:
+    return ticker.rsplit(".", 1)[0].upper() if "." in ticker else ticker.upper()
+
+
+def _cash_baseline(state: SqliteState, portfolio_id: str, day: date) -> dict[str, Any] | None:
+    """The cash read by the portfolio's latest end-of-day check before ``day``."""
+    if not reports_enabled(state):
+        return None
+    for r in state.sql(
+        f"SELECT summary_json FROM {TABLE} WHERE portfolio_id = ? AND kind = 'eod'"
+        " AND as_of < ? ORDER BY taken_at DESC, rowid DESC LIMIT 30",
+        [portfolio_id, day.isoformat()],
+    ):
+        cash = json.loads(r["summary_json"]).get("cash")
+        if isinstance(cash, dict) and "cash" in cash and "taken_at" in cash:
+            return cast(dict[str, Any], cash)
+    return None
+
+
+def _fill_cash(
+    state: SqliteState, portfolio_ids: Sequence[str], since: datetime, until: datetime
+) -> tuple[float, float]:
+    """``(trade cash, fees)`` of the portfolios' fills after ``since`` up to
+    ``until``. A buy pays, a sale receives, a fee costs."""
+    marks = ",".join("?" for _ in portfolio_ids)
+    trades = fees = 0.0
+    for r in state.sql(
+        "SELECT f.quantity, f.price, f.fee, f.filled_at, o.side FROM fills f"
+        " JOIN orders o ON o.client_id = f.order_client_id"
+        f" WHERE f.portfolio_id IN ({marks}) AND substr(f.filled_at, 1, 10) >= ?",
+        [*portfolio_ids, since.date().isoformat()],
+    ):
+        at = _utc(datetime.fromisoformat(str(r["filled_at"])))
+        if not since < at <= until:
+            continue
+        amount = float(r["quantity"]) * float(r["price"])
+        trades += amount if r["side"] == "sell" else -amount
+        fees -= float(r["fee"] or 0.0)
+    return trades, fees
+
+
+def _settled_fill_cash(
+    state: SqliteState, account: _Account, currency: str, start_day: date, day: date
+) -> float:
+    """Cash of the portfolios' fills that settled after ``start_day`` up to
+    ``day``, fees included."""
+    from stonks.accounts.rules.settlement import load_settlements
+
+    total = 0.0
+    for pid in account.portfolios:
+        for entry in load_settlements(
+            state, pid, account.settlement, currency_of=lambda _t: currency, as_of=day
+        ):
+            if start_day < entry.settle_date <= day:
+                total += entry.amount
+    return total
+
+
+def _statement_flows(
+    statements: Sequence[BrokerStatement],
+    currency: str,
+    start_day: date,
+    day: date,
+    owned: set[str],
+    refs: set[str],
+    booked: set[str],
+) -> tuple[float, float, float, float, int]:
+    """``(dividends, external, settled dividends, settled external,
+    rows skipped)`` the statements name from ``start_day`` (excluded) to
+    ``day``. Dividends are those on Stonks' positions. External flows are
+    the owner's own trades and every other cash movement. Stonks' own
+    executions are left out: the ledger's fills already count them. Rows in
+    another currency than the account's are skipped (no conversion)."""
+    dividends = external = settled_dividends = settled_external = 0.0
+    skipped = 0
+    seen_exec: set[str] = set()
+    seen_cash: set[tuple[Any, ...]] = set()
+
+    def inside(when: date | None) -> bool:
+        return when is not None and start_day < when <= day
+
+    for s in statements:
+        for e in s.executions:
+            if e.exec_id in booked or (e.order_ref or "") in refs or e.exec_id in seen_exec:
+                continue
+            seen_exec.add(e.exec_id)
+            if e.currency and e.currency != currency:
+                skipped += 1
+                continue
+            amount = (e.cash or 0.0) - (e.commission or 0.0)
+            if inside(e.trade_date):
+                external += amount
+            if inside(e.settle_date or e.trade_date):
+                settled_external += amount
+        for c in s.cash:
+            key = (c.kind, c.amount, c.date, c.symbol, c.currency)
+            if key in seen_cash:
+                continue
+            seen_cash.add(key)
+            if c.currency and c.currency != currency:
+                skipped += 1
+                continue
+            mine = c.kind == "dividend" and (c.symbol or "").upper() in owned
+            if inside(c.date):
+                if mine:
+                    dividends += c.amount
+                else:
+                    external += c.amount
+            if inside(c.settle_date or c.date):
+                if mine:
+                    settled_dividends += c.amount
+                else:
+                    settled_external += c.amount
+    return dividends, external, settled_dividends, settled_external, skipped
+
+
+def _drift_streak(state: SqliteState, portfolio_id: str) -> int:
+    """Drift reports in a row before this check, the newest first."""
+    if not reports_enabled(state):
+        return 0
+    streak = 0
+    for r in state.sql(
+        f"SELECT status FROM {TABLE} WHERE portfolio_id = ? ORDER BY taken_at DESC, rowid DESC"
+        " LIMIT 100",
+        [portfolio_id],
+    ):
+        if r["status"] != "drift":
+            break
+        streak += 1
+    return streak
 
 
 def _diff(
@@ -682,13 +1057,22 @@ def run_gateway_checks(
     actions_for: Callable[[Sequence[str]], CorporateActions | None] | None = None,
     publish: Publish | None = None,
     portfolio_ids: Sequence[str] | None = None,
+    statements: StatementSource | None = None,
+    settlement: AccountRulesSettings | None = None,
 ) -> list[CheckResult]:
     """Check every portfolio listed on a gateway in ``[brokers.ibkr.gateways]``
     (only ``portfolio_ids`` when given), through that gateway (the
     ``reconcile`` client id). ``actions_for`` returns the splits for the
-    tickers the portfolios own, when the lake can be read."""
+    tickers the portfolios own, when the lake can be read. ``statements``
+    defaults to the Flex statement when Flex is configured."""
     from stonks.execution.brokers.ibkr.factory import connect_ibkr, default_client_factory
 
+    if statements is None and kind == "eod":
+        from stonks.execution.brokers.ibkr.flex import FlexClient
+        from stonks.execution.brokers.ibkr.statements import statement_source
+
+        flex = FlexClient.from_env(config.flex)
+        statements = statement_source(flex) if flex is not None else None
     results: list[CheckResult] = []
     for name, gateway in sorted(config.gateways.items()):
         wanted = [
@@ -719,6 +1103,10 @@ def run_gateway_checks(
                         clock=clock,
                         actions=actions,
                         publish=publish,
+                        statements=statements,
+                        account_id=gateway.account_id,
+                        account_portfolios=gateway.portfolios,
+                        settlement=settlement,
                     )
                 )
         finally:

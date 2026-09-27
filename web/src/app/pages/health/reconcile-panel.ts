@@ -25,6 +25,12 @@ const ITEM_WORDS: Record<string, string> = {
   stuck_order: 'Order still working after the close',
   commission_missing: 'Commission not reported yet',
   stale_order: 'Old order cancelled',
+  statement_missing_execution: 'Fill in the statement, not booked',
+  statement_extra_execution: 'Booked fill missing from the statement',
+  statement_quantity: 'Fill size differs from the statement',
+  statement_commission: 'Commission differs from the statement',
+  cash: 'Cash change not explained',
+  settled_cash: 'Settled cash change not explained',
 };
 
 export interface ReconcileState {

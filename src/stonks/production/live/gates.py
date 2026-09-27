@@ -70,19 +70,15 @@ class DriftSource(Protocol):
 class ReconcileReportDrift:
     """Reads ``reconcile_reports`` (roadmap 19.5): the unexplained items of
     the session's last end-of-day report, else of its last report of any
-    kind. ``None`` while the table does not exist.
-
-    TODO(19.5): the reconciliation work package creates
-    ``reconcile_reports (id, portfolio_id, kind, taken_at, status,
-    items_json, explained_json)``. Until it merges this source reads
-    nothing and the drift check of a gate report is ``unavailable``."""
+    kind. ``None`` when the session has no report (or on a state DB from
+    before migration 034)."""
 
     def unexplained(self, state: SqliteState, portfolio_id: str, day: date) -> int | None:
         if not _table_exists(state, "reconcile_reports"):
             return None
         rows = state.sql(
             "SELECT items_json FROM reconcile_reports WHERE portfolio_id = ?"
-            " AND substr(taken_at, 1, 10) = ?"
+            " AND as_of = ?"
             " ORDER BY CASE kind WHEN 'eod' THEN 0 ELSE 1 END, taken_at DESC LIMIT 1",
             [portfolio_id, day.isoformat()],
         )

@@ -29,7 +29,6 @@ can hold only one session), so a connection never closes them.
 from __future__ import annotations
 
 import threading
-import time
 from collections.abc import Callable, Mapping
 from datetime import date
 from typing import Any, ClassVar, Self, TypeVar
@@ -75,6 +74,7 @@ from stonks.execution.brokers.ibkr.flex import (
     FlexTrade,
 )
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig, IbkrGatewayConfig
+from stonks.execution.brokers.ibkr.statements import cached_statements, clear_statement_cache
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.connections.providers.ibkr")
@@ -132,27 +132,16 @@ def reset_sessions() -> None:
 
 
 # ---- Flex statements, cached per query ------------------------------------------------
-
-_FLEX_CACHE: dict[str, tuple[float, list[FlexStatement]]] = {}
-_FLEX_LOCK = threading.Lock()
+# The cache lives in ``execution/brokers/ibkr/statements.py``: the sync and the
+# reconciliation checks share it.
 
 
 def _flex_statements(client: FlexClient) -> list[FlexStatement]:
-    key = str(client.settings.query_id)
-    ttl = client.settings.refresh_hours * 3600.0
-    with _FLEX_LOCK:
-        hit = _FLEX_CACHE.get(key)
-        if hit is not None and time.monotonic() - hit[0] < ttl:
-            return hit[1]
-    statements = client.fetch()
-    with _FLEX_LOCK:
-        _FLEX_CACHE[key] = (time.monotonic(), statements)
-    return statements
+    return cached_statements(client)
 
 
 def clear_flex_cache() -> None:
-    with _FLEX_LOCK:
-        _FLEX_CACHE.clear()
+    clear_statement_cache()
 
 
 #: Flex cash transaction types -> our activity kinds (others are ``other``).

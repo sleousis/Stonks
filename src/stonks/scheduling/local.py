@@ -544,6 +544,7 @@ def live_reconcile_action(ctx: RunContext) -> JobOutcome:
             settings=ctx.settings.production.live,
             clock=FixedClock(ctx.now),
             actions_for=_lake_actions(ctx.settings),
+            settlement=ctx.settings.production.risk.rules.account_rules,
         )
     finally:
         state.close()

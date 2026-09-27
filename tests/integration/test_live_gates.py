@@ -140,18 +140,16 @@ def test_the_shadow_model_book_weights_its_subscriptions(state):
     assert ShadowModelBook().session_return(state, PF, DAY + timedelta(days=1)) is None
 
 
-def test_drift_is_unknown_until_reconcile_reports_exist(state):
+def test_drift_reads_the_sessions_end_of_day_report(state):
     assert ReconcileReportDrift().unexplained(state, PF, DAY) is None
     state.execute(
-        "CREATE TABLE reconcile_reports (id INTEGER PRIMARY KEY, portfolio_id TEXT, kind TEXT,"
-        " taken_at TEXT, status TEXT, items_json TEXT, explained_json TEXT)"
-    )
-    assert ReconcileReportDrift().unexplained(state, PF, DAY) is None
-    state.execute(
-        "INSERT INTO reconcile_reports (portfolio_id, kind, taken_at, status, items_json)"
-        " VALUES (?, 'sod', ?, 'drift', ?), (?, 'eod', ?, 'clean', '[]')",
-        [PF, f"{DAY}T12:00:00", json.dumps([{"kind": "cash"}]), PF, f"{DAY}T20:15:00"],
-    )
+        "INSERT INTO reconcile_reports (id, portfolio_id, kind, as_of, taken_at, status,"
+        " items_json) VALUES ('rec_a', ?, 'sod', ?, ?, 'drift', ?),"
+        " ('rec_b', ?, 'eod', ?, ?, 'clean', '[]')",
+        [PF, DAY.isoformat(), f"{DAY}T12:00:00+00:00", json.dumps([{"kind": "cash"}]),
+         PF, DAY.isoformat(), f"{DAY}T20:15:00+00:00"],
+    )  # fmt: skip
+    # the end-of-day report wins over the start-of-day one
     assert ReconcileReportDrift().unexplained(state, PF, DAY) == 0
 
 

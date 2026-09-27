@@ -29,9 +29,12 @@ from stonks.production.live.checks import ReconcileReport, get_report, list_repo
 
 class DriftItemView(BaseModel):
     #: ``position_qty``, ``unknown_position``, ``unknown_order``,
-    #: ``missing_order``, ``order_state``, ``unknown_execution`` (material),
-    #: or ``unresolved_order``, ``stuck_order``, ``commission_missing``,
-    #: ``stale_order`` (alert only).
+    #: ``missing_order``, ``order_state``, ``unknown_execution``,
+    #: ``statement_missing_execution``, ``statement_extra_execution``,
+    #: ``statement_quantity`` (material), or ``unresolved_order``,
+    #: ``stuck_order``, ``commission_missing``, ``stale_order``,
+    #: ``statement_commission``, ``cash``, ``settled_cash`` (alert only,
+    #: cash material when ``cash_is_drift`` is set).
     kind: str
     #: The ticker, our client id or the broker's order id.
     key: str
