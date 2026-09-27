@@ -66,7 +66,8 @@
           </select>
         } @else {
           <p class="muted" id="sw-universe-none">
-            No universes yet. Create one on the Universes page, or type tickers instead.
+            No universes yet. <a class="hint-link" routerLink="/universes">Make one</a>, or type
+            tickers instead.
           </p>
         }
         @if (errors()['universe']; as e) {

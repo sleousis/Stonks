@@ -7,6 +7,7 @@ import {
   output,
   signal,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import type { IntervalInfo, StrategyClassInfo, SweepRequest, UniverseView } from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
@@ -23,7 +24,7 @@ import {
 @Component({
   selector: 'app-sweep-form',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PermissionNote],
+  imports: [PermissionNote, RouterLink],
   templateUrl: './sweep-form.html',
   styleUrls: ['./lab-form.scss', './research-form.scss'],
 })

@@ -124,3 +124,32 @@
     width: 100%;
   }
 }
+
+.notice {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-warn);
+  border-radius: var(--radius-sm);
+  background: var(--color-warn-soft);
+  font-size: var(--text-sm);
+}
+
+.lab-hint {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+
+  a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+  }
+}
+
+.history-intro {
+  padding: 0 var(--space-4);
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+}

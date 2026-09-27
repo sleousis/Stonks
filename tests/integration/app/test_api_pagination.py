@@ -41,6 +41,7 @@ PAGED = [
     "/api/portfolios/trading-modes",
     "/api/subscriptions",
     "/api/universes",
+    "/api/universes/exchanges",
 ]
 
 

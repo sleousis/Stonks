@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Response
 
 from stonks.api.deps import (
     OptionalPrincipalDep,
@@ -19,11 +20,14 @@ from stonks.app.universes import (
     UNIVERSE_ENSURE_JOB,
     UNIVERSE_REFRESH_JOB,
     EnsureDataRequest,
+    ExchangeView,
     IndexHistoryImport,
     IndexHistoryView,
+    MembershipSpanView,
     UniverseCreate,
     UniverseMembers,
     UniverseRefreshView,
+    UniverseUpdate,
     UniverseView,
 )
 from stonks.auth import Permission
@@ -68,6 +72,13 @@ def import_index_history(body: IndexHistoryImport, services: ServicesDep) -> Ind
     return services.universes.import_index_history(body)
 
 
+@router.get("/exchanges", response_model=Page[ExchangeView], operation_id="listUniverseExchanges")
+def list_exchanges(services: ServicesDep, page: PageDep) -> Page[ExchangeView]:
+    """Exchanges our instruments name, with counts, for picking an
+    ``exchange`` universe. A source may list more than we hold."""
+    return page_of(services.universes.exchanges(), page)
+
+
 @router.get(
     "/refresh/{job_id}/result",
     response_model=UniverseRefreshView,
@@ -95,6 +106,18 @@ def get_universe(universe_id: str, services: ServicesDep) -> UniverseView:
     return services.universes.get(universe_id)
 
 
+@router.put(
+    "/{universe_id}",
+    response_model=UniverseView,
+    operation_id="updateUniverse",
+    dependencies=_lab,
+)
+def update_universe(universe_id: str, body: UniverseUpdate, services: ServicesDep) -> UniverseView:
+    """Replace the definition. The members stay as they are until the next
+    refresh."""
+    return services.universes.update(universe_id, body)
+
+
 @router.delete(
     "/{universe_id}",
     response_model=UniverseView,
@@ -114,6 +137,25 @@ def get_members(
 ) -> UniverseMembers:
     """Members on ``as_of`` (default today), point in time."""
     return services.universes.members(universe_id, as_of)
+
+
+@router.get(
+    "/{universe_id}/history",
+    response_model=Page[MembershipSpanView],
+    operation_id="getUniverseHistory",
+)
+def get_history(
+    universe_id: str,
+    services: ServicesDep,
+    page: PageDep,
+    ticker: Annotated[
+        str | None, Query(max_length=64, description="tickers containing this")
+    ] = None,
+) -> Page[MembershipSpanView]:
+    """Membership spans, latest change first: who joined and left, when."""
+    return services.universes.history(
+        universe_id, ticker=ticker, limit=page.limit, offset=page.offset
+    )
 
 
 @router.post(

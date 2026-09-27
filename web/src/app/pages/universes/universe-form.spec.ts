@@ -5,8 +5,12 @@ import {
   specFromFields,
   specTemplate,
   universeCreateBody,
+  formFromUniverse,
   universeFormErrors,
+  universeUpdateBody,
 } from './universe-form';
+import { type ScreenForm, filterRow } from '../screener/screen-form';
+import { METRICS } from '../../../testing/screener-fixtures';
 
 function form(over: Partial<UniverseForm> = {}): UniverseForm {
   return {
@@ -40,14 +44,27 @@ describe('universe form', () => {
       include_delisted: false,
       start_date: '2020-01-01',
     });
-    expect(
-      specFromFields('rule', { ...f, minPrice: '', assetClasses: ['equity', 'crypto'] }),
-    ).toEqual({
+    const screen: ScreenForm = { ...f.screen, minPrice: '', assetClasses: ['equity', 'crypto'] };
+    expect(specFromFields('rule', { ...f, screen })).toEqual({
       rebalance: 'monthly',
       start: '2020-01-01',
       end: null,
       min_adv: 1000000,
       asset_classes: ['equity', 'crypto'],
+    });
+    // The rule's screen takes the screener's metric filters, in percent for percent metrics.
+    const filters = [filterRow('dividend_yield', '3', '')];
+    expect(
+      specFromFields(
+        'rule',
+        { ...f, screen: { ...f.screen, filters, sortBy: 'price', limit: '20' } },
+        METRICS,
+      ),
+    ).toMatchObject({
+      filters: [{ metric: 'dividend_yield', min: 0.03, max: null }],
+      sort_by: 'price',
+      descending: true,
+      limit: 20,
     });
     expect(specFromFields('index', f)).toEqual({
       index_id: 'sp500',
@@ -70,10 +87,19 @@ describe('universe form', () => {
     expect(universeFormErrors(form({ fields: { ...DEFAULT_FIELDS, tickers: ' ' } })).tickers).toBe(
       'Enter at least one ticker.',
     );
-    expect(
-      universeFormErrors(form({ kind: 'rule', fields: { ...DEFAULT_FIELDS, minAdv: 'lots' } }))
-        .minAdv,
-    ).toBeDefined();
+    const lots = { ...DEFAULT_FIELDS, screen: { ...DEFAULT_FIELDS.screen, minAdv: 'lots' } };
+    expect(universeFormErrors(form({ kind: 'rule', fields: lots })).screen).toContain(
+      'dollar volume',
+    );
+    const late = { ...DEFAULT_FIELDS, start: '2026-01-02', end: '2025-01-02' };
+    expect(universeFormErrors(form({ kind: 'rule', fields: late })).window).toBeDefined();
+    const empty = {
+      ...DEFAULT_FIELDS,
+      screen: { ...DEFAULT_FIELDS.screen, filters: [filterRow()] },
+    };
+    expect(universeFormErrors(form({ kind: 'rule', fields: empty })).screen).toContain(
+      'Pick a metric',
+    );
     expect(universeFormErrors(form({ source: 'json', specText: '{' })).spec).toBeDefined();
     expect(universeFormErrors(form({ source: 'csv' })).csv).toBe('Choose a CSV file.');
   });
@@ -94,5 +120,66 @@ describe('universe form', () => {
       spec: {},
       csv: 'ticker\nAAPL.US',
     });
+  });
+
+  it('reads a stored definition back into the fields, or JSON when fields cannot hold it', () => {
+    const list = formFromUniverse({
+      id: 'big',
+      kind: 'list',
+      name: 'Big',
+      spec: { tickers: ['AAPL.US', 'MSFT.US'], start_date: '1900-01-01' },
+    });
+    expect(list.source).toBe('fields');
+    expect(list.fields.tickers).toBe('AAPL.US, MSFT.US');
+    // The open-ended start shows blank.
+    expect(list.fields.startDate).toBe('');
+    expect(universeUpdateBody(list)).toEqual({
+      kind: 'list',
+      name: 'Big',
+      description: null,
+      spec: { tickers: ['AAPL.US', 'MSFT.US'] },
+      csv: null,
+    });
+
+    const spans = formFromUniverse({
+      id: 'dated',
+      kind: 'list',
+      spec: { spans: [{ ticker: 'OLD.US', start_date: '2020-01-02' }] },
+    });
+    expect(spans.source).toBe('json');
+    expect(JSON.parse(spans.specText)).toEqual({
+      spans: [{ ticker: 'OLD.US', start_date: '2020-01-02' }],
+    });
+
+    const rule = formFromUniverse(
+      {
+        id: 'cheap',
+        kind: 'rule',
+        spec: {
+          start: '2025-01-02',
+          rebalance: 'weekly',
+          filters: [{ metric: 'dividend_yield', min: 0.04, max: null }],
+          limit: 20,
+        },
+      },
+      METRICS,
+    );
+    expect(rule.source).toBe('fields');
+    expect(rule.fields.rebalance).toBe('weekly');
+    expect(rule.fields.screen.filters[0]).toMatchObject({ metric: 'dividend_yield', min: '4' });
+    expect(universeUpdateBody(rule, METRICS).spec).toEqual({
+      rebalance: 'weekly',
+      start: '2025-01-02',
+      end: null,
+      filters: [{ metric: 'dividend_yield', min: 0.04, max: null }],
+      limit: 20,
+    });
+
+    const exchange = formFromUniverse({
+      id: 'us',
+      kind: 'exchange',
+      spec: { exchange: 'US', include_delisted: false },
+    });
+    expect(exchange.fields).toMatchObject({ exchange: 'US', includeDelisted: false });
   });
 });

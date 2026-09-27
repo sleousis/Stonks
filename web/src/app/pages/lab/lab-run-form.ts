@@ -9,6 +9,7 @@ import {
   resource,
   signal,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { LabService } from '../../api/lab.service';
 import type {
@@ -89,6 +90,7 @@ export function isAdvancedField(key: string): boolean {
     PermissionNote,
     ErrorState,
     LoadingState,
+    RouterLink,
   ],
   templateUrl: './lab-run-form.html',
   styleUrl: './lab-form.scss',

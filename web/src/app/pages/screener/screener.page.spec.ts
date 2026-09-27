@@ -299,6 +299,11 @@ describe('ScreenerPage', () => {
     const saved = root.querySelector('section.universe')!;
     expect(saved.textContent).toContain('Cheap payers');
     expect(saved.textContent).toContain('A snapshot has survivorship bias.');
+    // The saved universe links to its own page.
+    expect(saved.querySelector('a[href="/universes/cheap-payers"]')?.textContent).toContain(
+      'Open the universe',
+    );
+    expect(root.querySelector('a[href="/universes"]')).not.toBeNull();
   });
 
   it('sends a rule universe by the saved screen when it is unchanged', async () => {

@@ -19,7 +19,7 @@ const UNIVERSE: UniverseView = {
   name: 'US large caps',
   description: 'Liquid names',
   kind: 'rule',
-  spec: { rebalance: 'monthly' },
+  spec: { rebalance: 'monthly', start: '2025-01-02' },
   member_count: 2,
   refreshed_at: '2026-09-25T06:00:00Z',
 };
@@ -58,6 +58,16 @@ describe('UniverseDetailPage', () => {
     return [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === text);
   }
 
+  const SPANS = [
+    { ticker: 'OLD.US', start_date: '2020-01-02', end_date: '2024-03-01' },
+    { ticker: 'AAPL.US', start_date: null, end_date: null },
+  ];
+
+  async function flushHistory(items = SPANS, total = items.length): Promise<void> {
+    const req = await nextRequest(http, '/api/universes/us-big/history');
+    req.flush({ items, total, limit: 50, offset: 0 });
+  }
+
   async function flushMembers(tickers: string[], asOf = '2026-09-26'): Promise<void> {
     const req = await nextRequest(http, '/api/universes/us-big/members');
     req.flush({ universe_id: 'us-big', as_of: asOf, tickers, count: tickers.length });
@@ -84,6 +94,7 @@ describe('UniverseDetailPage', () => {
     fixture.detectChanges();
     (await nextRequest(http, '/api/universes/us-big')).flush(UNIVERSE);
     await flushMembers(['AAPL.US', 'MSFT.US']);
+    await flushHistory();
     await settle();
   });
 
@@ -131,6 +142,7 @@ describe('UniverseDetailPage', () => {
     // The membership changed either way, so the page reloads it.
     (await nextRequest(http, '/api/universes/us-big')).flush(UNIVERSE);
     await flushMembers(['AAPL.US', 'MSFT.US']);
+    await flushHistory();
     await settle();
     const error = el.querySelector('app-job-progress app-error-state')!;
     expect(error.textContent).toContain('Refresh finished, but its result could not load');
@@ -203,6 +215,7 @@ describe('UniverseDetailPage', () => {
     });
     (await nextRequest(http, '/api/universes/us-big')).flush({ ...UNIVERSE, member_count: 5 });
     await flushMembers(['AAPL.US', 'MSFT.US', 'NVDA.US']);
+    await flushHistory();
     await settle();
     expect(success).toHaveBeenCalledWith('Refreshed US large caps: 3 members today.');
     const result = el.querySelector('[aria-label="Refresh result"]')!;
@@ -262,6 +275,55 @@ describe('UniverseDetailPage', () => {
     expect(confirm).not.toHaveBeenCalled();
   });
 
+  it('shows who joined and left, finds a ticker and pages on', async () => {
+    const history = el.querySelector('[aria-labelledby="history-title"]')!;
+    const rows = [...history.querySelectorAll('tbody tr')].map((tr) => tr.textContent);
+    expect(rows[0]).toContain('OLD.US');
+    expect(rows[0]).toContain('2024-03-01');
+    expect(rows[1]).toContain('From the start');
+    expect(rows[1]).toContain('Still a member');
+    expect(history.textContent).toContain('2 spans');
+
+    const find = el.querySelector<HTMLInputElement>('#h-find')!;
+    find.value = 'old';
+    find.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    const req = await nextRequest(http, '/api/universes/us-big/history');
+    expect(req.request.urlWithParams).toContain('ticker=old');
+    req.flush({ items: [SPANS[0]], total: 120, limit: 50, offset: 0 });
+    await settle();
+    button('Show more (1 of 120)')!.click();
+    const more = await nextRequest(http, '/api/universes/us-big/history');
+    expect(more.request.urlWithParams).toContain('limit=100');
+    more.flush({ items: SPANS, total: 120, limit: 100, offset: 0 });
+    await settle();
+  });
+
+  it('edits the definition in place and says to refresh', async () => {
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    button('Edit')!.click();
+    fixture.detectChanges();
+    (await nextRequest(http, '/api/universes')).flush({
+      items: [UNIVERSE],
+      total: 1,
+      limit: 500,
+      offset: 0,
+    });
+    (await nextRequest(http, '/api/screener/metrics')).flush([]);
+    await settle();
+    const panel = el.querySelector('#edit-panel')!;
+    expect(panel.querySelector<HTMLInputElement>('#u-id')!.value).toBe('us-big');
+    button('Save changes')!.click();
+    const put = await nextRequest(http, '/api/universes/us-big', 'PUT');
+    expect(put.request.body).toMatchObject({ kind: 'rule', name: 'US large caps' });
+    put.flush({ ...UNIVERSE, updated_at: '2026-09-26T08:00:00Z' });
+    await settle();
+    expect(el.querySelector('#edit-panel')).toBeNull();
+    expect(success).toHaveBeenCalledWith('Saved US large caps. Refresh it to rebuild the members.');
+    // Changed after the last refresh: the page says the members are behind.
+    expect(el.querySelector('.notice')?.textContent).toContain('changed after the last refresh');
+  });
+
   it('deletes after typing the id, then goes back to the list', async () => {
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     button('Delete')!.click();
@@ -282,6 +344,7 @@ describe('UniverseDetailPage', () => {
       expect(button('Refresh')!.disabled).toBe(false);
       expect(button('Fetch missing data')!.disabled).toBe(false);
       expect(button('Delete')!.disabled).toBe(true);
+      expect(button('Edit')!.disabled).toBe(false);
       expect(el.querySelector('app-page-header')!.textContent).toContain('Admins only.');
       expect(el.textContent).not.toContain('the lake');
     });

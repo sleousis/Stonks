@@ -28,6 +28,11 @@
         <span class="hint" id="lr-universe-hint">
           A saved universe runs on every ticker that was a member during the window, delisted ones
           included.
+          @if (form().universeId; as uid) {
+            <a class="hint-link" [routerLink]="['/universes', uid]">See its members</a>
+          } @else {
+            <a class="hint-link" routerLink="/universes">See or make universes</a>
+          }
         </span>
       </div>
       @if (form().universeId) {
@@ -47,6 +52,11 @@
           </span>
         </div>
       }
+    } @else {
+      <p class="hint no-universes">
+        Want a stored set of tickers, delisted names included?
+        <a class="hint-link" routerLink="/universes">Make a universe</a>
+      </p>
     }
     <app-window-fields
       idPrefix="lr"

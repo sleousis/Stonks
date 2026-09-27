@@ -28,7 +28,7 @@ A plain `list` has survivorship bias unless its spans say when names joined and 
 
 ## Refresh
 
-A refresh turns a definition into rows of `universe_membership` (migration 015). A ticker is a member from `start_date` up to the day before `end_date`. The refresh replaces the universe's rows each time, so running it twice changes nothing.
+A refresh turns a definition into rows of `universe_membership` (migration 015). A ticker is a member from `start_date` up to the day before `end_date`. The refresh replaces the universe's rows each time, so running it twice changes nothing. An edit changes only the definition. The members stay as they were until the next refresh, and the console marks the universe as changed since.
 
 - **exchange**: a span starts at the listing date, else the first bar, else `start_date`. A delisted name ends at its delisting date, else the day after its last bar. A delisted name with no dates and no bars stays a member up to the refresh date, with a warning. Ensure its data and refresh again to tighten it. The listings also fill the `instruments` table.
 - **rule**: the filters run on each rebalance date (weekly, monthly or quarterly). A name joins on the date it passes and leaves on the date it fails. Rules read only the lake, so ensure the candidates' data first.
@@ -103,6 +103,8 @@ uv run stonks universe create us_all --kind exchange --spec '{"exchange": "US"}'
 uv run stonks universe refresh mine [--as-of 2026-01-02]
 uv run stonks universe show mine
 uv run stonks universe members mine --as-of 2026-01-02
+uv run stonks universe update mine --tickers AAPL.US,MSFT.US,NVDA.US [--name ... --spec JSON]
+uv run stonks universe history mine [--ticker AAPL]
 uv run stonks universe ensure mine --start 2025-01-01 --end 2025-12-31 [--interval 1d --source eodhd]
 uv run stonks universe import-index sp500 history.csv
 uv run stonks universe delete mine --yes
@@ -117,8 +119,9 @@ These commands open the lake. While `stonks serve` runs, use the API or the cons
 - **Tick**: with a universe id in `[production].universe`, the tick trades the members on its date. Explicit tickers (`--tickers`, the request's `tickers`) still win. A universe with no members stops the tick with a clear error.
 - **Sweeps**: `POST /api/lab/sweeps` takes `universe` or `universe_id`.
 - **Scheduler**: the default `universes_refresh` job runs 20 minutes after the NYSE close, before the ingest and the tick. It refreshes every stored universe, then fetches missing bars over the last `ensure_days` (default 10). It skips when no universe is stored. Params: `ensure_days`, `interval`, `source`, `ensure = false` to only refresh.
-- **API**: `/api/universes` lists, shows, creates and deletes. `/members?as_of=` gives members on a day. `POST /{id}/refresh` and `POST /{id}/ensure` run as background jobs, because DuckDB has one writer. `POST /index-history` imports a history.
-- **MCP**: `list_universes`, `get_universe`, `get_universe_members`, and the guarded `create_universe`, `refresh_universe`, `ensure_universe_data`, `import_index_history` and `delete_universe`, which need `confirm=true`. `wait_for_job` returns the typed refresh and ensure results.
+- **API**: `/api/universes` lists, shows, creates, edits (`PUT /{id}`) and deletes. `/members?as_of=` gives members on a day. `/history` gives the membership spans, latest change first, and `?ticker=` narrows them. `/exchanges` lists the exchanges our instruments name, for an exchange universe. `POST /{id}/refresh` and `POST /{id}/ensure` run as background jobs, because DuckDB has one writer. `POST /index-history` imports a history.
+- **MCP**: `list_universes`, `get_universe`, `get_universe_members`, `get_universe_history`, `list_universe_exchanges`, and the guarded `create_universe`, `update_universe`, `refresh_universe`, `ensure_universe_data`, `import_index_history` and `delete_universe`, which need `confirm=true`.
+- **Console**: the Universes page (`/universes`, linked from Data, the screener and the lab forms) lists, creates and edits each kind, shows members on a date and the membership history, runs Refresh and Fetch missing data as jobs, and deletes with the id typed. A rule is built with the screener's filter builder. See `docs/ui.md`. `wait_for_job` returns the typed refresh and ensure results.
 
 ## Screener
 
@@ -200,7 +203,7 @@ Save a screen as a universe in one of two modes:
 - **rule** (default): a `rule` universe that runs the screen at each rebalance date from `start` (default a year ago). The lab sees who passed on each day, dead names too (P14).
 - **snapshot**: today's matches as a fixed `list`. It carries survivorship bias, and the result warns about it.
 
-Both queue the universe refresh, so members appear when the job ends.
+Both queue the universe refresh, so members appear when the job ends. The saved universe links to its page on the Universes page, where you can edit it later.
 
 ### Commands, API and MCP
 

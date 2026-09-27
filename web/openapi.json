@@ -4320,6 +4320,30 @@
         "title": "EventAlertSwitchView",
         "type": "object"
       },
+      "ExchangeView": {
+        "description": "An exchange our instruments name, for the exchange picker.",
+        "properties": {
+          "exchange": {
+            "title": "Exchange",
+            "type": "string"
+          },
+          "instruments": {
+            "title": "Instruments",
+            "type": "integer"
+          },
+          "listed": {
+            "title": "Listed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "exchange",
+          "instruments",
+          "listed"
+        ],
+        "title": "ExchangeView",
+        "type": "object"
+      },
       "Exposure": {
         "properties": {
           "benchmark": {
@@ -10093,6 +10117,44 @@
         "title": "MeView",
         "type": "object"
       },
+      "MembershipSpanView": {
+        "description": "One stretch of membership: a member from ``start_date`` up to the\nday before ``end_date``.",
+        "properties": {
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker"
+        ],
+        "title": "MembershipSpanView",
+        "type": "object"
+      },
       "MessageCreate": {
         "additionalProperties": false,
         "properties": {
@@ -12387,6 +12449,37 @@
         "title": "Page[Draft]",
         "type": "object"
       },
+      "Page_ExchangeView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExchangeView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ExchangeView]",
+        "type": "object"
+      },
       "Page_FillView_": {
         "properties": {
           "items": {
@@ -12633,6 +12726,37 @@
           "offset"
         ],
         "title": "Page[LotPickView]",
+        "type": "object"
+      },
+      "Page_MembershipSpanView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MembershipSpanView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[MembershipSpanView]",
         "type": "object"
       },
       "Page_ModelVersionView_": {
@@ -23722,8 +23846,8 @@
           }
         },
         "required": [
-          "id",
-          "kind"
+          "kind",
+          "id"
         ],
         "title": "UniverseCreate",
         "type": "object"
@@ -23810,6 +23934,67 @@
           "spans"
         ],
         "title": "UniverseRefreshView",
+        "type": "object"
+      },
+      "UniverseUpdate": {
+        "description": "A universe's new definition. The members stay as they are until the\nnext refresh.",
+        "properties": {
+          "csv": {
+            "anyOf": [
+              {
+                "maxLength": 5000000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Csv"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "kind": {
+            "enum": [
+              "list",
+              "exchange",
+              "rule",
+              "index"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "spec": {
+            "additionalProperties": true,
+            "title": "Spec",
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "UniverseUpdate",
         "type": "object"
       },
       "UniverseView": {
@@ -50632,6 +50817,115 @@
         ]
       }
     },
+    "/api/universes/exchanges": {
+      "get": {
+        "description": "Exchanges our instruments name, with counts, for picking an\n``exchange`` universe. A source may list more than we hold.",
+        "operationId": "listUniverseExchanges",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ExchangeView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Exchanges",
+        "tags": [
+          "universes"
+        ]
+      }
+    },
     "/api/universes/index-history": {
       "post": {
         "description": "Import an index's constituents and changes (CSV or JSON) for\n``index`` universes to rebuild membership from.",
@@ -50980,6 +51274,103 @@
         "tags": [
           "universes"
         ]
+      },
+      "put": {
+        "description": "Replace the definition. The members stay as they are until the next\nrefresh.",
+        "operationId": "updateUniverse",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "universe_id",
+            "required": true,
+            "schema": {
+              "title": "Universe Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UniverseUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UniverseView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update Universe",
+        "tags": [
+          "universes"
+        ],
+        "x-permission": "lab.run"
       }
     },
     "/api/universes/{universe_id}/ensure": {
@@ -51079,6 +51470,143 @@
           "universes"
         ],
         "x-permission": "lab.run"
+      }
+    },
+    "/api/universes/{universe_id}/history": {
+      "get": {
+        "description": "Membership spans, latest change first: who joined and left, when.",
+        "operationId": "getUniverseHistory",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "universe_id",
+            "required": true,
+            "schema": {
+              "title": "Universe Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "tickers containing this",
+            "in": "query",
+            "name": "ticker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "tickers containing this",
+              "title": "Ticker"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_MembershipSpanView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get History",
+        "tags": [
+          "universes"
+        ]
       }
     },
     "/api/universes/{universe_id}/members": {

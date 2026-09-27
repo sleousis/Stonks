@@ -9,6 +9,7 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import { SystemService } from '../../api/system.service';
 import { PageHeader } from '../../shared/ui/page-header';
@@ -28,7 +29,15 @@ const FALLBACK_INTERVALS = [{ code: '1d', is_intraday: false, seconds: 86_400 }]
 @Component({
   selector: 'app-data-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PageHeader, InstrumentSearch, CoveragePanel, PricePanel, IngestPanel, IngestRunsPanel],
+  imports: [
+    PageHeader,
+    RouterLink,
+    InstrumentSearch,
+    CoveragePanel,
+    PricePanel,
+    IngestPanel,
+    IngestRunsPanel,
+  ],
   templateUrl: './data.page.html',
   styleUrl: './data.page.scss',
 })

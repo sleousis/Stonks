@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { CATALOG, MOMENTUM } from '../../../testing/lab-fixtures';
 import type { SweepRequest, UniverseView } from '../../api/models';
@@ -15,7 +16,7 @@ describe('SweepFormView', () => {
 
   beforeEach(() => {
     emitted = [];
-    TestBed.configureTestingModule({ imports: [SweepFormView] });
+    TestBed.configureTestingModule({ imports: [SweepFormView], providers: [provideRouter([])] });
     const session = TestBed.inject(SessionService);
     vi.spyOn(session, 'can').mockImplementation(() => allowed());
     vi.spyOn(session, 'whyNot').mockImplementation(() =>

@@ -476,7 +476,7 @@ Tickers open `/data?instrument=<id>`.
 | Halts | `/ops/halts` | Active and past halts, the kill switch (global or one portfolio, reason, buys only), Resume and Clear |
 | Schedule and backups | `/ops/schedule` | Jobs with next and last run, recent runs and Run now. Every backup on disk with its size, Back up now, Verify and a staged Restore (admins) |
 | Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
-| Universes | `/universes`, `/universes/:id` | List, create (JSON spec or CSV), index history import, members on a date, Refresh and Ensure data |
+| Universes | `/universes`, `/universes/:id` | List, create and edit each kind, index history import, members on a date, membership history, Refresh, Fetch missing data and Delete (see Universes below) |
 
 - `<app-session-strip>` sits above every page: the next trading run with
   a live countdown (`GET /api/schedule`), Stop trading, and the halt state. It turns red
@@ -928,6 +928,61 @@ flowchart LR
 - **Backtest.** `<app-options-backtest>` (`options-backtest.ts`) fills the underlying and window from the first stored underlying. Strategy parameters use `<app-param-form>`. It needs `lab.run` (a permission note otherwise), runs as a job followed with `JobFollower`, and shows return, Sharpe, drawdown, fills, the equity chart and each validation check with the verdict. On generated chains it says the result is never evidence.
 - Pure helpers (chain columns, payoff scaling, leg text, the backtest form) live in `options-view.ts`.
 
+## Universes (20.10)
+
+The Universes page sits under Data: the Data page links to it, and so do
+the screener and the lab forms. Anyone signed in can read it. Creating,
+editing, refreshing and fetching data need `lab.run`. Delete is for
+admins.
+
+```mermaid
+flowchart LR
+  L[List: kind, members, last refresh] --> N[New universe]
+  L --> D[Universe page]
+  N --> E[app-universe-editor]
+  D --> E
+  E -->|POST or PUT /api/universes| D
+  D --> M[Members on a date]
+  D --> H[Membership history]
+  D --> R[Refresh job] --> M
+  D --> F[Fetch missing data job]
+  D --> X[Delete: type the id]
+```
+
+- **List.** `pages/universes/universes.page.ts`. Each row has its kind,
+  member count and last refresh. "Changed since" marks a universe whose
+  definition changed after its last refresh, so its members are behind.
+- **The form.** `<app-universe-editor>` (`universe-editor.ts`) serves both
+  New universe and Edit. Each kind has its own fields:
+  - list: tickers, or a CSV with optional dated spans,
+  - exchange: a code with suggestions from `GET /api/universes/exchanges`
+    (the exchanges our instruments name, with counts), a source and
+    "Include delisted names",
+  - rule: the window, how often the screen runs, a universe to start
+    from, where to look, the screener's filter builder
+    (`<app-screen-filters>`, shared with the screener) and an optional
+    top N,
+  - index: the index id, where its history comes from, and an optional
+    history file that is imported before the save.
+  "Edit as JSON" shows every setting. An edit opens in JSON when the
+  fields cannot hold the stored definition (dated spans, security types),
+  so a save never drops a setting. The id cannot change on an edit.
+  `universe-form.ts` turns the form into a spec and back.
+- **Universe page.** `universe-detail.page.ts`. Facts, a notice when the
+  definition changed after the last refresh, members on a date (a paged
+  table with a finder), and the membership history from
+  `GET /api/universes/{id}/history`: one row per stretch of membership,
+  latest change first, "From the start" and "Still a member" for open
+  ends, a ticker search on Enter and Show more for the next page.
+- **Jobs.** Refresh and Fetch missing data queue jobs and follow them with
+  `<app-job-progress>` to their typed results. Refresh reloads the facts,
+  members and history.
+- **Delete** asks for the universe id typed (`typedConfirmation`), then
+  goes back to the list.
+- **Links.** The screener's saved universe panel has Open the universe and
+  a link to the list beside Start from. The lab run form links a picked
+  universe to its page, and offers Make a universe when none is stored.
+
 ## Shared pieces from the usability pass (18.6)
 
 | Piece | Where | Use it for |
@@ -1050,6 +1105,7 @@ about the same thing.
 | Calendar, News | `/api/calendars`, `/api/calendars/news` | `stonks calendars` | `get_calendar`, `get_news`, `get_earnings_warnings`, `list_event_alert_kinds` |
 | Screener, Your screens, Save as a universe | `/api/screener/*` | `stonks screener` | `run_screen`, `list_screens`, `create_screen`, `save_screen_as_universe`, ... |
 | Options (chain, payoff, strategies, backtest) | `/api/options/*` | `stonks options` | `get_option_chain`, `get_option_payoff`, `list_option_strategies`, `run_options_backtest`, ... |
+| Universes (create, edit, history, refresh, fetch data) | `/api/universes/*` | `stonks universe` | `list_universes`, `update_universe`, `get_universe_history`, `list_universe_exchanges`, ... |
 
 "Buys only" was called `flatten` before 1.0. It never closed a position,
 so the old name was misleading. The API, the CLI (`--flatten`) and MCP

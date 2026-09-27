@@ -3092,6 +3092,57 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Membership spans of a universe, latest change first: each ticker\njoined on start_date (null: from the start) and left on end_date\n(null: still a member).",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 100,
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "keep tickers containing this, e.g. AAPL",
+            "title": "Ticker"
+          },
+          "universe_id": {
+            "description": "universe id, e.g. sp500 or us_common",
+            "title": "Universe Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe_id"
+        ],
+        "title": "get_universe_historyArguments",
+        "type": "object"
+      },
+      "name": "get_universe_history",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Members of a universe on a date (default today), point in time:\nnames that later died are members on the days they were listed.",
       "input_schema": {
         "properties": {
@@ -5104,6 +5155,22 @@
         "type": "object"
       },
       "name": "list_trading_modes",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Exchanges our instruments name, with instrument counts, for an\nexchange universe's spec. The data source may list more.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_universe_exchangesArguments",
+        "type": "object"
+      },
+      "name": "list_universe_exchanges",
       "needs_confirm": false
     },
     {
@@ -8683,6 +8750,99 @@
         "type": "object"
       },
       "name": "update_subscription",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Replace a universe's definition. The members stay as they are\nuntil the next refresh (refresh_universe). Without confirm=true\nreturns a preview with the current definition.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "csv": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "list only: CSV with a ticker column (replaces spec)",
+            "title": "Csv"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "kind": {
+            "enum": [
+              "list",
+              "exchange",
+              "rule",
+              "index"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Name"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "kind settings. list: {tickers, spans}. exchange: {exchange, source, security_types, include_delisted}. rule: {start, end, rebalance, min_adv, min_price, asset_classes, sectors, exclude_sectors, exchanges}. index: {index_id, source, start_date}",
+            "title": "Spec"
+          },
+          "universe_id": {
+            "description": "universe id, e.g. sp500 or us_common",
+            "title": "Universe Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe_id",
+          "kind"
+        ],
+        "title": "update_universeArguments",
+        "type": "object"
+      },
+      "name": "update_universe",
       "needs_confirm": true
     },
     {
