@@ -384,8 +384,16 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"{args.root} is not empty; pick a new --root")
     stack = start_server(build_stack(args.root), port=args.port)
     print(f"Stonks e2e stack on {stack.base_url}")  # noqa: T201 - output of the manual stack command
-    for person in (stack.admin, stack.trader):
-        print(f"  {person.role}: {person.email} / {person.password}  TOTP {person.totp_secret}")  # noqa: T201 - output of the manual stack command
+    # Test-only accounts, but keep their secrets out of the terminal and logs.
+    creds = args.root / "credentials.txt"
+    creds.write_text(
+        "".join(
+            f"{p.role}: {p.email} / {p.password}  TOTP {p.totp_secret}\n"
+            for p in (stack.admin, stack.trader)
+        ),
+        encoding="utf-8",
+    )
+    print(f"  Test sign-ins: {creds}")  # noqa: T201 - output of the manual stack command
     print("Ctrl+C to stop.")  # noqa: T201 - output of the manual stack command
     try:
         assert stack.process is not None

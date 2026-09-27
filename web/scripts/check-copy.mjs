@@ -37,7 +37,16 @@ function walk(dir, out = []) {
 
 /** The text a trader can see: template text, or string literals outside comments. */
 export function visibleText(source, isHtml) {
-  if (isHtml) return source.replace(/<!--[\s\S]*?-->/g, '');
+  if (isHtml) {
+    // Strip until stable, so a comment hidden inside another cannot survive.
+    let text = source;
+    let prev;
+    do {
+      prev = text;
+      text = text.replace(/<!--[\s\S]*?-->/g, '');
+    } while (text !== prev);
+    return text.replace(/<!--|-->/g, '');
+  }
   const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
   const strings = code.match(/'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"|`(?:\\.|[^`\\])*`/g) ?? [];
   return strings.join('\n');

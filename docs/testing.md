@@ -55,7 +55,7 @@ To click around the same stack by hand:
 uv run python -m tests.e2e.stack --root .e2e-stack --port 8765
 ```
 
-It prints the emails, the password and the TOTP secrets.
+It writes the test sign-ins (emails, password and TOTP secrets) to `credentials.txt` in the `--root` folder and prints that path.
 
 ## Why Playwright for Python
 
