@@ -324,3 +324,28 @@ def test_from_lake_reads_what_the_ingest_wrote(lake):
         config(start=days[0], end=days[-1]),
     ).run()
     assert result.n_fills >= 1
+
+
+def test_validation_runs_the_applicable_survival_tests(data):
+    from stonks.options.validation import OptionValidationSettings, validate_option_strategy
+
+    cls = resolve_option_strategy("covered_call")
+    reports = validate_option_strategy(
+        cls, None, data, config(), OptionValidationSettings(min_fills=1, n_trials=5)
+    )
+    assert [r.test_id for r in reports] == [
+        "oos",
+        "deflated_sharpe",
+        "fill_stress",
+        "missing_quotes",
+        "cost_stress",
+    ]
+    oos, dsr_ = reports[0], reports[1]
+    assert 0.0 <= oos.metrics["psr"] <= 1.0
+    assert dsr_.metrics["dsr"] <= oos.metrics["psr"] + 1e-12  # deflation never helps
+    assert all(isinstance(r.passed, bool) for r in reports)
+    # a window with no bars fails cleanly
+    empty = validate_option_strategy(
+        cls, None, data, config(start=date(2030, 1, 1), end=date(2030, 2, 1))
+    )
+    assert not empty[0].passed and empty[0].metrics["psr"] == 0.0

@@ -66,7 +66,7 @@ class OptionMargin(OptionRiskRule):
         groups = [*view.groups, unit_positions(unit)]
         before_req = book_requirement(dict(book), view, view.groups, method=s.method)
         after_req = book_requirement(after, view, groups, method=s.method)
-        cash_after = ctx.portfolio.cash - _spent(book, ctx) - cost
+        cash_after = ctx.portfolio.cash - _spent(book, ctx, view) - cost
         room = cash_after - s.cash_buffer * equity(ctx)
         if cash_after < -1e-6:
             return f"premium {cost:.2f} exceeds cash {cash_after + cost:.2f}"
@@ -75,13 +75,18 @@ class OptionMargin(OptionRiskRule):
         return None
 
 
-def _spent(book: Mapping[str, float], ctx: RiskContext) -> float:
-    """Cash the units kept earlier in this pass take: the book value moved
-    from cash into positions since the start of the pass."""
+def _spent(book: Mapping[str, float], ctx: RiskContext, view: OptionRiskView) -> float:
+    """Cash the units kept earlier in this pass take: each position change
+    since the start of the pass at its mark (options per contract)."""
     start = ctx.portfolio.positions
     spent = 0.0
     for instrument in set(book) | set(start):
         delta = book.get(instrument, 0.0) - start.get(instrument, 0.0)
-        if delta:
+        if not delta:
+            continue
+        contract = view.contract(instrument)
+        if contract is not None and contract.contract_id in view.marks:
+            spent += delta * view.marks[contract.contract_id] * contract.multiplier
+        else:
             spent += delta * ctx.prices.get(instrument, 0.0)
     return spent

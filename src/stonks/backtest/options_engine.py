@@ -244,7 +244,10 @@ class OptionsBacktester:
             quotes = self._quotes(day)
             for combo in pending:
                 result = broker.place(combo, quotes, spots, day)
-                (fills if isinstance(result, ComboFill) else rejections).append(result)
+                if isinstance(result, ComboFill):
+                    fills.append(result)
+                else:
+                    rejections.append(result)
             pending = []
 
             marks = self._marks(ledger, quotes, spots, day, last_iv, last_mark)

@@ -129,7 +129,11 @@ class OptionsSimulatedBroker:
                 combo, as_of, f"net {net:.4f} beyond the limit {combo.net_limit:.4f}"
             )
         cash_delta = 0.0
-        contracts = {leg.contract.contract_id: leg.contract for leg in combo.option_legs}
+        contracts = {
+            leg.contract.contract_id: leg.contract
+            for leg in combo.legs
+            if leg.contract is not None
+        }
         for fill in legs:
             contract = contracts.get(fill.instrument)
             if contract is not None:
