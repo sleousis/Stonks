@@ -3380,6 +3380,68 @@ export type Opinion = {
 };
 
 /**
+ * OptionGreekLimitsSettings
+ */
+export type OptionGreekLimitsSettings = {
+    /**
+     * Max Dollar Delta
+     */
+    max_dollar_delta?: number | null;
+    /**
+     * Max Dollar Gamma
+     */
+    max_dollar_gamma?: number | null;
+    /**
+     * Max Position Dollar Delta
+     */
+    max_position_dollar_delta?: number | null;
+    /**
+     * Max Position Vega
+     */
+    max_position_vega?: number | null;
+    /**
+     * Max Theta
+     */
+    max_theta?: number | null;
+    /**
+     * Max Vega
+     */
+    max_vega?: number | null;
+};
+
+/**
+ * OptionMarginSettings
+ */
+export type OptionMarginSettings = {
+    /**
+     * Cash Buffer
+     */
+    cash_buffer?: number;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Method
+     */
+    method?: 'reg_t' | 'risk_based';
+};
+
+/**
+ * OptionMaxLossSettings
+ */
+export type OptionMaxLossSettings = {
+    /**
+     * Max Loss Per Group
+     */
+    max_loss_per_group?: number | null;
+    /**
+     * Max Loss Total
+     */
+    max_loss_total?: number | null;
+};
+
+/**
  * OrderView
  */
 export type OrderView = {
@@ -5341,10 +5403,14 @@ export type RuleSettings = {
     max_holding?: MaxHoldingSettings;
     net_exposure?: NetExposureSettings;
     operational_halt?: OperationalHaltSettings;
+    option_greek_limits?: OptionGreekLimitsSettings;
+    option_margin?: OptionMarginSettings;
+    option_max_loss?: OptionMaxLossSettings;
     portfolio_vol?: PortfolioVolSettings;
     risk_per_position?: RiskPerPositionSettings;
     sector_cap?: SectorCapSettings;
     short_caps?: ShortCapsSettings;
+    short_option_guard?: ShortOptionGuardSettings;
     squeeze_guard?: SqueezeGuardSettings;
 };
 
@@ -5673,6 +5739,32 @@ export type ShortCapsSettings = {
      * Max Short Weight
      */
     max_short_weight?: number | null;
+};
+
+/**
+ * ShortOptionGuardSettings
+ */
+export type ShortOptionGuardSettings = {
+    /**
+     * Approval Level
+     */
+    approval_level?: number;
+    /**
+     * Cash Secured
+     */
+    cash_secured?: boolean;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Max Short Contracts
+     */
+    max_short_contracts?: number | null;
+    /**
+     * Min Dte
+     */
+    min_dte?: number;
 };
 
 /**
