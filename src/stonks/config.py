@@ -17,6 +17,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from stonks.assistant.settings import AssistantConfig
 from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
@@ -34,6 +35,7 @@ from stonks.production.rules.settings import RuleSettings
 from stonks.scheduling.config import SchedulerConfig
 from stonks.store.audit import AuditTolerances
 from stonks.store.bars import BarBackend
+from stonks.telegram.settings import TelegramConfig
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
 
@@ -520,6 +522,10 @@ class Settings(BaseSettings):
     ensure: EnsureSettings = Field(default_factory=EnsureSettings)
     backup: BackupConfig = BackupConfig()
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
+    # ``[assistant]``: the in-app AI assistant (roadmap 20.4). The key is env only.
+    assistant: AssistantConfig = Field(default_factory=AssistantConfig)
+    # ``[telegram]``: the Telegram bot (roadmap 20.3). The token is env only.
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
 
 
 #: Secrets read straight from the environment by blocks that keep their own
@@ -530,6 +536,8 @@ ENV_ONLY_SECRETS: tuple[str, ...] = (
     "STONKS_SMTP_PASSWORD",
     "STONKS_VAPID_PRIVATE_KEY",
     "STONKS_SNAPTRADE_CONSUMER_KEY",
+    "STONKS_ASSISTANT_API_KEY",
+    "STONKS_TELEGRAM_BOT_TOKEN",
     "STONKS_API_TOKEN",
     "EODHD_API_KEY",
     "ALPACA_API_KEY",

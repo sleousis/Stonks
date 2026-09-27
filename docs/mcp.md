@@ -10,7 +10,9 @@ it to:
 - launch backtests, lab runs (on typed tickers or a stored universe),
   sweeps, signal IC analyses and ingests, and cancel them
 - build and test Strategy Studio drafts, and write trade journal notes
-- with explicit confirmation, change strategy status or queue a production tick
+- with explicit confirmation, change strategy status, queue a production
+  tick, or place, change and cancel your own manual orders
+- manage your price alerts and read your tax settings and FX rates
 
 ## How it works
 
@@ -155,6 +157,9 @@ Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`,
 | `validate_rule_spec` (saves nothing) | `POST /api/studio/spec/validate` |
 | `list_connections` (your broker connections; never credentials) | `GET /api/connections` |
 | `get_connection_accounts` (external accounts and linked portfolios) | `GET /api/connections/{id}/accounts` |
+| `list_price_alerts`, `list_price_alert_events` (your price alerts and when they fired) | `GET /api/price-alerts[/events]` |
+| `get_tax_settings`, `list_tax_lot_picks` (base currency, tax settings, specific lots) | `GET /api/tax/settings`, `GET /api/tax/lots/picks` |
+| `get_fx_rate` (the rate the system converts with) | `GET /api/fx/rate` |
 
 List-shaped responses come back as `{"items": [...]}`.
 
@@ -180,6 +185,7 @@ never orders):
 | `run_draft_backtest`, `run_draft_lab` | `POST /api/studio/drafts/{id}/backtests`, `/lab-runs` |
 | `add_journal_note` (a note on one of your orders) | `POST /api/tca/orders/{id}/notes` |
 | `mark_notifications_read` (idempotent, your own feed only) | `POST /api/notifications/read` |
+| `create_price_alert` (a crossing of a level, or a move by a percent over a window, on a ticker or a watchlist) | `POST /api/price-alerts` |
 
 With `ensure_data: true`, `run_lab` first runs a `lab_ensure` job that
 fetches the missing bars. The lab result names it in `ensure_job_id`, and
@@ -191,7 +197,8 @@ result in shadow (whatever the verdict), so like `register_draft` they need
 
 **Edits** (destructive, idempotent, and no confirm since none of them trades):
 `update_draft` (`PATCH /api/studio/drafts/{id}`, only the fields given),
-`edit_journal_note` (`PUT /api/tca/notes/{id}`) and `cancel_job`
+`edit_journal_note` (`PUT /api/tca/notes/{id}`), `update_price_alert`
+(`PATCH /api/price-alerts/{id}`) and `cancel_job`
 (`POST /api/jobs/{id}/cancel`: a queued job never starts, a running lab run
 stops at its next trial).
 
@@ -208,6 +215,11 @@ stops at its next trial).
 | `engage_kill_switch` (`buys_only` stops buys only, and `flatten` is its deprecated name) | `POST /api/halts/kill` |
 | `subscribe`, `update_subscription` (never to auto) | `POST /api/subscriptions`, `PATCH /api/subscriptions/{id}` |
 | `create_universe`, `refresh_universe`, `ensure_universe_data`, `import_index_history`, `delete_universe` | `/api/universes/...` |
+| `place_order` (a manual order through the kill switch, every halt and every risk rule, and the preview runs every check) | `POST /api/orders/manual[/preview]` |
+| `change_order` (cancel and replace a working manual order), `cancel_order` (any working order of your portfolio) | `POST /api/orders/{id}/change`, `POST /api/orders/{id}/cancel` |
+| `delete_price_alert` | `DELETE /api/price-alerts/{id}` |
+
+`draft_order` (`POST /api/orders/drafts`) proposes an order without placing it: the server prices and checks it, and you approve it in the web app with a fresh second factor. `list_order_drafts` reads them.
 
 Connecting, linking and removing a broker are console-only: they carry
 credentials and need a fresh second factor.
@@ -240,7 +252,10 @@ These stay out of MCP on purpose. The parity test
 
 - Anything that needs a fresh second factor: resuming the kill switch,
   auto mode, connecting or removing a broker, restoring a backup, user
-  admin, recovery codes.
+  admin, recovery codes, and a manual order on a book that trades real
+  money (the preview still works).
+- Linking a Telegram chat, tax settings changes, specific-lot picks and
+  the CSV tax exports.
 - Anything that mints credentials or redirects alerts: API tokens,
   notification preferences, quiet hours, the webhook.
 - Turning a safety stop back off: clearing a halt, running health checks,

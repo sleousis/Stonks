@@ -45,6 +45,14 @@ class PeriodPnl(BaseModel):
     end_value: float
     change: float | None = Field(description="Value change, deposits and withdrawals included.")
     change_pct: float | None = Field(description="change / start_value (0.05 = +5%).")
+    net_flows: float = Field(
+        default=0.0, description="Deposits less withdrawals inside the period (roadmap 20.5)."
+    )
+    twr: float | None = Field(
+        default=None,
+        description="Time-weighted return over the period: deposits and withdrawals taken out, "
+        "so a deposit is never profit. Null without a start value.",
+    )
 
 
 class RiskStats(BaseModel):

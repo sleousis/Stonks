@@ -11,7 +11,7 @@ edits it.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -178,12 +178,26 @@ class TcaGroupView(BaseModel):
         return cls(**g.as_dict())
 
 
+class TcaMoneyView(BaseModel):
+    """A group's money figures in the portfolio's base currency (roadmap
+    20.5), each order converted at the FX rate of its decision day. Null
+    when an order's currency has no rate."""
+
+    key: str
+    filled_notional: float | None
+    is_cost: float | None
+    opportunity_cost: float | None
+
+
 class TcaSummaryView(BaseModel):
     portfolio_id: str
     by: GroupBy
     since: date | None
     until: date | None
     groups: list[TcaGroupView]
+    base_currency: str | None = None
+    groups_base: list[TcaMoneyView] = []
+    fx_missing: list[str] = []
 
 
 # ---- the service -----------------------------------------------------------------
@@ -216,13 +230,73 @@ class TcaService:
                 strategy_id=strategy_id,
                 ticker=ticker,
             )
+            found = state.sql("SELECT base_currency FROM portfolios WHERE id = ?", [portfolio_id])
+        base = str(found[0]["base_currency"]).upper() if found else "USD"
+        money, missing = self._in_base(rows, by, base)
         return TcaSummaryView(
             portfolio_id=portfolio_id,
             by=by,
             since=since,
             until=until,
             groups=[TcaGroupView.of(g) for g in summarize(rows, by)],
+            base_currency=base,
+            groups_base=money,
+            fx_missing=missing,
         )
+
+    def _in_base(
+        self, rows: list[Any], by: GroupBy, base: str
+    ) -> tuple[list[TcaMoneyView], list[str]]:
+        """Filled notional, shortfall and opportunity cost per group in
+        ``base``. An instrument with no currency is taken as ``base``."""
+        from stonks.fx import FxRates, load_fx_rates
+        from stonks.production.tca import group_key
+
+        tickers = sorted({r.ticker for r in rows})
+        currencies: dict[str, str] = {}
+        fx = FxRates([])
+        if tickers:
+            with self._context.lake() as lake:
+                df = lake.sql(
+                    "SELECT id, currency FROM instruments WHERE id = ANY(?)"
+                    " AND currency IS NOT NULL",
+                    [tickers],
+                )
+                currencies = {str(i): str(c) for i, c in zip(df["id"], df["currency"], strict=True)}
+                if any(c != base for c in currencies.values()):
+                    fx = load_fx_rates(lake, {*currencies.values(), base})
+        sums: dict[str, list[float | None]] = {}
+        missing: set[str] = set()
+
+        def add(slot: list[float | None], i: int, amount: float | None, rate: float | None) -> None:
+            if amount is None or slot[i] is None:
+                return
+            if rate is None:
+                slot[i] = None
+            else:
+                slot[i] = (slot[i] or 0.0) + amount * rate
+
+        for row in rows:
+            slot = sums.setdefault(group_key(row, by), [0.0, 0.0, 0.0])
+            ccy = currencies.get(row.ticker, base)
+            day = row.decided_at.date() if row.decided_at is not None else datetime.now(UTC).date()
+            rate = 1.0 if ccy == base else fx.rate(ccy, base, day)
+            if rate is None:
+                missing.add(ccy)
+            s = row.shortfall
+            add(slot, 0, s.filled_notional, rate)
+            add(slot, 1, s.is_cost, rate)
+            add(slot, 2, s.opportunity_cost, rate)
+        views = [
+            TcaMoneyView(
+                key=k,
+                filled_notional=v[0],
+                is_cost=v[1],
+                opportunity_cost=v[2],
+            )
+            for k, v in sorted(sums.items())
+        ]
+        return views, sorted(missing)
 
     def journal(
         self,

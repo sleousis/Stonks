@@ -92,6 +92,7 @@ from stonks.ingest.schemas import (
     EsgSnapshotRow,
     ExchangeInfo,
     FinancialStatementsBundle,
+    FxRateRow,
     IncomeStatementRow,
     InsiderTransactionRow,
     InstitutionalHolderRow,
@@ -484,6 +485,39 @@ def parse_prices_response(ticker: str, payload: Any) -> Iterator[RawPriceBar]:
             adj_close=_adjusted(row),
             volume=row.get("volume"),
         )
+
+
+def parse_fx_response(base: str, quote: str, payload: Any) -> list[FxRateRow]:
+    """Parse ``/api/eod/{BASE}{QUOTE}.FOREX`` into :class:`FxRateRow` rows:
+    the close is the rate (quote units per one base). Rows without a date
+    or a positive close are dropped."""
+    _check_free_tier(payload)
+    if not isinstance(payload, list):
+        return []
+    out: list[FxRateRow] = []
+    for row in payload:
+        if not isinstance(row, dict) or "date" not in row:
+            continue
+        close = row.get("close")
+        try:
+            rate = float(close) if close is not None else 0.0
+        except (TypeError, ValueError):
+            continue
+        if rate <= 0:
+            continue
+        try:
+            out.append(
+                FxRateRow(
+                    base_currency=base,
+                    quote_currency=quote,
+                    observation_date=row["date"],
+                    rate=rate,
+                    source="eodhd",
+                )
+            )
+        except ValueError:
+            continue
+    return out
 
 
 def _adjusted(row: dict) -> Any:
@@ -1949,6 +1983,23 @@ class EodhdDataSource(DataSource):
         """US option EOD quotes from the EODHD Marketplace options API
         (a separate subscription; see ``eodhd_options``)."""
         return list(fetch_option_quotes(self._get, self._base_url, underlying, since, until))
+
+    def fetch_fx_rates(
+        self,
+        base: str,
+        quote: str,
+        since: date | None = None,
+        until: date | None = None,
+    ) -> Iterable[FxRateRow]:
+        """Daily closes of the ``{BASE}{QUOTE}.FOREX`` pair as FX rates."""
+        base, quote = base.upper(), quote.upper()
+        url = f"{self._base_url}/eod/{base}{quote}.FOREX"
+        params: dict[str, str] = {"fmt": "json"}
+        if since is not None:
+            params["from"] = since.isoformat()
+        if until is not None:
+            params["to"] = until.isoformat()
+        return parse_fx_response(base, quote, self._get(url, params=params))
 
     def fetch_fundamentals(self, ticker: str) -> FinancialStatementsBundle:
         # Income/balance/cashflow statements are equity-only. Crypto/bond/

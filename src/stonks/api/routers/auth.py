@@ -100,7 +100,7 @@ class MeView(BaseModel):
     email: str | None
     display_name: str
     role: Role
-    via: Literal["session", "token", "legacy", "cli", "scheduler"]
+    via: Literal["session", "token", "legacy", "cli", "scheduler", "assistant", "telegram"]
     scopes: list[ApiScope]
     mfa_enrolled: bool
     #: Second factor verified recently enough for sensitive actions.

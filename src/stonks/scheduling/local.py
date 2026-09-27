@@ -16,6 +16,8 @@ The actions call the same services as the CLI:
   when unhealthy;
 - ``report``: the static HTML report written to ``out``;
 - ``backup``: ``run_configured_backup`` (``[backup]`` target and retention);
+- ``price_alerts``: every person's price alert rules checked against the
+  latest closes (roadmap 20.2);
 - ``connections_sync``: every due broker connection synced as
   ``service:scheduler`` (state DB only, so every backend runs it here).
 
@@ -270,6 +272,26 @@ def backup_action(ctx: RunContext) -> JobOutcome:
 
     result = run_configured_backup(ctx.settings, now=ctx.now)
     return JobOutcome("succeeded", {"backup_id": result.ref.id, "pruned": result.pruned})
+
+
+@register_action("price_alerts")
+def price_alerts_action(ctx: RunContext) -> JobOutcome:
+    """Every person's price alert rules against the latest closes, sent
+    through the notification router (roadmap 20.2)."""
+    from stonks.notify.router import configured_router
+    from stonks.price_alerts import run_price_alerts
+    from stonks.store.lake import DuckDBLake
+    from stonks.store.state import SqliteState
+
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        with DuckDBLake(ctx.settings.lake.path) as lake:
+            out = run_price_alerts(
+                state, lake, as_of=ctx.fire.as_of, publish=configured_router(state).publish
+            )
+    finally:
+        state.close()
+    return JobOutcome("succeeded", out.as_dict())
 
 
 @register_action("connections_sync")

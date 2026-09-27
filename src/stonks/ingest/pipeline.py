@@ -266,6 +266,26 @@ class IngestPipeline:
             units=[({"chain": c}, partial(ingest, c)) for c in chains],
         )
 
+    def run_fx_rates(
+        self,
+        pairs: Sequence[tuple[str, str]],
+        since: date | None = None,
+        until: date | None = None,
+    ) -> IngestRunResult:
+        """Pull daily FX rates per ``(base, quote)`` pair into ``fx_rates``
+        (roadmap 20.5). One pair is one unit of soft-fail accounting."""
+
+        def ingest(base: str, quote: str) -> dict[str, Any]:
+            rows = list(self._source.fetch_fx_rates(base, quote, since=since, until=until))
+            self._lake.upsert_fx_rates(_rows_to_df(rows))
+            return {"rows": len(rows)}
+
+        return self._run_units(
+            kind="fx",
+            event="pair",
+            units=[({"pair": f"{b}{q}"}, partial(ingest, b, q)) for b, q in pairs],
+        )
+
     def run_metadata(self, tickers: Sequence[str]) -> IngestRunResult:
         """Pull the extended fundamentals bundle per ticker (profile, dividends,
         insiders, news + sentiment, analyst estimates + ratings, shares

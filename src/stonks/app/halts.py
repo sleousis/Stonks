@@ -296,6 +296,7 @@ class HaltService:
                 actor=scope.actor,
             )
             self._cancel_working(state, scope, halt, ip)
+            _cancel_drafts(state, halt)
             return HaltView.of(halt, _today())
 
     def resume_kill(
@@ -436,3 +437,20 @@ def _covered_portfolios(state: SqliteState, halt: Halt) -> list[str]:
     else:
         rows = state.sql("SELECT id FROM portfolios WHERE status != 'archived' ORDER BY id")
     return [r["id"] for r in rows]
+
+
+def _cancel_drafts(state: SqliteState, halt: Halt) -> None:
+    """The kill switch cancels the pending order drafts it covers (the
+    assistant's proposals, roadmap 20.4). Never raises."""
+    from stonks.production.order_drafts import cancel_drafts
+
+    reason = f"cancelled by the kill switch (halt {halt.id})"
+    try:
+        if halt.scope == "global":
+            cancel_drafts(state, reason=reason, everyone=True)
+        elif halt.scope == "user":
+            cancel_drafts(state, reason=reason, user_id=halt.user_id)
+        elif halt.portfolio_id is not None:
+            cancel_drafts(state, reason=reason, portfolio_ids=[halt.portfolio_id])
+    except Exception as exc:  # the halt stands whatever happens here
+        _log.error("kill_switch.cancel_drafts_failed", halt_id=halt.id, error=str(exc))

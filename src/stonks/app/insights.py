@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 
 import pandas as pd
@@ -49,6 +49,8 @@ from stonks.insights import (
     strategy_agreement,
     weighted_returns,
 )
+from stonks.insights.flows import external_flows
+from stonks.insights.returns import mwr, net_flows
 from stonks.logging import get_logger
 from stonks.production.ledger import ledger_filter
 from stonks.production.pnl import load_pnl
@@ -96,6 +98,20 @@ class InsightsView(BaseModel):
     uncovered: list[str] = Field(description="Broker symbols no ticker maps to.")
     unpriced: list[str] = Field(description="Holdings without a price, left out of the numbers.")
     notes: list[str]
+    total_value_base: float | None = Field(
+        default=None,
+        description="Cash (kept in the base currency) plus every priced holding converted to "
+        "the base currency at the latest FX rate; null when a held currency has no rate.",
+    )
+    fx_missing: list[str] = Field(
+        default_factory=list, description="Held currencies with no FX rate to the base currency."
+    )
+    mwr: float | None = Field(
+        default=None,
+        description="Money-weighted return since inception, annualized (XIRR of the start "
+        "value, deposits, withdrawals and the latest value).",
+    )
+    net_flows: float = Field(default=0.0, description="Deposits less withdrawals since inception.")
 
 
 class AgreementView(BaseModel):
@@ -147,6 +163,12 @@ class InsightsService:
         betas = self._betas(book, returns, bench, notes)
         with self._ctx.state() as state:
             points = [(r.day, r.total_value) for r in load_pnl(state, portfolio_id=portfolio_id)]
+            flows = external_flows(state, portfolio_id)
+        total_base, fx_missing = self._total_in_base(book)
+        if fx_missing:
+            notes.append(
+                "no FX rate for " + ", ".join(fx_missing) + ": the base-currency total is left out"
+            )
         if book.uncovered:
             notes.append(
                 f"{len(book.uncovered)} holding(s) have no ticker; their broker value counts "
@@ -166,7 +188,7 @@ class InsightsService:
                 ticker=allocation(book, "ticker"),
             ),
             exposure=exposure(book, betas=betas, benchmark=bench),
-            pnl=period_pnl(points),
+            pnl=period_pnl(points, flows),
             risk=RiskView(
                 history=realized_risk([v for _, v in points]),
                 holdings=self._holdings_risk(book, returns),
@@ -176,7 +198,27 @@ class InsightsService:
             uncovered=[h.symbol for h in book.uncovered],
             unpriced=[h.symbol for h in book.unpriced],
             notes=notes,
+            total_value_base=total_base,
+            fx_missing=fx_missing,
+            mwr=mwr(points, flows),
+            net_flows=net_flows(points, flows),
         )
+
+    def _total_in_base(self, book: Book) -> tuple[float | None, list[str]]:
+        """The book's value in its base currency (roadmap 20.5): cash as is,
+        holdings converted at the latest stored FX rate."""
+        from stonks.fx import load_fx_rates, sum_in_base
+
+        base = book.base_currency
+        amounts = [
+            (float(h.market_value), h.currency) for h in book.priced if h.market_value is not None
+        ]
+        fx = None
+        if any(c and c != base for _, c in amounts):
+            with self._ctx.lake() as lake:
+                fx = load_fx_rates(lake, {c for _, c in amounts if c} | {base})
+        total, missing = sum_in_base(amounts, base, fx, datetime.now(UTC).date())
+        return (None if total is None else book.cash + total), missing
 
     def agreement(self, portfolio_id: str) -> AgreementView:
         """For each holding, what every active strategy's latest signal says."""

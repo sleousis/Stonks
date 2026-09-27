@@ -299,6 +299,17 @@ def api_backup(ctx: RunContext) -> JobOutcome:
     return backup_job_outcome(status, error, result, job_id)
 
 
+@API_ACTIONS.register("price_alerts")
+def api_price_alerts(ctx: RunContext) -> JobOutcome:
+    """The server holds the lake, so it checks the rules
+    (``POST /api/price-alerts/evaluate``)."""
+    view = _executor(ctx).client.post(
+        "/api/price-alerts/evaluate", {"as_of": ctx.fire.as_of.isoformat()}
+    )
+    keys = ("rules", "checked", "fired", "published", "skipped_no_price")
+    return JobOutcome("succeeded", {k: view.get(k) for k in keys})
+
+
 @API_ACTIONS.register("connections_sync")
 def api_connections_sync(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import connections_sync_action

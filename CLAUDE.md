@@ -67,6 +67,13 @@ uv run stonks pnl [--since YYYY-MM-DD] [--strategy <shadow-id>] [--portfolio ID]
 uv run stonks report [--backtest <job-or-strategy> --start ... --end ...]
 uv run stonks tca summary|journal|order|note|edit-note|refresh   # transaction costs and the trade journal
 uv run stonks options ingest|chain|strategies|backtest [--validate]   # options research (Phase 17), nothing trades
+uv run stonks orders place|preview|change|cancel|list [--user E]   # manual orders through every check
+uv run stonks price-alerts list|create|delete|events --user E | run   # price alerts, run = the scheduler job
+uv run stonks telegram link-code|status|unlink --user E | poll [--once]
+uv run stonks tax gains|dividends --year Y [--portfolio ID] | settings   # yearly tax CSVs, see docs/tax.md
+uv run stonks ingest fx --pairs EURUSD,GBPUSD [--since ...]   # FX rates into the lake
+uv run stonks cash-flows record|list --user E --portfolio ID   # deposits and withdrawals (TWR, MWR)
+uv run stonks assistant eval [--base-url URL --model M]   # the assistant's eval set
 
 # Servers
 uv run stonks serve              # REST API + built console on 127.0.0.1:8000
@@ -129,12 +136,13 @@ uv run python -m stonks.security keygen
 - **`universes/`**: stored universe definitions (list, exchange, rule, index) behind `UniverseProvider` and `IndexSource` registries, refreshed into point-in-time membership. See `docs/universes.md`.
 - **`api/`**: FastAPI app (`stonks serve`), session or API-token auth with per-route permissions (`STONKS_API_TOKEN` is a legacy credential), background jobs with SSE, OpenAPI contract, serves `web/dist`.
 - **`mcp/`**: `stonks mcp`, an MCP server that talks to the running REST API. Write tools need an explicit confirm.
+- **Phase 20 blocks**: `production/manual.py` (manual orders through the gates, every risk rule and the broker, idempotent by client id, `origin = manual`; the tick never trades manual holdings), `price_alerts/` (rules on tickers or watchlists, the `price_alerts` scheduler job, delivery through the notification router), `telegram/` (the `telegram` channel and a long-polling bot acting as the linked user, env token only), `assistant/` (the `ChatModel` seam, an OpenAI-compatible client for Ollama, vLLM or llama.cpp, an agent loop over the in-process MCP tools as the signed-in user, a tool catalog with a small default set, the safety gate and freeze in `guard.py`, and an eval set in `evals.py`), `production/order_drafts.py` (the assistant only drafts orders, approved in the web app with a fresh second factor), `fx/` (conversion over the lake's `fx_rates`) and `tax/` (FIFO or specific lots, US wash sales, dividends, yearly CSVs).
 - **`web/`**: Angular console (dashboard, strategies, lab, studio, data, orders, shadow, go-live, health, settings), typed client generated from the OpenAPI spec, installable PWA. See `docs/ui.md`.
 - **Deploy**: `Dockerfile`, `deploy/` (Compose with api, scheduler and Caddy, Tailscale, restic backups, host checks), `infra/` (Terraform), `.github/workflows/` (ci, codeql, docs, release, deploy, mutation).
 
 ## Canonical schemas (current)
 
-**Lake (DuckDB, migrations 001-018):**
+**Lake (DuckDB, migrations 001-019):**
 - `instruments (id, asset_class, exchange, currency, ipo_date, sector, industry, is_delisted, name, identifiers, GICS, address, ...)`: renamed from `tickers` in 007. `asset_class` in {equity, crypto, commodity, bond}.
 - `bars (ticker, timestamp, interval, open, high, low, close, adj_close, volume; PK (ticker, timestamp, interval))`: OHLCV at any `Interval` code (1m, 5m, 1h, 4h, 1d, 1w, 1mo, ...). `prices` is a read-only view of `interval='1d'`. Write with `upsert_bars` or the daily `upsert_prices` shim. With the Parquet backend the rows live under `<lake dir>/bars` instead of the table.
 - Statements (008, equity only), keyed `(ticker, period_end, frequency)`: `income_statement`, `balance_sheet`, `cash_flow_statement`, each with `filing_date` and `currency`. `upsert_<statement>` reindexes sparse frames and uses `COALESCE(EXCLUDED.col, table.col)`, so a NULL never overwrites a stored value but a real restated value does.
@@ -142,6 +150,7 @@ uv run python -m stonks.security keygen
 - Per-class profiles (007): `crypto_profiles`, `bond_profiles`, `bond_yield_history`, `commodity_contracts`. No FK enforcement.
 - `macro_indicators (country_iso, indicator, observation_date, period, country_name, value)` (009): ISO alpha-3 country, `lower_snake_case` indicator (open set), `period` in {annual, quarterly, monthly} or NULL.
 - `defi_tvl (chain, observation_date, tvl_usd, source)` (011).
+- `fx_rates (base_currency, quote_currency, observation_date, rate, source)` (019): daily FX closes, `rate` = quote units per one base unit. Read through `stonks.fx.FxRates` (latest on or before the day, inverse pair, cross through USD). See `docs/tax.md`.
 - `lake_settings (key, value)` (012): today only `bars_backend`.
 - `quarantined_bars (id, run_id, ticker, timestamp, interval, OHLCV, reasons, source, quarantined_at)` and `ingest_runs.quality_json` (013).
 - `ingest_runs (id, source, kind, started_at, finished_at, tickers_ok, tickers_failed, status, error, quality_json)`.
@@ -151,7 +160,7 @@ uv run python -m stonks.security keygen
 - `option_contracts (contract_id, underlying, expiry, strike, right, style, multiplier, settlement, ...)` and `option_quotes (contract_id, as_of, source, bid, ask, last, volume, open_interest, underlying_price, vendor_iv, vendor_delta..vendor_rho)` (017): option chains, vendor-agnostic. The contract id is `<underlying>:<expiry>:<C|P>:<strike>[:<multiplier>]`.
 - `income_statement_versions`, `balance_sheet_versions`, `cash_flow_statement_versions` (018): every version of a statement row with `known_at`, the time Stonks first saw it. Point-in-time reads pick the version known at the decision, so a restatement cannot leak backward (P12).
 
-**State (SQLite, migrations 001-026):**
+**State (SQLite, migrations 001-027):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -168,6 +177,7 @@ uv run python -m stonks.security keygen
 - 020: `signals`, `signal_events`, `portfolio_runs`, `portfolios.paper_of` (a broker portfolio's paper account), `subscriptions.paper_since`, `users.risk_policy_json`.
 - 021: `orders.position_effect` (`open` or `close`). 022: a `pf_default` subscription for every active strategy. 023: `financing_accruals`, `financing_charges`.
 - 025: lab offload queue (`jobs.executor`, `lab_workers`). 026: `onboarding_steps`, `onboarding_status` (first-run guide) and `watchlists` (per-user ticker lists).
+- 027: `orders.origin` (`strategy` or `manual`), `manual_reason`, `placed_by`, `replaces_client_id`; `price_alert_rules`, `price_alert_state`, `price_alert_events`; `telegram_links`, `telegram_link_codes`, `telegram_bot_state`; `assistant_conversations`, `assistant_messages`, `assistant_pending_actions`; `portfolio_tax_settings`, `tax_lot_picks`; `order_drafts`, `assistant_turns`, `assistant_freezes`, `portfolio_cash_flows`.
 
 ## Conventions to match
 

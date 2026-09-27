@@ -11,6 +11,7 @@ export type RoutePermission =
   | 'mfa.recovery_codes'
   | 'notifications.manage'
   | 'operations.run'
+  | 'orders.approve'
   | 'password.change'
   | 'portfolio.manage'
   | 'portfolio.totals'
@@ -24,12 +25,16 @@ export type RoutePermission =
 
 /** `"METHOD /api/path/{param}"` to the permission the route needs. */
 export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
+  'DELETE /api/assistant/conversations/{conversation_id}': 'data.read',
+  'DELETE /api/assistant/freeze': 'killswitch.resume',
   'DELETE /api/auth/tokens/{token_id}': 'tokens.revoke',
   'DELETE /api/auth/users/{user_id}/mfa': 'users.manage',
   'DELETE /api/connections/{connection_id}': 'connection.manage',
+  'DELETE /api/price-alerts/{alert_id}': 'notifications.manage',
   'DELETE /api/push/subscriptions': 'notifications.manage',
   'DELETE /api/push/subscriptions/{device_id}': 'notifications.manage',
   'DELETE /api/studio/drafts/{draft_id}': 'lab.run',
+  'DELETE /api/telegram/link': 'notifications.manage',
   'DELETE /api/universes/{universe_id}': 'strategy.promote',
   'DELETE /api/watchlists/{watchlist_id}': 'portfolio.manage',
   'GET /api/auth/users': 'users.read',
@@ -47,9 +52,13 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'GET /api/subscriptions': 'data.read',
   'PATCH /api/auth/users/{user_id}': 'users.manage',
   'PATCH /api/portfolios/{portfolio_id}': 'portfolio.manage',
+  'PATCH /api/price-alerts/{alert_id}': 'notifications.manage',
   'PATCH /api/studio/drafts/{draft_id}': 'lab.run',
   'PATCH /api/subscriptions/{subscription_id}': 'portfolio.trade',
   'PATCH /api/watchlists/{watchlist_id}': 'portfolio.manage',
+  'POST /api/assistant/conversations': 'data.read',
+  'POST /api/assistant/conversations/{conversation_id}/actions/{action_id}': 'data.read',
+  'POST /api/assistant/conversations/{conversation_id}/messages': 'data.read',
   'POST /api/auth/password': 'password.change',
   'POST /api/auth/recovery-codes': 'mfa.recovery_codes',
   'POST /api/auth/tokens': 'tokens.manage',
@@ -75,7 +84,17 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'POST /api/lab/sweeps': 'lab.run',
   'POST /api/notifications/read': 'data.read',
   'POST /api/notifications/test': 'data.read',
+  'POST /api/orders/{client_id}/cancel': 'portfolio.trade',
+  'POST /api/orders/{client_id}/change': 'portfolio.trade',
+  'POST /api/orders/drafts': 'portfolio.trade',
+  'POST /api/orders/drafts/{draft_id}/approve': 'orders.approve',
+  'POST /api/orders/drafts/{draft_id}/reject': 'portfolio.trade',
+  'POST /api/orders/manual': 'portfolio.trade',
+  'POST /api/orders/manual/preview': 'portfolio.trade',
   'POST /api/portfolios': 'portfolio.manage',
+  'POST /api/portfolios/{portfolio_id}/cash-flows': 'portfolio.manage',
+  'POST /api/price-alerts': 'notifications.manage',
+  'POST /api/price-alerts/evaluate': 'operations.run',
   'POST /api/push/subscriptions': 'notifications.manage',
   'POST /api/schedule/{job}/run-now': 'operations.run',
   'POST /api/strategies/{strategy_id}/promote': 'strategy.promote',
@@ -91,6 +110,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'POST /api/studio/spec/validate': 'lab.run',
   'POST /api/subscriptions': 'portfolio.trade',
   'POST /api/tca/orders/{client_id}/notes': 'portfolio.manage',
+  'POST /api/telegram/link-code': 'notifications.manage',
   'POST /api/ticks': 'operations.run',
   'POST /api/universes': 'lab.run',
   'POST /api/universes/{universe_id}/ensure': 'lab.run',
@@ -103,5 +123,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'PUT /api/onboarding': 'data.read',
   'PUT /api/onboarding/steps/{step}': 'data.read',
   'PUT /api/risk/limits': 'portfolio.manage',
+  'PUT /api/tax/lots/picks': 'portfolio.manage',
+  'PUT /api/tax/settings': 'portfolio.manage',
   'PUT /api/tca/notes/{note_id}': 'portfolio.manage',
 };

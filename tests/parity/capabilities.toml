@@ -1179,3 +1179,185 @@ routes = []
 console = { limited = "options are research only until live options follow 17.5" }
 cli = ["stonks options chain", "stonks options strategies", "stonks options backtest"]
 mcp = { limited = "options are research only until live options follow 17.5" }
+# ---- Phase 20: complete product -------------------------------------------------
+
+[[capability]]
+id = "orders.manual"
+domain = "trading"
+title = "Place, preview and change your own manual orders"
+routes = ["POST /api/orders/manual", "POST /api/orders/manual/preview", "POST /api/orders/{client_id}/change"]
+console = ["placeManualOrder", "previewManualOrder", "changeManualOrder"]
+cli = ["stonks orders place", "stonks orders preview", "stonks orders change", "stonks orders list"]
+mcp = ["place_order", "change_order"]
+
+[[capability]]
+id = "orders.cancel"
+domain = "trading"
+title = "Cancel a working order of your portfolio"
+routes = ["POST /api/orders/{client_id}/cancel"]
+console = "cancelOrder"
+cli = "stonks orders cancel"
+mcp = "cancel_order"
+
+[[capability]]
+id = "price_alerts.rules"
+domain = "notifications"
+title = "Your price alerts: list, create, read, change and delete"
+routes = [
+  "GET /api/price-alerts",
+  "POST /api/price-alerts",
+  "GET /api/price-alerts/{alert_id}",
+  "PATCH /api/price-alerts/{alert_id}",
+  "DELETE /api/price-alerts/{alert_id}",
+]
+console = ["listPriceAlerts", "createPriceAlert", "getPriceAlert", "updatePriceAlert", "deletePriceAlert"]
+cli = ["stonks price-alerts list", "stonks price-alerts create", "stonks price-alerts delete"]
+mcp = ["list_price_alerts", "create_price_alert", "update_price_alert", "delete_price_alert"]
+
+[[capability]]
+id = "price_alerts.events"
+domain = "notifications"
+title = "When your price alerts fired"
+routes = ["GET /api/price-alerts/events"]
+console = "listPriceAlertEvents"
+cli = "stonks price-alerts events"
+mcp = "list_price_alert_events"
+
+[[capability]]
+id = "price_alerts.run"
+domain = "operations"
+title = "Check every price alert now (the scheduler's price_alerts job)"
+routes = ["POST /api/price-alerts/evaluate"]
+console = { limited = "an operator job the scheduler runs after each price ingest" }
+cli = "stonks price-alerts run"
+mcp = { limited = "an operator job the scheduler runs after each price ingest" }
+
+[[capability]]
+id = "telegram.link"
+domain = "notifications"
+title = "Link a Telegram chat with a one-time code, see or remove the link"
+routes = ["GET /api/telegram/link", "POST /api/telegram/link-code", "DELETE /api/telegram/link"]
+console = ["getTelegramLink", "createTelegramLinkCode", "deleteTelegramLink"]
+cli = ["stonks telegram link-code", "stonks telegram status", "stonks telegram unlink"]
+mcp = { limited = "linking a chat is done in the console or the CLI, where the code is shown once" }
+
+[[capability]]
+id = "telegram.bot"
+domain = "notifications"
+title = "Run the Telegram bot (long polling)"
+routes = []
+console = { limited = "the bot runs inside stonks serve or from the operator shell" }
+cli = "stonks telegram poll"
+mcp = { limited = "the bot runs inside stonks serve or from the operator shell" }
+
+[[capability]]
+id = "assistant.chat"
+domain = "assistant"
+title = "Chat with the AI assistant: status, conversations, messages, approve or reject its write actions"
+routes = [
+  "GET /api/assistant/status",
+  "GET /api/assistant/conversations",
+  "POST /api/assistant/conversations",
+  "GET /api/assistant/conversations/{conversation_id}",
+  "DELETE /api/assistant/conversations/{conversation_id}",
+  "POST /api/assistant/conversations/{conversation_id}/messages",
+  "POST /api/assistant/conversations/{conversation_id}/actions/{action_id}",
+]
+console = [
+  "getAssistantStatus",
+  "listAssistantConversations",
+  "createAssistantConversation",
+  "getAssistantConversation",
+  "deleteAssistantConversation",
+  "sendAssistantMessage",
+  "decideAssistantAction",
+]
+cli = { limited = "the assistant is an in-app chat, the CLI is already a direct tool" }
+mcp = { limited = "the assistant runs the MCP tools itself, an MCP client is already an assistant" }
+
+[[capability]]
+id = "tax.settings"
+domain = "portfolio"
+title = "A portfolio's base currency and tax settings"
+routes = ["GET /api/tax/settings", "PUT /api/tax/settings"]
+console = ["getTaxSettings", "updateTaxSettings"]
+cli = "stonks tax settings"
+mcp = "get_tax_settings"
+
+[[capability]]
+id = "tax.lot_picks"
+domain = "portfolio"
+title = "Specific-lot picks: which buys a sell closes"
+routes = ["GET /api/tax/lots/picks", "PUT /api/tax/lots/picks"]
+console = ["listTaxLotPicks", "setTaxLotPicks"]
+cli = { limited = "lot picks are chosen per sell in the console" }
+mcp = "list_tax_lot_picks"
+
+[[capability]]
+id = "tax.exports"
+domain = "portfolio"
+title = "Yearly tax exports as CSV: realized gains per lot, dividends and withholding"
+routes = ["GET /api/tax/exports/gains", "GET /api/tax/exports/dividends"]
+console = ["exportTaxGains", "exportTaxDividends"]
+cli = ["stonks tax gains", "stonks tax dividends"]
+mcp = { limited = "CSV files are downloads for the console and the CLI" }
+
+[[capability]]
+id = "fx.rate"
+domain = "data"
+title = "FX rates: ingest them, read the rate the system converts with"
+routes = ["GET /api/fx/rate"]
+console = "getFxRate"
+cli = "stonks ingest fx"
+mcp = "get_fx_rate"
+
+[[capability]]
+id = "portfolio.cash_flows.list"
+domain = "portfolio"
+title = "Deposits and withdrawals of a portfolio (behind the time- and money-weighted returns)"
+routes = ["GET /api/portfolios/{portfolio_id}/cash-flows"]
+console = "listCashFlows"
+cli = "stonks cash-flows list"
+mcp = "list_cash_flows"
+
+[[capability]]
+id = "portfolio.cash_flows.record"
+domain = "portfolio"
+title = "Record a deposit or a withdrawal on a simulated portfolio"
+routes = ["POST /api/portfolios/{portfolio_id}/cash-flows"]
+console = "recordCashFlow"
+cli = "stonks cash-flows record"
+mcp = { limited = "moving money in a book stays in the console and the CLI" }
+
+[[capability]]
+id = "orders.drafts"
+domain = "trading"
+title = "Order drafts: propose an order, list, reject, and approve it with a fresh second factor"
+routes = [
+  "GET /api/orders/drafts",
+  "POST /api/orders/drafts",
+  "POST /api/orders/drafts/{draft_id}/approve",
+  "POST /api/orders/drafts/{draft_id}/reject",
+]
+console = ["listOrderDrafts", "createOrderDraft", "approveOrderDraft", "rejectOrderDraft"]
+cli = { limited = "drafts come from the assistant and MCP, the shell places orders directly" }
+mcp = ["draft_order", "list_order_drafts"]
+
+[[capability]]
+id = "assistant.safety"
+domain = "assistant"
+title = "The assistant's trace and freeze: recorded turns, and unfreezing after a burst"
+routes = ["GET /api/assistant/conversations/{conversation_id}/turns", "DELETE /api/assistant/freeze"]
+console = ["listAssistantTurns", "clearAssistantFreeze"]
+cli = { limited = "the trace and the freeze belong to the in-app chat" }
+mcp = { limited = "the assistant runs the MCP tools itself, an MCP client is already an assistant" }
+
+[[capability]]
+id = "assistant.eval"
+domain = "assistant"
+title = "Run the assistant's fixed eval set against the fake model or a real endpoint"
+routes = []
+console = { limited = "an operator check before switching models" }
+cli = "stonks assistant eval"
+mcp = { limited = "an operator check before switching models" }
+

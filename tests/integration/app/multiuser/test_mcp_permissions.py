@@ -528,6 +528,80 @@ CASES: dict[str, Case] = {
         "/api/studio/drafts/{draft_id}",
         lambda i: {"draft_id": i["draft"], "confirm": True},
     ),
+    # price alerts (roadmap 20.2) and currency and tax reads (20.5)
+    "list_price_alerts": _c("GET", "/api/price-alerts"),
+    "list_price_alert_events": _c("GET", "/api/price-alerts/events"),
+    "create_price_alert": _c(
+        "POST",
+        "/api/price-alerts",
+        lambda i: {"condition": "crosses_above", "ticker": "UP.US", "level": 100.0},
+    ),
+    "update_price_alert": _c(
+        "PATCH", "/api/price-alerts/{alert_id}", lambda i: {"alert_id": "pal_none", "level": 5.0}
+    ),
+    "delete_price_alert": _c(
+        "DELETE",
+        "/api/price-alerts/{alert_id}",
+        lambda i: {"alert_id": "pal_none", "confirm": True},
+    ),
+    "get_tax_settings": _c("GET", "/api/tax/settings", lambda i: {"portfolio_id": i["portfolio"]}),
+    "list_tax_lot_picks": _c(
+        "GET", "/api/tax/lots/picks", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
+    "get_fx_rate": _c("GET", "/api/fx/rate", lambda i: {"base": "EUR", "quote": "USD"}),
+    "list_cash_flows": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/cash-flows",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    # order drafts (roadmap 20.4): a stale price answers 409 once permitted
+    "list_order_drafts": _c("GET", "/api/orders/drafts"),
+    "draft_order": _c(
+        "POST",
+        "/api/orders/drafts",
+        lambda i: {
+            "portfolio_id": i["portfolio"],
+            "ticker": "UP.US",
+            "side": "buy",
+            "quantity": 1,
+            "reason": "by hand",
+            "retry_key": "perm-1",
+        },
+    ),
+    # manual orders (roadmap 20.1): a stale price answers 409 once permitted
+    "place_order": _c(
+        "POST",
+        "/api/orders/manual",
+        lambda i: {
+            "portfolio_id": i["portfolio"],
+            "ticker": "UP.US",
+            "side": "buy",
+            "quantity": 1,
+            "reason": "by hand",
+            "confirm": True,
+        },
+    ),
+    "change_order": _c(
+        "POST",
+        "/api/orders/{client_id}/change",
+        lambda i: {
+            "client_id": "manual:none:x",
+            "portfolio_id": i["portfolio"],
+            "quantity": 2,
+            "reason": "by hand",
+            "confirm": True,
+        },
+    ),
+    "cancel_order": _c(
+        "POST",
+        "/api/orders/{client_id}/cancel",
+        lambda i: {
+            "client_id": "manual:none:x",
+            "portfolio_id": i["portfolio"],
+            "reason": "by hand",
+            "confirm": True,
+        },
+    ),
 }
 
 #: Tools whose preview reads the target first; a missing id stops them there.
