@@ -137,7 +137,7 @@ Which modes a strategy's status allows:
 |---|:-:|:-:|:-:|
 | shadow (incubating) | yes, labelled | yes | no |
 | active | yes | yes | yes, after the checklist |
-| retired | ends: subscriptions switch to notify-exit-only until flat, then disable | | |
+| retired | ends: a paper book exits the strategy's own holdings, then the subscription is disabled | exits only | paused |
 
 Mode rules:
 

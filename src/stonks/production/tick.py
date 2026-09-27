@@ -481,6 +481,8 @@ class _TickRun:
     pool: StrategyPool
     #: Ids of the strategies that are ``active`` right now (auto needs one).
     active: frozenset[str] = frozenset()
+    #: Every registered strategy's status right now.
+    statuses: Mapping[str, str] = field(default_factory=dict)
     _shadow: SignalSet | None = None
     _shadow_error: Exception | None = None
     _vols: dict[str, float] | None = None
@@ -577,7 +579,8 @@ def _run_tick_body(
         scoped=scoped,
         signals=signals,
         pool=pool,
-        active=frozenset(h.id for h in registry.list_all(status="active")),
+        statuses=(statuses := {h.id: h.status for h in registry.list_all()}),
+        active=frozenset(sid for sid, st in statuses.items() if st == "active"),
     )
     _expect_consumers(run)
 
@@ -999,7 +1002,30 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         exit_owner=exit_owner,
         client_id=make_id,
     )
-    if pipeline.reason is not None:
+    # BE-18: a retired strategy of this book exits its own holdings, whatever
+    # the others decided for those tickers, then its subscription ends.
+    retired = sorted(
+        s for s in (book.spec.strategy_weights or {}) if run.statuses.get(s) == "retired"
+    )
+    retired_owned: dict[str, str] = {}
+    exits: list[Order] = []
+    if retired and run.scoped:
+        owners = _holding_owners(state, portfolio_id, held, book_input.prior_attribution)
+        retired_owned = {t: sid for t, sid in owners.items() if sid in retired}
+        exits = [
+            Order(
+                client_id=make_id(sid, t, "sell" if portfolio.positions[t] > 0 else "cover"),
+                ticker=t,
+                side="sell" if portfolio.positions[t] > 0 else "buy",
+                quantity=abs(portfolio.positions[t]),
+                strategy_id=sid,
+                position_effect="close",
+            )
+            for t, sid in sorted(retired_owned.items())
+        ]
+        if exits:
+            log.info("tick.retired_exits", tickers=sorted(retired_owned))
+    if pipeline.reason is not None and not exits:
         return noop(pipeline.reason)
     winner_id = pipeline.decided_by
     if winner_id is not None and not pipeline.exit_only:
@@ -1011,6 +1037,8 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     risk_adjustments = list(pipeline.adjustments)
     slice_policy = book_input.risk_overrides.get(winner_id) if winner_id else None
     proposed = pipeline.orders
+    if exits:
+        proposed = [o for o in proposed if o.ticker not in retired_owned] + exits
     outside: list[str] = []
     if settings.scoped:
         # the scope is the tick's tickers, even when the portfolio has its own
@@ -1184,6 +1212,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         )
 
     hook_summary: dict[str, Any] = {}
+    after = portfolio
     if not dry_run and external:
         # Report what the broker made of each submission (e.g. rejected).
         booked = _order_statuses(state, [o.client_id for o, _, _ in outcomes])
@@ -1245,6 +1274,10 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             log,
         )
 
+    ended: list[str] = []
+    if retired and run.scoped and not dry_run:
+        holdings = (after if external else portfolio).positions
+        ended = _end_retired_subscriptions(run, book, retired, retired_owned, holdings)
     exit_strategy_id = winner_id if pipeline.exit_only else None
     status: TickStatus = "ok" if not any_failure else "partial"
     return result(
@@ -1263,6 +1296,8 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             "stale_buys_dropped": pipeline.stale_buys,
             **({"outside_universe_skipped": outside} if outside else {}),
             **({"external_holdings_skipped": external_skipped} if external_skipped else {}),
+            **({"retired_exits": sorted(retired_owned)} if retired_owned else {}),
+            **({"retired_subscriptions_ended": ended} if ended else {}),
             **({"open_order_conflicts": open_conflicts} if open_conflicts else {}),
             **halted(halt),
             **({"constructor": construction.method} if not book.legacy else {}),
@@ -1450,6 +1485,63 @@ def _pause_on_broker_error(
     return replace(outcome, summary={**outcome.summary, "auto_paused": paused})
 
 
+def _holding_owners(
+    state: SqliteState,
+    portfolio_id: str,
+    held: Sequence[str],
+    prior: Mapping[str, Mapping[str, float]],
+) -> dict[str, str]:
+    """The strategy that owns each held ticker: the largest share of its
+    last attribution, else the strategy behind its latest fill here."""
+    owners: dict[str, str] = {}
+    for ticker in held:
+        shares = prior.get(ticker)
+        if shares:
+            owners[ticker] = min(shares, key=lambda sid: (-abs(shares[sid]), sid))
+    rest = [t for t in held if t not in owners]
+    if rest:
+        marks = ",".join("?" for _ in rest)
+        rows = state.sql(
+            "SELECT ticker, strategy_id FROM orders WHERE portfolio_id = ? AND strategy_id IS NOT"
+            f" NULL AND status IN ('filled', 'partially_filled') AND ticker IN ({marks})"
+            " ORDER BY updated_at DESC, created_at DESC, rowid DESC",
+            [portfolio_id, *rest],
+        )
+        for r in rows:
+            owners.setdefault(r["ticker"], r["strategy_id"])
+    return owners
+
+
+def _end_retired_subscriptions(
+    run: _TickRun,
+    book: TickBook,
+    retired: Sequence[str],
+    owned: Mapping[str, str],
+    holdings: Mapping[str, float],
+) -> list[str]:
+    """Disable the book's subscriptions of retired strategies that hold
+    nothing any more (BE-18; design: exit-only until flat, then disable).
+    Audited as ``service:system``. Never raises."""
+    from stonks.accounts.scope import Scope
+    from stonks.accounts.subscriptions import SubscriptionRepository
+
+    still = {sid for t, sid in owned.items() if abs(holdings.get(t, 0.0)) > _QTY_EPSILON}
+    ended: list[str] = []
+    repo = SubscriptionRepository(run.state)
+    system = Scope.service("system")
+    for sid in retired:
+        sub_id = book.subscription_ids.get(sid)
+        if sid in still or sub_id is None:
+            continue
+        try:
+            repo.disable(system, sub_id, reason="strategy retired and its holdings are closed")
+        except Exception as exc:  # pragma: no cover - best effort
+            run.log.error("tick.retired_disable_failed", subscription_id=sub_id, error=str(exc))
+            continue
+        ended.append(sub_id)
+    return ended
+
+
 def _pause_inactive_auto(run: _TickRun, book: TickBook, outcome: BookResult) -> BookResult:
     """Pause the book's auto subscriptions whose strategy is not active
     (BE-01): the book already left them out, this makes it stick."""
@@ -1461,10 +1553,9 @@ def _pause_inactive_auto(run: _TickRun, book: TickBook, outcome: BookResult) -> 
             by_strategy.setdefault(sid, []).append(book.subscription_ids[sid])
     if not by_strategy:
         return outcome
-    statuses = {h.id: h.status for h in run.registry.list_all()}
     paused: list[str] = []
     for sid, ids in by_strategy.items():
-        status = statuses.get(sid, "missing")
+        status = run.statuses.get(sid, "missing")
         try:
             paused += pause_auto(
                 run.state,

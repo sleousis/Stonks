@@ -393,3 +393,33 @@ def test_be52_a_dry_run_plan_writes_no_paper_account(world):
     run_tick(world.state, world.lake, world.registry, SETTINGS, as_of=DAY1, plan=plan,
              dry_run=True)  # fmt: skip
     assert not world.state.sql("SELECT 1 FROM portfolios WHERE paper_of IS NOT NULL")
+
+
+# ---- BE-18: a retired strategy's holdings are exited, then its subscription ends -----------
+
+
+def test_be18_a_retired_strategys_paper_holdings_are_sold_then_the_subscription_ends(world):
+    # Alice's book also follows bh_down, which keeps its own holding
+    world.subs.subscribe(world.alice, strategy_id="bh_down", mode=Mode.PAPER,
+                         portfolio_id=world.sim)  # fmt: skip
+    world.tick(DAY1)
+    bought = {o["ticker"] for o in world.orders(world.sim)}
+    assert "UP.US" in bought
+    world.registry.set_status("bh_up", "retired", actor="t", reason="no edge left")
+
+    world.tick(DAY2)
+    day2 = [o for o in world.orders(world.sim) if o["client_id"].startswith("2026-03-18")]
+    sells = [(o["ticker"], o["side"], o["strategy_id"]) for o in day2 if o["side"] == "sell"]
+    assert sells == [("UP.US", "sell", "bh_up")]
+    assert world.subs.get(world.alice, world.alice_paper).enabled is False
+    [audit] = world.state.sql(
+        "SELECT * FROM audit_log WHERE action = 'subscription.disable' AND target_id = ?",
+        [world.alice_paper],
+    )
+    assert audit["actor"] == "service:system"
+    [snap] = world.state.sql(
+        "SELECT positions_json FROM portfolio_snapshots WHERE portfolio_id = ?"
+        " ORDER BY as_of DESC, id DESC LIMIT 1",
+        [world.sim],
+    )
+    assert "UP.US" not in snap["positions_json"]
