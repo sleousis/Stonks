@@ -312,6 +312,17 @@ class BarFillModel:
         return triggered, None
 
 
+def triggered_price(
+    order: Order, open_: float, high: float | None = None, low: float | None = None
+) -> float | None:
+    """The price a stop (or stop-limit) ``order`` fills at in a bar with this
+    open, high and low, or ``None`` when the bar does not reach it. A gap
+    through the stop fills at the open. The resting protective stops of a
+    simulated book use it (roadmap 19.10)."""
+    price, _ = BarFillModel._price(order, BarQuote(open=open_, high=high, low=low))
+    return price
+
+
 def _limit(
     buy: bool, o: float, high: float, low: float, limit: float | None
 ) -> tuple[float | None, str | None]:
