@@ -22,7 +22,7 @@ import threading
 import uuid
 from abc import ABC, abstractmethod
 from collections import OrderedDict
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -81,9 +81,9 @@ def data_fingerprint(
     run the checksum queries (a point-in-time view, a test double): then the
     panel is not cached. ``tables`` are extra lake tables with a ``ticker``
     column the factor reads (statements, share counts)."""
-    sql = getattr(lake, "sql", None)
-    if isinstance(lake, PointInTimeLake) or not callable(sql):
+    if isinstance(lake, PointInTimeLake) or not callable(getattr(lake, "sql", None)):
         return None
+    sql: Callable[..., pd.DataFrame] = lake.sql
     tickers = list(tickers)
     try:
         bars = sql(
@@ -93,10 +93,8 @@ def data_fingerprint(
             [tickers, interval, start, end],
         )
         parts: list[Any] = [[int(bars["n"].iloc[0]), str(bars["h"].iloc[0])]]
-        actions = getattr(lake, "get_corporate_actions", None)
-        if callable(actions):
-            frame = actions(tickers)
-            parts.append(_frame_digest(frame))
+        if callable(getattr(lake, "get_corporate_actions", None)):
+            parts.append(_frame_digest(lake.get_corporate_actions(tickers)))
         for table in tables:
             row = sql(
                 f"SELECT COUNT(*) AS n, COALESCE(SUM(hash(t)), 0) AS h FROM {table} t "
@@ -115,8 +113,8 @@ def data_fingerprint(
 def _frame_digest(frame: pd.DataFrame | None) -> str:
     if frame is None or frame.empty:
         return "empty"
-    hashed = pd.util.hash_pandas_object(frame.astype(str), index=False)
-    return hashlib.sha256(hashed.to_numpy().tobytes()).hexdigest()[:32]
+    text = frame.astype(str).to_csv(index=False)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:32]
 
 
 class PanelCache(ABC):

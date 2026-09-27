@@ -31,7 +31,7 @@ import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import duckdb
 import numpy as np
@@ -53,6 +53,7 @@ __all__ = [
     "evaluate_long",
     "latest_values",
     "membership_frame",
+    "membership_spans",
     "panel_from_lake",
     "prepare_bars",
     "read_bars",
@@ -143,15 +144,25 @@ def _membership_mask(
     days = pd.to_datetime(bars["timestamp"]).dt.normalize()
     mask = np.zeros(len(bars), dtype=bool)
     wanted = set(tickers)
-    for span in membership.itertuples(index=False):
-        if span.ticker not in wanted:
+    for ticker, lo, hi in membership_spans(membership):
+        if ticker not in wanted:
             continue
-        lo = pd.Timestamp(span.start_date)
-        hi = pd.Timestamp(span.end_date) if pd.notna(span.end_date) else pd.Timestamp.max
-        rows = (bars["ticker"] == span.ticker).to_numpy() & (days >= lo).to_numpy()
+        rows = (bars["ticker"] == ticker).to_numpy() & (days >= lo).to_numpy()
         rows &= (days < hi).to_numpy()
         mask |= rows
     return mask
+
+
+def membership_spans(membership: pd.DataFrame) -> list[tuple[str, pd.Timestamp, pd.Timestamp]]:
+    """``(ticker, first day, end day)`` per span; the end day is exclusive
+    and an open span ends at ``Timestamp.max``."""
+    out: list[tuple[str, pd.Timestamp, pd.Timestamp]] = []
+    for ticker, start, end in zip(
+        membership["ticker"], membership["start_date"], membership["end_date"], strict=True
+    ):
+        hi = pd.Timestamp(end) if pd.notna(end) else pd.Timestamp.max
+        out.append((str(ticker), cast(pd.Timestamp, pd.Timestamp(start)), cast(pd.Timestamp, hi)))
+    return out
 
 
 def prepare_bars(
@@ -277,10 +288,9 @@ def latest_values(
     last = long.sort_values("timestamp").groupby("ticker", sort=False).tail(1)
     oldest = pd.Timestamp(at) - pd.Timedelta(days=max_age_days + 1)
     out: dict[str, float] = {}
-    for row in last.itertuples(index=False):
-        value = row.value
-        if row.timestamp >= oldest and value is not None and math.isfinite(value):
-            out[str(row.ticker)] = float(value)
+    for ticker, stamp, value in zip(last["ticker"], last["timestamp"], last["value"], strict=True):
+        if stamp >= oldest and value is not None and math.isfinite(value):
+            out[str(ticker)] = float(value)
     return out
 
 

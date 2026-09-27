@@ -14,6 +14,7 @@ from __future__ import annotations
 import importlib
 import pkgutil
 from functools import cache
+from typing import Any, cast
 
 import stonks.factors.library as _library
 from stonks.factors.base import ExpressionFactor, Factor
@@ -28,10 +29,11 @@ def _discover() -> dict[str, Factor]:
         if info.name.startswith("_"):
             continue
         module = importlib.import_module(f"{_library.__name__}.{info.name}")
-        make = getattr(module, "factors", None)
+        make: Any = getattr(module, "factors", None)
         if not callable(make):
             continue
-        for factor in make():
+        made: list[Any] = list(cast(Any, make)())
+        for factor in made:
             if not isinstance(factor, Factor):
                 raise TypeError(f"{module.__name__}.factors() returned {factor!r}")
             if factor.id in found:

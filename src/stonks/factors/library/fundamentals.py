@@ -26,7 +26,7 @@ import pandas as pd
 from stonks.core.interval import Interval
 from stonks.core.timeutil import day_end, day_start
 from stonks.factors.base import Factor, FactorKind
-from stonks.factors.engine import PanelRequest, read_bars
+from stonks.factors.engine import PanelRequest, membership_spans, read_bars
 from stonks.store.pit import PitSession, PointInTimeLake
 
 __all__ = ["FundamentalFactor", "factors"]
@@ -127,13 +127,11 @@ def _members(request: PanelRequest, dates: pd.DatetimeIndex) -> dict | None:
     if request.membership is None:
         return None
     out: dict[tuple[int, str], bool] = {}
-    days = dates.normalize()
-    for span in request.membership.itertuples(index=False):
-        lo = pd.Timestamp(span.start_date)
-        hi = pd.Timestamp(span.end_date) if pd.notna(span.end_date) else pd.Timestamp.max
+    days = pd.DatetimeIndex(np.asarray(dates, dtype="datetime64[D]"))
+    for ticker, lo, hi in membership_spans(request.membership):
         for i, day in enumerate(days):
             if lo <= day < hi:  # end_date is exclusive
-                out[(i, str(span.ticker))] = True
+                out[(i, ticker)] = True
     return out
 
 
