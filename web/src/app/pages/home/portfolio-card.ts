@@ -10,6 +10,7 @@ import {
   toneClass,
 } from '../../core/format/format';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
+import { baseCurrencyLine } from '../../shared/base-currency';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { autoRefresh } from '../../shared/auto-refresh';
 import { NoBook } from '../../shared/ui/no-book';
@@ -76,6 +77,7 @@ export function sessionLabel(day: string | null | undefined, now = new Date()): 
               [value]="value()"
               [amount]="total()"
               [format]="money"
+              [detail]="baseLine()"
               [help]="false"
             />
             <app-stat-tile
@@ -86,6 +88,9 @@ export function sessionLabel(day: string | null | undefined, now = new Date()): 
               [help]="false"
             />
           </div>
+          @if (returnsLine(); as line) {
+            <p class="returns">{{ line }}</p>
+          }
           @if (holdings().length === 0) {
             <app-empty-state
               title="No holdings yet"
@@ -141,6 +146,11 @@ export function sessionLabel(day: string | null | undefined, now = new Date()): 
       display: inline-flex;
       align-items: center;
       min-height: var(--touch-min);
+      font-size: var(--text-sm);
+    }
+    .returns {
+      margin: 0;
+      color: var(--color-ink-2);
       font-size: var(--text-sm);
     }
     .holdings {
@@ -229,6 +239,28 @@ export class PortfolioCard {
     return book ? book.total_value : null;
   });
   protected readonly money = (n: number) => formatMoney(n);
+  /** The value in the base currency when it differs, or why it is missing. */
+  protected readonly baseLine = computed(() => {
+    const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
+    if (!book) return null;
+    return baseCurrencyLine(
+      { ...book, currency: book.currency ?? 'USD' },
+      book.base_currency ?? this.portfolioCtx.current()?.base_currency,
+    );
+  });
+  /** Since the start, with deposits and withdrawals taken out. */
+  protected readonly returnsLine = computed(() => {
+    const series = this.pnl.hasValue() ? this.pnl.value() : null;
+    if (!series || (series.twr == null && series.mwr == null)) return null;
+    const parts: string[] = [];
+    if (series.twr != null) {
+      parts.push(`return ${formatPercent(series.twr, { signed: true, digits: 1 })}`);
+    }
+    if (series.mwr != null) {
+      parts.push(`${formatPercent(series.mwr, { signed: true, digits: 1 })} a year on your money`);
+    }
+    return `Since the start: ${parts.join(', ')}. Deposits and withdrawals left out.`;
+  });
   /** Paper or live, when the portfolio list is known. Brass means live. */
   protected readonly mode = computed(() => this.portfolioCtx.current()?.trading ?? null);
   protected readonly live = computed(() => this.mode() === 'live');

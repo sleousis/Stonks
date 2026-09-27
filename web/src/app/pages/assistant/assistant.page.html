@@ -1,0 +1,249 @@
+<app-page-header
+  title="Assistant"
+  description="Ask about your portfolio, strategies and research. It uses the same tools you do, as you, and asks before it changes anything."
+>
+  @if (status.value()?.enabled) {
+    <button actions type="button" class="btn" (click)="newConversation()">New conversation</button>
+  }
+</app-page-header>
+
+@if (status.error(); as err) {
+  <app-error-state title="Could not check the assistant" [error]="err" (retry)="status.reload()" />
+} @else if (!status.hasValue()) {
+  <app-loading-state label="Checking the assistant" [rows]="3" />
+} @else if (!status.value().enabled) {
+  <section class="panel off" aria-labelledby="off-title">
+    <div class="panel-body">
+      <h2 id="off-title" class="off-title">The assistant is off</h2>
+      <p>
+        It talks to a model server that your admin runs, such as Ollama, and no server is set up
+        yet.
+      </p>
+      <p class="muted">
+        Admins: set the model server's address in the server settings and restart the server. The
+        operations guide has the steps.
+      </p>
+    </div>
+  </section>
+} @else {
+  @let st = status.value();
+  @if (frozen()) {
+    <div class="banner warn" role="alert">
+      <p>
+        <strong>The assistant is frozen until {{ frozenText() }}.</strong>
+        It made many changes in a short time, so it only reads until then.
+        @if (st.reason) {
+          <span class="muted">{{ st.reason }}</span>
+        }
+      </p>
+      <span class="banner-actions">
+        <button
+          type="button"
+          class="btn"
+          [disabled]="!canUnfreeze() || unfreezing()"
+          [attr.aria-busy]="unfreezing()"
+          (click)="unfreeze()"
+        >
+          Unfreeze now
+        </button>
+        <app-permission-note permission="killswitch.resume" />
+      </span>
+    </div>
+  } @else if (st.reason) {
+    <p class="banner" role="status">{{ st.reason }}</p>
+  }
+
+  <div class="layout" [class.has-open]="!!currentId()">
+    <nav class="convos panel" aria-labelledby="convos-title">
+      <div class="panel-head">
+        <h2 id="convos-title">Conversations</h2>
+      </div>
+      <div class="panel-body">
+        @if (list.error(); as err) {
+          <app-error-state
+            title="Could not load your conversations"
+            [error]="err"
+            (retry)="list.reload()"
+          />
+        } @else if (!list.hasValue()) {
+          <app-loading-state label="Loading your conversations" [rows]="3" />
+        } @else if (list.value().length === 0) {
+          <p class="muted">Your conversations show here. Start one with a question.</p>
+        } @else {
+          <ul class="convo-list">
+            @for (conv of list.value(); track conv.id) {
+              <li [class.active]="conv.id === currentId()">
+                <a
+                  class="convo-link"
+                  [routerLink]="['/assistant']"
+                  [queryParams]="{ c: conv.id }"
+                  [attr.aria-current]="conv.id === currentId() ? 'page' : null"
+                >
+                  <span class="convo-title">{{ conv.title || 'Untitled conversation' }}</span>
+                  <span class="convo-meta">
+                    <span class="num">{{ when(conv) }}</span>
+                    @if (conv.research_only) {
+                      <span class="tag">Research only</span>
+                    }
+                  </span>
+                </a>
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-icon"
+                  [attr.aria-label]="'Delete ' + (conv.title || 'Untitled conversation')"
+                  (click)="remove(conv)"
+                >
+                  <span aria-hidden="true">✕</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </nav>
+
+    <section class="chat panel" aria-labelledby="chat-title">
+      <div class="panel-head chat-head">
+        @if (currentId()) {
+          <a class="back" routerLink="/assistant">All conversations</a>
+        }
+        <h2 id="chat-title">{{ title() }}</h2>
+        @if (current()?.research_only) {
+          <span class="tag">Research only</span>
+        }
+        @if (currentId()) {
+          <button type="button" class="btn btn-ghost" (click)="openTrace()">Trace</button>
+        }
+      </div>
+
+      <div class="panel-body chat-body">
+        @if (historyState() === 'failed') {
+          <app-error-state
+            title="Could not load this conversation"
+            [error]="historyError()"
+            (retry)="loadHistory()"
+          />
+        } @else if (historyState() === 'loading') {
+          <app-loading-state label="Loading the conversation" [rows]="4" />
+        } @else if (items().length === 0) {
+          <div class="intro">
+            <p>Try one of these:</p>
+            <ul>
+              <li>How is my portfolio doing this month?</li>
+              <li>Which strategies agree with my biggest holding?</li>
+              <li>Backtest a simple trend strategy on my watchlist.</li>
+            </ul>
+            <p class="muted">
+              Model {{ st.model }}. Up to {{ st.max_steps }} steps per answer.
+              @if (!st.order_tools) {
+                It cannot draft orders on this server.
+              }
+            </p>
+          </div>
+        } @else {
+          <ol class="transcript" aria-label="Messages">
+            @for (item of items(); track item.key) {
+              @switch (item.type) {
+                @case ('user') {
+                  <li class="msg user">
+                    <span class="who">You</span>
+                    <p class="text">{{ item.text }}</p>
+                  </li>
+                }
+                @case ('answer') {
+                  <li class="msg answer" [attr.aria-busy]="item.streaming">
+                    <span class="who">Assistant</span>
+                    <p class="text">
+                      {{ item.text }}
+                      @if (item.streaming) {
+                        <span class="caret" aria-hidden="true"></span>
+                      }
+                    </p>
+                  </li>
+                }
+                @case ('step') {
+                  <li class="msg step"><app-chat-step [step]="item" /></li>
+                }
+                @case ('confirm') {
+                  <li class="msg confirm">
+                    <app-confirm-step
+                      [item]="item"
+                      [busy]="deciding() || streaming()"
+                      (decide)="decide(item.actionId, $event)"
+                    />
+                  </li>
+                }
+                @case ('error') {
+                  <li class="msg error" role="alert">
+                    <span class="who">Stopped</span>
+                    <p class="text">{{ item.message }}</p>
+                  </li>
+                }
+              }
+            }
+          </ol>
+        }
+        <p class="visually-hidden" role="status">{{ announce() }}</p>
+      </div>
+
+      <form class="composer" (submit)="$event.preventDefault(); send()" novalidate>
+        <div class="field">
+          <label for="assistant-message">Message</label>
+          <textarea
+            id="assistant-message"
+            class="input"
+            rows="3"
+            [attr.maxlength]="messageMax"
+            [disabled]="historyState() === 'loading'"
+            [attr.aria-describedby]="'assistant-message-hint'"
+            [value]="draft()"
+            (input)="draft.set($any($event.target).value)"
+            (keydown)="onKeydown($event)"
+          ></textarea>
+          <span id="assistant-message-hint" class="hint">
+            @if (pending()) {
+              Approve or reject the step above first, or send a new message to skip it.
+            } @else {
+              Ctrl+Enter sends.
+            }
+          </span>
+        </div>
+        <div class="composer-actions">
+          @if (!currentId()) {
+            <label class="check research">
+              <input
+                type="checkbox"
+                [checked]="researchOnly()"
+                (change)="researchOnly.set($any($event.target).checked)"
+                aria-describedby="research-only-hint"
+              />
+              Research only
+            </label>
+            <span id="research-only-hint" class="hint research-hint"
+              >It reads and researches but cannot change anything, not even a price alert.</span
+            >
+          }
+          @if (streaming()) {
+            <button type="button" class="btn" (click)="stop()">Stop</button>
+          }
+          <button
+            type="submit"
+            class="btn btn-primary"
+            [disabled]="!canSend()"
+            [attr.aria-busy]="streaming()"
+          >
+            {{ streaming() ? 'Answering…' : 'Send' }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+
+  <app-trace-sheet
+    [open]="traceOpen()"
+    [turns]="traceTurns()"
+    [error]="traceError()"
+    (closed)="traceOpen.set(false)"
+    (retry)="openTrace()"
+  />
+}

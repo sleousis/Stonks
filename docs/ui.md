@@ -549,7 +549,7 @@ flowchart LR
 
 - Both screens read the portfolio picked in the session strip (a synced
   broker account too) through `api/insights.service.ts` and
-  `api/risk.service.ts`. `<app-insights-nav>` links them.
+  `api/risk.service.ts`. `<app-insights-nav>` links them and the Cash flows and Tax screens.
 - **Insights** reads `GET /api/insights`, `GET /api/insights/agreement` and
   `GET /api/portfolio/snapshots` (server paged). Each stance is a word and a
   mark (agrees, disagrees, has no view), never colour alone. Admins
@@ -619,6 +619,65 @@ flowchart LR
   page, where auto is turned on again with a fresh code. Other people's
   paused books show as a count only. The `broker:<gateway>` health checks
   still count toward the overall state, but leave the Runs list.
+
+## Assistant, cash flows and tax (Phase 20)
+
+| Page | Route | What it does |
+|---|---|---|
+| Assistant | `/assistant`, `/assistant?c=<id>` | Chat with the AI assistant: streamed answers, each tool it uses as a step, a yes or no step for anything that changes something, the trace, and your conversations |
+| Cash flows | `/insights/cash-flows` | Returns with deposits and withdrawals left out, the list of flows, and a form to record one |
+| Tax | `/insights/tax` | Base currency, where you file, the lot method, US wash sales, specific lot picks, and the yearly gains and dividends CSVs |
+
+```mermaid
+flowchart LR
+  M[Message] --> S[POST .../messages, event stream]
+  S --> T[text: the answer grows]
+  S --> C[tool_call and tool_result: a step]
+  S --> Y[confirm_required: a ticket with Approve and run, Reject]
+  Y --> D[POST .../actions/id, event stream]
+  D --> T
+```
+
+- **The chat.** `AssistantService.send()` and `decide()` stream the turn's
+  events. They go through `fetch`, so the service adds the credential
+  itself: the tab's API token, else the CSRF header for the session cookie.
+  A refused stream becomes an `ApiError` with the API's message, and a
+  stream is never retried. `pages/assistant/chat-model.ts` folds the events
+  into the transcript (`applyEvent`) and rebuilds a stored conversation
+  (`fromHistory`), pending actions included.
+- **Steps.** `<app-chat-step>` names the tool in words (`tool-labels.ts`),
+  writes its state as a word and a mark (Working, Waiting for you, Done,
+  Failed, Not run), and folds the inputs and what it saw under Details.
+- **The yes or no step.** `<app-confirm-step>` is a ticket: what it will do,
+  its inputs and the tool's own preview. Nothing runs until Approve and run.
+  Stopping trading or deleting is a danger button. A new message skips the
+  step, and the hint under the box says so.
+- **Research only** is picked when a conversation starts. It reads and
+  researches but changes nothing. The conversation and the list show a
+  Research only tag.
+- **Trace** opens a sheet with each turn: model, prompt version, steps,
+  order drafts, and every tool call with its inputs and result.
+- **Frozen.** After a burst of changes the assistant freezes itself. A
+  warning banner says until when, and Unfreeze now asks first and then for a
+  fresh code (`killswitch.resume`).
+- **Off.** Without a model server the page says the assistant is off and
+  what an admin does about it. No chat is shown.
+- **Phones.** The list and the open conversation are one screen each, with
+  "All conversations" to go back. Stop ends the answer early.
+- **Cash flows.** Recording a deposit or withdrawal moves the paper book's
+  cash, so it confirms as a ticket (`portfolio.manage`). A broker book gets
+  its flows from the sync, so the form is replaced by a note.
+- **Returns.** Insights shows each period's change (deposits count) and its
+  time-weighted return (they do not), the money-weighted return per year
+  and net deposits. Today's portfolio card adds a one-line summary. Both
+  show the value in the base currency when it differs, or which exchange
+  rate is missing (`shared/base-currency.ts`). Glossary terms: time-weighted
+  return and money-weighted return.
+- **Tax.** Save stays off until something changed. Specific lots
+  (`<app-lot-picks>`) lists your sales, then the earlier buys of that ticker
+  with a number field each. Picks may not add up to more than the sale.
+  "Use oldest first" clears them. The CSVs download through
+  `TaxService.download()` and `saveFile()`.
 
 ## Trader workspace (Phase 13)
 
@@ -1013,7 +1072,7 @@ automate it.
   pages (`g m` Today, `g s` strategies, `g o` orders, `g t` trade costs,
   `g z` charts, `g x` watchlists, `g e` insights, `g n` notifications,
   `g w` paper trading, `g b` leaderboard, `g u` studio, `g l` lab, `g g`
-  go live, `g p` profile, `g ,` settings, `g c` broker connections, `g i`
+  go live, `g y` assistant, `g p` profile, `g ,` settings, `g c` broker connections, `g i`
   glossary, and for admins
   `g d` overview, `g h` health, `g j` schedule, `g a` data, `g q` data
   quality, `g v` universes, `g k` halts, `g r` users); `n b` new
@@ -1106,7 +1165,7 @@ flowchart LR
   | Group | Pages | Who |
   |---|---|---|
   | (top) | Today, Strategies, Orders (tabs: Orders, Fills, Trading runs, Trade costs), Charts, Watchlists, Insights, Notifications | everyone signed in |
-  | Research | Paper trading, Leaderboard, Studio, Lab, Go live | Studio and Lab need `lab.run`, the rest are for all |
+  | Research | Paper trading, Leaderboard, Studio, Lab, Go live, Assistant | Studio and Lab need `lab.run`, the rest are for all |
   | System | Overview (`/dashboard`), Health, Schedule, Data, Data quality, Universes, Halts, Users | admins |
   | Account menu (by your name) | Profile, Settings, Broker connections, Get set up, Glossary, Sign out | everyone signed in |
 

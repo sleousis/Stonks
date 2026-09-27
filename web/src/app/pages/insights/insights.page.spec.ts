@@ -22,6 +22,7 @@ describe('InsightsPage', () => {
   let totalsBody: typeof TOTALS = TOTALS;
   const selected = signal<string | null>(null);
   const live = signal(false);
+  let base = 'USD';
   const seen: string[] = [];
 
   function setup(): void {
@@ -36,6 +37,7 @@ describe('InsightsPage', () => {
           useValue: {
             selectedId: selected,
             live,
+            current: () => ({ base_currency: base }),
             state: () => 'ready',
             noBook: () => false,
             query: () => (selected() ? { portfolio_id: selected() } : {}),
@@ -54,6 +56,7 @@ describe('InsightsPage', () => {
     admin = false;
     selected.set(null);
     live.set(false);
+    base = 'USD';
     seen.length = 0;
   });
 
@@ -102,6 +105,25 @@ describe('InsightsPage', () => {
     expect(text).toContain('22.0%');
     expect(text).toContain('Beta covers 90% of the holdings.');
     expect(el.querySelector('.tile-value .live, .tile-value.live')).toBeNull();
+  });
+
+  it('shows time and money weighted returns with deposits left out', async () => {
+    setup();
+    await flushAll();
+    const returns = el.querySelector('section[aria-labelledby="returns-title"]')!.textContent!;
+    expect(returns).toContain('Return +0.4%');
+    expect(returns).toContain('Money-weighted, per year');
+    expect(returns).toContain('+8.5%');
+    expect(returns).toContain('+$5,000.00');
+    expect(returns).toContain('Record a deposit or withdrawal');
+    expect(el.textContent).not.toContain('Value in');
+  });
+
+  it('shows the value in the base currency when it differs', async () => {
+    base = 'EUR';
+    setup();
+    await flushAll();
+    expect(el.querySelector('.base-line')?.textContent).toContain('Value in EUR: €92,000.00');
   });
 
   it('switches the allocation between asset class, sector, currency and holding', async () => {

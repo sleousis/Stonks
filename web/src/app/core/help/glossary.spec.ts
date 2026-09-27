@@ -10,6 +10,8 @@ const LABELS_SHOWN = [
   'Violation ratio',
   'Effective holdings',
   'Largest holding',
+  'Time-weighted return',
+  'Money-weighted return',
   // Signal research
   'Mean IC',
   // Backtest and lab result tiles

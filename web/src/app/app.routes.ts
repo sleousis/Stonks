@@ -59,6 +59,8 @@ export const routes: Routes = [
     loadChildren: () => import('./pages/notifications/notifications.routes'),
   },
   { path: 'trades', loadChildren: () => import('./pages/trades/trades.routes') },
+  // 20: the AI assistant
+  { path: 'assistant', loadChildren: () => import('./pages/assistant/assistant.routes') },
   {
     path: '**',
     title: 'Not found',

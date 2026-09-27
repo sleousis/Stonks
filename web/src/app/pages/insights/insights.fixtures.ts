@@ -16,6 +16,10 @@ export const INSIGHTS: InsightsView = {
   currency: 'USD',
   cash: 20_000,
   total_value: 100_000,
+  total_value_base: 92_000,
+  fx_missing: [],
+  mwr: 0.085,
+  net_flows: 5_000,
   allocation: {
     asset_class: [
       { key: 'equity', value: 70_000, weight: 0.7, holdings: 2 },
@@ -51,6 +55,7 @@ export const INSIGHTS: InsightsView = {
       end_value: 100_000,
       change: 1_000,
       change_pct: 0.0101,
+      twr: 0.0042,
     },
     {
       period: 'inception',

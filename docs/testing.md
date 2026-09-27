@@ -51,6 +51,7 @@ flowchart LR
 - The trader has a paper book with its own cash. The admin has the default book.
 - Four active buy and hold strategies, one per ticker, so a tick limited to one ticker places one order. One shadow strategy per viewport waits for the promote journey.
 - `stonks serve` runs on a free localhost port with the built console. `tests/e2e/serve.py` swaps every data source for the canned one, so nothing reaches a vendor. The broker is the simulated one. The fake connection provider is enabled.
+- The assistant is on, but its model is `tests/e2e/fake_assistant.py`: a keyword model that reads the portfolio, asks for the kill switch, or greets. No model server runs.
 
 To click around the same stack by hand:
 

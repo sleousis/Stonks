@@ -76,7 +76,9 @@ export function goLiveReport(id: string, passed: boolean): GoLiveReport {
         passed,
         value: passed ? 25 : 3,
         limit: 20,
-        detail: passed ? '25 days of paper trading, needs at least 20' : '3 days of paper trading, needs at least 20',
+        detail: passed
+          ? '25 days of paper trading, needs at least 20'
+          : '3 days of paper trading, needs at least 20',
       },
     ],
   };
