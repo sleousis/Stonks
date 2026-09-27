@@ -1,5 +1,5 @@
 {
-  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsweeps, signal IC analyses and ingests. Follow up with wait_for_job, and stop\none with cancel_job. Check get_golive_report before promote_strategy. Status changes,\ndraft register/enable/disable, broker syncs, manual orders (place_order,\nchange_order, cancel_order) and production ticks need confirm=true; call them\nfirst without it to get a preview and show it to the user before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.\nEvery tool acts as the user who owns this server's API token (whoami shows the\nuser, role and scopes) and sees only that user's portfolios. Actions that need\na fresh second factor (switching to auto, connecting a broker, resuming the\nkill switch, restoring a backup, a manual order on a real-money book) are\nrefused here. The user does them in the web app.",
+  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsweeps, signal IC analyses and ingests. Follow up with wait_for_job, and stop\none with cancel_job. Check get_golive_report before promote_strategy, and\ncheck_model_swap before swap_model_version. Status changes, model swaps,\ndraft register/enable/disable, broker syncs, manual orders (place_order,\nchange_order, cancel_order) and production ticks need confirm=true; call them\nfirst without it to get a preview and show it to the user before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.\nEvery tool acts as the user who owns this server's API token (whoami shows the\nuser, role and scopes) and sees only that user's portfolios. Actions that need\na fresh second factor (switching to auto, connecting a broker, resuming the\nkill switch, restoring a backup, a manual order on a real-money book) are\nrefused here. The user does them in the web app.",
   "resource_templates": [],
   "resources": [
     {
@@ -314,6 +314,37 @@
       },
       "name": "change_order",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "The swap check of a candidate against the live version: model\nbook days, drawdown and return against the live model over the same\ndays, each with value, limit and pass or fail. Read it before\nswap_model_version: an override skips exactly these checks.",
+      "input_schema": {
+        "properties": {
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "version": {
+            "description": "the model version number",
+            "minimum": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "version"
+        ],
+        "title": "check_model_swapArguments",
+        "type": "object"
+      },
+      "name": "check_model_swap",
+      "needs_confirm": false
     },
     {
       "annotations": {
@@ -1686,6 +1717,30 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "A strategy's append-only version log (baseline, candidate, swap,\nreject, supersede, fail), with actor, reason and swap check result.",
+      "input_schema": {
+        "properties": {
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "get_model_version_historyArguments",
+        "type": "object"
+      },
+      "name": "get_model_version_history",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Your own risk limits next to the system policy, what your\nportfolios follow (the system tightened by yours) and any of yours\nthat are looser than the system and so change nothing.",
       "input_schema": {
         "properties": {},
@@ -3007,6 +3062,77 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Every candidate model version running as a model book, across strategies.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 100,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "title": "list_model_candidatesArguments",
+        "type": "object"
+      },
+      "name": "list_model_candidates",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "A strategy's model versions, oldest first: the live one, candidates\nrunning as model books beside it, and archived, rejected or failed fits.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 100,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "strategy_id"
+        ],
+        "title": "list_model_versionsArguments",
+        "type": "object"
+      },
+      "name": "list_model_versions",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Your notification feed, newest first, with the unread count: what\nStonks told you (signals, fills, halts, failed runs), each with a\ncategory, level, message and a link into the console.",
       "input_schema": {
         "properties": {
@@ -4228,6 +4354,57 @@
         "open_world": false,
         "read_only": false
       },
+      "description": "Drop a candidate version: its model book stops and it can never\nswap in. Needs a reason. Without confirm=true returns a preview and\nchanges nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "why (logged in the audit trail); required for demotions and overrides",
+            "title": "Reason"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "version": {
+            "description": "the model version number",
+            "minimum": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "version"
+        ],
+        "title": "reject_model_versionArguments",
+        "type": "object"
+      },
+      "name": "reject_model_version",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
       "description": "Retire a strategy: it stops being ranked or evaluated.\nNeeds a reason. Without confirm=true returns a preview and changes nothing.",
       "input_schema": {
         "properties": {
@@ -4263,6 +4440,81 @@
         "type": "object"
       },
       "name": "retire_strategy",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue a retrain. Each fit becomes a candidate version that runs as\na model book; nothing trades until a swap. Without confirm=true\nreturns a preview and queues nothing.",
+      "input_schema": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD, last day of the training window",
+            "title": "As Of"
+          },
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "force": {
+            "default": false,
+            "description": "refit even when a recent fit exists",
+            "title": "Force",
+            "type": "boolean"
+          },
+          "strategy_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "refit only these (default: every strategy that learns from data)",
+            "title": "Strategy Ids"
+          },
+          "tickers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "tickers to fit on when a strategy records no lab universe",
+            "title": "Tickers"
+          }
+        },
+        "title": "retrain_modelsArguments",
+        "type": "object"
+      },
+      "name": "retrain_models",
       "needs_confirm": true
     },
     {
@@ -6117,6 +6369,63 @@
         "type": "object"
       },
       "name": "subscribe",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Make a candidate version live, so the next tick trades it. Needs a\npassing swap check, or override=true with a reason of at least 20\ncharacters, and the change is audited. Without confirm=true returns\nthe swap check as a preview and changes nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "override": {
+            "default": false,
+            "description": "swap without a passing swap check; needs a reason of at least 20 characters",
+            "title": "Override",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "why (logged in the audit trail); required for demotions and overrides",
+            "title": "Reason"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "version": {
+            "description": "the model version number",
+            "minimum": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "version"
+        ],
+        "title": "swap_model_versionArguments",
+        "type": "object"
+      },
+      "name": "swap_model_version",
       "needs_confirm": true
     },
     {

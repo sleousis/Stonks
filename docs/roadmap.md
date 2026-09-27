@@ -489,7 +489,7 @@ From the competitor study of 44 open-source projects (Qlib, alphalens, vectorbt,
 | 22.3 Factor tear sheets | alphalens-style IC by sector, asset class and size, returns per quantile, factor alpha and beta, and a monthly IC heatmap, for any factor. |
 | 22.4 Factor risk model | A PCA then style-factor risk model as a CovarianceEstimator, a style-exposure RiskRule, and factor attribution in reports. |
 | 22.5 Sweeps and heatmaps | Vectorised sweeps for more strategies, with parameter heatmaps in reports and the console, linked to the plateau test. |
-| 22.6 Model lifecycle | Scheduled retraining for ML strategies, model versions under one strategy id, new fits run as model books, swaps only through governance. |
+| 22.6 Model lifecycle | Scheduled retraining for ML strategies, model versions under one strategy id, new fits run as model books, swaps only through governance. Done: the weekly `model_retrain` job on all three backends, candidate and live version books in the tick, the swap check and an audited swap (`stonks registry versions|retrain|swap-check|swap|reject`, REST and MCP). See `docs/model-lifecycle.md`. |
 | 22.7 Forecast weights | Carver-style forecast weights estimated net of costs, and rules dropped when too costly for an instrument. |
 | 22.8 Factor library | An Alpha158-style factor set with a next-open label, plus the fundamentals scores as factors. |
 | 22.9 AI research loop | The assistant proposes hypotheses and runs lab trials under a budget, each counted in the trial ledger. |

@@ -361,6 +361,42 @@ cli = "stonks golive check"
 mcp = "get_golive_report"
 
 [[capability]]
+id = "strategies.versions"
+domain = "strategies"
+title = "Model versions of a strategy, their log, and every candidate"
+routes = ["GET /api/strategies/{strategy_id}/versions", "GET /api/strategies/{strategy_id}/versions/history", "GET /api/model-versions/candidates"]
+console = { limited = "no versions page yet, the CLI and MCP read them" }
+cli = ["stonks registry versions", "stonks registry version-history", "stonks registry candidates"]
+mcp = ["list_model_versions", "get_model_version_history", "list_model_candidates"]
+
+[[capability]]
+id = "strategies.versions.check"
+domain = "strategies"
+title = "Swap check: a candidate model book against the live one"
+routes = ["GET /api/strategies/{strategy_id}/versions/{version}/check"]
+console = { limited = "no versions page yet, the CLI and MCP read it" }
+cli = "stonks registry swap-check"
+mcp = "check_model_swap"
+
+[[capability]]
+id = "strategies.versions.swap"
+domain = "strategies"
+title = "Swap a candidate model in through the check or an override, or reject it"
+routes = ["POST /api/strategies/{strategy_id}/versions/{version}/swap", "POST /api/strategies/{strategy_id}/versions/{version}/reject"]
+console = { limited = "no versions page yet, the CLI and MCP do the governed swap" }
+cli = ["stonks registry swap", "stonks registry reject"]
+mcp = ["swap_model_version", "reject_model_version"]
+
+[[capability]]
+id = "strategies.versions.retrain"
+domain = "strategies"
+title = "Retrain strategies that learn from data into candidate versions"
+routes = ["POST /api/model-versions/retrain", "GET /api/model-versions/jobs/{job_id}/result"]
+console = { limited = "the scheduler runs it weekly, the CLI and MCP start it by hand" }
+cli = "stonks registry retrain"
+mcp = "retrain_models"
+
+[[capability]]
 id = "shadow.decisions"
 domain = "strategies"
 title = "Paper trading decisions"

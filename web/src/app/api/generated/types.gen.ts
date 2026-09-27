@@ -4017,6 +4017,58 @@ export type MfaView = {
 };
 
 /**
+ * ModelVersionView
+ */
+export type ModelVersionView = {
+    /**
+     * Book Id
+     */
+    book_id: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Created By
+     */
+    created_by: string;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Fit
+     */
+    fit: {
+        [key: string]: unknown;
+    };
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Train End
+     */
+    train_end: string | null;
+    /**
+     * Train Start
+     */
+    train_start: string | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Version
+     */
+    version: number;
+};
+
+/**
  * MonthlyReturn
  */
 export type MonthlyReturn = {
@@ -4806,6 +4858,28 @@ export type PageLotPickView = {
 };
 
 /**
+ * Page[ModelVersionView]
+ */
+export type PageModelVersionView = {
+    /**
+     * Items
+     */
+    items: Array<ModelVersionView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[OrderDraftView]
  */
 export type PageOrderDraftView = {
@@ -5231,6 +5305,28 @@ export type PageUserView = {
      * Items
      */
     items: Array<UserView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[VersionEventView]
+ */
+export type PageVersionEventView = {
+    /**
+     * Items
+     */
+    items: Array<VersionEventView>;
     /**
      * Limit
      */
@@ -6501,6 +6597,84 @@ export type ResumeRequest = {
      * Reason
      */
     reason: string;
+};
+
+/**
+ * RetrainOutcomeView
+ */
+export type RetrainOutcomeView = {
+    /**
+     * Detail
+     */
+    detail: string | null;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Train End
+     */
+    train_end: string | null;
+    /**
+     * Train Start
+     */
+    train_start: string | null;
+    /**
+     * Version
+     */
+    version: number | null;
+};
+
+/**
+ * RetrainRequest
+ */
+export type RetrainRequest = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+    /**
+     * Force
+     */
+    force?: boolean;
+    /**
+     * Strategy Ids
+     */
+    strategy_ids?: Array<string> | null;
+    /**
+     * Tickers
+     */
+    tickers?: Array<string> | null;
+};
+
+/**
+ * RetrainResultView
+ */
+export type RetrainResultView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Candidates
+     */
+    candidates: number;
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Outcomes
+     */
+    outcomes: Array<RetrainOutcomeView>;
+    /**
+     * Skipped
+     */
+    skipped: number;
 };
 
 /**
@@ -8085,6 +8259,76 @@ export type SurvivalTestInfo = {
 };
 
 /**
+ * SwapCheckView
+ */
+export type SwapCheckView = {
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Limit
+     */
+    limit: number | null;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Passed
+     */
+    passed: boolean;
+    /**
+     * Value
+     */
+    value: number | null;
+};
+
+/**
+ * SwapReportView
+ *
+ * The swap check of a candidate against the live version (``[lifecycle.swap]``).
+ */
+export type SwapReportView = {
+    /**
+     * Candidate Drawdown
+     */
+    candidate_drawdown: number | null;
+    /**
+     * Candidate Return
+     */
+    candidate_return: number | null;
+    /**
+     * Checks
+     */
+    checks: Array<SwapCheckView>;
+    /**
+     * Days
+     */
+    days: number;
+    /**
+     * Live Return
+     */
+    live_return: number | null;
+    /**
+     * Live Version
+     */
+    live_version: number;
+    /**
+     * Passed
+     */
+    passed: boolean;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Version
+     */
+    version: number;
+};
+
+/**
  * SweepRequest
  *
  * A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every
@@ -9370,6 +9614,78 @@ export type VerifyView = {
      * Problems
      */
     problems: Array<string>;
+};
+
+/**
+ * VersionChangeRequest
+ *
+ * Body of a swap or a reject. A reject needs ``reason``. A swap without
+ * a passing check needs ``override`` plus a ``reason`` of at least 20
+ * characters.
+ */
+export type VersionChangeRequest = {
+    /**
+     * Override
+     */
+    override?: boolean;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+};
+
+/**
+ * VersionEventView
+ *
+ * One row of the append-only version log.
+ */
+export type VersionEventView = {
+    /**
+     * Actor
+     */
+    actor: string;
+    /**
+     * Check Passed
+     */
+    check_passed: boolean | null;
+    /**
+     * Check Report
+     */
+    check_report: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * From Status
+     */
+    from_status: string | null;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Override
+     */
+    override: boolean;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * To Status
+     */
+    to_status: string;
+    /**
+     * Version
+     */
+    version: number;
 };
 
 /**
@@ -14090,6 +14406,148 @@ export type ListInstrumentsResponses = {
 
 export type ListInstrumentsResponse = ListInstrumentsResponses[keyof ListInstrumentsResponses];
 
+export type ListModelCandidatesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/model-versions/candidates';
+};
+
+export type ListModelCandidatesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListModelCandidatesError = ListModelCandidatesErrors[keyof ListModelCandidatesErrors];
+
+export type ListModelCandidatesResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageModelVersionView;
+};
+
+export type ListModelCandidatesResponse = ListModelCandidatesResponses[keyof ListModelCandidatesResponses];
+
+export type GetModelRetrainResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/model-versions/jobs/{job_id}/result';
+};
+
+export type GetModelRetrainResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetModelRetrainResultError = GetModelRetrainResultErrors[keyof GetModelRetrainResultErrors];
+
+export type GetModelRetrainResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: RetrainResultView;
+};
+
+export type GetModelRetrainResultResponse = GetModelRetrainResultResponses[keyof GetModelRetrainResultResponses];
+
+export type StartModelRetrainData = {
+    /**
+     * Body
+     */
+    body?: RetrainRequest | null;
+    path?: never;
+    query?: never;
+    url: '/api/model-versions/retrain';
+};
+
+export type StartModelRetrainErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartModelRetrainError = StartModelRetrainErrors[keyof StartModelRetrainErrors];
+
+export type StartModelRetrainResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type StartModelRetrainResponse = StartModelRetrainResponses[keyof StartModelRetrainResponses];
+
 export type ListNotificationsData = {
     body?: never;
     path?: never;
@@ -17423,6 +17881,276 @@ export type GetTearSheetResponses = {
 };
 
 export type GetTearSheetResponse = GetTearSheetResponses[keyof GetTearSheetResponses];
+
+export type ListModelVersionsData = {
+    body?: never;
+    path: {
+        /**
+         * Strategy Id
+         */
+        strategy_id: string;
+    };
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/strategies/{strategy_id}/versions';
+};
+
+export type ListModelVersionsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListModelVersionsError = ListModelVersionsErrors[keyof ListModelVersionsErrors];
+
+export type ListModelVersionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageModelVersionView;
+};
+
+export type ListModelVersionsResponse = ListModelVersionsResponses[keyof ListModelVersionsResponses];
+
+export type GetModelVersionHistoryData = {
+    body?: never;
+    path: {
+        /**
+         * Strategy Id
+         */
+        strategy_id: string;
+    };
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/strategies/{strategy_id}/versions/history';
+};
+
+export type GetModelVersionHistoryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetModelVersionHistoryError = GetModelVersionHistoryErrors[keyof GetModelVersionHistoryErrors];
+
+export type GetModelVersionHistoryResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageVersionEventView;
+};
+
+export type GetModelVersionHistoryResponse = GetModelVersionHistoryResponses[keyof GetModelVersionHistoryResponses];
+
+export type CheckModelSwapData = {
+    body?: never;
+    path: {
+        /**
+         * Strategy Id
+         */
+        strategy_id: string;
+        /**
+         * Version
+         */
+        version: number;
+    };
+    query?: never;
+    url: '/api/strategies/{strategy_id}/versions/{version}/check';
+};
+
+export type CheckModelSwapErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CheckModelSwapError = CheckModelSwapErrors[keyof CheckModelSwapErrors];
+
+export type CheckModelSwapResponses = {
+    /**
+     * Successful Response
+     */
+    200: SwapReportView;
+};
+
+export type CheckModelSwapResponse = CheckModelSwapResponses[keyof CheckModelSwapResponses];
+
+export type RejectModelVersionData = {
+    /**
+     * Body
+     */
+    body?: VersionChangeRequest | null;
+    path: {
+        /**
+         * Strategy Id
+         */
+        strategy_id: string;
+        /**
+         * Version
+         */
+        version: number;
+    };
+    query?: never;
+    url: '/api/strategies/{strategy_id}/versions/{version}/reject';
+};
+
+export type RejectModelVersionErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RejectModelVersionError = RejectModelVersionErrors[keyof RejectModelVersionErrors];
+
+export type RejectModelVersionResponses = {
+    /**
+     * Successful Response
+     */
+    200: ModelVersionView;
+};
+
+export type RejectModelVersionResponse = RejectModelVersionResponses[keyof RejectModelVersionResponses];
+
+export type SwapModelVersionData = {
+    /**
+     * Body
+     */
+    body?: VersionChangeRequest | null;
+    path: {
+        /**
+         * Strategy Id
+         */
+        strategy_id: string;
+        /**
+         * Version
+         */
+        version: number;
+    };
+    query?: never;
+    url: '/api/strategies/{strategy_id}/versions/{version}/swap';
+};
+
+export type SwapModelVersionErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SwapModelVersionError = SwapModelVersionErrors[keyof SwapModelVersionErrors];
+
+export type SwapModelVersionResponses = {
+    /**
+     * Successful Response
+     */
+    200: ModelVersionView;
+};
+
+export type SwapModelVersionResponse = SwapModelVersionResponses[keyof SwapModelVersionResponses];
 
 export type GetStudioCapabilitiesData = {
     body?: never;

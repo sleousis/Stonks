@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -206,6 +206,19 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/market/bars` | Get Bars | sign-in |  | [BarSeries](#barseries) |
 | GET | `/api/market/coverage` | List Coverage | sign-in |  | [Page_CoverageRow_](#page_coveragerow_) |
 | GET | `/api/market/instruments` | List Instruments | sign-in |  | [Page_InstrumentView_](#page_instrumentview_) |
+
+## model-versions endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/model-versions/candidates` | List Candidates | sign-in |  | [Page_ModelVersionView_](#page_modelversionview_) |
+| GET | `/api/model-versions/jobs/{job_id}/result` | Get Retrain Result | sign-in |  | [RetrainResultView](#retrainresultview) |
+| POST | `/api/model-versions/retrain` | Start Retrain | `lab.run` | [RetrainRequest](#retrainrequest) \| null | [Job](#job) |
+| GET | `/api/strategies/{strategy_id}/versions` | List Versions | sign-in |  | [Page_ModelVersionView_](#page_modelversionview_) |
+| GET | `/api/strategies/{strategy_id}/versions/history` | Version History | sign-in |  | [Page_VersionEventView_](#page_versioneventview_) |
+| GET | `/api/strategies/{strategy_id}/versions/{version}/check` | Check Swap | sign-in |  | [SwapReportView](#swapreportview) |
+| POST | `/api/strategies/{strategy_id}/versions/{version}/reject` | Reject Version | `strategy.promote` | [VersionChangeRequest](#versionchangerequest) \| null | [ModelVersionView](#modelversionview) |
+| POST | `/api/strategies/{strategy_id}/versions/{version}/swap` | Swap Version | `strategy.promote` | [VersionChangeRequest](#versionchangerequest) \| null | [ModelVersionView](#modelversionview) |
 
 ## notifications endpoints
 
@@ -1893,6 +1906,22 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `recovery_codes` | list[string] \| null | no |  |
 | `recovery_codes_left` | integer | yes |  |
 
+### ModelVersionView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `book_id` | string | yes |  |
+| `created_at` | string | yes |  |
+| `created_by` | string | yes |  |
+| `error` | string \| null | yes |  |
+| `fit` | object | yes |  |
+| `status` | string | yes |  |
+| `strategy_id` | string | yes |  |
+| `train_end` | date \| null | yes |  |
+| `train_start` | date \| null | yes |  |
+| `updated_at` | string | yes |  |
+| `version` | integer | yes |  |
+
 ### MonthlyReturn
 
 | Field | Type | Required | Description |
@@ -2210,6 +2239,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_ModelVersionView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[ModelVersionView](#modelversionview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_OrderDraftView_
 
 | Field | Type | Required | Description |
@@ -2386,6 +2424,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[UserView](#userview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_VersionEventView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[VersionEventView](#versioneventview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -2850,6 +2897,36 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 |-------|------|----------|-------------|
 | `confirmation` | string | yes |  |
 | `reason` | string | yes |  |
+
+### RetrainOutcomeView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `detail` | string \| null | yes |  |
+| `status` | string | yes |  |
+| `strategy_id` | string | yes |  |
+| `train_end` | date \| null | yes |  |
+| `train_start` | date \| null | yes |  |
+| `version` | integer \| null | yes |  |
+
+### RetrainRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+| `force` | boolean | no |  |
+| `strategy_ids` | list[string] \| null | no |  |
+| `tickers` | list[string] \| null | no |  |
+
+### RetrainResultView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `candidates` | integer | yes |  |
+| `failed` | integer | yes |  |
+| `outcomes` | list[[RetrainOutcomeView](#retrainoutcomeview)] | yes |  |
+| `skipped` | integer | yes |  |
 
 ### RiskAdjustmentView
 
@@ -3457,6 +3534,32 @@ A survival test and the options a request's ``test_options[id]`` may set, as JSO
 | `options_schema` | object | yes |  |
 | `presets` | list[string] | yes |  |
 
+### SwapCheckView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `detail` | string | yes |  |
+| `limit` | number \| null | yes |  |
+| `name` | string | yes |  |
+| `passed` | boolean | yes |  |
+| `value` | number \| null | yes |  |
+
+### SwapReportView
+
+The swap check of a candidate against the live version (``[lifecycle.swap]``).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `candidate_drawdown` | number \| null | yes |  |
+| `candidate_return` | number \| null | yes |  |
+| `checks` | list[[SwapCheckView](#swapcheckview)] | yes |  |
+| `days` | integer | yes |  |
+| `live_return` | number \| null | yes |  |
+| `live_version` | integer | yes |  |
+| `passed` | boolean | yes |  |
+| `strategy_id` | string | yes |  |
+| `version` | integer | yes |  |
+
 ### SweepRequest
 
 A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member during the window). ``strategies`` default to every catalogued non-wrapper strategy. The lab options apply to every run; sweeps never register strategies.
@@ -3923,6 +4026,33 @@ Smoke-run on these lake tickers (sample data when empty), over the last ``bars``
 | `backup_id` | string | yes |  |
 | `ok` | boolean | yes |  |
 | `problems` | list[string] | yes |  |
+
+### VersionChangeRequest
+
+Body of a swap or a reject. A reject needs ``reason``. A swap without a passing check needs ``override`` plus a ``reason`` of at least 20 characters.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `override` | boolean | no |  |
+| `reason` | string \| null | no |  |
+
+### VersionEventView
+
+One row of the append-only version log.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `actor` | string | yes |  |
+| `check_passed` | boolean \| null | yes |  |
+| `check_report` | object \| null | yes |  |
+| `created_at` | string | yes |  |
+| `from_status` | string \| null | yes |  |
+| `id` | integer | yes |  |
+| `kind` | string | yes |  |
+| `override` | boolean | yes |  |
+| `reason` | string | yes |  |
+| `to_status` | string | yes |  |
+| `version` | integer | yes |  |
 
 ### WalkForwardConfig
 
