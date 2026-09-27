@@ -75,7 +75,7 @@ uv run stonks mcp                # MCP server over the running API
 uv run stonks schedule run|next|runs|run-now JOB|check|metrics
 uv run stonks backup backup|verify|restore|list|prune
 
-# People (the shell is admin; passwords come from a no-echo prompt)
+# People (the shell is admin, and passwords come from a no-echo prompt)
 uv run stonks users bootstrap|reset-password|list
 uv run stonks users create --email E --name N [--role viewer|trader|admin]
 uv run stonks users set-role|disable|enable|reset-2fa --email E   # reset-2fa: sole-admin lockout

@@ -172,14 +172,14 @@ never orders):
 |------|-------|
 | `run_backtest` (`cost_model`: `zero` / `realistic` preset, or flat `slippage_bps` / `fee_per_trade`) | `POST /api/lab/backtests` |
 | `run_lab` (typed `universe` or a stored `universe_id`, `ensure_data` to fetch missing bars first, `preflight` and `strict_preflight`, `walk_forward` and `mcpt` option blocks) | `POST /api/lab/runs` |
-| `run_sweep` (a lab run of every strategy, or the ones named, ranked; never registers) | `POST /api/lab/sweeps` |
+| `run_sweep` (a lab run of every strategy, or the ones named, ranked, and never registers) | `POST /api/lab/sweeps` |
 | `run_signal_ic` (IC, ICIR, decay, quantile spread, turnover of `estimate_return`; 10+ tickers) | `POST /api/lab/signal-ic` |
 | `run_ingest` (also `openWorld`: calls market-data vendors) | `POST /api/ingest/runs` |
 | `create_draft` | `POST /api/studio/drafts` |
 | `validate_draft` (smoke run; a code draft's Python runs in the API) | `POST /api/studio/drafts/{id}/validate` |
 | `run_draft_backtest`, `run_draft_lab` | `POST /api/studio/drafts/{id}/backtests`, `/lab-runs` |
 | `add_journal_note` (a note on one of your orders) | `POST /api/tca/orders/{id}/notes` |
-| `mark_notifications_read` (idempotent; your own feed only) | `POST /api/notifications/read` |
+| `mark_notifications_read` (idempotent, your own feed only) | `POST /api/notifications/read` |
 
 With `ensure_data: true`, `run_lab` first runs a `lab_ensure` job that
 fetches the missing bars. The lab result names it in `ensure_job_id`, and
@@ -189,7 +189,7 @@ fetches the missing bars. The lab result names it in `ensure_job_id`, and
 result in shadow (whatever the verdict), so like `register_draft` they need
 `confirm: true`; without it they return a preview and queue nothing.
 
-**Edits** (destructive, idempotent; no confirm, since none of them trades):
+**Edits** (destructive, idempotent, and no confirm since none of them trades):
 `update_draft` (`PATCH /api/studio/drafts/{id}`, only the fields given),
 `edit_journal_note` (`PUT /api/tca/notes/{id}`) and `cancel_job`
 (`POST /api/jobs/{id}/cancel`: a queued job never starts, a running lab run
@@ -205,7 +205,7 @@ stops at its next trial).
 | `run_tick` (not idempotent) | `POST /api/ticks` |
 | `sync_connection` (idempotent, `openWorld`: reads from the broker, read-only there) | `POST /api/connections/{id}/sync` |
 | `delete_draft` (the registered strategy stays) | `DELETE /api/studio/drafts/{id}` |
-| `engage_kill_switch` (`buys_only` stops buys only; `flatten` is its deprecated name) | `POST /api/halts/kill` |
+| `engage_kill_switch` (`buys_only` stops buys only, and `flatten` is its deprecated name) | `POST /api/halts/kill` |
 | `subscribe`, `update_subscription` (never to auto) | `POST /api/subscriptions`, `PATCH /api/subscriptions/{id}` |
 | `create_universe`, `refresh_universe`, `ensure_universe_data`, `import_index_history`, `delete_universe` | `/api/universes/...` |
 
