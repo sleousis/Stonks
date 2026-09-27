@@ -14,13 +14,14 @@ import { StrategiesService } from '../../api/strategies.service';
 import { SystemService } from '../../api/system.service';
 import { formatMoney, formatPercent } from '../../core/format/format';
 import { type CheckRow, checkRow, checklistItems } from '../../shared/golive-checks';
+import { isRealMoneyBroker } from '../../shared/governance';
 import { LIFECYCLE } from '../../shared/governance-labels';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { strategyKindName } from '../strategies/strategy-format';
+import { strategyDisplayName, strategyKindName } from '../strategies/strategy-format';
 
 export { CHECK_MEASURES, checkRow, type CheckRow } from '../../shared/golive-checks';
 
@@ -71,18 +72,20 @@ export class GoLivePage {
     loader: ({ params }) => this.strategiesApi.golive(params.id),
   });
 
-  protected readonly rows = computed<CheckRow[]>(() =>
-    this.report.hasValue() ? this.report.value().checks.map(checkRow) : [],
-  );
+  protected readonly rows = computed<CheckRow[]>(() => {
+    if (!this.report.hasValue()) return [];
+    const r = this.report.value();
+    return r.checks.map((c) => checkRow(c, r.strategy_id));
+  });
 
   protected readonly failedCount = computed(() => this.rows().filter((r) => !r.passed).length);
 
-  /** What a reviewer reads before promoting; it never changes the verdict. */
+  /** What a reviewer reads before going live; it never changes the verdict. */
   protected readonly checklist = computed(() =>
     this.report.hasValue() ? checklistItems(this.report.value().checklist) : [],
   );
 
-  /** Shadow first (the usual candidates), then active, then retired. */
+  /** Paper trading first (the usual candidates), then live, then stopped. */
   protected readonly groups = computed(() => {
     if (!this.strategies.hasValue()) return [];
     const items = [...this.strategies.value().items].sort(
@@ -108,6 +111,8 @@ export class GoLivePage {
 
   protected readonly goLiveLabel = LIFECYCLE.live.label;
   protected readonly kindName = strategyKindName;
+  protected readonly displayName = strategyDisplayName;
+  protected readonly realMoney = isRealMoneyBroker;
 
   protected readonly riskRows = computed(() => {
     if (!this.risk.hasValue()) return [];

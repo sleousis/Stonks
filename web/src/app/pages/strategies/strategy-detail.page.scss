@@ -71,6 +71,17 @@ dd {
   display: block;
   color: var(--color-ink-3);
   font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+// Real money: the LIVE stamp next to the title, never a pill (docs/ui.md).
+.title-stamp {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
 }
 
 .chips {

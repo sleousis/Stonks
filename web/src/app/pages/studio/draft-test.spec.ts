@@ -289,7 +289,7 @@ describe('DraftTest', () => {
     const pills = [...el.querySelectorAll('app-lab-run-result .test app-status-pill')].map((p) =>
       p.textContent?.trim(),
     );
-    expect(pills).toEqual(['pass', 'fail']);
+    expect(pills).toEqual(['Passed', 'Failed']);
     expect(text).toContain('Out of sample');
     expect(text).toContain('Unstable');
   });

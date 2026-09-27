@@ -97,7 +97,8 @@ describe('governance labels', () => {
     controller.match(() => true); // go-live verdict and paper value are not needed here
 
     const actions = buttonTexts(page.nativeElement, 'app-page-header button');
-    expect(actions).toEqual([LIFECYCLE.live.label, LIFECYCLE.stop.label]);
+    // Not ready yet: no Go live, the admin's override instead (UX-23).
+    expect(actions).toEqual(['Override…', LIFECYCLE.stop.label]);
     expect(actions.join(' ')).not.toMatch(OLD_WORDS);
   });
 

@@ -16,6 +16,7 @@ import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-tab
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { className } from '../lab/ledger.page';
+import { strategyDisplayName } from '../../shared/strategy-names';
 
 type SortKey = NonNullable<NonNullable<GetLeaderboardData['query']>['sort']>;
 
@@ -91,7 +92,7 @@ export function goliveLabel(passed: boolean | null | undefined): string {
       } @else if (board.value().rows.length === 0) {
         <app-empty-state
           title="No strategies yet"
-          message="Strategies show here once the lab registers them and they trade on paper."
+          message="Strategies show here once they pass their tests in Lab and trade on paper."
         >
           <a routerLink="/lab" class="btn">Go to the lab</a>
         </app-empty-state>
@@ -112,7 +113,7 @@ export function goliveLabel(passed: boolean | null | undefined): string {
           <ng-template appCell="strategy_id" [appCellOf]="board.value().rows" let-r>
             <a [routerLink]="['/strategies', r.strategy_id, 'tearsheet']" class="name">
               <span class="num rank">{{ r.rank }}</span>
-              <span class="id">{{ r.strategy_id }}</span>
+              <span class="id">{{ name(r.strategy_id) }}</span>
               <span class="cls muted">{{ cls(r.class_path) }}</span>
             </a>
           </ng-template>
@@ -246,6 +247,7 @@ export class LeaderboardPage {
     },
   ];
   protected readonly rowKey = (r: LeaderboardRow) => r.strategy_id;
+  protected readonly name = strategyDisplayName;
 
   protected stage(r: LeaderboardRow): string {
     return stageLabel(r);

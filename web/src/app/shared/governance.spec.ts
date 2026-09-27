@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, viewChild } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 
-import type { GoLiveReport, StatusChangeRequest } from '../api/models';
+import type { BrokerInfo, GoLiveReport, StatusChangeRequest } from '../api/models';
 import { ApiError } from '../core/http/api-error';
 import type { ToastService } from '../core/notify/toast.service';
 import { tick } from '../../testing/http';
@@ -12,7 +12,13 @@ import {
   goLiveReport,
   isHoldDialog,
 } from '../../testing/status-dialog';
-import { isGoLiveRefusal, promoteThroughGate } from './governance';
+import {
+  HELD_POSITIONS_LINE,
+  type PromotionSteps,
+  demoteOptions,
+  isGoLiveRefusal,
+  promoteThroughGate,
+} from './governance';
 import { StatusChangeDialog } from './ui/status-change-dialog';
 
 @Component({
@@ -46,7 +52,7 @@ describe('promoteThroughGate', () => {
     busy = [];
   });
 
-  function start() {
+  function start(extra: Partial<PromotionSteps<string>> = {}) {
     return promoteThroughGate({
       id: 'mom',
       dialog: fixture.componentInstance.dialog(),
@@ -57,6 +63,7 @@ describe('promoteThroughGate', () => {
       message: 'It trades from the next run.',
       confirmLabel: 'Go live',
       busy: (on) => busy.push(on),
+      ...extra,
     });
   }
 
@@ -162,6 +169,90 @@ describe('promoteThroughGate', () => {
     answerDialog(fixture, { reason: 'Board approved the early start', typed: 'override' });
     await expect(result).resolves.toBeNull();
     expect(toasts.error).toHaveBeenCalledWith('again', 'Oops');
+  });
+});
+
+describe('promoteThroughGate ticket (UX-03)', () => {
+  let fixture: ComponentFixture<Host>;
+  let el: HTMLElement;
+  const alpaca = (paper: boolean): BrokerInfo => ({
+    kind: 'alpaca',
+    paper,
+    allow_live: true,
+    credentials_configured: true,
+  });
+
+  beforeEach(async () => {
+    fixture = TestBed.createComponent(Host);
+    await fixture.whenStable();
+    el = fixture.nativeElement;
+  });
+
+  async function open(broker: BrokerInfo, extra: Partial<PromotionSteps<string>> = {}) {
+    const result = promoteThroughGate({
+      id: 'momentum_3fa9c21b',
+      name: 'Momentum 3fa9',
+      dialog: fixture.componentInstance.dialog(),
+      toasts: { error: vi.fn() } as unknown as ToastService,
+      golive: () => Promise.resolve(goLiveReport('momentum_3fa9c21b', true)),
+      promote: () => Promise.resolve('done'),
+      broker: () => Promise.resolve(broker),
+      followers: () => Promise.resolve(['Main book']),
+      title: 'Go live with Momentum 3fa9?',
+      message: 'It places orders from the next trading run.',
+      confirmLabel: 'Go live',
+      ...extra,
+    });
+    await tick();
+    fixture.detectChanges();
+    return { result, form: dialogForm(el)! };
+  }
+
+  it('LIVE stamp and ticket lines when broker.paper is false, PAPER otherwise', async () => {
+    const live = await open(alpaca(false));
+    const ticket = live.form.querySelector('.ticket')!;
+    expect(ticket.classList).toContain('live');
+    expect(ticket.querySelector('app-mode-stamp')!.textContent).toContain('LIVE');
+    expect(ticket.textContent).toContain('Momentum 3fa9');
+    expect(ticket.textContent).toContain('Main book');
+    expect(ticket.textContent).toContain('Alpaca live account');
+    expect(live.form.textContent).toContain('Real money');
+    // Real money needs the name typed, not a hold.
+    expect(isHoldDialog(el)).toBe(false);
+
+    const paper = await open(alpaca(true));
+    const paperTicket = paper.form.querySelector('.ticket')!;
+    expect(paperTicket.classList).not.toContain('live');
+    expect(paperTicket.querySelector('app-mode-stamp')!.textContent).toContain('PAPER');
+    expect(paper.form.textContent).toContain('no real money moves');
+    expect(paper.form.textContent).not.toContain('Real money');
+    expect(isHoldDialog(el)).toBe(true);
+    await expect(live.result).resolves.toBeNull();
+  });
+
+  it('asks for the override straight away for an admin override', async () => {
+    const promote = vi.fn().mockResolvedValue('forced');
+    const { result, form } = await open(alpaca(true), { overrideFirst: true, promote });
+    expect(form.textContent).toContain('without passing the check');
+    answerDialog(fixture, { reason: 'Board approved the early start', typed: 'override' });
+    await expect(result).resolves.toBe('forced');
+    expect(promote).toHaveBeenCalledWith({
+      reason: 'Board approved the early start',
+      override: true,
+    });
+  });
+});
+
+describe('demoteOptions (UX-24)', () => {
+  it('uses one title, message and tone for each step back', () => {
+    const pause = demoteOptions('pause', 'Momentum 3fa9');
+    expect(pause.title).toBe('Move Momentum 3fa9 back to paper trading?');
+    expect(pause.confirmLabel).toBe('Back to paper trading');
+    expect(pause.message).toContain(HELD_POSITIONS_LINE);
+    const stop = demoteOptions('stop', 'Momentum 3fa9');
+    expect(stop.title).toBe('Stop Momentum 3fa9?');
+    expect(stop.tone).toBe('danger');
+    expect(stop.message).toContain(HELD_POSITIONS_LINE);
   });
 });
 

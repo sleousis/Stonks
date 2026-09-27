@@ -24,6 +24,8 @@ import { StatusPill } from '../../shared/ui/status-pill';
 import { className } from '../lab/ledger.page';
 import { goliveLabel } from './leaderboard.page';
 import { MONTHS, curveSeries, curveSummary, yearRows } from './tearsheet-data';
+import { testLabel } from '../../shared/lab-results/survival-tests';
+import { strategyDisplayName } from '../../shared/strategy-names';
 
 const NA = 'n/a';
 
@@ -99,10 +101,13 @@ export class TearsheetPage {
   protected readonly years = computed(() =>
     this.sheet.hasValue() ? yearRows(this.sheet.value().monthly_returns) : [],
   );
+  /** A name to read, not the registry id (UX-27). */
+  protected readonly displayName = computed(() => strategyDisplayName(this.id()));
   protected readonly tests = computed(() =>
     this.sheet.hasValue()
       ? this.sheet.value().strategy.survival_reports.map((r) => ({
           id: r.test_id,
+          label: testLabel(r.test_id),
           passed: r.passed,
           notes: r.notes,
           figures: splitMetrics(r.test_id, r.metrics).key,
@@ -111,7 +116,7 @@ export class TearsheetPage {
   );
   protected readonly checks = computed(() => {
     const g = this.sheet.hasValue() ? this.sheet.value().golive : null;
-    return g ? g.checks.map(checkRow) : [];
+    return g ? g.checks.map((c) => checkRow(c, g.strategy_id)) : [];
   });
   protected readonly golive = computed(() =>
     goliveLabel(this.sheet.hasValue() ? this.sheet.value().golive?.passed : null),
