@@ -86,6 +86,10 @@ describe('HealthPage', () => {
     http
       .match((r) => r.url.split('?')[0] === '/api/alerts')
       .forEach((r) => r.flush({ items: [], total: 0, limit: 20, offset: 0 }));
+    // So does the broker gateways panel (its own spec covers it).
+    http
+      .match((r) => r.url.split('?')[0] === '/api/brokers/gateways')
+      .forEach((r) => r.flush({ configured: false, gateways: [] }));
     await tick();
     fixture.detectChanges();
   }
@@ -171,6 +175,19 @@ describe('HealthPage', () => {
   it('shows the recent system alerts panel (UI-07)', async () => {
     await flushAll();
     expect(el.querySelector('app-alerts-panel')).not.toBeNull();
+  });
+
+  it('shows the broker gateways panel, not their checks among the runs', async () => {
+    await flushAll({
+      ...REPORT,
+      checks: [
+        { name: 'stuck_ticks', ok: true, detail: 'none' },
+        { name: 'broker:live', ok: false, detail: 'live gateway down since 14:05' },
+      ],
+    });
+    expect(el.querySelector('app-gateway-panel')).not.toBeNull();
+    expect(el.querySelector('.checks')?.textContent).not.toContain('broker:live');
+    expect(el.querySelector('.overall')!.getAttribute('data-level')).toBe('critical');
   });
 
   it('checks chosen tickers', async () => {

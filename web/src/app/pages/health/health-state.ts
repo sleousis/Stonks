@@ -25,6 +25,8 @@ export const LEVEL_LABEL: Record<HealthLevel, string> = {
 };
 
 const FRESHNESS_PREFIX = 'freshness:';
+/** One check per broker gateway; the broker gateways panel shows them. */
+const BROKER_PREFIX = 'broker:';
 /** "latest bar 2026-09-19 (7d old, max 4d)" */
 const AGE_RE = /\((\d+)d old, max (\d+)d\)/;
 
@@ -63,7 +65,9 @@ export interface LeveledCheck extends HealthCheckView {
 
 /**
  * Per-ticker freshness rows (worst first, then by ticker) and the remaining
- * checks (stuck runs, failures, crashed checks) sorted by name.
+ * checks (stuck runs, failures, crashed checks) sorted by name. Broker
+ * gateway checks still count toward the overall level, but show in their
+ * own panel.
  */
 export function splitChecks(checks: readonly HealthCheckView[]): {
   freshness: FreshnessRow[];
@@ -75,7 +79,7 @@ export function splitChecks(checks: readonly HealthCheckView[]): {
     const level = checkLevel(c);
     if (c.name.startsWith(FRESHNESS_PREFIX)) {
       freshness.push({ ticker: c.name.slice(FRESHNESS_PREFIX.length), level, detail: c.detail });
-    } else {
+    } else if (!c.name.startsWith(BROKER_PREFIX)) {
       other.push({ ...c, level });
     }
   }
