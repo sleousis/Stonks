@@ -328,6 +328,31 @@ def test_auction_no_fill_is_expired():
     assert s.state == "expired" and s.status == "cancelled"
 
 
+def test_opening_auction_cancelled_by_hand_is_cancelled():
+    # roadmap 19.16: IBKR says a person cancelled it, so it did not expire
+    broker, gw = make()
+    broker.place_order(buy(time_in_force="opg"))
+    gw.cancel_by_hand("t1-s1-AAPL.US-buy")
+    s = broker.get_order_state("t1-s1-AAPL.US-buy")
+    assert s.state == "cancelled" and s.status == "cancelled"
+
+
+def test_opening_auction_expired_by_the_exchange_is_expired():
+    broker, gw = make()
+    broker.place_order(buy(time_in_force="opg"))
+    gw.auction_no_fill("t1-s1-AAPL.US-buy", origin="system")
+    assert broker.get_order_state("t1-s1-AAPL.US-buy").state == "expired"
+
+
+def test_opening_auction_cancelled_by_us_is_cancelled():
+    # IBKR sent no origin, but this broker sent the cancel itself
+    broker, gw = make()
+    broker.place_order(buy(time_in_force="opg"))
+    assert broker.cancel_order("t1-s1-AAPL.US-buy")
+    gw.set_cancel_origin("t1-s1-AAPL.US-buy", None)
+    assert broker.get_order_state("t1-s1-AAPL.US-buy").state == "cancelled"
+
+
 def test_unknown_client_id_has_no_state():
     broker, _ = make()
     assert broker.get_order_state("never-sent") is None

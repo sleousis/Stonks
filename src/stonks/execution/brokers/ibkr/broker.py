@@ -139,6 +139,9 @@ class IbkrBroker:
         self._account: str | None = None
         self._checked_connects = -1
         self._seen_execs: set[str] = set()
+        #: orderRefs this process asked IBKR to cancel (a cancel we sent
+        #: is never an expiry, even when IBKR names no origin)
+        self._cancels_sent: set[str] = set()
         self._closers: list[Callable[[], object]] = []
 
     def on_close(self, fn: Callable[[], object]) -> None:
@@ -360,9 +363,7 @@ class IbkrBroker:
         if trade_avg is not None:
             trade_avg = to_major(trade_avg, self.price_magnifier(trade.contract))
         avg = trade_avg if trade.filled >= exec_qty else exec_avg
-        state: OrderState = ibkr_state(
-            trade.status, filled=filled, time_in_force=_TIF_BACK.get(trade.tif or "")
-        )
+        state: OrderState = self._state_of(trade, filled)
         return BrokerOrderState(
             client_id=client_id,
             broker_order_id=str(trade.perm_id),
@@ -392,6 +393,7 @@ class IbkrBroker:
             raise to_broker_error(exc, action=f"cancel of {client_id}") from exc
         except (ConnectionError, TimeoutError) as exc:
             raise to_broker_error(exc, action=f"cancel of {client_id}") from exc
+        self._cancels_sent.add(ref)
         _log.info("ibkr.order.cancel_requested", client_id=client_id)
         return True
 
@@ -414,7 +416,7 @@ class IbkrBroker:
         for t in self._guard("open orders", self.client.open_trades):
             if t.account and t.account != account:
                 continue
-            state = ibkr_state(t.status, filled=t.filled, time_in_force=_TIF_BACK.get(t.tif or ""))
+            state = self._state_of(t, t.filled)
             if state in TERMINAL:
                 continue
             out.append(
@@ -522,6 +524,19 @@ class IbkrBroker:
             return fn()
         except (IbApiError, ConnectionError, TimeoutError) as exc:
             raise to_broker_error(exc, action=action) from exc
+
+    def _state_of(self, trade: IbTrade, filled: float) -> OrderState:
+        """Our state for ``trade``. Who cancelled it is IBKR's word when it
+        gives one, else ``trader`` when this broker sent the cancel."""
+        origin = trade.cancel_origin
+        if origin is None and trade.order_ref in self._cancels_sent:
+            origin = "trader"
+        return ibkr_state(
+            trade.status,
+            filled=filled,
+            time_in_force=_TIF_BACK.get(trade.tif or ""),
+            cancel_origin=origin,
+        )
 
     def _find_trade(self, ref: str) -> IbTrade | None:
         for t in self._guard("open orders", self.client.open_trades):
