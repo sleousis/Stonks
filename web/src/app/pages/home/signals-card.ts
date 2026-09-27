@@ -13,15 +13,18 @@ import type { FeedItemView, TickRun } from '../../api/models';
 import { NotificationsService } from '../../api/notifications.service';
 import { TicksService } from '../../api/ticks.service';
 import { formatTime } from '../../core/format/format';
+import { NotificationFeedService, appLink } from '../../core/notify/notification-feed.service';
+import { jobLabel, nextTradingRun } from '../../core/schedule/job-labels';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
 import {
   WatchlistContextService,
   signalTicker,
 } from '../../core/watchlists/watchlist-context.service';
-import { humanize } from '../../shared/ui/param-form/param-spec';
-import { countdown, nextJob } from '../../shared/ui/session-strip';
+import { autoRefresh } from '../../shared/auto-refresh';
+import { countdown } from '../../shared/ui/session-strip';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { RunsPassed } from './runs-passed';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FEED_LIMIT = 100;
@@ -40,11 +43,6 @@ export function todaysSignals(items: readonly FeedItemView[], now = new Date()):
 export function todaysRuns(runs: readonly TickRun[], now = new Date()): TickRun[] {
   const since = now.getTime() - DAY_MS;
   return runs.filter((r) => new Date(r.started_at).getTime() >= since);
-}
-
-/** A deep link the router can open (same-app paths only). */
-export function appLink(link: string | null): string | null {
-  return link && link.startsWith('/') && !link.startsWith('//') ? link : null;
 }
 
 /** One line of a trading run: "3 orders, 3 fills" or its error. */
@@ -281,6 +279,7 @@ export class SignalsCard {
   private readonly ticksApi = inject(TicksService);
   private readonly day = inject(TradingDayService);
   private readonly watch = inject(WatchlistContextService);
+  private readonly counter = inject(NotificationFeedService);
 
   protected readonly feed = resource({ loader: () => this.api.feed({ limit: FEED_LIMIT }) });
   /** Runs are the second half of the story; if they fail, signals still show. */
@@ -293,6 +292,11 @@ export class SignalsCard {
         return [];
       }
     },
+  });
+
+  /** Fresh through the session: every minute, and when a trading run starts (UX-12). */
+  protected readonly auto = autoRefresh(() => [this.feed, this.ticks], {
+    triggers: [inject(RunsPassed).count],
   });
 
   private readonly now = signal(Date.now());
@@ -339,10 +343,11 @@ export class SignalsCard {
 
   protected readonly next = computed(() => {
     const now = this.now();
-    const job = nextJob(this.day.jobs(), now);
+    // The run that trades, never the earliest system job (UX-08).
+    const job = nextTradingRun(this.day.jobs(), now);
     if (!job?.next_run_at) return null;
     return {
-      label: humanize(job.name),
+      label: jobLabel(job),
       time: formatTime(job.next_run_at),
       in: countdown(Date.parse(job.next_run_at) - now),
     };
@@ -356,7 +361,8 @@ export class SignalsCard {
   protected async markRead(): Promise<void> {
     this.marking.set(true);
     try {
-      await this.api.markRead(this.unread().map((s) => s.id));
+      // Through the feed service, so the bell's count follows (UX-32).
+      await this.counter.markRead(this.unread().map((s) => s.id));
       this.feed.reload();
     } catch {
       // The error interceptor already showed the API's message.

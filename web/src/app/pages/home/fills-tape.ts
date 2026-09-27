@@ -12,8 +12,10 @@ import {
 } from '../../core/format/format';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { WatchlistContextService } from '../../core/watchlists/watchlist-context.service';
+import { autoRefresh } from '../../shared/auto-refresh';
 import { BrandMark } from '../../shared/ui/brand-mark';
 import { SideTag } from '../../shared/ui/side-tag';
+import { RunsPassed } from './runs-passed';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FILLS_LIMIT = 50;
@@ -280,6 +282,10 @@ export class FillsTape {
       ]);
       return { fills: fills.items, sides: sideByOrder(orders.items) };
     },
+  });
+  /** New fills show during the session, and right after a trading run starts (UX-12). */
+  protected readonly auto = autoRefresh(() => [this.fills], {
+    triggers: [inject(RunsPassed).count],
   });
 
   private readonly latest = computed(() =>
