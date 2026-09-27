@@ -1135,7 +1135,7 @@ def pnl(
     """Daily P&L from portfolio snapshots, one row per tick as_of: value,
     change since the previous row (blank when more than 4 days apart, see
     ``days``), cumulative return and drawdown from the running peak."""
-    from stonks.insights.flows import external_flows
+    from stonks.insights.flows import flows_or_missing, lake_fx_loader
     from stonks.insights.returns import mwr, net_flows, twr
     from stonks.production.pnl import load_pnl
 
@@ -1144,7 +1144,12 @@ def pnl(
     state = SqliteState(settings.state.path)
     try:
         rows = load_pnl(state, since=since_d, strategy_id=strategy, portfolio_id=portfolio)
-        flows = [] if strategy else external_flows(state, portfolio)
+        flow_missing = None
+        flows = []
+        if not strategy:
+            loader = lake_fx_loader(lambda: _open_lake(settings.lake.path))
+            found, flow_missing = flows_or_missing(state, portfolio, fx_loader=loader)
+            flows = found or []
     finally:
         state.close()
 
@@ -1171,6 +1176,12 @@ def pnl(
         )
     console.print(table)
     points = [(r.day, r.total_value) for r in rows]
+    if flow_missing:
+        console.print(
+            f"[yellow]no FX rate for a {flow_missing} deposit or withdrawal:"
+            " TWR and MWR are left out[/yellow]"
+        )
+        return
     console.print(
         f"time-weighted {pct(twr(points, flows))}, money-weighted (annual)"
         f" {pct(mwr(points, flows))}, net deposits {net_flows(points, flows):+,.2f}"

@@ -49,7 +49,7 @@ from stonks.insights import (
     strategy_agreement,
     weighted_returns,
 )
-from stonks.insights.flows import external_flows
+from stonks.insights.flows import flows_or_missing, lake_fx_loader
 from stonks.insights.returns import mwr, net_flows
 from stonks.logging import get_logger
 from stonks.production.ledger import ledger_filter
@@ -163,12 +163,23 @@ class InsightsService:
         betas = self._betas(book, returns, bench, notes)
         with self._ctx.state() as state:
             points = [(r.day, r.total_value) for r in load_pnl(state, portfolio_id=portfolio_id)]
-            flows = external_flows(state, portfolio_id)
+            found, flow_missing = flows_or_missing(
+                state, portfolio_id, fx_loader=lake_fx_loader(self._ctx.lake)
+            )
+        flows = found or []
         total_base, fx_missing = self._total_in_base(book)
         if fx_missing:
             notes.append(
                 "no FX rate for " + ", ".join(fx_missing) + ": the base-currency total is left out"
             )
+        if flow_missing:
+            fx_missing = sorted({*fx_missing, flow_missing})
+            notes.append(
+                f"no FX rate for a {flow_missing} deposit or withdrawal: TWR and MWR are left out"
+            )
+        pnl_rows = period_pnl(points, flows)
+        if flow_missing:
+            pnl_rows = [r.model_copy(update={"twr": None}) for r in pnl_rows]
         if book.uncovered:
             notes.append(
                 f"{len(book.uncovered)} holding(s) have no ticker; their broker value counts "
@@ -188,7 +199,7 @@ class InsightsService:
                 ticker=allocation(book, "ticker"),
             ),
             exposure=exposure(book, betas=betas, benchmark=bench),
-            pnl=period_pnl(points, flows),
+            pnl=pnl_rows,
             risk=RiskView(
                 history=realized_risk([v for _, v in points]),
                 holdings=self._holdings_risk(book, returns),
@@ -200,7 +211,7 @@ class InsightsService:
             notes=notes,
             total_value_base=total_base,
             fx_missing=fx_missing,
-            mwr=mwr(points, flows),
+            mwr=None if flow_missing else mwr(points, flows),
             net_flows=net_flows(points, flows),
         )
 

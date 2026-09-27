@@ -15,7 +15,7 @@ from stonks.app.errors import NotFoundError
 from stonks.app.pagination import Page
 from stonks.app.serialize import finite
 from stonks.config import HealthConfig, RiskPolicy
-from stonks.insights.flows import external_flows
+from stonks.insights.flows import flows_or_missing, lake_fx_loader
 from stonks.insights.returns import mwr, net_flows, twr
 from stonks.production.halts import HEALTH_ACTOR, read_health, run_health
 from stonks.production.pnl import PnlRow, load_pnl
@@ -152,8 +152,13 @@ class OperationsService:
         with self._ctx.state() as state:
             rows = load_pnl(state, since=since, portfolio_id=portfolio_id)
             snapshots, base = _snapshot_points(state, portfolio_id)
-            flows = external_flows(state, portfolio_id)
+            found, flow_missing = flows_or_missing(
+                state, portfolio_id, fx_loader=lake_fx_loader(self._ctx.lake)
+            )
+        flows = found or []
         base_rows, missing = self._base_rows(snapshots, base, since)
+        if flow_missing:
+            missing = sorted({*missing, flow_missing})
         points = [(r.day, r.total_value) for r in rows]
         return PnlSeries(
             strategy_id=None,
@@ -162,8 +167,8 @@ class OperationsService:
             base_rows=base_rows,
             fx_missing=missing,
             net_flows=net_flows(points, flows),
-            twr=twr(points, flows),
-            mwr=mwr(points, flows),
+            twr=None if flow_missing else twr(points, flows),
+            mwr=None if flow_missing else mwr(points, flows),
         )
 
     def _base_rows(

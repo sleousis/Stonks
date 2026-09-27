@@ -716,7 +716,7 @@ Columns: `date`, `value` (cash plus marked positions), `change`, `daily`, `cumul
 - **Money-weighted return (MWR):** the yearly rate (XIRR) that turns the start value and the flows into the latest value. It shows what your money earned, timing included.
 - **Net deposits:** deposits less withdrawals inside the range.
 
-Only deposits and withdrawals are flows. Dividends, interest and fees stay inside the return. A broker book's flows come from its sync. On a simulated book, record them yourself. Recording one also moves the book's cash:
+Only deposits and withdrawals are flows. Dividends, interest and fees stay inside the return. A broker book's flows come from its sync. A broker flow in another currency than its account is converted to the account currency at the stored FX rate of its day. When no rate exists, TWR and MWR are left out and the view names the currency. On a simulated book, record them yourself. Recording one also moves the book's cash:
 
 ```bash
 uv run stonks cash-flows record --kind deposit --amount 5000 [--date YYYY-MM-DD] [--note ...] --user you@example.com
