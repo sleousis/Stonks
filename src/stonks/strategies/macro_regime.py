@@ -12,8 +12,9 @@ annual series do, or its end).
 
 Risk off when the signal is above (or below) ``threshold``. In risk off
 ``estimate_return`` returns ``None`` for every ticker and ``decide`` exits:
-every long position (``risk_off_exit="all"``) or only what the inner
-strategy's own no-picks exit logic sells (``"inner"``). In risk on the
+every position, longs sold and shorts covered (``risk_off_exit="all"``),
+or only what the inner strategy's own no-picks exit logic closes
+(``"inner"``). In risk on the
 wrapper is transparent.
 
 When the regime can't be judged (no data, too little history, or the
@@ -41,7 +42,7 @@ from typing import Any
 
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
-from stonks.strategies._common import as_datetime, sell_all_longs
+from stonks.strategies._common import as_datetime, close_all, closes_only
 from stonks.strategies._wrapping import InnerStrategyWrapper, inner_param_specs
 from stonks.strategies._wrapping import import_strategy_class as _import_strategy_class
 
@@ -252,8 +253,8 @@ class MacroRegimeFilter(InnerStrategyWrapper):
         if lake is None or not self._regime(as_of, lake)[0]:
             return self._inner.decide(my_picks, portfolio, prices, as_of)
         if self.params["risk_off_exit"] == "inner":
-            return [o for o in self._inner.decide([], portfolio, prices, as_of) if o.side == "sell"]
-        return sell_all_longs(self.id, portfolio, as_of)
+            return closes_only(self._inner.decide([], portfolio, prices, as_of), portfolio)
+        return close_all(self.id, portfolio, as_of)
 
 
 # ---- point-in-time macro loaders (shared with the regime conditions) --------------
