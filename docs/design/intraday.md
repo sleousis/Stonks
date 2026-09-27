@@ -35,7 +35,7 @@ Non-goals for this phase: tick-level strategies (sub-minute decisions), market m
 | `DataSource` (`ingest/sources/base.py`) | REST pulls, `fetch_intraday_bars` | A separate `StreamingSource` seam for push data (21.1) |
 | IBKR adapter (`execution/brokers/ibkr/`) | orders, executions, account, `QuoteSource` snapshots | A streaming source over its quotes (21.1), day orders during the session (21.2) |
 | Order state machine (`execution/order_state.py`) | `pending` to `filled`, `unknown` after a timeout, `require_reconciled` | Reused as is by the intraday router (21.2) |
-| Halts (`production/halts.py`) | kill switch, breakers, `operational`, `runaway`, `broker_drift` | An `intraday_loss` halt kind and a check on every event (21.3) |
+| Halts (`production/halts.py`) | kill switch, breakers, `operational`, `runaway`, `broker_drift` | An `intraday_loss` halt kind and a check on every event (21.3.2, built) |
 | Scheduler | session, daily and interval triggers | Start the engine before the open and stop it after the close (21.2) |
 
 ## 3. The three work packages
@@ -105,7 +105,7 @@ flowchart LR
 ### 21.3 Intraday strategies, risk and monitoring (planned)
 
 - **Strategies** (21.3.1, built): `intraday_orb`, `intraday_vwap_reversion` and `intraday_momentum` in `strategies/examples/`, each with a hypothesis card (P1). They read the regular session from the exchange calendar, decide on closed minute bars only and are flat before every close. The lab splits an intraday dataset by whole sessions, with an embargo of whole sessions (P9), and walk-forward folds count sessions. See `docs/strategies/intraday.md`.
-- **Risk**: registered `RiskRule`s and halts for the intraday loop (section 6).
+- **Risk** (21.3.2, built): registered `RiskRule`s and halts for the intraday loop (section 6).
 - **Monitoring**: stream and engine health on the metrics endpoint, a dead-man on the engine heartbeat, event-to-order latency, a live panel in the console, and alerts.
 
 ## 4. Session rules
@@ -128,13 +128,31 @@ flowchart LR
 
 ## 6. Safety
 
-- **Per-minute loss limit.** A book whose marked equity falls more than X% within a rolling N-minute window opens an `intraday_loss` halt (buys) for the portfolio. A larger drop opens a halt of new orders and, when set, flattens. Clearing needs a reason, like every halt (P40, P41).
-- **Intraday drawdown** from the day's high-water mark scales opening orders down, like `drawdown_scaling` (P27).
-- **Kill switch and halts** are checked on every event, not once a run. The kill switch in stop-all mode also cancels working orders at the broker (`GlobalCanceller`).
-- **Stale data.** No new entries while the stream is stale or reconnecting. Exits still go out on the last known prices with a tight collar.
-- **Runaway guard.** A cap on orders per minute and per day per book. A burst above it drops opening orders and opens a `runaway` halt, as `max_orders_per_run` does.
+Built in 21.3.2. Every rule is off by default and set under `[production.risk.rules.*]`, where overrides only tighten.
+
+```mermaid
+flowchart LR
+  EV[event] --> CK[event_verdict<br/>halts in force]
+  CK -->|all| STOP[nothing sent,<br/>cancel working on stop-all]
+  CK --> RULES[apply_risk<br/>with ctx.intraday]
+  RULES --> GATE[gate_event_orders<br/>buys: closes only]
+  GATE --> RT[router]
+  RULES -. loss breach .-> TL[trip_intraday_loss]
+  RULES -. order burst .-> TR[trip_intraday_runaway]
+  TL --> H[(risk_halts)]
+  TR --> H
+  H --> CK
+```
+
+- **What the rules read.** The engine puts an `IntradayContext` (`production/rules/_intraday.py`) on `RiskContext.intraday`: the event time, the session's equity marks, the latest bar time per ticker, the times of orders already sent, and whether the stream is stale. A daily book has none, and the intraday rules leave its orders alone. Nothing stamped after the event is read (P12).
+- **Per-minute loss limit** (`intraday_loss_limit`). The loss is the fall from the highest mark in the last `window_minutes` to the current value. Past `max_loss` opening orders are dropped and `trip_intraday_loss` opens an `intraday_loss` halt (buys) for the portfolio. Past `hard_loss` the halt stops every new order (an open buys halt is escalated). With `flatten` the rule also closes every position at once, and the halt stays on buys so those closes get out. Clearing needs a reason, like every halt (P40, P41).
+- **Intraday drawdown** (`intraday_drawdown`) from the day's high scales opening orders with a schedule and the same hysteresis as `drawdown_scaling` (P27).
+- **Kill switch and halts** are checked on every event by `production/intraday_halts.py`: `event_verdict` reads the halts in force (global, the owner's, the portfolio's and its parent's), and `gate_event_orders` keeps only closes under a buys halt and nothing under stop-all. `cancel_working` tells the engine to cancel working orders at the broker (`GlobalCanceller`) when a stop-all kill switch is on.
+- **Stale data** (`intraday_stale_data`). No opening order when the latest bar of its ticker is older than `max_bar_age_seconds`, when it has no bar, or while the stream is stale or reconnecting. Exits still go out on the last known prices. The tight collar on those exits belongs to the router (21.2.3).
+- **Runaway guard** (`intraday_order_rate`). A cap on orders per minute and per day per book. Closes use the room first and always go out. Opening orders over it are dropped, lowest score first, and `trip_intraday_runaway` opens a `runaway` halt, as `max_orders_per_run` does.
 - **Pattern day trader.** The account rules already count day trades (`pdt`). Intraday books on a margin account under the threshold are refused at configuration time.
-- Every intraday rule only reduces exposure and never drops a closing order. The property tests over the rule registry cover them.
+- Every intraday rule only reduces exposure and never drops a closing order. Property tests (`tests/property/test_intraday_rules_properties.py`) cover it over random books, marks, bar times and sent orders.
+- Migration 042 adds `intraday_loss` to the halt kinds. It rebuilds `risk_halts` with its rows, ids, counter, indexes and triggers, and `reconcile_reports` around it, because that table refers to the halts.
 
 ## 7. Testing
 
@@ -303,7 +321,7 @@ Shared files (`config.py`, `config/default.toml`, `cli.py`, router mounts, the M
 | 21.2.4 Session rules | Regular hours only, no entries at the open and close edges, flatten before the close, per-ticker trading halts, early closes. | `engine/sessions.py` |
 | 21.2.5 Engine process | The always-on process, scheduler jobs to start before the open and stop after the close, startup reconcile, restart and state recovery, the runner inside it. | `engine/process.py`, `scheduling/jobs.py` (jobs) |
 | 21.3.1 Intraday strategies | Opening range breakout, VWAP reversion and intraday momentum with hypothesis cards, lab windows by session. | `strategies/examples/intraday_*.py`, `lab/dataset.py` (session windows) |
-| 21.3.2 Intraday risk | The per-minute loss limit and `intraday_loss` halt kind, intraday drawdown scaling, orders per minute cap, the stale data gate, the kill switch per event. | `production/rules/intraday_*.py`, `production/halts.py`, a new SQLite migration |
+| 21.3.2 Intraday risk | The per-minute loss limit and `intraday_loss` halt kind, intraday drawdown scaling, orders per minute cap, the stale data gate, the kill switch per event. | `production/rules/intraday_*.py`, `production/intraday_halts.py`, `production/halts.py`, SQLite migration 042 (built) |
 | 21.3.3 Live marks and P&L | Minute marks from the stream, intraday P&L per book and strategy sleeve, intraday risk snapshots. | `production/intraday_pnl.py`, a new SQLite migration |
 | 21.3.4 Monitoring | Stream and engine metrics on `/metrics`, the engine dead-man, latency from event to order, alerts, a live panel in the console. | `scheduling/metrics.py`, `api/routers/stream.py`, `web/src/app/pages/live/*` |
 | 21.3.5 Intraday TCA | Spread from recorded quotes, arrival at the next minute, cost model calibration for minute trading. | `production/tca.py` (additions), `backtest/costs.py` (additions) |

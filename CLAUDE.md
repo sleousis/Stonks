@@ -219,6 +219,8 @@ uv run python -m stonks.streaming sources|run|record|replay   # live streams int
 - 037: `portfolios.live_stage` (`sim_paper`, `broker_paper`, `live_small`, `live_scale`), `live_stage_changes` (append only, a trigger refuses an unlogged stage write) and `live_gate_days` (roadmap 19.9).
 - 038: `economic_alert_prefs (user_id, countries_json, min_importance, updated_at)` (roadmap 20.9).
 - 039: `order_tickets.hold` also takes `hard_to_borrow` (table rebuilt, roadmap 19.16).
+- 041: `engine_runs` (the intraday engine process: status, heartbeat, checkpoint, counts, the run it recovered from, roadmap 21.2.5).
+- 042: halt kind `intraday_loss` on `risk_halts` (rebuilt with `reconcile_reports`, ids and counter kept, roadmap 21.3.2).
 
 ## Conventions to match
 

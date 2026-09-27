@@ -21,6 +21,10 @@ from stonks.production.rules.capital_ramp import CapitalRampSettings
 from stonks.production.rules.circuit_breaker import CircuitBreakerSettings, Cooldown
 from stonks.production.rules.drawdown_scaling import DrawdownScalingSettings, Schedule
 from stonks.production.rules.exposure import GrossExposureSettings, NetExposureSettings
+from stonks.production.rules.intraday_drawdown import IntradayDrawdownSettings
+from stonks.production.rules.intraday_loss import IntradayLossLimitSettings
+from stonks.production.rules.intraday_orders import IntradayOrderRateSettings
+from stonks.production.rules.intraday_stale import IntradayStaleDataSettings
 from stonks.production.rules.liquidity import LiquiditySettings
 from stonks.production.rules.live_caps import LiveNotionalCapsSettings
 from stonks.production.rules.margin_call import MarginCallSettings
@@ -51,6 +55,10 @@ __all__ = [
     "CircuitBreakerSettings",
     "DrawdownScalingSettings",
     "GrossExposureSettings",
+    "IntradayDrawdownSettings",
+    "IntradayLossLimitSettings",
+    "IntradayOrderRateSettings",
+    "IntradayStaleDataSettings",
     "LiquiditySettings",
     "LiveNotionalCapsSettings",
     "LosingLockSettings",
@@ -119,6 +127,12 @@ class RuleSettings(BaseModel):
     # Broker-side protective stops (roadmap 19.10), off by default. Not a
     # risk rule: ``production.live.stops`` places them.
     protective_stops: ProtectiveStopSettings = ProtectiveStopSettings()
+    # Intraday books (roadmap 21.3.2): act only on an event of the intraday
+    # engine, every one off by default.
+    intraday_loss_limit: IntradayLossLimitSettings = IntradayLossLimitSettings()
+    intraday_drawdown: IntradayDrawdownSettings = IntradayDrawdownSettings()
+    intraday_order_rate: IntradayOrderRateSettings = IntradayOrderRateSettings()
+    intraday_stale_data: IntradayStaleDataSettings = IntradayStaleDataSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -265,6 +279,19 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "atr_window": _keep_base,
         "fallback_pct": min,
     },
+    # A longer window sees a higher peak, so it catches more losses.
+    "intraday_loss_limit": {
+        "max_loss": _min_optional,
+        "hard_loss": _min_optional,
+        "window_minutes": max,
+        "flatten": _either,
+    },
+    "intraday_drawdown": {"schedule": merge_schedules},
+    "intraday_order_rate": {
+        "max_orders_per_minute": _min_optional,
+        "max_orders_per_day": _min_optional,
+    },
+    "intraday_stale_data": {"max_bar_age_seconds": _min_optional},
 }
 
 
