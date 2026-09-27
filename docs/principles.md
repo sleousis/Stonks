@@ -12,7 +12,7 @@ Enforced: BL-26 adds a `hypothesis` card to every strategy. BL-04 stores it with
 
 **P2. Every trial is counted, and a Sharpe ratio is never reported without its trial count.**
 Why: search a big enough parameter space and a high Sharpe always turns up. Overfitting is what normally happens, not a rare accident (López de Prado, *AFML*; Bailey et al.; Kahneman's "what you see is all there is").
-Enforced: BL-04's trial ledger (`lab/trials.py`, tables `lab_runs` and `lab_trials`) records every lab run with a running trial count for each strategy class. BL-14's deflated Sharpe reads that count. The opt-in vectorised pre-screen (`lab/vectorized.py`, BL-49) records every set it screened out as a trial too.
+Enforced: BL-04's trial ledger (`lab/trials.py`, tables `lab_runs` and `lab_trials`) records every lab run with a running trial count for each strategy class. BL-14's deflated Sharpe reads that count. The opt-in vectorised pre-screen (`lab/vectorized.py`, BL-49) records every set it screened out as a trial too. The assistant's research loop (roadmap 22.9) tags its runs with a trial family (`lab_runs.family`), and deflated Sharpe counts the larger of the class's and the family's trials. A research run stopped half way counts its whole budget as failed trials.
 
 **P3. The best of many noisy estimates is biased upward, so it is shrunk before anyone acts on it.**
 Why: the winner's curse applies to tuner winners and to the top-ranked pick each tick alike (Kahneman; Bailey and López de Prado, deflated Sharpe).

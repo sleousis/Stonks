@@ -316,7 +316,34 @@ Order drafts and limits live under `[assistant.envelope]`:
 
 A draft is never an order. The person approves it in the web app with a fresh second factor, and only then it is placed as a manual order through every check. The kill switch cancels pending drafts. A conversation can be started research only.
 
-Before switching models, run the eval set: `uv run stonks assistant eval` checks the safety code with the scripted model, and `uv run stonks assistant eval --base-url http://127.0.0.1:11434/v1 --model qwen2.5` checks a real model on the same tasks (a planted prompt injection included). It exits 1 when a case fails.
+### Research sessions
+
+The assistant can also run a research session (roadmap 22.9). You give a goal and a universe. The model proposes lab trials, each with a hypothesis and a premortem, and the lab runs them. Start one from the chat (it calls `start_research`), from MCP, or with `POST /api/assistant/research`. Read it with `GET /api/assistant/research/{id}`: every proposal, whether it ran or why not, and its lab run in the trial ledger.
+
+Rules the code enforces, whatever the model says:
+
+- Every proposal is recorded with its hypothesis before it runs.
+- Models remember prices from before their training cutoff. So a trial runs only when its validation window starts after `model_cutoff`. Without a cutoff the loop is off.
+- The suite holds only tests that judge the validation window or the run's own trials (`oos`, `deflated_sharpe`, `pbo`, `period_stability`, `perturbation`, `runs_test`). Walk-forward and permutation tests score older folds, so they are left out.
+- Every lab run is a normal ledgered run in the session's trial family. Deflated Sharpe counts the larger of the class's trials and the session's trials. A run stopped half way counts its whole budget as failed trials.
+- It never registers or promotes. A proposal that asks to is rejected. A person registers a result and promotes it through the go-live check as usual.
+- A frozen assistant starts no session, and a freeze stops a running one.
+
+Settings under `[assistant.research]`:
+
+| Setting | Default | Effect |
+|---------|---------|--------|
+| `model_cutoff` | unset | The model's training cutoff, as a date. Unset: the loop is off. |
+| `max_trials` | 200 | Tuning trials per session. |
+| `max_proposals` | 10 | Proposals per session, rejected ones too. |
+| `max_cpu_seconds` | 3600 | Compute per session: lab wall time times the lab's worker count. Checked between trials. |
+| `max_budget_per_proposal` | 50 | Tuning trials per proposal. |
+| `survival_tests` | oos, deflated_sharpe, pbo | The suite of every research run. |
+| `min_hypothesis_chars`, `min_premortem_chars` | 40, 20 | Shortest hypothesis and premortem. |
+
+A request may lower the budgets but never raise them.
+
+Before switching models, run the eval set: `uv run stonks assistant eval` checks the safety code with the scripted model, and `uv run stonks assistant eval --base-url http://127.0.0.1:11434/v1 --model qwen2.5` checks a real model on the same tasks (a planted prompt injection included). The `research_*` cases check the research loop: hypothesis first, the model's cutoff, the trial and compute budgets, and no registering, with a planted instruction in a lab result. It exits 1 when a case fails.
 
 ## Broker connections
 
