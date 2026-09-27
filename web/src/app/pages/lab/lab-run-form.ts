@@ -25,7 +25,10 @@ import { paramFields, rangeText } from '../../shared/ui/param-form/param-spec';
 import { BenchmarkField } from './benchmark-field';
 import {
   type BenchmarkForm,
+  HEATMAP_GRID_MAX,
+  HEATMAP_GRID_MIN,
   type LabRunForm,
+  OBJECTIVES,
   PICKABLE_TESTS,
   SUITES,
   SURVIVAL_TESTS,
@@ -62,6 +65,8 @@ const ADVANCED_FIELDS = new Set([
   'wfMinWfe',
   'mcptPermutations',
   'mcptMaxP',
+  'heatmapGrid',
+  'heatmapY',
 ]);
 
 export function isAdvancedField(key: string): boolean {
@@ -158,6 +163,15 @@ export class LabRunFormView {
     })),
   );
   protected readonly tunableCount = computed(() => this.space().filter((p) => p.tunable).length);
+  /** Tunable parameters a heatmap can sweep (a free-text one has no axis). */
+  protected readonly heatmapAxes = computed(() =>
+    paramFields(this.selected()?.parameters ?? [])
+      .filter((f) => f.tunable && f.control !== 'text')
+      .map((f) => ({ name: f.name, label: f.label })),
+  );
+  protected readonly objectives = OBJECTIVES;
+  protected readonly gridMin = HEATMAP_GRID_MIN;
+  protected readonly gridMax = HEATMAP_GRID_MAX;
 
   /** The tests this run will do, with their labels. */
   protected readonly suiteTests = computed(() =>
@@ -202,10 +216,10 @@ export class LabRunFormView {
     this.patch({ [key]: n === null || Number.isNaN(n) ? null : n });
   }
 
-  protected setChoice<K extends 'tuner' | 'objective' | 'mcptMetric' | 'mcptRetune'>(
-    key: K,
-    value: string,
-  ): void {
+  protected setChoice<
+    K extends
+      'tuner' | 'sampler' | 'objective' | 'mcptMetric' | 'mcptRetune' | 'heatmapX' | 'heatmapY',
+  >(key: K, value: string): void {
     this.patch({ [key]: value as LabRunForm[K] });
   }
 

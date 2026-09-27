@@ -57,8 +57,27 @@ export interface BacktestForm extends WindowForm, BenchmarkForm, CostForm {
   rebalanceEveryBars: number | null;
 }
 
+export type TunerChoice = NonNullable<LabRunRequest['tuner']>;
+export type SamplerChoice = NonNullable<LabRunRequest['sampler']>;
+
+/** Heatmap grid bounds (points per axis), as the API checks them. */
+export const HEATMAP_GRID_MIN = 2;
+export const HEATMAP_GRID_MAX = 15;
+
 export interface LabRunForm extends WindowForm, BenchmarkForm {
-  tuner: 'grid' | 'random';
+  tuner: TunerChoice;
+  /** Optuna only: how it searches. */
+  sampler: SamplerChoice;
+  /** Optuna only: stop trials early that trail on the fast path. */
+  prune: boolean;
+  /** Sweep two parameters around the tuned set after tuning. */
+  heatmap: boolean;
+  /** '' = the server picks (the first numeric tunable parameter). */
+  heatmapX: string;
+  heatmapY: string;
+  heatmapGrid: number | null;
+  /** Score the cells with full backtests instead of the fast path. */
+  heatmapFull: boolean;
   budget: number | null;
   seed: number | null;
   objective: NonNullable<LabRunRequest['objective']>;
@@ -206,6 +225,13 @@ export function defaultLabRunForm(today?: Date): LabRunForm {
     ...defaultWindow(today),
     interval: '1d',
     tuner: 'random',
+    sampler: 'tpe',
+    prune: false,
+    heatmap: false,
+    heatmapX: '',
+    heatmapY: '',
+    heatmapGrid: 7,
+    heatmapFull: false,
     budget: 20,
     seed: 0,
     objective: 'sharpe',
@@ -355,6 +381,15 @@ export function labRunErrors(
     (!isInt(f.embargoBars) || f.embargoBars < 0 || f.embargoBars > 10_000)
   )
     e['embargoBars'] = 'Leave blank or enter 0 to 10000 bars.';
+  if (f.heatmap) {
+    if (
+      !isInt(f.heatmapGrid) ||
+      f.heatmapGrid < HEATMAP_GRID_MIN ||
+      f.heatmapGrid > HEATMAP_GRID_MAX
+    )
+      e['heatmapGrid'] = `Between ${HEATMAP_GRID_MIN} and ${HEATMAP_GRID_MAX}.`;
+    if (f.heatmapX && f.heatmapX === f.heatmapY) e['heatmapY'] = 'Pick a different parameter.';
+  }
   if (tests.length === 0) e['tests'] = 'Pick at least one survival test.';
   if (tests.includes('walk_forward')) {
     if (f.wfSplits !== null && (!isInt(f.wfSplits) || f.wfSplits < 2))
@@ -429,6 +464,18 @@ export function buildLabRunRequest(
   } else {
     body.universe = parseTickers(f.tickers);
   }
+  if (f.tuner === 'optuna') {
+    body.sampler = f.sampler;
+    if (f.prune) body.prune = true;
+  }
+  if (f.heatmap) {
+    body.heatmap = {
+      x: f.heatmapX || null,
+      y: f.heatmapY || null,
+      grid_size: f.heatmapGrid ?? 7,
+      fast: !f.heatmapFull,
+    };
+  }
   if (f.suite === 'custom') body.survival_tests = tests;
   else body.preset = f.suite;
 
@@ -453,9 +500,12 @@ export function buildLabRunRequest(
     if (f.wfMinWfe !== null) wf.min_wfe = f.wfMinWfe;
     if (f.wfMatrix) wf.matrix = true;
     // Only send a config when something differs from the test's defaults.
-    // A cv_ objective scores walk-forward on its plain metric.
-    const metric = f.objective.replace(/^cv_/, '') as NonNullable<WalkForwardConfig['metric']>;
-    if (Object.keys(wf).length) body.walk_forward = { ...wf, metric };
+    // A cv_ objective scores walk-forward on its plain metric. Walk-forward
+    // scores only a few metrics: other objectives keep the test's default.
+    const metric = f.objective.replace(/^cv_/, '');
+    if (WF_METRICS.includes(metric as WfMetric)) wf.metric = metric as WfMetric;
+    const shaped = Object.keys(wf).filter((k) => k !== 'metric');
+    if (shaped.length) body.walk_forward = wf;
   }
   if (tests.includes('mcpt')) {
     const mcpt: McptOptions = {};
@@ -470,6 +520,26 @@ export function buildLabRunRequest(
   if (options) body.test_options = options;
   return body;
 }
+
+type WfMetric = NonNullable<WalkForwardConfig['metric']>;
+const WF_METRICS: readonly WfMetric[] = ['sharpe', 'cagr', 'final_return'];
+
+/** Every objective the lab-run form offers, in menu order. */
+export const OBJECTIVES: readonly {
+  id: NonNullable<LabRunRequest['objective']>;
+  label: string;
+}[] = [
+  { id: 'sharpe', label: 'Sharpe' },
+  { id: 'cagr', label: 'CAGR' },
+  { id: 'final_return', label: 'Total return' },
+  { id: 'sortino', label: 'Sortino' },
+  { id: 'calmar', label: 'Calmar' },
+  { id: 'sharpe_dd', label: 'Sharpe less twice the drawdown' },
+  { id: 'multi', label: 'Sharpe, Calmar and drawdown together' },
+  { id: 'cv_sharpe', label: 'Sharpe on purged folds' },
+  { id: 'cv_cagr', label: 'CAGR on purged folds' },
+  { id: 'cv_final_return', label: 'Total return on purged folds' },
+];
 
 /**
  * The form fields a stored lab-run request (a job's `params`) fills, for a
@@ -497,19 +567,25 @@ export function formFromRequest(
   } else if (Array.isArray(r['universe'])) {
     f.tickers = r['universe'].filter(str).join(', ');
   }
-  if (r['tuner'] === 'grid' || r['tuner'] === 'random') f.tuner = r['tuner'];
+  if (r['tuner'] === 'grid' || r['tuner'] === 'random' || r['tuner'] === 'optuna')
+    f.tuner = r['tuner'];
+  if (r['sampler'] === 'tpe' || r['sampler'] === 'nsga2' || r['sampler'] === 'random')
+    f.sampler = r['sampler'];
+  if (r['prune'] === true) f.prune = true;
+  const heatmap = r['heatmap'];
+  if (heatmap && typeof heatmap === 'object') {
+    const h = heatmap as Record<string, unknown>;
+    f.heatmap = true;
+    if (str(h['x'])) f.heatmapX = h['x'];
+    if (str(h['y'])) f.heatmapY = h['y'];
+    if (num(h['grid_size'])) f.heatmapGrid = h['grid_size'];
+    if (h['fast'] === false) f.heatmapFull = true;
+  }
   if (num(r['budget'])) f.budget = r['budget'];
   if (num(r['seed'])) f.seed = r['seed'];
   if (num(r['train_ratio'])) f.trainRatio = r['train_ratio'];
   if (num(r['embargo_bars'])) f.embargoBars = r['embargo_bars'];
-  const objectives: readonly string[] = [
-    'sharpe',
-    'cagr',
-    'final_return',
-    'cv_sharpe',
-    'cv_cagr',
-    'cv_final_return',
-  ];
+  const objectives: readonly string[] = OBJECTIVES.map((o) => o.id);
   if (str(r['objective']) && objectives.includes(r['objective']))
     f.objective = r['objective'] as LabRunForm['objective'];
   const preset = r['preset'];

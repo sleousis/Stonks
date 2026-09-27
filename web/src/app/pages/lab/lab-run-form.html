@@ -219,6 +219,9 @@
               <option value="grid" [selected]="form().tuner === 'grid'">
                 Grid: tries every combination
               </option>
+              <option value="optuna" [selected]="form().tuner === 'optuna'">
+                Bayesian (Optuna): learns where good trials are
+              </option>
             </select>
           </div>
           <div class="field">
@@ -228,22 +231,53 @@
               class="input"
               (change)="setChoice('objective', $any($event.target).value)"
             >
-              <option value="sharpe" [selected]="form().objective === 'sharpe'">Sharpe</option>
-              <option value="cagr" [selected]="form().objective === 'cagr'">CAGR</option>
-              <option value="final_return" [selected]="form().objective === 'final_return'">
-                Total return
-              </option>
-              <option value="cv_sharpe" [selected]="form().objective === 'cv_sharpe'">
-                Sharpe on purged folds
-              </option>
-              <option value="cv_cagr" [selected]="form().objective === 'cv_cagr'">
-                CAGR on purged folds
-              </option>
-              <option value="cv_final_return" [selected]="form().objective === 'cv_final_return'">
-                Total return on purged folds
-              </option>
+              @for (o of objectives; track o.id) {
+                <option [value]="o.id" [selected]="form().objective === o.id">{{ o.label }}</option>
+              }
             </select>
           </div>
+          @if (form().tuner === 'optuna') {
+            <div class="field">
+              <label for="lr-sampler">How Optuna searches</label>
+              <select
+                id="lr-sampler"
+                class="input"
+                aria-describedby="lr-sampler-hint"
+                (change)="setChoice('sampler', $any($event.target).value)"
+              >
+                <option value="tpe" [selected]="form().sampler === 'tpe'">
+                  TPE: the usual Bayesian search
+                </option>
+                <option value="nsga2" [selected]="form().sampler === 'nsga2'">
+                  NSGA-II: balances the parts of the combined score
+                </option>
+                <option value="random" [selected]="form().sampler === 'random'">
+                  Random: no learning
+                </option>
+              </select>
+              <span class="hint" id="lr-sampler-hint">
+                @if (form().sampler === 'nsga2' && form().objective !== 'multi') {
+                  NSGA-II only helps with "Sharpe, Calmar and drawdown together".
+                } @else {
+                  The same seed gives the same trials for any number of workers.
+                }
+              </span>
+            </div>
+            <div class="checks-col">
+              <label class="check">
+                <input
+                  type="checkbox"
+                  aria-describedby="lr-prune-hint"
+                  [checked]="form().prune"
+                  (change)="patch({ prune: $any($event.target).checked })"
+                />
+                Stop weak trials early
+              </label>
+              <span class="check-hint" id="lr-prune-hint">
+                Only strategies with a fast path can be stopped early. A stopped trial still counts.
+              </span>
+            </div>
+          }
           <div class="field">
             <label for="lr-budget">Trials</label>
             <input
@@ -343,6 +377,109 @@
             (patch)="patch($event)"
           />
         </div>
+      </section>
+
+      <section class="adv-section" aria-labelledby="lr-heatmap-title">
+        <h3 id="lr-heatmap-title" class="adv-title">Parameter heatmap</h3>
+        <div class="checks-col">
+          <label class="check">
+            <input
+              type="checkbox"
+              aria-describedby="lr-heatmap-hint"
+              [checked]="form().heatmap"
+              (change)="patch({ heatmap: $any($event.target).checked })"
+            />
+            Draw a parameter heatmap
+          </label>
+          <span class="check-hint" id="lr-heatmap-hint">
+            After tuning, scores two parameters around the winner. Every cell counts as a trial.
+          </span>
+        </div>
+        @if (form().heatmap) {
+          <div class="grid-2">
+            <div class="field">
+              <label for="lr-heat-x">Across</label>
+              <select
+                id="lr-heat-x"
+                class="input"
+                (change)="setChoice('heatmapX', $any($event.target).value)"
+              >
+                <option value="" [selected]="!form().heatmapX">Auto</option>
+                @for (p of heatmapAxes(); track p.name) {
+                  <option [value]="p.name" [selected]="form().heatmapX === p.name">
+                    {{ p.label }}
+                  </option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="lr-heat-y">Down</label>
+              <select
+                id="lr-heat-y"
+                class="input"
+                aria-describedby="lr-heat-y-hint"
+                [attr.aria-invalid]="!!errors()['heatmapY']"
+                (change)="setChoice('heatmapY', $any($event.target).value)"
+              >
+                <option value="" [selected]="!form().heatmapY">Auto</option>
+                @for (p of heatmapAxes(); track p.name) {
+                  <option [value]="p.name" [selected]="form().heatmapY === p.name">
+                    {{ p.label }}
+                  </option>
+                }
+              </select>
+              @if (errors()['heatmapY']; as e) {
+                <span class="error" id="lr-heat-y-hint">{{ e }}</span>
+              } @else {
+                <span class="hint" id="lr-heat-y-hint">
+                  Auto picks tuned parameters, numbers first.
+                </span>
+              }
+            </div>
+            <div class="field">
+              <label for="lr-heat-grid">Points per axis</label>
+              <input
+                id="lr-heat-grid"
+                class="input num"
+                type="number"
+                inputmode="numeric"
+                step="1"
+                [min]="gridMin"
+                [max]="gridMax"
+                aria-describedby="lr-heat-grid-hint"
+                [value]="form().heatmapGrid ?? ''"
+                [attr.aria-invalid]="!!errors()['heatmapGrid']"
+                (input)="setNumber('heatmapGrid', $any($event.target).value)"
+              />
+              @if (errors()['heatmapGrid']; as e) {
+                <span class="error" id="lr-heat-grid-hint">{{ e }}</span>
+              } @else {
+                <span class="hint" id="lr-heat-grid-hint">
+                  {{ gridMin }} to {{ gridMax }}. The winning value is always on the axis.
+                </span>
+              }
+            </div>
+            <div class="checks-col">
+              <label class="check">
+                <input
+                  type="checkbox"
+                  aria-describedby="lr-heat-full-hint"
+                  [checked]="form().heatmapFull"
+                  (change)="patch({ heatmapFull: $any($event.target).checked })"
+                />
+                Score cells with full backtests
+              </label>
+              <span class="check-hint" id="lr-heat-full-hint">
+                Slower. Off uses the fast path when the strategy has one.
+              </span>
+            </div>
+          </div>
+          @if (selected() && heatmapAxes().length < 2) {
+            <p class="muted summary">
+              This strategy tunes fewer than two parameters, so no map is drawn.
+            </p>
+          }
+        }
       </section>
 
       @if (runs('walk_forward')) {
