@@ -3882,6 +3882,11 @@
             "title": "Portfolios",
             "type": "integer"
           },
+          "suppressed": {
+            "default": false,
+            "title": "Suppressed",
+            "type": "boolean"
+          },
           "total_value": {
             "title": "Total Value",
             "type": "number"
@@ -7664,6 +7669,12 @@
             "description": "Active portfolios with at least one snapshot.",
             "title": "Portfolios",
             "type": "integer"
+          },
+          "suppressed": {
+            "default": false,
+            "description": "True when too few other people own books for the sums to hide anyone's numbers: cash and value then read 0.",
+            "title": "Suppressed",
+            "type": "boolean"
           },
           "total_value": {
             "description": "Sum of each book's value at its latest snapshot.",

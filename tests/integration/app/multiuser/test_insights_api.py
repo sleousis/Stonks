@@ -137,7 +137,11 @@ def test_other_peoples_insights_are_not_found(client, people, alice_book, route,
     assert "UP.US" not in resp.text
 
 
-def test_admins_get_totals_without_holdings(client, people, alice_book):
+def test_admins_get_totals_without_holdings(client, people, alice_book, settings):
+    # three traders besides the admin, so the sums reveal nobody (BE-43)
+    for who in ("bob", "vic"):
+        pid = _portfolio(settings.state.path, people[who]["id"], f"{who} main")
+        _snapshot(settings.state.path, pid, "2026-03-31", 100.0, "{}", 100.0)
     resp = client.get("/api/insights/totals", headers=people["ada"]["headers"])
     assert resp.status_code == 200
     body = resp.json()
