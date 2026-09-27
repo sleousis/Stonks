@@ -89,3 +89,24 @@ def test_dataset_without_label_and_on_sampled_dates(lake):
     data = factor_dataset(resolve_factors("KMID"), lake, request, label_horizon=None, dates=dates)
     assert list(data.columns) == ["KMID"]
     assert set(data.index.get_level_values("timestamp")) == set(dates)
+
+
+def test_write_dataset_to_csv_and_parquet(lake, tmp_path):
+    import duckdb
+
+    from stonks.factors.dataset import write_dataset
+
+    request = PanelRequest(tuple(TICKERS), date(2024, 4, 1), date(2024, 5, 1))
+    data = factor_dataset(resolve_factors("KMID"), lake, request)
+    write_dataset(data, tmp_path / "d.csv")
+    assert pd.read_csv(tmp_path / "d.csv").columns.tolist() == [
+        "timestamp",
+        "ticker",
+        "KMID",
+        "label",
+    ]
+    write_dataset(data, tmp_path / "d.parquet")
+    back = duckdb.sql(f"SELECT * FROM read_parquet('{tmp_path / 'd.parquet'}')").df()
+    assert len(back) == len(data)
+    with pytest.raises(ValueError, match="parquet"):
+        write_dataset(data, tmp_path / "d.xlsx")

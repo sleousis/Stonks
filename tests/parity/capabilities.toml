@@ -231,6 +231,51 @@ cli = "stonks lab ic"
 mcp = "run_signal_ic"
 
 [[capability]]
+id = "factors.catalog"
+domain = "lab"
+title = "The factor library: Alpha158, classic price factors and fundamentals scores"
+routes = ["GET /api/factors", "GET /api/factors/{factor_id}"]
+console = { limited = "no factor views in the console yet (roadmap 22.2), the CLI and MCP cover it" }
+cli = ["stonks factors list", "stonks factors show"]
+mcp = ["list_factors", "get_factor"]
+
+[[capability]]
+id = "factors.check"
+domain = "lab"
+title = "Check a factor formula: parses, point in time, warm-up"
+routes = ["POST /api/factors/check"]
+console = { limited = "no factor views in the console yet (roadmap 22.2), the CLI and MCP cover it" }
+cli = "stonks factors check"
+mcp = "check_factor_expression"
+
+[[capability]]
+id = "factors.values"
+domain = "lab"
+title = "Factor values across a universe at a date, ranked"
+routes = ["POST /api/factors/values"]
+console = { limited = "no factor views in the console yet (roadmap 22.2), the CLI and MCP cover it" }
+cli = "stonks factors values"
+mcp = "get_factor_values"
+
+[[capability]]
+id = "factors.tearsheet"
+domain = "lab"
+title = "Factor tear sheet: IC by horizon, sector, asset class and size, quantile returns, alpha, monthly IC"
+routes = ["POST /api/factors/tearsheets", "GET /api/factors/tearsheets/{job_id}/result"]
+console = { limited = "no factor views in the console yet (roadmap 22.3), the CLI and MCP cover it" }
+cli = "stonks factors tearsheet"
+mcp = "run_factor_tearsheet"
+
+[[capability]]
+id = "factors.dataset"
+domain = "lab"
+title = "Export a factor dataset (features and a next-open label) for a model"
+routes = []
+console = { limited = "a file export for model training, run from the shell" }
+cli = "stonks factors dataset"
+mcp = { limited = "a file export for model training, run from the shell" }
+
+[[capability]]
 id = "lab.survival_tests"
 domain = "lab"
 title = "Survival test catalog"

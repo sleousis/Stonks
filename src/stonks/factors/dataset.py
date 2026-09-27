@@ -15,8 +15,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import timedelta
+from pathlib import Path
 from typing import Any
 
+import duckdb
 import pandas as pd
 
 from stonks.core.timeutil import day_end, day_start
@@ -32,7 +34,7 @@ from stonks.factors.expression import next_open_label
 from stonks.factors.panels import FactorEngine
 from stonks.store.corporate_actions import LakeCorporateActions
 
-__all__ = ["LABEL", "factor_dataset"]
+__all__ = ["LABEL", "factor_dataset", "write_dataset"]
 
 LABEL = "label"
 
@@ -82,3 +84,23 @@ def factor_dataset(
     features = [f.id for f in factors]
     keep = out[features].notna().to_numpy().any(axis=1)
     return pd.DataFrame(out.loc[keep]).astype(float)
+
+
+def write_dataset(frame: pd.DataFrame, path: str | Path) -> None:
+    """Write a :func:`factor_dataset` table to ``.csv`` or ``.parquet``
+    (through DuckDB), with ``timestamp`` and ``ticker`` as columns."""
+    target = Path(path)
+    flat = frame.reset_index()
+    suffix = target.suffix.lower()
+    if suffix == ".csv":
+        flat.to_csv(target, index=False)
+        return
+    if suffix != ".parquet":
+        raise ValueError(f"write a .csv or .parquet file, not {target.name!r}")
+    con = duckdb.connect()
+    try:
+        con.register("dataset", flat)
+        quoted = str(target).replace("'", "''")
+        con.execute(f"COPY dataset TO '{quoted}' (FORMAT PARQUET)")
+    finally:
+        con.close()

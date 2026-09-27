@@ -18,10 +18,17 @@ from stonks.app.errors import NotFoundError, ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.core.interval import Interval
 from stonks.factors.base import Factor
+from stonks.factors.dataset import factor_dataset
 from stonks.factors.engine import PanelRequest
 from stonks.factors.expression import ExpressionError
 from stonks.factors.panels import FactorEngine
-from stonks.factors.registry import factor_catalog, factor_sets, get_factor, resolve_factor
+from stonks.factors.registry import (
+    factor_catalog,
+    factor_sets,
+    get_factor,
+    resolve_factor,
+    resolve_factors,
+)
 from stonks.factors.settings import make_panel_cache
 from stonks.factors.tearsheet import FactorTearSheet, TearSheetOptions, factor_tearsheet
 
@@ -127,6 +134,22 @@ class FactorTearSheetRequest(_UniverseMixin):
         if any(h < 1 or h > MAX_HORIZON_BARS for h in value):
             raise ValueError(f"horizons must be 1-{MAX_HORIZON_BARS} bars")
         return sorted(set(value))
+
+    @model_validator(mode="after")
+    def _window(self) -> Self:
+        if self.start >= self.end:
+            raise ValueError("start must be before end")
+        return self
+
+
+class FactorDatasetRequest(_UniverseMixin):
+    #: Comma-separated set names, library ids and formulas (``alpha158``).
+    factors: str = Field(min_length=1, max_length=20_000)
+    start: date
+    end: date
+    interval: str = "1d"
+    #: Bars of the next-open label; ``None`` leaves it out.
+    label_horizon: int | None = Field(default=1, ge=1, le=MAX_HORIZON_BARS)
 
     @model_validator(mode="after")
     def _window(self) -> Self:
@@ -334,6 +357,26 @@ class FactorService:
     def _handle_tearsheet(self, params: dict[str, Any], ctx: JobContext) -> FactorTearSheetView:
         return self.run_tearsheet(FactorTearSheetRequest.model_validate(params))
 
+    # ---- datasets ------------------------------------------------------------------
+
+    def dataset(self, request: FactorDatasetRequest) -> pd.DataFrame:
+        """Factor values and the next-open label per ``(timestamp, ticker)``
+        (:func:`stonks.factors.dataset.factor_dataset`)."""
+        try:
+            factors = resolve_factors(request.factors)
+        except (ExpressionError, ValueError) as exc:
+            raise ValidationError(str(exc)) from None
+        interval = _interval(request.interval)
+        with self._ctx.lake() as lake:
+            panel_request = self._panel_request(lake, request, interval)
+            return factor_dataset(
+                factors,
+                lake,
+                panel_request,
+                label_horizon=request.label_horizon,
+                engine=FactorEngine(lake, self.cache),
+            )
+
     # ---- universes -----------------------------------------------------------------
 
     def _known_universe(self, lake: Any, universe_id: str) -> None:
@@ -348,7 +391,7 @@ class FactorService:
         return lake.members_as_of(request.universe_id, day)
 
     def _panel_request(
-        self, lake: Any, request: FactorTearSheetRequest, interval: Interval
+        self, lake: Any, request: FactorTearSheetRequest | FactorDatasetRequest, interval: Interval
     ) -> PanelRequest:
         if request.universe is not None:
             return PanelRequest(tuple(request.universe), request.start, request.end, interval)

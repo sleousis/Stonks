@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from stonks.mcp.tools import (
     connections,
+    factors,
     guarded,
     halts,
     insights,
@@ -29,6 +30,7 @@ MODULES = (
     halts,
     universes,
     tca,
+    factors,
     subscriptions,
     insights,
     risk,

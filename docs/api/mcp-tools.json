@@ -183,6 +183,32 @@
     {
       "annotations": {
         "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Check a formula in the factor expression language: whether it\nparses and is point in time (no future reads, no raw price levels\nthat later splits would change), its canonical form and warm-up.",
+      "input_schema": {
+        "properties": {
+          "expression": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Expression",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expression"
+        ],
+        "title": "check_factor_expressionArguments",
+        "type": "object"
+      },
+      "name": "check_factor_expression",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
         "idempotent": false,
         "open_world": false,
         "read_only": false
@@ -1016,6 +1042,93 @@
         "type": "object"
       },
       "name": "get_draft",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One library factor: formula, family, direction, hypothesis and\nwarm-up in bars.",
+      "input_schema": {
+        "properties": {
+          "factor_id": {
+            "title": "Factor Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "factor_id"
+        ],
+        "title": "get_factorArguments",
+        "type": "object"
+      },
+      "name": "get_factor",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Each universe name's factor value known at the close of as_of,\nranked best first in the factor's direction.",
+      "input_schema": {
+        "properties": {
+          "as_of": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "factor": {
+            "description": "a library factor id (e.g. mom_12_1, ROC20, piotroski_f) or a formula such as '$close / Ref($close, 20) - 1'",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Factor",
+            "type": "string"
+          },
+          "universe": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "instrument ids; or name a stored universe_id",
+            "title": "Universe"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "a stored universe id (or give universe)",
+            "title": "Universe Id"
+          }
+        },
+        "required": [
+          "factor",
+          "as_of"
+        ],
+        "title": "get_factor_valuesArguments",
+        "type": "object"
+      },
+      "name": "get_factor_values",
       "needs_confirm": false
     },
     {
@@ -2242,6 +2355,65 @@
         "type": "object"
       },
       "name": "list_drafts",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "The factor library: every factor with its family, direction,\nformula and hypothesis, plus the sets and families to filter by.",
+      "input_schema": {
+        "properties": {
+          "family": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "e.g. momentum, value, kbar",
+            "title": "Family"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "expression",
+                  "fundamental"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Kind"
+          },
+          "set": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "alpha158, classic or fundamentals",
+            "title": "Set"
+          }
+        },
+        "title": "list_factorsArguments",
+        "type": "object"
+      },
+      "name": "list_factors",
       "needs_confirm": false
     },
     {
@@ -4102,6 +4274,111 @@
       },
       "name": "run_draft_lab",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue a factor tear sheet: IC per horizon and by sector, asset\nclass and size, returns per quantile, factor alpha and beta, a\nmonthly IC heatmap and turnover. Needs at least 10 tickers (else\nn/a). Returns the job; use wait_for_job for the result. Research\nonly: writes nothing.",
+      "input_schema": {
+        "properties": {
+          "end": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "every_bars": {
+            "default": 5,
+            "description": "sample every N bars",
+            "minimum": 1,
+            "title": "Every Bars",
+            "type": "integer"
+          },
+          "factor": {
+            "description": "a library factor id (e.g. mom_12_1, ROC20, piotroski_f) or a formula such as '$close / Ref($close, 20) - 1'",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Factor",
+            "type": "string"
+          },
+          "horizons": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "forward-return horizons in bars; default [1, 5, 21]",
+            "title": "Horizons"
+          },
+          "interval": {
+            "default": "1d",
+            "title": "Interval",
+            "type": "string"
+          },
+          "n_quantiles": {
+            "default": 5,
+            "maximum": 20,
+            "minimum": 2,
+            "title": "N Quantiles",
+            "type": "integer"
+          },
+          "start": {
+            "description": "YYYY-MM-DD",
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "universe": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "instrument ids; or name a stored universe_id",
+            "title": "Universe"
+          },
+          "universe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "a stored universe id (or give universe)",
+            "title": "Universe Id"
+          }
+        },
+        "required": [
+          "factor",
+          "start",
+          "end"
+        ],
+        "title": "run_factor_tearsheetArguments",
+        "type": "object"
+      },
+      "name": "run_factor_tearsheet",
+      "needs_confirm": false
     },
     {
       "annotations": {

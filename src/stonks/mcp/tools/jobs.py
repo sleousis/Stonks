@@ -53,6 +53,7 @@ RESULT_ROUTES: dict[str, str] = {
     "ingest": "/api/ingest/jobs/{id}/result",
     "tick": "/api/ticks/jobs/{id}/result",
     "signal_ic": "/api/lab/signal-ic/{id}/result",
+    "factor_tearsheet": "/api/factors/tearsheets/{id}/result",
     "lab_ensure": "/api/lab/ensure/{id}/result",
     "lab_sweep": "/api/lab/sweeps/{id}/result",
     "universe_refresh": "/api/universes/refresh/{id}/result",

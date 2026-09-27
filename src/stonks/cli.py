@@ -2128,6 +2128,12 @@ from stonks.cli_tca import app as tca_app  # noqa: E402
 
 app.add_typer(tca_app, name="tca")
 
+# ---- factors (roadmap 22.2, 22.3, 22.8) --------------------------------------
+
+from stonks.cli_factors import app as factors_app  # noqa: E402
+
+app.add_typer(factors_app, name="factors")
+
 golive_app = typer.Typer(help="Go-live gate for paper-traded strategies")
 app.add_typer(golive_app, name="golive")
 

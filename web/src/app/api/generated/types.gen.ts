@@ -141,6 +141,36 @@ export type AlpacaStatus = {
 };
 
 /**
+ * AlphaBetaView
+ */
+export type AlphaBetaView = {
+    /**
+     * Alpha Annual
+     */
+    alpha_annual?: number | null;
+    /**
+     * Alpha T
+     */
+    alpha_t?: number | null;
+    /**
+     * Benchmark
+     */
+    benchmark?: string;
+    /**
+     * Beta
+     */
+    beta?: number | null;
+    /**
+     * N Periods
+     */
+    n_periods?: number;
+    /**
+     * R Squared
+     */
+    r_squared?: number | null;
+};
+
+/**
  * ApiScope
  *
  * What a credential may do. A token never exceeds its user's role.
@@ -1443,6 +1473,319 @@ export type Exposure = {
 };
 
 /**
+ * ExpressionCheckRequest
+ */
+export type ExpressionCheckRequest = {
+    /**
+     * Expression
+     */
+    expression: string;
+};
+
+/**
+ * ExpressionCheckView
+ */
+export type ExpressionCheckView = {
+    /**
+     * Canonical
+     */
+    canonical?: string | null;
+    /**
+     * Error
+     */
+    error?: string | null;
+    /**
+     * Lookback Bars
+     */
+    lookback_bars?: number | null;
+    /**
+     * Ok
+     */
+    ok: boolean;
+};
+
+/**
+ * FactorCatalogView
+ */
+export type FactorCatalogView = {
+    /**
+     * Factors
+     */
+    factors: Array<FactorView>;
+    /**
+     * Families
+     */
+    families: Array<string>;
+    /**
+     * Sets
+     */
+    sets: Array<FactorSetView>;
+};
+
+/**
+ * FactorSetView
+ */
+export type FactorSetView = {
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * FactorTearSheetRequest
+ */
+export type FactorTearSheetRequest = {
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Every Bars
+     */
+    every_bars?: number;
+    /**
+     * Factor
+     */
+    factor: string;
+    /**
+     * Horizons
+     */
+    horizons?: Array<number>;
+    /**
+     * Interval
+     */
+    interval?: string;
+    /**
+     * Min Names
+     */
+    min_names?: number;
+    /**
+     * N Quantiles
+     */
+    n_quantiles?: number;
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * Universe
+     */
+    universe?: Array<string> | null;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
+};
+
+/**
+ * FactorTearSheetView
+ *
+ * :class:`stonks.factors.tearsheet.FactorTearSheet`; NaN is null.
+ */
+export type FactorTearSheetView = {
+    alpha_beta?: AlphaBetaView;
+    /**
+     * Coverage
+     */
+    coverage?: number | null;
+    /**
+     * Every Bars
+     */
+    every_bars: number;
+    factor: FactorView;
+    /**
+     * Horizons
+     */
+    horizons?: Array<HorizonSummaryView>;
+    /**
+     * Ic By Group
+     */
+    ic_by_group?: {
+        [key: string]: Array<GroupIcView>;
+    };
+    /**
+     * Ic Horizon
+     */
+    ic_horizon?: number | null;
+    /**
+     * Ic Series
+     */
+    ic_series?: Array<[
+        string,
+        number | null
+    ]>;
+    /**
+     * Interval
+     */
+    interval: string;
+    /**
+     * Monthly Ic
+     */
+    monthly_ic?: Array<MonthlyIcView>;
+    /**
+     * N Dates
+     */
+    n_dates: number;
+    /**
+     * N Quantiles
+     */
+    n_quantiles: number;
+    /**
+     * N Tickers
+     */
+    n_tickers: number;
+    /**
+     * Note
+     */
+    note?: string;
+    quantile_curves?: QuantileCurvesView;
+    /**
+     * Score Turnover
+     */
+    score_turnover?: number | null;
+    /**
+     * Size Basis
+     */
+    size_basis?: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Top Quantile Turnover
+     */
+    top_quantile_turnover?: number | null;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
+    /**
+     * Window
+     */
+    window: [
+        string,
+        string
+    ];
+};
+
+/**
+ * FactorValue
+ */
+export type FactorValue = {
+    /**
+     * Rank
+     */
+    rank: number;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Value
+     */
+    value: number;
+};
+
+/**
+ * FactorValuesRequest
+ */
+export type FactorValuesRequest = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Factor
+     */
+    factor: string;
+    /**
+     * Universe
+     */
+    universe?: Array<string> | null;
+    /**
+     * Universe Id
+     */
+    universe_id?: string | null;
+};
+
+/**
+ * FactorValuesView
+ */
+export type FactorValuesView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Direction
+     */
+    direction: number;
+    /**
+     * Factor Id
+     */
+    factor_id: string;
+    /**
+     * Missing
+     */
+    missing: Array<string>;
+    /**
+     * Values
+     */
+    values: Array<FactorValue>;
+};
+
+/**
+ * FactorView
+ */
+export type FactorView = {
+    /**
+     * Asset Classes
+     */
+    asset_classes: Array<string>;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Direction
+     */
+    direction: number;
+    /**
+     * Expression
+     */
+    expression?: string | null;
+    /**
+     * Family
+     */
+    family: string;
+    /**
+     * Hypothesis
+     */
+    hypothesis: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Lookback Bars
+     */
+    lookback_bars: number;
+    /**
+     * Set
+     */
+    set?: string | null;
+};
+
+/**
  * FailingCheck
  *
  * One go-live check that failed (``GoLiveCheck`` without ``passed``).
@@ -1693,6 +2036,32 @@ export type GrossExposureSettings = {
 };
 
 /**
+ * GroupICView
+ */
+export type GroupIcView = {
+    /**
+     * Group
+     */
+    group: string;
+    /**
+     * Mean Ic
+     */
+    mean_ic: number | null;
+    /**
+     * Mean Names
+     */
+    mean_names: number | null;
+    /**
+     * N Dates
+     */
+    n_dates: number;
+    /**
+     * T Stat Hac
+     */
+    t_stat_hac: number | null;
+};
+
+/**
  * HaltView
  */
 export type HaltView = {
@@ -1917,6 +2286,56 @@ export type HorizonIcView = {
      * Se Iid
      */
     se_iid: number | null;
+    /**
+     * Spread Mean
+     */
+    spread_mean: number | null;
+    /**
+     * Spread T Hac
+     */
+    spread_t_hac: number | null;
+    /**
+     * T Stat Hac
+     */
+    t_stat_hac: number | null;
+};
+
+/**
+ * HorizonSummaryView
+ */
+export type HorizonSummaryView = {
+    /**
+     * Hac Lags
+     */
+    hac_lags: number;
+    /**
+     * Hit Rate
+     */
+    hit_rate: number | null;
+    /**
+     * Horizon
+     */
+    horizon: number;
+    /**
+     * Ic Std
+     */
+    ic_std: number | null;
+    /**
+     * Icir
+     */
+    icir: number | null;
+    /**
+     * Mean Ic
+     */
+    mean_ic: number | null;
+    /**
+     * N Dates
+     */
+    n_dates: number;
+    /**
+     * Quantile Means
+     */
+    quantile_means: Array<number | null>;
     /**
      * Spread Mean
      */
@@ -3257,6 +3676,20 @@ export type MfaView = {
      * Recovery Codes Left
      */
     recovery_codes_left: number;
+};
+
+/**
+ * MonthlyICView
+ */
+export type MonthlyIcView = {
+    /**
+     * Months
+     */
+    months: Array<number | null>;
+    /**
+     * Year
+     */
+    year: number;
 };
 
 /**
@@ -4913,6 +5346,24 @@ export type PushUnsubscribeRequest = {
      * Endpoint
      */
     endpoint: string;
+};
+
+/**
+ * QuantileCurvesView
+ */
+export type QuantileCurvesView = {
+    /**
+     * Dates
+     */
+    dates?: Array<string>;
+    /**
+     * Series
+     */
+    series?: Array<Array<number | null>>;
+    /**
+     * Spread
+     */
+    spread?: Array<number | null>;
 };
 
 /**
@@ -10072,6 +10523,275 @@ export type ExportSnapshotsResponses = {
 };
 
 export type ExportSnapshotsResponse = ExportSnapshotsResponses[keyof ExportSnapshotsResponses];
+
+export type ListFactorsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Family
+         */
+        family?: string | null;
+        /**
+         * Set
+         */
+        set?: string | null;
+        /**
+         * Kind
+         */
+        kind?: 'expression' | 'fundamental' | null;
+    };
+    url: '/api/factors';
+};
+
+export type ListFactorsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListFactorsError = ListFactorsErrors[keyof ListFactorsErrors];
+
+export type ListFactorsResponses = {
+    /**
+     * Successful Response
+     */
+    200: FactorCatalogView;
+};
+
+export type ListFactorsResponse = ListFactorsResponses[keyof ListFactorsResponses];
+
+export type CheckFactorExpressionData = {
+    body: ExpressionCheckRequest;
+    path?: never;
+    query?: never;
+    url: '/api/factors/check';
+};
+
+export type CheckFactorExpressionErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CheckFactorExpressionError = CheckFactorExpressionErrors[keyof CheckFactorExpressionErrors];
+
+export type CheckFactorExpressionResponses = {
+    /**
+     * Successful Response
+     */
+    200: ExpressionCheckView;
+};
+
+export type CheckFactorExpressionResponse = CheckFactorExpressionResponses[keyof CheckFactorExpressionResponses];
+
+export type StartFactorTearsheetData = {
+    body: FactorTearSheetRequest;
+    path?: never;
+    query?: never;
+    url: '/api/factors/tearsheets';
+};
+
+export type StartFactorTearsheetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartFactorTearsheetError = StartFactorTearsheetErrors[keyof StartFactorTearsheetErrors];
+
+export type StartFactorTearsheetResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type StartFactorTearsheetResponse = StartFactorTearsheetResponses[keyof StartFactorTearsheetResponses];
+
+export type GetFactorTearsheetResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/factors/tearsheets/{job_id}/result';
+};
+
+export type GetFactorTearsheetResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetFactorTearsheetResultError = GetFactorTearsheetResultErrors[keyof GetFactorTearsheetResultErrors];
+
+export type GetFactorTearsheetResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: FactorTearSheetView;
+};
+
+export type GetFactorTearsheetResultResponse = GetFactorTearsheetResultResponses[keyof GetFactorTearsheetResultResponses];
+
+export type GetFactorValuesData = {
+    body: FactorValuesRequest;
+    path?: never;
+    query?: never;
+    url: '/api/factors/values';
+};
+
+export type GetFactorValuesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetFactorValuesError = GetFactorValuesErrors[keyof GetFactorValuesErrors];
+
+export type GetFactorValuesResponses = {
+    /**
+     * Successful Response
+     */
+    200: FactorValuesView;
+};
+
+export type GetFactorValuesResponse = GetFactorValuesResponses[keyof GetFactorValuesResponses];
+
+export type GetFactorData = {
+    body?: never;
+    path: {
+        /**
+         * Factor Id
+         */
+        factor_id: string;
+    };
+    query?: never;
+    url: '/api/factors/{factor_id}';
+};
+
+export type GetFactorErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetFactorError = GetFactorErrors[keyof GetFactorErrors];
+
+export type GetFactorResponses = {
+    /**
+     * Successful Response
+     */
+    200: FactorView;
+};
+
+export type GetFactorResponse = GetFactorResponses[keyof GetFactorResponses];
 
 export type ListHaltsData = {
     body?: never;
