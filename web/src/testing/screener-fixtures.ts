@@ -1,4 +1,14 @@
-import type { MetricView, SavedScreenView, ScreenResult } from '../app/api/models';
+import { signal } from '@angular/core';
+
+import type {
+  JobEvent,
+  JobStatus,
+  MetricView,
+  SavedScreenView,
+  ScreenResult,
+  ScreenSize,
+} from '../app/api/models';
+import type { JobHandle } from '../app/core/jobs/jobs.service';
 
 /** A few screen metrics, one of each unit. */
 export const METRICS: MetricView[] = [
@@ -57,3 +67,55 @@ export const RESULT: ScreenResult = {
     },
   ],
 };
+
+/** A size answer: small by default, `use_job` or `over_cap` when asked. */
+export function screenSize(candidates: number, change: Partial<ScreenSize> = {}): ScreenSize {
+  return {
+    as_of: '2026-09-25',
+    candidates,
+    max_candidates: 10000,
+    job_threshold: 1000,
+    over_cap: false,
+    use_job: false,
+    ...change,
+  };
+}
+
+/** A followed job the test moves by hand: `step` while it runs, then `end`. */
+export function controlledJob(jobId: string) {
+  const status = signal<JobStatus | null>('queued');
+  const progress = signal(0);
+  const message = signal<string | null>(null);
+  const error = signal<string | null>(null);
+  const done = signal(false);
+  const event = signal<JobEvent | null>(null);
+  let resolve!: (e: JobEvent | null) => void;
+  const finished = new Promise<JobEvent | null>((r) => (resolve = r));
+  const handle: JobHandle = {
+    jobId,
+    event,
+    status,
+    progress,
+    message,
+    error,
+    done,
+    finished,
+    stop: () => undefined,
+  };
+  return {
+    handle,
+    step(fraction: number, text: string) {
+      status.set('running');
+      progress.set(fraction);
+      message.set(text);
+    },
+    end(final: JobStatus, failure: string | null = null) {
+      const e: JobEvent = { job_id: jobId, status: final, progress: 1, error: failure };
+      status.set(final);
+      error.set(failure);
+      done.set(true);
+      event.set(e);
+      resolve(e);
+    },
+  };
+}

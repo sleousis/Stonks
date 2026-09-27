@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   computed,
   inject,
   resource,
@@ -14,16 +15,21 @@ import type {
   SavedScreenView,
   ScreenResult,
   ScreenRow,
+  ScreenRunRequest,
+  ScreenSize,
   ScreenSpec,
   ScreenUniverseView,
 } from '../../api/models';
+import { JobsApiService } from '../../api/jobs-api.service';
 import { ScreenerService } from '../../api/screener.service';
 import { UniversesService } from '../../api/universes.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
+import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { formatDate, formatNumber } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { JobProgress, JobResult } from '../../shared/ui/job-progress';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
@@ -74,6 +80,7 @@ interface OpenScreen {
     ErrorState,
     EmptyState,
     SaveUniverseSheet,
+    JobProgress,
   ],
   templateUrl: './screener.page.html',
   styleUrl: './screener.page.scss',
@@ -84,6 +91,9 @@ export class ScreenerPage {
   private readonly session = inject(SessionService);
   private readonly confirm = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
+  private readonly jobs = inject(JobsService);
+  private readonly jobsApi = inject(JobsApiService);
+  private readonly destroyRef = inject(DestroyRef);
 
   private readonly sheet = viewChild.required(SaveUniverseSheet);
 
@@ -104,6 +114,12 @@ export class ScreenerPage {
   protected readonly saving = signal(false);
   protected readonly result = signal<ScreenResult | null>(null);
   protected readonly savedUniverse = signal<ScreenUniverseView | null>(null);
+  /** The size check of the last run: over the cap, or big enough for a job. */
+  protected readonly size = signal<ScreenSize | null>(null);
+  /** The background job of a large screen, while it runs and after. */
+  protected readonly job = signal<JobHandle | null>(null);
+  protected readonly jobRead = new JobResult<ScreenResult>();
+  protected readonly cancelling = signal(false);
 
   protected readonly canSave = computed(() => this.session.can('portfolio.manage'));
   protected readonly canUniverse = computed(() => this.session.can('lab.run'));
@@ -151,6 +167,24 @@ export class ScreenerPage {
 
   protected readonly rowKey = (r: ScreenRow) => r.ticker;
   protected readonly day = (v: string) => formatDate(v);
+
+  /** Why a screen over the candidate cap did not run, and how to narrow it. */
+  protected readonly capMessage = computed(() => {
+    const z = this.size();
+    if (!z?.over_cap) return '';
+    return (
+      `This screen starts from ${formatNumber(z.candidates)} candidates, more than the ` +
+      `limit of ${formatNumber(z.max_candidates)}. Narrow it: start from a universe, or ` +
+      'pick asset classes, sectors, exchanges, a minimum price or a minimum dollar volume.'
+    );
+  });
+
+  protected readonly jobNote = computed(() => {
+    const z = this.size();
+    return z?.use_job
+      ? `A large screen: ${formatNumber(z.candidates)} candidates. It runs in the background.`
+      : '';
+  });
 
   protected readonly resultSummary = computed(() => {
     const r = this.result();
@@ -207,21 +241,61 @@ export class ScreenerPage {
     this.tried.set(false);
     this.result.set(null);
     this.savedUniverse.set(null);
+    this.size.set(null);
   }
 
   // ---- run -------------------------------------------------------------------------
 
+  /**
+   * Check the size first. Over the cap nothing runs and the page says how
+   * to narrow the screen. Above the job threshold the screen runs as a
+   * background job with progress. Otherwise it runs directly.
+   */
   async run(): Promise<void> {
     this.tried.set(true);
     const { spec, errors } = this.checked();
     if (errors.length) return;
+    const body: ScreenRunRequest = { spec, as_of: this.asOf() || null };
     this.running.set(true);
+    this.job()?.stop();
+    this.job.set(null);
+    this.jobRead.reset();
     try {
-      this.result.set(await this.api.run({ spec, as_of: this.asOf() || null }));
+      const size = await this.api.size(body);
+      this.size.set(size);
+      if (size.over_cap) {
+        this.result.set(null);
+      } else if (size.use_job) {
+        await this.runAsJob(body);
+      } else {
+        this.result.set(await this.api.run(body));
+      }
     } catch {
       // The error interceptor already showed the API's message.
     } finally {
       this.running.set(false);
+    }
+  }
+
+  private async runAsJob(body: ScreenRunRequest): Promise<void> {
+    this.result.set(null);
+    const queued = await this.api.submitJob(body);
+    const handle = this.jobs.track(queued.id, this.destroyRef);
+    this.job.set(handle);
+    const last = await handle.finished;
+    if (last?.status !== 'succeeded') return;
+    const result = await this.jobRead.load(() => this.api.jobResult(queued.id));
+    if (result) this.result.set(result);
+  }
+
+  protected async cancelJob(handle: JobHandle): Promise<void> {
+    this.cancelling.set(true);
+    try {
+      await this.jobsApi.cancel(handle.jobId);
+    } catch {
+      // The error interceptor already showed the API's message.
+    } finally {
+      this.cancelling.set(false);
     }
   }
 
