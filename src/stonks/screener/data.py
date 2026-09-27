@@ -1,8 +1,8 @@
 """What a screen reads from the lake, loaded once per screen and date.
 
-Everything is point in time (P12): bars up to the date, statements whose
-filing date is on or before it (a missing filing date counts as the period
-end plus :data:`FILING_LAG_DAYS`), dividends with an ex date on or before
+Everything is point in time (P12): bars up to the date, the statement
+version known on it, usable from the day after its filing date (a missing
+filing date counts as the period end plus :data:`FILING_LAG_DAYS`), dividends with an ex date on or before
 it. A ticker whose last daily bar is more than :data:`STALE_DAYS` old has
 no price on the date, so it has no price metric either.
 """
@@ -28,8 +28,8 @@ BAR_LOOKBACK_DAYS = 400
 #: A last bar older than this many days means no price on the date.
 STALE_DAYS = 10
 #: Days after the period end a statement counts as known when the vendor
-#: gave no filing date.
-FILING_LAG_DAYS = 45
+#: gave no filing date (the lake's point-in-time default).
+FILING_LAG_DAYS = 90
 #: A stored market cap older than this many days is not used.
 MARKET_CAP_MAX_AGE_DAYS = 10
 
@@ -116,14 +116,49 @@ class ScreenData:
     # ---- statements --------------------------------------------------------------------
 
     def _statement(self, table: str, cols: Sequence[str]) -> pd.DataFrame:
-        known = f"COALESCE(filing_date, CAST(period_end + INTERVAL {FILING_LAG_DAYS} DAY AS DATE))"
-        return self.lake.con.execute(
-            f"""SELECT ticker, period_end, frequency, {", ".join(cols)}
-                  FROM {table}
-                 WHERE ticker = ANY(?) AND {known} <= ?
-                 ORDER BY ticker, period_end DESC""",
-            [self.tickers, self.as_of],
+        """Per period, the version known on the date (P12): a version counts
+        from the day after its filing (``period_end`` plus
+        :data:`FILING_LAG_DAYS` when the vendor gave none), and a
+        restatement Stonks saw after the date is not used. The same rule as
+        ``DuckDBLake.get_statements_as_of``, for many tickers at once."""
+        from stonks.core.timeutil import day_start
+        from stonks.store.statement_versions import known_versions
+
+        picked = ", ".join(cols)
+        current = ", ".join(f"c.{c}" for c in cols)
+        versions = f"{table}_versions"
+        df = self.lake.con.execute(
+            f"""WITH v AS (
+                    SELECT ticker, period_end, frequency, filing_date, known_at, {picked}
+                      FROM {versions} WHERE ticker = ANY(?)
+                    UNION ALL BY NAME
+                    SELECT c.ticker, c.period_end, c.frequency, c.filing_date,
+                           CAST(COALESCE(c.filing_date, c.period_end) AS TIMESTAMP) AS known_at,
+                           {current}
+                      FROM {table} c
+                     WHERE c.ticker = ANY(?)
+                       AND NOT EXISTS (SELECT 1 FROM {versions} x
+                                        WHERE x.ticker = c.ticker
+                                          AND x.period_end = c.period_end
+                                          AND x.frequency = c.frequency)
+                )
+                SELECT *,
+                       CAST(GREATEST(COALESCE(filing_date + INTERVAL 1 DAY,
+                                              period_end + to_days(CAST(? AS INTEGER))),
+                                     period_end) AS DATE) AS available_date
+                  FROM v
+                 ORDER BY ticker, period_end, frequency, known_at""",
+            [self.tickers, self.tickers, FILING_LAG_DAYS],
         ).df()
+        columns = ["ticker", "period_end", "frequency", *cols]
+        if df.empty:
+            return pd.DataFrame(columns=columns)
+        filed = pd.to_datetime(df["available_date"]) <= pd.Timestamp(self.as_of)
+        known = known_versions(df, day_start(self.as_of + timedelta(days=1)), filed)
+        out = cast(pd.DataFrame, known[columns])
+        return out.sort_values(by=["ticker", "period_end"], ascending=[True, False]).reset_index(
+            drop=True
+        )
 
     @cached_property
     def income(self) -> pd.DataFrame:

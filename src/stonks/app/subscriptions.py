@@ -156,7 +156,7 @@ class SubscriptionService:
                 sub = repo.set_mode(scope, sub.id, mode, reason=request.reason)
             restarts = (
                 request.enabled is True
-                and sub.mode is Mode.AUTO
+                and sub.mode.trades_live
                 and (not sub.enabled or sub.auto_paused)
             )
             if restarts:
@@ -167,7 +167,7 @@ class SubscriptionService:
                 if blockers:
                     raise AutoBlocked(blockers)
                 if sub.auto_paused:
-                    sub = repo.set_mode(scope, sub.id, Mode.AUTO, reason=request.reason)
+                    sub = repo.set_mode(scope, sub.id, sub.mode, reason=request.reason)
             if request.enabled is not None:
                 change = repo.enable if request.enabled else repo.disable
                 sub = change(scope, sub.id, reason=request.reason)
@@ -178,7 +178,7 @@ class SubscriptionService:
         state: SqliteState, repo: SubscriptionRepository, principal: Principal, s: Subscription
     ) -> SubscriptionView:
         rows = state.sql("SELECT status FROM strategies WHERE id = ?", [s.strategy_id])
-        blockers = [] if s.mode is Mode.AUTO and not s.auto_paused else None
+        blockers = [] if s.mode.trades_live and not s.auto_paused else None
         if blockers is None:
             blockers = repo.auto_blockers(principal.scope, s.id)
         return SubscriptionView(

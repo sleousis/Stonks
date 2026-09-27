@@ -33,8 +33,10 @@ from typing import Any, Literal
 
 import pandas as pd
 
+from stonks.core.corporate_actions import Split
 from stonks.logging import get_logger
 from stonks.notify.events import Audience, Event
+from stonks.store.corporate_actions import LakeCorporateActions
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
 
@@ -236,6 +238,7 @@ def run_price_alerts(
     tickers = sorted({t for r in rules for t in r.tickers})
     longest = max((r.window_days or 0 for r in rules), default=0)
     history = load_history(lake, tickers, as_of, longest + _HISTORY_PAD_DAYS)
+    splits = LakeCorporateActions(lake).load(tickers)
     seen = _last_seen(state)
     checked = fired = published = no_price = 0
     firings: list[Firing] = []
@@ -251,7 +254,13 @@ def run_price_alerts(
             if last is not None and last[1] >= observation.observed_at:
                 continue  # nothing new since the last check
             checked += 1
-            previous = last[0] if last is not None else (bars[-2][1] if len(bars) > 1 else None)
+            # Earlier closes in today's share terms, so a split is no move.
+            factor = _split_factors(splits.for_ticker(ticker), day)
+            bars = [(d, c / factor(d)) for d, c in bars]
+            if last is not None:
+                previous: float | None = last[0] / factor(date.fromisoformat(last[1][:10]))
+            else:
+                previous = bars[-2][1] if len(bars) > 1 else None
             firing = check(rule, observation, previous_price=previous, history=bars)
             with state.transaction():
                 if firing is not None and _record(state, firing, now):
@@ -270,6 +279,22 @@ def run_price_alerts(
     )
     _log.info("price_alerts.run", as_of=as_of.isoformat(), **summary.as_dict())
     return summary
+
+
+def _split_factors(events: Sequence[object], upto: date) -> Callable[[date], float]:
+    """``factor(day)``: the product of split ratios with an ex-date after
+    ``day`` and on or before ``upto`` (a raw close on ``day`` divided by it
+    is in ``upto``'s share terms)."""
+    splits = [e for e in events if isinstance(e, Split) and e.ex_date <= upto]
+
+    def factor(day: date) -> float:
+        out = 1.0
+        for s in splits:
+            if s.ex_date > day:
+                out *= s.ratio
+        return out
+
+    return factor
 
 
 def _last_seen(state: SqliteState) -> Mapping[tuple[str, str], tuple[float, str]]:

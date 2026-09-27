@@ -82,13 +82,43 @@ def window_start(as_of: date, business_days: int) -> date:
 def day_trades(
     fills: list[tuple[str, str, float, float, date]], as_of: date, window_days: int
 ) -> list[date]:
-    """One date per ticker and day with both a buy and a sell in the window."""
+    """One date per day trade in the window: a close (a sell of a long, a
+    buy to cover a short) of a position opened the same day. Opening again
+    after a counted close starts a new one, so two round trips in a day
+    are two day trades, while selling an older holding and buying back is
+    none. Longs and shorts both count."""
     start = window_start(as_of, window_days)
-    sides: dict[tuple[str, date], set[str]] = {}
-    for ticker, side, _, _, day in fills:
-        if start <= day <= as_of:
-            sides.setdefault((ticker, day), set()).add(side)
-    return sorted(day for (_, day), s in sides.items() if s == {"buy", "sell"})
+    out: list[date] = []
+    held: dict[str, float] = {}
+    #: Per ticker: the day of an opening not yet matched by a close.
+    open_day: dict[str, date] = {}
+    for ticker, side, qty, _, day in fills:
+        q = held.get(ticker, 0.0)
+        signed = qty if side == "buy" else -qty
+        closes = (q > _EPS and signed < 0) or (q < -_EPS and signed > 0)
+        opens = abs(q + signed) > abs(q) + _EPS or (closes and abs(signed) > abs(q) + _EPS)
+        if closes and open_day.get(ticker) == day:
+            if start <= day <= as_of:
+                out.append(day)
+            open_day.pop(ticker, None)
+        if opens:
+            open_day[ticker] = day
+        held[ticker] = q + signed
+    return sorted(out)
+
+
+def opened_on(fills: list[tuple[str, str, float, float, date]], as_of: date) -> frozenset[str]:
+    """Tickers with a position opened or grown on ``as_of`` (a buy of a long
+    or a sell to open a short)."""
+    held: dict[str, float] = {}
+    out: set[str] = set()
+    for ticker, side, qty, _, day in fills:
+        q = held.get(ticker, 0.0)
+        new = q + (qty if side == "buy" else -qty)
+        if day == as_of and (abs(new) > abs(q) + _EPS or q * new < 0):
+            out.add(ticker)
+        held[ticker] = new
+    return frozenset(out)
 
 
 def loss_sales(
@@ -153,7 +183,7 @@ def load_account_inputs(
         kid_available=kid_flags(state, profile.jurisdiction),
         settlements=load_settlements(state, portfolio_id, settings, currency_of=_ccy, as_of=as_of),
         day_trades=day_trades(fills, as_of, settings.pdt_window_days),
-        opened_today=frozenset(t for t, side, _, _, day in fills if side == "buy" and day == as_of),
+        opened_today=opened_on(fills, as_of),
         loss_sales=loss_sales(fills, as_of, settings.wash_sale_window_days),
         shortable=dict(shortable or {}),
         short_sale_restricted=short_sale_restricted,

@@ -91,6 +91,9 @@ def test_blocked_bot_is_gone_and_unlinks(state):
         (TelegramApiError("slow", status=429, retryable=True, retry_after=2), "retry"),
         (TelegramApiError("down", status=None, retryable=True), "retry"),
         (TelegramApiError("odd", status=401, retryable=False), "dead"),
+        # a bad request is not a lost chat: the link stays (review 2026-09-27)
+        (TelegramApiError("Bad Request: message is too long", status=400, retryable=False), "dead"),
+        (TelegramApiError("Bad Request: chat not found", status=400, retryable=False), "gone"),
     ],
 )
 def test_error_outcomes(error, outcome):

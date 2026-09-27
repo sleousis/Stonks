@@ -67,7 +67,9 @@ class TelegramChannel(Channel):
             self._api.send_message(target, format_message(message, self._base_url))
         except TelegramApiError as exc:
             error = self.redact(str(exc))
-            if exc.status in (400, 403):
+            # 403: blocked or left. A 400 only when the chat is gone; any
+            # other bad request (a message too long, ...) keeps the link.
+            if exc.status == 403 or (exc.status == 400 and "chat not found" in error.lower()):
                 return DeliveryResult.gone(error)
             if exc.retryable:
                 return DeliveryResult.retry(error, exc.retry_after)

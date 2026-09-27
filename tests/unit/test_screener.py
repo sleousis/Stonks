@@ -225,3 +225,41 @@ def test_no_candidates_reads_nothing(market):
     data = ScreenData(market, [], END)
     for metric in metric_ids():
         assert data.metric(metric) == {}
+
+
+# ---- review 2026-09-27: statements read the version known on the date (P12) -----------
+
+
+def _income(ticker: str, net_income: float, filed: date | None) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "ticker": ticker,
+                "period_end": date(2023, 12, 31),
+                "frequency": "A",
+                "filing_date": filed,
+                "currency": "USD",
+                "revenue": 1e8,
+                "net_income": net_income,
+            }
+        ]
+    )
+
+
+def test_a_restatement_seen_later_does_not_leak_backward(market):
+    market.upsert_income_statement(_income("BBB.US", 1e7, date(2024, 3, 1)))
+    market.upsert_income_statement(_income("BBB.US", -5e7, date(2024, 3, 1)))
+    data = ScreenData(market, ["BBB.US"], END)
+    assert data.metric("net_margin")["BBB.US"] == pytest.approx(0.1)
+
+
+def test_a_statement_is_usable_the_day_after_its_filing(market):
+    market.upsert_income_statement(_income("BBB.US", 1e7, date(2024, 3, 1)))
+    assert "BBB.US" not in ScreenData(market, ["BBB.US"], date(2024, 3, 1)).metric("net_margin")
+    assert "BBB.US" in ScreenData(market, ["BBB.US"], date(2024, 3, 2)).metric("net_margin")
+
+
+def test_a_missing_filing_date_uses_the_lakes_lag(market):
+    market.upsert_income_statement(_income("BBB.US", 1e7, None))
+    # 60 days after the period end: the lake's 90-day stand-in says not yet
+    assert "BBB.US" not in ScreenData(market, ["BBB.US"], date(2024, 2, 29)).metric("net_margin")

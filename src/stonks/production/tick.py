@@ -864,7 +864,8 @@ def inactive_auto(book: TickBook, active: Collection[str]) -> list[str]:
     if book.legacy or book.spec.strategy_weights is None:
         return []
     modes = book.spec.strategy_modes
-    return sorted(s for s in book.spec.strategy_weights if modes.get(s) is Mode.AUTO
+    return sorted(s for s in book.spec.strategy_weights
+                  if (m := modes.get(s)) is not None and m.trades_live
                   and s not in active)  # fmt: skip
 
 
@@ -2051,7 +2052,7 @@ def _pause_on_broker_error(
         paused = pause_auto(
             run.state,
             book.portfolio_id,
-            book.subscriptions_in(Mode.AUTO),
+            book.subscriptions_in(Mode.AUTO) + book.subscriptions_in(Mode.APPROVE),
             reason,
             tick_id=run.tick_id,
             as_of=run.as_of,

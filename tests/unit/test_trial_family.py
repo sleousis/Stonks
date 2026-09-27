@@ -71,3 +71,33 @@ def test_deflated_sharpe_uses_the_family_count_when_it_is_larger():
     assert test.trial_count(ctx) == 40
     ctx.n_trials_family = 2
     assert test.trial_count(ctx) == 5
+
+
+# ---- review 2026-09-27: the class and the family together, each trial once (P2) --------
+
+
+def test_the_searched_count_is_the_union_of_class_and_family(ledger):
+    ledger.record_run(LabRunSpec("a:A"), _trials(100))  # the class, outside the family
+    ledger.record_run(LabRunSpec("b:B", family="rs_1"), _trials(50))
+    ledger.record_run(LabRunSpec("a:A", family="rs_1"), _trials(10))
+    assert ledger.n_trials_searched("a:A", "rs_1") == 160
+    assert ledger.n_trials_searched("a:A", None) == 110
+
+
+def test_deflated_sharpe_judges_against_the_union():
+    rng = np.random.default_rng(0)
+    matrix = TrialMatrix(index=np.arange(200), values=rng.normal(0, 0.01, (200, 5)))
+    test = DeflatedSharpeTest()
+    ctx = LabRunContext(
+        setup=None,  # type: ignore[arg-type]
+        run_id="r",
+        ledger=None,
+        trials=_trials(5),
+        trial_matrix=matrix,
+        n_trials_run=5,
+        n_trials_class=110,
+        n_trials_family=60,
+        n_trials_searched=160,
+    )
+    test.bind_run(ctx)
+    assert test.trial_count(ctx) == 160

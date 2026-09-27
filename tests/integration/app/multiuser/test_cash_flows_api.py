@@ -73,3 +73,28 @@ def test_withdrawals_and_refusals(client, people, settings):
     assert _flow(client, pid, vic["headers"], kind="deposit", amount=1).status_code == 403
     broker = _book(settings, alice["id"], kind="broker")
     assert _flow(client, broker, h, kind="deposit", amount=1).status_code == 409
+
+
+def test_a_book_written_while_the_flow_is_checked_is_a_conflict(
+    client, people, settings, monkeypatch
+):
+    # review 2026-09-27: another write lands between the read and the write
+    import stonks.app.cash_flows as cash_flows
+
+    alice = people["alice"]
+    pid = _book(settings, alice["id"])
+    real = cash_flows.load_prices
+
+    def racing(*args, **kw):
+        with SqliteState(settings.state.path) as state:
+            state.execute(
+                "INSERT INTO portfolio_snapshots (tick_id, as_of, taken_at, cash,"
+                " positions_json, total_value, portfolio_id) VALUES"
+                " (NULL, '2026-03-02', '2026-03-02T20:00:00', 9000, '{}', 9000, ?)",
+                [pid],
+            )
+        return real(*args, **kw)
+
+    monkeypatch.setattr(cash_flows, "load_prices", racing)
+    r = _flow(client, pid, alice["headers"], kind="deposit", amount=5_000, flow_date="2026-03-02")
+    assert r.status_code == 409

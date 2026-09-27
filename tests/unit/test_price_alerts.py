@@ -213,3 +213,19 @@ def test_a_failing_publish_never_stops_the_run(state, lake):
     out = run_price_alerts(state, lake, as_of=date(2026, 4, 1), publish=broken, now=NOW)
     assert out.fired == 1 and out.published == 0
     assert state.sql("SELECT COUNT(*) AS n FROM price_alert_events")[0]["n"] == 1
+
+
+def test_a_split_between_two_closes_fires_nothing(state, lake):
+    # review 2026-09-27: 400 then 100 after a 4:1 split is no move at all
+    alice = _user(state, "alice")
+    _bars(lake, "UP.US", [("2026-03-30", 400.0), ("2026-03-31", 400.0)])
+    _add_rule(state, "pal_down", alice, "crosses_below", ticker="UP.US", level=200.0)
+    _add_rule(state, "pal_move", alice, "moves_pct", ticker="UP.US", pct=10.0, window_days=5)
+    sent = []
+    run_price_alerts(state, lake, as_of=date(2026, 3, 31), publish=sent.append, now=NOW)
+    lake.upsert_stock_splits(
+        pd.DataFrame([{"ticker": "UP.US", "date": date(2026, 4, 1), "ratio": 4.0}])
+    )
+    _bars(lake, "UP.US", [("2026-04-01", 100.0)])
+    out = run_price_alerts(state, lake, as_of=date(2026, 4, 1), publish=sent.append, now=NOW)
+    assert out.fired == 0 and sent == []

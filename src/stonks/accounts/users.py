@@ -81,7 +81,7 @@ class UserRepository:
             if status == "disabled":
                 self._state.execute(
                     "UPDATE subscriptions SET paused_reason = 'user_disabled', updated_at = ?"
-                    " WHERE user_id = ? AND mode = 'auto' AND paused_reason IS NULL",
+                    " WHERE user_id = ? AND mode IN ('approve', 'auto') AND paused_reason IS NULL",
                     [iso_now(), user_id],
                 )
             self._audit.record(

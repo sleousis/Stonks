@@ -19,7 +19,8 @@ confirmation in the chat.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 #: Tools every conversation starts with.
 DEFAULT_TOOLS: frozenset[str] = frozenset(
@@ -173,11 +174,12 @@ NEVER: frozenset[str] = frozenset(
 
 #: Writes that touch only research data or the person's own feed: they run
 #: without asking (still counted by the rate limit). ``draft_order`` places
-#: nothing: the person approves it in the web app.
+#: nothing: the person approves it in the web app. Left out on purpose:
+#: ``update_draft`` and ``cancel_job`` (an admin reaches other people's
+#: drafts and jobs) and ``update_price_alert`` (it can switch alerts off).
 RESEARCH_WRITES: frozenset[str] = frozenset(
     {
         "create_draft",
-        "update_draft",
         "validate_draft",
         "run_draft_backtest",
         "run_draft_lab",
@@ -186,13 +188,22 @@ RESEARCH_WRITES: frozenset[str] = frozenset(
         "run_sweep",
         "run_signal_ic",
         "start_research",
-        "cancel_job",
         "create_price_alert",
-        "update_price_alert",
         "mark_notifications_read",
         "draft_order",
     }
 )
+
+
+def runs_without_asking(name: str, arguments: Mapping[str, Any]) -> bool:
+    """Whether the write ``name`` with ``arguments`` runs at once. A code
+    draft never does: its Python runs inside the API server, so a person
+    reads and confirms it first."""
+    if name not in RESEARCH_WRITES:
+        return False
+    code = arguments.get("kind") == "code" or arguments.get("source_code") is not None
+    return not (name == "create_draft" and code)
+
 
 #: Tools whose results name instruments a draft may use.
 RESOLVERS: frozenset[str] = frozenset({"search_instruments"})

@@ -9,7 +9,7 @@ from stonks.tax.export import (
     gains_rows,
     to_csv,
 )
-from stonks.tax.lots import Disposal, TaxFill, TaxSettings, realized_disposals
+from stonks.tax.lots import Disposal, TaxFill, TaxSettings, TaxSplit, realized_disposals
 
 __all__ = [
     "DIVIDEND_COLUMNS",
@@ -18,6 +18,7 @@ __all__ = [
     "DividendEvent",
     "TaxFill",
     "TaxSettings",
+    "TaxSplit",
     "dividend_rows",
     "gains_rows",
     "realized_disposals",

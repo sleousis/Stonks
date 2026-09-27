@@ -132,7 +132,7 @@ def _paused(state: SqliteState, ids: list[str]) -> list[PausedBookView]:
     rows = state.sql(
         "SELECT s.id, s.portfolio_id, p.name, s.strategy_id, s.paused_reason"
         " FROM subscriptions s JOIN portfolios p ON p.id = s.portfolio_id"
-        f" WHERE s.portfolio_id IN ({marks}) AND s.mode = 'auto'"
+        f" WHERE s.portfolio_id IN ({marks}) AND s.mode IN ('approve', 'auto')"
         " AND s.paused_reason IS NOT NULL ORDER BY p.name, s.strategy_id",
         ids,
     )

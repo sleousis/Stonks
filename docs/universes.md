@@ -157,7 +157,7 @@ A spec has the rule filters (`asset_classes`, `sectors`, `exclude_sectors`, `exc
 
 `GET /api/screener/metrics` lists them with units. A new metric is one `ScreenMetric` class in `screener/metrics/`.
 
-Every value is point in time (P12). Returns use adjusted closes up to the date. A last bar more than 10 days old means no price. Flows (revenue, net income) sum the last four quarters filed on or before the date, else the last annual statement. A statement with no filing date counts as known 45 days after its period end. The balance sheet is the latest one filed. The market cap is the stored one near the date, else price times shares.
+Every value is point in time (P12). Returns use adjusted closes up to the date. A last bar more than 10 days old means no price. Flows (revenue, net income) sum the last four quarters filed before the date, else the last annual statement. A statement counts from the day after its filing date, and one with no filing date counts as known 90 days after its period end. Each period uses the version Stonks knew on the date, so a later restatement never leaks back. The balance sheet is the latest one filed. The market cap is the stored one near the date, else price times shares.
 
 A ticker with no value for a metric fails that metric's filter and sorts last. A loss has no P/E. Negative equity has no P/B or ROE.
 

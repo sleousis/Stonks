@@ -458,3 +458,35 @@ def test_be27_a_future_tick_is_refused_unless_it_is_a_dry_run(world):
     world.tick(future, dry_run=True)  # a dry run may look ahead
     world.tick(DAY1)  # and real ticks still run
     assert world.orders(world.sim)
+
+
+# ---- review 2026-09-27: approve mode trades live, so every pause covers it --------------
+
+
+def _approve(world) -> None:
+    world.state.execute("UPDATE subscriptions SET mode = 'approve' WHERE id = ?", [world.bob_auto])
+
+
+def test_a_demotion_pauses_an_approve_subscription(world):
+    _approve(world)
+    world.registry.set_status("bh_up", "shadow", actor="service:system", reason="quit rule")
+    sub = world.subs.get(world.bob, world.bob_auto)
+    assert sub.mode is Mode.APPROVE and sub.paused_reason == "strategy_not_active: shadow"
+    assert sub.auto_paused
+
+
+def test_a_broker_error_pauses_an_approve_subscription(world):
+    _approve(world)
+    world.book.fail = ProviderError("fake broker is down", status=503)
+    world.tick(DAY1)
+    sub = world.subs.get(world.bob, world.bob_auto)
+    assert sub.paused_reason is not None and sub.paused_reason.startswith("broker_error: ")
+
+
+def test_disabling_a_user_pauses_their_approve_subscriptions(world):
+    _approve(world)
+    world.users.set_status(world.bob.user_id, "disabled", actor="t")
+    [row] = world.state.sql(
+        "SELECT paused_reason FROM subscriptions WHERE id = ?", [world.bob_auto]
+    )
+    assert row["paused_reason"] == "user_disabled"

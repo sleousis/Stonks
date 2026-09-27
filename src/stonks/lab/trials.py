@@ -124,6 +124,9 @@ class LabRunContext:
     #: Trials of every run in the same research family (roadmap 22.9); 0
     #: for a run outside any family.
     n_trials_family: int = 0
+    #: Trials of the class or the family, each counted once: everything
+    #: searched on the way to this result (P2). 0 when not known.
+    n_trials_searched: int = 0
 
 
 class TrialLedger:
@@ -233,6 +236,19 @@ class TrialLedger:
             "SELECT COUNT(*) FROM lab_trials t JOIN lab_runs r ON r.id = t.run_id"
             " WHERE r.family = ?",
             [family],
+        )[0]
+        return int(row[0])
+
+    def n_trials_searched(self, strategy_class: str, family: str | None) -> int:
+        """Trials of every run of the class or of the family, each once:
+        the class's past runs outside the family and the family's runs of
+        other classes both count (P2)."""
+        if not family:
+            return self.n_trials(strategy_class)
+        row = self.state.sql(
+            "SELECT COUNT(*) FROM lab_trials t JOIN lab_runs r ON r.id = t.run_id"
+            " WHERE r.strategy_class = ? OR r.family = ?",
+            [strategy_class, family],
         )[0]
         return int(row[0])
 

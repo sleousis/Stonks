@@ -33,6 +33,7 @@ Safety (the model proposes, deterministic code decides):
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass, field
@@ -305,7 +306,9 @@ class AgentLoop:
         info = infos.get(name)
         arguments = {k: v for k, v in tool_call.arguments.items() if k != "confirm"}
         writes = info is not None and not info.read_only
-        runs_at_once = info is not None and (info.read_only or name in catalog.RESEARCH_WRITES)
+        runs_at_once = info is not None and (
+            info.read_only or catalog.runs_without_asking(name, arguments)
+        )
         yield AssistantEvent(
             "tool_call",
             {
@@ -526,12 +529,11 @@ def _untrusted(message: ChatMessage) -> ChatMessage:
     """A tool result as the model sees it: marked as untrusted data."""
     if message.role != "tool":
         return message
+    # data that spells the tags cannot end the block early or open a new one
+    body = re.sub(r"<(/?)tool_result", r"&lt;\1tool_result", message.content or "")
     return ChatMessage(
         role="tool",
-        content=(
-            f'<tool_result name="{message.name}" trust="untrusted">\n'
-            f"{message.content}\n</tool_result>"
-        ),
+        content=(f'<tool_result name="{message.name}" trust="untrusted">\n{body}\n</tool_result>'),
         tool_call_id=message.tool_call_id,
         name=message.name,
     )

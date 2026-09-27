@@ -53,6 +53,15 @@ class TaxFill:
 
 
 @dataclass(frozen=True)
+class TaxSplit:
+    """A split of ``ratio`` new shares per old share from ``ex_date`` on."""
+
+    ticker: str
+    ex_date: date
+    ratio: float
+
+
+@dataclass(frozen=True)
 class TaxSettings:
     jurisdiction: Jurisdiction = "us"
     lot_method: LotMethod = "fifo"
@@ -119,11 +128,15 @@ def realized_disposals(
     fills: Iterable[TaxFill],
     settings: TaxSettings | None = None,
     picks: Mapping[int, Sequence[tuple[int, float]]] | None = None,
+    splits: Iterable[TaxSplit] = (),
 ) -> list[Disposal]:
     """Every realized disposal of ``fills``, in fill order.
 
     ``picks`` maps a sell fill id to ``(buy fill id, quantity)`` pairs it
-    closes first (``lot_method = "specific"`` only)."""
+    closes first (``lot_method = "specific"`` only). ``splits`` rescale the
+    open lots of their ticker (quantity x ratio, per share / ratio) before
+    the first fill on or after the ex-date, so fills keep their own share
+    count."""
     cfg = settings or TaxSettings()
     ordered = sorted(fills, key=lambda f: (f.filled_at, f.id))
     specific = picks if cfg.lot_method == "specific" and picks else {}
@@ -138,8 +151,19 @@ def realized_disposals(
         if f.side == "buy":
             buys_by_ticker.setdefault(f.ticker, []).append(f)
 
+    due_splits: dict[str, list[TaxSplit]] = {}
+    for sp in sorted(splits, key=lambda x: x.ex_date):
+        if sp.ratio > 0:
+            due_splits.setdefault(sp.ticker, []).append(sp)
+
     for f in ordered:
         book = books.setdefault(f.ticker, _Book())
+        waiting = due_splits.get(f.ticker)
+        while waiting and waiting[0].ex_date <= f.day:
+            ratio = waiting.pop(0).ratio
+            for lot in book.lots:
+                lot.quantity *= ratio
+                lot.per_share /= ratio
         if f.side == "buy":
             remaining = f.quantity
             fee_per_share = f.fee / f.quantity if f.quantity else 0.0
@@ -263,7 +287,14 @@ def _wash(
             continue
         if buy.filled_at == sale.filled_at and buy.id < sale.id:
             continue
+        lot = next((x for x in book.lots if x.fill_id == buy.id and x.kind == "long"), None)
+        later = buy.filled_at > sale.filled_at
+        if lot is None and not later:
+            # bought before and already sold: nothing is held to replace
+            continue
         free = buy.quantity - used.get(buy.id, 0.0)
+        if lot is not None and not later:
+            free = min(free, lot.quantity)
         take = min(free, need)
         if take <= _EPS:
             continue
@@ -271,10 +302,8 @@ def _wash(
         used[buy.id] = used.get(buy.id, 0.0) + take
         need -= take
         disallowed += part
-        lot = next((x for x in book.lots if x.fill_id == buy.id and x.kind == "long"), None)
         if lot is not None:
             lot.added_basis += part
-        elif buy.filled_at > sale.filled_at:
+        else:
             pending[buy.id] = pending.get(buy.id, 0.0) + part
-        # a replacement bought before and already sold keeps nothing to adjust
     return disallowed
