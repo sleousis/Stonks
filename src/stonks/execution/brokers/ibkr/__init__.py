@@ -16,6 +16,7 @@ from stonks.execution.brokers.ibkr.settings import (
     IbkrClientIds,
     IbkrGatewayConfig,
     IbkrHealthSettings,
+    IbkrOrderSettings,
 )
 
 __all__ = [
@@ -24,4 +25,5 @@ __all__ = [
     "IbkrClientIds",
     "IbkrGatewayConfig",
     "IbkrHealthSettings",
+    "IbkrOrderSettings",
 ]
