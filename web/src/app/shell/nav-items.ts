@@ -22,7 +22,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // Advanced pages.
   { path: '/dashboard', label: 'Dashboard', key: 'd', group: 'Monitor' },
   { path: '/strategies', label: 'Strategies', key: 's', group: 'Monitor' },
-  { path: '/strategies/leaderboard', label: 'Leaderboard', key: 'b', group: 'Monitor' },
+  { path: '/leaderboard', label: 'Leaderboard', key: 'b', group: 'Monitor' },
   { path: '/shadow', label: 'Shadow', key: 'w', group: 'Monitor' },
   { path: '/orders', label: 'Orders', key: 'o', group: 'Monitor' },
   { path: '/trades', label: 'Trade costs', key: 't', group: 'Monitor' },

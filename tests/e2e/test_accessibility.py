@@ -40,8 +40,24 @@ ADMIN_PAGES = (
     "/ops/schedule",
     "/ops/data-quality",
     "/universes",
+    "/welcome",
+    "/watchlists",
+    "/charts/AAA.US",
+    "/leaderboard",
+    f"/strategies/{ACTIVE_IDS['AAA.US']}/tearsheet",
 )
-TRADER_PAGES = ("/", "/insights", "/insights/risk", "/profile", "/settings", "/strategies")
+TRADER_PAGES = (
+    "/",
+    "/insights",
+    "/insights/risk",
+    "/profile",
+    "/settings",
+    "/strategies",
+    "/welcome",
+    "/watchlists",
+    "/charts/AAA.US",
+    "/leaderboard",
+)
 
 
 def _audit(visit, pages, who: str) -> dict[str, list[str]]:

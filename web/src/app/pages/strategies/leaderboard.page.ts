@@ -135,6 +135,7 @@ export function goliveLabel(passed: boolean | null | undefined): string {
       gap: var(--space-2) var(--space-4);
     }
     .field-inline {
+      white-space: nowrap;
       display: inline-flex;
       align-items: center;
       gap: var(--space-2);

@@ -25,6 +25,12 @@ export const routes: Routes = [
   { path: 'watchlists', loadChildren: () => import('./pages/watchlists/watchlists.routes') },
   { path: 'charts', loadChildren: () => import('./pages/charts/charts.routes') },
   {
+    path: 'leaderboard',
+    title: 'Leaderboard',
+    loadComponent: () =>
+      import('./pages/strategies/leaderboard.page').then((m) => m.LeaderboardPage),
+  },
+  {
     path: 'admin/users',
     canActivate: [adminGuard],
     loadChildren: () => import('./pages/admin-users/admin-users.routes'),

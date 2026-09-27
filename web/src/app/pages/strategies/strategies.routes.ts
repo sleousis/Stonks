@@ -7,11 +7,6 @@ export default [
     loadComponent: () => import('./strategies.page').then((m) => m.StrategiesPage),
   },
   {
-    path: 'leaderboard',
-    title: 'Leaderboard',
-    loadComponent: () => import('./leaderboard.page').then((m) => m.LeaderboardPage),
-  },
-  {
     path: ':id/tearsheet',
     title: 'Tear sheet',
     loadComponent: () => import('./tearsheet.page').then((m) => m.TearsheetPage),

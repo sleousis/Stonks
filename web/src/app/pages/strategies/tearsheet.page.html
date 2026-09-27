@@ -2,7 +2,7 @@
   [title]="id()"
   [description]="sheet.hasValue() ? cls() + '. ' + statusWord() + '.' : 'Tear sheet'"
 >
-  <a actions class="btn btn-ghost" routerLink="/strategies/leaderboard">Leaderboard</a>
+  <a actions class="btn btn-ghost" routerLink="/leaderboard">Leaderboard</a>
   <a actions class="btn btn-ghost" [routerLink]="['/strategies', id()]">Strategy page</a>
   <a actions class="btn" routerLink="/lab" [queryParams]="{ strategy: id() }">Backtest it</a>
 </app-page-header>

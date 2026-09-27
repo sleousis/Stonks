@@ -71,3 +71,9 @@
     padding: 0 var(--space-3);
   }
 }
+@include bp.phone {
+  .chip {
+    min-height: var(--touch-min);
+    padding: 0 var(--space-3);
+  }
+}
