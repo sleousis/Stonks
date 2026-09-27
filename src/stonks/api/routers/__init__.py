@@ -10,6 +10,7 @@ from stonks.api.routers import (
     auth,
     backups,
     brokers,
+    calendars,
     catalog,
     charts,
     connections,
@@ -81,6 +82,7 @@ API_ROUTERS: list[APIRouter] = [
     watchlists.router,
     charts.router,
     exports.router,
+    calendars.router,
 ]
 
 #: Routers that always need a principal, even for reads on loopback.

@@ -73,7 +73,8 @@ class JobConfig(BaseModel):
 
     name: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_.-]+$")
     #: A registered job action (``ingest_prices``, ``tick``, ``health``,
-    #: ``report``, ``universes_refresh``, ``backup``, ``connections_sync``).
+    #: ``report``, ``universes_refresh``, ``backup``, ``connections_sync``,
+    #: ``calendars_refresh``).
     action: str
     trigger: TriggerConfig
     params: dict[str, Any] = Field(default_factory=dict)
@@ -142,6 +143,13 @@ def default_jobs() -> list[JobConfig]:
             name="connections_sync",
             action="connections_sync",
             trigger=IntervalTriggerConfig(every_minutes=60),
+        ),
+        # Earnings, dividend and economic calendars, then the upcoming-event
+        # notifications (roadmap 20.7). Needs a paid EODHD plan.
+        JobConfig(
+            name="calendars_refresh",
+            action="calendars_refresh",
+            trigger=DailyTriggerConfig(at=time(6, 0)),
         ),
     ]
 

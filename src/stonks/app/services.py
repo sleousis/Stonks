@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from stonks.app.alerts import AlertService
 from stonks.app.backups import BackupService
 from stonks.app.brokers import BrokerConnector, BrokerService
+from stonks.app.calendars import CalendarService
 from stonks.app.catalog import CatalogService, LabCatalogSource, StrategySource
 from stonks.app.connections import ConnectionsAppService
 from stonks.app.context import AppContext
@@ -191,6 +192,7 @@ class Services:
     subscriptions: SubscriptionService
     insights: InsightsService
     ledger: TrialLedgerService
+    calendars: CalendarService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -255,6 +257,7 @@ class Services:
             subscriptions=SubscriptionService(context),
             insights=InsightsService(context, portfolio),
             ledger=TrialLedgerService(context),
+            calendars=CalendarService(context, runner),
         )
         services.schedule.bind(services)
         return services

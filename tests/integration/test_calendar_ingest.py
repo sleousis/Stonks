@@ -3,66 +3,12 @@ accounting under one ``ingest_runs`` row, and re-running is idempotent."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from datetime import UTC, date, datetime
+from datetime import date
 
 from stonks.calendars.store import CalendarStore
-from stonks.ingest.calendar_schemas import DividendEventRow, EarningsEventRow, EconomicEventRow
 from stonks.ingest.pipeline import IngestPipeline
-from stonks.ingest.schemas import FinancialStatementsBundle, RawPriceBar
-from stonks.ingest.sources.base import DataSource, DataSourceError
-
-
-class FakeCalendarSource(DataSource):
-    """Canned calendars; records what it was asked for."""
-
-    source_id = "fake"
-
-    def __init__(self, *, fail: set[str] | None = None) -> None:
-        self.fail = fail or set()
-        self.calls: list[tuple[str, date, date, Sequence[str] | None]] = []
-
-    def list_tickers(self, exchange: str) -> list[str]:
-        return []
-
-    def fetch_prices(self, ticker, since=None, until=None) -> Iterable[RawPriceBar]:
-        return []
-
-    def fetch_fundamentals(self, ticker: str) -> FinancialStatementsBundle:
-        return FinancialStatementsBundle()
-
-    def _check(self, kind: str) -> None:
-        if kind in self.fail:
-            raise DataSourceError(f"{kind} is down")
-
-    def fetch_earnings_calendar(self, start, end, tickers=None):
-        self.calls.append(("earnings", start, end, tickers))
-        self._check("earnings")
-        return [
-            EarningsEventRow(
-                ticker="AAPL.US",
-                period_end=date(2026, 9, 30),
-                report_date=date(2026, 10, 29),
-                before_after_market="after",
-            )
-        ]
-
-    def fetch_dividend_calendar(self, start, end, tickers=None):
-        self.calls.append(("dividends", start, end, tickers))
-        self._check("dividends")
-        return [DividendEventRow(ticker="KO.US", ex_date=date(2026, 10, 14), amount=0.51)]
-
-    def fetch_economic_events(self, start, end, countries=None):
-        self.calls.append(("economic", start, end, countries))
-        self._check("economic")
-        return [
-            EconomicEventRow(
-                country="US",
-                event_time=datetime(2026, 10, 10, 12, 30, tzinfo=UTC),
-                event_type="CPI",
-                comparison="yoy",
-            )
-        ]
+from stonks.ingest.sources.base import DataSource
+from tests.fixtures.calendars import FakeCalendarSource
 
 
 def test_run_calendars_fills_three_tables_once(lake):

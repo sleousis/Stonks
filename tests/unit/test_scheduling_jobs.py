@@ -29,6 +29,7 @@ BUILTIN = {
     "health",
     "report",
     "universes_refresh",
+    "calendars_refresh",
 }
 
 
@@ -44,6 +45,7 @@ def test_default_jobs_build():
         "connections_sync",
         "universes_refresh",
         "ingest_metadata",
+        "calendars_refresh",
     }
     tick = by_name["tick"]
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))

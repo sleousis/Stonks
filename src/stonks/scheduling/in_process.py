@@ -22,6 +22,8 @@ from stonks.scheduling.api_backend import (
     TERMINAL_JOB_STATUSES,
     JobWaitTimeoutError,
     backup_job_outcome,
+    calendar_job_outcome,
+    calendar_refresh_body,
     ensure_body,
     ensure_step,
     health_view_outcome,
@@ -299,3 +301,20 @@ def in_process_universes_refresh(ctx: RunContext) -> JobOutcome:
             step |= ensure_step(e_status, e_error, e_result)
         results[universe.id] = step
     return universes_outcome(results)
+
+
+@IN_PROCESS_ACTIONS.register("calendars_refresh")
+def in_process_calendars_refresh(ctx: RunContext) -> JobOutcome:
+    """Like the ``api`` action, on the server's ``lake_write`` lane."""
+    from stonks.app.calendars import (
+        CALENDAR_REFRESH_JOB,
+        CalendarRefreshRequest,
+        CalendarRefreshView,
+    )
+
+    ex = _executor(ctx)
+    job = ex.services.calendars.submit_refresh(
+        CalendarRefreshRequest.model_validate(calendar_refresh_body(ctx))
+    )
+    status, error, result, job_id = ex.run_job(job, CALENDAR_REFRESH_JOB, CalendarRefreshView)
+    return calendar_job_outcome(status, error, result, job_id)
