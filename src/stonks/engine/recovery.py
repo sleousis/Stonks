@@ -163,7 +163,8 @@ class EngineRuns:
         bar_closes: int | None = None,
         orders_routed: int | None = None,
     ) -> None:
-        sets, params = ["heartbeat_at = ?"], [iso_now(self.clock)]
+        sets: list[str] = ["heartbeat_at = ?"]
+        params: list[Any] = [iso_now(self.clock)]
         if last_close_at is not None:
             sets.append("last_close_at = ?")
             params.append(last_close_at.isoformat())
