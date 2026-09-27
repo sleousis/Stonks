@@ -55,7 +55,7 @@ def _cmd_worker(settings: Any, args: argparse.Namespace) -> int:
 
     def _stop(signum: int, frame: Any) -> None:
         stop.set()
-        worker.request_stop()  # a running lab job ends cancelled at its next checkpoint
+        worker.request_stop()  # a running lab job stops and goes back to the queue
 
     signal.signal(signal.SIGINT, _stop)
     signal.signal(signal.SIGTERM, _stop)
