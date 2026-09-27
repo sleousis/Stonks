@@ -2208,8 +2208,10 @@ Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes*
 
 Turn kinds of upcoming-event alerts on or off for yourself:
 earnings coming up, ex-dividend dates coming up, economic releases
-coming up. Off means none of that kind, not even in the app. Without
-confirm=true returns your current switches and changes nothing.
+coming up. Off means none of that kind, not even in the app. Also
+picks the countries and the importance threshold (low, medium, high)
+of economic release alerts. Without confirm=true returns your
+current choices and changes nothing.
 
 Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
@@ -2218,6 +2220,9 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `earnings` | boolean \| null | no | `null` | true: on, false: off, omit: leave as is |
 | `dividends` | boolean \| null | no | `null` | true: on, false: off, omit: leave as is |
 | `economic` | boolean \| null | no | `null` | true: on, false: off, omit: leave as is |
+| `economic_countries` | list[string] \| null | no | `null` | countries for economic release alerts, such as US, EU, DE |
+| `economic_default_countries` | boolean | no | `false` | true: follow your portfolios' base currencies again |
+| `economic_importance` | "low" \| "medium" \| "high" \| null | no | `null` | the lowest importance of release that alerts you |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `shadow_strategy`

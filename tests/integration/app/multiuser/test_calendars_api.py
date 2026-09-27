@@ -234,5 +234,9 @@ def test_earnings_warnings_and_alert_kinds(client, people, books):
     # DOWN.US reports in five days: never before the next open
     assert "DOWN.US" not in [w["ticker"] for w in body["warnings"]]
     kinds = client.get("/api/calendars/alert-kinds", headers=alice).json()
-    assert [k["kind"] for k in kinds] == ["earnings_upcoming", "ex_dividend_upcoming"]
-    assert [k["topic"] for k in kinds] == ["earnings", "dividends"]
+    assert [k["kind"] for k in kinds] == [
+        "earnings_upcoming",
+        "economic_release",
+        "ex_dividend_upcoming",
+    ]
+    assert [k["topic"] for k in kinds] == ["earnings", "economic", "dividends"]

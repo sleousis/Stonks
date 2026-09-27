@@ -1109,6 +1109,20 @@ export type ChartView = {
 };
 
 /**
+ * ChoiceOption
+ */
+export type ChoiceOption = {
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Value
+     */
+    value: string;
+};
+
+/**
  * CircuitBreakerSettings
  */
 export type CircuitBreakerSettings = {
@@ -1946,6 +1960,55 @@ export type EarningsWarningsView = {
 };
 
 /**
+ * EconomicAlertsUpdate
+ *
+ * Economic release alerts. Only what is given changes.
+ */
+export type EconomicAlertsUpdate = {
+    /**
+     * Countries
+     */
+    countries?: Array<string> | null;
+    /**
+     * Default Countries
+     */
+    default_countries?: boolean;
+    /**
+     * Min Importance
+     */
+    min_importance?: 'low' | 'medium' | 'high' | null;
+};
+
+/**
+ * EconomicAlertsView
+ *
+ * Which economic releases alert you. Turned on or off by the
+ * ``economic`` switch in ``event_alerts``.
+ */
+export type EconomicAlertsView = {
+    /**
+     * Countries
+     */
+    countries: Array<string>;
+    /**
+     * Country Options
+     */
+    country_options?: Array<ChoiceOption>;
+    /**
+     * Default Countries
+     */
+    default_countries: boolean;
+    /**
+     * Importance Options
+     */
+    importance_options?: Array<ChoiceOption>;
+    /**
+     * Min Importance
+     */
+    min_importance: 'low' | 'medium' | 'high';
+};
+
+/**
  * EconomicEvent
  */
 export type EconomicEvent = {
@@ -1981,6 +2044,10 @@ export type EconomicEvent = {
      * Event Type
      */
     event_type: string;
+    /**
+     * Importance
+     */
+    importance?: 'low' | 'medium' | 'high';
     /**
      * Period
      */
@@ -7353,6 +7420,7 @@ export type PreferenceItem = {
  * Only what is given changes.
  */
 export type PreferencesUpdate = {
+    economic_alerts?: EconomicAlertsUpdate | null;
     /**
      * Event Alerts
      */
@@ -7375,6 +7443,7 @@ export type PreferencesView = {
      * Channels
      */
     channels: Array<string>;
+    economic_alerts?: EconomicAlertsView | null;
     /**
      * Event Alerts
      */

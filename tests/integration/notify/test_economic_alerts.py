@@ -144,7 +144,9 @@ def test_store_round_trip_and_validation(state, users):
 
 def test_each_person_gets_their_countries_and_threshold_once(state, lake, users, releases, router):
     alice, bob, admin = users["alice"].id, users["bob"].id, users["admin"].id
-    PortfolioRepository(state).create(Scope.for_user(users["alice"]), name="Eu", base_currency="EUR")
+    PortfolioRepository(state).create(
+        Scope.for_user(users["alice"]), name="Eu", base_currency="EUR"
+    )
     prefs = EconomicAlertPrefStore(state)
     prefs.set(bob, countries=["US", "GB"], min_importance="medium", now=NOW)
     prefs.set(admin, min_importance="low", now=NOW)

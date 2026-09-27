@@ -25,10 +25,14 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from stonks.accounts import AccountsError, AuditLog, NotFound, Scope
+from stonks.calendars.countries import COUNTRY_LABELS
+from stonks.calendars.importance import IMPORTANCE_LABELS, IMPORTANCE_LEVELS
 from stonks.notify.base import redact_url
 from stonks.notify.channels import channel_defaults, channel_names
 from stonks.notify.prefs import (
     EVENT_ALERT_TOPICS,
+    EconomicAlertPrefs,
+    EconomicAlertPrefStore,
     EventAlertPrefStore,
     Preference,
     PreferenceStore,
@@ -76,6 +80,31 @@ class NotificationPreferences:
     channel_defaults: tuple[tuple[str, bool, bool], ...] = field(default_factory=tuple)
     #: One switch per upcoming-event alert kind, in display order.
     event_alerts: tuple[EventAlertSwitch, ...] = field(default_factory=tuple)
+    #: Countries and importance threshold of economic release alerts.
+    economic_alerts: EconomicAlertPrefs | None = None
+
+
+@dataclass(frozen=True)
+class EconomicAlertChange:
+    """What to change in a person's economic release alerts. ``None``
+    leaves a field as it is. ``default_countries`` goes back to the
+    countries of the person's portfolios."""
+
+    countries: tuple[str, ...] | None = None
+    default_countries: bool = False
+    min_importance: str | None = None
+
+    @property
+    def empty(self) -> bool:
+        return self.countries is None and not self.default_countries and not self.min_importance
+
+
+#: ``(code, label)`` of every country the console offers.
+ECONOMIC_COUNTRY_OPTIONS: tuple[tuple[str, str], ...] = tuple(COUNTRY_LABELS.items())
+#: ``(level, label)`` of every importance threshold, lowest first.
+IMPORTANCE_OPTIONS: tuple[tuple[str, str], ...] = tuple(
+    (level, IMPORTANCE_LABELS[level]) for level in IMPORTANCE_LEVELS
+)
 
 
 @dataclass(frozen=True)
@@ -343,6 +372,7 @@ def get_preferences(state: SqliteState, scope: Scope) -> NotificationPreferences
             EventAlertSwitch(topic, EVENT_ALERT_TOPICS[topic], enabled)
             for topic, enabled in EventAlertPrefStore(state).switches(user_id).items()
         ),
+        economic_alerts=EconomicAlertPrefStore(state).get(user_id),
     )
 
 
@@ -352,12 +382,15 @@ def update_preferences(
     preferences: Iterable[Preference],
     *,
     event_alerts: Mapping[str, bool] | None = None,
+    economic: EconomicAlertChange | None = None,
 ) -> NotificationPreferences:
-    """Channel switches per category (and strategy), and the per-kind event
-    alert switches. Only what is given changes."""
+    """Channel switches per category (and strategy), the per-kind event
+    alert switches, and the countries and importance threshold of economic
+    release alerts. Only what is given changes."""
     user_id = _person(state, scope)
     prefs = list(preferences)
     switches = dict(event_alerts or {})
+    economic = economic if economic is not None and not economic.empty else None
     for topic in switches:
         if topic not in EVENT_ALERT_TOPICS:
             raise AccountsError(
@@ -375,11 +408,28 @@ def update_preferences(
         now = _now()
         PreferenceStore(state).set(user_id, prefs, now=now)
         EventAlertPrefStore(state).set(user_id, switches, now=now)
+        if economic is not None:
+            try:
+                EconomicAlertPrefStore(state).set(
+                    user_id,
+                    countries=economic.countries,
+                    default_countries=economic.default_countries,
+                    min_importance=economic.min_importance,
+                    now=now,
+                )
+            except ValueError as exc:
+                raise AccountsError(str(exc)) from exc
         details: dict[str, Any] = {
             "changes": [[p.category, p.strategy_id, p.channel, p.enabled] for p in prefs]
         }
         if switches:
             details["event_alerts"] = switches
+        if economic is not None:
+            details["economic_alerts"] = {
+                "countries": list(economic.countries) if economic.countries else None,
+                "default_countries": economic.default_countries,
+                "min_importance": economic.min_importance,
+            }
         AuditLog(state).record(scope.actor, "notify.prefs.update", "user", user_id, details=details)
     return get_preferences(state, scope)
 
