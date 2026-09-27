@@ -84,4 +84,21 @@ describe('StepUpDialog', () => {
     buttons.find((b) => b.textContent?.trim() === 'Cancel')!.click();
     expect(service.cancel).toHaveBeenCalled();
   });
+
+  it('opens with focus on the code field (UX-47)', async () => {
+    const fixture = render();
+    request.set({ reason: 'x' });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(document.activeElement?.id).toBe('step-up-code');
+  });
+
+  it('cancels on Escape, through the shared sheet (UX-48)', () => {
+    const fixture = render();
+    request.set({ reason: 'x' });
+    fixture.detectChanges();
+    const dialog = (fixture.nativeElement as HTMLElement).querySelector('app-sheet dialog')!;
+    dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    expect(service.cancel).toHaveBeenCalled();
+  });
 });

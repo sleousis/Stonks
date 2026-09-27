@@ -1,6 +1,6 @@
 import type { MeView } from '../../api/models';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
-import { POLICY, allowed, denial, routePermission } from './permissions';
+import { POLICY, allowed, denial } from './permissions';
 import { ROUTE_PERMISSIONS } from './route-permissions.gen';
 
 const VIEWER: MeView = { ...TRADER, role: 'viewer', scopes: ['read'] };
@@ -12,12 +12,11 @@ describe('permissions', () => {
     }
   });
 
-  it('reads the route permission from the contract', () => {
-    expect(routePermission('post', '/api/strategies/{strategy_id}/promote')).toBe(
+  it('reads the route permissions from the contract', () => {
+    expect(ROUTE_PERMISSIONS['POST /api/strategies/{strategy_id}/promote']).toBe(
       'strategy.promote',
     );
-    expect(routePermission('POST', '/api/ticks')).toBe('operations.run');
-    expect(routePermission('GET', '/api/portfolio')).toBeNull();
+    expect(ROUTE_PERMISSIONS['POST /api/ticks']).toBe('operations.run');
   });
 
   it('lets admins promote and run operations, not traders or viewers', () => {

@@ -119,7 +119,7 @@ describe('SettingsPage', () => {
   });
 
   function headings(): string[] {
-    return [...el.querySelectorAll('h2')].map((h) => h.textContent?.trim() ?? '');
+    return [...el.querySelectorAll('h2, h3')].map((h) => h.textContent?.trim() ?? '');
   }
 
   it('shows a trader their account sections only', async () => {
@@ -134,11 +134,30 @@ describe('SettingsPage', () => {
     expect(h).not.toContain('Data sources');
     expect(h).not.toContain('Cost-model presets');
     expect(el.querySelector('a[href="/profile"]')?.textContent).toContain('Open profile');
+    // UX-43: the token panel is folded away under For scripts, at the bottom.
+    const scripts = el.querySelector<HTMLDetailsElement>('details.scripts')!;
+    expect(scripts.querySelector('summary')?.textContent?.trim()).toBe('For scripts');
+    expect(scripts.open).toBe(false);
+    expect(scripts.contains(el.querySelector('#api-token'))).toBe(true);
     expect(el.textContent).not.toContain('Reload system settings');
     // No system reads for a trader.
     http.expectNone('/api/brokers');
     http.expectNone('/api/risk/policy');
     http.verify();
+  });
+
+  it('nests panel headings under the group headings (UX-72)', async () => {
+    await setup(ADMIN);
+    const h2 = [...el.querySelectorAll('h2')].map((h) => h.textContent?.trim());
+    expect(h2).toEqual(['Your account', 'System']);
+    expect(el.querySelector('#broker-title')?.tagName).toBe('H3');
+  });
+
+  it("shows the broker's paper or live mode as the stamp (UX-72)", async () => {
+    await setup(ADMIN, { ...BROKER, paper: false });
+    const panel = el.querySelector('#broker-title')!.closest('section')!;
+    expect(panel.querySelector('app-mode-stamp')).not.toBeNull();
+    expect(panel.querySelector('app-status-pill[status="live"]')).toBeNull();
   });
 
   it('shows an admin the System sections too', async () => {
@@ -189,6 +208,8 @@ describe('SettingsPage', () => {
     expect(input.type).toBe('password');
     typeToken(SECRET);
     button('Save token').click();
+    (await nextRequest(http, '/api/auth/me')).flush({ ...TRADER, via: 'token' });
+    await tick();
     fixture.detectChanges();
 
     expect(TestBed.inject(AuthTokenService).token()).toBe(SECRET);
@@ -206,6 +227,8 @@ describe('SettingsPage', () => {
 
     typeToken(SECRET);
     button('Save token').click();
+    (await nextRequest(http, '/api/auth/me')).flush({ ...TRADER, via: 'token' });
+    await tick();
     fixture.detectChanges();
     button('Test token').click();
 
@@ -229,6 +252,8 @@ describe('SettingsPage', () => {
     await setup(TRADER);
     typeToken('wrong');
     button('Save token').click();
+    (await nextRequest(http, '/api/auth/me')).flush({ ...TRADER, via: 'token' });
+    await tick();
     fixture.detectChanges();
     const before = toasts.toasts().length;
     button('Test token').click();
@@ -242,6 +267,42 @@ describe('SettingsPage', () => {
 
     expect(el.textContent).toContain('Rejected');
     expect(toasts.toasts().length).toBe(before);
+  });
+
+  it('saving a token calls /api/auth/me with the new bearer and updates the role (UX-37)', async () => {
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    await setup(TRADER);
+    typeToken(SECRET);
+    button('Save token').click();
+    const me = await nextRequest(http, '/api/auth/me');
+    expect(me.request.headers.get('Authorization')).toBe(`Bearer ${SECRET}`);
+    me.flush({ ...TRADER, role: 'viewer', via: 'token' });
+    await tick();
+    expect(TestBed.inject(SessionService).role()).toBe('viewer');
+    expect(success).toHaveBeenCalledWith(
+      'Token saved for this tab. You are Ann, viewer.',
+      'Token saved',
+    );
+  });
+
+  it('drops a saved token the server refuses (UX-37)', async () => {
+    const error = vi.spyOn(TestBed.inject(ToastService), 'error');
+    await setup(TRADER);
+    typeToken('wrong');
+    button('Save token').click();
+    (await nextRequest(http, '/api/auth/me')).flush(
+      { title: 'x', status: 401, detail: 'not_authenticated' },
+      { status: 401, statusText: 'Unauthorized' },
+    );
+    const again = await nextRequest(http, '/api/auth/me');
+    expect(again.request.headers.has('Authorization')).toBe(false);
+    again.flush(TRADER);
+    await tick();
+    expect(TestBed.inject(AuthTokenService).token()).toBeNull();
+    expect(TestBed.inject(SessionService).me()?.role).toBe('trader');
+    expect(error).toHaveBeenCalledWith(
+      'That token did not work, so it was not kept. Check it and try again.',
+    );
   });
 
   it('explains that a token cannot be verified when none is saved', async () => {

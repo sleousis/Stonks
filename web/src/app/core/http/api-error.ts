@@ -17,7 +17,7 @@ export interface FieldError {
  * (`mfa_required: ...`), with what the trader should read instead.
  */
 const AUTH_CODE_MESSAGES: Readonly<Record<string, string>> = {
-  not_authenticated: 'You are signed out. Sign in, or enter an API token in Settings.',
+  not_authenticated: 'You are signed out. Sign in again.',
   invalid_credentials: 'That did not match. Try again.',
   mfa_required: 'Finish signing in with your code.',
   step_up_required: 'Confirm it is you with a code from your authenticator app.',
@@ -36,6 +36,8 @@ export class ApiError extends Error {
     readonly fieldErrors: readonly FieldError[] = [],
     /** The problem's stable code (`mfa_required`, `step_up_required`...), else null. */
     readonly code: string | null = null,
+    /** On a 401 `mfa_required`: which second-factor screen comes next. */
+    readonly nextStep: 'enrol' | 'verify' | null = null,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -79,14 +81,21 @@ export function toApiError(body: unknown, response?: unknown): ApiError {
 
   const code = authCode(problem?.detail) ?? bodyCode(body);
   if (code && code in AUTH_CODE_MESSAGES) {
-    return new ApiError(status, title, AUTH_CODE_MESSAGES[code], fieldErrors, code);
+    return new ApiError(
+      status,
+      title,
+      AUTH_CODE_MESSAGES[code],
+      fieldErrors,
+      code,
+      nextStepOf(body),
+    );
   }
 
   if (fieldErrors.length) {
     message = `${message}: ${fieldErrors.map((e) => `${e.field} ${e.message}`).join('; ')}`;
   }
   if (status === 401) {
-    message = `${message}. Sign in, or enter an API token in Settings.`;
+    message = `${message}. Sign in again.`;
   }
   return new ApiError(status, title, message, fieldErrors, code);
 }
@@ -99,6 +108,13 @@ export function toApiError(body: unknown, response?: unknown): ApiError {
 function bodyCode(body: unknown): string | null {
   const raw = typeof body === 'object' && body !== null ? (body as { code?: unknown }).code : null;
   return typeof raw === 'string' && /^[a-z_]+$/.test(raw) ? raw : null;
+}
+
+/** `next_step` on a 401 `mfa_required` problem (`enrol` or `verify`), else null. */
+function nextStepOf(body: unknown): 'enrol' | 'verify' | null {
+  const raw =
+    typeof body === 'object' && body !== null ? (body as { next_step?: unknown }).next_step : null;
+  return raw === 'enrol' || raw === 'verify' ? raw : null;
 }
 
 function authCode(detail: string | null | undefined): AuthCode | null {

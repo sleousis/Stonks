@@ -1,6 +1,6 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 
 import { provideApi } from '../../api/provide-api';
 import { TRADER } from '../../../testing/auth-fixtures';
@@ -94,5 +94,32 @@ describe('StepUpService', () => {
     await vi.waitFor(() => expect(stepUp.request()).not.toBeNull());
     stepUp.cancel();
     expect(await ok).toBe(false);
+  });
+
+  it('ensure() with /me status 0 keeps me and shows no token toast (UX-36)', async () => {
+    await signIn();
+    const error = vi.spyOn(TestBed.inject(ToastService), 'error');
+    const ok = stepUp.ensure('Resume trading');
+    (await nextRequest(controller, '/api/auth/me')).error(new ProgressEvent('error'), {
+      status: 0,
+    });
+    await vi.waitFor(() => expect(stepUp.request()).not.toBeNull());
+    expect(session.me()?.user_id).toBe('usr_1');
+    expect(error).not.toHaveBeenCalled();
+    stepUp.cancel();
+    expect(await ok).toBe(false);
+  });
+
+  it('ensure() sends a signed-out user to sign in (UX-36)', async () => {
+    await signIn();
+    const nav = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    const ok = stepUp.ensure('Resume trading');
+    (await nextRequest(controller, '/api/auth/me')).flush(
+      { title: 'x', status: 401, detail: 'not_authenticated' },
+      { status: 401, statusText: 'Unauthorized' },
+    );
+    expect(await ok).toBe(false);
+    expect(stepUp.request()).toBeNull();
+    expect(nav).toHaveBeenCalledWith(['/login'], { queryParams: { next: '/' } });
   });
 });

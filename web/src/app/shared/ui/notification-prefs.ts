@@ -46,7 +46,7 @@ const ALWAYS_ON = 'inapp';
   template: `
     <section class="panel" aria-labelledby="prefs-title">
       <div class="panel-head">
-        <h2 id="prefs-title">Alert settings</h2>
+        <h3 id="prefs-title">Alert settings</h3>
       </div>
       @if (prefs.error(); as err) {
         <app-error-state

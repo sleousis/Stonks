@@ -42,9 +42,7 @@ describe('toApiError', () => {
     const body = { title: 'Unauthorized', status: 401, detail: 'missing or invalid bearer token' };
     const err = toApiError(body, new HttpErrorResponse({ status: 401, error: body }));
     expect(err.isAuth).toBe(true);
-    expect(err.message).toBe(
-      'missing or invalid bearer token. Sign in, or enter an API token in Settings.',
-    );
+    expect(err.message).toBe('missing or invalid bearer token. Sign in again.');
   });
 
   it('reads the auth code at the start of the detail and says it plainly', () => {
@@ -54,7 +52,7 @@ describe('toApiError', () => {
         401,
         'not_authenticated: missing or invalid credentials',
         'not_authenticated',
-        'You are signed out. Sign in, or enter an API token in Settings.',
+        'You are signed out. Sign in again.',
       ],
       [401, 'invalid_credentials', 'invalid_credentials', 'That did not match. Try again.'],
       [

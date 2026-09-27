@@ -1,4 +1,5 @@
 import { Injectable, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 
 import type { MfaCodeRequest } from '../../api/models';
 import { ToastService } from '../notify/toast.service';
@@ -24,6 +25,7 @@ const DEFAULT_REASON = 'This action needs a fresh code from your authenticator a
 export class StepUpService {
   private readonly session = inject(SessionService);
   private readonly toasts = inject(ToastService);
+  private readonly router = inject(Router);
 
   private readonly current = signal<StepUpRequest | null>(null);
   readonly request = this.current.asReadonly();
@@ -33,7 +35,9 @@ export class StepUpService {
   prompt(reason = DEFAULT_REASON): Promise<boolean> {
     if (!this.session.viaSession()) {
       this.toasts.error(
-        'Sign in to the console to do this. API tokens cannot confirm a second factor.',
+        this.session.me()
+          ? 'Sign in to the console with your password to do this. A token cannot confirm a code.'
+          : 'Sign in to do this.',
         'Sign-in needed',
       );
       return Promise.resolve(false);
@@ -46,9 +50,20 @@ export class StepUpService {
     return promise;
   }
 
-  /** Before a sensitive action: prompt only when the last check is too old. */
+  /**
+   * Before a sensitive action: prompt only when the last check is too old.
+   * A signed-out answer goes to sign-in; a network blip keeps the user and
+   * still prompts (the code check then says what went wrong).
+   */
   async ensure(reason = DEFAULT_REASON): Promise<boolean> {
-    await this.session.load(true);
+    const status = await this.session.load(true);
+    if (status === 'signed-out' || status === 'mfa-pending') {
+      const here = this.router.url;
+      void this.router.navigate(['/login'], {
+        queryParams: status === 'mfa-pending' ? { step: 'code', next: here } : { next: here },
+      });
+      return false;
+    }
     if (this.session.me()?.mfa_fresh) return true;
     return this.prompt(reason);
   }

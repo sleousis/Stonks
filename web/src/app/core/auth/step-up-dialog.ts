@@ -2,68 +2,80 @@ import {
   ChangeDetectionStrategy,
   Component,
   type ElementRef,
+  Injector,
+  afterNextRender,
   effect,
   inject,
   linkedSignal,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 
+import { Sheet } from '../../shared/ui/sheet';
 import { errorMessage } from '../http/api-error';
 import { StepUpService } from './step-up.service';
 
 /**
- * Renders StepUpService requests: one code field (or a recovery code) in a
- * modal <dialog>. Mounted once, in the shell. A full-screen sheet on phones.
+ * Renders StepUpService requests: one code field (or a recovery code) in the
+ * shared `<app-sheet>` (a card on larger screens, full screen on phones,
+ * Escape cancels). Mounted once, in the shell. Opens with the cursor in
+ * the code field (UX-47).
  */
 @Component({
   selector: 'app-step-up-dialog',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [Sheet],
   template: `
-    <dialog
-      #dialog
-      class="sheet"
-      aria-labelledby="step-up-title"
-      aria-describedby="step-up-reason"
-      (cancel)="$event.preventDefault(); cancel()"
+    <app-sheet
+      [open]="!!request()"
+      labelledBy="step-up-title"
+      describedBy="step-up-reason"
+      (dismiss)="cancel()"
     >
       @if (request(); as req) {
-        <form (submit)="$event.preventDefault(); submit()">
+        <form class="sheet-form" (submit)="$event.preventDefault(); submit()">
           <h2 id="step-up-title">Confirm it is you</h2>
-          <p id="step-up-reason" class="reason">{{ req.reason }}</p>
+          <p id="step-up-reason" class="sheet-message">{{ req.reason }}</p>
           <div class="field">
             @if (useRecovery()) {
               <label for="step-up-recovery">Recovery code</label>
               <input
+                #codeInput
                 id="step-up-recovery"
                 class="input"
                 autocomplete="off"
                 autocapitalize="off"
                 spellcheck="false"
                 maxlength="64"
+                [attr.aria-invalid]="error() ? true : null"
+                [attr.aria-describedby]="error() ? 'step-up-error' : null"
                 [value]="value()"
                 (input)="value.set($any($event.target).value)"
               />
             } @else {
               <label for="step-up-code">Code from your authenticator app</label>
               <input
+                #codeInput
                 id="step-up-code"
                 class="input code"
                 inputmode="numeric"
                 autocomplete="one-time-code"
                 maxlength="8"
+                [attr.aria-invalid]="error() ? true : null"
+                [attr.aria-describedby]="error() ? 'step-up-error' : null"
                 [value]="value()"
                 (input)="value.set($any($event.target).value)"
               />
             }
             @if (error(); as err) {
-              <span class="error" role="alert">{{ err }}</span>
+              <span id="step-up-error" class="error" role="alert">{{ err }}</span>
             }
           </div>
           <button type="button" class="btn btn-ghost switch" (click)="toggleRecovery()">
             {{ useRecovery() ? 'Use the app code instead' : 'Use a recovery code' }}
           </button>
-          <div class="actions">
+          <div class="sheet-actions">
             <button type="button" class="btn" (click)="cancel()">Cancel</button>
             <button
               type="submit"
@@ -76,34 +88,9 @@ import { StepUpService } from './step-up.service';
           </div>
         </form>
       }
-    </dialog>
+    </app-sheet>
   `,
   styles: `
-    @use 'breakpoints' as bp;
-
-    .sheet {
-      width: min(420px, calc(100vw - 32px));
-      padding: 0;
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
-      background: var(--color-surface);
-      color: var(--color-ink);
-      box-shadow: var(--shadow-2);
-    }
-    .sheet::backdrop {
-      background: var(--color-scrim);
-    }
-    form {
-      display: grid;
-      gap: var(--space-4);
-      padding: var(--space-5);
-    }
-    h2 {
-      font-size: var(--text-lg);
-    }
-    .reason {
-      color: var(--color-ink-2);
-    }
     .code {
       font-size: var(--text-lg);
       letter-spacing: 0.2em;
@@ -112,40 +99,12 @@ import { StepUpService } from './step-up.service';
     .switch {
       justify-self: start;
     }
-    .actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: var(--space-2);
-    }
-    @include bp.phone {
-      .sheet {
-        width: 100vw;
-        max-width: 100vw;
-        height: 100dvh;
-        max-height: 100dvh;
-        margin: 0;
-        border: 0;
-        border-radius: 0;
-      }
-      form {
-        min-height: 100%;
-        align-content: start;
-        padding: calc(var(--space-5) + env(safe-area-inset-top)) var(--space-4)
-          calc(var(--space-4) + env(safe-area-inset-bottom));
-      }
-      .actions {
-        margin-top: auto;
-        flex-direction: column-reverse;
-      }
-      .actions .btn {
-        width: 100%;
-      }
-    }
   `,
 })
 export class StepUpDialog {
   private readonly stepUp = inject(StepUpService);
-  private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+  private readonly injector = inject(Injector);
+  private readonly codeInput = viewChild<ElementRef<HTMLInputElement>>('codeInput');
 
   protected readonly request = this.stepUp.request;
   protected readonly value = linkedSignal({ source: this.request, computation: () => '' });
@@ -161,12 +120,7 @@ export class StepUpDialog {
 
   constructor() {
     effect(() => {
-      const el = this.dialog().nativeElement;
-      if (this.request()) {
-        if (!el.open) el.showModal?.();
-      } else if (el.open) {
-        el.close();
-      }
+      if (this.request()) untracked(() => this.focusCode());
     });
   }
 
@@ -174,6 +128,7 @@ export class StepUpDialog {
     this.useRecovery.update((v) => !v);
     this.value.set('');
     this.error.set(null);
+    this.focusCode();
   }
 
   protected async submit(): Promise<void> {
@@ -192,5 +147,10 @@ export class StepUpDialog {
 
   protected cancel(): void {
     this.stepUp.cancel();
+  }
+
+  /** Once the field is on screen, put the cursor in it. */
+  private focusCode(): void {
+    afterNextRender(() => this.codeInput()?.nativeElement.focus(), { injector: this.injector });
   }
 }
