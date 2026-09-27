@@ -174,3 +174,32 @@ Waves:
 2. 21.2.1, 21.2.4 and 21.3.1 in parallel.
 3. 21.2.2, 21.2.3 and 21.3.2.
 4. 21.2.5, 21.3.3, 21.3.4 and 21.3.5.
+
+## 11. What 21.2.2 built
+
+```mermaid
+flowchart LR
+  LB[LakeBarSource] --> DRV[EventDriver]
+  DRV -->|bar close| F[fills handler<br/>priority -10<br/>next bar open, marks, equity]
+  DRV -->|bar close| ST[DecisionStep<br/>priority 0]
+  ST --> PIT[PointInTimeLake<br/>bars closed by the event]
+  ST --> BO[build_orders per book]
+  BO --> G[session gate<br/>and flatten]
+  G -->|StepDecision| F
+```
+
+- **`engine/step.py`**: `DecisionStep(strategies, books, lake, universe=, portfolio=, on_decision=)`, a driver handler named `decision_step`.
+  - On each bar close it updates the marks (last close per ticker, carried forward) and opens a `PointInTimeLake` for the bar that just closed, with the driver's interval as the decision interval. A strategy sees only bars closed by the event time (P12).
+  - Strategies get `as_of` = the start of the decision bar in naive UTC, the same value the bar backtester passes. Session rules and `Order.decided_at` use the bar close in aware UTC.
+  - Every strategy scores every universe ticker once per bar (`estimate_return`), shared by all books. A book that cannot short drops negative scores.
+  - Per book (`StepBook`: construction, risk policy, strategy weights, `allow_short`, session rules) it runs `portfolio.pipeline.build_orders`. Client ids are `[<portfolio_id>:]<strategy>:<bar start>:<ticker>:<side>`, the bar backtester's format. Orders carry `portfolio_id`, `decided_at` and `decision_price`.
+  - A book with `sessions` (a `SessionRules`) is gated by `gate_orders` and gets `flatten_orders` in the flatten window, which replace other orders for those tickers. A book without session rules is not gated (research parity).
+  - `stale_after` blocks opening orders on a ticker without a recent bar. `fresh_reads` opens a new point-in-time session per bar, for a live lake that grows. `record_fill` tells the step who filled a holding, so its owner can exit it when nothing is picked.
+  - The result is one `StepDecision` per book (orders, dropped orders with the reason, flattened tickers, the pipeline result), handed to `on_decision`.
+- **`backtest/intraday.py`**: `IntradayBacktester(strategies, broker, lake, IntradayBacktestConfig(...))`.
+  - `LakeBarSource` with a `FakeClock`, the `EventDriver`, a fills handler at priority -10 and the `DecisionStep` at 0. It is the loop a live run uses. Only the fills differ.
+  - The fills handler fills orders queued on the previous close at this bar's opens (P21), carries deferred remainders as `<root>~<n>`, accrues financing, marks at the closes and records equity. A new decision replaces what is still queued. This is the bar backtester's convention, kept exactly.
+  - The report is `compute_report` over the same equity points, so Sharpe and the other metrics match too.
+- **Tests**: `tests/unit/engine/test_step.py` (the view stops at the closed bar, one scoring per bar for all books, client ids and decision fields, carried marks, opening edge, halts, flatten, the closing bar, exit owners from fills, a constructor book, shorts dropped, stale tickers) and `tests/unit/engine/test_intraday_backtest.py` (fills, equity curve and Sharpe equal to `Backtester` on the same minute bars for `single_winner` and `equal_weight_top_n`, one decision per bar close, no look-ahead, changing later bars leaves earlier fills alone, two runs and shuffled lake rows give the same fills, next-bar fills, session edges and flatten). The helper `tests/unit/engine/minute_lake.py` builds minute bars on real NYSE sessions and a toy minute momentum strategy.
+- No migration, no settings, no CLI.
+- Not yet: corporate actions, point-in-time membership, lagged market statistics for fills and short books in the intraday backtest (the bar backtester keeps them). The router of 21.2.3 replaces the fills handler. History-aware risk rules get no daily history in the step yet, so they skip.
