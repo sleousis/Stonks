@@ -40,12 +40,14 @@ from datetime import date
 from functools import partial
 from typing import Any, Literal
 
+from stonks.backtest.costs import CostModelSettings
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
 from stonks.logging import get_logger
 from stonks.registry.store import StrategyRegistry
 from stonks.store.lake import DuckDBLake
 from stonks.store.pit import PitSession
+from stonks.strategies.costs import bind_costs
 
 _log = get_logger("stonks.production.ranker")
 
@@ -130,6 +132,7 @@ class Ranker:
         allow_short: bool = False,
         universe_id: str | None = None,
         loaders: Mapping[str, Callable[[], Strategy]] | None = None,
+        costs: CostModelSettings | None = None,
     ) -> None:
         """``universe_id``: the stored universe the tick trades; names that
         are not members on the tick date are not scored. ``workers`` > 1 scores the strategies that opt in with
@@ -138,8 +141,11 @@ class Ranker:
         (below that a pool costs more than it saves). ``allow_short`` keeps
         the short scores of strategies that support shorts (module doc).
         ``loaders`` scores these ``id -> loader`` instead of the registry's
-        strategies of ``status`` (the model version books, roadmap 22.6)."""
+        strategies of ``status`` (the model version books, roadmap 22.6).
+        ``costs`` is bound to every strategy loaded (22.10,
+        :mod:`stonks.strategies.costs`)."""
         self._loaders = None if loaders is None else dict(loaders)
+        self._costs = costs
         self._allow_short = allow_short
         self._workers = workers
         self._min_parallel = min_parallel_estimates
@@ -201,7 +207,7 @@ class Ranker:
                     error=str(exc),
                 )
                 continue
-            instances[sid] = strategy
+            instances[sid] = bind_costs(strategy, self._costs)
         parallel = self._score_parallel(instances, as_of, asset_classes, universe)
         for sid, strategy in instances.items():
             if sid in parallel:
@@ -326,9 +332,13 @@ class StrategyPool:
     registry, and a load error propagates to the caller.
     """
 
-    def __init__(self, registry: StrategyRegistry, lake: Any) -> None:
+    def __init__(
+        self, registry: StrategyRegistry, lake: Any, costs: CostModelSettings | None = None
+    ) -> None:
         self._registry = registry
         self._lake = lake
+        #: Bound to every strategy the pool loads itself (22.10).
+        self._costs = costs
         self._instances: dict[str, Strategy] = {}
         self._pristine: dict[str, Strategy] = {}
         self._expected: Counter[str] = Counter()
@@ -344,7 +354,7 @@ class StrategyPool:
     def checkout(self, strategy_id: str) -> Strategy:
         instance = self._instances.get(strategy_id)
         if instance is None:
-            instance = self._registry.load(strategy_id)
+            instance = bind_costs(self._registry.load(strategy_id), self._costs)
             self._instances[strategy_id] = instance
         uses = self._uses[strategy_id]
         self._uses[strategy_id] += 1
@@ -357,7 +367,7 @@ class StrategyPool:
             # More consumers than declared: the scoring instance may already
             # carry a decision's state, so copy the registry's instead.
             _log.warning("strategy_pool.unexpected_consumer", strategy_id=strategy_id)
-            base = self._registry.load(strategy_id)
+            base = bind_costs(self._registry.load(strategy_id), self._costs)
             self._pristine[strategy_id] = base
         return self._fork(strategy_id, base)
 

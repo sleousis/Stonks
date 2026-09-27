@@ -14,8 +14,10 @@ Rules, per ticker, on adjusted daily closes:
    weights it could have known on its first day:
    - each rule's turnover and its yearly cost in Sharpe units, from the
      instrument's one-way trade cost (half-spread plus fee of its asset
-     class in ``CostModelSettings.realistic()``, the shipped
-     ``[backtest.costs]``) times ``cost_multiplier``;
+     class) times ``cost_multiplier``. The cost model comes through the
+     seam in :mod:`stonks.strategies.costs`: the lab, the backtest and the
+     tick bind theirs (``[backtest.costs]`` by default), and without one
+     ``CostModelSettings.realistic()`` applies;
    - the speed limit: a rule that costs more than ``max_cost_sr`` (0.13
      SR a year) is dropped for this instrument (principle P19);
    - weights for the rest from the ``weight_method`` estimator
@@ -35,7 +37,9 @@ whether it was dropped).
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd
@@ -60,6 +64,7 @@ from stonks.features.forecast_weights import (
     weight_estimator_names,
 )
 from stonks.features.volatility import periods_per_year
+from stonks.strategies.costs import trade_costs_or_default
 from stonks.strategies.examples._forecast_trend import (
     ForecastTrendStrategy,
     forecast_specs,
@@ -77,6 +82,8 @@ REFIT_PERIODS = ["year", "quarter", "month"]
 #: multiple of the slowest EWMAC span (the seed then weighs under 0.1%).
 WINDOW_MULTIPLE = 16
 _BPS = 10_000.0
+#: The bound cost model, next to ``params.json`` in a saved strategy.
+COSTS_FILE = "costs.json"
 
 RawRule = Callable[[pd.Series, int, int], pd.Series]
 
@@ -130,10 +137,40 @@ class ForecastBlend(ForecastTrendStrategy):
     label_horizon_bars = 21
     required_history_bars = 256
 
-    def __init__(self, params: Any) -> None:
+    def __init__(self, params: Any, *, costs: CostModelSettings | None = None) -> None:
         super().__init__(params)
         self._fit_cache: dict[str, tuple[tuple[Any, ...], ForecastWeightFit]] = {}
         self._fits: dict[str, ForecastWeightFit] = {}
+        self._costs = costs
+
+    # ---- costs (the CostAware seam) ------------------------------------------------
+
+    @property
+    def costs(self) -> CostModelSettings | None:
+        """The cost model the caller bound; ``None`` means the defaults."""
+        return self._costs
+
+    def bind_costs(self, costs: CostModelSettings) -> None:
+        """Fit with ``costs`` from now on (earlier fits and the forecasts
+        cached from them are dropped)."""
+        if costs != self._costs:
+            self._costs = costs
+            self._fit_cache.clear()
+            self._days.clear()
+
+    def save(self, path: Path) -> None:
+        super().save(path)
+        if self._costs is not None:
+            (Path(path) / COSTS_FILE).write_text(self._costs.model_dump_json(indent=2))
+
+    @classmethod
+    def load(cls, path: Path) -> ForecastBlend:
+        params = json.loads((Path(path) / "params.json").read_text())
+        stored = Path(path) / COSTS_FILE
+        costs = (
+            CostModelSettings.model_validate_json(stored.read_text()) if stored.is_file() else None
+        )
+        return cls(params, costs=costs)
 
     @classmethod
     def parameter_spec(cls):
@@ -248,7 +285,7 @@ class ForecastBlend(ForecastTrendStrategy):
             return cached[1]
         klass = cast(AssetClass, asset_class)
         cost = (
-            CostModelSettings.realistic().one_way_cost_bps(klass)
+            trade_costs_or_default(self._costs).one_way_cost_bps(klass)
             / _BPS
             * float(self.params["cost_multiplier"])
         )

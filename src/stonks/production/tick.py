@@ -581,6 +581,7 @@ class _TickRun:
                     workers=self.settings.scoring_workers,
                     min_parallel_estimates=self.settings.parallel_min_estimates,
                     universe_id=self.settings.universe_id,
+                    costs=self.settings.costs,
                 ).score(as_of=self.as_of)
             except Exception as exc:
                 self._shadow_error = exc
@@ -650,9 +651,10 @@ def _run_tick_body(
         min_parallel_estimates=settings.parallel_min_estimates,
         allow_short=any(b.spec.allow_short for b in plan.books),
         universe_id=settings.universe_id,
+        costs=settings.costs,
     )
     signals = ranker.score(as_of=as_of)
-    pool = StrategyPool(registry, lake)
+    pool = StrategyPool(registry, lake, costs=settings.costs)
     pool.add(signals)
     run = _TickRun(
         state=state,
@@ -2245,6 +2247,7 @@ def _version_book_phase(
             threshold=settings.threshold,
             universe_id=settings.universe_id,
             loaders=loaders,
+            costs=settings.costs,
         ).score(as_of=run.as_of)
 
         def strategy(bid: str) -> Strategy:
