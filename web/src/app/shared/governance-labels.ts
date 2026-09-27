@@ -58,6 +58,20 @@ export const STATUS_WORDS: Readonly<Record<StrategyStatus, string>> = {
 };
 
 /**
+ * Server lines (gate details, auto blockers) still name the API's status
+ * keys. This puts them in the trader's words (UX-09).
+ */
+export function toTraderWords(text: string): string {
+  return text
+    .replace(/'?promotion'? (preset|suite)/gi, 'full test suite')
+    .replace(/\bpromotion\b/gi, 'going live')
+    .replace(/\bsurvival (reports?|tests?)\b/gi, 'robustness tests')
+    .replace(/\bnot active\b/gi, 'not live yet')
+    .replace(/\bshadow\b/gi, 'paper trading')
+    .replace(/\bretired\b/gi, 'stopped');
+}
+
+/**
  * The stage for a registered strategy. `golivePassed` is the go-live
  * verdict when known; a paper strategy that passed it is ready.
  */

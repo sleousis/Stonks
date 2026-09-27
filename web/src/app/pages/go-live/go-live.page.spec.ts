@@ -43,6 +43,7 @@ const RISK: RiskPolicy = {
 };
 
 let reportStatus = 'active';
+let presetPassed = true;
 
 function report(id: string, passed: boolean): GoLiveReport {
   return {
@@ -92,7 +93,7 @@ function report(id: string, passed: boolean): GoLiveReport {
       { name: 'quit_rule', passed: true, value: 0.042, limit: 0.12, detail: 'within' },
       {
         name: 'promotion_preset',
-        passed: true,
+        passed: presetPassed,
         value: 10,
         limit: 10,
         detail: "10/10 'promotion' preset tests on record",
@@ -129,6 +130,7 @@ describe('GoLivePage', () => {
     goliveRequests = [];
     goliveError = false;
     reportStatus = 'active';
+    presetPassed = true;
     TestBed.configureTestingModule({
       imports: [GoLivePage],
       providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
@@ -200,7 +202,11 @@ describe('GoLivePage', () => {
     expect(minDays.textContent).toContain('Paper days');
     // No raw check ids on the page.
     expect(check.textContent).not.toContain('min_days');
-    expect(minDays.querySelector('app-status-pill')?.textContent).toContain('fail');
+    expect(minDays.querySelector('app-status-pill')?.textContent).toContain('Failed');
+    // Each failing check says how to fix it (UX-28).
+    expect(minDays.querySelector('.check-fix')?.textContent).toContain(
+      'About 17 more trading days on paper.',
+    );
     expect(minDays.querySelector('.check-value')?.textContent).toContain('3');
     expect(minDays.querySelector('.check-limit')?.textContent).toContain('20');
     expect(rows[2].querySelector('.check-value')?.textContent).toContain('4.20%');
@@ -237,10 +243,31 @@ describe('GoLivePage', () => {
     expect(check.querySelector('.verdict')?.textContent).toContain('Ready to go live');
     // Shadow strategies that pass are handed to a human; active ones already trade.
     expect(check.querySelector('.ready')).toBeNull();
-    expect(check.textContent).toContain('It is already active');
+    expect(check.textContent).toContain('It is already live');
   });
 
-  it('shows the ready state and the promotion checklist, nulls as n/a', async () => {
+  it('failing promotion_preset row links to Lab with preset=promotion (UX-28)', async () => {
+    presetPassed = false;
+    fixture.componentRef.setInput('strategy', 'buyhold-spy');
+    fixture.detectChanges();
+    await flushAll();
+    const rows = Array.from(el.querySelectorAll('.checks li'));
+    const preset = rows.find((li) => li.textContent?.includes('Full test suite'))!;
+    expect(preset.querySelector('.check-fix a')?.getAttribute('href')).toBe(
+      '/lab?strategy=buyhold-spy&preset=promotion',
+    );
+  });
+
+  it('uses trader words only: no system words on the page (UX-09)', async () => {
+    reportStatus = 'shadow';
+    fixture.componentRef.setInput('strategy', 'buyhold-spy');
+    fixture.detectChanges();
+    await flushAll();
+    expect(el.textContent).not.toMatch(/shadow|promot|regist|retire/i);
+    expect(el.textContent).toContain('Before you go live');
+  });
+
+  it('shows the ready state and the go-live evidence, nulls as n/a', async () => {
     reportStatus = 'shadow';
     fixture.componentRef.setInput('strategy', 'momentum-v3');
     fixture.detectChanges();

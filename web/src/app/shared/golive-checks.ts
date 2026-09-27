@@ -1,5 +1,6 @@
 import type { GoLiveCheckView, GoLiveReport, PromotionChecklistView } from '../api/models';
 import { MISSING, formatNumber, formatPercent } from '../core/format/format';
+import { toTraderWords } from './governance-labels';
 
 export type GoLiveCheckName = GoLiveCheckView['name'];
 
@@ -105,7 +106,7 @@ export function checkRow(c: GoLiveCheckView, strategyId?: string): CheckRow {
     measures: CHECK_MEASURES[c.name] ?? '',
     value,
     limit,
-    detail: c.detail,
+    detail: toTraderWords(c.detail),
     fix: strategyId ? checkFix(c, strategyId) : null,
   };
 }

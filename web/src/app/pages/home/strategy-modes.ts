@@ -1,5 +1,7 @@
 import type { SubscriptionView } from '../../api/subscriptions.service';
 
+import { toTraderWords } from '../../shared/governance-labels';
+
 export { MODES, type ModeOption } from '../../shared/governance-labels';
 
 /**
@@ -18,14 +20,9 @@ export function autoBlockedReason(sub: SubscriptionView): string | null {
   }
   for (const blocker of sub.auto_blockers) {
     if (/paper trading day/i.test(blocker)) continue;
-    reasons.push(sentence(traderWords(blocker)));
+    reasons.push(sentence(toTraderWords(blocker)));
   }
   return reasons.length ? reasons.join(' ') : null;
-}
-
-/** Server lines that name a status key, in the trader's words (UX-09). */
-function traderWords(text: string): string {
-  return text.replace(/\bnot active\b/gi, 'not live yet').replace(/\bshadow\b/gi, 'paper trading');
 }
 
 function sentence(text: string): string {
