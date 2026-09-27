@@ -28,6 +28,8 @@ dependencies = [
     "argon2-cffi>=25.1.0",
     "pyotp>=2.10.0",
     "cvxpy>=1.9.3",
+    "statsmodels>=0.15.0",
+    "arch>=8.0.0",
 ]
 
 [project.scripts]

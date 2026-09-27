@@ -2059,6 +2059,8 @@
                   "enum": [
                     "benchmark_relative",
                     "cost_stress",
+                    "cpcv",
+                    "crisis",
                     "cross_instrument",
                     "deflated_sharpe",
                     "drift",
@@ -2073,6 +2075,7 @@
                     "plateau",
                     "runs_test",
                     "signal_ic",
+                    "stress",
                     "vs_random",
                     "walk_forward",
                     "walk_forward_mcpt"
@@ -2099,6 +2102,8 @@
                   "enum": [
                     "benchmark_relative",
                     "cost_stress",
+                    "cpcv",
+                    "crisis",
                     "cross_instrument",
                     "deflated_sharpe",
                     "drift",
@@ -2113,6 +2118,7 @@
                     "plateau",
                     "runs_test",
                     "signal_ic",
+                    "stress",
                     "vs_random",
                     "walk_forward",
                     "walk_forward_mcpt"
@@ -4589,6 +4595,8 @@
                   "enum": [
                     "benchmark_relative",
                     "cost_stress",
+                    "cpcv",
+                    "crisis",
                     "cross_instrument",
                     "deflated_sharpe",
                     "drift",
@@ -4603,6 +4611,7 @@
                     "plateau",
                     "runs_test",
                     "signal_ic",
+                    "stress",
                     "vs_random",
                     "walk_forward",
                     "walk_forward_mcpt"
@@ -4629,6 +4638,8 @@
                   "enum": [
                     "benchmark_relative",
                     "cost_stress",
+                    "cpcv",
+                    "crisis",
                     "cross_instrument",
                     "deflated_sharpe",
                     "drift",
@@ -4643,6 +4654,7 @@
                     "plateau",
                     "runs_test",
                     "signal_ic",
+                    "stress",
                     "vs_random",
                     "walk_forward",
                     "walk_forward_mcpt"
@@ -10155,6 +10167,8 @@
                   "enum": [
                     "benchmark_relative",
                     "cost_stress",
+                    "cpcv",
+                    "crisis",
                     "cross_instrument",
                     "deflated_sharpe",
                     "drift",
@@ -10169,6 +10183,7 @@
                     "plateau",
                     "runs_test",
                     "signal_ic",
+                    "stress",
                     "vs_random",
                     "walk_forward",
                     "walk_forward_mcpt"
@@ -10195,6 +10210,8 @@
                   "enum": [
                     "benchmark_relative",
                     "cost_stress",
+                    "cpcv",
+                    "crisis",
                     "cross_instrument",
                     "deflated_sharpe",
                     "drift",
@@ -10209,6 +10226,7 @@
                     "plateau",
                     "runs_test",
                     "signal_ic",
+                    "stress",
                     "vs_random",
                     "walk_forward",
                     "walk_forward_mcpt"

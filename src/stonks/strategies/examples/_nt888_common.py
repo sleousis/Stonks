@@ -36,7 +36,42 @@ def train_bars(
     the result: fitting cannot leak. Reads go through the strategy's
     ``caches`` when given (one history fetch shared with its predictions),
     else a one-off :class:`BarCache`."""
-    start, end = dataset.train_window
+    return _window_bars(dataset, dataset.train_window, ticker, interval, caches=caches, strict=True)
+
+
+def train_bar_segments(
+    dataset: Any,
+    ticker: str,
+    interval: Interval,
+    *,
+    caches: LakeBarCaches | None = None,
+) -> list[pd.DataFrame]:
+    """:func:`train_bars` for each of ``dataset.train_windows`` (the purged
+    training segments of a CV fold, BL-45; the one train window otherwise).
+    Segments with no bars are left out. Raises when none has any."""
+    windows = getattr(dataset, "train_windows", None) or (dataset.train_window,)
+    frames = [
+        frame
+        for window in windows
+        if not (
+            frame := _window_bars(dataset, window, ticker, interval, caches=caches, strict=False)
+        ).empty
+    ]
+    if not frames:
+        raise ValueError(f"no bars for {ticker!r} in the training window")
+    return frames
+
+
+def _window_bars(
+    dataset: Any,
+    window: tuple[Any, Any],
+    ticker: str,
+    interval: Interval,
+    *,
+    caches: LakeBarCaches | None,
+    strict: bool,
+) -> pd.DataFrame:
+    start, end = window
     end_dt = (
         datetime.combine(end, time.max)
         if isinstance(end, date) and not isinstance(end, datetime)
@@ -46,5 +81,7 @@ def train_bars(
     cache = caches.for_lake(lake) if caches is not None else BarCache(lake)
     bars = cache.bars_between(ticker, interval, as_datetime(start), end_dt, basis="adjusted")
     if bars is None or bars.empty:
-        raise ValueError(f"no bars for {ticker!r} in the training window")
+        if strict:
+            raise ValueError(f"no bars for {ticker!r} in the training window")
+        return pd.DataFrame()
     return bars.reset_index(drop=True)

@@ -67,7 +67,7 @@ uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --prese
 | Id | What it does |
 |----|--------------|
 | `pip_miner` | Mines perceptually important point patterns and trades the best cluster. |
-| `trendline_meta_label` | Trendline breakouts filtered by a random-forest meta-label model. |
+| `trendline_meta_label` | Trendline breakouts filtered by a random-forest meta-label model. Takes a trade only above the barriers' break-even probability plus a margin, weights trades by uniqueness, fits each CV segment separately and reports a purged CV score. Optional bet sizing. |
 | `rsi_pca` | PCA over many RSI periods and a linear read-out with quantile thresholds (see its module docstring). |
 
 ## DeFi ([details](nt888-tvl.md))
@@ -85,7 +85,10 @@ A wrapper gates an inner strategy. It takes the inner strategy's asset classes.
 | `macro_regime_filter` | Goes flat when a point-in-time macro series (from `macro_indicators`) says risk off. |
 | `feature_regime_filter` | Goes flat per ticker when a complexity feature (permutation entropy, reversibility, runs) says risk off. [Details](nt888-filters-ml.md). |
 | `last_trade_filter` | Takes the inner strategy's entry only after its previous trade lost (or won). [Details](nt888-filters-ml.md). |
-| `regime_filter` | Blocks buys, exits or scales down when at least k of n regime conditions (macro, benchmark trend, volatility, yield curve, weekly trend) say risk off. [Details](book-strategies.md#regimefilter-bl-42). |
+| `regime_filter` | Blocks buys, exits or scales down when at least k of n regime conditions (macro, benchmark trend, volatility, yield curve, weekly trend, VIX term structure) say risk off. [Details](book-strategies.md#regimefilter-bl-42). |
+| `latent_regime_filter` | Blocks buys (or exits) when a Markov-switching model of a reference market's returns puts the high-volatility state above a threshold. Fitted on the train window only, filtered probabilities only (BL-46). |
+
+The `vix_term_structure` regime condition triggers when spot VIX is above 3-month VIX (an inverted curve). It reads `vix_spot` and `vix_3m` from `macro_indicators`. Load them with `stonks ingest macro --source yahoo --countries USA --indicators vix_spot,vix_3m`.
 
 ## Not in the catalog
 

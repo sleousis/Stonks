@@ -697,7 +697,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strict_preflight` | boolean \| null | no |  |
-| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
@@ -1183,7 +1183,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
 | `strict_preflight` | boolean \| null | no |  |
-| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |
@@ -2421,7 +2421,7 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `start` | date | yes |  |
 | `strategies` | list[string] \| null | no |  |
 | `strict_preflight` | boolean \| null | no |  |
-| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" | no |  |

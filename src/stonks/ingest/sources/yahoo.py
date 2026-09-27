@@ -29,6 +29,11 @@ Caveats
 -------
 - Constructing the source sets ``yf.config.debug.hide_exceptions = False``
   process-wide, so yfinance raises instead of returning empty frames.
+- Macro series: Yahoo serves a few market-derived indicators that no
+  ticker row fits, currently the CBOE volatility indices. They land in
+  ``macro_indicators`` under canonical names (:data:`MACRO_SERIES`, BL-46):
+  ``vix_spot`` (``^VIX``) and ``vix_3m`` (``^VIX3M``) for ``USA``, one row
+  per trading day with ``period`` NULL and the daily close as ``value``.
 - Profiles carry only what Yahoo reports reliably (name, currency, sector,
   industry, fund-type security types). The instruments upsert keeps a
   stored value when the new one is NULL, so a Yahoo metadata run after an
@@ -54,6 +59,7 @@ from stonks.ingest.schemas import (
     ExchangeInfo,
     FinancialStatementsBundle,
     IntradayBar,
+    MacroIndicatorRow,
     RawPriceBar,
     TickerProfile,
 )
@@ -120,6 +126,14 @@ _YAHOO_SUFFIX_TO_EXCHANGE: dict[str, str] = {
     suffix: code for code, suffix in _EXCHANGE_TO_YAHOO_SUFFIX.items() if suffix
 }
 _CRYPTO_EXCHANGE = "CC"
+
+#: ``(country_iso, canonical indicator) -> Yahoo symbol`` of the macro series
+#: this source serves (see the module doc).
+MACRO_SERIES: dict[tuple[str, str], str] = {
+    ("USA", "vix_spot"): "^VIX",
+    ("USA", "vix_3m"): "^VIX3M",
+}
+_COUNTRY_NAMES = {"USA": "United States"}
 
 
 def _split(ticker: str) -> tuple[str, str]:
@@ -309,7 +323,8 @@ class YahooDataSource(DataSource):
     :meth:`fetch_metadata` (profile only), :meth:`list_exchanges`.
     Unsupported (raise :class:`YahooUnsupportedOperationError`, which the
     pipeline soft-fails): :meth:`fetch_fundamentals`, :meth:`list_tickers`.
-    Macro indicators inherit the empty default.
+    :meth:`fetch_macro_indicator` serves the series in :data:`MACRO_SERIES`
+    and nothing for any other pair.
     """
 
     source_id = "yahoo"
@@ -385,6 +400,29 @@ class YahooDataSource(DataSource):
                 volume=_volume(row["Volume"]),
             )
             for day, (_, row) in zip(days, _iter_rows(frame), strict=True)
+        ]
+
+    def fetch_macro_indicator(
+        self, country_iso: str, indicator: str
+    ) -> Iterable[MacroIndicatorRow]:
+        country = country_iso.upper()
+        symbol = MACRO_SERIES.get((country, indicator))
+        if symbol is None:
+            return []
+        frame = _clean_ohlcv(self._history(symbol, interval="1d", period="max"))
+        if frame.empty:
+            return []
+        days = _to_local_dates(pd.DatetimeIndex(frame.index))
+        return [
+            MacroIndicatorRow(
+                country_iso=country,
+                indicator=indicator,
+                observation_date=day,
+                period=None,
+                country_name=_COUNTRY_NAMES.get(country),
+                value=float(close),
+            )
+            for day, close in zip(days, frame["Close"], strict=True)
         ]
 
     def fetch_intraday_bars(

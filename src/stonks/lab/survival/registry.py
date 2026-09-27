@@ -82,6 +82,9 @@ SUITE_PRESETS: dict[str, tuple[str, ...]] = {
         "mcpt",
         "event_study",
         "vs_random",
+        # 9.5.2 and 9.5.5: combinatorial purged CV, named crisis windows
+        "cpcv",
+        "crisis",
     ),
 }
 
@@ -94,6 +97,7 @@ PRESET_OPTIONS: dict[str, dict[str, dict[str, Any]]] = {
     "promotion": {
         "mcpt": {"n_permutations": 200, "retune": "auto"},
         "cross_instrument": {"held_out_auto": 3},
+        "cpcv": {"n_groups": 6, "n_test_groups": 2},
     },
 }
 

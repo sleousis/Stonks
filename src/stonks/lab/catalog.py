@@ -4,7 +4,8 @@ Every concrete strategy defined in a public ``stonks.strategies.examples``
 module (modules starting with ``_`` hold shared helpers and are skipped),
 plus the wrapper strategies (:class:`MacroRegimeFilter`,
 :class:`FeatureRegimeFilter`, :class:`LastTradeFilter`,
-:class:`RegimeFilter`, :class:`TrailingStopWrapper`), keyed by ``id``. ``resolve_strategy``
+:class:`RegimeFilter`, :class:`TrailingStopWrapper`,
+:class:`LatentRegimeFilter`), keyed by ``id``. ``resolve_strategy``
 also accepts a class name or a ``module:Class`` path, and
 ``load_strategy_class`` returns the same class typed as a tradable
 :class:`~stonks.core.protocols.Strategy` for the lab.
@@ -21,6 +22,7 @@ import stonks.strategies.examples as _examples
 from stonks.strategies.base import BaseStrategy
 from stonks.strategies.feature_regime import FeatureRegimeFilter
 from stonks.strategies.last_trade_filter import LastTradeFilter
+from stonks.strategies.latent_regime import LatentRegimeFilter
 from stonks.strategies.macro_regime import MacroRegimeFilter
 from stonks.strategies.regime import RegimeFilter
 from stonks.strategies.trailing_stop import TrailingStopWrapper
@@ -34,6 +36,7 @@ _WRAPPERS: tuple[type[BaseStrategy], ...] = (
     LastTradeFilter,
     RegimeFilter,
     TrailingStopWrapper,
+    LatentRegimeFilter,
 )
 
 

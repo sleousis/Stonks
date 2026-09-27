@@ -45,6 +45,7 @@ def test_plan_defaults_to_every_non_wrapper_strategy_and_honours_exclude():
         "last_trade_filter",
         "regime_filter",
         "trailing_stop",
+        "latent_regime_filter",
     }
 
 
