@@ -4983,7 +4983,7 @@
                 "type": "null"
               }
             ],
-            "description": "Best finite objective score; null if none.",
+            "description": "Best finite objective score, null if none.",
             "title": "Best Score"
           },
           "budget": {
@@ -5199,7 +5199,7 @@
                 "type": "null"
               }
             ],
-            "description": "Best finite objective score; null if none.",
+            "description": "Best finite objective score, null if none.",
             "title": "Best Score"
           },
           "budget": {
@@ -5416,7 +5416,7 @@
                 "type": "null"
               }
             ],
-            "description": "Objective score; null for a failed trial.",
+            "description": "Objective score, null for a failed trial.",
             "title": "Score"
           },
           "status": {
@@ -7459,7 +7459,7 @@
                 "type": "null"
               }
             ],
-            "description": "Starting cash; default the configured amount.",
+            "description": "Starting cash. Default: the configured amount.",
             "title": "Initial Cash"
           },
           "name": {

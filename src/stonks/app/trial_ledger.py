@@ -41,7 +41,7 @@ class LedgerRunView(BaseModel):
     verdict: Literal["pass", "fail", "error"] | None
     n_trials: int = Field(description="Trials this run evaluated.")
     n_failed: int = Field(description="Trials that failed (no finite score).")
-    best_score: float | None = Field(description="Best finite objective score; null if none.")
+    best_score: float | None = Field(description="Best finite objective score, null if none.")
     universe_id: str | None = None
     tickers: int = Field(default=0, description="Tickers in the dataset.")
     interval: str | None = None
@@ -52,7 +52,7 @@ class LedgerRunView(BaseModel):
 class LedgerTrialView(BaseModel):
     trial_index: int
     params: dict[str, Any]
-    score: float | None = Field(description="Objective score; null for a failed trial.")
+    score: float | None = Field(description="Objective score, null for a failed trial.")
     n_bars: int | None
     status: Literal["ok", "failed"]
 

@@ -40,10 +40,10 @@ def register(t: ToolContext) -> None:
     async def mark_notifications_read(
         ids: Annotated[
             list[int] | None,
-            Field(max_length=500, description="notification ids; omit to mark all of yours"),
+            Field(max_length=500, description="notification ids, or omit to mark all of yours"),
         ] = None,
     ) -> dict[str, Any]:
         """Mark notifications read (all of yours when ids is omitted). Only
-        touches your own feed; returns how many changed and the new unread
+        touches your own feed, and returns how many changed and the new unread
         count."""
         return await t.post("/api/notifications/read", drop_none({"ids": ids}))

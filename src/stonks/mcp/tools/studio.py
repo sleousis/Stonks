@@ -256,7 +256,7 @@ def register(t: ToolContext) -> None:
         draft = await t.get(draft_path(draft_id), hints=HINTS)
         summary = {k: draft.get(k) for k in ("id", "name", "kind", "status")}
         if not confirm:
-            warnings = ["deletes the draft and its spec; this cannot be undone"]
+            warnings = ["deletes the draft and its spec, and this cannot be undone"]
             if draft.get("registered_strategy_id"):
                 warnings.append(
                     f"strategy {draft['registered_strategy_id']} registered from it stays"

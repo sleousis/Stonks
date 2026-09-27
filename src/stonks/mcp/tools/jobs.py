@@ -63,7 +63,7 @@ RESULT_ROUTES: dict[str, str] = {
 Metric = Literal["sharpe", "cagr", "final_return"]
 
 OptionalTickers = Annotated[
-    list[str] | None, Field(description="instrument ids; or give universe_id")
+    list[str] | None, Field(description="instrument ids, or give universe_id")
 ]
 UniverseId = Annotated[
     str | None,
@@ -77,16 +77,16 @@ EnsureData = Annotated[
     bool,
     Field(
         description="fetch the bars the run needs that the lake lacks first (a lab_ensure "
-        "job the run waits for; its report id is ensure_job_id in the result)"
+        "job the run waits for, and its id is ensure_job_id in the result)"
     ),
 ]
 Preflight = Annotated[
     bool | None,
-    Field(description="check the data before tuning (missing bars, gaps); default [lab] preflight"),
+    Field(description="check the data before tuning (missing bars, gaps). Default [lab] preflight"),
 ]
 StrictPreflight = Annotated[
     bool | None,
-    Field(description="treat preflight warnings as errors; default [lab] strict_preflight"),
+    Field(description="treat preflight warnings as errors. Default [lab] strict_preflight"),
 ]
 
 
@@ -186,7 +186,7 @@ def register(t: ToolContext) -> None:
         benchmark: Benchmark = None,
     ) -> dict[str, Any]:
         """Queue a backtest of one strategy over typed tickers (universe) or a
-        stored universe (universe_id) and a date window. Returns the job; use
+        stored universe (universe_id) and a date window. Returns the job. Use
         wait_for_job to get the metrics and equity curve. Simulated only:
         never places real orders."""
         _need_universe(universe, universe_id)
@@ -298,7 +298,7 @@ def register(t: ToolContext) -> None:
             list[str] | None,
             Field(
                 max_length=200,
-                description="strategy ids (e.g. momentum), class names or module:Class; "
+                description="strategy ids (e.g. momentum), class names or module:Class. "
                 "default every catalogued strategy",
             ),
         ] = None,
@@ -308,7 +308,7 @@ def register(t: ToolContext) -> None:
         preset: SurvivalPreset = None,
         survival_tests: Annotated[
             list[SurvivalTestName] | None,
-            Field(description="survival suite for every strategy; server default when omitted"),
+            Field(description="survival suite for every strategy, the server default when omitted"),
         ] = None,
         tuner: TunerName = "random",
         objective: ObjectiveName = "sharpe",
@@ -327,7 +327,7 @@ def register(t: ToolContext) -> None:
         """Queue a sweep: a lab run of every strategy (or the ones named) on
         the same tickers or stored universe and window, ranked best first.
         A strategy with a ticker parameter runs once per ticker. Returns the
-        job; wait_for_job gives the ranked rows. Every trial is counted in
+        job, and wait_for_job gives the ranked rows. Every trial is counted in
         the trial ledger. A sweep never registers a strategy: register the
         one you like with run_lab."""
         _need_universe(universe, universe_id)

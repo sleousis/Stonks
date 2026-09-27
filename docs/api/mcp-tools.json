@@ -1,5 +1,5 @@
 {
-  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsweeps, signal IC analyses and ingests; follow up with wait_for_job, and stop\none with cancel_job. Check get_golive_report before promote_strategy. Status changes,\ndraft register/enable/disable, broker syncs and production ticks need\nconfirm=true; call them first without it to get a preview and show it to the\nuser before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.\nEvery tool acts as the user who owns this server's API token (whoami shows the\nuser, role and scopes) and sees only that user's portfolios. Actions that need\na fresh second factor (switching to auto, connecting a broker, resuming the\nkill switch, restoring a backup) are refused here; the user does them in the\nweb app.",
+  "instructions": "Stonks research + trading system. Tools talk to the local REST API started\nwith `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,\nsweeps, signal IC analyses and ingests. Follow up with wait_for_job, and stop\none with cancel_job. Check get_golive_report before promote_strategy. Status changes,\ndraft register/enable/disable, broker syncs and production ticks need\nconfirm=true; call them first without it to get a preview and show it to the\nuser before confirming.\nrun_tick is a dry run unless dry_run=false, and a real tick is refused unless\nthe API reports a paper/simulated broker. No tool can change broker settings\nor enable live trading.\nEvery tool acts as the user who owns this server's API token (whoami shows the\nuser, role and scopes) and sees only that user's portfolios. Actions that need\na fresh second factor (switching to auto, connecting a broker, resuming the\nkill switch, restoring a backup) are refused here. The user does them in the\nweb app.",
   "resource_templates": [],
   "resources": [
     {
@@ -18,7 +18,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Add a note to one of your orders in the trade journal (why you\nagree or disagree with it, what you learned). Needs a trading\ntoken; the note is yours and shows in the console.",
+      "description": "Add a note to one of your orders in the trade journal (why you\nagree or disagree with it, what you learned). Needs a trading\ntoken. The note is yours and shows in the console.",
       "input_schema": {
         "properties": {
           "client_id": {
@@ -906,7 +906,7 @@
               }
             ],
             "default": null,
-            "description": "first day of the paper period; default all",
+            "description": "first day of the paper period, default all",
             "title": "Since"
           },
           "strategy_id": {
@@ -3060,7 +3060,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Mark notifications read (all of yours when ids is omitted). Only\ntouches your own feed; returns how many changed and the new unread\ncount.",
+      "description": "Mark notifications read (all of yours when ids is omitted). Only\ntouches your own feed, and returns how many changed and the new unread\ncount.",
       "input_schema": {
         "properties": {
           "ids": {
@@ -3077,7 +3077,7 @@
               }
             ],
             "default": null,
-            "description": "notification ids; omit to mark all of yours",
+            "description": "notification ids, or omit to mark all of yours",
             "title": "Ids"
           }
         },
@@ -3341,7 +3341,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Queue a backtest of one strategy over typed tickers (universe) or a\nstored universe (universe_id) and a date window. Returns the job; use\nwait_for_job to get the metrics and equity curve. Simulated only:\nnever places real orders.",
+      "description": "Queue a backtest of one strategy over typed tickers (universe) or a\nstored universe (universe_id) and a date window. Returns the job. Use\nwait_for_job to get the metrics and equity curve. Simulated only:\nnever places real orders.",
       "input_schema": {
         "properties": {
           "benchmark": {
@@ -3474,7 +3474,7 @@
               }
             ],
             "default": null,
-            "description": "instrument ids; or give universe_id",
+            "description": "instrument ids, or give universe_id",
             "title": "Universe"
           },
           "universe_id": {
@@ -4251,7 +4251,7 @@
           },
           "ensure_data": {
             "default": false,
-            "description": "fetch the bars the run needs that the lake lacks first (a lab_ensure job the run waits for; its report id is ensure_job_id in the result)",
+            "description": "fetch the bars the run needs that the lake lacks first (a lab_ensure job the run waits for, and its id is ensure_job_id in the result)",
             "title": "Ensure Data",
             "type": "boolean"
           },
@@ -4309,7 +4309,7 @@
               }
             ],
             "default": null,
-            "description": "check the data before tuning (missing bars, gaps); default [lab] preflight",
+            "description": "check the data before tuning (missing bars, gaps). Default [lab] preflight",
             "title": "Preflight"
           },
           "premortem": {
@@ -4377,7 +4377,7 @@
               }
             ],
             "default": null,
-            "description": "treat preflight warnings as errors; default [lab] strict_preflight",
+            "description": "treat preflight warnings as errors. Default [lab] strict_preflight",
             "title": "Strict Preflight"
           },
           "survival_tests": {
@@ -4444,7 +4444,7 @@
               }
             ],
             "default": null,
-            "description": "instrument ids; or give universe_id",
+            "description": "instrument ids, or give universe_id",
             "title": "Universe"
           },
           "universe_id": {
@@ -4610,7 +4610,7 @@
         "open_world": false,
         "read_only": false
       },
-      "description": "Queue a sweep: a lab run of every strategy (or the ones named) on\nthe same tickers or stored universe and window, ranked best first.\nA strategy with a ticker parameter runs once per ticker. Returns the\njob; wait_for_job gives the ranked rows. Every trial is counted in\nthe trial ledger. A sweep never registers a strategy: register the\none you like with run_lab.",
+      "description": "Queue a sweep: a lab run of every strategy (or the ones named) on\nthe same tickers or stored universe and window, ranked best first.\nA strategy with a ticker parameter runs once per ticker. Returns the\njob, and wait_for_job gives the ranked rows. Every trial is counted in\nthe trial ledger. A sweep never registers a strategy: register the\none you like with run_lab.",
       "input_schema": {
         "properties": {
           "benchmark": {
@@ -4732,7 +4732,7 @@
               }
             ],
             "default": null,
-            "description": "check the data before tuning (missing bars, gaps); default [lab] preflight",
+            "description": "check the data before tuning (missing bars, gaps). Default [lab] preflight",
             "title": "Preflight"
           },
           "premortem": {
@@ -4792,7 +4792,7 @@
               }
             ],
             "default": null,
-            "description": "strategy ids (e.g. momentum), class names or module:Class; default every catalogued strategy",
+            "description": "strategy ids (e.g. momentum), class names or module:Class. default every catalogued strategy",
             "title": "Strategies"
           },
           "strict_preflight": {
@@ -4805,7 +4805,7 @@
               }
             ],
             "default": null,
-            "description": "treat preflight warnings as errors; default [lab] strict_preflight",
+            "description": "treat preflight warnings as errors. Default [lab] strict_preflight",
             "title": "Strict Preflight"
           },
           "survival_tests": {
@@ -4823,7 +4823,7 @@
               }
             ],
             "default": null,
-            "description": "survival suite for every strategy; server default when omitted",
+            "description": "survival suite for every strategy, the server default when omitted",
             "title": "Survival Tests"
           },
           "train_ratio": {
@@ -4855,7 +4855,7 @@
               }
             ],
             "default": null,
-            "description": "instrument ids; or give universe_id",
+            "description": "instrument ids, or give universe_id",
             "title": "Universe"
           },
           "universe_id": {

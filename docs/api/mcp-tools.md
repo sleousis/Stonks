@@ -197,7 +197,7 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
-| `since` | date \| null | no | `null` | first day of the paper period; default all |
+| `since` | date \| null | no | `null` | first day of the paper period, default all |
 
 ### `get_health_report`
 
@@ -898,7 +898,7 @@ Queue background work on the API. Research data only, never orders.
 
 Add a note to one of your orders in the trade journal (why you
 agree or disagree with it, what you learned). Needs a trading
-token; the note is yours and shows in the console.
+token. The note is yours and shows in the console.
 
 Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
 
@@ -971,19 +971,19 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: no.
 ### `mark_notifications_read`
 
 Mark notifications read (all of yours when ids is omitted). Only
-touches your own feed; returns how many changed and the new unread
+touches your own feed, and returns how many changed and the new unread
 count.
 
 Safety: writes, non-destructive, idempotent, closed world. Needs confirm: no.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `ids` | list[integer] \| null | no | `null` | notification ids; omit to mark all of yours |
+| `ids` | list[integer] \| null | no | `null` | notification ids, or omit to mark all of yours |
 
 ### `run_backtest`
 
 Queue a backtest of one strategy over typed tickers (universe) or a
-stored universe (universe_id) and a date window. Returns the job; use
+stored universe (universe_id) and a date window. Returns the job. Use
 wait_for_job to get the metrics and equity curve. Simulated only:
 never places real orders.
 
@@ -993,7 +993,7 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 |-------|------|----------|---------|-------------|
 | `start` | date | yes |  | YYYY-MM-DD |
 | `end` | date | yes |  | YYYY-MM-DD |
-| `universe` | list[string] \| null | no | `null` | instrument ids; or give universe_id |
+| `universe` | list[string] \| null | no | `null` | instrument ids, or give universe_id |
 | `universe_id` | string \| null | no | `null` | a stored universe (see list_universes): its point-in-time members, delisted names included, instead of typed tickers |
 | `strategy_id` | string \| null | no | `null` | registered strategy id (or use class_path) |
 | `class_path` | string \| null | no | `null` | catalog class path, e.g. pkg.mod:Class |
@@ -1073,7 +1073,7 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 Queue a sweep: a lab run of every strategy (or the ones named) on
 the same tickers or stored universe and window, ranked best first.
 A strategy with a ticker parameter runs once per ticker. Returns the
-job; wait_for_job gives the ranked rows. Every trial is counted in
+job, and wait_for_job gives the ranked rows. Every trial is counted in
 the trial ledger. A sweep never registers a strategy: register the
 one you like with run_lab.
 
@@ -1083,12 +1083,12 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 |-------|------|----------|---------|-------------|
 | `start` | date | yes |  | YYYY-MM-DD |
 | `end` | date | yes |  | YYYY-MM-DD |
-| `universe` | list[string] \| null | no | `null` | instrument ids; or give universe_id |
+| `universe` | list[string] \| null | no | `null` | instrument ids, or give universe_id |
 | `universe_id` | string \| null | no | `null` | a stored universe (see list_universes): its point-in-time members, delisted names included, instead of typed tickers |
-| `strategies` | list[string] \| null | no | `null` | strategy ids (e.g. momentum), class names or module:Class; default every catalogued strategy |
+| `strategies` | list[string] \| null | no | `null` | strategy ids (e.g. momentum), class names or module:Class. default every catalogued strategy |
 | `exclude` | list[string] \| null | no | `null` | strategies to leave out |
 | `preset` | "quick" \| "standard" \| "promotion" \| null | no | `null` | named survival suite when survival_tests is omitted (default: promotion when registering, else quick) |
-| `survival_tests` | list[string] \| null | no | `null` | survival suite for every strategy; server default when omitted |
+| `survival_tests` | list[string] \| null | no | `null` | survival suite for every strategy, the server default when omitted |
 | `tuner` | "grid" \| "random" | no | `"random"` |  |
 | `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |
 | `budget` | integer | no | `20` | tuner trials each |
@@ -1098,8 +1098,8 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `cost_model` | "zero" \| "realistic" \| null | no | `null` | transaction-cost preset (see list_cost_models); default [backtest.costs] |
 | `benchmark` | string \| null | no | `null` | benchmark to compare against: auto (SPY.US when priced, else EW), EW (equal-weight universe), a ticker such as QQQ.US, or none; default [lab] benchmark |
 | `embargo_bars` | integer \| null | no | `null` | trading bars skipped between the train and validation windows (a strategy's label horizon raises it); default [lab] embargo_bars |
-| `preflight` | boolean \| null | no | `null` | check the data before tuning (missing bars, gaps); default [lab] preflight |
-| `strict_preflight` | boolean \| null | no | `null` | treat preflight warnings as errors; default [lab] strict_preflight |
+| `preflight` | boolean \| null | no | `null` | check the data before tuning (missing bars, gaps). Default [lab] preflight |
+| `strict_preflight` | boolean \| null | no | `null` | treat preflight warnings as errors. Default [lab] strict_preflight |
 | `hypothesis` | string \| null | no | `null` | the edge and who pays for it; recorded before tuning (trial ledger) |
 | `premortem` | string \| null | no | `null` | how the strategy is expected to fail; recorded |
 
@@ -1397,11 +1397,11 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: **
 | `class_path` | string | yes |  | catalog class path to tune |
 | `start` | date | yes |  | YYYY-MM-DD |
 | `end` | date | yes |  | YYYY-MM-DD |
-| `universe` | list[string] \| null | no | `null` | instrument ids; or give universe_id |
+| `universe` | list[string] \| null | no | `null` | instrument ids, or give universe_id |
 | `universe_id` | string \| null | no | `null` | a stored universe (see list_universes): its point-in-time members, delisted names included, instead of typed tickers |
-| `ensure_data` | boolean | no | `false` | fetch the bars the run needs that the lake lacks first (a lab_ensure job the run waits for; its report id is ensure_job_id in the result) |
-| `preflight` | boolean \| null | no | `null` | check the data before tuning (missing bars, gaps); default [lab] preflight |
-| `strict_preflight` | boolean \| null | no | `null` | treat preflight warnings as errors; default [lab] strict_preflight |
+| `ensure_data` | boolean | no | `false` | fetch the bars the run needs that the lake lacks first (a lab_ensure job the run waits for, and its id is ensure_job_id in the result) |
+| `preflight` | boolean \| null | no | `null` | check the data before tuning (missing bars, gaps). Default [lab] preflight |
+| `strict_preflight` | boolean \| null | no | `null` | treat preflight warnings as errors. Default [lab] strict_preflight |
 | `survival_tests` | list[string] \| null | no | `null` | survival suite; server default when omitted |
 | `tuner` | "grid" \| "random" | no | `"random"` |  |
 | `objective` | "sharpe" \| "cagr" \| "final_return" \| "cv_sharpe" \| "cv_cagr" \| "cv_final_return" | no | `"sharpe"` |  |

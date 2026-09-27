@@ -2562,7 +2562,7 @@ export type LedgerRunDetail = {
     /**
      * Best Score
      *
-     * Best finite objective score; null if none.
+     * Best finite objective score, null if none.
      */
     best_score: number | null;
     /**
@@ -2664,7 +2664,7 @@ export type LedgerRunView = {
     /**
      * Best Score
      *
-     * Best finite objective score; null if none.
+     * Best finite objective score, null if none.
      */
     best_score: number | null;
     /**
@@ -2764,7 +2764,7 @@ export type LedgerTrialView = {
     /**
      * Score
      *
-     * Objective score; null for a failed trial.
+     * Objective score, null for a failed trial.
      */
     score: number | null;
     /**
@@ -4029,7 +4029,7 @@ export type PortfolioCreate = {
     /**
      * Initial Cash
      *
-     * Starting cash; default the configured amount.
+     * Starting cash. Default: the configured amount.
      */
     initial_cash?: number | null;
     /**

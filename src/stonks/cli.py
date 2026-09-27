@@ -1291,7 +1291,7 @@ def users_reset_2fa(
     sole admin who lost the authenticator gets back in."""
     svc = _auth_service(_settings())
     user_id = _users_call(lambda: svc.reset_mfa_from_shell(email))
-    console.print(f"second factor cleared for {user_id}; they enrol again at the next sign-in")
+    console.print(f"second factor cleared for {user_id}, they enrol again at the next sign-in")
 
 
 @users_app.command("list")

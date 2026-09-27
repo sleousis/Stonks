@@ -114,7 +114,7 @@ class PortfolioCreate(BaseModel):
 
     name: PortfolioName
     initial_cash: float | None = Field(
-        default=None, gt=0, le=1e12, description="Starting cash; default the configured amount."
+        default=None, gt=0, le=1e12, description="Starting cash. Default: the configured amount."
     )
     base_currency: str = Field(default="USD", pattern=r"^[A-Z]{3}$")
 

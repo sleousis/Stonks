@@ -79,7 +79,7 @@ def register(t: ToolContext) -> None:
     async def add_journal_note(client_id: str, note: Note) -> dict[str, Any]:
         """Add a note to one of your orders in the trade journal (why you
         agree or disagree with it, what you learned). Needs a trading
-        token; the note is yours and shows in the console."""
+        token. The note is yours and shows in the console."""
         return await t.post(f"/api/tca/orders/{quote(client_id, safe='')}/notes", {"note": note})
 
     @server.tool(annotations=EDIT)

@@ -339,7 +339,7 @@ def register(t: ToolContext) -> None:
     async def get_golive_report(
         strategy_id: str,
         since: Annotated[
-            IsoDate | None, Field(description="first day of the paper period; default all")
+            IsoDate | None, Field(description="first day of the paper period, default all")
         ] = None,
     ) -> dict[str, Any]:
         """The go-live gate for one strategy: every check of its paper period

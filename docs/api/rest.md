@@ -1249,7 +1249,7 @@ Tunes the class the ``strategy`` ref points at (its ``params`` are ignored: the 
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `best_score` | number \| null | yes | Best finite objective score; null if none. |
+| `best_score` | number \| null | yes | Best finite objective score, null if none. |
 | `budget` | integer \| null | yes |  |
 | `end` | string \| null | no |  |
 | `finished_at` | date-time \| null | yes |  |
@@ -1277,7 +1277,7 @@ One recorded lab run: what was tested, why, and how it came out.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `best_score` | number \| null | yes | Best finite objective score; null if none. |
+| `best_score` | number \| null | yes | Best finite objective score, null if none. |
 | `budget` | integer \| null | yes |  |
 | `end` | string \| null | no |  |
 | `finished_at` | date-time \| null | yes |  |
@@ -1303,7 +1303,7 @@ One recorded lab run: what was tested, why, and how it came out.
 |-------|------|----------|-------------|
 | `n_bars` | integer \| null | yes |  |
 | `params` | object | yes |  |
-| `score` | number \| null | yes | Objective score; null for a failed trial. |
+| `score` | number \| null | yes | Objective score, null for a failed trial. |
 | `status` | "ok" \| "failed" | yes |  |
 | `trial_index` | integer | yes |  |
 
@@ -1834,7 +1834,7 @@ A new paper portfolio of yours (simulated fills on the Stonks ledger). Broker po
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `base_currency` | string | no |  |
-| `initial_cash` | number \| null | no | Starting cash; default the configured amount. |
+| `initial_cash` | number \| null | no | Starting cash. Default: the configured amount. |
 | `name` | string | yes |  |
 
 ### PortfolioRename
