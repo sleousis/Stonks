@@ -97,7 +97,9 @@ def default_jobs() -> list[JobConfig]:
     every four hours; a backup every night; due broker syncs every hour.
     ``universes_refresh`` skips while no universe is stored. The IB Gateway
     jobs (``broker_health`` every 5 minutes, ``ibkr_reauth_reminder`` on
-    Sunday at 18:00 New York time) skip while no gateway is configured."""
+    Sunday at 18:00 New York time) skip while no gateway is configured.
+    ``live_submit`` (open minus 20 minutes) sends approved order tickets and
+    skips while none is open."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -162,6 +164,15 @@ def default_jobs() -> list[JobConfig]:
             name="ibkr_reauth_reminder",
             action="ibkr_reauth_reminder",
             trigger=DailyTriggerConfig(at=time(18, 0), timezone="America/New_York", weekdays=[6]),
+            catch_up="none",
+        ),
+        # Approved order tickets go out in the window before the open
+        # (roadmap 19.8). A missed window is never caught up: unsent
+        # tickets expire and the next tick decides afresh.
+        JobConfig(
+            name="live_submit",
+            action="live_submit",
+            trigger=SessionTriggerConfig(anchor="open", offset_minutes=-20),
             catch_up="none",
         ),
     ]

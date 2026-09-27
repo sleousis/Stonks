@@ -320,3 +320,12 @@ def in_process_ibkr_reauth_reminder(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import ibkr_reauth_reminder_action
 
     return ibkr_reauth_reminder_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("live_submit")
+def in_process_live_submit(ctx: RunContext) -> JobOutcome:
+    """Order tickets live in the state DB only, so every backend sends them
+    the same way (the lake is not needed)."""
+    from stonks.scheduling.local import live_submit_action
+
+    return live_submit_action(ctx)

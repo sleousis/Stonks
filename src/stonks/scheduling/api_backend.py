@@ -380,3 +380,12 @@ def api_universes_refresh(ctx: RunContext) -> JobOutcome:
             step |= ensure_step(e_status, e_error, e_result)
         results[uid] = step
     return universes_outcome(results)
+
+
+@API_ACTIONS.register("live_submit")
+def api_live_submit(ctx: RunContext) -> JobOutcome:
+    """Order tickets live in the state DB only, so every backend sends them
+    the same way (the lake is not needed)."""
+    from stonks.scheduling.local import live_submit_action
+
+    return live_submit_action(ctx)

@@ -141,6 +141,20 @@ long_window = 120
 negative_days = 20
 min_fraction = 0.5
 
+[production.live]
+# Live trading at a real broker (roadmap 19). Stonks trades only the
+# positions it opened in a shared account.
+allow_manual_trades = true
+# Decide after the close, submit in the window before the next open
+# (order tickets, roadmap 19.8). Off: auto books send at once. Books with
+# an approve subscription, and runaway runs, always use tickets.
+submit_in_window = false
+
+[production.live.submit]
+calendar = "XNYS"
+window_minutes = 20                # the live_submit job fires at open minus this
+deadline_minutes = 2               # unsent tickets expire at open minus this
+
 [production.health]
 # `stonks health` thresholds.
 max_bar_age_days = 4

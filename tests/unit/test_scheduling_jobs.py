@@ -48,8 +48,13 @@ def test_default_jobs_build():
         "price_alerts",
         "broker_health",
         "ibkr_reauth_reminder",
+        "live_submit",
     }
     tick = by_name["tick"]
+    # 19.8: approved tickets go out before the open, never caught up late
+    submit = by_name["live_submit"]
+    assert submit.trigger == SessionTrigger("XNYS", "open", timedelta(minutes=-20))
+    assert submit.catch_up == "none"
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))
     assert tick.deadline == timedelta(minutes=60)
     assert tick.catch_up == "latest"

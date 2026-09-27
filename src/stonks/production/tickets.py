@@ -535,6 +535,15 @@ def awaiting_counts(state: SqliteState, *, owner_id: str | None = None) -> dict[
     return {r["portfolio_id"]: int(r["n"]) for r in rows}
 
 
+def open_ticket_count(state: SqliteState) -> int:
+    """Tickets nothing was sent for yet, plus submitted ones still working."""
+    rows = state.sql(
+        "SELECT COUNT(*) FROM order_tickets"
+        " WHERE status IN ('awaiting_approval', 'approved', 'submitted')"
+    )
+    return int(rows[0][0])
+
+
 def tickets_recorded(state: SqliteState) -> bool:
     """Whether the state DB has the ticket table (migration 029)."""
     return bool(
