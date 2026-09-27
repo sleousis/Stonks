@@ -116,7 +116,7 @@ services:
       disable: true
 
   caddy:
-    image: caddy:2.10-alpine
+    image: caddy:2.11-alpine
     restart: unless-stopped
     depends_on:
       api:
@@ -137,7 +137,7 @@ services:
 
   # One-shot backup tool, not started by `up`. See deploy/backup/.
   restic:
-    image: restic/restic:0.18.0
+    image: restic/restic:0.19.1
     profiles: ["backup"]
     env_file:
       - path: .env
