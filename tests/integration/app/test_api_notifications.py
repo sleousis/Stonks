@@ -255,3 +255,23 @@ def test_feed_unread_count_and_mark_read(client, settings):
     ).json()
     assert [i["id"] for i in page["items"]] == [first]
     assert client.get("/api/notifications", params={"limit": 0}, headers=AUTH).status_code == 422
+
+
+# ---- test notification -----------------------------------------------------------------
+
+
+def test_send_a_test_notification_to_yourself(client):
+    assert _subscribe(client).status_code == 201
+    sent = client.post("/api/notifications/test", headers=AUTH)
+    assert sent.status_code == 201, sent.text
+    body = sent.json()
+    assert body["notification_id"] is not None
+    assert body["deliveries"] >= 1 and "webpush" in body["channels"]
+    feed = client.get("/api/notifications", headers=AUTH).json()
+    assert feed["items"][0]["title"] == "Test notification"
+    assert feed["items"][0]["id"] == body["notification_id"]
+
+
+def test_a_test_notification_needs_a_signed_in_person(client, settings, services):
+    with TestClient(create_app(settings, services=services), client=REMOTE) as remote:
+        assert remote.post("/api/notifications/test").status_code == 401
