@@ -121,6 +121,26 @@ quit_multiple = 1.5
 auto_demote = false                # true: also move it to shadow
 min_eval_days = 126                # evaluation horizon before a retire needs no override
 
+[production.risk_monitor]
+# Live risk (BL-47): after each real tick, store each book's one-day VaR and
+# ES and score yesterday's forecast. Alerts when the violation ratio leaves
+# ratio_low..ratio_high after min_window scored days.
+enabled = true
+lam = 0.94                         # EWMA decay of the covariance
+window = 250                       # daily returns behind a forecast
+min_window = 60
+ratio_low = 0.5
+ratio_high = 1.5
+
+[production.decay]
+# Alpha decay per strategy sleeve: fires when the short-window IR stays
+# negative for negative_days, or the long-window IR falls below
+# min_fraction of the backtest IR.
+short_window = 60
+long_window = 120
+negative_days = 20
+min_fraction = 0.5
+
 [production.health]
 # `stonks health` thresholds.
 max_bar_age_days = 4

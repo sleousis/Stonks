@@ -153,3 +153,30 @@ def test_the_quit_rule_reaches_the_tick_settings():
         update={"auto_demote": True}
     )
     assert build_tick_settings(settings, ["A.US"]).quit_rule.auto_demote is True
+
+
+def test_risk_monitor_and_decay_reach_the_tick_settings():
+    from stonks.production.decay import DecaySettings
+    from stonks.production.monitor_settings import RiskMonitorSettings
+
+    settings = _settings()
+    settings.production.risk_monitor = RiskMonitorSettings(lam=0.9, window=100)
+    settings.production.decay = DecaySettings(short_window=40)
+    built = build_tick_settings(settings, ["A.US"])
+    assert built.risk_monitor == RiskMonitorSettings(lam=0.9, window=100)
+    assert built.decay == DecaySettings(short_window=40)
+
+
+def test_the_risk_monitor_hook_reads_the_tick_settings():
+    from stonks.production.decay import DecaySettings
+    from stonks.production.hooks.risk_monitor import _settings as hook_settings
+    from stonks.production.monitor_settings import RiskMonitorSettings
+
+    tick = TickSettings(
+        universe=["A.US"],
+        risk_monitor=RiskMonitorSettings(enabled=False),
+        decay=DecaySettings(negative_days=5),
+    )
+    assert hook_settings(tick, "risk_monitor", RiskMonitorSettings).enabled is False
+    assert hook_settings(tick, "decay", DecaySettings).negative_days == 5
+    assert TickSettings(universe=[]).risk_monitor == RiskMonitorSettings()

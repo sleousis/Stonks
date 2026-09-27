@@ -26,6 +26,8 @@ from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.ops.config import BackupConfig
 from stonks.portfolio.settings import ConstructionSettings
+from stonks.production.decay import DecaySettings
+from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.rules.settings import RuleSettings
 from stonks.scheduling.config import SchedulerConfig
@@ -247,6 +249,11 @@ class ProductionConfig(BaseModel):
     # to shadow) an active strategy whose attributed drawdown passes
     # quit_multiple x its backtest drawdown.
     quit_rule: QuitRuleSettings = QuitRuleSettings()
+    # ``[production.risk_monitor]`` (BL-47): daily VaR and ES snapshots and
+    # the violation checks after each real tick.
+    risk_monitor: RiskMonitorSettings = RiskMonitorSettings()
+    # ``[production.decay]``: the alpha-decay check per strategy sleeve.
+    decay: DecaySettings = DecaySettings()
 
 
 class GoLivePolicy(BaseModel):

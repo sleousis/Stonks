@@ -4,8 +4,8 @@ scores and, per strategy sleeve, the alpha-decay check (see
 :mod:`stonks.production.risk_metrics`). Alerts go through the configured
 notification router. Skipped in a dry run.
 
-Settings come from ``TickHookContext.settings.risk_monitor`` and
-``.decay`` when the tick carries them, the defaults otherwise."""
+Settings come from ``[production.risk_monitor]`` and ``[production.decay]``
+through ``TickSettings``. A context without them gets the defaults."""
 
 from __future__ import annotations
 
@@ -14,7 +14,8 @@ from typing import Any
 
 from stonks.production.decay import DecaySettings
 from stonks.production.hooks import PostTickHook, TickHookContext, register_hook
-from stonks.production.risk_metrics import RiskMonitorSettings, record_risk_snapshots
+from stonks.production.monitor_settings import RiskMonitorSettings
+from stonks.production.risk_metrics import record_risk_snapshots
 
 
 def _settings[T: (RiskMonitorSettings, DecaySettings)](settings: Any, name: str, cls: type[T]) -> T:

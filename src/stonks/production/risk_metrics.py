@@ -33,11 +33,11 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, Field
 from scipy.stats import chi2, norm
 
 from stonks.logging import get_logger
 from stonks.production.decay import DecaySettings, evaluate_decay, expected_ir
+from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.prices import load_history
 from stonks.store.state import SqliteState
 
@@ -69,22 +69,6 @@ _log = get_logger("stonks.production.risk_metrics")
 LEVELS = (0.95, 0.99)
 #: ``strategy_id`` of a whole portfolio's row (a sleeve row names its strategy).
 PORTFOLIO_BOOK = ""
-
-
-class RiskMonitorSettings(BaseModel):
-    """Live risk monitoring (``[production.risk_monitor]`` when wired)."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    enabled: bool = True
-    #: EWMA decay (RiskMetrics daily 0.94).
-    lam: float = Field(default=0.94, gt=0.0, lt=1.0)
-    #: Daily returns behind a forecast, and days in the violation window.
-    window: int = Field(default=250, ge=20, le=2000)
-    #: Scored days before the violation ratio is judged (health, alerts).
-    min_window: int = Field(default=60, ge=1)
-    ratio_low: float = Field(default=0.5, ge=0.0)
-    ratio_high: float = Field(default=1.5, gt=0.0)
 
 
 # ---- the math ----------------------------------------------------------------------

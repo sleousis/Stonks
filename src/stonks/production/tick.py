@@ -108,6 +108,7 @@ from stonks.production.corporate_actions import (
     record_plan,
     working_orders,
 )
+from stonks.production.decay import DecaySettings
 from stonks.production.halts import active_halts
 from stonks.production.hooks import (
     GateContext,
@@ -120,6 +121,7 @@ from stonks.production.hooks import (
 )
 from stonks.production.hooks.attribution import load_attribution
 from stonks.production.ledger import ledger_columns, ledger_filter
+from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.portfolio_runs import PortfolioRun, record_run, runs_recorded
 from stonks.production.prices import PriceBook, held_tickers, load_history, load_prices
 from stonks.production.quit_rule import QuitRuleSettings
@@ -199,6 +201,10 @@ class TickSettings:
     model_books: Literal["shadow", "all"] = "shadow"
     #: ``[production.quit_rule]``: read by the ``quit_rule`` tick hook.
     quit_rule: QuitRuleSettings = field(default_factory=QuitRuleSettings)
+    #: ``[production.risk_monitor]`` and ``[production.decay]``: read by the
+    #: ``risk_monitor`` tick hook.
+    risk_monitor: RiskMonitorSettings = field(default_factory=RiskMonitorSettings)
+    decay: DecaySettings = field(default_factory=DecaySettings)
     #: A scoped tick (explicit tickers, e.g. a crypto-only job) trades only
     #: tickers of ``universe``: holdings outside it are marked but never
     #: traded, not even sold (TO-04). The full tick over the configured
