@@ -22,7 +22,7 @@ Rates live in the lake table `fx_rates`. One row per pair and day: how many unit
 uv run stonks ingest fx --pairs EURUSD,GBPUSD --since 2024-01-01
 ```
 
-EODHD serves them (`EURUSD.FOREX`). To convert on a day, Stonks takes the latest rate on or before that day. It uses the inverse pair when only that one is stored, and a cross through USD when needed. London prices in pence (`GBX`) count as GBP / 100.
+EODHD serves them (`EURUSD.FOREX`). To convert on a day, Stonks takes the latest rate on or before that day. It uses the inverse pair when only that one is stored, and a cross through USD when needed. London prices in pence (`GBX`) count as GBP / 100. Orders, stops and the portfolio view show London prices in pounds, and a manual limit for a London stock is in pounds too.
 
 A missing rate is never guessed. The amount stays unconverted, the base total is empty, and `fx_missing` names the currency. `GET /api/fx/rate?base=EUR&quote=USD` shows the rate Stonks would use.
 

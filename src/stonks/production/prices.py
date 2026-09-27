@@ -5,6 +5,10 @@ staleness window may still *mark* a holding and *sell* it (the last known
 close is the best estimate there is), but it must never fund a *new buy*
 (a delisted or failed-ingest ticker would otherwise be bought at a
 months-old price).
+
+Prices come out in the major currency unit: a London close the lake keeps
+in pence is read in pounds (:mod:`stonks.fx.units`), so decision prices,
+limits and sizing match the broker and the cash.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ import pandas as pd
 
 from stonks.core.timeutil import day_start
 from stonks.core.types import Order
+from stonks.fx.units import price_scales, quote_scale
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
 
@@ -65,6 +70,7 @@ def load_prices(
     volumes: dict[str, float] = {}
     fresh: set[str] = set()
     bar_dates: dict[str, date] = {}
+    scales = price_scales(lake, tickers)
     for record in df.to_dict("records"):
         ticker = str(record["ticker"])
         bar_date: date = pd.Timestamp(record["date"]).date()  # type: ignore[assignment]
@@ -72,7 +78,7 @@ def load_prices(
         if is_fresh:
             fresh.add(ticker)
         if is_fresh or ticker in held_set:
-            prices[ticker] = float(record["close"])
+            prices[ticker] = float(record["close"]) * scales.get(ticker, 1.0)
             bar_dates[ticker] = bar_date
             if not pd.isna(record["volume"]):
                 volumes[ticker] = float(record["volume"])
@@ -83,32 +89,41 @@ _HISTORY_COLUMNS = ["open", "high", "low", "close", "volume"]
 
 
 def load_history(
-    lake: DuckDBLake, tickers: Sequence[str], as_of: date, *, bars: int = 260
+    lake: DuckDBLake,
+    tickers: Sequence[str],
+    as_of: date,
+    *,
+    bars: int = 260,
+    major_units: bool = True,
 ) -> dict[str, pd.DataFrame]:
     """The last ``bars`` daily bars at or before ``as_of`` per ticker, in one
     query: a date-indexed frame (oldest first) of adjusted
     ``open, high, low, close, volume``. OHLC are scaled by
     ``adj_close / close`` (raw where either is missing). Tickers without
-    bars are absent."""
+    bars are absent. ``major_units`` (production) reads pence as pounds; a
+    backtest passes ``False`` to stay in the lake's units."""
     if not tickers or bars < 1:
         return {}
     df = lake.sql(
         """
-        SELECT ticker, CAST(timestamp AS DATE) AS date,
-               open, high, low, close, adj_close, volume
+        SELECT b.ticker, CAST(b.timestamp AS DATE) AS date,
+               b.open, b.high, b.low, b.close, b.adj_close, b.volume, i.currency
           FROM (
             SELECT *, row_number() OVER (PARTITION BY ticker ORDER BY timestamp DESC) AS rn
               FROM bars
              WHERE interval = '1d' AND ticker = ANY(?) AND timestamp < ?
-          )
-         WHERE rn <= ?
-         ORDER BY ticker, timestamp
+          ) b
+          LEFT JOIN instruments i ON i.id = b.ticker
+         WHERE b.rn <= ?
+         ORDER BY b.ticker, b.timestamp
         """,
         [sorted(set(tickers)), day_start(as_of + timedelta(days=1)), bars],
     )
     if df.empty:
         return {}
     factor = (df["adj_close"] / df["close"]).where(df["close"] > 0).fillna(1.0)
+    if major_units:  # in the same query: no second read per call
+        factor = factor * df["currency"].map(quote_scale).astype(float)
     for col in ("open", "high", "low", "close"):
         df[col] = df[col] * factor
     df["date"] = pd.to_datetime(df["date"])

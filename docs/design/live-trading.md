@@ -225,7 +225,7 @@ flowchart LR
 - Ambiguity is never guessed. Several matches, or a match whose currency or primary exchange disagrees with the instrument, refuse the ticker.
 - Entries are re-verified weekly and when a split, ticker change or delisting reaches the lake.
 - The reverse map for positions is by `conId`. An IBKR position with no mapped ticker is kept with its raw symbol, as the connection seam already does ("not covered"), and counts as drift for an auto book.
-- London prices are quoted in pence (GBX) for many stocks. `contracts.py` keeps the price unit next to the currency, and the band and notional math converts both ways.
+- London prices are quoted in pence (GBX) for many stocks. The lake keeps EODHD's pence, marked by `instruments.currency = 'GBX'`. Production reads every price in the major unit (`fx/units.py`): the tick's prices and history, protective stop ATRs, risk marks, TCA benchmarks and the portfolio view. So a decision price, a limit, a stop and the sizing are in pounds, as the IBKR adapter and the cash are. Research keeps the lake's units. Flex statements for London come out in pounds too: a `GBX` statement is divided by 100, and so is a price in pence next to proceeds in pounds.
 
 ### Market data and pacing
 

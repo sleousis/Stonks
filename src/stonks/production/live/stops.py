@@ -482,8 +482,10 @@ def load_atr(
     lake: DuckDBLake | None, tickers: Sequence[str], as_of: date, window: int
 ) -> tuple[dict[str, float], dict[str, float]]:
     """``(ATR, last close)`` per ticker from the traded (unadjusted) daily
-    bars up to ``as_of``. A ticker with too few bars has no ATR."""
+    bars up to ``as_of``, in the major currency unit (pounds, not pence).
+    A ticker with too few bars has no ATR."""
     from stonks.features.indicators import atr as wilder_atr
+    from stonks.fx.units import price_scales
 
     if lake is None or not tickers:
         return {}, {}
@@ -499,11 +501,13 @@ def load_atr(
     )
     atrs: dict[str, float] = {}
     closes: dict[str, float] = {}
+    scales = price_scales(lake, tickers)
     for ticker, group in df.groupby("ticker", sort=True):
         name = str(ticker)
-        high = pd.Series(group["high"], dtype=float)
-        low = pd.Series(group["low"], dtype=float)
-        close = pd.Series(group["close"], dtype=float)
+        scale = scales.get(name, 1.0)
+        high = pd.Series(group["high"], dtype=float) * scale
+        low = pd.Series(group["low"], dtype=float) * scale
+        close = pd.Series(group["close"], dtype=float) * scale
         closes[name] = float(close.iloc[-1])
         series = wilder_atr(high, low, close, window)
         last = series.iloc[-1] if len(series) else float("nan")

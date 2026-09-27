@@ -139,6 +139,27 @@ def _statement(el: ET.Element) -> FlexStatement:
     )
 
 
+#: How close ``price * quantity`` must come to ``100 * proceeds`` to read the
+#: price as pence against proceeds in pounds.
+_PENCE_TOLERANCE = 0.02
+
+
+def _major_units(
+    price: float, quantity: float, proceeds: float | None, currency: str | None
+) -> tuple[float, float | None, str | None]:
+    """London in pounds, as the IBKR adapter works: a statement in pence
+    (``GBX``) is divided by 100, and so is a price in pence next to proceeds
+    in pounds (found from ``price * quantity`` being 100 times the proceeds)."""
+    code = (currency or "").strip()
+    if code.upper() == "GBX" or code == "GBp":
+        return price / 100.0, None if proceeds is None else proceeds / 100.0, "GBP"
+    if code.upper() == "GBP" and proceeds and quantity:
+        ratio = abs(price * quantity) / abs(proceeds)
+        if abs(ratio - 100.0) <= 100.0 * _PENCE_TOLERANCE:
+            return price / 100.0, proceeds, "GBP"
+    return price, proceeds, currency
+
+
 def _trade(r: ET.Element) -> FlexTrade | None:
     trade_id = _text(r.get("tradeID"))
     exec_id = _text(r.get("ibExecID"))
@@ -146,6 +167,9 @@ def _trade(r: ET.Element) -> FlexTrade | None:
     price = _num(r.get("tradePrice"))
     if (trade_id is None and exec_id is None) or quantity is None or price is None:
         return None
+    price, proceeds, currency = _major_units(
+        price, quantity, _num(r.get("proceeds")), _text(r.get("currency"))
+    )
     return FlexTrade(
         trade_id=trade_id or exec_id or "",
         exec_id=exec_id,
@@ -154,13 +178,13 @@ def _trade(r: ET.Element) -> FlexTrade | None:
         quantity=quantity,
         price=price,
         trade_date=_date(r.get("tradeDate")),
-        currency=_text(r.get("currency")),
+        currency=currency,
         asset_class=_text(r.get("assetCategory")),
         con_id=_int(r.get("conid")),
         isin=_text(r.get("isin")),
         listing_exchange=_text(r.get("listingExchange")),
         settle_date=_date(r.get("settleDateTarget")),
-        proceeds=_num(r.get("proceeds")),
+        proceeds=proceeds,
         commission=_num(r.get("ibCommission")),
         commission_currency=_text(r.get("ibCommissionCurrency")),
         order_ref=_text(r.get("orderReference")),

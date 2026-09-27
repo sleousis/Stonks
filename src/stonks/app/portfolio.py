@@ -499,6 +499,10 @@ class PortfolioService:
         )
 
     def _currencies(self, tickers: list[str]) -> dict[str, str]:
+        """Each ticker's currency in its major unit (``GBP`` for a London
+        stock the lake quotes in pence), as :meth:`_latest_closes` prices it."""
+        from stonks.fx import normalize_currency
+
         if not tickers:
             return {}
         with self._ctx.lake() as lake:
@@ -506,12 +510,22 @@ class PortfolioService:
                 "SELECT id, currency FROM instruments WHERE id = ANY(?) AND currency IS NOT NULL",
                 [tickers],
             )
-        return {r.id: str(r.currency).upper() for r in df.itertuples(index=False) if r.currency}
+        return {
+            r.id: normalize_currency(str(r.currency))[0]
+            for r in df.itertuples(index=False)
+            if r.currency
+        }
 
     def _latest_closes(self, tickers: list[str]) -> dict[str, tuple[float, date]]:
+        """The latest close per ticker in the major currency unit: the
+        ledger's average cost is in pounds, so a pence close would be 100
+        times too high."""
+        from stonks.fx.units import price_scales
+
         if not tickers:
             return {}
         with self._ctx.lake() as lake:
+            scales = price_scales(lake, tickers)
             df = lake.sql(
                 """
                 SELECT ticker, max(date) AS date, arg_max(close, date) AS close
@@ -522,7 +536,10 @@ class PortfolioService:
                 [tickers],
             )
         return {
-            r.ticker: (float(r.close), r.date.date() if isinstance(r.date, datetime) else r.date)
+            r.ticker: (
+                float(r.close) * scales.get(r.ticker, 1.0),
+                r.date.date() if isinstance(r.date, datetime) else r.date,
+            )
             for r in df.itertuples(index=False)
         }
 

@@ -86,6 +86,17 @@ def test_foreign_holding_converts_at_the_rate(settings, foreign, services):
     assert insights.total_value_base == pytest.approx(insights.cash + 2.0 * pos.market_value)
 
 
+def test_a_pence_quoted_holding_is_shown_in_pounds(settings, seeded, services):
+    """The ledger's average cost is in pounds, so the mark must be too."""
+    before = services.portfolio.current("pf_default").positions[0]
+    _set_currency(settings, "UP.US", "GBX")
+    _add_rate(settings, "GBP", "USD", date(2026, 1, 1), 1.25)
+    pos = services.portfolio.current("pf_default").positions[0]
+    assert pos.currency == "GBP"
+    assert pos.price == pytest.approx(before.price / 100.0)
+    assert pos.market_value_base == pytest.approx(pos.market_value * 1.25)
+
+
 def test_tca_summary_money_in_base(settings, foreign, services):
     from stonks.app.tca import TcaService
 
