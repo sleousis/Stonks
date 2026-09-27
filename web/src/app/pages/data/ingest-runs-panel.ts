@@ -42,7 +42,9 @@ const STATUSES = ['running', 'ok', 'partial', 'error'] as const;
       <div class="panel-head">
         <h2 id="runs-title">Data updates</h2>
         @if (page(); as p) {
-          <span class="muted num count">{{ p.total }} {{ p.total === 1 ? 'update' : 'updates' }}</span>
+          <span class="muted num count"
+            >{{ p.total }} {{ p.total === 1 ? 'update' : 'updates' }}</span
+          >
         }
       </div>
       <div class="filters">

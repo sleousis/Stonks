@@ -40,15 +40,15 @@ describe('universe form', () => {
       include_delisted: false,
       start_date: '2020-01-01',
     });
-    expect(specFromFields('rule', { ...f, minPrice: '', assetClasses: ['equity', 'crypto'] })).toEqual(
-      {
-        rebalance: 'monthly',
-        start: '2020-01-01',
-        end: null,
-        min_adv: 1000000,
-        asset_classes: ['equity', 'crypto'],
-      },
-    );
+    expect(
+      specFromFields('rule', { ...f, minPrice: '', assetClasses: ['equity', 'crypto'] }),
+    ).toEqual({
+      rebalance: 'monthly',
+      start: '2020-01-01',
+      end: null,
+      min_adv: 1000000,
+      asset_classes: ['equity', 'crypto'],
+    });
     expect(specFromFields('index', f)).toEqual({
       index_id: 'sp500',
       source: 'wikipedia_sp500',

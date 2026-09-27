@@ -75,7 +75,9 @@ export class UniversesPage {
   protected readonly kindHint = KIND_HINT;
   protected readonly rebalances = Object.entries(REBALANCE_LABEL) as [Rebalance, string][];
   protected readonly assetClasses = Object.entries(ASSET_CLASS_LABEL);
-  protected readonly dataSources = Object.entries(SOURCE_LABELS).filter(([id]) => id !== 'defillama');
+  protected readonly dataSources = Object.entries(SOURCE_LABELS).filter(
+    ([id]) => id !== 'defillama',
+  );
   protected readonly universeKey = (u: UniverseView) => u.id;
 
   protected readonly columns: TableColumn<UniverseView>[] = [

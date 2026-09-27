@@ -252,7 +252,11 @@ export class SchedulePage {
       };
     }
     if (!this.broker.hasValue()) return null;
-    const ticket = tickTicket(this.broker.value(), { asOf: '', tickers: '' }, 'Run the trading run now?');
+    const ticket = tickTicket(
+      this.broker.value(),
+      { asOf: '', tickers: '' },
+      'Run the trading run now?',
+    );
     return {
       ...ticket,
       message: `Runs now, outside the schedule. ${ticket.message}`,

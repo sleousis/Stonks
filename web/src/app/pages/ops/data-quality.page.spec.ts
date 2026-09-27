@@ -102,7 +102,12 @@ describe('DataQualityPage', () => {
     fixture.detectChanges();
     expect(el.querySelector('app-loading-state')).toBeNull();
     expect(el.textContent).toContain('T0.US');
-    req.flush({ ...FLAGS, items: [{ ...FLAGS.items[0], ticker: 'LAST.US' }], total: 60, offset: 50 });
+    req.flush({
+      ...FLAGS,
+      items: [{ ...FLAGS.items[0], ticker: 'LAST.US' }],
+      total: 60,
+      offset: 50,
+    });
     await settle();
     expect(el.textContent).toContain('LAST.US');
     expect(el.textContent).not.toContain('T0.US');

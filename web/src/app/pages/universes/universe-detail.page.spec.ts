@@ -157,7 +157,9 @@ describe('UniverseDetailPage', () => {
     );
     await settle();
     const error = el.querySelector('app-job-progress app-error-state')!;
-    expect(error.textContent).toContain('Fetch missing data finished, but its result could not load');
+    expect(error.textContent).toContain(
+      'Fetch missing data finished, but its result could not load',
+    );
     error.querySelector('button')!.click();
     (await nextRequest(http, '/api/universes/ensure/job_e/result')).flush({
       interval: '1d',

@@ -77,7 +77,7 @@ describe('tick confirmation', () => {
       tickConfirmOptions(false, ALPACA_LIVE),
       tickTicket(ALPACA_LIVE, { asOf: '', tickers: '' }),
     ]) {
-      expect(`${opts.title} ${opts.message}`).not.toMatch(/tick|shadow/i);
+      expect(`${opts.title} ${opts.message}`).not.toMatch(/\bticks?\b|shadow/i);
     }
     expect(() => tickConfirmOptions(false, null)).toThrow(/trading run/);
   });

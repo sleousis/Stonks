@@ -169,7 +169,8 @@ function fieldErrors(kind: UniverseKind, f: KindFields): UniverseFormErrors {
     const bad = (t: string) => !!t.trim() && (numberOrNull(t) === null || Number(t) < 0);
     if (bad(f.minAdv)) errors.minAdv = 'Enter a number of 0 or more, or leave it blank.';
     if (bad(f.minPrice)) errors.minPrice = 'Enter a number of 0 or more, or leave it blank.';
-    if (f.start && f.end && f.start > f.end) errors.window = 'The start must be on or before the end.';
+    if (f.start && f.end && f.start > f.end)
+      errors.window = 'The start must be on or before the end.';
   }
   return errors;
 }

@@ -52,7 +52,8 @@
       <h2 id="members-title">Members on a date</h2>
       @if (members.hasValue()) {
         <span class="muted num"
-          >{{ members.value().count | num: { digits: 0 } }} on {{ day(members.value().as_of) }}</span
+          >{{ members.value().count | num: { digits: 0 } }} on
+          {{ day(members.value().as_of) }}</span
         >
       }
     </div>

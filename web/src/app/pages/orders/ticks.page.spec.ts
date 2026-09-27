@@ -86,7 +86,8 @@ describe('TicksPage', () => {
     }
     const el = fixture.nativeElement as HTMLElement;
     const rows = [...el.querySelectorAll('tbody tr')];
-    const rowOf = (id: string) => rows.find((r) => r.querySelector(`a[href="/orders/ticks/${id}"]`))!;
+    const rowOf = (id: string) =>
+      rows.find((r) => r.querySelector(`a[href="/orders/ticks/${id}"]`))!;
     expect(rowOf('t1').textContent).toContain('Dry run');
     expect(rowOf('t2').querySelector('app-mode-stamp')?.textContent).toContain('LIVE');
     expect(rowOf('t3').textContent).not.toContain('Dry run');
