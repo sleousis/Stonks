@@ -194,6 +194,7 @@ def place_manual_order(
         raise ManualOrderRefused("a limit order needs a positive limit price")
 
     external = book.broker is not None
+    marker = 0
     if external:
         assert book.broker is not None
         if not isinstance(book.broker, OrderStateSource):
@@ -213,6 +214,7 @@ def place_manual_order(
             )
         portfolio = book.broker.fetch_portfolio()
     else:
+        marker = _snapshot_marker(state, book.portfolio_id)
         portfolio = _load_or_seed_portfolio(state, book.initial_cash, book.portfolio_id)
 
     held = [t for t, q in portfolio.positions.items() if abs(q) > _QTY_EPS]
@@ -348,7 +350,7 @@ def place_manual_order(
         assert book.broker is not None
         return _place_at_broker(state, book, order, decided, result)
     return _fill_simulated(
-        state, book, order, decided, result, portfolio, priced, asset_classes, tick, now
+        state, book, order, decided, result, portfolio, priced, asset_classes, tick, now, marker
     )
 
 
@@ -363,6 +365,7 @@ def _fill_simulated(
     asset_classes: Mapping[str, str],
     tick: TickSettings,
     now: datetime,
+    marker: int,
 ) -> ManualResult:
     price = result.reference_price
     status: OrderStatus = "filled"
@@ -392,6 +395,15 @@ def _fill_simulated(
             reference = broker.reference_price(decided.client_id)
             arrival = float(reference) if reference is not None else None
     with state.transaction():
+        # The book was read outside this write lock: another order (the
+        # same key twice, a double click) or a tick may have landed since.
+        existing = _existing(state, decided.client_id)
+        if existing is None and (
+            _snapshot_marker(state, book.portfolio_id) != marker or _tick_running(state)
+        ):
+            raise ManualOrderRefused("the book changed while this order was checked; try again")
+        if existing is not None:
+            return _duplicate(existing, order, book.portfolio_id)
         _record_order(state, decided, status=status, reason=reason, portfolio_id=book.portfolio_id)
         _mark_manual(state, decided.client_id, order)
         if fill is not None:
@@ -604,6 +616,16 @@ def change_manual_order(
 
 
 # ---- helpers -----------------------------------------------------------------------
+
+
+def _snapshot_marker(state: SqliteState, portfolio_id: str) -> int:
+    """The newest snapshot id of the book (0 for none): it changes whenever
+    anything writes the book's ledger."""
+    row = state.sql(
+        "SELECT COALESCE(MAX(id), 0) AS m FROM portfolio_snapshots WHERE portfolio_id = ?",
+        [portfolio_id],
+    )[0]
+    return int(row["m"])
 
 
 def _existing(state: SqliteState, client_id: str) -> Any | None:

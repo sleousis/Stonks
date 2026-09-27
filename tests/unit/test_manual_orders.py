@@ -580,3 +580,61 @@ def test_change_waits_for_a_confirmed_cancel(state, lake, tick, portfolio_id, ow
             now=NOW,
         )
     assert list(broker.orders) == [first.client_id]
+
+
+def _race(monkeypatch, state, lake, tick, portfolio_id, owner, other_key: str) -> None:
+    """While the first order is checked, another one lands on the book."""
+    import stonks.production.manual as manual
+
+    real = manual.load_prices
+    fired = {"done": False}
+
+    def racing(*args, **kw):
+        if not fired["done"]:
+            fired["done"] = True
+            place_manual_order(
+                state,
+                lake,
+                _order(portfolio_id, owner, client_key=other_key),
+                _book(portfolio_id, owner),
+                tick,
+                now=NOW,
+            )
+        return real(*args, **kw)
+
+    monkeypatch.setattr(manual, "load_prices", racing)
+
+
+def test_a_concurrent_order_on_a_simulated_book_is_not_lost(
+    monkeypatch, state, lake, tick, portfolio_id, owner
+):
+    _race(monkeypatch, state, lake, tick, portfolio_id, owner, other_key="other")
+    with pytest.raises(ManualOrderRefused, match="changed"):
+        place_manual_order(
+            state,
+            lake,
+            _order(portfolio_id, owner, client_key="mine"),
+            _book(portfolio_id, owner),
+            tick,
+            now=NOW,
+        )
+    snap = state.sql(
+        "SELECT positions_json FROM portfolio_snapshots WHERE portfolio_id = ?"
+        " ORDER BY id DESC LIMIT 1",
+        [portfolio_id],
+    )[0]
+    assert json.loads(snap["positions_json"]) == {"UP.US": 10.0}
+
+
+def test_a_same_key_race_books_one_fill(monkeypatch, state, lake, tick, portfolio_id, owner):
+    _race(monkeypatch, state, lake, tick, portfolio_id, owner, other_key="same")
+    out = place_manual_order(
+        state,
+        lake,
+        _order(portfolio_id, owner, client_key="same"),
+        _book(portfolio_id, owner),
+        tick,
+        now=NOW,
+    )
+    assert out.duplicate
+    assert len(state.sql("SELECT id FROM fills WHERE portfolio_id = ?", [portfolio_id])) == 1
