@@ -201,6 +201,10 @@ class IbAsyncClient:
     def open_trades(self) -> Sequence[IbTrade]:
         return [from_trade(t) for t in self._call(self.ib.openTrades)]
 
+    def all_open_trades(self) -> Sequence[IbTrade]:
+        found = self._run(self.ib.reqAllOpenOrdersAsync)
+        return [from_trade(t) for t in _items(found)]
+
     def completed_trades(self) -> Sequence[IbTrade]:
         found = self._run(lambda: self.ib.reqCompletedOrdersAsync(False))
         return [from_trade(t) for t in _items(found)]
@@ -279,11 +283,12 @@ class IbAsyncClient:
 
     def cancel_order(self, order_id: int) -> None:
         def cancel() -> None:
-            for t in self.ib.openTrades():
-                if int(t.order.orderId) == order_id:
-                    self.ib.cancelOrder(t.order)
-                    return
-            raise IbApiError(135, f"no open order with id {order_id}", req_id=order_id)
+            # order ids are per client, so our own order wins a clash
+            found = [t for t in self.ib.openTrades() if int(t.order.orderId) == order_id]
+            own = [t for t in found if int(t.order.clientId or 0) == self.endpoint.client_id]
+            if not found:
+                raise IbApiError(135, f"no open order with id {order_id}", req_id=order_id)
+            self.ib.cancelOrder((own or found)[0].order)
 
         self._call(cancel, paced=False)
 
@@ -425,6 +430,7 @@ def from_trade(t: Any) -> IbTrade:
         tif=_text(order.tif),
         account=_text(order.account),
         reason=reason,
+        client_id=int(order.clientId) if order.clientId is not None else None,
     )
 
 

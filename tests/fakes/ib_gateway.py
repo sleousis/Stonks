@@ -6,6 +6,14 @@ codes, late commission reports, a disconnect or timeout in the middle of a
 submit, a gateway restart that renumbers order ids, a competing session,
 a lost link to IBKR, delayed quotes, missing market data and a what-if
 timeout. No network.
+
+Client ids (roadmap 19.17): the gateway is itself API client ``client_id``
+(11, the tick's). :meth:`FakeIbGateway.session` opens another client of the
+same gateway with its own id and socket. A client id connects once at a
+time. A client sees and cancels only its own orders, except the master
+client (``master_client_id``, the IB Gateway setting), which sees and may
+cancel every order. ``all_open_trades`` (``reqAllOpenOrders``) and
+``global_cancel`` (``reqGlobalCancel``) reach every order from any client.
 """
 
 from __future__ import annotations
@@ -13,7 +21,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 
 from stonks.execution.brokers.ibkr.client import (
     IbAccountValue,
@@ -77,7 +85,15 @@ class FakeIbGateway:
         *,
         contracts: Sequence[IbContractDetails] = (AAPL, MSFT, BRKB, VOD),
         now: datetime = T0,
+        client_id: int = 11,
+        master_client_id: int | None = 11,
     ) -> None:
+        #: this client's API client id, and the gateway's master client id
+        self.client_id = client_id
+        self.master_client_id = master_client_id
+        self.sessions: list[FakeIbSession] = []
+        #: the client a session call runs as (``None``: the gateway itself)
+        self._viewer: FakeIbSession | None = None
         self.accounts = list(accounts)
         self.contracts = list(contracts)
         self.now = now
@@ -112,7 +128,27 @@ class FakeIbGateway:
         self.sent: list[tuple[IbContract, IbOrderRequest]] = []
         self.lookups: list[IbContractQuery] = []
         self.cancels: list[int] = []
+        #: (client id, order id) of each accepted cancel
+        self.cancels_by: list[tuple[int, int]] = []
         self.global_cancels = 0
+        self.all_open_requests = 0
+
+    # ---- client ids -----------------------------------------------------------------
+
+    def session(self, client_id: int) -> FakeIbSession:
+        """Another API client of this gateway (not connected yet)."""
+        found = FakeIbSession(self, client_id)
+        self.sessions.append(found)
+        return found
+
+    def _view(self) -> FakeIbGateway | FakeIbSession:
+        return self._viewer or self
+
+    def _clients(self) -> list[FakeIbGateway | FakeIbSession]:
+        return [self, *self.sessions]
+
+    def _is_master(self, client_id: int) -> bool:
+        return self.master_client_id is not None and client_id == self.master_client_id
 
     # ---- scripting -----------------------------------------------------------------
 
@@ -204,6 +240,7 @@ class FakeIbGateway:
         t = IbTrade(
             order_id=0,
             perm_id=self._perm(),
+            client_id=0,
             order_ref="",
             contract=symbol_details.contract,
             action="BUY",
@@ -215,15 +252,16 @@ class FakeIbGateway:
         return t
 
     def restart(self) -> None:
-        """The gateway restarts: the session drops and open orders come back
+        """The gateway restarts: every session drops and open orders come back
         under new order ids."""
-        self.connected = False
+        for view in self._clients():
+            view.connected = False
+            view._next_order_id = 1
         renumbered = 1000
         for perm, t in list(self._trades.items()):
             if t.status not in TERMINAL:
                 self._trades[perm] = replace(t, order_id=renumbered)
                 renumbered += 1
-        self._next_order_id = 1
 
     def new_day(self) -> None:
         """The session rolled: completed orders and executions are gone."""
@@ -253,30 +291,38 @@ class FakeIbGateway:
         return self._next_perm
 
     def _need_connection(self) -> None:
-        if not self.connected:
+        if not self._view().connected:
             raise IbConnectionError("socket closed")
 
     # ---- IbClient -----------------------------------------------------------------
 
     def connect(self) -> None:
-        if self.connected:
+        view = self._view()
+        if view.connected:
             return
         if self.connect_failures > 0:
             self.connect_failures -= 1
             raise IbConnectionError("connection refused")
-        self.connected = True
-        self.connects += 1
+        if any(v is not view and v.connected and v.client_id == view.client_id
+               for v in self._clients()):  # fmt: skip
+            # IBKR answers 326 and closes the socket
+            raise IbConnectionError(
+                f"IBKR 326: Unable to connect as the client id {view.client_id} is already in use"
+            )
+        view.connected = True
+        view.connects += 1
 
     def disconnect(self) -> None:
-        self.connected = False
+        self._view().connected = False
 
     def status(self) -> IbLinkStatus:
+        view = self._view()
         return IbLinkStatus(
-            connected=self.connected,
+            connected=view.connected,
             link_ok=self.link_ok,
             competing=self.competing,
             last_error=self.last_error,
-            connects=self.connects,
+            connects=view.connects,
         )
 
     def managed_accounts(self) -> Sequence[str]:
@@ -303,16 +349,18 @@ class FakeIbGateway:
         return found
 
     def place_order(self, contract: IbContract, order: IbOrderRequest) -> IbTrade:
+        view = self._view()
         if self.submit_fault == "disconnect_before":
             self.submit_fault = None
-            self.connected = False
+            view.connected = False
         self._need_connection()
         self.sent.append((contract, order))
         rejection, self.reject_next = self.reject_next, None
         status = "PreSubmitted" if order.tif == "OPG" else "Submitted"
         trade = IbTrade(
-            order_id=self._next_order_id,
+            order_id=view._next_order_id,
             perm_id=self._perm(),
+            client_id=view.client_id,
             order_ref=order.order_ref,
             contract=contract,
             action=order.action,
@@ -322,7 +370,7 @@ class FakeIbGateway:
             account=order.account,
             reason=rejection[1] if rejection else None,
         )
-        self._next_order_id += 1
+        view._next_order_id += 1
         self._put(trade)
         if order.oca_group:
             self._oca[trade.perm_id] = order.oca_group
@@ -330,21 +378,30 @@ class FakeIbGateway:
             raise IbApiError(rejection[0], rejection[1], req_id=trade.order_id)
         fault, self.submit_fault = self.submit_fault, None
         if fault == "disconnect_after":
-            self.connected = False
+            view.connected = False
             raise IbConnectionError("socket closed during submit")
         if fault == "timeout_after":
             raise TimeoutError("no answer")
         return trade
 
     def cancel_order(self, order_id: int) -> None:
+        """A client cancels its own order. The master may cancel any."""
         self._need_connection()
-        for t in self._trades.values():
-            if t.order_id == order_id and t.status not in TERMINAL:
-                self.cancels.append(order_id)
-                status = "PendingCancel" if self.cancel_leaves_pending else "Cancelled"
-                self._put(replace(t, status=status))
-                return
-        raise IbApiError(135, f"Can't find order with id = {order_id}")
+        cid = self._view().client_id
+        working = [t for t in self._trades.values()
+                   if t.order_id == order_id and t.status not in TERMINAL]  # fmt: skip
+        own = [t for t in working if t.client_id == cid]
+        target = own[0] if own else (working[0] if working and self._is_master(cid) else None)
+        if target is None:
+            if working:
+                raise IbApiError(
+                    10147, f"OrderId {order_id} that needs to be cancelled is not found."
+                )
+            raise IbApiError(135, f"Can't find order with id = {order_id}")
+        self.cancels.append(order_id)
+        self.cancels_by.append((cid, order_id))
+        status = "PendingCancel" if self.cancel_leaves_pending else "Cancelled"
+        self._put(replace(target, status=status))
 
     def global_cancel(self) -> None:
         self._need_connection()
@@ -354,7 +411,18 @@ class FakeIbGateway:
                 self._put(replace(t, status="Cancelled"))
 
     def open_trades(self) -> Sequence[IbTrade]:
+        """The orders this client keeps in sync: its own, or every order
+        for the master client."""
         self._need_connection()
+        cid = self._view().client_id
+        master = self._is_master(cid)
+        return [t for t in self._trades.values()
+                if t.status not in TERMINAL and (master or t.client_id == cid)]  # fmt: skip
+
+    def all_open_trades(self) -> Sequence[IbTrade]:
+        """``reqAllOpenOrders``: every open order, whoever placed it."""
+        self._need_connection()
+        self.all_open_requests += 1
         return [t for t in self._trades.values() if t.status not in TERMINAL]
 
     def completed_trades(self) -> Sequence[IbTrade]:
@@ -397,3 +465,82 @@ class FakeIbGateway:
         self._need_connection()
         self.shortable_requests += 1
         return [self.shortable_data[c.con_id] for c in contracts if c.con_id in self.shortable_data]
+
+
+class FakeIbSession:
+    """Another API client of a :class:`FakeIbGateway`: its own client id,
+    socket and order ids, the gateway's orders and scripting."""
+
+    def __init__(self, gateway: FakeIbGateway, client_id: int) -> None:
+        self.gateway = gateway
+        self.client_id = client_id
+        self.connected = False
+        self.connects = 0
+        self.closed = False
+        self._next_order_id = 1
+
+    def _via(self, name: str, *args: object) -> Any:
+        gw = self.gateway
+        before, gw._viewer = gw._viewer, self
+        try:
+            return getattr(gw, name)(*args)
+        finally:
+            gw._viewer = before
+
+    def close(self) -> None:
+        self.connected = False
+        self.closed = True
+
+    def connect(self) -> None:
+        self._via("connect")
+
+    def disconnect(self) -> None:
+        self.connected = False
+
+    def status(self) -> IbLinkStatus:
+        return self._via("status")
+
+    def managed_accounts(self) -> Sequence[str]:
+        return self._via("managed_accounts")
+
+    def server_time(self) -> datetime:
+        return self._via("server_time")
+
+    def contract_details(self, query: IbContractQuery) -> Sequence[IbContractDetails]:
+        return self._via("contract_details", query)
+
+    def place_order(self, contract: IbContract, order: IbOrderRequest) -> IbTrade:
+        return self._via("place_order", contract, order)
+
+    def cancel_order(self, order_id: int) -> None:
+        self._via("cancel_order", order_id)
+
+    def global_cancel(self) -> None:
+        self._via("global_cancel")
+
+    def open_trades(self) -> Sequence[IbTrade]:
+        return self._via("open_trades")
+
+    def all_open_trades(self) -> Sequence[IbTrade]:
+        return self._via("all_open_trades")
+
+    def completed_trades(self) -> Sequence[IbTrade]:
+        return self._via("completed_trades")
+
+    def executions(self) -> Sequence[IbExecution]:
+        return self._via("executions")
+
+    def positions(self, account: str) -> Sequence[IbPosition]:
+        return self._via("positions", account)
+
+    def account_values(self, account: str) -> Sequence[IbAccountValue]:
+        return self._via("account_values", account)
+
+    def what_if(self, contract: IbContract, order: IbOrderRequest) -> IbWhatIf:
+        return self._via("what_if", contract, order)
+
+    def snapshots(self, contracts: Sequence[IbContract]) -> Sequence[IbSnapshot]:
+        return self._via("snapshots", contracts)
+
+    def shortability(self, contracts: Sequence[IbContract]) -> Sequence[IbShortability]:
+        return self._via("shortability", contracts)
