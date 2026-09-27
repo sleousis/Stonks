@@ -119,7 +119,7 @@ class PairsReversion(BaseStrategy):
                 name="exit_z",
                 kind="float",
                 default=0.5,
-                bounds=(0.0, 1.0),
+                bounds=(0.0, 0.9),
                 description="Spread z-score that closes it.",
             ),
             ParameterSpec(

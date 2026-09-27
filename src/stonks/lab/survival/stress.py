@@ -234,10 +234,18 @@ class StressTest:
         max_workers: int | None = Field(default=None, ge=1)
         seed: int = 0
         #: The short-squeeze scenario (see the module doc).
-        short_squeeze: bool = True
-        squeeze_jump: float = Field(default=0.5, gt=0.0)
-        squeeze_bars: int = Field(default=3, ge=1)
-        max_squeeze_drawdown: float = Field(default=-0.3, le=0.0)
+        short_squeeze: bool = Field(
+            default=True, description="Replay a squeeze of the largest short when the book shorts."
+        )
+        squeeze_jump: float = Field(
+            default=0.5, gt=0.0, description="How far the squeezed price rises, as a fraction."
+        )
+        squeeze_bars: int = Field(
+            default=3, ge=1, description="Bars over which the squeezed price rises."
+        )
+        max_squeeze_drawdown: float = Field(
+            default=-0.3, le=0.0, description="Deepest drawdown the squeezed backtest may reach."
+        )
 
     def __init__(self, options: StressTest.Options | None = None) -> None:
         self.options = options or StressTest.Options()
