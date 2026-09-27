@@ -142,6 +142,18 @@ from stonks.production.ledger import ledger_columns, ledger_filter
 from stonks.production.live.context import LiveContext
 from stonks.production.live.runaway import runaway_reason
 from stonks.production.live.settings import LiveSettings
+from stonks.production.live.stops import (
+    LedgerFill,
+    any_enabled,
+    book_settings,
+    load_working_stops,
+    plan_book,
+    record_paper_plan,
+    send_stop_plan,
+    stops_recorded,
+    sweep_paper_stops,
+    tag_exits,
+)
 from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.ownership import (
     drop_unowned_crossings,
@@ -973,6 +985,24 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     if plan is not None and plan.deferred:
         corporate_summary["deferred_corporate_actions"] = [event_as_dict(e) for e in plan.deferred]
 
+    # 19.10: protective stops. A simulated book's working stops fill from
+    # the bars since they were placed, before anything decides (the stop
+    # fills and the orders are recorded with this run's snapshot).
+    stops_on = run.scoped and stops_recorded(state)
+    stop_settings = book_settings(book.spec.risk, book.spec.risk_overrides)
+    stop_fills: list[tuple[Order, Fill]] = []
+    if stops_on and not external:
+        stop_fills = sweep_paper_stops(
+            state,
+            lake,
+            portfolio,
+            portfolio_id=portfolio_id,
+            as_of=as_of,
+            make_broker=settings.simulated_costs.build_broker,
+        )
+        for order, fill in stop_fills:
+            log.info("tick.stop_filled", client_id=order.client_id, price=fill.price)
+
     def persist_corporate_actions() -> int:
         """Record the handled events and split-adjust the working orders;
         call inside the transaction that writes this tick's snapshot.
@@ -1017,6 +1047,45 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             held = held_tickers(portfolio.positions)
             log.info("tick.manual_holdings", tickers=sorted(manual_holdings))
 
+    def own_view(held_now: Portfolio) -> dict[str, float]:
+        """The positions of an account at a real broker that are the book's
+        own (its fills explain them), never the owner's manual ones."""
+        view, _ = managed_view(held_now, owned_positions(state, portfolio_id, actions))
+        return dict(view.positions)
+
+    def sync_stops(
+        positions: Mapping[str, float], extra: Sequence[LedgerFill], verdict: Any
+    ) -> dict[str, Any]:
+        """Place, resize and cancel this book's protective stops for its
+        own ``positions`` (19.10). At a real broker the stops are sent now.
+        A simulated book writes them to the ledger, so call it inside the
+        transaction that writes the snapshot."""
+        if not stops_on or dry_run:
+            return {}
+        working = load_working_stops(state, portfolio_id)
+        if not working and not any_enabled(book.spec.risk, book.spec.risk_overrides):
+            return {}
+        if verdict is not None and verdict.halt == "all":
+            return {"stops": {"paused": "a halt holds new orders"}}
+        stop_plan = plan_book(
+            state,
+            lake,
+            portfolio_id=portfolio_id,
+            positions=positions,
+            settings_for=stop_settings,
+            as_of=as_of,
+            tick_id=tick_id,
+            extra_fills=extra,
+            working=working,
+        )
+        if stop_plan.empty and not stop_plan.unprotected:
+            return {"stops": {"kept": len(stop_plan.keep)}} if stop_plan.keep else {}
+        if external:
+            synced = send_stop_plan(state, broker, stop_plan, portfolio_id=portfolio_id)
+        else:
+            synced = record_paper_plan(state, stop_plan, portfolio_id=portfolio_id)
+        return {"stops": synced.as_dict()}
+
     def result(status: TickStatus, winner: str | None, placed: int, fills: int, summary: dict):
         return BookResult(
             portfolio_id=portfolio_id,
@@ -1048,15 +1117,33 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
 
     def noop(reason: str) -> BookResult:
         halt_summary: dict[str, Any] = {}
+        stop_summary: dict[str, Any] = {}
         if not dry_run:
             # nothing trades, but the gates still record a breaker trip the
-            # day it happens, and applied events must still be persisted
-            halt_summary = halted(gate())
+            # day it happens, applied events must still be persisted, and
+            # positions still get (or lose) their protective stops
+            verdict = gate()
+            halt_summary = halted(verdict)
+            if external:
+                stop_summary = sync_stops(own_view(account), (), verdict)
             with state.transaction():
-                if persist_corporate_actions() or applied:
+                for order, fill in stop_fills:
+                    _record_order(state, order, status="filled", portfolio_id=scope)
+                    _record_fill(state, fill, portfolio_id=scope)
+                if not external:
+                    stop_summary = sync_stops(
+                        portfolio.positions, _ledger_fills(stop_fills), verdict
+                    )
+                if persist_corporate_actions() or applied or stop_fills:
                     _snapshot_portfolio(state, tick_id, account, prices, as_of, portfolio_id=scope)
         log.info("tick.portfolio_noop", reason=reason)
-        return result("noop", None, 0, 0, {"reason": reason, **halt_summary, **corporate_summary})
+        return result(
+            "noop",
+            None,
+            0,
+            len(stop_fills) if not dry_run else 0,
+            {"reason": reason, **halt_summary, **corporate_summary, **stop_summary},
+        )
 
     # 3. construct: the pipeline turns this book's signals into orders
     #    (decide or targets, stale buys dropped, then the risk layer).
@@ -1255,6 +1342,9 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         orders_with_tick, open_conflicts = _drop_open_order_conflicts(
             state, orders_with_tick, log, portfolio_id=scope
         )
+        if stops_on:
+            # 19.10: an exit joins its position's stop group at the broker
+            orders_with_tick = tag_exits(orders_with_tick, load_working_stops(state, portfolio_id))
     sells = [o for o in orders_with_tick if o.side == "sell"]
     buys = [o for o in orders_with_tick if o.side == "buy"]
 
@@ -1265,7 +1355,11 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     # portfolio snapshot in one transaction, so a crash can't leave fills
     # recorded without the snapshot that reflects them. External: see
     # ``place_external``.
-    outcomes: list[tuple[Order, OrderStatus, Fill | None]] = []
+    outcomes: list[tuple[Order, OrderStatus, Fill | None]] = [
+        (order, "filled", fill) for order, fill in stop_fills
+    ]
+    if not dry_run:
+        fills_count += len(stop_fills)
     #: ``status_reason`` per client id (simulated partial fills).
     reasons: dict[str, str] = {}
 
@@ -1390,6 +1484,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         )
 
     hook_summary: dict[str, Any] = {}
+    stop_summary: dict[str, Any] = {}
     after = portfolio
     if not dry_run and external:
         # Report what the broker made of each submission (e.g. rejected).
@@ -1408,6 +1503,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                     max_staleness_days=settings.max_price_staleness_days,
                 ).prices
             )
+        stop_summary = sync_stops(own_view(after), (), halt)
         with state.transaction():
             persist_corporate_actions()
             _snapshot_portfolio(state, tick_id, after, marks, as_of, portfolio_id=scope)
@@ -1429,6 +1525,9 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             persist_corporate_actions()
             if financing is not None:
                 record_accrual(state, portfolio_id, as_of, financing, tick_id=tick_id)
+            stop_summary = sync_stops(
+                portfolio.positions, _ledger_fills([(o, f) for o, _, f in outcomes if f]), halt
+            )
             whole = merge_holdings(portfolio, manual_holdings) if manual_holdings else portfolio
             _snapshot_portfolio(state, tick_id, whole, prices, as_of, portfolio_id=scope)
             hook_summary = hooks(whole, prices)
@@ -1486,6 +1585,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             "risk_adjustments": [a.as_dict() for a in risk_adjustments],
             **corporate_summary,
             **({"financing": round(sum(e.amount for e in financing), 6)} if financing else {}),
+            **stop_summary,
             **hook_summary,
         },
     )
@@ -2084,6 +2184,22 @@ def _notify_signals(run: _TickRun) -> list[NotifySignal]:
 # ---- helpers ---------------------------------------------------------------
 
 
+def _ledger_fills(pairs: Sequence[tuple[Order, Fill | None]]) -> list[LedgerFill]:
+    """This run's fills, not recorded yet, as the stop planner reads them."""
+    return [
+        LedgerFill(
+            client_id=order.client_id,
+            strategy_id=order.strategy_id,
+            ticker=fill.ticker,
+            side=fill.side or order.side,
+            quantity=fill.quantity,
+            price=fill.price,
+        )
+        for order, fill in pairs
+        if fill is not None
+    ]
+
+
 def _reduces(order: Order) -> bool:
     """A sell of a long or a cover of a short (never a short sale)."""
     if order.position_effect is not None:
@@ -2429,9 +2545,12 @@ def _drop_open_order_conflicts(
     open): the portfolio doesn't show it yet, so deciding again would double
     the position once both fill."""
     placeholders = ",".join("?" for _ in NON_TERMINAL_STATUSES)
+    # a protective stop is not a competing order: an exit joins its OCA
+    # group instead (19.10)
+    protective = " AND protective = 0" if stops_recorded(state) else ""
     sql, params = _scoped(
         portfolio_id,
-        f"SELECT client_id, ticker, side FROM orders WHERE status IN ({placeholders})",
+        f"SELECT client_id, ticker, side FROM orders WHERE status IN ({placeholders}){protective}",
         list(NON_TERMINAL_STATUSES),
     )
     open_rows = state.sql(sql, params)

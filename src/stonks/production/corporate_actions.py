@@ -146,8 +146,15 @@ def adjust_working_orders(
             "UPDATE orders SET quantity = quantity * ?,"
             f" limit_price = limit_price / ?{stop}, updated_at = ?"
             f" WHERE ticker = ? AND status IN ({status_ph}) AND client_id IN ({ids_ph})",
-            [split.ratio, split.ratio, *stop_arg, now, split.ticker, *NON_TERMINAL_STATUSES,
-             *client_ids],  # fmt: skip
+            [
+                split.ratio,
+                split.ratio,
+                *stop_arg,
+                now,
+                split.ticker,
+                *NON_TERMINAL_STATUSES,
+                *client_ids,
+            ],
         )
         touched += cursor.rowcount
     return touched
@@ -344,8 +351,15 @@ def adjust_orders_for_splits(
             "UPDATE orders SET quantity = quantity * ?,"
             f" limit_price = limit_price / ?{stop}, updated_at = ?"
             f" WHERE ticker = ? AND status IN ({status_ph}) AND client_id IN ({ids_ph})",
-            [split.ratio, split.ratio, *stop_arg, now, split.ticker, *NON_TERMINAL_STATUSES,
-             *earlier],  # fmt: skip
+            [
+                split.ratio,
+                split.ratio,
+                *stop_arg,
+                now,
+                split.ticker,
+                *NON_TERMINAL_STATUSES,
+                *earlier,
+            ],
         )
         touched += cursor.rowcount
     return touched

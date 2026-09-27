@@ -145,9 +145,7 @@ class StopCooldown(_Protection):
         stops = [
             t
             for t in trades
-            if t.ticker == order.ticker
-            and t.exit_day > since
-            and _is_stop(t, losses)
+            if t.ticker == order.ticker and t.exit_day > since and _is_stop(t, losses)
         ]
         if not stops:
             return None

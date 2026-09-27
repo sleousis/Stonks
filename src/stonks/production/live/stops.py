@@ -52,6 +52,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock
+from stonks.core.timeutil import day_start
 from stonks.core.types import Fill, Order, OrderSide, Portfolio
 from stonks.execution.brokers.base import OrderCanceller, OrderRejectedError, OrderStateSource
 from stonks.execution.order_state import (
@@ -377,15 +378,18 @@ def holdings_from_fills(
 
 
 def tag_exits(orders: Sequence[Order], working: Sequence[WorkingStop]) -> list[Order]:
-    """Closing orders on a ticker with a working stop join the stop's OCA
-    group, so a fill of either shrinks the other at the broker."""
-    groups = {s.ticker: s.oca_group for s in working if s.oca_group}
+    """Orders that shrink a position with a working stop (the stop's side,
+    never a short sale) join the stop's OCA group, so a fill of either
+    shrinks the other at the broker."""
+    stops = {s.ticker: s for s in working if s.oca_group}
     out: list[Order] = []
     for order in orders:
-        group = groups.get(order.ticker)
-        closes = order.position_effect == "close"
-        tag = group is not None and closes and not order.oca_group
-        out.append(replace(order, oca_group=group) if tag else order)
+        stop = stops.get(order.ticker)
+        shrinks = stop is not None and order.side == stop.side and order.position_effect != "open"
+        if stop is not None and shrinks and not order.oca_group:
+            out.append(replace(order, oca_group=stop.oca_group))
+        else:
+            out.append(order)
     return out
 
 
@@ -482,12 +486,13 @@ def load_atr(
         return {}, {}
     df = lake.sql(
         """
-        SELECT ticker, date, high, low, close FROM (
-            SELECT *, row_number() OVER (PARTITION BY ticker ORDER BY date DESC) AS rn
-              FROM prices WHERE ticker = ANY(?) AND date <= ?)
-         WHERE rn <= ? ORDER BY ticker, date
+        SELECT ticker, timestamp, high, low, close FROM (
+            SELECT ticker, timestamp, high, low, close,
+                   row_number() OVER (PARTITION BY ticker ORDER BY timestamp DESC) AS rn
+              FROM bars WHERE interval = '1d' AND ticker = ANY(?) AND timestamp < ?)
+         WHERE rn <= ? ORDER BY ticker, timestamp
         """,
-        [sorted(set(tickers)), as_of, window * 3 + 1],
+        [sorted(set(tickers)), day_start(as_of + timedelta(days=1)), window * 3 + 1],
     )
     atrs: dict[str, float] = {}
     closes: dict[str, float] = {}
@@ -750,9 +755,14 @@ def sweep_paper_stops(
     if first > as_of:
         return []
     bars = lake.sql(
-        "SELECT ticker, date, open, high, low FROM prices"
-        " WHERE ticker = ANY(?) AND date >= ? AND date <= ? ORDER BY date, ticker",
-        [sorted({o.ticker for o, _ in stops}), first, as_of],
+        "SELECT ticker, CAST(timestamp AS DATE) AS date, open, high, low FROM bars"
+        " WHERE interval = '1d' AND ticker = ANY(?) AND timestamp >= ? AND timestamp < ?"
+        " ORDER BY timestamp, ticker",
+        [
+            sorted({o.ticker for o, _ in stops}),
+            day_start(first),
+            day_start(as_of + timedelta(days=1)),
+        ],
     )
     broker = make_broker(portfolio) if make_broker is not None else SimulatedBroker(portfolio)
     by_id = {o.client_id: o for o, _ in stops}

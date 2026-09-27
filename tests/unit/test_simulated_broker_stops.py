@@ -29,7 +29,9 @@ def _stop(cid="s1", side="sell", qty=10.0, stop=90.0, ticker="A.US", tif="gtc") 
 
 
 def _broker(positions=None, cash=10_000.0) -> SimulatedBroker:
-    return SimulatedBroker(Portfolio(cash=cash, positions={"A.US": 10.0} if positions is None else dict(positions)))
+    return SimulatedBroker(
+        Portfolio(cash=cash, positions={"A.US": 10.0} if positions is None else dict(positions))
+    )
 
 
 def test_a_gtc_stop_rests_instead_of_filling_at_once():
