@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, fields
 from datetime import date, datetime, timedelta
 from typing import Any, Literal, get_args
@@ -214,6 +214,24 @@ def _reason(order: Order) -> dict[str, Any]:
     if order.position_effect is not None:
         reason["position_effect"] = order.position_effect
     return reason
+
+
+def ticket_hold(
+    order: Order,
+    *,
+    approve_strategies: Collection[str],
+    auto_strategies: Collection[str],
+    runaway: bool,
+) -> Hold | None:
+    """Why ``order`` waits for a person, or ``None``. A runaway run or halt
+    holds every order. A book with approve subscriptions holds every order
+    that is not one auto strategy's own (a constructor's blended order
+    included)."""
+    if runaway:
+        return "runaway"
+    if approve_strategies and order.strategy_id not in auto_strategies:
+        return "approve_mode"
+    return None
 
 
 # ---- writes ------------------------------------------------------------------------

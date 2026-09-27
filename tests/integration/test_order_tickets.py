@@ -4,6 +4,7 @@ the system (auto), and sent in the submit window."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
@@ -22,6 +23,7 @@ from stonks.production.tickets import (
     set_ticket_status,
     submit_window,
     sync_submitted,
+    ticket_hold,
     write_tickets,
 )
 from stonks.store.state import SqliteState
@@ -178,3 +180,35 @@ def test_submitted_tickets_follow_their_order(state, status, fine, ticket_status
     _order_row(state, ticket.client_id, status, fine)
     sync_submitted(state, now=DECIDED)
     assert get_ticket(state, ticket.id).status == ticket_status
+
+
+def test_a_partly_filled_order_that_ended_counts_as_filled(state):
+    [ticket] = _write(state, [_order("A.US")])
+    set_ticket_status(state, ticket.id, "submitted", now=DECIDED)
+    _order_row(state, ticket.client_id, "cancelled", "expired")
+    state.execute(
+        "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at,"
+        " portfolio_id) VALUES (?, 'A.US', 4, 100, 0, 'x', 'pf_default')",
+        [ticket.client_id],
+    )
+    sync_submitted(state, now=DECIDED)
+    after = get_ticket(state, ticket.id)
+    assert after.status == "filled" and after.status_reason == "partly filled (4)"
+
+
+@pytest.mark.parametrize(
+    ("strategy", "approve", "runaway", "hold"),
+    [
+        ("s_auto", set(), False, None),
+        ("s_auto", {"s_app"}, False, None),
+        ("s_app", {"s_app"}, False, "approve_mode"),
+        ("__portfolio__", {"s_app"}, False, "approve_mode"),  # a blended order
+        ("s_auto", set(), True, "runaway"),
+    ],
+)
+def test_which_tickets_wait_for_a_person(strategy, approve, runaway, hold):
+    order = replace(_order("A.US"), strategy_id=strategy)
+    held = ticket_hold(
+        order, approve_strategies=approve, auto_strategies={"s_auto"}, runaway=runaway
+    )
+    assert held == hold

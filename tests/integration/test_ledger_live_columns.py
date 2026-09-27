@@ -53,3 +53,11 @@ def test_fill_execution_id_and_fee_currency_are_written(state):
     _record_fill(state, fill, portfolio_id="pf_default")
     row = state.sql("SELECT broker_exec_id, fee_currency FROM fills")[0]
     assert (row["broker_exec_id"], row["fee_currency"]) == ("e-1", "USD")
+
+
+def test_the_tick_writes_the_fine_state_and_a_rerecord_restarts_it(state):
+    order = Order(client_id="c4", ticker="AAPL.US", side="buy", quantity=1.0)
+    _record_order(state, order, "rejected", reason="never arrived")
+    assert tuple(state.sql("SELECT status, state FROM orders")[0]) == ("rejected", "rejected")
+    _record_order(state, order, "pending")  # a rerun resubmits it
+    assert tuple(state.sql("SELECT status, state FROM orders")[0]) == ("pending", "pending")
