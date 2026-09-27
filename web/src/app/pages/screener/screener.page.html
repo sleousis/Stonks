@@ -391,12 +391,14 @@
       <p>
         <strong>{{ u.universe.name || u.universe.id }}</strong>
         ({{ u.universe.kind === 'rule' ? 're-runs the screen' : "today's matches" }}). Its members
-        appear when the refresh ends. In the lab, pick it under Run on.
+        appear when the refresh ends. The lab opens with it picked under Run on.
       </p>
       @for (w of u.warnings ?? []; track w) {
         <p class="warning">{{ w }}</p>
       }
-      <a class="btn btn-ghost" routerLink="/lab">Open the lab</a>
+      <a class="btn btn-ghost" routerLink="/lab" [queryParams]="{ universe: u.universe.id }"
+        >Open the lab</a
+      >
     </div>
   </section>
 }

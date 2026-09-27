@@ -214,6 +214,8 @@ describe('ScreenerPage', () => {
     const saved = root.querySelector('section.universe')!;
     expect(saved.textContent).toContain('Cheap payers');
     expect(saved.textContent).toContain('A snapshot has survivorship bias.');
+    const lab = saved.querySelector<HTMLAnchorElement>('a')!;
+    expect(lab.getAttribute('href')).toBe('/lab?universe=cheap-payers');
   });
 
   it('sends a rule universe by the saved screen when it is unchanged', async () => {

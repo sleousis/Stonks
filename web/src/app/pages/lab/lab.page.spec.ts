@@ -10,7 +10,7 @@ import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
 import { TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { BACKTEST_RESULT, CATALOG, LAB_RUN_VIEW, MOMENTUM } from '../../../testing/lab-fixtures';
-import type { Job, LabRunView, MeView, Page } from '../../api/models';
+import type { Job, LabRunView, MeView, Page, UniverseView } from '../../api/models';
 import type { ConfirmOptions } from '../../core/confirm/confirm.service';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
@@ -63,6 +63,8 @@ describe('LabPage', () => {
   let confirmOptions: ConfirmOptions[];
   /** What GET /api/lab/runs/new-lr/result returns. */
   let labRunView: LabRunView;
+  /** What GET /api/universes lists. */
+  let universes: UniverseView[];
 
   let created = false;
 
@@ -84,6 +86,7 @@ describe('LabPage', () => {
     confirmed = [];
     confirmOptions = [];
     labRunView = LAB_RUN_VIEW;
+    universes = [];
     jobStatus = {};
     TestBed.configureTestingModule({
       imports: [LabPage],
@@ -148,7 +151,7 @@ describe('LabPage', () => {
       case '/api/lab/survival-presets':
         return req.flush([]);
       case '/api/universes':
-        return req.flush({ items: [], total: 0, limit: 200, offset: 0 });
+        return req.flush({ items: universes, total: universes.length, limit: 200, offset: 0 });
       case '/api/lab/sweeps/sw-1/result':
         return req.flush(SWEEP_RESULT);
     }
@@ -401,6 +404,18 @@ describe('LabPage', () => {
         '#lab-panel-lab_run input[name="lr-suite"][value="promotion"]',
       )!.checked,
     ).toBe(true);
+  });
+
+  it('opens the lab run form on the universe from ?universe= (17.9)', async () => {
+    universes = [
+      { id: 'us-big', name: 'US large caps', kind: 'rule', spec: {} },
+      { id: 'mine', name: 'Mine', kind: 'list', spec: {} },
+    ];
+    await create(TRADER, { universe: 'us-big' });
+    await settle();
+    expect(el.querySelector('#lab-panel-lab_run')!.hasAttribute('hidden')).toBe(false);
+    const picker = el.querySelector<HTMLSelectElement>('#lab-panel-lab_run select#lr-universe')!;
+    expect(picker.value).toBe('us-big');
   });
 
   it('a stale result load never clears the newer job spinner (UX-62)', async () => {

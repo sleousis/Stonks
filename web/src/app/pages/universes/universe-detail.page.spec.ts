@@ -99,6 +99,13 @@ describe('UniverseDetailPage', () => {
     expect(el.querySelector<HTMLInputElement>('#m-date')!.value).toBe(isoDay());
   });
 
+  it('links to the lab with this universe picked (17.9)', () => {
+    const link = [...el.querySelectorAll<HTMLAnchorElement>('a')].find(
+      (a) => a.textContent?.trim() === 'Test in the lab',
+    )!;
+    expect(link.getAttribute('href')).toBe('/lab?universe=us-big');
+  });
+
   it('5,000 members render one page', async () => {
     const tickers = Array.from({ length: 5000 }, (_, i) => `T${String(i).padStart(4, '0')}.US`);
     const date = el.querySelector<HTMLInputElement>('#m-date')!;

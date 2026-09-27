@@ -1,6 +1,9 @@
 @let u = universe.hasValue() ? universe.value() : null;
 <app-page-header [title]="u?.name || id()" [description]="u?.description ?? null">
   <a actions class="btn btn-ghost" routerLink="/universes">All universes</a>
+  <a actions class="btn btn-ghost" routerLink="/lab" [queryParams]="{ universe: id() }"
+    >Test in the lab</a
+  >
   <button
     actions
     type="button"
