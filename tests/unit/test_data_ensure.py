@@ -514,3 +514,60 @@ def test_a_dead_ticker_is_not_asked_again_after_settle_days(lake):
     source.price_calls.clear()
     later.ensure(["DEAD.US"], date(2025, 6, 2), date(2025, 6, 30))
     assert source.price_calls == []
+
+
+# ---- intraday coverage by timestamp (BE-23) --------------------------------------------
+
+
+class _HourlySource(FakeListingSource):
+    """Hourly XNYS-like bars 14:00-20:00 UTC on 2025-06-19 and 06-20, served
+    only once complete at ``upto`` (naive UTC)."""
+
+    def __init__(self, upto: datetime) -> None:
+        super().__init__()
+        self.upto = upto
+        self.intraday_calls: list[tuple[date | None, date | None]] = []
+
+    def fetch_intraday_bars(self, ticker, interval, since=None, until=None):
+        from datetime import timedelta
+
+        from stonks.ingest.schemas import IntradayBar
+
+        self.intraday_calls.append((since, until))
+        out = []
+        for day in (date(2025, 6, 19), date(2025, 6, 20)):
+            if (since and day < since) or (until and day > until):
+                continue
+            for hour in range(14, 20):
+                ts = datetime(day.year, day.month, day.day, hour)
+                if ts + timedelta(hours=1) <= self.upto:
+                    out.append(
+                        IntradayBar(ticker=ticker, timestamp=ts, open=10, high=10.1, low=9.9,
+                                    close=10, adj_close=10, volume=5)
+                    )  # fmt: skip
+        return out
+
+
+def test_a_mid_session_intraday_ensure_leaves_no_hole():
+    from stonks.store.lake import DuckDBLake
+
+    lake = DuckDBLake(":memory:")
+    lake.migrate()
+    try:
+        hourly = Interval.parse("1h")
+        paid = {"fake": "all_in_one"}
+        mid = datetime(2025, 6, 20, 17, 30, tzinfo=UTC)
+        first = _HourlySource(mid.replace(tzinfo=None))
+        DataEnsurer(lake, first, EnsureSettings(plans=paid), clock=lambda: mid).ensure(
+            ["A.US"], date(2025, 6, 19), date(2025, 6, 20), hourly
+        )
+        later = datetime(2025, 6, 23, 12, tzinfo=UTC)
+        second = _HourlySource(later.replace(tzinfo=None))
+        DataEnsurer(lake, second, EnsureSettings(plans=paid), clock=lambda: later).ensure(
+            ["A.US"], date(2025, 6, 19), date(2025, 6, 20), hourly
+        )
+        assert second.intraday_calls == [(date(2025, 6, 20), date(2025, 6, 20))]
+        stored = lake.get_bars("A.US", hourly, datetime(2025, 6, 20), datetime(2025, 6, 21))
+        assert pd.to_datetime(stored["timestamp"]).dt.hour.tolist() == list(range(14, 20))
+    finally:
+        lake.close()

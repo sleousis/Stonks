@@ -31,6 +31,8 @@ __all__ = [
     "drop_open_sessions",
     "fallback_closes",
     "is_final",
+    "open_sessions",
+    "session_close",
 ]
 
 
@@ -135,6 +137,19 @@ def closed_sessions(
     return sorted(d for d, close in closes.items() if close <= now)
 
 
+def open_sessions(
+    sessions: SessionCloses | None,
+    ticker: str,
+    start: date,
+    end: date,
+    now: datetime,
+    asset_class: str | None = None,
+) -> list[date]:
+    """Session dates in ``[start, end]`` whose close is after ``now``."""
+    closes = _closes(sessions, ticker, start, end, asset_class)
+    return sorted(d for d, close in closes.items() if close > now)
+
+
 def is_final(
     sessions: SessionCloses | None,
     ticker: str,
@@ -153,6 +168,15 @@ def is_final(
         close = closes.get(d) or datetime.combine(d + timedelta(days=1), time(), UTC)
         out.append(close <= now)
     return out
+
+
+def session_close(
+    sessions: SessionCloses | None, ticker: str, day: date, asset_class: str | None = None
+) -> datetime:
+    """The UTC close of ``day``'s session (the next UTC midnight when the
+    calendar has no session that day)."""
+    close = _closes(sessions, ticker, day, day, asset_class).get(day)
+    return close or datetime.combine(day + timedelta(days=1), time(), UTC)
 
 
 def drop_open_sessions(

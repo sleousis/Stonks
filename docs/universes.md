@@ -68,6 +68,8 @@ Vendors send `adj_close` adjusted as of the day you fetch. Bars fetched on diffe
 
 A vendor's bar for today holds the latest trade until the session closes. The ingest pipeline drops any daily bar whose session has not closed yet, for every ingest, not only the ensurer. The ensurer does not record that day as fetched, so it asks again after the close. A partial bar stored before this rule existed is overwritten by the overlap of the next fetch.
 
+Intraday bars follow the same idea. The ensurer stores only bars that are complete (bar start plus its length is past now). A day counts as covered only when its last stored bar reaches the session close, and a session still open is never recorded as fetched. So an ensure run in the middle of a session fetches the rest of that day next time.
+
 ## Settings
 
 `[ensure]` in `config/default.toml` sets how fetches run.

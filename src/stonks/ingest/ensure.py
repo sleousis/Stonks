@@ -62,7 +62,14 @@ from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.pipeline import _SOFT_FAIL_EXCEPTIONS, IngestPipeline
 from stonks.ingest.redact import format_exception
 from stonks.ingest.schemas import FinancialStatementsBundle, RawPriceBar
-from stonks.ingest.sessions import SessionCloses, closed_sessions, default_sessions, is_final
+from stonks.ingest.sessions import (
+    SessionCloses,
+    closed_sessions,
+    default_sessions,
+    is_final,
+    open_sessions,
+    session_close,
+)
 from stonks.ingest.sources.base import DataSource, DataSourceError
 from stonks.logging import get_logger
 from stonks.store.lake import DuckDBLake
@@ -383,11 +390,15 @@ class DataEnsurer:
     ) -> dict[str, list[DateRange]]:
         out: dict[str, list[DateRange]] = {}
         cov = self._lake.bar_coverage(tickers, interval, start, end)
+        classes = self._lake.get_asset_classes(tickers) if interval.is_intraday else {}
         for r in cov.itertuples(index=False):
             if int(r.n_window) > 0:
-                out.setdefault(r.ticker, []).append(
-                    (pd.Timestamp(r.first_bar).date(), pd.Timestamp(r.last_bar).date())
-                )
+                first = pd.Timestamp(r.first_bar).date()
+                last = pd.Timestamp(r.last_bar).date()
+                if interval.is_intraday:
+                    last = self._last_full_day(r.ticker, r.last_bar, interval, classes)
+                if last >= first:
+                    out.setdefault(r.ticker, []).append((first, last))
         rows = self._lake.con.execute(
             """
             SELECT ticker, range_start, range_end FROM bar_fetch_ranges
@@ -398,6 +409,20 @@ class DataEnsurer:
         for t, s, e in rows:
             out.setdefault(t, []).append((pd.Timestamp(s).date(), pd.Timestamp(e).date()))
         return out
+
+    def _last_full_day(
+        self, ticker: str, last_bar: Any, interval: Interval, classes: dict[str, str]
+    ) -> date:
+        """The last day an intraday series holds in full: the last stored
+        bar's day when that bar reaches its session's close, else the day
+        before (a mid-session fetch stored only part of it, BE-23)."""
+        stamp = pd.Timestamp(last_bar)
+        stamp = stamp.tz_localize(UTC) if stamp.tzinfo is None else stamp.tz_convert(UTC)
+        day = stamp.date()
+        close = session_close(self._sessions, ticker, day, classes.get(ticker))
+        if stamp.to_pydatetime() + interval.to_timedelta() >= close:
+            return day
+        return day - timedelta(days=1)
 
     def _load_tails(self, plan: _Plan) -> None:
         """Read the stored ``adj_close / close`` of the last
@@ -528,8 +553,15 @@ class DataEnsurer:
         return self._final(ticker, rows, interval, plan)
 
     def _final(self, ticker: str, rows: list[Any], interval: Interval, plan: _Plan) -> list[Any]:
-        """``rows`` without the daily bars whose session has not closed."""
-        if interval != Interval.DAY_1 or not rows:
+        """``rows`` without the daily bars whose session has not closed, or
+        the intraday bars that are not complete yet (BE-23)."""
+        if not rows:
+            return rows
+        if interval.is_intraday:
+            now = self.now()
+            span = interval.to_timedelta()
+            return [r for r in rows if _utc(r.timestamp) + span <= now]
+        if interval != Interval.DAY_1:
             return rows
         keep = is_final(
             self._sessions,
@@ -627,11 +659,19 @@ class DataEnsurer:
     ) -> None:
         cutoff = self.today - timedelta(days=self._settings.settle_days)
         now = datetime.now(UTC).replace(tzinfo=None)
+        classes = self._lake.get_asset_classes(list(fetched)) if interval.is_intraday else {}
         records = []
         for ticker, rows in fetched.items():
             days = [_row_day(r) for r in rows]
             for since, until in gaps.get(ticker, []):
                 end = until
+                if interval.is_intraday:
+                    # a session still open is asked for again (BE-23)
+                    still_open = open_sessions(
+                        self._sessions, ticker, since, until, self.now(), classes.get(ticker)
+                    )
+                    if still_open:
+                        until = end = min(end, still_open[0] - timedelta(days=1))
                 if until > cutoff:
                     last = max((d for d in days if since <= d <= until), default=None)
                     end = max(cutoff, last) if last is not None else cutoff
@@ -656,6 +696,13 @@ def _with_overlap(gaps: list[DateRange], tail: dict[date, float] | None) -> list
     if not tail:
         return gaps
     return [*gaps[:-1], (min(tail), gaps[-1][1])]
+
+
+def _utc(value: Any) -> datetime:
+    """``value`` as an aware UTC ``datetime`` (naive stamps are UTC)."""
+    stamp = pd.Timestamp(value)
+    stamp = stamp.tz_localize(UTC) if stamp.tzinfo is None else stamp.tz_convert(UTC)
+    return stamp.to_pydatetime()
 
 
 def _row_day(row: Any) -> date:
