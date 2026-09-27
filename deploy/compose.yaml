@@ -2,7 +2,8 @@
 #
 #   internet / tailnet --443--> caddy --8000--> api (REST + console)
 #                                               scheduler (python -m stonks.scheduling run)
-#                               api + scheduler share the one `data` volume (/data)
+#                                               lab-worker (python -m stonks.lab.offload worker)
+#                               api, scheduler and lab-worker share the one `data` volume (/data)
 #
 # Run from this directory:  docker compose up -d
 # Secrets and settings come from ./.env (copy .env.example; chmod 600).
@@ -44,6 +45,8 @@ services:
     environment:
       STONKS_DATA_DIR: /data
       STONKS_API_TRUSTED_PROXIES: ${STONKS_DOCKER_SUBNET:-172.31.250.0/24}
+      # "worker" queues heavy lab jobs for the lab-worker service (14.9).
+      STONKS_LAB_EXECUTOR: ${STONKS_LAB_EXECUTOR:-in_process}
     expose:
       - "8000"
     # A running tick or ingest is never cut off mid-way. Give it time to
@@ -80,6 +83,35 @@ services:
       api:
         condition: service_healthy
     # No HTTP server here; the image healthcheck would always fail.
+    healthcheck:
+      disable: true
+
+  # Heavy lab jobs (tuning, survival suites, sweeps, MCPT) outside the API,
+  # so traders keep a fast console (roadmap 14.9, docs/deploy.md). On when
+  # COMPOSE_PROFILES includes "lab-worker" and STONKS_LAB_EXECUTOR=worker.
+  lab-worker:
+    <<: *app
+    command: ["python", "-m", "stonks.lab.offload", "worker"]
+    # The anchor's environment is replaced, not merged: repeat STONKS_DATA_DIR.
+    environment:
+      STONKS_DATA_DIR: /data
+      STONKS_LAB_EXECUTOR: worker
+      # One pool process per CPU the container may use.
+      STONKS_LAB_MAX_WORKERS: ${STONKS_LAB_WORKER_CPUS:-2}
+      # Per-run pool snapshots on the data volume, not the in-memory /tmp.
+      TMPDIR: /data/lab_tmp
+    # Its own limits: a big run slows itself down, never the API.
+    cpus: ${STONKS_LAB_WORKER_CPUS:-2}
+    mem_limit: ${STONKS_LAB_WORKER_MEMORY:-3g}
+    # Under contention the API (default weight 1024) gets 4x the CPU.
+    cpu_shares: 256
+    # A running lab job is cancelled at its next checkpoint on stop.
+    stop_grace_period: 1m
+    profiles: ["lab-worker"]
+    depends_on:
+      api:
+        condition: service_healthy
+    # No HTTP server here. Watch it through /metrics and `stonks health`.
     healthcheck:
       disable: true
 

@@ -22,6 +22,7 @@ from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
 from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
+from stonks.lab.offload.settings import LabOffloadSettings
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.ops.config import BackupConfig
@@ -208,6 +209,9 @@ class HealthConfig(BaseModel):
     stuck_ingest_minutes: int = Field(default=180, ge=1)
     # Ingest runs with status 'error' started within this window are unhealthy.
     ingest_failure_lookback_hours: int = Field(default=24, ge=1)
+    # Lab worker jobs queued longer than this with no live worker are
+    # unhealthy (roadmap 14.9). Never trips the operational halt.
+    stuck_lab_queue_minutes: int = Field(default=30, ge=1)
 
 
 class ProductionConfig(BaseModel):
@@ -462,6 +466,9 @@ class LabSettings(BaseModel):
     #: Treat every preflight warning as an error (``--strict``, request
     #: ``strict_preflight``).
     strict_preflight: bool = False
+    #: ``[lab.offload]``: run heavy lab jobs in a separate worker process
+    #: (roadmap 14.9). Env: ``STONKS_LAB_EXECUTOR``.
+    offload: LabOffloadSettings = LabOffloadSettings()
 
 
 class AuditConfig(BaseModel):
@@ -622,6 +629,11 @@ def _overlay_env(data: dict) -> None:
         data.setdefault("api", {})["trusted_proxies"] = [
             p.strip() for p in proxies.split(",") if p.strip()
         ]
+
+    executor = os.environ.get("STONKS_LAB_EXECUTOR")
+    if executor is not None and executor.strip():
+        lab = data.setdefault("lab", {})
+        lab.setdefault("offload", {})["executor"] = executor.strip()
 
     log_level = os.environ.get("STONKS_LOG_LEVEL")
     if log_level:

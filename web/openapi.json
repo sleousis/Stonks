@@ -3268,6 +3268,12 @@
             "title": "Stuck Ingest Minutes",
             "type": "integer"
           },
+          "stuck_lab_queue_minutes": {
+            "default": 30,
+            "minimum": 1.0,
+            "title": "Stuck Lab Queue Minutes",
+            "type": "integer"
+          },
           "stuck_tick_minutes": {
             "default": 60,
             "minimum": 1.0,

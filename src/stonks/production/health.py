@@ -64,6 +64,7 @@ def check_health(
     checks.extend(_guard("stuck_ingest_runs", lambda: [_stuck_ingest(lake, config, now)]))
     checks.extend(_guard("ingest_failures", lambda: [_ingest_failures(lake, config, now)]))
     checks.extend(_guard("var_violations", lambda: [_var_violations(state, now)]))
+    checks.extend(_guard("lab_queue", lambda: [_lab_queue(state, config, now)]))
     report = HealthReport(checks=checks, checked_at=now)
     _log.info(
         "health.checked",
@@ -204,6 +205,16 @@ def _var_violations(state: SqliteState, now: datetime) -> HealthCheck:
             name="var_violations", ok=False, detail=f"outside {band}: {', '.join(off)}"
         )
     return HealthCheck(name="var_violations", ok=True, detail="within band or too few days")
+
+
+def _lab_queue(state: SqliteState, config: HealthConfig, now: datetime) -> HealthCheck:
+    """Roadmap 14.9: lab worker jobs wait with no live worker, or lost one."""
+    from stonks.lab.offload.health import queue_health
+
+    if "lab_workers" not in state.tables():
+        return HealthCheck(name="lab_queue", ok=True, detail="no lab queue table")
+    ok, detail = queue_health(state, stuck_minutes=config.stuck_lab_queue_minutes, now=now)
+    return HealthCheck(name="lab_queue", ok=ok, detail=detail)
 
 
 def _parse_iso(value: str) -> datetime:

@@ -358,7 +358,23 @@ class ScheduleService:
                     bars = latest_daily_bars(lake, universe)
             except Exception as exc:  # data age is optional; the rest still renders
                 _log.warning("metrics.data_age_failed", error_type=type(exc).__name__)
-        return metrics_text(settings.state.path, now=self._clock(), specs=specs, latest_bars=bars)
+        text = metrics_text(settings.state.path, now=self._clock(), specs=specs, latest_bars=bars)
+        return text + self._lab_queue_metrics()
+
+    def _lab_queue_metrics(self) -> str:
+        """Roadmap 14.9: the lab worker queue (empty when it can't be read)."""
+        from stonks.lab.offload.health import metrics_text as lab_queue_metrics
+
+        try:
+            with self._ctx.state() as state:
+                return lab_queue_metrics(
+                    state,
+                    now=self._clock(),
+                    lease_seconds=self._ctx.settings.lab.offload.lease_seconds,
+                )
+        except Exception as exc:
+            _log.warning("metrics.lab_queue_failed", error_type=type(exc).__name__)
+            return ""
 
     def readiness(self) -> ProbeView:
         probe = readiness(self._ctx.settings.state.path, self._ctx.settings.lake.path)

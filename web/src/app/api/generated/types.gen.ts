@@ -1715,6 +1715,10 @@ export type HealthConfig = {
      */
     stuck_ingest_minutes?: number;
     /**
+     * Stuck Lab Queue Minutes
+     */
+    stuck_lab_queue_minutes?: number;
+    /**
      * Stuck Tick Minutes
      */
     stuck_tick_minutes?: number;

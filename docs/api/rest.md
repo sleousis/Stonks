@@ -953,6 +953,7 @@ Thresholds for ``stonks health`` (``[production.health]``).
 | `ingest_failure_lookback_hours` | integer | no |  |
 | `max_bar_age_days` | integer | no |  |
 | `stuck_ingest_minutes` | integer | no |  |
+| `stuck_lab_queue_minutes` | integer | no |  |
 | `stuck_tick_minutes` | integer | no |  |
 
 ### HealthReportView
