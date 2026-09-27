@@ -3858,6 +3858,97 @@ export type IntervalInfo = {
 };
 
 /**
+ * IntradaySnapshotView
+ *
+ * One book at one moment of a session. ``strategy_id`` is null for the
+ * whole portfolio. Money is in the book's currency.
+ */
+export type IntradaySnapshotView = {
+    /**
+     * At
+     */
+    at: string;
+    /**
+     * Day
+     */
+    day: string;
+    /**
+     * Day Return
+     */
+    day_return: number | null;
+    /**
+     * Drawdown
+     */
+    drawdown: number;
+    /**
+     * Exposures
+     */
+    exposures: {
+        [key: string]: number;
+    };
+    /**
+     * Fees
+     */
+    fees: number;
+    /**
+     * Fills
+     */
+    fills: number;
+    /**
+     * Gross Exposure
+     */
+    gross_exposure: number;
+    /**
+     * High Water Pnl
+     */
+    high_water_pnl: number;
+    /**
+     * Max Mark Age Seconds
+     */
+    max_mark_age_seconds: number | null;
+    /**
+     * Net Exposure
+     */
+    net_exposure: number;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Realised
+     */
+    realised: number;
+    /**
+     * Stale Marks
+     */
+    stale_marks: number;
+    /**
+     * Start Value
+     */
+    start_value: number;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+    /**
+     * Unmarked
+     */
+    unmarked: number;
+    /**
+     * Unrealised
+     */
+    unrealised: number;
+    /**
+     * Value
+     */
+    value: number;
+};
+
+/**
  * Job
  */
 export type Job = {
@@ -6223,6 +6314,28 @@ export type PageInstrumentView = {
      * Items
      */
     items: Array<InstrumentView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[IntradaySnapshotView]
+ */
+export type PageIntradaySnapshotView = {
+    /**
+     * Items
+     */
+    items: Array<IntradaySnapshotView>;
     /**
      * Limit
      */
@@ -20692,6 +20805,82 @@ export type GetReconcileReportResponses = {
 };
 
 export type GetReconcileReportResponse = GetReconcileReportResponses[keyof GetReconcileReportResponses];
+
+export type ListIntradaySnapshotsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Day
+         *
+         * the trading day; default the latest day with rows
+         */
+        day?: string | null;
+        /**
+         * Strategy Id
+         *
+         * one strategy's sleeve; default the whole portfolio
+         */
+        strategy_id?: string | null;
+        /**
+         * All Books
+         *
+         * every book: the whole portfolio and each sleeve
+         */
+        all_books?: boolean;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/risk/intraday';
+};
+
+export type ListIntradaySnapshotsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListIntradaySnapshotsError = ListIntradaySnapshotsErrors[keyof ListIntradaySnapshotsErrors];
+
+export type ListIntradaySnapshotsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageIntradaySnapshotView;
+};
+
+export type ListIntradaySnapshotsResponse = ListIntradaySnapshotsResponses[keyof ListIntradaySnapshotsResponses];
 
 export type GetMyRiskLimitsData = {
     body?: never;

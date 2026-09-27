@@ -347,6 +347,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/risk/intraday` | List Intraday Snapshots | `data.read` |  | [Page_IntradaySnapshotView_](#page_intradaysnapshotview_) |
 | GET | `/api/risk/limits` | Get My Risk Limits | sign-in |  | [RiskLimitsView](#risklimitsview) |
 | PUT | `/api/risk/limits` | Set My Risk Limits | `portfolio.manage` | [RiskLimitsUpdate](#risklimitsupdate) | [RiskLimitsView](#risklimitsview) |
 | GET | `/api/risk/live` | Get Live Risk | sign-in |  | [RiskSummaryView](#risksummaryview) |
@@ -1904,6 +1905,33 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers, sect
 | `is_intraday` | boolean | yes |  |
 | `seconds` | integer | yes |  |
 
+### IntradaySnapshotView
+
+One book at one moment of a session. ``strategy_id`` is null for the whole portfolio. Money is in the book's currency.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `at` | date-time | yes |  |
+| `day` | date | yes |  |
+| `day_return` | number \| null | yes |  |
+| `drawdown` | number | yes |  |
+| `exposures` | dict[str, number] | yes |  |
+| `fees` | number | yes |  |
+| `fills` | integer | yes |  |
+| `gross_exposure` | number | yes |  |
+| `high_water_pnl` | number | yes |  |
+| `max_mark_age_seconds` | number \| null | yes |  |
+| `net_exposure` | number | yes |  |
+| `pnl` | number | yes |  |
+| `portfolio_id` | string | yes |  |
+| `realised` | number | yes |  |
+| `stale_marks` | integer | yes |  |
+| `start_value` | number | yes |  |
+| `strategy_id` | string \| null | yes |  |
+| `unmarked` | integer | yes |  |
+| `unrealised` | number | yes |  |
+| `value` | number | yes |  |
+
 ### Job
 
 | Field | Type | Required | Description |
@@ -2791,6 +2819,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[InstrumentView](#instrumentview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_IntradaySnapshotView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[IntradaySnapshotView](#intradaysnapshotview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |

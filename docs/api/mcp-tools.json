@@ -3681,6 +3681,80 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Intraday P&L and risk snapshots of one of your portfolios for one\nday, newest first, one every few minutes of the session: realised\nand unrealised P&L from live marks, fees, the day's return, the\ndrawdown from the day's high, gross and net exposure, and how many\nheld names had a stale or missing mark.",
+      "input_schema": {
+        "properties": {
+          "all_books": {
+            "default": false,
+            "description": "every book: the whole portfolio and each sleeve",
+            "title": "All Books",
+            "type": "boolean"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD; default the latest day with rows",
+            "title": "Day"
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one strategy's sleeve; default the whole portfolio",
+            "title": "Strategy Id"
+          }
+        },
+        "title": "list_intraday_snapshotsArguments",
+        "type": "object"
+      },
+      "name": "list_intraday_snapshots",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Background jobs (backtests, lab runs, ingests, ticks), newest first.",
       "input_schema": {
         "properties": {

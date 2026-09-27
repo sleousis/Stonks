@@ -83,13 +83,14 @@ CATEGORIES: dict[str, tuple[str, frozenset[str]]] = {
         ),
     ),
     "risk": (
-        "risk: policy, your limits, risk snapshots, broker reconcile reports, and the kill "
+        "risk: policy, your limits, daily and intraday risk snapshots, broker reconcile reports, and the kill "
         "switch (asks you first)",
         frozenset(
             {
                 "get_risk_policy",
                 "get_my_risk_limits",
                 "list_risk_snapshots",
+                "list_intraday_snapshots",
                 "list_reconcile_reports",
                 "get_reconcile_report",
                 "engage_kill_switch",

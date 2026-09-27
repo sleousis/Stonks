@@ -7141,6 +7141,141 @@
         "title": "IntervalInfo",
         "type": "object"
       },
+      "IntradaySnapshotView": {
+        "description": "One book at one moment of a session. ``strategy_id`` is null for the\nwhole portfolio. Money is in the book's currency.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "day_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Return"
+          },
+          "drawdown": {
+            "title": "Drawdown",
+            "type": "number"
+          },
+          "exposures": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Exposures",
+            "type": "object"
+          },
+          "fees": {
+            "title": "Fees",
+            "type": "number"
+          },
+          "fills": {
+            "title": "Fills",
+            "type": "integer"
+          },
+          "gross_exposure": {
+            "title": "Gross Exposure",
+            "type": "number"
+          },
+          "high_water_pnl": {
+            "title": "High Water Pnl",
+            "type": "number"
+          },
+          "max_mark_age_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Mark Age Seconds"
+          },
+          "net_exposure": {
+            "title": "Net Exposure",
+            "type": "number"
+          },
+          "pnl": {
+            "title": "Pnl",
+            "type": "number"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "realised": {
+            "title": "Realised",
+            "type": "number"
+          },
+          "stale_marks": {
+            "title": "Stale Marks",
+            "type": "integer"
+          },
+          "start_value": {
+            "title": "Start Value",
+            "type": "number"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
+          "unmarked": {
+            "title": "Unmarked",
+            "type": "integer"
+          },
+          "unrealised": {
+            "title": "Unrealised",
+            "type": "number"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "strategy_id",
+          "day",
+          "at",
+          "start_value",
+          "value",
+          "realised",
+          "unrealised",
+          "fees",
+          "pnl",
+          "day_return",
+          "high_water_pnl",
+          "drawdown",
+          "gross_exposure",
+          "net_exposure",
+          "exposures",
+          "fills",
+          "unmarked",
+          "stale_marks",
+          "max_mark_age_seconds"
+        ],
+        "title": "IntradaySnapshotView",
+        "type": "object"
+      },
       "Job": {
         "properties": {
           "created_at": {
@@ -11638,6 +11773,37 @@
           "offset"
         ],
         "title": "Page[InstrumentView]",
+        "type": "object"
+      },
+      "Page_IntradaySnapshotView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/IntradaySnapshotView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[IntradaySnapshotView]",
         "type": "object"
       },
       "Page_Job_": {
@@ -40287,6 +40453,185 @@
         "summary": "Get Reconcile Report",
         "tags": [
           "reconcile"
+        ],
+        "x-permission": "data.read"
+      }
+    },
+    "/api/risk/intraday": {
+      "get": {
+        "description": "Intraday P&L and risk snapshots of one of your portfolios for one\nday, newest first: realised and unrealised P&L from live marks, fees,\nthe drawdown from the day's high, exposure and mark freshness.",
+        "operationId": "listIntradaySnapshots",
+        "parameters": [
+          {
+            "description": "the trading day; default the latest day with rows",
+            "in": "query",
+            "name": "day",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "the trading day; default the latest day with rows",
+              "title": "Day"
+            }
+          },
+          {
+            "description": "one strategy's sleeve; default the whole portfolio",
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "one strategy's sleeve; default the whole portfolio",
+              "title": "Strategy Id"
+            }
+          },
+          {
+            "description": "every book: the whole portfolio and each sleeve",
+            "in": "query",
+            "name": "all_books",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "every book: the whole portfolio and each sleeve",
+              "title": "All Books",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_IntradaySnapshotView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Intraday Snapshots",
+        "tags": [
+          "risk"
         ],
         "x-permission": "data.read"
       }
