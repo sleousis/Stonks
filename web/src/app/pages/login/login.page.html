@@ -106,8 +106,8 @@
             <div class="qr">
               <app-qr-code [value]="e.otpauth_uri" label="QR code for your authenticator app" />
               <div class="secret">
-                <span class="muted" id="enrol-key-label">Key</span>
-                <code aria-labelledby="enrol-key-label">{{ groupedSecret() }}</code>
+                <span class="muted">Key</span>
+                <code>{{ groupedSecret() }}</code>
                 <app-copy-button
                   [text]="e.secret"
                   label="key"
