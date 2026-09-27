@@ -18,7 +18,9 @@ from stonks.execution.brokers.base import (
 )
 from stonks.execution.brokers.ibkr.broker import IbkrBroker, account_state
 from stonks.execution.brokers.ibkr.client import IbAccountValue, IbSnapshot, IbWhatIf
-from tests.fakes.ib_gateway import AAPL, MSFT, T0, FakeIbGateway
+from tests.fakes.ib_gateway import AAPL, BRKB, MSFT, T0, FakeIbGateway, stock
+
+TOYOTA = stock(4321, "7203", currency="JPY", primary="TSEJ")
 
 ACCOUNT = "DU1234567"
 
@@ -465,11 +467,13 @@ def test_fetch_portfolio_maps_positions_by_con_id():
     broker.ensure_ready()
     broker.resolver.resolve("AAPL.US")
     gw.set_position(AAPL, 10)
-    gw.set_position(MSFT, 3)  # never resolved here: raw symbol
+    gw.set_position(MSFT, 3)  # never resolved here: mapped from its market (19.3)
+    gw.set_position(BRKB, 2)
+    gw.set_position(TOYOTA, 100)  # a market we do not trade: raw symbol
     gw.set_position(AAPL, 0)
     gw.set_values(NetLiquidation="100000", TotalCashValue="50000")
     p = broker.fetch_portfolio()
-    assert p.positions == {"AAPL.US": 10, "MSFT": 3}
+    assert p.positions == {"AAPL.US": 10, "MSFT.US": 3, "BRK-B.US": 2, "7203": 100}
     assert p.cash == 50000
 
 

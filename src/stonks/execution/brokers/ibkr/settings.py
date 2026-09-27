@@ -65,6 +65,9 @@ class IbkrGatewayConfig(BaseModel):
     #: The account the gateway must be logged in to (``DU...`` for paper,
     #: ``U...`` for live). Checked by the adapter on connect (19.2).
     account_id: str | None = None
+    #: ``cash`` trades long only. ``margin`` may short, each opening sell
+    #: checked against IBKR's locate first (roadmap 19.3).
+    account_type: Literal["cash", "margin"] = "cash"
 
     @model_validator(mode="before")
     @classmethod

@@ -92,3 +92,21 @@ def test_close_runs_owned_closers():
     broker.close()
     broker.close()
     assert closed == ["client", "state", "client"]
+
+
+def test_a_cash_gateway_trades_long_only_and_a_margin_gateway_checks_borrow():
+    from stonks.execution.borrow import FlatBorrow
+    from stonks.execution.brokers.ibkr.borrow import IbkrBorrowSource
+
+    cash = connect_ibkr(CONFIG, gateway="paper", client_factory=lambda ep: FakeIbGateway())
+    assert (cash.account_type, cash.allow_short, cash.borrow) == ("cash", False, None)
+    margin_cfg = IbkrBrokerConfig(
+        gateways={"m": {"host": "h", "port": 1, "mode": "paper", "account_type": "margin"}}
+    )
+    fees = FlatBorrow()
+    margin = connect_ibkr(margin_cfg, client_factory=lambda ep: FakeIbGateway(), borrow_fees=fees)
+    assert (margin.account_type, margin.allow_short) == ("margin", True)
+    assert isinstance(margin.borrow, IbkrBorrowSource)
+    with pytest.raises(ValueError, match="account_type"):
+        IbkrBrokerConfig(gateways={"m": {"host": "h", "port": 1, "mode": "paper",
+                                         "account_type": "cfd"}})  # fmt: skip

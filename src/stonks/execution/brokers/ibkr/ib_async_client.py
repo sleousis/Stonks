@@ -44,6 +44,7 @@ from stonks.execution.brokers.ibkr.client import (
     IbLinkStatus,
     IbOrderRequest,
     IbPosition,
+    IbShortability,
     IbSnapshot,
     IbTrade,
     IbWhatIf,
@@ -64,6 +65,8 @@ _ORDER_ERROR_KINDS = frozenset({"rejected", "bad_tick", "duplicate_order_id"})
 _ACK_POLL_SECONDS = 0.05
 #: Market data type 3: live where subscribed, else delayed.
 _MARKET_DATA_TYPE = 3
+#: Generic tick list for the shortable indicator and shares.
+_SHORTABLE_TICKS = "236"
 
 
 class IbAsyncClient:
@@ -224,6 +227,28 @@ class IbAsyncClient:
         wanted = [to_contract(c) for c in contracts]
         tickers = self._run(lambda: self.ib.reqTickersAsync(*wanted))
         return [from_ticker(t) for t in _items(tickers)]
+
+    def shortability(self, contracts: Sequence[IbContract]) -> Sequence[IbShortability]:
+        """The shortable ticks (generic tick 236) of each contract. IBKR
+        sends them only on a streaming request, so this subscribes, waits
+        until every answer arrived (or most of the request timeout passed)
+        and cancels again. A contract with no answer has ``indicator=None``."""
+        wanted = [to_contract(c) for c in contracts]
+        wait = max(0.1, self.endpoint.request_timeout * 0.8)
+
+        async def collect() -> list[IbShortability]:
+            tickers = [self.ib.reqMktData(c, _SHORTABLE_TICKS, False, False) for c in wanted]
+            try:
+                loop = asyncio.get_running_loop()
+                deadline = loop.time() + wait
+                while loop.time() < deadline and any(_missing(t.shortable) for t in tickers):
+                    await asyncio.sleep(_ACK_POLL_SECONDS)
+            finally:
+                for c in wanted:
+                    self.ib.cancelMktData(c)
+            return [from_shortable(t) for t in tickers]
+
+        return self._run(collect)
 
     # ---- orders ----------------------------------------------------------------------
 
@@ -442,6 +467,16 @@ def from_order_state(s: Any) -> IbWhatIf:
         commission_currency=_text(s.commissionCurrency),
         warning=_text(s.warningText),
     )
+
+
+def _missing(value: Any) -> bool:
+    return value is None or (isinstance(value, float) and math.isnan(value))
+
+
+def from_shortable(t: Any) -> IbShortability:
+    indicator = None if _missing(t.shortable) else float(t.shortable)
+    shares = None if _missing(t.shortableShares) else float(t.shortableShares)
+    return IbShortability(con_id=int(t.contract.conId), indicator=indicator, shares=shares)
 
 
 def from_ticker(t: Any) -> IbSnapshot:

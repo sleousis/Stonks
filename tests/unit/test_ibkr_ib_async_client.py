@@ -81,6 +81,9 @@ class FakeIB:
         self.global_cancels = 0
         self.details: list[ContractDetails] = []
         self.queries: list[Contract] = []
+        self.shortable: dict[int, tuple[float, float]] = {}
+        self.mkt_requests: list = []
+        self.mkt_cancels: list = []
 
     def isConnected(self):
         return self.connected
@@ -140,6 +143,23 @@ class FakeIB:
             t.bid, t.ask = 1.0, 1.2
             out.append(t)
         return out
+
+    def reqMktData(self, contract, generic, snapshot, regulatory):
+        self.mkt_requests.append((contract.conId, generic, snapshot))
+        t = Ticker(contract=contract, time=NOW)
+        answer = self.shortable.get(contract.conId)
+        if answer is not None:
+            loop = asyncio.get_running_loop()
+
+            def arrive():
+                t.shortable, t.shortableShares = answer
+
+            loop.call_later(0.01, arrive)
+        return t
+
+    def cancelMktData(self, contract):
+        self.mkt_cancels.append(contract.conId)
+        return True
 
     def placeOrder(self, contract, order):
         order.orderId = len(self.trades) + 1
@@ -353,3 +373,18 @@ def test_from_trade_without_fills():
     order = Order(orderId=1, action="BUY", totalQuantity=2, orderRef="")
     t = from_trade(Trade(AAPL, order, OrderStatus(orderId=1, status="Submitted", permId=4), [], []))
     assert (t.filled, t.reason, t.tif, t.order_ref, t.perm_id) == (0.0, None, None, "", 4)
+
+
+def test_shortability_streams_generic_tick_236_then_cancels(pair):
+    c, ib = pair
+    c.connect()
+    ib.shortable = {265598: (3.0, 12_000.0)}
+    other = IbContract(1, "NOPE", "STK", "USD", "SMART", "NYSE")
+    first, second = c.shortability([IB_AAPL, other])
+    assert (first.con_id, first.indicator, first.shares) == (265598, 3.0, 12_000.0)
+    assert (second.con_id, second.indicator, second.shares) == (1, None, None)
+    assert [(cid, g, snap) for cid, g, snap in ib.mkt_requests] == [
+        (265598, "236", False),
+        (1, "236", False),
+    ]
+    assert ib.mkt_cancels == [265598, 1]
