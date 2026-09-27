@@ -2124,6 +2124,12 @@ def _record_order(
     extra.update(order_live_values(order, ledger_columns(state, "orders")))  # migration 027
     extra_col = "".join(f", {c}" for c in extra)
     extra_val = ", ?" * len(extra)
+    # The tick writes the coarse status. A re-record (a rerun resubmitting a
+    # rejected order) clears the fine state, which is then read from status
+    # (migration 027, execution.order_state).
+    reset_state = (
+        ",\n            state = NULL" if "state" in ledger_columns(state, "orders") else ""
+    )
     state.execute(
         f"""
         INSERT INTO orders
@@ -2134,7 +2140,7 @@ def _record_order(
         ON CONFLICT (client_id) DO UPDATE SET
             status = excluded.status,
             status_reason = excluded.status_reason,
-            updated_at = excluded.updated_at
+            updated_at = excluded.updated_at{reset_state}
           WHERE orders.status IS NOT excluded.status
              OR orders.status_reason IS NOT excluded.status_reason
         """,
