@@ -78,7 +78,7 @@ A login with the same username anywhere else (TWS, the web portal, the mobile ap
 - **Daily.** IB Gateway must restart once a day. IBC restarts it at `AUTO_RESTART_TIME` (`IBKR_AUTO_RESTART_TIME`, default `11:45 PM` in `IBKR_TIME_ZONE`, default `America/New_York`). This keeps the session, so no 2FA is needed. Pick a quiet time away from the submit window (open minus 20 minutes) and the tick (close plus 45 minutes).
 - **Weekly.** After IBKR's Sunday reset (about 01:00 US Eastern) the session expires. IBC types the password and IBKR pushes an approval to **IBKR Mobile** on your phone. Approve it.
 - **Missed it?** `TWOFA_TIMEOUT_ACTION=restart` and `RELOGIN_AFTER_TWOFA_TIMEOUT=yes` make the gateway restart and ask again, so a late approval still works.
-- Stonks sends a push every Sunday evening (`ibkr_reauth_reminder`) and checks the gateway every 5 minutes (`broker_health`).
+- Stonks sends a push every Sunday evening (`ibkr_reauth_reminder`) and checks the gateway every 5 minutes (`broker_health`). The check logs in with the health client id, reads the managed account and the server time. A wrong account, a login that did not finish or a competing session pauses auto at once.
 
 If the gateway is down at submit time, no orders go out that day and the tickets expire. Nothing is ever sent late. Down for two sessions in a row pauses auto subscriptions. See the design doc, "When the gateway is down".
 
@@ -133,11 +133,20 @@ host = "ib-gateway-live"
 port = 4003
 mode = "live"
 portfolios = ["pf_live"]
+account_id = "U1234567"     # the expected account, not a secret
+
+[brokers.ibkr.orders]
+default_time_in_force = "opg"   # join the opening auction
+collar_bps = 100                # a market order goes out as a limit this far through the reference
+order_ref_max_length = 40       # longer client ids go out as a stable hash
 ```
 
 - `host` is the Compose service name. It resolves only on the `ibkr` network.
 - `portfolios` lists the portfolio ids that trade through that gateway.
 - `allow_live = false` is the default. Keep it until the paper gate in the design doc passes.
+- `account_id` is checked on every connect. A paper gateway must be logged in to a `DU` account and a live one to a `U` account, or Stonks refuses to trade.
+- `[brokers.ibkr.health] probe = "socket"` only checks the port, for a gateway that is not logged in yet. The default `login` checks the account.
+- Contracts are looked up once and cached in the `broker_contracts` table for 7 days (`contract_max_age_days`).
 - No username, password or token goes in TOML. The optional Flex statements token is `STONKS_IBKR_FLEX_TOKEN` in `deploy/.env`.
 
 ## Start and stop

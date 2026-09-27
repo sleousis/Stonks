@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 19. It takes Stonks from simulated paper trading to real orders at Interactive Brokers (IBKR), in stages, with a gate between each stage.
 
-Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules). The IBKR adapter (19.2) and the rest are proposed. What wave 1 changed against this design is listed in section 11.
+Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2). The rest is proposed. What wave 1 changed against this design is listed in section 11, and what 19.2 changed in section 12.
 
 Owner decisions (2026-09-27):
 
@@ -713,3 +713,18 @@ Wave 1 landed 19.1, 19.4, 19.6 and 19.7, plus the deploy side of 20.6. Where it 
 - **Instruments.** Wave 1 needed no contract details, so it adds no instrument model. The IBKR adapter uses the shared `InstrumentSpec` in `core/` (tick size, lot size, multiplier, currency, broker contract ids) when it lands.
 - **Protections.** Three more live rules, freqtrade style, off by default: `stop_cooldown` (no reopen of a ticker for some days after a stop-out), `stop_guard` (a strategy opens nothing after N stop-outs in a window) and `losing_lock` (a ticker whose last trades all lost is locked). They read the book's closed trades from its own fills. Until broker-side stops exist, a losing exit counts as a stop-out.
 - **Seam ready for 19.2.** `BrokerKind` has `ibkr`, `[brokers.ibkr]` lists the gateways and refuses credentials in TOML, and `make_broker(kind="ibkr")` refuses until the adapter lands. `build_live_context` reads the account and quotes through the new capabilities, so the adapter only has to implement them. Nothing wires `build_live_context` into the tick yet: that is the decide and submit split of 19.8.
+
+## 12. What 19.2 built
+
+The IBKR adapter lives in `execution/brokers/ibkr/`. Where it differs from section 2:
+
+- **Modules.** `client.py` holds the `IbClient` protocol and its plain types. `ib_async_client.py` holds `IbAsyncClient`, the only module that imports `ib_async`. `session.py` holds the loop thread, the backoff and the token bucket. `factory.py` turns `[brokers.ibkr]` into a broker. `borrow.py` waits for 19.3.
+- **Submits.** `place_order` never returns a fill. Fills come from executions. It first looks the client id up by `orderRef` (open orders, completed orders, executions) and sends nothing when IBKR knows it. A submit that drops or times out raises `OrderOutcomeUnknownError` (`execution/brokers/base.py`). The caller marks the order `unknown` and reconciliation finds it. A 103 (duplicate order id) re-checks by `orderRef` before it reports an error.
+- **Order shape.** A market order with a `decision_price` goes out as a collared limit (`[brokers.ibkr.orders] collar_bps`, 100 by default). A market close with no reference goes out as `MKT`. An opening market order with no reference is refused. Stops default to `DAY`. `order_ref_max_length` is 40 until the live contract test measures what the gateway keeps.
+- **Order states.** A cancelled opening-auction order with no fill reads as `expired`, a cancel by hand included. An order known only from its executions reads as `unknown`, so reconciliation settles it.
+- **Account check.** It runs after every connect. The stage check (`live_small` or higher) waits for the stages of 19.9. Live orders need `allow_live`. Reads do not.
+- **Long only.** A short sale is refused until borrow checks land (19.3), since the first live account is a cash account.
+- **Contracts.** `broker_contracts` is SQLite migration 029, with `price_magnifier` next to the minimum tick. Prices are not converted by the magnifier yet: the live contract test checks the LSE price unit first. The lake lookup reads the ISIN, venue and currency from `instruments`.
+- **Health.** `broker_health` logs in through the adapter by default (`IbkrLoginProbe`, the health client id, one try within `probe_timeout_seconds`). `[brokers.ibkr.health] probe = "socket"` keeps the port-only check.
+- **Legacy book.** `make_broker(kind="ibkr")` builds the broker of the gateway that lists `pf_default` (or the only gateway). It connects on first use.
+- **Tests.** `tests/fakes/ib_gateway.py` scripts every failure section 8 lists. Properties: no client id is sent twice across crashes, drops, restarts and faults, and reported executions and commissions equal the gateway's. Live contract tests are in `tests/integration/live/test_ibkr_live.py`.
