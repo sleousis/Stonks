@@ -845,7 +845,10 @@ class ConnectionService:
         cls.require(Capability.TRADE)
         credentials = self._open_credentials(self._secret_box(), record.id)
         try:
-            conn = cls.open(credentials, self._context(cls, record.id))
+            # the trader runs in the caller's thread, so it may use the state
+            # DB (the IBKR contract cache and orderRef lookup, roadmap 19.3)
+            context = self._context(cls, record.id, extra={"state": self._state})
+            conn = cls.open(credentials, context)
             return conn.trader(portfolio.external_account_id)
         except ProviderError as exc:
             raise _redacted(exc, credentials) from None
@@ -972,12 +975,19 @@ class ConnectionService:
             self._box = SecretBox.from_env()
         return self._box
 
-    def _context(self, cls: type[BrokerConnection], connection_id: str) -> ProviderContext:
+    def _context(
+        self,
+        cls: type[BrokerConnection],
+        connection_id: str,
+        *,
+        extra: dict[str, Any] | None = None,
+    ) -> ProviderContext:
         return ProviderContext(
             config=self.config,
             connection_id=connection_id,
             limiter=limiter_for(cls.provider, cls.rate_limit),
             transport=self._transports.get(cls.provider),
+            extra=dict(extra or {}),
         )
 
     def _with_provider(
