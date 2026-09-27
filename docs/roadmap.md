@@ -461,10 +461,28 @@ Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invit
 | 20.4 AI assistant | An in-app chat that talks to any OpenAI-compatible model endpoint (the owner's own open-source model on the local server through Ollama, vLLM or llama.cpp) and acts through the existing MCP tools as the signed-in user. Write actions need the same confirmations as the console, step-up actions stay in the web app. |
 | 20.5 Currency and tax per portfolio | Each portfolio picks a base currency. FX rates in the lake, values and P&L converted, and yearly tax exports (realized gains per lot with FIFO or specific lots, dividends, withholding) for US and EU rules. |
 | 20.6 Deploy anywhere | The same stack on a cloud VM or a local home server: one Compose file with profiles, a local-server guide (Tailscale, auto start, UPS and power loss, backups off the machine), and a cloud guide, with the lab worker and the model server optional. |
+| 20.7 Calendars and news | Earnings, dividend and economic calendars from EODHD, a news and sentiment panel in the console (the data is already in the lake), a warning on an order ticket when earnings fall before the next open, and alerts on these events. |
+| 20.8 Screener | Saved screens on fundamentals and price rules, built on the universe rule provider, savable as a universe for the lab, and an MCP tool. |
 
 ## Phase 21: Intraday trading
 
 Planned after live daily trading is stable. Streaming prices (EODHD websockets, IBKR), a live event engine that decides on minute bars, intraday strategies with realistic fills and session rules, intraday risk (per-minute loss limits, halts), and the monitoring an always-on intraday loop needs.
+
+## Phase 22: Research depth
+
+From the competitor study of 44 open-source projects (Qlib, alphalens, vectorbt, pysystemtrade, freqtrade and others). Stonks leads on validation; these close the gaps in factor research, risk and model lifecycle.
+
+| WP | Scope |
+|----|-------|
+| 22.1 Optuna tuner and objectives | An Optuna tuner behind the Tuner seam, seeded and parallel, with every trial in the ledger, plus Sortino, Calmar, drawdown-penalised and multi-metric objectives. |
+| 22.2 Factor layer | A Factor ABC and registry, a small expression language compiled to DuckDB SQL, cached date-by-ticker panels, and a FactorStrategy. Modelled on Qlib's expression engine. |
+| 22.3 Factor tear sheets | alphalens-style IC by sector, asset class and size, returns per quantile, factor alpha and beta, and a monthly IC heatmap, for any factor. |
+| 22.4 Factor risk model | A PCA then style-factor risk model as a CovarianceEstimator, a style-exposure RiskRule, and factor attribution in reports. |
+| 22.5 Sweeps and heatmaps | Vectorised sweeps for more strategies, with parameter heatmaps in reports and the console, linked to the plateau test. |
+| 22.6 Model lifecycle | Scheduled retraining for ML strategies, model versions under one strategy id, new fits run as model books, swaps only through governance. |
+| 22.7 Forecast weights | Carver-style forecast weights estimated net of costs, and rules dropped when too costly for an instrument. |
+| 22.8 Factor library | An Alpha158-style factor set with a next-open label, plus the fundamentals scores as factors. |
+| 22.9 AI research loop | The assistant proposes hypotheses and runs lab trials under a budget, each counted in the trial ledger. |
 
 ## Execution order
 
@@ -480,3 +498,4 @@ Planned after live daily trading is stable. Streaming prices (EODHD websockets, 
 10. Phase 18 runs last: the review sweep starts as soon as the code is frozen for review, the fix waves follow each merge wave, and the release waits for every gate.
 11. Phase 19 follows `docs/design/live-trading.md`. Its code waves can start once Phase 18 has frozen the money paths, and real money waits for each stage gate.
 12. Phase 17 (options) starts now, in parallel with Phase 19. Phase 20 runs alongside them. Phase 21 (intraday) follows once live daily trading is stable.
+13. Phase 22 (research depth) follows the Phase 19 and 20 waves. Full comparison: the competitor study page.
