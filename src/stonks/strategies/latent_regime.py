@@ -40,7 +40,13 @@ from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.regimes import MIN_FIT_RETURNS, MarkovSwitchingRegime
 from stonks.logging import get_logger
-from stonks.strategies._common import LakeBarCaches, as_datetime, iso, sell_all_longs
+from stonks.strategies._common import (
+    LakeBarCaches,
+    as_datetime,
+    close_all_positions,
+    closing_orders,
+    iso,
+)
 from stonks.strategies._wrapping import InnerStrategyWrapper, inner_param_specs
 
 _MODEL_FILE = "regime_model.json"
@@ -233,8 +239,10 @@ class LatentRegimeFilter(InnerStrategyWrapper):
         if lake is None or not self.is_risk_off(as_of, lake):
             return self._inner.decide(my_picks, portfolio, prices, as_of)
         if self.params["mode"] == "exit_all":
-            return sell_all_longs(self.id, portfolio, as_of)
+            return close_all_positions(self.id, portfolio, as_of)
         orders = self._inner.decide(my_picks, portfolio, prices, as_of)
+        if self.supports_short:  # covers go through, new shorts do not
+            return closing_orders(orders, portfolio)
         return [o for o in orders if o.side != "buy"]
 
     # ---- persistence ----------------------------------------------------------------

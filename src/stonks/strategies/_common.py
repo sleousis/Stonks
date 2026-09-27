@@ -439,6 +439,39 @@ def long_only_decide(
     ]
 
 
+def close_all_positions(strategy_id: str, portfolio: Portfolio, as_of: Any) -> list[Order]:
+    """A market close of every position: longs sold, shorts covered (a
+    wrapper's risk-off exit, BE-14). For a long-only book it is
+    :func:`sell_all_longs` with each order marked as a close."""
+    out: list[Order] = []
+    for ticker, qty in portfolio.positions.items():
+        if qty == 0:
+            continue
+        side = "sell" if qty > 0 else "buy"
+        token = "sell" if qty > 0 else "cover"
+        out.append(
+            Order(
+                client_id=f"{strategy_id}:{token}:{ticker}:{iso(as_of)}",
+                ticker=ticker,
+                side=side,
+                quantity=abs(qty),
+                order_type="market",
+                strategy_id=strategy_id,
+                position_effect="close",
+            )
+        )
+    return out
+
+
+def closing_orders(orders: Sequence[Order], portfolio: Portfolio) -> list[Order]:
+    """The legs of ``orders`` that reduce a position, split at zero against
+    ``portfolio``: a risk-off block keeps covers and sells of longs and
+    drops every order that opens or adds to one (BE-14)."""
+    from stonks.execution.orders import classify_all
+
+    return [o for o in classify_all(orders, portfolio.positions) if o.position_effect == "close"]
+
+
 def sell_all_longs(strategy_id: str, portfolio: Portfolio, as_of: Any) -> list[Order]:
     """A market sell of every long position (a wrapper's risk-off exit)."""
     return [

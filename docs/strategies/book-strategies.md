@@ -419,6 +419,8 @@ Risk off when at least `k` of the n conditions trigger. Then `mode` decides:
 - `exit_all`: every long is sold.
 - `scale`: buys shrink to the share of conditions that did not trigger.
 
+The wrapper takes `supports_short` from its inner strategy. Around a strategy in `short_mode = "short"` the modes act on opening orders of either side: a new short is blocked or scaled like a new long, a cover always passes, and `exit_all` covers shorts too.
+
 Example params:
 
 ```json
