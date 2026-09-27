@@ -9,6 +9,17 @@
   >
     {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
   </button>
+  <button
+    actions
+    type="button"
+    class="btn btn-primary"
+    [disabled]="runningChecks() || !canRunChecks()"
+    [attr.aria-busy]="runningChecks()"
+    (click)="runChecksNow()"
+  >
+    {{ runningChecks() ? 'Running checks…' : 'Run checks now' }}
+  </button>
+  <app-permission-note actions permission="operations.run" />
 </app-page-header>
 
 <!-- Overall ---------------------------------------------------------------->

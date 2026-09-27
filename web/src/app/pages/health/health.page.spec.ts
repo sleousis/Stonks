@@ -4,6 +4,11 @@ import { type ComponentFixture, TestBed } from '@angular/core/testing';
 
 import type { HealthReportView, IngestRunView, Page, TickRun } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SessionService } from '../../core/auth/session.service';
+import { ConfirmService } from '../../core/confirm/confirm.service';
+import { HaltStateService } from '../../core/halts/halt-state.service';
+import { ToastService } from '../../core/notify/toast.service';
+import { ADMIN } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { HealthPage } from './health.page';
 
@@ -158,5 +163,60 @@ describe('HealthPage', () => {
     expect(text).toContain('No universe is set for trading yet. Ask your admin');
     expect(el.textContent).not.toMatch(/\[[a-z_.]+\]/);
     expect(el.textContent).not.toContain('ingest');
+  });
+
+  it('keeps Run checks now for admins', async () => {
+    await flushAll();
+    const run = [...el.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Run checks now'),
+    )!;
+    expect(run.disabled).toBe(true);
+  });
+});
+
+describe('HealthPage run checks now (admin)', () => {
+  it('confirms, runs the checks, then reloads the report and the halt state', async () => {
+    const confirm = vi.fn().mockResolvedValue(true);
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        ...provideApi(),
+        provideHttpClientTesting(),
+        { provide: ConfirmService, useValue: { confirm } },
+        { provide: HaltStateService, useValue: { refresh } },
+      ],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const signingIn = TestBed.inject(SessionService).load();
+    (await nextRequest(http, '/api/auth/me')).flush(ADMIN);
+    await signingIn;
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    const fixture = TestBed.createComponent(HealthPage);
+    const el: HTMLElement = fixture.nativeElement;
+    fixture.detectChanges();
+    (await nextRequest(http, '/api/health/report')).flush(REPORT);
+    await tick();
+    fixture.detectChanges();
+
+    const run = [...el.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Run checks now'),
+    )!;
+    expect(run.disabled).toBe(false);
+    run.click();
+    const post = await nextRequest(http, '/api/health/run', 'POST');
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        confirmLabel: 'Run checks now',
+        message: expect.stringContaining('stops trading for everyone'),
+      }),
+    );
+    expect(post.request.body).toEqual({ tickers: null });
+    post.flush({ ...REPORT, healthy: true });
+    await tick();
+    (await nextRequest(http, '/api/health/report')).flush({ ...REPORT, healthy: true });
+    await tick();
+    expect(refresh).toHaveBeenCalled();
+    expect(success).toHaveBeenCalledWith('Ran the health checks: all pass.');
   });
 });

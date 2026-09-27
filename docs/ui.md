@@ -414,14 +414,22 @@ Tickers open `/data?instrument=<id>`.
 - Refresh, Ensure data and Back up now return a job. Pages follow it with
   `JobsService.track()` and show `<app-job-progress>`.
 - Run now on a tick job needs the job name typed, like a tick.
+- **Run checks now** on Health (admins, `operations.run`) calls
+  `POST /api/health/run`. It asks first, because stale data or a stuck run
+  opens the operational halt and passing checks clear it. Then it reloads
+  the report and `HaltStateService`.
 - The backup list comes from `GET /api/backups`: every backup on disk,
   also those made from the command line, with its size. Verify is
   `POST /api/backups/{id}/verify`. Restore is
   `POST /api/backups/{id}/restore` with `{"confirmation": "RESTORE <id>"}`
-  and a fresh second factor. It returns a job. The restore is staged: the
-  server restores into a new folder and never touches the live data. The
-  job result (`GET /api/backups/restores/{job_id}/result`) says where the
-  data went and how to switch to it.
+  and a fresh second factor (`StepUpService.ensure()` first, and the
+  session interceptor asks again on 403 `step_up_required`). It returns a
+  job. The restore is staged: the server restores into a new folder and
+  never touches the live data. The job result
+  (`GET /api/backups/restores/{job_id}/result`) says where the data went
+  and how to switch to it, shown above the list with Verify's outcome.
+  Only admins load the list (`operations.run`, and `backups.restore` for
+  Restore).
 - `GET /api/schedule` also returns `market`: the calendar, `is_open`, and
   `today` and `next` sessions, each with `pre_open` (30 minutes before the
   open), `open` and `close` in UTC. `today` is null on days the market is
