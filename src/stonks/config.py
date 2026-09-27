@@ -27,6 +27,7 @@ from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.offload.settings import LabOffloadSettings
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
+from stonks.lifecycle.settings import ModelLifecycleSettings
 from stonks.ops.config import BackupConfig
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.decay import DecaySettings
@@ -523,6 +524,8 @@ class Settings(BaseSettings):
     lab: LabSettings = LabSettings()
     audit: AuditConfig = AuditConfig()
     golive: GoLivePolicy = GoLivePolicy()
+    # ``[lifecycle]``: scheduled retraining and the model swap gate (roadmap 22.6).
+    lifecycle: ModelLifecycleSettings = Field(default_factory=ModelLifecycleSettings)
     mcp: McpConfig = McpConfig()
     ingest: IngestConfig = IngestConfig()
     # ``[ensure]``: how on-demand bar fetches run (docs/universes.md).

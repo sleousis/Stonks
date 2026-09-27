@@ -397,6 +397,20 @@ promotion_preset = "promotion"    # every test of this preset needs a stored rep
 min_backtest_trades = 30
 min_hypothesis_chars = 20
 
+[lifecycle]
+# Model lifecycle (roadmap 22.6, docs/model-lifecycle.md). The model_retrain
+# job refits strategies that learn from data into candidate versions. A
+# candidate runs as a model book beside the live version and swaps in only
+# through `stonks registry swap`, after the swap check below passes.
+lookback_days = 730               # each fit trains on this many calendar days
+statuses = ["active", "shadow"]
+min_days_between_fits = 5         # a newer fit is kept, not redone (unless forced)
+
+[lifecycle.swap]
+min_days = 20                     # candidate model book days before a swap
+max_drawdown = 0.25
+max_underperformance = 0.02       # the candidate may trail the live version by this much
+
 [mcp]
 # `stonks mcp` talks to the running REST API (`stonks serve`); it never opens
 # the lake. Write and job tools send STONKS_API_TOKEN (env only).
