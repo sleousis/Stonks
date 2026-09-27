@@ -130,9 +130,7 @@ class OptionsSimulatedBroker:
             )
         cash_delta = 0.0
         contracts = {
-            leg.contract.contract_id: leg.contract
-            for leg in combo.legs
-            if leg.contract is not None
+            leg.contract.contract_id: leg.contract for leg in combo.legs if leg.contract is not None
         }
         for fill in legs:
             contract = contracts.get(fill.instrument)
