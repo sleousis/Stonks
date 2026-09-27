@@ -470,6 +470,43 @@ Tickers open `/data?instrument=<id>`.
   hovered or focused. Errors stay until dismissed. The toast layer is a
   manual popover in the top layer, so toasts over a modal stay usable.
 
+## Insights and risk
+
+| Page | Route | What it does |
+|---|---|---|
+| Insights | `/insights` | The picked portfolio's value, beta, exposure and largest holding, where the money sits (asset class, sector, currency or holding), returns over periods, risk, which strategies agree with each holding, and the snapshot history |
+| Risk | `/insights/risk` | Each measure against its limit, today's VaR and ES with how often the model missed, each strategy sleeve with its alpha-decay check, and the daily history as a chart and a table |
+
+```mermaid
+flowchart LR
+  I[Insights: GET /api/insights] --> R[Risk screen]
+  P[GET /api/risk/policy] --> R
+  L[GET /api/risk/live] --> R
+  S[GET /api/risk/snapshots] --> R
+```
+
+- Both screens read the portfolio picked in the session strip (a synced
+  broker account too) through `api/insights.service.ts` and
+  `api/risk.service.ts`. `<app-insights-nav>` links them.
+- **Insights** reads `GET /api/insights`, `GET /api/insights/agreement` and
+  `GET /api/portfolio/snapshots` (server paged). Each stance is a word and a
+  mark (agrees, disagrees, has no view), never colour alone. Admins
+  (`portfolio.totals`) also get "All portfolios" from
+  `GET /api/insights/totals`: sums only, never holdings. The headline value
+  is brass only for a live portfolio.
+- **Risk** puts each reading next to its limit in `limitRows()`
+  (`pages/insights/limit-rows.ts`): largest holding, open positions,
+  largest sector, asset-class weights, gross and net exposure, volatility
+  and drawdown from `GET /api/insights`, against `GET /api/risk/policy`,
+  and the VaR violation ratio from `GET /api/risk/live` against its 0.5 to
+  1.5 band. At 80% of a limit a row reads "Near the limit". The status is
+  always written out next to the meter. The limits shown are the system
+  ones, and a trader's own settings can make them tighter.
+- The chart draws the last 200 readings (`GET /api/risk/snapshots`, 95%
+  VaR and ES in pane 0, the day's loss in pane 1). The table below it is
+  server paged.
+- New glossary terms: violation ratio, alpha decay and concentration.
+
 ## Permissions
 
 The console hides or disables what the signed-in user may not do, so nobody
@@ -721,7 +758,7 @@ automate it.
   Ctrl+K / Cmd+K opens the command palette (ARIA combobox: the input keeps
   focus, arrows move `aria-activedescendant`, Enter runs, Escape closes and
   returns focus); `?` lists every shortcut; `g` then a key jumps between
-  pages (`g d` dashboard, `g s` strategies, `g w` shadow, `g o` orders, `g u`
+  pages (`g d` dashboard, `g e` insights, `g s` strategies, `g w` shadow, `g o` orders, `g u`
   studio, `g l` lab, `g a` data, `g g` go-live, `g h` health, `g ,`
   settings); `n b` new backtest, `n t` dry-run tick. Single-key shortcuts can
   be switched off in the cheat sheet (WCAG 2.1.4); Ctrl+K always works.

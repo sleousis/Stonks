@@ -6,6 +6,10 @@ import { GLOSSARY, METRIC_KEYS, findGlossary, glossaryUrl } from './glossary';
  * until the glossary explains it.
  */
 const LABELS_SHOWN = [
+  // Insights and risk
+  'Violation ratio',
+  'Effective holdings',
+  'Largest holding',
   // Signal research
   'Mean IC',
   // Backtest and lab result tiles
