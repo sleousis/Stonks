@@ -14,6 +14,9 @@ import { SubscriptionsService } from '../../api/subscriptions.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { MODES, type ModeOption, modeLabel } from '../../shared/governance-labels';
+import { strategyDisplayName } from '../../shared/strategy-names';
+import { HelpTip } from '../../shared/ui/help-tip';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { ErrorState, LoadingState } from '../../shared/ui/states';
@@ -21,14 +24,10 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
 /** How a new follower starts. Auto is never a starting mode. */
 export type FollowMode = 'notify' | 'paper';
 
-export const FOLLOW_MODES: readonly { value: FollowMode; label: string; help: string }[] = [
-  { value: 'notify', label: 'Signals only', help: 'You get its signals. Nothing trades.' },
-  {
-    value: 'paper',
-    label: 'Paper trading',
-    help: 'It trades simulated money in one of your portfolios.',
-  },
-];
+/** The starting modes, in the same words as Today's switch (UX-31). */
+export const FOLLOW_MODES = MODES.filter(
+  (m): m is ModeOption & { value: FollowMode } => m.value !== 'auto',
+);
 
 /**
  * Strategy page: follow this strategy, for signals only or paper trading in
@@ -38,7 +37,7 @@ export const FOLLOW_MODES: readonly { value: FollowMode; label: string; help: st
 @Component({
   selector: 'app-follow-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, ModeStamp, PermissionNote, ErrorState, LoadingState],
+  imports: [RouterLink, HelpTip, ModeStamp, PermissionNote, ErrorState, LoadingState],
   template: `
     <section class="panel" aria-labelledby="follow-title">
       <div class="panel-head">
@@ -90,7 +89,7 @@ export const FOLLOW_MODES: readonly { value: FollowMode; label: string; help: st
                   (change)="mode.set(m.value)"
                 />
                 <span class="mode-text">
-                  <strong>{{ m.label }}</strong>
+                  <strong>{{ m.label }} <app-help-tip [term]="m.label" /></strong>
                   <span class="muted">{{ m.help }}</span>
                 </span>
               </label>
@@ -245,9 +244,7 @@ export class FollowPanel {
     void this.ctx.load();
   }
 
-  protected modeLabel(mode: string): string {
-    return mode === 'auto' ? 'Auto' : (FOLLOW_MODES.find((m) => m.value === mode)?.label ?? mode);
-  }
+  protected readonly modeLabel = modeLabel;
 
   protected portfolioName(id: string): string {
     return this.ctx.options().find((p) => p.id === id)?.name ?? 'one of your portfolios';
@@ -256,6 +253,7 @@ export class FollowPanel {
   protected async follow(): Promise<void> {
     if (!this.canFollow()) return;
     const paper = this.mode() === 'paper';
+    const name = strategyDisplayName(this.strategyId());
     this.busy.set(true);
     try {
       await this.api.subscribe({
@@ -266,8 +264,8 @@ export class FollowPanel {
       this.subs.reload();
       this.toasts.success(
         paper
-          ? `Following ${this.strategyId()} on paper in ${this.portfolioName(this.portfolioId())}.`
-          : `Following ${this.strategyId()} for signals.`,
+          ? `Following ${name} on paper in ${this.portfolioName(this.portfolioId())}.`
+          : `Following ${name} for signals.`,
       );
     } catch {
       // The error interceptor already showed the API's message.

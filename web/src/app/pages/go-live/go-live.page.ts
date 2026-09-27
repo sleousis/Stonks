@@ -72,7 +72,9 @@ export class GoLivePage {
   });
 
   protected readonly rows = computed<CheckRow[]>(() =>
-    this.report.hasValue() ? this.report.value().checks.map(checkRow) : [],
+    this.report.hasValue()
+      ? this.report.value().checks.map((c) => checkRow(c, this.report.value().strategy_id))
+      : [],
   );
 
   protected readonly failedCount = computed(() => this.rows().filter((r) => !r.passed).length);

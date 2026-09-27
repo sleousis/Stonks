@@ -254,7 +254,7 @@ export class StatusChangeDialog {
 
   protected readonly failing = computed<CheckRow[]>(() => {
     const g = this.current()?.golive;
-    return g ? g.checks.filter((c) => !c.passed).map(checkRow) : [];
+    return g ? g.checks.filter((c) => !c.passed).map((c) => checkRow(c, g.strategy_id)) : [];
   });
 
   private readonly reasonLength = computed(() => this.reason().trim().length);

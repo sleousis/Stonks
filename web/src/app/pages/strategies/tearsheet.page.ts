@@ -111,7 +111,7 @@ export class TearsheetPage {
   );
   protected readonly checks = computed(() => {
     const g = this.sheet.hasValue() ? this.sheet.value().golive : null;
-    return g ? g.checks.map(checkRow) : [];
+    return g ? g.checks.map((c) => checkRow(c, g.strategy_id)) : [];
   });
   protected readonly golive = computed(() =>
     goliveLabel(this.sheet.hasValue() ? this.sheet.value().golive?.passed : null),
