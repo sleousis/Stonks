@@ -126,7 +126,7 @@ With one user, one portfolio and those subscriptions the tick must produce byte-
 - `allow_short` defaults to false (see `shorting.md`).
 
 **`subscriptions`** `(id, user_id, strategy_id, portfolio_id, mode, weight, risk_overrides_json, enabled, auto_enabled_at, auto_enabled_by, paused_reason, created_at, updated_at)`
-- `mode ∈ {notify, paper, auto}`.
+- `mode ∈ {notify, paper, approve, auto}`. `approve` (roadmap 19.8) is optional: the tick decides and every order waits for a person as an order ticket. Switching to it passes the auto checklist.
 - `portfolio_id` is optional for notify (signals without sizing) and required for paper and auto. Unique `(portfolio_id, strategy_id)`; unique `(user_id, strategy_id)` where `portfolio_id IS NULL`.
 - `weight`: the strategy's share of the portfolio's risk budget, fed to the construction pipeline as `strategy_weights`.
 - `risk_overrides_json`: e.g. `max_positions`, `max_weight_per_ticker`, `max_order_notional` for this strategy's slice.
