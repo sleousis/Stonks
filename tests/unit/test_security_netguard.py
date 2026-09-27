@@ -36,7 +36,9 @@ from stonks.security.netguard import (
 )
 def test_ip_literal_reads_every_numeric_form(host, expected):
     got = ip_literal(host)
-    assert (str(got) if got is not None else None) == expected
+    # Compare addresses, not text: Python 3.12 and 3.13 format an
+    # IPv4-mapped IPv6 address differently.
+    assert got == (ipaddress.ip_address(expected) if expected is not None else None)
 
 
 @pytest.mark.parametrize(
