@@ -203,6 +203,11 @@ max_concurrent_jobs = 2
 
 [scheduler]
 catch_up = "none"
+
+# On, but served by tests.e2e.fake_assistant: nothing listens at this address.
+[assistant]
+base_url = "http://assistant.invalid/v1"
+model = "e2e-keyword"
 """.lstrip()
 
 
