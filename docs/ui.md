@@ -1,9 +1,11 @@
 # Trader console (web UI)
 
 The Angular app in `web/` is the trader console: sign-in, a simple home,
-profile, the first-run guide, watchlists, charts, the leaderboard and tear sheets, admin users, and the advanced pages (dashboard, strategies, studio,
-lab, data, universes, orders, shadow, go-live, halts, schedule and backups,
-data quality, health and settings). It talks only to the
+profile, the first-run guide, watchlists, charts, strategies, orders and
+trade costs, insights, notifications, the research pages (paper trading,
+leaderboard and tear sheets, studio, lab, go live) and the admin pages
+(overview, health, schedule and backups, data, data quality, universes,
+halts, users). It talks only to the
 REST API (`src/stonks/api/`) through a client generated from the checked-in
 contract `web/openapi.json`.
 
@@ -29,19 +31,19 @@ serves it at `/` with single-page fallback (`[api].ui_dist`), so one process
 serves both. The dev server origin (`http://localhost:4200`) is the API's
 `[api].ui_origin` for CORS, although the proxy makes CORS unnecessary in dev.
 
-Every call needs a credential. Sign in, or paste an API token (on the sign-in
-page under "Use an API token instead", or in **Settings**; kept in
-`sessionStorage` for that tab only). For local UI work, start the API with
+Every call needs a credential. Sign in, or paste an API token (in the
+closed "For scripts" section of the sign-in page, open only in dev, or of
+**Settings**; kept in `sessionStorage` for that tab only). For local UI work, start the API with
 `STONKS_PROFILE=dev` so reads from 127.0.0.1 work without signing in. See
 `docs/security.md` and [Sign-in and the trader home](#sign-in-and-the-trader-home).
 
 | Command | What it does |
 |---|---|
 | `npm start` | Dev server with the `/api` proxy (`proxy.conf.json`) |
-| `npm run build` | Production build into `web/dist/` |
+| `npm run build` | Production build into `web/dist/`, then `scripts/preload-routes.mjs` (see [Lighthouse budget](#lighthouse-budget)) |
 | `npm test` | Unit tests once, headless (Vitest + jsdom via `ng test`) |
 | `npm run test:watch` | Unit tests in watch mode |
-| `npm run lint` | ESLint (angular-eslint, template accessibility rules) |
+| `npm run lint` | ESLint (angular-eslint, template accessibility rules), the node specs in `scripts/`, and the copy check |
 | `npm run format` / `format:check` | Prettier |
 | `npm run api:generate` | Regenerate the typed client from `openapi.json` |
 | `npm run api:check` | Regenerate and fail if the committed client differs (CI) |
@@ -329,8 +331,22 @@ picks one instead of typed tickers (`universe_id`), and "Fetch missing
 data first" sends `ensure_data`: the server fetches the missing prices in
 a data job before tuning, and the result says so when `ensure_job_id` is
 set.
-Registering defaults to `register_if_passes` (the promotion suite, a
-required hypothesis); "Always" sends `register_strategy`. Walk-forward,
+The form shows only what a first run needs: strategy, tickers or
+universe, window, suite, hypothesis ("Why it should work") and "Start
+paper trading if it passes" (`register_if_passes`, with the Go-live suite
+and a required hypothesis). Everything else (search space and method,
+objective, trials, seed, tuning share, embargo, benchmark, walk-forward
+and MCPT options, pass rules, premortem, and "Start paper trading whatever
+the verdict", which sends `register_strategy`) sits in one closed
+**Advanced** fold that opens itself when one of its fields is wrong. The
+`promotion` preset is called the **Go-live suite** everywhere. `/lab?preset=`
+picks a suite, with `?strategy=` and `?tickers=`, so a failing go-live check
+links straight to a prefilled run. A backtest or plain lab run starts with
+no confirm; a run that may start paper trading asks once, plainly. A
+finished run shows a next step: Start paper trading (a prefilled re-run),
+what failed and "Change and run again", or Open strategy and Follow. Costs
+use the shared `<app-cost-field>` (`pages/lab/cost-field.ts`), and
+Studio's backtests default to the configured costs and run the same suites. Walk-forward,
 MCPT and the per-test "advanced options" start blank, meaning "the test's
 default", and only filled fields are sent, so presets keep their own
 settings. The options come from `GET /api/lab/survival-tests`: each test's
@@ -414,8 +430,8 @@ Tickers open `/data?instrument=<id>`.
 | Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
 | Universes | `/universes`, `/universes/:id` | List, create (JSON spec or CSV), index history import, members on a date, Refresh and Ensure data |
 
-- `<app-session-strip>` sits above every page: the next scheduled run with
-  a live countdown (`GET /api/schedule`), and the halt state. It turns red
+- `<app-session-strip>` sits above every page: the next trading run with
+  a live countdown (`GET /api/schedule`), Stop trading, and the halt state. It turns red
   while a kill switch is on and amber for a breaker or operational halt.
   `HaltStateService` (`core/halts/`) reads active halts every minute and
   right after any halt action.
@@ -427,9 +443,28 @@ Tickers open `/data?instrument=<id>`.
   first, and again with `force` when the API answers 403
   `step_up_required`. The default service never prompts. The sign-in work
   provides the real one.
-- Refresh, Ensure data and Back up now return a job. Pages follow it with
-  `JobsService.track()` and show `<app-job-progress>`.
-- Run now on a tick job needs the job name typed, like a tick.
+- Refresh, Fetch missing data, Update data, a trading run and Back up now
+  return a job. Pages follow it with `JobsService.track()` and show
+  `<app-job-progress [result]="r">` with a `jobActions` slot for Cancel.
+  Every read after a job goes through `JobResult.load()`
+  (`shared/ui/job-progress.ts`), which shows a failed read inline with Try
+  again, never a silent "Finished".
+- Run now on the trading run is the same order ticket as the runner
+  (`tickTicket()`): broker, PAPER or LIVE stamp, and the broker label
+  typed. Other jobs ask plainly, named by `jobLabel()`
+  (`core/schedule/job-labels.ts`: Trading run, Price update, Broker sync,
+  Health check, ...). A real run cannot be dated before the last real run.
+- Schedule, Health, Data quality and Halts refresh on their own
+  (`autoRefresh`, `<app-updated-ago>`). Schedule also reads again just
+  after a job's time passes, so "due now" never sticks.
+- Data says "Update data" (the action) and "Data updates" (the history),
+  with labels for providers, kinds and outcomes from
+  `pages/data/data-labels.ts`, never raw ids. Each universe kind asks for
+  its own fields, JSON is behind "Edit as JSON", and members are a paged
+  table with a search box.
+- A trading run shows "Dry run" or its PAPER or LIVE stamp
+  (`<app-tick-mode>`) when the summary carries `dry_run` and
+  `broker_mode`.
 - **Run checks now** on Health (admins, `operations.run`) calls
   `POST /api/health/run`. It asks first, because stale data or a stuck run
   opens the operational halt and passing checks clear it. Then it reloads
@@ -592,6 +627,27 @@ flowchart LR
   P&L and snapshots (Insights) and lab trials (trial ledger, and one run).
   A failure toasts the API's reason.
 
+## Shared pieces from the usability pass (18.6)
+
+| Piece | Where | Use it for |
+|---|---|---|
+| `jobLabel()`, `nextTradingRun()` | `core/schedule/job-labels.ts` | Naming a scheduled job, finding the run that trades |
+| `TradingDayService.runsPassed`, `loaded`, `hasTradingRun` | `core/schedule/` | Reloading after a trading run, telling "nothing scheduled" from "not read yet" |
+| `<app-kill-sheet>`, `StopTradingService`, `killTicket()` | `shared/ui/`, `core/halts/` | Stop trading from anywhere |
+| `haltScopeText()` | `core/halts/halt-view.ts` | "Every portfolio", "Your portfolios", a portfolio's name, never an id |
+| `<app-account-menu>` | `shell/` | Profile, Settings, Broker connections, Get set up, Glossary, Sign out |
+| `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few: a radio group with arrow keys, 44px on phones |
+| `<app-no-book>`, `bookState()` | `shared/ui/no-book.ts` | A money page for someone with no portfolio |
+| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Orders, Fills, Trading runs and Trade costs, one tap apart |
+| `<app-copy-button>`, `copyText()`, `downloadText()` | `shared/ui/copy-button.ts` | Copy with a visible message when the clipboard is blocked |
+| `JobResult`, `<app-job-progress [result]>` | `shared/ui/job-progress.ts` | A job's result read with an inline error and Try again |
+| `<app-tick-mode>` | `pages/orders/tick-mode.ts` | "Dry run" or the PAPER or LIVE stamp for a trading run |
+| `<app-cost-field>` | `pages/lab/cost-field.ts` | Backtest costs in the Lab and Studio |
+| `strategyDisplayName()`, `strategyKindName()` | `shared/strategy-names.ts` | Names, not ids |
+| `goLiveTicket()`, `demoteOptions()`, `checkFix()` | `shared/governance.ts`, `shared/golive-checks.ts` | Go live, Back to paper trading, Stop, and the fix for a failing check |
+| `<app-stage-bar compact>` | `pages/strategies/stage-bar.ts` | The lifecycle steps, framed on the strategy page, bare in Studio |
+| Trading words | `core/help/glossary.ts` (`TRADING_KEYS`, `GLOSSARY_GROUPS`) | Help tips for Paper trading, Auto, Kill switch, Dry run, Trading run, ... |
+
 ## Permissions
 
 The console hides or disables what the signed-in user may not do, so nobody
@@ -603,10 +659,11 @@ fills in a form that ends in a 403. The server still decides.
 - `core/auth/permissions.ts` mirrors the server policy (roles, token scopes,
   browser-session-only). Step-up is not checked: the interceptor asks for a
   code when the API wants one.
-- `SessionService.can('strategy.promote')`, `whyNot(...)` and
-  `canCall('POST', '/api/ticks')`. Put `<app-permission-note
-  permission="...">` after a disabled action: it prints "Admins only." and
-  renders nothing when allowed.
+- `SessionService.can('strategy.promote')` and `whyNot(...)`. Put
+  `<app-permission-note permission="...">` after a disabled action: it
+  prints "Admins only." and renders nothing when allowed.
+  `route-permissions.gen.ts` supplies the permission names, and
+  `permissions.spec.ts` fails if a route's permission has no rule.
 - The sidebar shows the user's name and role.
 
 ## Portfolio picker
@@ -614,17 +671,42 @@ fills in a form that ends in a 403. The server still decides.
 `core/portfolio/portfolio-context.service.ts` holds which portfolio the
 money pages show. It reads `GET /api/portfolios` (a 404 keeps the
 picker hidden and nothing changes), remembers the pick per browser, and
-never sends an id that is no longer listed. `PortfolioService`,
+never sends an id that is no longer listed. The pick is stored per user
+(`stonks.portfolio.<user_id>`). A failed read retries on its own (2 s, 4
+s, ... up to a minute), and `load(true)` always starts a new read, so a
+network blip never hides the LIVE stamp for the session. `PortfolioService`,
 `OrdersService` and `TcaService` add `portfolio_id` from it. Pages put
 `portfolioCtx.selectedId()` in their resource params so a new pick reloads
 them. `<app-portfolio-picker>` sits in the session strip with a PAPER or
-LIVE stamp, and shows only with two or more portfolios.
+LIVE stamp, and shows only with two or more portfolios, one option per
+portfolio.
+
+A money page puts `bookState(ctx) === 'ready' ? {...} : undefined` in its
+resource params and renders `<app-no-book>` (`shared/ui/no-book.ts`) when
+the state is `none`: one action, "Open a paper portfolio", to
+`/welcome?step=portfolio`. It never reads a portfolio without one, and
+never says "ask your admin".
 
 ## Copy rule
 
-No CLI commands, config keys, environment variables or raw ids in trader
-copy. `npm run lint` runs `scripts/check-copy.mjs`, which fails on
-`stonks <command>`, `STONKS_*`, `[section]` config keys and "command line".
+No CLI commands, config keys, environment variables, raw ids or system
+words in trader copy. `npm run lint` runs `scripts/check-copy.mjs`, which
+fails on `stonks <command>`, `STONKS_*`, `[section]` config keys and
+"command line" anywhere, and on the system words tick, ingest, shadow,
+promote, register, retire, `class_path` and `python -m` in prose
+(template text, shown attributes, string literals with a space, and
+capitalised labels). Routes, API paths, snake ids, styles and bindings are
+skipped. The one allowlisted file is the glossary, which explains the
+system names on purpose. `node scripts/check-copy.mjs src/app/pages/lab`
+checks one folder. The rule's own specs are `scripts/check-copy.test.mjs`.
+
+Names, not ids: `strategyDisplayName()` (`shared/strategy-names.ts`)
+turns `stocks_on_the_move_3fa9c21b` into "Stocks on the move 3fa9" (a
+draft's own name wins), with the id under "Technical details".
+`<app-status-pill>` writes strategy statuses as Paper trading, Live and
+Stopped and outcomes as Passed and Failed on its own. One `MODES` list
+(`shared/governance-labels.ts`) names Signals only, Paper trading and
+Auto, and `toTraderWords()` rewrites the server's gate details.
 
 ### Words across surfaces
 
@@ -635,14 +717,17 @@ about the same thing.
 | Console word | API | CLI | MCP |
 |---|---|---|---|
 | Trading run | `/api/ticks` | `stonks tick` | `run_tick`, `list_ticks`, `get_tick` |
-| Paper trading (stage "Paper", nav "Shadow") | status `shadow`, `/api/shadow/...` | `registry shadow` | `shadow_strategy`, `list_shadow_pnl` |
+| Paper trading (stage "Paper", page `/paper`, `/shadow` redirects) | status `shadow`, `/api/shadow/...` | `registry shadow` | `shadow_strategy`, `list_shadow_pnl` |
 | Go live, Live | status `active`, `.../promote` | `registry promote` | `promote_strategy` |
 | Back to paper trading | `.../shadow` | `registry shadow` | `shadow_strategy` |
 | Stop (a strategy) | status `retired`, `.../retire` | `registry retire` | `retire_strategy` |
 | Strategies | `/api/strategies` | `stonks registry` | `*_strategy`, `list_strategies` |
 | Follow a strategy | `POST /api/subscriptions` | none | `subscribe` |
 | Trade costs | `/api/tca` | `stonks tca` | `get_tca_summary`, `list_trade_journal`, `get_order_tca` |
-| Kill switch, "Buys only" | `POST /api/halts/kill`, `buys_only` | `halts kill --buys-only` | `engage_kill_switch` (`buys_only`) |
+| Stop trading (kill switch), "Stop new buys only" | `POST /api/halts/kill`, `buys_only` | `halts kill --buys-only` | `engage_kill_switch` (`buys_only`) |
+| Update data, Data updates | `/api/ingest/*`, `ingest_runs` | `stonks ingest` | `run_ingest` |
+| Go-live suite | preset `promotion` | `--preset promotion` | `run_lab` (`preset`) |
+| Signals only, Paper trading, Auto (modes) | `notify`, `paper`, `auto` | none | `subscribe` (`mode`) |
 | Signal IC | `/api/lab/signal-ic` | `stonks lab ic` | `run_signal_ic` |
 | Trial ledger | `/api/lab/ledger` | none | `list_ledger_runs`, `get_ledger_run` |
 | Notifications (feed) | `/api/notifications` | `python -m stonks.notify` | `list_notifications` |
@@ -710,10 +795,14 @@ layered, apply to every page and shared component:
 
 1. **The trading day is the spine.** `<app-session-strip>` sits on top of
    every page: the market phase (pre-open, open, closed) with a track from
-   pre-open to the close, and the next scheduled run with a live countdown,
-   from `GET /api/schedule` (`market`, `jobs`, read once through
-   `TradingDayService`). It turns red for a kill switch and amber for a
-   breaker. Home is **Today**: a blotter of the next run, trading runs and
+   pre-open to the close, the next **trading run** with a live countdown
+   (never a system job; admins get a quiet "Then Broker sync 14:00" when
+   one comes first), and **Stop trading**. It reads `GET /api/schedule`
+   (`market`, `jobs`) once through `TradingDayService`, whose `runsPassed`
+   goes up just after each trading run starts: Today lists it as an
+   `autoRefresh` trigger, so the blotter, tape and value reload by
+   themselves. The strip turns red for a kill switch (the rail gets a red
+   edge too) and amber for a breaker. Home is **Today**: a blotter of the next run, trading runs and
    signals in time order, a tape of the latest fills, the portfolio and my
    strategies.
 2. **Tape and ticket.** Every price, quantity, date and time is set in the
@@ -744,6 +833,25 @@ indicator (it draws itself), the empty-state mark (still) and the error mark
 label. `<app-empty-state>` shows the mark, a title in the display face, one
 line on what fills the space, and one action in its content slot.
 `<app-error-state>` shows the broken mark, the API's message and Try again.
+
+**Stop trading** (UX-01) is one tap from any page, on phones too: the
+strip's red-outlined button (with the brass ring when the book is live)
+opens `<app-kill-sheet>`, a full-screen sheet on phones that is its own
+ticket: scope preset to the portfolio on screen ("All your portfolios"
+always, "Every portfolio" with `killswitch.global`), All new orders or
+Stop new buys only, a reason filled in and editable, and the stamp. After
+it the strip is red at once and the button becomes Resume, which leads to
+the halts page (Resume keeps the typed RESUME TRADING and a fresh code).
+The palette's "Stop trading" opens the same sheet (`StopTradingService`).
+Viewers never see it.
+
+**Every real-money moment is a ticket.** Go live (`goLiveTicket()`:
+strategy, following portfolios, broker, PAPER or LIVE, and the name typed
+when real money moves), turning auto on or back on (step-up first, then
+the ticket), a trading run from the runner or Schedule (`tickTicket()`),
+the kill switch and Resume (`killTicket()`, `ConfirmTicket.kind`), and
+disconnecting a broker (each linked portfolio with its mode, the provider
+typed).
 
 **Status differs by form** (`<app-status-pill>`, `pillForm()`): a lifecycle
 state is a round `lamp` pill (active, shadow, retired), an outcome is a
@@ -849,9 +957,15 @@ automate it.
   Ctrl+K / Cmd+K opens the command palette (ARIA combobox: the input keeps
   focus, arrows move `aria-activedescendant`, Enter runs, Escape closes and
   returns focus); `?` lists every shortcut; `g` then a key jumps between
-  pages (`g d` dashboard, `g e` insights, `g z` charts, `g x` watchlists, `g b` leaderboard, `g s` strategies, `g w` shadow, `g o` orders, `g u`
-  studio, `g l` lab, `g a` data, `g g` go-live, `g h` health, `g ,`
-  settings); `n b` new backtest, `n t` dry-run tick. Single-key shortcuts can
+  pages (`g m` Today, `g s` strategies, `g o` orders, `g t` trade costs,
+  `g z` charts, `g x` watchlists, `g e` insights, `g n` notifications,
+  `g w` paper trading, `g b` leaderboard, `g u` studio, `g l` lab, `g g`
+  go live, `g p` profile, `g ,` settings, `g c` broker connections, `g i`
+  glossary, and for admins
+  `g d` overview, `g h` health, `g j` schedule, `g a` data, `g q` data
+  quality, `g v` universes, `g k` halts, `g r` users); `n b` new
+  backtest, `n t` dry-run trading run. Pages and actions a user may not
+  use are hidden from the palette, the shortcuts and the cheat sheet. Single-key shortcuts can
   be switched off in the cheat sheet (WCAG 2.1.4); Ctrl+K always works.
   Escape closes dialogs and the drawer.
 - Status is text plus shape (`app-status-pill`), never colour alone; signed
@@ -909,10 +1023,23 @@ flowchart LR
 - **Routes.** `app.config.ts` wraps `app.routes.ts` with `protectRoutes()`, so
   every page gets `authGuard` unless it has `data: { public: true }`.
   `data: { bare: true }` shows a page without the app frame (sign-in).
-  `/admin/users` also has `adminGuard`. Home is `/`; the dashboard is
-  `/dashboard`. The nav keeps Today, Profile (and Users for admins) on top and
-  folds the rest under **Advanced** (closed for traders and viewers, open for
-  admins, tokens and dev mode, remembered per browser).
+  `/admin/users` also has `adminGuard`. Home is `/`.
+- **Nav** (UX-10), no folds:
+
+  | Group | Pages | Who |
+  |---|---|---|
+  | (top) | Today, Strategies, Orders (tabs: Orders, Fills, Trading runs, Trade costs), Charts, Watchlists, Insights, Notifications | everyone signed in |
+  | Research | Paper trading, Leaderboard, Studio, Lab, Go live | Studio and Lab need `lab.run`, the rest are for all |
+  | System | Overview (`/dashboard`), Health, Schedule, Data, Data quality, Universes, Halts, Users | admins |
+  | Account menu (by your name) | Profile, Settings, Broker connections, Get set up, Glossary, Sign out | everyone signed in |
+
+  With open reads and nobody signed in (dev) everything shows.
+- **Signing out** (and a different user signing in on the same tab) loads
+  `/login` afresh through `HARD_NAVIGATE` (`core/auth/hard-navigate.ts`),
+  so no store keeps the last user's portfolios, stamp or halts. Only a 401
+  from `/me` clears the user: a network blip or a 5xx keeps them. A 401 on
+  the tab's own API token clears it and goes to sign-in. A reload in the
+  middle of signing in shows "Signing in" until the next step is known.
 - **Session.** `SessionService` asks `GET /api/auth/me` once (with the tab's
   API token when there is one, as the server prefers it). Statuses:
   `signed-in`, `mfa-pending`, `open` (no one signed in but reads work: dev
@@ -928,11 +1055,17 @@ flowchart LR
   instead of parsing `detail`. A 401 `mfa_required` also has `next_step`:
   `enrol` or `verify`.
 - **Step-up.** Any action that needs a fresh code just calls the API: the
-  interceptor asks when needed. A page that knows beforehand (turning on auto)
+  interceptor asks when needed. The prompt is an `<app-sheet>` (Escape
+  closes it, full screen on phones) with focus in the code field, and a
+  cancelled prompt fails quietly (`quietError()`), with no toast. A page that knows beforehand (turning on auto)
   calls `await inject(StepUpService).ensure('Turn on auto for X.')` first.
   API tokens cannot step up; the prompt says to sign in instead.
 - **QR codes** are drawn in the browser by `uqr` (pinned), behind
-  `core/auth/qr.ts`. The secret never leaves the page.
+  `core/auth/qr.ts`. The secret never leaves the page. On a phone, "Add to
+  authenticator app" (the `otpauth_uri` link) comes first, and the key has
+  a Copy button (`<app-copy-button>`, which says so when the clipboard is
+  blocked). Recovery codes also offer "Download .txt". The alerts step
+  moves on only once push is really on, and says why otherwise.
 - **Today** (`pages/home/`): my portfolio (value, today's change, biggest
   holdings; admins get totals across traders instead, never holdings), a
   tape of the latest session's fills, today's signals and trading runs in

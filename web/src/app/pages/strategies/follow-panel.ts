@@ -79,20 +79,25 @@ export const FOLLOW_MODES = MODES.filter(
           <fieldset class="modes">
             <legend class="visually-hidden">How to follow</legend>
             @for (m of modes; track m.value) {
-              <label class="mode" [class.picked]="mode() === m.value">
-                <input
-                  type="radio"
-                  name="follow-mode"
-                  [value]="m.value"
-                  [checked]="mode() === m.value"
-                  [disabled]="!canTrade()"
-                  (change)="mode.set(m.value)"
-                />
-                <span class="mode-text">
-                  <strong>{{ m.label }} <app-help-tip [term]="m.label" /></strong>
-                  <span class="muted">{{ m.help }}</span>
-                </span>
-              </label>
+              <!-- The help tip sits beside the label, not in it: it keeps the
+                   radio's name to the mode, and a tap on it never picks. -->
+              <div class="mode" [class.picked]="mode() === m.value">
+                <label class="mode-pick">
+                  <input
+                    type="radio"
+                    name="follow-mode"
+                    [value]="m.value"
+                    [checked]="mode() === m.value"
+                    [disabled]="!canTrade()"
+                    (change)="mode.set(m.value)"
+                  />
+                  <span class="mode-text">
+                    <strong>{{ m.label }}</strong>
+                    <span class="muted">{{ m.help }}</span>
+                  </span>
+                </label>
+                <app-help-tip [term]="m.label" />
+              </div>
             }
           </fieldset>
           @if (mode() === 'paper') {
@@ -174,6 +179,14 @@ export const FOLLOW_MODES = MODES.filter(
     }
     .mode.picked {
       border-color: var(--color-primary);
+    }
+    .mode-pick {
+      display: flex;
+      flex: 1;
+      align-items: flex-start;
+      gap: var(--space-2);
+      min-width: 0;
+      cursor: pointer;
     }
     .mode input {
       margin-top: 3px;
