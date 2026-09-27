@@ -46,7 +46,7 @@ import { OrderStatus, orderReason } from './order-status';
         <app-side-tag [side]="o.side" />
       </ng-template>
       <ng-template appCell="status" [appCellOf]="rows()" let-o>
-        <app-order-status [status]="o.status" [reason]="reason(o)" />
+        <app-order-status [status]="o.status" [state]="o.state" [reason]="reason(o)" />
       </ng-template>
       <ng-template appCell="tick_id" [appCellOf]="rows()" let-o>
         @if (o.tick_id) {

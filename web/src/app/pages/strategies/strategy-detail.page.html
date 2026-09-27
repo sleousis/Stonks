@@ -145,7 +145,7 @@
             <app-side-tag [side]="o.side" />
           </ng-template>
           <ng-template appCell="status" [appCellOf]="orders.value().items" let-o>
-            <app-status-pill [status]="o.status" />
+            <app-order-status [status]="o.status" [state]="o.state" [showNote]="false" />
           </ng-template>
         </app-data-table>
       }

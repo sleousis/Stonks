@@ -43,6 +43,7 @@ import { SideTag } from '../../shared/ui/side-tag';
 import { ErrorState, EmptyState, LoadingState } from '../../shared/ui/states';
 import { StatusChangeDialog } from '../../shared/ui/status-change-dialog';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { OrderStatus } from '../orders/order-status';
 import { FollowPanel } from './follow-panel';
 import { StageBar } from './stage-bar';
 import { formatParam, strategyDisplayName, strategyKindName } from './strategy-format';
@@ -189,6 +190,7 @@ function metricList(report: SurvivalReportView): { key: string; label: string; v
     DataTable,
     TableCell,
     SideTag,
+    OrderStatus,
     LoadingState,
     EmptyState,
     ErrorState,
