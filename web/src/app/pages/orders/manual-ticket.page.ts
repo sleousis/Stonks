@@ -23,6 +23,7 @@ import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
 import { SideTag } from '../../shared/ui/side-tag';
+import { EarningsWarningLine } from './earnings-warning';
 import { ManualOrdersList } from './manual-orders-list';
 import { OrderRefusalPanel, type OrderRefusal, refusalOf } from './order-refusal';
 import { OrderStatus } from './order-status';
@@ -99,6 +100,7 @@ export function orderLines(
     OrderRefusalPanel,
     OrderStatus,
     ManualOrdersList,
+    EarningsWarningLine,
   ],
   template: `
     <div class="layout">
@@ -133,6 +135,7 @@ export function orderLines(
               <span id="mo-ticker-error" class="hint error">{{ e }}</span>
             }
           </div>
+          <app-earnings-warning [ticker]="tickerField()" />
 
           <div class="field">
             <span class="label">Side</span>
