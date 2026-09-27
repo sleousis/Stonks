@@ -39,6 +39,22 @@ Implementations
     ``allow_zero_volume``); the whole order carries when
     ``carry_unfilled``.
 
+- ``MinuteFillModel`` (``MinuteFillSettings.build()``, roadmap 21.2.3):
+  the fills of an intraday book. It uses ``BarFillModel`` for order types
+  and the participation cap of the minute's volume, and adds:
+
+  * **day orders**: an order that is not good till cancelled expires
+    when its fill bar is in a later session than its decision
+    (``BarQuote.new_session``). An IOC order never carries.
+  * **gap in bars**: the gap guard counts bars (``BarQuote.gap_bars``),
+    not calendar days.
+  * **half spread**: with a recorded quote (``bid`` and ``ask``) a buy
+    pays half the spread above the reference price and a sell half below,
+    never past a limit. Without a quote nothing is added, and the cost
+    model's class half spread applies as in the daily path. With recorded
+    quotes, set the cost model's class half spread to zero, or the spread
+    is paid twice.
+
 Stop price: ``Order`` has no stop-price field yet, so the model reads a
 duck-typed ``order.stop_price`` and, for ``order_type="stop"`` without one,
 takes ``limit_price`` as the stop trigger. A stop-limit without
@@ -188,6 +204,14 @@ class BarQuote:
     gap_days: float | None = None
     #: Length of one bar of the backtest interval in days; ``None`` unknown.
     bar_days: float | None = None
+    # ---- intraday fields (roadmap 21.2.3). The daily model ignores them. ----
+    #: A recorded quote at the fill bar's open (``None`` when unknown).
+    bid: float | None = None
+    ask: float | None = None
+    #: Bars from the decision bar's close to this bar's start (0 = the next bar).
+    gap_bars: float | None = None
+    #: Whether this bar is in a later session than the decision.
+    new_session: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -310,6 +334,85 @@ class BarFillModel:
         if limit is None or (triggered > limit if buy else triggered < limit):
             return None, "limit_not_reached"
         return triggered, None
+
+
+class MinuteFillSettings(BaseModel):
+    """Settings for ``MinuteFillModel``. See the module docstring."""
+
+    model_config = ConfigDict(frozen=True)
+
+    #: Largest fraction of the minute's volume one order takes per bar.
+    max_participation: float | None = Field(0.10, gt=0.0, le=1.0)
+    carry_unfilled: bool = True
+    allow_zero_volume: bool = False
+    honour_limits: bool = True
+    #: Most bars between the decision and the fill bar (``None`` disables).
+    max_gap_bars: int | None = Field(5, ge=0)
+    #: Day orders expire when the fill bar is in a later session.
+    expire_at_session_end: bool = True
+    #: Add the half spread of a recorded quote to the reference price.
+    use_quote_spread: bool = True
+    adv_window: int = Field(20, ge=1)
+
+    def build(self) -> MinuteFillModel:
+        return MinuteFillModel(self)
+
+
+class MinuteFillModel:
+    """Next-bar fills on minute bars: day orders, a gap in bars, the half
+    spread of a recorded quote, over ``BarFillModel`` (roadmap 21.2.3)."""
+
+    def __init__(self, settings: MinuteFillSettings | None = None) -> None:
+        self._s = settings or MinuteFillSettings.model_validate({})
+        self._bars = BarFillModel(
+            FillModelSettings(
+                max_participation=self._s.max_participation,
+                participation_basis="bar_volume",
+                carry_unfilled=self._s.carry_unfilled,
+                allow_zero_volume=self._s.allow_zero_volume,
+                honour_limits=self._s.honour_limits,
+                max_gap_days=None,
+                adv_window=self._s.adv_window,
+            )
+        )
+
+    @property
+    def settings(self) -> MinuteFillSettings:
+        return self._s
+
+    @property
+    def market_stats_spec(self) -> MarketStatsSpec:
+        return MarketStatsSpec.model_validate({"adv_window": self._s.adv_window})
+
+    def decide(self, order: Order, quote: BarQuote) -> FillDecision:
+        s = self._s
+        day_order = order.time_in_force != "gtc"
+        if s.expire_at_session_end and day_order and quote.new_session:
+            return FillDecision.none("session_end")
+        gap = quote.gap_bars
+        if s.max_gap_bars is not None and gap is not None and gap > s.max_gap_bars:
+            return FillDecision.none("gap")
+        decision = self._bars.decide(order, quote)
+        if order.time_in_force == "ioc" and decision.carry:
+            decision = FillDecision(decision.quantity, decision.price, 0.0, decision.reason)
+        if decision.price is None or not s.use_quote_spread:
+            return decision
+        price = _with_half_spread(order, decision.price, quote.bid, quote.ask)
+        return FillDecision(decision.quantity, price, decision.carry, decision.reason)
+
+
+def _with_half_spread(order: Order, price: float, bid: float | None, ask: float | None) -> float:
+    """``price`` plus half the quoted spread against the order, never past
+    its limit. A missing or crossed quote adds nothing."""
+    if bid is None or ask is None or bid <= 0 or ask < bid:
+        return price
+    half = (ask - bid) / 2.0
+    buy = order.side == "buy"
+    adjusted = price + half if buy else price - half
+    limit = order.limit_price if order.order_type in ("limit", "stop_limit") else None
+    if limit is not None:
+        adjusted = min(adjusted, limit) if buy else max(adjusted, limit)
+    return adjusted
 
 
 def triggered_price(
