@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from stonks.core.types import Order
 from stonks.production.rules import RiskAdjustment, RiskContext, RiskRule, register_rule
 from stonks.production.rules._common import adjustment, is_opening_order, settings_of
-from stonks.production.rules._intraday import intraday_of
+from stonks.production.rules._intraday import IntradayContext, intraday_of
 
 __all__ = ["IntradayStaleData", "IntradayStaleDataSettings"]
 
@@ -68,7 +68,7 @@ class IntradayStaleData(RiskRule):
         return kept, adjustments
 
     @staticmethod
-    def _stale(ticker: str, intraday: Any, limit: int) -> str | None:
+    def _stale(ticker: str, intraday: IntradayContext, limit: int) -> str | None:
         """Why ``ticker``'s data is too old to open on, or ``None``."""
         if intraday.stream_stale:
             return "stale data: the stream is stale or reconnecting"

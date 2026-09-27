@@ -40,9 +40,7 @@ INTRADAY_RULES = {
 def _marks(*values: float, step: int = 1) -> tuple[tuple[datetime, float], ...]:
     """Equity marks one ``step`` minute apart, the last one a minute before NOW."""
     n = len(values)
-    return tuple(
-        (NOW - timedelta(minutes=step * (n - i)), float(v)) for i, v in enumerate(values)
-    )
+    return tuple((NOW - timedelta(minutes=step * (n - i)), float(v)) for i, v in enumerate(values))
 
 
 def _ctx(pol, *, value: float = 10_000.0, positions=None, **intraday):
@@ -65,7 +63,7 @@ def _ctx(pol, *, value: float = 10_000.0, positions=None, **intraday):
 
 def test_every_intraday_rule_is_registered_and_off_by_default():
     rules = {r.name: r for r in registered_rules()}
-    assert INTRADAY_RULES <= set(rules)
+    assert set(rules) >= INTRADAY_RULES
     for name in INTRADAY_RULES:
         assert not rules[name].enabled(RiskPolicy()), name
 

@@ -77,8 +77,10 @@ class IntradayOrderRate(RiskRule):
         if settings.max_orders_per_minute is not None:
             in_minute = sum(1 for t in sent if t > now - WINDOW)
             rooms.append(
-                (settings.max_orders_per_minute - in_minute, f"{settings.max_orders_per_minute}"
-                 " orders per minute")
+                (
+                    settings.max_orders_per_minute - in_minute,
+                    f"{settings.max_orders_per_minute} orders per minute",
+                )
             )
         if settings.max_orders_per_day is not None:
             today = sum(1 for t in sent if t.date() == now.date())

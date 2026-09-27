@@ -70,7 +70,9 @@ def test_the_guards_survive(state):
 def test_rows_ids_counter_and_reports_survive_the_rebuild(tmp_path):
     old = SqliteState(tmp_path / "old.sqlite")
     _migrate_to(old, 37)
-    kill, _ = trip_halt(old, "kill", reason="stop", actor="user:usr_owner", scope="global", halt="all")
+    kill, _ = trip_halt(
+        old, "kill", reason="stop", actor="user:usr_owner", scope="global", halt="all"
+    )
     drift, _ = trip_halt(
         old, "broker_drift", reason="one share", actor="system", portfolio_id="pf_default"
     )
