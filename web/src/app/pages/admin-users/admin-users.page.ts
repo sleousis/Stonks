@@ -16,6 +16,7 @@ import { ConfirmService } from '../../core/confirm/confirm.service';
 import { formatAgo } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { PageHeader } from '../../shared/ui/page-header';
+import { Sheet, TypedConfirm, typedMatches } from '../../shared/ui/sheet';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 
@@ -32,7 +33,16 @@ export const ROLES: readonly { value: Role; label: string; help: string }[] = [
 @Component({
   selector: 'app-admin-users-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ReactiveFormsModule, PageHeader, StatusPill, LoadingState, EmptyState, ErrorState],
+  imports: [
+    ReactiveFormsModule,
+    PageHeader,
+    StatusPill,
+    LoadingState,
+    EmptyState,
+    ErrorState,
+    Sheet,
+    TypedConfirm,
+  ],
   templateUrl: './admin-users.page.html',
   styleUrl: './admin-users.page.scss',
 })
@@ -145,6 +155,52 @@ export class AdminUsersPage {
       // The error interceptor already showed the API's message.
     } finally {
       this.busy.set(null);
+    }
+  }
+
+  /** The person whose password is being reset (the sheet is open). */
+  protected readonly resetting = signal<UserView | null>(null);
+  protected readonly newPassword = signal('');
+  protected readonly resetTyped = signal('');
+  protected readonly resetBusy = signal(false);
+  protected readonly resetPhrase = computed(() => {
+    const u = this.resetting();
+    return u ? (u.email ?? u.display_name) : '';
+  });
+  protected readonly canReset = computed(
+    () =>
+      !this.resetBusy() &&
+      this.newPassword().length >= PASSWORD_MIN &&
+      this.newPassword().length <= PASSWORD_MAX &&
+      typedMatches(this.resetPhrase(), this.resetTyped()),
+  );
+
+  protected openReset(user: UserView): void {
+    this.newPassword.set('');
+    this.resetTyped.set('');
+    this.resetting.set(user);
+  }
+
+  protected closeReset(): void {
+    this.resetting.set(null);
+    this.newPassword.set('');
+    this.resetTyped.set('');
+  }
+
+  protected async resetPassword(): Promise<void> {
+    const user = this.resetting();
+    if (!user || !this.canReset()) return;
+    this.resetBusy.set(true);
+    try {
+      await this.api.resetPassword(user.id, this.newPassword());
+      this.closeReset();
+      this.toasts.success(
+        `Reset the password for ${user.display_name}. Share it privately. They were signed out.`,
+      );
+    } catch {
+      // The error interceptor already showed the API's message.
+    } finally {
+      this.resetBusy.set(false);
     }
   }
 

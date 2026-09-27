@@ -6,6 +6,7 @@ import type { PreferencesView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
+import { ToastService } from '../../core/notify/toast.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { NotificationPrefs } from './notification-prefs';
 
@@ -176,5 +177,29 @@ describe('NotificationPrefs', () => {
     expect(button(el, 'Save quiet hours')!.disabled).toBe(true);
     expect(button(el, 'Save webhook')!.disabled).toBe(true);
     expect(el.querySelector<HTMLInputElement>('#webhook-url')!.disabled).toBe(true);
+  });
+
+  it('sends a test notification and says where it went', async () => {
+    const toasts = TestBed.inject(ToastService);
+    const success = vi.spyOn(toasts, 'success');
+    const info = vi.spyOn(toasts, 'info');
+    const el = await render();
+    button(el, 'Send a test notification')!.click();
+    (await nextRequest(controller, '/api/notifications/test', 'POST')).flush({
+      notification_id: 7,
+      deliveries: 2,
+      channels: ['inapp', 'webpush', 'webhook'],
+    });
+    await tick();
+    expect(success).toHaveBeenCalledWith(expect.stringContaining('2 deliveries by push, webhook'));
+    fixture.detectChanges();
+    button(el, 'Send a test notification')!.click();
+    (await nextRequest(controller, '/api/notifications/test', 'POST')).flush({
+      notification_id: 8,
+      deliveries: 0,
+      channels: ['inapp'],
+    });
+    await tick();
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('Turn on push'));
   });
 });

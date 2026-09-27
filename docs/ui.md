@@ -489,7 +489,10 @@ Tickers open `/data?instrument=<id>`.
 - **Dialogs** are built on `app-sheet` (`shared/ui/sheet.ts`) with
   `app-typed-confirm`.
 - **Settings** has "Your account" for everyone and "System" (broker, risk
-  policy, data sources, cost models) for admins only.
+  policy, data sources, cost models) for admins only. Alert settings have
+  **Send a test notification** (`POST /api/notifications/test`): it goes to
+  every channel you turned on, skips quiet hours, and the toast says how
+  many deliveries went out and on which channels.
 - **Toasts.** Success and info leave after a few seconds and pause while
   hovered or focused. Errors stay until dismissed. The toast layer is a
   manual popover in the top layer, so toasts over a modal stay usable.
@@ -873,18 +876,28 @@ flowchart LR
   runs from the last 24 hours), and my
   strategies with an on/off switch and a notify, paper or auto switch. Auto
   stays disabled with the reason until 20 paper days and the server's other
-  checks pass, then asks for the step-up and a typed confirm.
+  checks pass, then asks for the step-up and a typed confirm. "Follow a
+  strategy" leads to the strategy list.
+- **Follow** (`pages/strategies/follow-panel.ts`): the strategy page of a
+  live or paper strategy has a Follow panel. Pick "Signals only" (notify) or
+  "Paper trading" in one of your portfolios, then `POST /api/subscriptions`
+  (`portfolio.trade`). Auto is never offered: it is switched on later from
+  Today. Once you follow it, the panel says how and links to Today.
   The server routes exist now: `GET /api/subscriptions` (each row has
   `paper_days_completed`, `paper_days_required`, `auto_blockers` and
   `paused_reason`), `POST /api/subscriptions` and
   `PATCH /api/subscriptions/{id}` with `{enabled?, mode?, reason?}`. Auto
   answers 403 `step_up_required` without a fresh second factor, and 409
   `auto_blocked` with `blockers` while the checklist fails.
-  `GET /api/portfolios` lists your portfolios, and
-  `GET /api/portfolios/trading-modes` says for each one whether it trades
-  paper or live money and through which broker.
-- **Profile** (`pages/profile/`): password, new recovery codes and API
-  tokens (a new token is shown once). **Settings** adds alert settings per
+  `GET /api/portfolios` lists your portfolios, each with `trading` (paper
+  or live). The console reads the PAPER or LIVE stamp from there, not from
+  `GET /api/portfolios/trading-modes` (MCP uses that one).
+- **Profile** (`pages/profile/`): password, new recovery codes, your
+  portfolios and API tokens (a new token is shown once). "Your portfolios"
+  lists each with its PAPER or LIVE stamp, renames one
+  (`PATCH /api/portfolios/{id}`) and opens a new paper portfolio with an
+  optional starting cash (`POST /api/portfolios`, both `portfolio.manage`).
+  The portfolio picker reloads after each change. **Settings** adds alert settings per
   type and channel and quiet hours next to the push opt-in.
   `GET /api/notifications/preferences` has `channel_defaults`: whether each
   channel is on when you never set it, and whether it stands in for push.
@@ -893,7 +906,10 @@ flowchart LR
   `GET /api/alerts` shows only your alerts (admins also see the admin
   audience).
 - **Users** (`pages/admin-users/`): add a person, change role, disable or
-  enable, reset their authenticator.
+  enable, reset their authenticator, and reset their password (a sheet
+  with the new password and their email typed to confirm). A password reset
+  signs them out and stops their API tokens. Every change asks for a fresh
+  code.
 
 Checked at 375px in Chromium: no sideways scroll and 44px targets on sign-in,
 set-up, home (trader and admin), profile, settings and users.
