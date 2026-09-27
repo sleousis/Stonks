@@ -10,6 +10,7 @@ dated after the pricing day and check that nothing moves (P12).
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from datetime import date, timedelta
 
 import pytest
@@ -356,3 +357,71 @@ def test_a_dividend_declared_before_the_pricing_day_does_move_the_price():
     assert BS.price(with_div.inputs(c, AS_OF, spot=100.0, vol=0.3)) < BS.price(
         without.inputs(c, AS_OF, spot=100.0, vol=0.3)
     )
+
+
+# ---- the market reaches chains, Greeks, implied vol, selection and risk -------------------
+
+
+def _priced_quote(market: PricingMarket, vol: float = 0.3):
+    from stonks.options.chain import OptionQuote
+
+    c = contract(AS_OF + timedelta(days=150), "call", 100.0, "european")
+    price = BS.price(market.inputs(c, AS_OF, spot=101.0, vol=vol))
+    return OptionQuote(c, AS_OF, bid=price, ask=price, underlying_price=101.0)
+
+
+def rich_market() -> PricingMarket:
+    declared = [div(AS_OF + timedelta(days=40), 1.5, declared=AS_OF - timedelta(days=1))]
+    return PricingMarket(treasury(), KnownDividendForecast({"X.US": declared}))
+
+
+def test_analyze_solves_implied_vol_and_greeks_in_the_market():
+    from stonks.options.analytics import analyze, analyze_chain
+    from stonks.options.chain import ChainSnapshot
+
+    market = rich_market()
+    quote = _priced_quote(market)
+    a = analyze(quote, 101.0, market=market)
+    assert a.iv == pytest.approx(0.3, abs=1e-7)
+    assert a.greeks == BS.greeks(market.inputs(quote.contract, AS_OF, spot=101.0, vol=a.iv))
+    # a flat market reads the same price as a different vol
+    assert analyze(quote, 101.0).iv != pytest.approx(0.3, abs=1e-4)
+    chain = ChainSnapshot("X.US", AS_OF, (quote,), spot=101.0)
+    assert analyze_chain(chain, market=market)[quote.contract_id].iv == a.iv
+
+
+def test_model_mark_prices_in_the_market():
+    from stonks.options.analytics import model_mark
+
+    market = rich_market()
+    c = contract(AS_OF + timedelta(days=150))
+    assert model_mark(c, AS_OF, 101.0, 0.3, market=market) == BS.price(
+        market.inputs(c, AS_OF, spot=101.0, vol=0.3)
+    )
+
+
+def test_selector_delta_uses_the_market():
+    from stonks.options.selector import LegSelector
+
+    market = rich_market()
+    quote = _priced_quote(market)
+    delta = LegSelector(market=market).delta(quote, 101.0)
+    expected = BS.greeks(market.inputs(quote.contract, AS_OF, spot=101.0, vol=0.3)).delta
+    assert delta == pytest.approx(expected, abs=1e-6)
+
+
+def test_risk_view_reprices_scenarios_in_the_market():
+    from stonks.options.analytics import risk_view
+    from stonks.options.chain import ChainSnapshot
+    from stonks.options.risk import risk_based_requirement
+
+    market = rich_market()
+    quote = _priced_quote(market)
+    chain = ChainSnapshot("X.US", AS_OF, (quote,), spot=101.0)
+    view = risk_view(AS_OF, {"X.US": chain}, {"X.US": 101.0}, market=market)
+    assert view.market is market
+    assert view.ivs[quote.contract_id] == pytest.approx(0.3, abs=1e-7)
+    flat = replace(view, market=None)
+    assert flat.pricing().rates.zero_rate(AS_OF, 1.0) == 0.0
+    short = {quote.contract_id: -1.0}
+    assert risk_based_requirement(short, view) != risk_based_requirement(short, flat)
