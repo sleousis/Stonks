@@ -61,6 +61,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     keywords: ['backtest', 'test'],
   },
   { path: '/go-live', label: 'Go live', key: 'g', group: 'Research', keywords: ['checks'] },
+  {
+    path: '/assistant',
+    label: 'Assistant',
+    key: 'y',
+    group: 'Research',
+    keywords: ['chat', 'ask', 'ai'],
+  },
 
   {
     path: '/dashboard',

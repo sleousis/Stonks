@@ -61,6 +61,7 @@ describe('Nav', () => {
       'Studio',
       'Lab',
       'Go live',
+      'Assistant',
     ]);
     expect(group(el, 'System')).toEqual([]);
     expect(el.textContent).not.toContain('Advanced');
@@ -76,7 +77,7 @@ describe('Nav', () => {
     expect(all).not.toContain('Lab');
     // Viewers may still read strategies, paper trading and the leaderboard.
     expect(all).toContain('Strategies');
-    expect(group(el, 'Research')).toEqual(['Paper trading', 'Leaderboard', 'Go live']);
+    expect(group(el, 'Research')).toEqual(['Paper trading', 'Leaderboard', 'Go live', 'Assistant']);
   });
 
   it('gives admins the System group, with Overview, Halts and Users', () => {

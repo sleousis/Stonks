@@ -1,0 +1,277 @@
+@use 'breakpoints' as bp;
+
+.off-title {
+  font-family: var(--font-display);
+  font-stretch: var(--display-stretch);
+  font-size: var(--text-xl);
+  margin-bottom: var(--space-2);
+}
+
+.off p + p {
+  margin-top: var(--space-2);
+}
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+
+  &.warn {
+    border-color: var(--color-warn);
+    background: var(--color-warn-soft);
+  }
+
+  p {
+    margin: 0;
+    min-width: 0;
+    flex: 1 1 20rem;
+  }
+}
+
+.banner-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-xs);
+  color: var(--color-ink-2);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+// Phones: the list alone, or the open conversation alone (with a way back).
+.layout {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+
+  &.has-open .convos {
+    display: none;
+  }
+
+  @include bp.from-tablet {
+    grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+    align-items: start;
+
+    &.has-open .convos {
+      display: block;
+    }
+  }
+}
+
+.convos {
+  min-width: 0;
+}
+
+.convo-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    border-bottom: 1px solid var(--color-border);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+
+    &.active {
+      background: var(--color-surface-3);
+    }
+  }
+}
+
+.convo-link {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+  min-height: var(--touch-min);
+  padding: var(--space-2);
+  color: var(--color-ink);
+  text-decoration: none;
+
+  &:hover {
+    background: var(--color-surface-2);
+  }
+}
+
+.convo-title {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
+}
+
+.convo-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: var(--color-ink-3);
+  font-size: var(--text-xs);
+}
+
+.chat {
+  display: grid;
+  min-width: 0;
+}
+
+.chat-head {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+
+  h2 {
+    flex: 1 1 12rem;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  flex-basis: 100%;
+  font-size: var(--text-sm);
+
+  @include bp.from-tablet {
+    display: none;
+  }
+}
+
+.chat-body {
+  min-width: 0;
+}
+
+.intro {
+  color: var(--color-ink-2);
+
+  ul {
+    margin: var(--space-2) 0 var(--space-3);
+    padding-left: var(--space-5);
+  }
+}
+
+.transcript {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.msg {
+  min-width: 0;
+
+  .who {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--color-ink-3);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+  }
+
+  .text {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}
+
+.msg.user {
+  justify-self: end;
+  max-width: min(100%, 38rem);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-3);
+}
+
+.msg.answer {
+  max-width: min(100%, 46rem);
+}
+
+.msg.error {
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-loss);
+  background: var(--color-loss-soft);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--color-primary);
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret {
+    animation: none;
+  }
+}
+
+.composer {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-top: 1px solid var(--color-border);
+
+  textarea {
+    width: 100%;
+    min-height: 5rem;
+    resize: vertical;
+    padding: var(--space-2);
+  }
+}
+
+.composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2) var(--space-3);
+
+  .research {
+    margin-right: auto;
+  }
+
+  .research-hint {
+    flex-basis: 100%;
+    order: 3;
+    color: var(--color-ink-3);
+    font-size: var(--text-xs);
+  }
+
+  @include bp.phone {
+    .btn {
+      flex: 1 1 8rem;
+    }
+  }
+}
