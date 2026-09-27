@@ -19,6 +19,14 @@ Embargo: the strategy's effective embargo
 neither tuned on nor scored, and each fold dataset carries the same
 embargo, so its ``val_window`` is exactly the fold's test window.
 
+Sessions (roadmap 21.3.1): on a dataset split by session (``sessions``
+set, every intraday lab dataset) the folds count whole trading sessions
+instead of calendar days (:func:`session_walk_forward_folds`).
+``test_days`` and ``train_days`` then mean sessions, the embargo is whole
+sessions (``lab.dataset.bars_to_sessions``) and the matrix converts its
+bar counts to sessions. Each fold dataset keeps the sessions, so its
+``val_window`` is still exactly the fold's test window.
+
 Per fold the strategy class is re-tuned on the train window with the
 runner's tuner / objective / budget (``TuningSetup``), fitted on the same
 fold dataset, backtested on the train window (in-sample, for the
@@ -86,7 +94,7 @@ from stonks.backtest.trades import RoundTrip, compute_trade_stats
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy, SurvivalReport
 from stonks.lab.backtesting import run_backtest
-from stonks.lab.dataset import embargo_calendar_days, scoring_window
+from stonks.lab.dataset import bars_to_sessions, embargo_calendar_days, scoring_window
 from stonks.lab.parallel import DatasetSpec, dataset_snapshot, planned_workers, run_tasks
 from stonks.lab.survival.base import TuningSetup
 from stonks.lab.tuning.base import tune_and_fit
@@ -152,6 +160,18 @@ class WalkForwardConfig(BaseModel):
     def folds_for(self, dataset: Any, strategy: Any = None) -> list[WalkForwardFold]:
         """The folds this config lays over ``dataset``'s full window, with
         the embargo ``strategy`` needs on ``dataset``."""
+        sessions = _window_sessions(dataset)
+        if sessions:
+            val_start, val_end = scoring_window(dataset, strategy)
+            n_val = sum(1 for s in sessions if val_start <= s <= val_end)
+            return session_walk_forward_folds(
+                sessions,
+                n_splits=self.n_splits,
+                test_sessions=self.test_days or max(1, n_val // self.n_splits),
+                train_sessions=self.train_days,
+                anchored=self.anchored,
+                embargo_sessions=_embargo_sessions(dataset, strategy),
+            )
         return walk_forward_folds(
             dataset.start,
             dataset.end,
@@ -169,10 +189,22 @@ class WalkForwardConfig(BaseModel):
         fits ``dataset``; cells that do not fit are left out."""
         interval = getattr(dataset, "interval", Interval.DAY_1)
         embargo = _embargo_days(dataset, strategy)
+        sessions = _window_sessions(dataset)
         cells = []
         for train_bars in self.matrix_train_bars:
             for test_bars in self.matrix_test_bars:
                 try:
+                    if sessions:
+                        folds = session_walk_forward_folds(
+                            sessions,
+                            n_splits=self.n_splits,
+                            test_sessions=bars_to_sessions(test_bars, interval),
+                            train_sessions=bars_to_sessions(train_bars, interval),
+                            anchored=self.anchored,
+                            embargo_sessions=_embargo_sessions(dataset, strategy),
+                        )
+                        cells.append((train_bars, test_bars, folds))
+                        continue
                     folds = walk_forward_folds(
                         dataset.start,
                         dataset.end,
@@ -207,6 +239,65 @@ def _embargo_bars(dataset: Any, strategy: Any) -> int:
 def _embargo_days(dataset: Any, strategy: Any) -> int:
     interval = getattr(dataset, "interval", Interval.DAY_1)
     return embargo_calendar_days(_embargo_bars(dataset, strategy), interval)
+
+
+def _window_sessions(dataset: Any) -> tuple[date, ...]:
+    return tuple(getattr(dataset, "window_sessions", ()) or ())
+
+
+def _embargo_sessions(dataset: Any, strategy: Any) -> int:
+    interval = getattr(dataset, "interval", Interval.DAY_1)
+    return bars_to_sessions(_embargo_bars(dataset, strategy), interval)
+
+
+def session_walk_forward_folds(
+    sessions: Sequence[date],
+    *,
+    n_splits: int,
+    test_sessions: int,
+    train_sessions: int | None = None,
+    anchored: bool = False,
+    embargo_sessions: int = 0,
+) -> list[WalkForwardFold]:
+    """Lay ``n_splits`` folds over ``sessions`` (sorted trading days), the
+    same geometry as :func:`walk_forward_folds` counted in whole sessions:
+    ``test_sessions`` per test window, the last ending on the last session,
+    ``embargo_sessions`` skipped before each one.
+
+    Raises ``ValueError`` when the sessions cannot hold them with a
+    non-empty train window."""
+    if n_splits < 1 or test_sessions < 1:
+        raise ValueError("n_splits and test_sessions must be >= 1")
+    if embargo_sessions < 0:
+        raise ValueError("embargo_sessions must be >= 0")
+    first_test = len(sessions) - n_splits * test_sessions
+    if first_test - embargo_sessions <= 0:
+        raise ValueError(
+            f"{n_splits} test windows of {test_sessions} sessions after a "
+            f"{embargo_sessions}-session embargo leave no train window in {len(sessions)} sessions"
+        )
+    if train_sessions is None:
+        train_sessions = first_test - embargo_sessions
+    folds: list[WalkForwardFold] = []
+    for i in range(n_splits):
+        test_start = first_test + i * test_sessions
+        train_end = test_start - 1 - embargo_sessions
+        train_start = 0 if anchored else train_end - train_sessions + 1
+        if train_start < 0:
+            raise ValueError(
+                f"fold {i} would train on {train_sessions} sessions before the first one; "
+                "shorten train_days/test_days or reduce n_splits"
+            )
+        folds.append(
+            WalkForwardFold(
+                index=i,
+                train_start=sessions[train_start],
+                train_end=sessions[train_end],
+                test_start=sessions[test_start],
+                test_end=sessions[test_start + test_sessions - 1],
+            )
+        )
+    return folds
 
 
 def walk_forward_folds(

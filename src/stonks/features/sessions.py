@@ -12,14 +12,32 @@ the one US calendar in the system: regular holidays and the one-off
 closures the exchange announced (national days of mourning, 9/11,
 Hurricane Sandy). Outside that calendar's window (before 1970, after 2040)
 every weekday counts as a session.
+
+Intraday strategies (roadmap 21.3.1) need the regular session of the
+ticker's own exchange: :func:`regular_session` returns its open and close
+as naive UTC instants (the lake's bar stamps are naive UTC), so pre-market
+and after-hours bars stay outside it, and early closes and daylight saving
+move it. A ticker with no known calendar has no session.
 """
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 
-__all__ = ["is_session", "last_session_of_month", "week_index", "weekly_session"]
+__all__ = [
+    "RegularSession",
+    "is_session",
+    "last_session_of_month",
+    "previous_regular_session",
+    "regular_session",
+    "week_index",
+    "weekly_session",
+]
+
+#: How many days back :func:`previous_regular_session` looks.
+_MAX_BACK_DAYS = 15
 
 
 @lru_cache(maxsize=256)
@@ -72,4 +90,77 @@ def weekly_session(day: date, weekday: int) -> date | None:
         if is_session(candidate):
             return candidate
         candidate += timedelta(days=1)
+    return None
+
+
+# ---- regular sessions of any exchange (roadmap 21.3.1) ------------------------
+
+
+@dataclass(frozen=True)
+class RegularSession:
+    """One regular session: its local date and its open and close as naive
+    UTC instants."""
+
+    day: date
+    open: datetime
+    close: datetime
+
+
+def _naive_utc(when: datetime) -> datetime:
+    if when.tzinfo is None:
+        return when
+    return when.astimezone(UTC).replace(tzinfo=None)
+
+
+@lru_cache(maxsize=64)
+def _calendar_name(ticker: str) -> str | None:
+    from stonks.scheduling.calendar import UnknownCalendarError, calendar_for_ticker
+
+    try:
+        return calendar_for_ticker(ticker).name
+    except UnknownCalendarError:
+        return None
+
+
+@lru_cache(maxsize=8192)
+def _session_on(calendar: str, day: date) -> RegularSession | None:
+    from stonks.scheduling.calendar import CalendarRangeError, get_calendar
+
+    try:
+        s = get_calendar(calendar).session(day)
+    except CalendarRangeError:
+        return None
+    if s is None:
+        return None
+    return RegularSession(s.date, _naive_utc(s.open), _naive_utc(s.close))
+
+
+def regular_session(ticker: str, at: datetime) -> RegularSession | None:
+    """The regular session of ``ticker``'s exchange that is open at ``at``
+    (naive means UTC), or ``None``: closed, an unknown calendar, or a date
+    outside the calendar's range."""
+    name = _calendar_name(ticker)
+    if name is None:
+        return None
+    at = _naive_utc(at)
+    # a session's local date can differ from its UTC date by one day
+    for day in (at.date() - timedelta(days=1), at.date(), at.date() + timedelta(days=1)):
+        s = _session_on(name, day)
+        if s is not None and s.open <= at < s.close:
+            return s
+    return None
+
+
+def previous_regular_session(ticker: str, session: RegularSession) -> RegularSession | None:
+    """The regular session before ``session`` on ``ticker``'s exchange, or
+    ``None`` when there is none within two weeks."""
+    name = _calendar_name(ticker)
+    if name is None:
+        return None
+    day = session.day
+    for _ in range(_MAX_BACK_DAYS):
+        day -= timedelta(days=1)
+        s = _session_on(name, day)
+        if s is not None:
+            return s
     return None
