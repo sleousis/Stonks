@@ -457,6 +457,8 @@ Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invit
 
 **Status:** the backend of 20.1 to 20.5 is done: services, API, CLI and MCP, with minimal console services. The console screens come next, after the usability pass. 20.6 is planned.
 
+**Console, 20.4 and 20.5:** done. The assistant chat (`/assistant`: streamed answers, tool steps, the yes or no step for writes, research only, the trace, unfreeze, conversations, and a clear page when it is off), cash flows (`/insights/cash-flows`), tax settings with lot picks and the yearly CSVs (`/insights/tax`), and time-weighted and money-weighted returns with base-currency values on Insights and Today. See `docs/ui.md`.
+
 - 20.1: `production/manual.py`, `app/manual_orders.py`, `/api/orders/manual`, `stonks orders`, the MCP tools `place_order`, `change_order` and `cancel_order`. The order ticket and the account rules arrive with Phase 19 as registered risk rules, which manual orders already run. A real-money book needs a fresh second factor (`orders.live`). The tick never trades a manual holding.
 - 20.2: `price_alerts/`, `app/price_alerts.py`, `/api/price-alerts`, `stonks price-alerts`, five MCP tools, and the `price_alerts` scheduler job after the price ingest. Live prices can call the same check once intraday lands.
 - 20.3: `telegram/` (the channel, the long-polling bot, one-time link codes), `/api/telegram`, `stonks telegram`. Off unless `[telegram] enabled` and `STONKS_TELEGRAM_BOT_TOKEN` are set.
