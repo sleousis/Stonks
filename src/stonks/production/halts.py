@@ -64,9 +64,17 @@ _log = get_logger("stonks.production.halts")
 
 #: ``runaway`` (a run that closes more than the ceiling, roadmap 19.6) and
 #: ``broker_drift`` (unexplained reconciliation drift, 19.5) came with
-#: migration 028.
+#: migration 028. ``intraday_loss`` (a book lost more than its limit within
+#: a few minutes, roadmap 21.3.2) came with migration 038.
 HaltKind = Literal[
-    "month_loss", "week_loss", "drawdown", "operational", "kill", "runaway", "broker_drift"
+    "month_loss",
+    "week_loss",
+    "drawdown",
+    "operational",
+    "kill",
+    "runaway",
+    "broker_drift",
+    "intraday_loss",
 ]
 HaltScope = Literal["global", "user", "portfolio"]
 HaltMode = Literal["buys", "all"]
