@@ -243,7 +243,7 @@ export class StudioPage {
       title: `Delete ${d.name}?`,
       message:
         d.status === 'registered'
-          ? `The draft is removed. The strategy registered from it (${d.registered_strategy_id}) stays in Strategies.`
+          ? `The draft is removed. The strategy started from it (${d.registered_strategy_id}) stays in Strategies.`
           : 'The draft and its rules are removed. This cannot be undone.',
       confirmLabel: 'Delete',
       tone: 'danger',

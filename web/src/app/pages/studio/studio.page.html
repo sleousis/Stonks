@@ -102,7 +102,7 @@
   } @else if (drafts.value().items.length === 0) {
     <app-empty-state
       title="No drafts yet"
-      message="A draft is a strategy you are building. Start from a template such as RSI mean reversion, test it, then register it."
+      message="A draft is a strategy you are building. Start from a template such as RSI mean reversion, test it, then start paper trading it."
     >
       @if (!creating()) {
         <button type="button" class="btn btn-primary" [disabled]="!canLab()" (click)="openCreate()">

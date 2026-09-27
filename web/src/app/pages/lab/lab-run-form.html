@@ -7,29 +7,6 @@
     (valueChange)="patch({ classPath: $event })"
   />
 
-  @if (selected(); as cls) {
-    <fieldset class="group">
-      <legend>
-        Search space
-        <span class="legend-note">{{ tunableCount() }} of {{ space().length }} tuned</span>
-      </legend>
-      @if (space().length) {
-        <ul class="space">
-          @for (p of space(); track p.name) {
-            <li>
-              <span class="pname">{{ p.label }}</span>
-              <span class="num muted">{{ p.tunable ? p.range : 'fixed at ' + p.range }}</span>
-            </li>
-          }
-        </ul>
-      } @else {
-        <p class="muted summary">
-          {{ cls.name }} has no parameters. The run fits and tests it as is.
-        </p>
-      }
-    </fieldset>
-  }
-
   <fieldset class="group">
     <legend>Data</legend>
     @if (universes().length) {
@@ -79,148 +56,6 @@
       [showTickers]="!form().universeId"
       (patch)="patch($event)"
     />
-    <div class="grid-2">
-      <div class="field">
-        <label for="lr-train">Share used for tuning</label>
-        <input
-          id="lr-train"
-          class="input num"
-          type="number"
-          inputmode="decimal"
-          min="0.05"
-          max="0.95"
-          step="0.05"
-          aria-describedby="lr-train-hint"
-          [value]="form().trainRatio ?? ''"
-          [attr.aria-invalid]="!!errors()['trainRatio']"
-          (input)="setNumber('trainRatio', $any($event.target).value)"
-        />
-        @if (errors()['trainRatio']; as e) {
-          <span class="error" id="lr-train-hint">{{ e }}</span>
-        } @else {
-          <span class="hint" id="lr-train-hint">
-            The part of the window the search learns from, e.g. 0.7. The rest is kept aside to test
-            the winner.
-          </span>
-        }
-      </div>
-      <div class="field">
-        <label for="lr-embargo">Gap before testing (bars) <app-help-tip term="embargo" /></label>
-        <input
-          id="lr-embargo"
-          class="input num"
-          type="number"
-          inputmode="numeric"
-          min="0"
-          step="1"
-          placeholder="Default"
-          aria-describedby="lr-embargo-hint"
-          [value]="form().embargoBars ?? ''"
-          [attr.aria-invalid]="!!errors()['embargoBars']"
-          (input)="setNumber('embargoBars', $any($event.target).value)"
-        />
-        @if (errors()['embargoBars']; as e) {
-          <span class="error" id="lr-embargo-hint">{{ e }}</span>
-        } @else {
-          <span class="hint" id="lr-embargo-hint">
-            Bars skipped between the tuning and test data so one cannot leak into the other. Blank
-            uses the default, never shorter than the strategy looks ahead.
-          </span>
-        }
-      </div>
-      <app-benchmark-field
-        idPrefix="lr"
-        [value]="form()"
-        [error]="errors()['benchmarkTicker'] ?? null"
-        (patch)="patch($event)"
-      />
-    </div>
-  </fieldset>
-
-  <fieldset class="group">
-    <legend>Parameter search</legend>
-    <div class="grid-2">
-      <div class="field">
-        <label for="lr-tuner">Search method</label>
-        <select
-          id="lr-tuner"
-          class="input"
-          (change)="setChoice('tuner', $any($event.target).value)"
-        >
-          <option value="random" [selected]="form().tuner === 'random'">
-            Random: samples the space
-          </option>
-          <option value="grid" [selected]="form().tuner === 'grid'">
-            Grid: tries every combination
-          </option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="lr-objective">Pick the best by</label>
-        <select
-          id="lr-objective"
-          class="input"
-          (change)="setChoice('objective', $any($event.target).value)"
-        >
-          <option value="sharpe" [selected]="form().objective === 'sharpe'">Sharpe</option>
-          <option value="cagr" [selected]="form().objective === 'cagr'">CAGR</option>
-          <option value="final_return" [selected]="form().objective === 'final_return'">
-            Total return
-          </option>
-          <option value="cv_sharpe" [selected]="form().objective === 'cv_sharpe'">
-            Sharpe on purged folds
-          </option>
-          <option value="cv_cagr" [selected]="form().objective === 'cv_cagr'">
-            CAGR on purged folds
-          </option>
-          <option value="cv_final_return" [selected]="form().objective === 'cv_final_return'">
-            Total return on purged folds
-          </option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="lr-budget">Trials</label>
-        <input
-          id="lr-budget"
-          class="input num"
-          type="number"
-          inputmode="numeric"
-          min="1"
-          max="1000"
-          step="1"
-          aria-describedby="lr-budget-hint"
-          [value]="form().budget ?? ''"
-          [attr.aria-invalid]="!!errors()['budget']"
-          (input)="setNumber('budget', $any($event.target).value)"
-        />
-        @if (errors()['budget']; as e) {
-          <span class="error" id="lr-budget-hint">{{ e }}</span>
-        } @else {
-          <span class="hint" id="lr-budget-hint">
-            How many parameter sets to try. Every one counts against the strategy.
-          </span>
-        }
-      </div>
-      <div class="field">
-        <label for="lr-seed">Random seed</label>
-        <input
-          id="lr-seed"
-          class="input num"
-          type="number"
-          inputmode="numeric"
-          step="1"
-          aria-describedby="lr-seed-hint"
-          [value]="form().seed ?? ''"
-          [attr.aria-invalid]="!!errors()['seed']"
-          (input)="setNumber('seed', $any($event.target).value)"
-        />
-        @if (errors()['seed']; as e) {
-          <span class="error" id="lr-seed-hint">{{ e }}</span>
-        } @else {
-          <span class="hint" id="lr-seed-hint">The same seed picks the same trials again.</span>
-        }
-      </div>
-    </div>
   </fieldset>
 
   <fieldset class="group" [attr.aria-describedby]="errors()['tests'] ? 'lr-tests-error' : null">
@@ -272,197 +107,424 @@
     @if (errors()['tests']; as e) {
       <span class="error" id="lr-tests-error">{{ e }}</span>
     }
+  </fieldset>
 
-    @if (runs('walk_forward')) {
-      <div class="sub grid-2" role="group" aria-label="Walk-forward options">
-        <p class="sub-title span-2">
-          Walk-forward <app-help-tip term="walk_forward" />
-          <span class="muted">Blank fields use the test's defaults.</span>
-        </p>
-        <div class="field">
-          <label for="lr-wf-splits">Folds</label>
-          <input
-            id="lr-wf-splits"
-            class="input num"
-            type="number"
-            inputmode="numeric"
-            min="2"
-            step="1"
-            placeholder="Default"
-            [value]="form().wfSplits ?? ''"
-            [attr.aria-invalid]="!!errors()['wfSplits']"
-            (input)="setNumber('wfSplits', $any($event.target).value)"
-          />
-          @if (errors()['wfSplits']; as e) {
-            <span class="error">{{ e }}</span>
-          }
-        </div>
-        <div class="field">
-          <label for="lr-wf-days">Test days per fold</label>
-          <input
-            id="lr-wf-days"
-            class="input num"
-            type="number"
-            inputmode="numeric"
-            min="1"
-            step="1"
-            placeholder="Even split"
-            [value]="form().wfTestDays ?? ''"
-            [attr.aria-invalid]="!!errors()['wfTestDays']"
-            (input)="setNumber('wfTestDays', $any($event.target).value)"
-          />
-          @if (errors()['wfTestDays']; as e) {
-            <span class="error">{{ e }}</span>
-          }
-        </div>
-        <div class="field">
-          <label for="lr-wf-wfe">Min efficiency <app-help-tip term="wfe" /></label>
-          <input
-            id="lr-wf-wfe"
-            class="input num"
-            type="number"
-            inputmode="decimal"
-            min="0"
-            max="2"
-            step="0.05"
-            placeholder="0.5"
-            aria-describedby="lr-wf-wfe-hint"
-            [value]="form().wfMinWfe ?? ''"
-            [attr.aria-invalid]="!!errors()['wfMinWfe']"
-            (input)="setNumber('wfMinWfe', $any($event.target).value)"
-          />
-          @if (errors()['wfMinWfe']; as e) {
-            <span class="error" id="lr-wf-wfe-hint">{{ e }}</span>
+  <fieldset class="group">
+    <legend>Why it should work</legend>
+    <div class="field">
+      <label for="lr-hypothesis">
+        Hypothesis <app-help-tip term="hypothesis" />
+        <span class="legend-note">{{
+          form().register ? 'needed to start paper trading' : 'recommended'
+        }}</span>
+      </label>
+      <textarea
+        id="lr-hypothesis"
+        class="input textarea"
+        rows="3"
+        maxlength="4000"
+        placeholder="Who loses money to this strategy, and why will they keep doing it?"
+        aria-describedby="lr-hypothesis-hint"
+        [value]="form().hypothesis"
+        [attr.aria-invalid]="!!errors()['hypothesis']"
+        [attr.aria-required]="form().register"
+        (input)="patch({ hypothesis: $any($event.target).value })"
+      ></textarea>
+      @if (errors()['hypothesis']; as e) {
+        <span class="error" id="lr-hypothesis-hint">{{ e }}</span>
+      } @else {
+        <span class="hint" id="lr-hypothesis-hint">
+          Saved with the run before tuning starts. The go-live check reads it.
+        </span>
+      }
+    </div>
+  </fieldset>
+
+  <div class="register">
+    <label class="check">
+      <input
+        id="lr-register"
+        type="checkbox"
+        aria-describedby="lr-register-hint"
+        [checked]="form().register"
+        (change)="setRegister($any($event.target).checked)"
+      />
+      Start paper trading if it passes
+    </label>
+    <span class="check-hint" id="lr-register-hint">
+      @if (form().register && !form().registerIfPasses) {
+        Set under Advanced to start paper trading whatever the verdict.
+      } @else {
+        The fitted strategy then trades on paper: it decides on every trading run without real
+        orders. Turning this on picks the go-live suite. You can change it.
+      }
+    </span>
+  </div>
+
+  <details
+    class="advanced"
+    [open]="advancedOpen()"
+    (toggle)="advancedOpen.set($any($event.target).open)"
+  >
+    <summary>
+      Advanced
+      @if (optionsFilled()) {
+        <span class="legend-note">{{ optionsFilled() }} test options changed</span>
+      }
+      @if (advancedErrorCount(); as n) {
+        <span class="error summary-error">{{ n }} to fix</span>
+      }
+    </summary>
+    <div class="advanced-body">
+      <p class="hint advanced-lead">
+        Search settings, the benchmark and each test's pass rules. The defaults suit most runs.
+      </p>
+
+      @if (selected(); as cls) {
+        <section class="adv-section" aria-labelledby="lr-space-title">
+          <h3 id="lr-space-title" class="adv-title">
+            Search space
+            <span class="legend-note">{{ tunableCount() }} of {{ space().length }} tuned</span>
+          </h3>
+          @if (space().length) {
+            <ul class="space">
+              @for (p of space(); track p.name) {
+                <li>
+                  <span class="pname">{{ p.label }}</span>
+                  <span class="num muted">{{ p.tunable ? p.range : 'fixed at ' + p.range }}</span>
+                </li>
+              }
+            </ul>
           } @else {
-            <span class="hint" id="lr-wf-wfe-hint"
-              >Out-of-sample result over in-sample. Under 0.5 fails.</span
+            <p class="muted summary">
+              {{ cls.name }} has no parameters. The run fits and tests it as is.
+            </p>
+          }
+        </section>
+      }
+
+      <section class="adv-section" aria-labelledby="lr-search-title">
+        <h3 id="lr-search-title" class="adv-title">Parameter search</h3>
+        <div class="grid-2">
+          <div class="field">
+            <label for="lr-tuner">Search method</label>
+            <select
+              id="lr-tuner"
+              class="input"
+              (change)="setChoice('tuner', $any($event.target).value)"
             >
-          }
-        </div>
-        <div class="checks-col">
-          <label class="check">
+              <option value="random" [selected]="form().tuner === 'random'">
+                Random: samples the space
+              </option>
+              <option value="grid" [selected]="form().tuner === 'grid'">
+                Grid: tries every combination
+              </option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="lr-objective">Pick the best by</label>
+            <select
+              id="lr-objective"
+              class="input"
+              (change)="setChoice('objective', $any($event.target).value)"
+            >
+              <option value="sharpe" [selected]="form().objective === 'sharpe'">Sharpe</option>
+              <option value="cagr" [selected]="form().objective === 'cagr'">CAGR</option>
+              <option value="final_return" [selected]="form().objective === 'final_return'">
+                Total return
+              </option>
+              <option value="cv_sharpe" [selected]="form().objective === 'cv_sharpe'">
+                Sharpe on purged folds
+              </option>
+              <option value="cv_cagr" [selected]="form().objective === 'cv_cagr'">
+                CAGR on purged folds
+              </option>
+              <option
+                value="cv_final_return"
+                [selected]="form().objective === 'cv_final_return'"
+              >
+                Total return on purged folds
+              </option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="lr-budget">Trials</label>
             <input
-              type="checkbox"
-              [checked]="form().wfAnchored"
-              (change)="patch({ wfAnchored: $any($event.target).checked })"
+              id="lr-budget"
+              class="input num"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              max="1000"
+              step="1"
+              aria-describedby="lr-budget-hint"
+              [value]="form().budget ?? ''"
+              [attr.aria-invalid]="!!errors()['budget']"
+              (input)="setNumber('budget', $any($event.target).value)"
             />
-            Anchored (training always starts at the window start)
-          </label>
-          <label class="check">
+            @if (errors()['budget']; as e) {
+              <span class="error" id="lr-budget-hint">{{ e }}</span>
+            } @else {
+              <span class="hint" id="lr-budget-hint">
+                How many parameter sets to try. Every one counts against the strategy.
+              </span>
+            }
+          </div>
+          <div class="field">
+            <label for="lr-seed">Random seed</label>
             <input
-              type="checkbox"
-              aria-describedby="lr-wf-matrix-hint"
-              [checked]="form().wfMatrix"
-              (change)="patch({ wfMatrix: $any($event.target).checked })"
+              id="lr-seed"
+              class="input num"
+              type="number"
+              inputmode="numeric"
+              step="1"
+              aria-describedby="lr-seed-hint"
+              [value]="form().seed ?? ''"
+              [attr.aria-invalid]="!!errors()['seed']"
+              (input)="setNumber('seed', $any($event.target).value)"
             />
-            Also try several window lengths
-          </label>
-          <span class="check-hint" id="lr-wf-matrix-hint">
-            A walk-forward matrix: passes only if most train and test lengths work.
-          </span>
-        </div>
-      </div>
-    }
-
-    @if (runs('mcpt')) {
-      <div class="sub grid-2" role="group" aria-label="Permutation test options">
-        <p class="sub-title span-2">
-          Monte Carlo permutation <app-help-tip term="permutation" />
-          <span class="muted">Blank fields use the test's defaults.</span>
-        </p>
-        <div class="field">
-          <label for="lr-mcpt-n">Shuffles</label>
-          <input
-            id="lr-mcpt-n"
-            class="input num"
-            type="number"
-            inputmode="numeric"
-            min="1"
-            max="1000"
-            step="1"
-            [placeholder]="form().suite === 'promotion' ? '200' : 'Default'"
-            [value]="form().mcptPermutations ?? ''"
-            [attr.aria-invalid]="!!errors()['mcptPermutations']"
-            (input)="setNumber('mcptPermutations', $any($event.target).value)"
+            @if (errors()['seed']; as e) {
+              <span class="error" id="lr-seed-hint">{{ e }}</span>
+            } @else {
+              <span class="hint" id="lr-seed-hint">The same seed picks the same trials again.</span>
+            }
+          </div>
+          <div class="field">
+            <label for="lr-train">Share used for tuning</label>
+            <input
+              id="lr-train"
+              class="input num"
+              type="number"
+              inputmode="decimal"
+              min="0.05"
+              max="0.95"
+              step="0.05"
+              aria-describedby="lr-train-hint"
+              [value]="form().trainRatio ?? ''"
+              [attr.aria-invalid]="!!errors()['trainRatio']"
+              (input)="setNumber('trainRatio', $any($event.target).value)"
+            />
+            @if (errors()['trainRatio']; as e) {
+              <span class="error" id="lr-train-hint">{{ e }}</span>
+            } @else {
+              <span class="hint" id="lr-train-hint">
+                The part of the window the search learns from, e.g. 0.7. The rest is kept aside to
+                test the winner.
+              </span>
+            }
+          </div>
+          <div class="field">
+            <label for="lr-embargo"
+              >Gap before testing (bars) <app-help-tip term="embargo"
+            /></label>
+            <input
+              id="lr-embargo"
+              class="input num"
+              type="number"
+              inputmode="numeric"
+              min="0"
+              step="1"
+              placeholder="Default"
+              aria-describedby="lr-embargo-hint"
+              [value]="form().embargoBars ?? ''"
+              [attr.aria-invalid]="!!errors()['embargoBars']"
+              (input)="setNumber('embargoBars', $any($event.target).value)"
+            />
+            @if (errors()['embargoBars']; as e) {
+              <span class="error" id="lr-embargo-hint">{{ e }}</span>
+            } @else {
+              <span class="hint" id="lr-embargo-hint">
+                Bars skipped between the tuning and test data so one cannot leak into the other.
+                Blank uses the default, never shorter than the strategy looks ahead.
+              </span>
+            }
+          </div>
+          <app-benchmark-field
+            idPrefix="lr"
+            [value]="form()"
+            [error]="errors()['benchmarkTicker'] ?? null"
+            (patch)="patch($event)"
           />
-          @if (errors()['mcptPermutations']; as e) {
-            <span class="error">{{ e }}</span>
-          }
         </div>
-        <div class="field">
-          <label for="lr-mcpt-p">Max p-value</label>
-          <input
-            id="lr-mcpt-p"
-            class="input num"
-            type="number"
-            inputmode="decimal"
-            min="0"
-            max="1"
-            step="0.01"
-            placeholder="0.05"
-            [value]="form().mcptMaxP ?? ''"
-            [attr.aria-invalid]="!!errors()['mcptMaxP']"
-            (input)="setNumber('mcptMaxP', $any($event.target).value)"
-          />
-          @if (errors()['mcptMaxP']; as e) {
-            <span class="error">{{ e }}</span>
-          }
-        </div>
-        <div class="field">
-          <label for="lr-mcpt-metric">Metric</label>
-          <select
-            id="lr-mcpt-metric"
-            class="input"
-            (change)="setChoice('mcptMetric', $any($event.target).value)"
-          >
-            <option value="" [selected]="form().mcptMetric === ''">Default (profit factor)</option>
-            <option value="profit_factor" [selected]="form().mcptMetric === 'profit_factor'">
-              Profit factor
-            </option>
-            <option value="sharpe" [selected]="form().mcptMetric === 'sharpe'">Sharpe</option>
-            <option value="cagr" [selected]="form().mcptMetric === 'cagr'">CAGR</option>
-            <option value="final_return" [selected]="form().mcptMetric === 'final_return'">
-              Total return
-            </option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="lr-mcpt-retune">Re-tune on each shuffle</label>
-          <select
-            id="lr-mcpt-retune"
-            class="input"
-            aria-describedby="lr-mcpt-retune-hint"
-            (change)="setChoice('mcptRetune', $any($event.target).value)"
-          >
-            <option value="default" [selected]="form().mcptRetune === 'default'">Default</option>
-            <option value="auto" [selected]="form().mcptRetune === 'auto'">
-              Auto (only when tuning matters)
-            </option>
-            <option value="yes" [selected]="form().mcptRetune === 'yes'">Always</option>
-            <option value="no" [selected]="form().mcptRetune === 'no'">Never</option>
-          </select>
-          <span class="hint" id="lr-mcpt-retune-hint">
-            Stricter, but costs (shuffles + 1) × trials backtests.
-          </span>
-        </div>
-      </div>
-    }
+      </section>
 
-    @if (showOptions()) {
-      <details
-        class="advanced"
-        [open]="optionsOpen()"
-        (toggle)="optionsOpen.set($any($event.target).open)"
-      >
-        <summary>
-          Advanced test options
-          @if (optionsFilled()) {
-            <span class="legend-note">{{ optionsFilled() }} changed</span>
-          }
-          @if (optionErrorCount(); as n) {
-            <span class="error summary-error">{{ n }} to fix</span>
-          }
-        </summary>
+      @if (runs('walk_forward')) {
+        <div class="sub grid-2" role="group" aria-label="Walk-forward options">
+          <p class="sub-title span-2">
+            Walk-forward <app-help-tip term="walk_forward" />
+            <span class="muted">Blank fields use the test's defaults.</span>
+          </p>
+          <div class="field">
+            <label for="lr-wf-splits">Folds</label>
+            <input
+              id="lr-wf-splits"
+              class="input num"
+              type="number"
+              inputmode="numeric"
+              min="2"
+              step="1"
+              placeholder="Default"
+              [value]="form().wfSplits ?? ''"
+              [attr.aria-invalid]="!!errors()['wfSplits']"
+              (input)="setNumber('wfSplits', $any($event.target).value)"
+            />
+            @if (errors()['wfSplits']; as e) {
+              <span class="error">{{ e }}</span>
+            }
+          </div>
+          <div class="field">
+            <label for="lr-wf-days">Test days per fold</label>
+            <input
+              id="lr-wf-days"
+              class="input num"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              step="1"
+              placeholder="Even split"
+              [value]="form().wfTestDays ?? ''"
+              [attr.aria-invalid]="!!errors()['wfTestDays']"
+              (input)="setNumber('wfTestDays', $any($event.target).value)"
+            />
+            @if (errors()['wfTestDays']; as e) {
+              <span class="error">{{ e }}</span>
+            }
+          </div>
+          <div class="field">
+            <label for="lr-wf-wfe">Min efficiency <app-help-tip term="wfe" /></label>
+            <input
+              id="lr-wf-wfe"
+              class="input num"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              max="2"
+              step="0.05"
+              placeholder="0.5"
+              aria-describedby="lr-wf-wfe-hint"
+              [value]="form().wfMinWfe ?? ''"
+              [attr.aria-invalid]="!!errors()['wfMinWfe']"
+              (input)="setNumber('wfMinWfe', $any($event.target).value)"
+            />
+            @if (errors()['wfMinWfe']; as e) {
+              <span class="error" id="lr-wf-wfe-hint">{{ e }}</span>
+            } @else {
+              <span class="hint" id="lr-wf-wfe-hint"
+                >Out-of-sample result over in-sample. Under 0.5 fails.</span
+              >
+            }
+          </div>
+          <div class="checks-col">
+            <label class="check">
+              <input
+                type="checkbox"
+                [checked]="form().wfAnchored"
+                (change)="patch({ wfAnchored: $any($event.target).checked })"
+              />
+              Anchored (training always starts at the window start)
+            </label>
+            <label class="check">
+              <input
+                type="checkbox"
+                aria-describedby="lr-wf-matrix-hint"
+                [checked]="form().wfMatrix"
+                (change)="patch({ wfMatrix: $any($event.target).checked })"
+              />
+              Also try several window lengths
+            </label>
+            <span class="check-hint" id="lr-wf-matrix-hint">
+              A walk-forward matrix: passes only if most train and test lengths work.
+            </span>
+          </div>
+        </div>
+      }
+
+      @if (runs('mcpt')) {
+        <div class="sub grid-2" role="group" aria-label="Permutation test options">
+          <p class="sub-title span-2">
+            Monte Carlo permutation <app-help-tip term="permutation" />
+            <span class="muted">Blank fields use the test's defaults.</span>
+          </p>
+          <div class="field">
+            <label for="lr-mcpt-n">Shuffles</label>
+            <input
+              id="lr-mcpt-n"
+              class="input num"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              max="1000"
+              step="1"
+              [placeholder]="form().suite === 'promotion' ? '200' : 'Default'"
+              [value]="form().mcptPermutations ?? ''"
+              [attr.aria-invalid]="!!errors()['mcptPermutations']"
+              (input)="setNumber('mcptPermutations', $any($event.target).value)"
+            />
+            @if (errors()['mcptPermutations']; as e) {
+              <span class="error">{{ e }}</span>
+            }
+          </div>
+          <div class="field">
+            <label for="lr-mcpt-p">Max p-value</label>
+            <input
+              id="lr-mcpt-p"
+              class="input num"
+              type="number"
+              inputmode="decimal"
+              min="0"
+              max="1"
+              step="0.01"
+              placeholder="0.05"
+              [value]="form().mcptMaxP ?? ''"
+              [attr.aria-invalid]="!!errors()['mcptMaxP']"
+              (input)="setNumber('mcptMaxP', $any($event.target).value)"
+            />
+            @if (errors()['mcptMaxP']; as e) {
+              <span class="error">{{ e }}</span>
+            }
+          </div>
+          <div class="field">
+            <label for="lr-mcpt-metric">Metric</label>
+            <select
+              id="lr-mcpt-metric"
+              class="input"
+              (change)="setChoice('mcptMetric', $any($event.target).value)"
+            >
+              <option value="" [selected]="form().mcptMetric === ''">Default (profit factor)</option>
+              <option value="profit_factor" [selected]="form().mcptMetric === 'profit_factor'">
+                Profit factor
+              </option>
+              <option value="sharpe" [selected]="form().mcptMetric === 'sharpe'">Sharpe</option>
+              <option value="cagr" [selected]="form().mcptMetric === 'cagr'">CAGR</option>
+              <option value="final_return" [selected]="form().mcptMetric === 'final_return'">
+                Total return
+              </option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="lr-mcpt-retune">Re-tune on each shuffle</label>
+            <select
+              id="lr-mcpt-retune"
+              class="input"
+              aria-describedby="lr-mcpt-retune-hint"
+              (change)="setChoice('mcptRetune', $any($event.target).value)"
+            >
+              <option value="default" [selected]="form().mcptRetune === 'default'">Default</option>
+              <option value="auto" [selected]="form().mcptRetune === 'auto'">
+                Auto (only when tuning matters)
+              </option>
+              <option value="yes" [selected]="form().mcptRetune === 'yes'">Always</option>
+              <option value="no" [selected]="form().mcptRetune === 'no'">Never</option>
+            </select>
+            <span class="hint" id="lr-mcpt-retune-hint">
+              Stricter, but costs (shuffles + 1) × trials backtests.
+            </span>
+          </div>
+        </div>
+      }
+
+      <section class="adv-section" aria-labelledby="lr-opts-title">
+        <h3 id="lr-opts-title" class="adv-title">Test pass rules</h3>
         @if (testCatalog.error(); as err) {
           <app-error-state
             title="Could not load the test options"
@@ -471,8 +533,10 @@
           />
         } @else if (!testCatalog.hasValue()) {
           <app-loading-state label="Loading the test options" [rows]="2" />
+        } @else if (!optionTests().length) {
+          <p class="muted summary">The tests in this suite have nothing to set.</p>
         } @else {
-          <p class="hint advanced-lead">
+          <p class="hint">
             Change a pass rule only with a reason: loosening one after a failure is how overfitting
             sneaks in. Blank uses the test's default, shown greyed out.
           </p>
@@ -539,94 +603,42 @@
             </fieldset>
           }
         }
-      </details>
-    }
-  </fieldset>
+      </section>
 
-  <fieldset class="group">
-    <legend>Research notes</legend>
-    <div class="field">
-      <label for="lr-hypothesis">
-        Hypothesis <app-help-tip term="hypothesis" />
-        <span class="legend-note">{{
-          form().register ? 'required to register' : 'recommended'
-        }}</span>
-      </label>
-      <textarea
-        id="lr-hypothesis"
-        class="input textarea"
-        rows="3"
-        maxlength="4000"
-        placeholder="Who loses money to this strategy, and why will they keep doing it?"
-        aria-describedby="lr-hypothesis-hint"
-        [value]="form().hypothesis"
-        [attr.aria-invalid]="!!errors()['hypothesis']"
-        [attr.aria-required]="form().register"
-        (input)="patch({ hypothesis: $any($event.target).value })"
-      ></textarea>
-      @if (errors()['hypothesis']; as e) {
-        <span class="error" id="lr-hypothesis-hint">{{ e }}</span>
-      } @else {
-        <span class="hint" id="lr-hypothesis-hint">
-          Saved with the run before tuning starts. The go-live check reads it.
+      <section class="adv-section" aria-labelledby="lr-notes-title">
+        <h3 id="lr-notes-title" class="adv-title">More research notes</h3>
+        <div class="field">
+          <label for="lr-premortem">Premortem <app-help-tip term="premortem" /></label>
+          <textarea
+            id="lr-premortem"
+            class="input textarea"
+            rows="2"
+            maxlength="4000"
+            placeholder="How will it fail? e.g. stops working when volatility is low."
+            [value]="form().premortem"
+            [attr.aria-invalid]="!!errors()['premortem']"
+            (input)="patch({ premortem: $any($event.target).value })"
+          ></textarea>
+          @if (errors()['premortem']; as e) {
+            <span class="error">{{ e }}</span>
+          }
+        </div>
+        <label class="check">
+          <input
+            id="lr-register-always"
+            type="checkbox"
+            aria-describedby="lr-register-always-hint"
+            [checked]="form().register && !form().registerIfPasses"
+            (change)="setRegisterAlways($any($event.target).checked)"
+          />
+          Start paper trading whatever the verdict
+        </label>
+        <span class="check-hint" id="lr-register-always-hint">
+          Only for a strategy you want to watch on paper even though a test failed.
         </span>
-      }
+      </section>
     </div>
-    <div class="field">
-      <label for="lr-premortem">Premortem <app-help-tip term="premortem" /></label>
-      <textarea
-        id="lr-premortem"
-        class="input textarea"
-        rows="2"
-        maxlength="4000"
-        placeholder="How will it fail? e.g. stops working when volatility is low."
-        [value]="form().premortem"
-        [attr.aria-invalid]="!!errors()['premortem']"
-        (input)="patch({ premortem: $any($event.target).value })"
-      ></textarea>
-      @if (errors()['premortem']; as e) {
-        <span class="error">{{ e }}</span>
-      }
-    </div>
-  </fieldset>
-
-  <div class="register">
-    <label class="check">
-      <input
-        type="checkbox"
-        aria-describedby="lr-register-hint"
-        [checked]="form().register"
-        (change)="setRegister($any($event.target).checked)"
-      />
-      Register the fitted strategy in shadow
-    </label>
-    <span class="check-hint" id="lr-register-hint">
-      It then paper trades: it decides on every trading run without placing orders. Turning this on
-      picks the promotion suite. You can change it.
-    </span>
-    @if (form().register) {
-      <div class="sub register-when" role="radiogroup" aria-label="When to register">
-        <label class="check">
-          <input
-            type="radio"
-            name="lr-register-when"
-            [checked]="form().registerIfPasses"
-            (change)="patch({ registerIfPasses: true })"
-          />
-          Only if every test passes (recommended)
-        </label>
-        <label class="check">
-          <input
-            type="radio"
-            name="lr-register-when"
-            [checked]="!form().registerIfPasses"
-            (change)="patch({ registerIfPasses: false })"
-          />
-          Always, whatever the verdict
-        </label>
-      </div>
-    }
-  </div>
+  </details>
 
   <div class="form-actions">
     @if (errorCount(); as n) {

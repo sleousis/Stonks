@@ -373,7 +373,7 @@ export function labRunErrors(
       e['mcptMaxP'] = 'Above 0 and at most 1.';
   }
   if (f.register && !f.hypothesis.trim())
-    e['hypothesis'] = 'Say why it should make money before registering it.';
+    e['hypothesis'] = 'Say why it should make money before it starts paper trading.';
   if (f.hypothesis.length > 4000) e['hypothesis'] = 'At most 4000 characters.';
   if (f.premortem.length > 4000) e['premortem'] = 'At most 4000 characters.';
   for (const [key, msg] of Object.entries(testOptionErrors(tests, f.testOptions, catalog))) {
@@ -468,6 +468,91 @@ export function buildLabRunRequest(
   const options = buildTestOptions(tests, f.testOptions, catalog);
   if (options) body.test_options = options;
   return body;
+}
+
+/**
+ * The form fields a stored lab-run request (a job's `params`) fills, for a
+ * prefilled re-run. Unknown or odd values are left out, so the form keeps
+ * its defaults there. Advanced per-test options are not carried over.
+ */
+export function formFromRequest(
+  request: LabRunRequest | Readonly<Record<string, unknown>>,
+): Partial<LabRunForm> {
+  const r = request as Readonly<Record<string, unknown>>;
+  const f: Partial<LabRunForm> = {};
+  const str = (v: unknown): v is string => typeof v === 'string';
+  const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+  const strategy = r['strategy'];
+  if (strategy && typeof strategy === 'object') {
+    const cp = (strategy as Record<string, unknown>)['class_path'];
+    if (str(cp)) f.classPath = cp;
+  }
+  if (str(r['start'])) f.start = r['start'];
+  if (str(r['end'])) f.end = r['end'];
+  if (str(r['interval'])) f.interval = r['interval'];
+  if (str(r['universe_id']) && r['universe_id']) {
+    f.universeId = r['universe_id'];
+    f.ensureData = r['ensure_data'] === true;
+  } else if (Array.isArray(r['universe'])) {
+    f.tickers = r['universe'].filter(str).join(', ');
+  }
+  if (r['tuner'] === 'grid' || r['tuner'] === 'random') f.tuner = r['tuner'];
+  if (num(r['budget'])) f.budget = r['budget'];
+  if (num(r['seed'])) f.seed = r['seed'];
+  if (num(r['train_ratio'])) f.trainRatio = r['train_ratio'];
+  if (num(r['embargo_bars'])) f.embargoBars = r['embargo_bars'];
+  const objectives: readonly string[] = [
+    'sharpe',
+    'cagr',
+    'final_return',
+    'cv_sharpe',
+    'cv_cagr',
+    'cv_final_return',
+  ];
+  if (str(r['objective']) && objectives.includes(r['objective']))
+    f.objective = r['objective'] as LabRunForm['objective'];
+  const preset = r['preset'];
+  if (preset === 'quick' || preset === 'standard' || preset === 'promotion') {
+    f.suite = preset;
+  } else if (Array.isArray(r['survival_tests'])) {
+    f.suite = 'custom';
+    f.tests = r['survival_tests'].filter((t): t is SurvivalTestName => KNOWN_TESTS.has(t));
+  }
+  const benchmark = r['benchmark'];
+  if (benchmark === 'auto' || benchmark === 'EW' || benchmark === 'none') {
+    f.benchmark = benchmark;
+  } else if (str(benchmark) && benchmark) {
+    f.benchmark = 'ticker';
+    f.benchmarkTicker = benchmark;
+  }
+  if (r['register_if_passes'] === true || r['register_strategy'] === true) {
+    f.register = true;
+    f.registerIfPasses = r['register_if_passes'] === true;
+  }
+  if (str(r['hypothesis'])) f.hypothesis = r['hypothesis'];
+  if (str(r['premortem'])) f.premortem = r['premortem'];
+  const wf = r['walk_forward'];
+  if (wf && typeof wf === 'object') {
+    const w = wf as Record<string, unknown>;
+    if (num(w['n_splits'])) f.wfSplits = w['n_splits'];
+    if (num(w['test_days'])) f.wfTestDays = w['test_days'];
+    if (num(w['min_wfe'])) f.wfMinWfe = w['min_wfe'];
+    if (w['anchored'] === true) f.wfAnchored = true;
+    if (w['matrix'] === true) f.wfMatrix = true;
+  }
+  const mcpt = r['mcpt'];
+  if (mcpt && typeof mcpt === 'object') {
+    const m = mcpt as Record<string, unknown>;
+    if (num(m['n_permutations'])) f.mcptPermutations = m['n_permutations'];
+    if (num(m['max_p_value'])) f.mcptMaxP = m['max_p_value'];
+    const metrics: readonly string[] = ['profit_factor', 'sharpe', 'cagr', 'final_return'];
+    if (str(m['metric']) && metrics.includes(m['metric']))
+      f.mcptMetric = m['metric'] as LabRunForm['mcptMetric'];
+    if (m['retune'] === 'auto') f.mcptRetune = 'auto';
+    else if (m['retune'] === true) f.mcptRetune = 'yes';
+    else if (m['retune'] === false) f.mcptRetune = 'no';
+  }
+  return f;
 }
 
 /** Catalog grouped for the picker: by source package, then name. */

@@ -11,6 +11,7 @@ import {
   defaultBacktestForm,
   defaultLabRunForm,
   defaultWindow,
+  formFromRequest,
   benchmarkValue,
   groupStrategies,
   labRunErrors,
@@ -206,7 +207,7 @@ describe('lab requests', () => {
       expect(always.register_if_passes).toBeUndefined();
 
       expect(labRunErrors(labForm({ register: true }))['hypothesis']).toBe(
-        'Say why it should make money before registering it.',
+        'Say why it should make money before it starts paper trading.',
       );
       expect(labRunErrors(labForm({ register: false }))['hypothesis']).toBeUndefined();
     });
@@ -341,6 +342,55 @@ describe('lab requests', () => {
       expect(buildLabRunRequest(labForm(), catalog).test_options).toBeUndefined();
       // Without the catalog nothing can be checked or sent.
       expect(buildLabRunRequest(form).test_options).toBeUndefined();
+    });
+  });
+
+  describe('re-run (UX-22)', () => {
+    it('turns a lab-run request back into the form that builds it', () => {
+      const form = labForm({
+        tickers: 'AAPL.US, MSFT.US',
+        tuner: 'grid',
+        budget: 40,
+        seed: 7,
+        objective: 'cagr',
+        embargoBars: 5,
+        suite: 'promotion',
+        mcptPermutations: 100,
+        mcptRetune: 'auto',
+        wfSplits: 4,
+        benchmark: 'ticker',
+        benchmarkTicker: 'QQQ.US',
+        hypothesis: 'Winners keep winning.',
+      });
+      const request = buildLabRunRequest(form);
+      const again = { ...defaultLabRunForm(TODAY), ...formFromRequest(request) };
+      expect(buildLabRunRequest(again)).toEqual(request);
+    });
+
+    it('keeps a custom suite, a stored universe and the paper-trading choice', () => {
+      const request = buildLabRunRequest(
+        labForm({
+          universeId: 'sp500',
+          ensureData: true,
+          suite: 'custom',
+          tests: ['oos', 'drift'],
+          register: true,
+          hypothesis: 'x',
+        }),
+      );
+      const f = formFromRequest(request);
+      expect(f).toMatchObject({
+        universeId: 'sp500',
+        ensureData: true,
+        suite: 'custom',
+        tests: ['oos', 'drift'],
+        register: true,
+        registerIfPasses: true,
+      });
+    });
+
+    it('ignores what it cannot read', () => {
+      expect(formFromRequest({ strategy: 'nope', start: 3 } as never)).toEqual({});
     });
   });
 

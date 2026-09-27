@@ -6,7 +6,7 @@
 
 <div class="lab-layout">
   <!-- Forms ---------------------------------------------------------------->
-  <section class="panel form-panel" aria-labelledby="lab-form-title">
+  <section #formPanel class="panel form-panel" aria-labelledby="lab-form-title">
     <div class="panel-head">
       <h2 id="lab-form-title">New run</h2>
       <div class="tabs" role="tablist" aria-label="Run type">
@@ -53,9 +53,9 @@
     } @else {
       @if (strategy(); as id) {
         <div class="preset panel-body" role="status">
-          @if (registered.error()) {
+          @if (sourceStrategy.error()) {
             <p class="preset-warn">Could not load strategy “{{ id }}”, so the forms start empty.</p>
-          } @else if (preset(); as p) {
+          } @else if (strategyPreset(); as p) {
             @if (presetUncatalogued()) {
               <p class="preset-warn">
                 {{ p.strategyId }} uses a strategy that is not available to test here, so the forms
@@ -64,7 +64,7 @@
             } @else {
               <p>
                 Re-running <strong>{{ p.strategyId }}</strong
-                >: its class and registered parameters are filled in. A lab run searches the
+                >: its class and saved parameters are filled in. A lab run searches the
                 parameters again.
               </p>
             }
@@ -85,7 +85,7 @@
           [classes]="classes.value()"
           [intervals]="intervalList()"
           [costModels]="costModelList()"
-          [preset]="preset()"
+          [preset]="strategyPreset()"
           [tickers]="tickerList()"
           [busy]="starting()"
           (submitted)="startBacktest($event)"
@@ -106,8 +106,9 @@
           [classes]="classes.value()"
           [intervals]="intervalList()"
           [universes]="universeList()"
-          [preset]="preset()"
+          [preset]="strategyPreset()"
           [tickers]="tickerList()"
+          [prefill]="prefill()"
           [busy]="starting()"
           (submitted)="startLabRun($event)"
         />
@@ -182,6 +183,67 @@
                 <app-backtest-result [result]="s.result" />
               }
               @case ('lab_run') {
+                @if (next(); as n) {
+                  <div class="next-step" role="region" aria-label="Next step">
+                    @switch (n.kind) {
+                      @case ('paper') {
+                        <p class="next-text">
+                          <strong>It passed and is paper trading</strong> as
+                          <span class="num">{{ n.strategyId }}</span>. Follow it to get its
+                          signals, or paper trade it in your portfolio.
+                        </p>
+                        <div class="next-actions">
+                          <a class="btn btn-primary" [routerLink]="['/strategies', n.strategyId]"
+                            >Open strategy</a
+                          >
+                          <a
+                            class="btn"
+                            [routerLink]="['/strategies', n.strategyId]"
+                            fragment="follow-title"
+                            >Follow</a
+                          >
+                        </div>
+                      }
+                      @case ('passed') {
+                        <p class="next-text">
+                          <strong>It passed.</strong> To start paper trading it, run it again with
+                          "Start paper trading if it passes" ticked. The form is filled in for you.
+                        </p>
+                        <div class="next-actions">
+                          <button
+                            type="button"
+                            class="btn btn-primary"
+                            [disabled]="!canRerun() || !canRun()"
+                            (click)="rerun(true)"
+                          >
+                            Start paper trading
+                          </button>
+                        </div>
+                      }
+                      @case ('failed') {
+                        <p class="next-text">
+                          <strong
+                            >It failed {{ n.failed.length }} of {{ n.total }}
+                            {{ n.total === 1 ? 'test' : 'tests' }}</strong
+                          >@if (n.failed.length) {
+                            : {{ n.failed.join(', ') }}
+                          }. Change the window, tickers or suite and run it again. Loosening a
+                          test until it passes is how overfitting sneaks in.
+                        </p>
+                        <div class="next-actions">
+                          <button
+                            type="button"
+                            class="btn"
+                            [disabled]="!canRerun() || !canRun()"
+                            (click)="rerun(false)"
+                          >
+                            Change and run again
+                          </button>
+                        </div>
+                      }
+                    }
+                  </div>
+                }
                 <app-lab-run-result [result]="s.result" />
               }
               @case ('lab_sweep') {

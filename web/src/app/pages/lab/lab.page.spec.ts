@@ -10,7 +10,8 @@ import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
 import { TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { BACKTEST_RESULT, CATALOG, LAB_RUN_VIEW, MOMENTUM } from '../../../testing/lab-fixtures';
-import type { Job, MeView, Page } from '../../api/models';
+import type { Job, LabRunView, MeView, Page } from '../../api/models';
+import type { ConfirmOptions } from '../../core/confirm/confirm.service';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
@@ -59,16 +60,23 @@ describe('LabPage', () => {
   /** Status the poller sees for each job id. */
   let jobStatus: Record<string, Job>;
   let confirmed: string[];
+  let confirmOptions: ConfirmOptions[];
+  /** What GET /api/lab/runs/new-lr/result returns. */
+  let labRunView: LabRunView;
 
   let created = false;
 
-  async function create(me: MeView = TRADER): Promise<void> {
+  async function create(
+    me: MeView = TRADER,
+    query: Record<string, string> = {},
+  ): Promise<void> {
     created = true;
     const session = TestBed.inject(SessionService);
     const loading = session.load();
     (await nextRequest(controller, '/api/auth/me')).flush(me);
     await loading;
     fixture = TestBed.createComponent(LabPage);
+    for (const [k, v] of Object.entries(query)) fixture.componentRef.setInput(k, v);
     el = fixture.nativeElement;
     fixture.detectChanges();
   }
@@ -77,6 +85,8 @@ describe('LabPage', () => {
     created = false;
     posted = [];
     confirmed = [];
+    confirmOptions = [];
+    labRunView = LAB_RUN_VIEW;
     jobStatus = {};
     TestBed.configureTestingModule({
       imports: [LabPage],
@@ -93,6 +103,7 @@ describe('LabPage', () => {
     const confirm = TestBed.inject(ConfirmService);
     vi.spyOn(confirm, 'confirm').mockImplementation(async (o) => {
       confirmed.push(o.title);
+      confirmOptions.push(o);
       return true;
     });
     controller = TestBed.inject(HttpTestingController);
@@ -134,7 +145,7 @@ describe('LabPage', () => {
       case '/api/lab/backtests/bt-1/result':
         return req.flush(BACKTEST_RESULT);
       case '/api/lab/runs/new-lr/result':
-        return req.flush(LAB_RUN_VIEW);
+        return req.flush(labRunView);
       case '/api/lab/survival-tests':
         return req.flush(SURVIVAL_TEST_CATALOG);
       case '/api/lab/survival-presets':
@@ -149,10 +160,12 @@ describe('LabPage', () => {
     throw new Error(`unexpected GET ${path}`);
   }
 
-  async function settle(rounds = 8): Promise<void> {
+  async function settle(rounds = 8, hold: (path: string) => boolean = () => false): Promise<void> {
     if (!created) await create();
     for (let i = 0; i < rounds; i++) {
-      controller.match(() => true).forEach(respond);
+      controller
+        .match((r) => !hold(r.url.split('?')[0]))
+        .forEach(respond);
       await tick(5);
       fixture.detectChanges();
     }
@@ -184,7 +197,7 @@ describe('LabPage', () => {
     expect(rows[1].textContent).not.toContain('Cancel');
   });
 
-  it('starts a backtest, follows it and renders the result', async () => {
+  it('startBacktest calls the API without ConfirmService, follows it and renders the result (UX-29)', async () => {
     await settle();
     const radio = el.querySelector<HTMLInputElement>(
       `#lab-panel-backtest input[value="${MOMENTUM.class_path}"]`,
@@ -199,7 +212,7 @@ describe('LabPage', () => {
     el.querySelector<HTMLButtonElement>('#lab-panel-backtest button[type="submit"]')!.click();
     await settle(12);
 
-    expect(confirmed).toEqual(['Run a backtest of Momentum?']);
+    expect(confirmed).toEqual([]);
     expect(posted[0]).toMatchObject({
       url: '/api/lab/backtests',
       body: {
@@ -285,11 +298,10 @@ describe('LabPage', () => {
     expect(el.querySelectorAll('app-lab-run-result .test').length).toBe(3);
   });
 
-  it('registers only if the run passes, and asks for a hypothesis first', async () => {
+  it('starts paper trading only if the run passes, and asks for a hypothesis first', async () => {
     await openLabRunForm();
-    const register = [...el.querySelectorAll<HTMLLabelElement>('#lab-panel-lab_run label.check')]
-      .find((l) => l.textContent!.includes('Register the fitted strategy'))!
-      .querySelector('input')!;
+    const register = el.querySelector<HTMLInputElement>('#lr-register')!;
+    expect(register.closest('label')!.textContent).toContain('Start paper trading if it passes');
     register.click();
     fixture.detectChanges();
     // Registering switches the quick suite to promotion, as the API does.
@@ -300,7 +312,7 @@ describe('LabPage', () => {
     submitLabRun();
     await settle(2);
     expect(posted).toEqual([]);
-    expect(el.textContent).toContain('Say why it should make money before registering it.');
+    expect(el.textContent).toContain('Say why it should make money before it starts paper trading.');
 
     const hypothesis = el.querySelector<HTMLTextAreaElement>('#lr-hypothesis')!;
     hypothesis.value = 'Slow money chases recent winners for months.';
@@ -310,13 +322,115 @@ describe('LabPage', () => {
     submitLabRun();
     await settle(12);
 
-    expect(confirmed).toEqual(['Start a lab run of Momentum?']);
+    // A plain confirmation: paper trading places no real orders, so no typed words.
+    expect(confirmed).toEqual(['Start paper trading Momentum if it passes?']);
+    expect(confirmOptions[0].typedConfirmation).toBeUndefined();
     expect(posted[0].body).toMatchObject({
       preset: 'promotion',
       register_if_passes: true,
       hypothesis: 'Slow money chases recent winners for months.',
     });
     expect((posted[0].body as Record<string, unknown>)['register_strategy']).toBeUndefined();
+  });
+
+  it('starts a plain lab run without asking', async () => {
+    await openLabRunForm();
+    jobStatus['new-lr'] = job({ id: 'new-lr', kind: 'lab_run', status: 'succeeded' });
+    submitLabRun();
+    await settle(12);
+    expect(confirmed).toEqual([]);
+    expect(posted[0].url).toBe('/api/lab/runs');
+  });
+
+  describe('next step after a lab run (UX-22)', () => {
+    async function finishRun(view: LabRunView): Promise<void> {
+      labRunView = view;
+      await openLabRunForm();
+      jobStatus['new-lr'] = job({ id: 'new-lr', kind: 'lab_run', status: 'succeeded' });
+      submitLabRun();
+      await settle(12);
+    }
+
+    it('passed, unregistered result renders a next step', async () => {
+      await finishRun({ ...LAB_RUN_VIEW, verdict: 'pass', registered_strategy_id: null });
+      const next = el.querySelector('.next-step')!;
+      expect(next.textContent).toContain('It passed.');
+      const start = [...next.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent!.trim() === 'Start paper trading',
+      )!;
+      // Somewhere else first, to see the re-run switch back to the lab run form.
+      el.querySelector<HTMLButtonElement>('#lab-tab-backtest')!.click();
+      fixture.detectChanges();
+      start.click();
+      await settle(2);
+      expect(el.querySelector('#lab-panel-lab_run')!.hasAttribute('hidden')).toBe(false);
+      expect(el.querySelector<HTMLInputElement>('#lr-register')!.checked).toBe(true);
+      expect(el.querySelector<HTMLInputElement>('#lr-tickers')!.value).toBe('SPY.US');
+      expect(
+        el.querySelector<HTMLInputElement>('#lab-panel-lab_run input[name="lr-suite"][value="promotion"]')!
+          .checked,
+      ).toBe(true);
+    });
+
+    it('a failed run says what failed and offers a prefilled re-run', async () => {
+      await finishRun(LAB_RUN_VIEW);
+      const next = el.querySelector('.next-step')!;
+      expect(next.textContent).toContain('It failed 1 of 3 tests');
+      expect(next.textContent).toContain('Walk-forward');
+      [...next.querySelectorAll<HTMLButtonElement>('button')]
+        .find((b) => b.textContent!.includes('Change and run again'))!
+        .click();
+      await settle(2);
+      expect(el.querySelector<HTMLInputElement>('#lr-register')!.checked).toBe(false);
+      expect(el.querySelector<HTMLInputElement>('#lr-tickers')!.value).toBe('SPY.US');
+    });
+
+    it('a run that started paper trading links to the strategy and to Follow', async () => {
+      await finishRun({ ...LAB_RUN_VIEW, verdict: 'pass', registered_strategy_id: 'mom-7' });
+      const links = [...el.querySelectorAll<HTMLAnchorElement>('.next-step a')];
+      expect(links.map((a) => a.textContent!.trim())).toEqual(['Open strategy', 'Follow']);
+      expect(links[0].getAttribute('href')).toBe('/strategies/mom-7');
+      expect(links[1].getAttribute('href')).toBe('/strategies/mom-7#follow-title');
+    });
+  });
+
+  it('opens the lab run form on the suite from ?preset=promotion (UX-28)', async () => {
+    await create(TRADER, { preset: 'promotion' });
+    await settle();
+    expect(el.querySelector('#lab-panel-lab_run')!.hasAttribute('hidden')).toBe(false);
+    expect(
+      el.querySelector<HTMLInputElement>('#lab-panel-lab_run input[name="lr-suite"][value="promotion"]')!
+        .checked,
+    ).toBe(true);
+  });
+
+  it('a stale result load never clears the newer job spinner (UX-62)', async () => {
+    const held = (path: string) =>
+      path === '/api/lab/backtests/bt-1/result' || path === '/api/lab/sweeps/sw-1/result';
+    await settle(8, held);
+    const rows = [...el.querySelectorAll('app-data-table tbody tr')];
+    const openRow = (text: string) =>
+      rows
+        .find((r) => r.textContent!.includes(text))!
+        .querySelector<HTMLButtonElement>('button')!
+        .click();
+    openRow('Backtest');
+    await settle(8, held);
+    const a = controller.match('/api/lab/backtests/bt-1/result');
+    expect(a).toHaveLength(1);
+    openRow('Sweep');
+    await settle(8, held);
+    const b = controller.match('/api/lab/sweeps/sw-1/result');
+    expect(b).toHaveLength(1);
+    // A resolves after opening B: B still shows loading.
+    a[0].flush(BACKTEST_RESULT);
+    await settle(2, held);
+    expect(el.querySelector('.result-panel app-loading-state')).not.toBeNull();
+    expect(el.querySelector('app-backtest-result')).toBeNull();
+    b[0].flush(SWEEP_RESULT);
+    await settle(2, held);
+    expect(el.querySelector('.result-panel app-loading-state')).toBeNull();
+    expect(el.querySelector('app-sweep-result')).not.toBeNull();
   });
 
   it('opens a finished job from history and cancels a running lab run', async () => {
