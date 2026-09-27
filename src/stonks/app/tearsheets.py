@@ -26,6 +26,7 @@ from stonks.lab.catalog import resolve_strategy
 from stonks.lab.heatmap import ParameterHeatmap
 from stonks.logging import get_logger
 from stonks.production.universe import EmptyUniverseError, window_tickers
+from stonks.reporting.forecast_weights import strategy_report_sections
 from stonks.reporting.tearsheet import TearSheet, render_tear_sheet_page
 
 __all__ = ["TearSheetWindow", "render_backtest_tear_sheet", "tear_sheet_request"]
@@ -103,7 +104,10 @@ def render_backtest_tear_sheet(
     ref = request.strategy
     title = ref.strategy_id or f"{ref.class_path} {ref.params or ''}".strip()
     heatmap = _registered_heatmap(context, ref.strategy_id) if ref.strategy_id else None
-    return render_tear_sheet_page(TearSheet(title=title, report=report, heatmap=heatmap))
+    sections = tuple(strategy_report_sections(strategy))
+    return render_tear_sheet_page(
+        TearSheet(title=title, report=report, heatmap=heatmap, sections=sections)
+    )
 
 
 def _registered_heatmap(context: AppContext, strategy_id: str) -> ParameterHeatmap | None:

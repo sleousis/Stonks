@@ -71,7 +71,9 @@ _HISTORY_START = pd.Timestamp("1900-01-01").to_pydatetime()
 _EPOCH_ORDINAL = date(1970, 1, 1).toordinal()
 
 
-def forecast_specs(*, fdm_default: float = 1.1) -> list[ParameterSpec]:
+def forecast_specs(
+    *, fdm_default: float = 1.1, fdm_mode_default: str = "fixed"
+) -> list[ParameterSpec]:
     """How rule forecasts are scaled and combined."""
     return [
         ParameterSpec(
@@ -87,7 +89,7 @@ def forecast_specs(*, fdm_default: float = 1.1) -> list[ParameterSpec]:
         ParameterSpec(
             name="fdm_mode",
             kind="categorical",
-            default="fixed",
+            default=fdm_mode_default,
             bounds=["fixed", "estimate"],
             tunable=False,
             description="'fixed': use fdm; 'estimate': 1/sqrt(w'Hw) from the "
@@ -249,6 +251,11 @@ class ForecastTrendStrategy(BaseStrategy):
         dated on or before as_of, oldest first); ``None`` when undefined."""
         raise NotImplementedError
 
+    def _ticker_forecast(self, ticker: str, bars: pd.DataFrame, asset_class: str) -> float | None:
+        """:meth:`_signed_forecast` for ``ticker``; override when the
+        forecast keeps per-instrument state (fitted forecast weights)."""
+        return self._signed_forecast(bars, asset_class)
+
     # ---- shared helpers for subclasses ---------------------------------------------
 
     def _combine(self, rules: pd.DataFrame) -> pd.Series:
@@ -325,7 +332,7 @@ class ForecastTrendStrategy(BaseStrategy):
         if len(bars) < self._min_bars():
             return None
         asset_class = self._asset_class(ticker, lake)
-        forecast = self._signed_forecast(bars.reset_index(drop=True), asset_class)
+        forecast = self._ticker_forecast(ticker, bars.reset_index(drop=True), asset_class)
         if forecast is None or not math.isfinite(forecast):
             return None
         closes = bars["close"].astype(float)

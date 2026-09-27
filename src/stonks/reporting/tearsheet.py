@@ -56,6 +56,9 @@ class TearSheet:
     report: Any
     #: The lab run's parameter heatmap (``lab.heatmap.ParameterHeatmap``).
     heatmap: Any = None
+    #: Extra HTML sections shown after the tear sheet, already escaped
+    #: (e.g. :func:`stonks.reporting.forecast_weights.strategy_report_sections`).
+    sections: tuple[str, ...] = ()
 
 
 # ---- data --------------------------------------------------------------------------
@@ -369,6 +372,7 @@ def render_tear_sheet(sheet: TearSheet) -> str:
         f"{short_html}"
         f"{heatmap_section}"
         "</section>"
+        f"{''.join(sheet.sections)}"
     )
 
 
