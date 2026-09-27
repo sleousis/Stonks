@@ -184,13 +184,7 @@
       <app-empty-state
         title="No universes yet"
         message="Create one with New universe. Lab runs and the daily trading run can then use it."
-      >
-        @if (canEdit() && !creating()) {
-          <button type="button" class="btn btn-primary" (click)="creating.set(true)">
-            New universe
-          </button>
-        }
-      </app-empty-state>
+      />
     } @else {
       @let rows = universes.value();
       <app-data-table
