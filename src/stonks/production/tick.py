@@ -1,4 +1,4 @@
-"""Production tick â€” one-shot entrypoint invoked by an external scheduler.
+"""Production tick — one-shot entrypoint invoked by an external scheduler.
 
 Each invocation is a fresh process. State lives in SqliteState + DuckDBLake;
 the tick is stateless across runs. A tick has three phases (BL-12, design
@@ -997,7 +997,9 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     proposed = pipeline.orders
     outside: list[str] = []
     if settings.scoped:
-        allowed = set(universe)
+        # the scope is the tick's tickers, even when the portfolio has its own
+        # universe: the ranker scored only them (BE-03)
+        allowed = set(settings.universe) & set(universe)
         outside = sorted({o.ticker for o in proposed if o.ticker not in allowed})
         if outside:
             log.info("tick.outside_universe_skipped", tickers=outside)

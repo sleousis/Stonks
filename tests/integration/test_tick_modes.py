@@ -354,3 +354,33 @@ def test_be02_an_auto_book_never_sells_the_users_own_holdings(world):
         [world.live],
     )
     assert "FLAT.US" in snap["positions_json"]
+
+
+# ---- BE-03: a scoped tick trades only its scope ---------------------------------------------
+
+
+@pytest.mark.parametrize("own_universe", [False, True])
+def test_be03_a_scoped_tick_never_orders_outside_its_scope(world, own_universe):
+    import json
+    from dataclasses import replace
+
+    from stonks.strategies.examples.momentum import Momentum
+
+    reports = [SurvivalReport(test_id="oos", passed=True, metrics={})]
+    params = {"lookback_days": 5, "skip_days": 0, "threshold": 0.0, "allocation": 0.5}
+    world.registry.register(Momentum(params), reports=reports, strategy_id="mom")
+    seed_status(world.registry, "mom", "active")
+    world.state.execute("UPDATE subscriptions SET strategy_id = 'mom' WHERE id = ?",
+                        [world.alice_paper])  # fmt: skip
+    if own_universe:
+        world.state.execute("UPDATE portfolios SET universe = ? WHERE id = ?",
+                            [json.dumps(UNIVERSE), world.sim])  # fmt: skip
+    world.tick(DAY1)
+    [bought] = world.orders(world.sim)
+    assert bought["ticker"] == "UP.US"
+
+    scoped = replace(SETTINGS, universe=["DOWN.US"], scoped=True)
+    plan = load_tick_plan(world.state, scoped, traders=world.traders)
+    run_tick(world.state, world.lake, world.registry, scoped, as_of=DAY2, plan=plan)
+    day2 = [o for o in world.orders(world.sim) if o["client_id"].startswith("2026-03-18")]
+    assert all(o["ticker"] == "DOWN.US" for o in day2), day2
