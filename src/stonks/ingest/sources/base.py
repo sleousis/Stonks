@@ -20,6 +20,7 @@ from stonks.ingest.schemas import (
     DefiTvlRow,
     ExchangeInfo,
     FinancialStatementsBundle,
+    FxRateRow,
     IntradayBar,
     MacroIndicatorRow,
     RawPriceBar,
@@ -134,3 +135,21 @@ class DataSource(ABC):
         """
         del since
         raise UnsupportedCapabilityError(f"{self.source_id} does not serve DeFi TVL ({chain!r})")
+
+    def fetch_fx_rates(
+        self,
+        base: str,
+        quote: str,
+        since: date | None = None,
+        until: date | None = None,
+    ) -> Iterable[FxRateRow]:
+        """Daily FX rates for one pair: units of ``quote`` per one ``base``
+        (ISO 4217 codes), optionally only ``since <= day <= until``.
+
+        Optional capability: the default raises
+        :class:`UnsupportedCapabilityError`, so a source without forex
+        data shows up as a failed pair instead of a silent empty run."""
+        del since, until
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve FX rates ({base}{quote})"
+        )

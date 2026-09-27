@@ -1588,6 +1588,7 @@ class DuckDBLake:
         "contract_unit",
     )
     _DEFI_TVL_COLS = ("chain", "observation_date", "tvl_usd", "source")
+    _FX_RATE_COLS = ("base_currency", "quote_currency", "observation_date", "rate", "source")
     _MACRO_INDICATOR_COLS = (
         "country_iso",
         "indicator",
@@ -1815,6 +1816,42 @@ class DuckDBLake:
         df = self.con.execute(
             "SELECT observation_date, tvl_usd, source FROM defi_tvl"
             f" WHERE {' AND '.join(clauses)} ORDER BY observation_date",
+            params,
+        ).fetchdf()
+        return _dates_to_python(df, ("observation_date",))
+
+    def upsert_fx_rates(self, df: pd.DataFrame) -> int:
+        """Upsert daily FX rates keyed by ``(base_currency, quote_currency,
+        observation_date)``. Last write wins, so a re-run is a no-op."""
+        return self._upsert(
+            df,
+            table="fx_rates",
+            cols=self._FX_RATE_COLS,
+            pk=("base_currency", "quote_currency", "observation_date"),
+        )
+
+    def get_fx_rates(
+        self,
+        currencies: Any = None,
+        *,
+        end: Any = None,
+    ) -> pd.DataFrame:
+        """Stored FX rates (``base_currency, quote_currency,
+        observation_date, rate``), oldest first. ``currencies`` keeps pairs
+        whose both legs are in it; ``end`` keeps days on or before it."""
+        clauses: list[str] = []
+        params: list[Any] = []
+        if currencies is not None:
+            codes = sorted({str(c).upper() for c in currencies})
+            clauses.append("base_currency = ANY(?) AND quote_currency = ANY(?)")
+            params += [codes, codes]
+        if end is not None:
+            clauses.append("observation_date <= ?")
+            params.append(_as_calendar_date(end))
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        df = self.con.execute(
+            "SELECT base_currency, quote_currency, observation_date, rate FROM fx_rates"
+            f"{where} ORDER BY observation_date",
             params,
         ).fetchdf()
         return _dates_to_python(df, ("observation_date",))

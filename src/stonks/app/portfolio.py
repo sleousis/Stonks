@@ -9,7 +9,7 @@ portfolio that isn't yours, admins included). Admins get
 from __future__ import annotations
 
 import json
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
@@ -52,6 +52,11 @@ class PositionView(BaseModel):
     unrealized_pnl_pct: float | None = Field(
         default=None, description="unrealized_pnl / |cost_basis| (0.05 = +5%)."
     )
+    market_value_base: float | None = Field(
+        default=None,
+        description="market_value in the portfolio's base currency, at the FX rate of the "
+        "price date; null when unpriced or no FX rate is stored.",
+    )
 
 
 class PortfolioView(BaseModel):
@@ -76,6 +81,23 @@ class PortfolioView(BaseModel):
     )
     unrealized_pnl: float = Field(
         default=0.0, description="Sum of the positions' unrealized_pnl (priced, known cost)."
+    )
+    base_currency: str | None = Field(
+        default=None, description="The portfolio's base (reporting) currency."
+    )
+    positions_value_base: float | None = Field(
+        default=None,
+        description="positions_value in the base currency; null when a held currency has no FX "
+        "rate (see fx_missing).",
+    )
+    total_value_base: float | None = Field(
+        default=None,
+        description="Cash (kept in the base currency) plus positions_value_base; null when a "
+        "held currency has no FX rate.",
+    )
+    fx_missing: list[str] = Field(
+        default_factory=list,
+        description="Held currencies with no stored FX rate to the base currency.",
     )
 
 
@@ -334,7 +356,7 @@ class PortfolioService:
             )
         if not rows:
             cash = float(self._ctx.settings.production.initial_cash)
-            return PortfolioView(
+            empty = PortfolioView(
                 taken_at=None,
                 tick_id=None,
                 cash=cash,
@@ -343,6 +365,7 @@ class PortfolioService:
                 total_value=cash,
                 snapshot_total_value=None,
             )
+            return self._with_base(empty, portfolio_id)
         row = rows[0]
         holdings: dict[str, float] = json.loads(row["positions_json"])
         latest = self._latest_closes(list(holdings))
@@ -363,7 +386,7 @@ class PortfolioService:
             if p.market_value is not None and total:
                 p.weight = p.market_value / total
         held_currencies = {currencies.get(t) for t in holdings}
-        return PortfolioView(
+        view = PortfolioView(
             currency=_single(held_currencies) or DEFAULT_CURRENCY,
             cost_basis=sum(p.cost_basis or 0.0 for p in positions),
             unrealized_pnl=sum(p.unrealized_pnl or 0.0 for p in positions),
@@ -375,6 +398,51 @@ class PortfolioService:
             total_value=total,
             snapshot_total_value=float(row["total_value"]),
         )
+        return self._with_base(view, portfolio_id)
+
+    def base_currency(self, portfolio_id: str) -> str:
+        """The portfolio's base (reporting) currency, USD when unknown."""
+        with self._ctx.state() as state:
+            rows = state.sql("SELECT base_currency FROM portfolios WHERE id = ?", [portfolio_id])
+        return str(rows[0]["base_currency"]).upper() if rows else DEFAULT_CURRENCY
+
+    def _with_base(self, view: PortfolioView, portfolio_id: str) -> PortfolioView:
+        """Fill the base-currency fields (roadmap 20.5). Cash is taken as
+        already in the base currency. An instrument with no currency in the
+        lake is taken to trade in the base currency. Each position converts
+        at the FX rate of its price date; a currency with no rate is listed
+        in ``fx_missing`` and leaves the base totals null (never guessed)."""
+        from stonks.fx import load_fx_rates
+
+        base = self.base_currency(portfolio_id)
+        view.base_currency = base
+        needed = {p.currency for p in view.positions if p.currency and p.currency != base}
+        fx = None
+        if needed:
+            with self._ctx.lake() as lake:
+                fx = load_fx_rates(lake, {*needed, base})
+        missing: set[str] = set()
+        total = 0.0
+        for p in view.positions:
+            if p.market_value is None:
+                continue
+            ccy = p.currency or base
+            day = p.price_date or datetime.now(UTC).date()
+            value = (
+                p.market_value
+                if ccy == base or fx is None
+                else fx.convert(p.market_value, ccy, base, day)
+            )
+            if value is None:
+                missing.add(ccy)
+                continue
+            p.market_value_base = value
+            total += value
+        view.fx_missing = sorted(missing)
+        if not missing:
+            view.positions_value_base = total
+            view.total_value_base = view.cash + total
+        return view
 
     def snapshots(
         self, *, limit: int, offset: int, portfolio_id: str = DEFAULT_PORTFOLIO_ID
