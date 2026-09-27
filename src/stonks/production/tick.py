@@ -68,7 +68,7 @@ from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Mode, Subscription
 from stonks.accounts.models import Portfolio as AccountPortfolio
 from stonks.accounts.paper import ensure_paper_account
 from stonks.backtest.costs import CostModel, CostModelSettings, FixedCostModel
-from stonks.backtest.simulated_broker import SimulatedBroker
+from stonks.backtest.simulated_broker import FinancingEvent, SimulatedBroker
 from stonks.core.interval import Interval
 from stonks.core.protocols import Broker
 from stonks.core.types import Fill, Order, OrderStatus, Portfolio
@@ -109,6 +109,7 @@ from stonks.production.corporate_actions import (
     working_orders,
 )
 from stonks.production.decay import DecaySettings
+from stonks.production.financing import last_accrual, record_accrual
 from stonks.production.halts import active_halts
 from stonks.production.hooks import (
     GateContext,
@@ -968,6 +969,14 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             # Roadmap 16.1: a short book's paper broker trades on margin.
             model = book.spec.risk.rules.margin_call.margin.build()
             broker.enable_shorts(model if model.allows_short else RegTMargin())
+    # Roadmap 16.1: a short book's paper broker charges borrow fees and debit
+    # interest for the days since the stored accrual date (else the last
+    # snapshot), before any order changes the positions.
+    financing: list[FinancingEvent] | None = None
+    if book.spec.allow_short and isinstance(broker, SimulatedBroker) and not dry_run:
+        financing = broker.accrue(as_of, since=last_accrual(state, portfolio_id) or since)
+        for event in financing:
+            log.info("tick.financing", ticker=event.ticker, kind=event.kind, amount=event.amount)
     # Every order records its decision: price, time, context and the
     # modelled cost (BL-32, P22).
     orders_with_tick = annotate_orders(
@@ -1138,6 +1147,8 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                         state, fill, portfolio_id=scope, arrival_price=_arrival(broker, fill)
                     )
             persist_corporate_actions()
+            if financing is not None:
+                record_accrual(state, portfolio_id, as_of, financing, tick_id=tick_id)
             _snapshot_portfolio(state, tick_id, portfolio, prices, as_of, portfolio_id=scope)
             hook_summary = hooks(portfolio, prices)
 
@@ -1185,6 +1196,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             "fills": fills_count,
             "risk_adjustments": [a.as_dict() for a in risk_adjustments],
             **corporate_summary,
+            **({"financing": round(sum(e.amount for e in financing), 6)} if financing else {}),
             **hook_summary,
         },
     )
