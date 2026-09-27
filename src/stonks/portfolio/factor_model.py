@@ -116,19 +116,20 @@ def standardize_exposures(raw: pd.DataFrame) -> pd.DataFrame:
             for name in sorted({str(v) for v in labels.dropna() if str(v)}):
                 out[f"{SECTOR}:{name}"] = (labels.astype(str) == name).astype(float)
             continue
-        x = pd.to_numeric(values, errors="coerce").astype(float)
-        x = x.where(np.isfinite(x))
-        finite = x.dropna()
-        if finite.size < 2 or float(finite.std(ddof=0)) <= 0:
+        x = np.asarray(pd.to_numeric(values, errors="coerce"), dtype=float)
+        x = np.where(np.isfinite(x), x, np.nan)
+        finite = x[np.isfinite(x)]
+        if finite.size < 2 or float(np.std(finite)) <= 0:
             continue
-        median = float(finite.median())
-        mad = float((finite - median).abs().median()) * 1.4826
-        scale = mad if mad > 0 else float(finite.std(ddof=0))
-        x = x.clip(median - WINSOR_Z * scale, median + WINSOR_Z * scale)
-        std = float(x.std(ddof=0))
+        median = float(np.median(finite))
+        mad = float(np.median(np.abs(finite - median))) * 1.4826
+        scale = mad if mad > 0 else float(np.std(finite))
+        x = np.clip(x, median - WINSOR_Z * scale, median + WINSOR_Z * scale)
+        std = float(np.nanstd(x))
         if not std > 0:
             continue
-        out[str(column)] = ((x - x.mean()) / std).fillna(0.0)
+        z = np.nan_to_num((x - float(np.nanmean(x))) / std, nan=0.0)
+        out[str(column)] = pd.Series(z, index=raw.index)
     frame = pd.DataFrame(out, index=raw.index)
     if SECTOR in raw.columns:
         # a sector dummy that every name shares is the market itself
@@ -170,8 +171,8 @@ def cross_section_returns(returns: pd.Series, exposures: pd.DataFrame) -> dict[s
     ``[1, exposures]`` over the names that have a return. With fewer names
     than factors plus three only the market (the mean return) is given;
     with no name, nothing."""
-    r = pd.to_numeric(returns, errors="coerce").astype(float)
-    r = r[np.isfinite(r)]
+    r = pd.Series(pd.to_numeric(returns, errors="coerce"), index=returns.index, dtype=float)
+    r = r.loc[np.isfinite(r.to_numpy())]
     if r.empty:
         return {}
     b = exposures.reindex(r.index).fillna(0.0)
@@ -272,6 +273,6 @@ def model_exposures(
     else:
         raw = exposures.reindex(list(tickers))
         for column in derived.columns:
-            if column not in raw.columns or raw[column].isna().all():
+            if column not in raw.columns or bool(raw[column].isna().all()):
                 raw = raw.assign(**{column: derived[column]})
     return standardize_exposures(raw).reindex(list(tickers)).fillna(0.0)

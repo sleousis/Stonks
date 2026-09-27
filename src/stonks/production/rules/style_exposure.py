@@ -102,17 +102,20 @@ def bars_style_exposures(
             continue
         if as_of is not None:
             frame = frame[frame.index <= pd.Timestamp(as_of)]
-        close = frame["close"].astype(float)
-        close = close[close > 0]
+        close = pd.Series(frame["close"], dtype=float)
+        close = close.loc[close.to_numpy() > 0]
         if len(close) < MIN_BARS:
             continue
         recent = frame.loc[close.index].tail(WINDOW_BARS)
         returns = close.pct_change().dropna().tail(WINDOW_BARS)
-        dollar = (recent["close"].astype(float) * recent.get("volume", np.nan)).mean()
+        volume = recent.get("volume", np.nan)
+        dollar = float(np.nanmean(recent["close"].to_numpy(float) * np.asarray(volume, float)))
         rows[str(ticker)] = {
             "momentum": _momentum(close),
-            "size": math.log(dollar) if dollar and dollar > 0 else math.nan,
-            "volatility": float(returns.std(ddof=1)) if len(returns) > 1 else math.nan,
+            "size": math.log(dollar) if math.isfinite(dollar) and dollar > 0 else math.nan,
+            "volatility": float(np.std(returns.to_numpy(float), ddof=1))
+            if len(returns) > 1
+            else math.nan,
             SECTOR: sectors.get(str(ticker)),
         }
     return pd.DataFrame.from_dict(rows, orient="index")
@@ -125,7 +128,7 @@ def _scores(ctx: RiskContext, styles: Sequence[str]) -> pd.DataFrame:
     columns = [s for s in styles if s in raw.columns]
     if raw.empty or not columns:
         return pd.DataFrame()
-    return standardize_exposures(raw[columns])
+    return standardize_exposures(pd.DataFrame(raw[columns]))
 
 
 @register_rule

@@ -140,7 +140,8 @@ def safe_style_exposures(
 
 def _month_ends(index: pd.DatetimeIndex) -> pd.DatetimeIndex:
     stamps = index.to_series()
-    return pd.DatetimeIndex(stamps.groupby(index.to_period("M")).max().to_numpy())
+    last = stamps.groupby(index.to_period("M")).max()
+    return pd.DatetimeIndex(np.asarray(last, dtype="datetime64[ns]"))
 
 
 def style_factor_returns(
@@ -174,7 +175,7 @@ def style_factor_returns(
             continue
         panels[style] = panel.reindex(index=dates, columns=list(request.universe))
     labels = sectors_of(lake, request.universe) if sectors else {}
-    rows: dict[pd.Timestamp, dict[str, float]] = {}
+    rows: dict[Any, dict[str, float]] = {}
     for i in range(1, len(dates)):
         before = dates[i - 1]
         raw = pd.DataFrame(

@@ -73,8 +73,12 @@ class FactorAttribution:
 def returns_from_curve(dates: Sequence[date], curve: Sequence[float]) -> pd.Series:
     """Simple per-bar returns of an equity curve, indexed by the bar date."""
     values = pd.Series(list(curve), index=pd.DatetimeIndex(pd.to_datetime(list(dates))))
-    values = values[~values.index.duplicated(keep="last")].astype(float)
+    values = pd.Series(values[~values.index.duplicated(keep="last")], dtype=float)
     return values.pct_change().iloc[1:].replace([np.inf, -np.inf], np.nan).dropna()
+
+
+def _days(index: pd.Index) -> pd.DatetimeIndex:
+    return pd.DatetimeIndex(pd.to_datetime(index).to_numpy(dtype="datetime64[D]"))
 
 
 def _group(name: str) -> str:
@@ -90,9 +94,9 @@ def attribute_returns(
     if factor_returns is None or factor_returns.empty or portfolio_returns.empty:
         return None
     r = portfolio_returns.copy()
-    r.index = pd.DatetimeIndex(pd.to_datetime(r.index)).normalize()
+    r.index = _days(r.index)
     f = factor_returns.copy()
-    f.index = pd.DatetimeIndex(pd.to_datetime(f.index)).normalize()
+    f.index = _days(f.index)
     f = f.fillna(0.0)
     joined = pd.concat([r.rename("__book__"), f], axis=1, join="inner").dropna()
     if len(joined) < max(min_bars, f.shape[1] + 2):
