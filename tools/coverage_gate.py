@@ -23,7 +23,7 @@ TARGET = 95.0
 #: Floors enforced now. Measured on 2026-09-27 (combined line and branch):
 #: core 98.4, production 95.5, execution 95.9, auth 98.5, portfolio 96.3.
 PACKAGE_FLOORS: dict[str, float] = {
-    "core": 98.0,
+    "core": 95.0,
     "production": 95.0,
     "execution": 95.0,
     "auth": 95.0,

@@ -370,7 +370,7 @@ CI enforces each gate at today's value where it is still below the target, so it
 | Gate | Target | Today | Enforced by |
 |---|---|---|---|
 | Coverage overall (coverage.py's combined line and branch number) | 90 | 94.2 (lines 95.7, branches 87.6) | `fail_under = 90` in `pyproject.toml` |
-| Coverage `core/` | 95 | 98.4 | floor 98 in `tools/coverage_gate.py` |
+| Coverage `core/` | 95 | 98.4 | floor 95 (the target) in `tools/coverage_gate.py` |
 | Coverage `production/` | 95 | 95.5 | floor 95 |
 | Coverage `execution/` | 95 | 95.9 | floor 95 |
 | Coverage `auth/` | 95 | 98.5 | floor 95 |
