@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import typer
 from rich.console import Console
@@ -125,14 +125,18 @@ def _definition(
 ) -> Any:
     """A validated definition. ``current`` is the stored spec an update
     keeps when no new one is given."""
-    from stonks.universes import UniverseDefinition
+    from stonks.universes import UniverseDefinition, UniverseKind
 
     body = _spec_body(kind, tickers, csv, spec)
     if current is not None and not (tickers or csv or spec):
         body = current
     try:
         definition = UniverseDefinition(
-            id=universe_id, kind=kind, name=name, description=description, spec=body
+            id=universe_id,
+            kind=cast(UniverseKind, kind),  # checked by _spec_body
+            name=name,
+            description=description,
+            spec=body,
         )
         definition.validated()
     except ValueError as exc:

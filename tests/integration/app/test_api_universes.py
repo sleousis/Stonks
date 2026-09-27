@@ -261,7 +261,7 @@ def test_exchanges_come_from_the_instruments_we_hold(client, listing_source):
     done = _wait(client, client.post("/api/universes/us_all/refresh", headers=AUTH).json()["id"])
     assert done["status"] == "succeeded", done["error"]
 
-    rows = client.get("/api/universes/exchanges").json()
+    rows = client.get("/api/universes/exchanges").json()["items"]
     assert rows == [
         {"exchange": "NASDAQ", "instruments": 1, "listed": 0},
         {"exchange": "NYSE", "instruments": 2, "listed": 2},

@@ -53,9 +53,9 @@ describe('UniversesService', () => {
     expect((await history).total).toBe(0);
 
     const exchanges = universes.exchanges();
-    (await nextRequest(controller, '/api/universes/exchanges')).flush([
-      { exchange: 'US', instruments: 3, listed: 2 },
-    ]);
+    (await nextRequest(controller, '/api/universes/exchanges')).flush(
+      page([{ exchange: 'US', instruments: 3, listed: 2 }]),
+    );
     expect((await exchanges)[0].exchange).toBe('US');
   });
 

@@ -11120,6 +11120,37 @@
         "title": "Page[Draft]",
         "type": "object"
       },
+      "Page_ExchangeView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ExchangeView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ExchangeView]",
+        "type": "object"
+      },
       "Page_FillView_": {
         "properties": {
           "items": {
@@ -47404,16 +47435,44 @@
       "get": {
         "description": "Exchanges our instruments name, with counts, for picking an\n``exchange`` universe. A source may list more than we hold.",
         "operationId": "listUniverseExchanges",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ExchangeView"
-                  },
-                  "title": "Response Listuniverseexchanges",
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_ExchangeView_"
                 }
               }
             },

@@ -62,7 +62,7 @@ export class UniversesService {
 
   /** Exchanges our instruments name, for the exchange picker. */
   exchanges() {
-    return unwrap(listUniverseExchanges());
+    return allItems((query) => unwrap(listUniverseExchanges({ query })));
   }
 
   delete(id: string) {

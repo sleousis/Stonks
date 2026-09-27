@@ -136,7 +136,7 @@ def register(t: ToolContext) -> None:
     async def list_universe_exchanges() -> dict[str, Any]:
         """Exchanges our instruments name, with instrument counts, for an
         exchange universe's spec. The data source may list more."""
-        return items(await t.get("/api/universes/exchanges"))
+        return await t.get("/api/universes/exchanges", {"limit": 500})
 
     @server.tool(annotations=UNIVERSE_WRITE)
     async def update_universe(

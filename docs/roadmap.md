@@ -17,7 +17,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
 | 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. 19.2 IBKR adapter, 19.3 connection and borrow, 19.5 reconciliation and drift, and 19.8 tickets and approve mode done. Design: `docs/design/live-trading.md`. |
-| 20 | 20.1 to 20.8 done, backend and console. |
+| 20 | 20.1 to 20.8 and 20.10 done, backend and console. |
 | 21 | 21.1 (streaming data) done, off by default. 21.2 and 21.3 planned in small work packages. Design: `docs/design/intraday.md`. |
 | 22 | All of 22.1 to 22.9 done. Factors: `docs/factors.md`. |
 
@@ -479,6 +479,7 @@ Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invit
 | 20.6 Deploy anywhere | The same stack on a cloud VM or a local home server: one Compose file with profiles, a local-server guide (Tailscale, auto start, UPS and power loss, backups off the machine), and a cloud guide, with the lab worker and the model server optional. |
 | 20.7 Calendars and news | Earnings, dividend and economic calendars from EODHD, a news and sentiment panel in the console (the data is already in the lake), a warning on an order ticket when earnings fall before the next open, and alerts on these events. Backend done: lake tables, the EODHD adapter, the daily `calendars_refresh` job, scoped reads, the earnings check and the event alerts, over the API, CLI and MCP (`docs/calendars.md`). Console done: the calendar page (`/calendar`) with a scope picker, window, countries and tabs, the news and sentiment panel, the earnings warning on the order ticket, and the event alerts in the alert settings (`docs/ui.md`). A switch per alert kind needs a server preference first. |
 | 20.8 Screener | Saved screens on fundamentals and price rules, built on the universe rule provider, savable as a universe for the lab, and an MCP tool. Backend done: point-in-time metrics behind a registry, screens as `rule` universes, saved screens, API, CLI and MCP (`docs/universes.md#screener`). Console done: the screener page (`/screener`) with the metric picker, filters, results, saved screens and Save as a universe in rule or snapshot mode (`docs/ui.md`). |
+| 20.10 Universes page | Done. Create, edit and refresh stored universes in the console: the list with kind, member count and last refresh, each kind's own form (tickers or CSV, an exchange picker, a rule built with the screener's filter builder, an index with its history file), members on a date, membership history, Fetch missing data with job progress, and Delete with the id typed. New routes: `PUT /api/universes/{id}`, `GET /api/universes/{id}/history` and `GET /api/universes/exchanges`, with `stonks universe update` and `history` and three MCP tools. Linked from Data, the screener and the lab forms (`docs/ui.md`, `docs/universes.md`). |
 
 ## Phase 21: Intraday trading
 

@@ -181,9 +181,10 @@ class UniverseStore:
             params.append(f"%{ticker.upper()}%")
         clause = " AND ".join(where)
         con = self._lake.con
-        total = con.execute(
+        counted = con.execute(
             f"SELECT count(*) FROM universe_membership WHERE {clause}", params
-        ).fetchone()[0]
+        ).fetchone()
+        total = counted[0] if counted else 0
         rows = con.execute(
             f"""
             SELECT ticker, start_date, end_date FROM universe_membership WHERE {clause}

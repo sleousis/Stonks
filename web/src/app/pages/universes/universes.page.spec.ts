@@ -104,9 +104,9 @@ describe('UniversesPage', () => {
     expect(el.querySelector<HTMLInputElement>('#u-exchange')!.value).toBe('US');
     expect(el.textContent).not.toContain('Spec (JSON)');
     // The exchange picker offers the exchanges our data holds.
-    (await nextRequest(http, '/api/universes/exchanges')).flush([
-      { exchange: 'LSE', instruments: 12, listed: 10 },
-    ]);
+    (await nextRequest(http, '/api/universes/exchanges')).flush(
+      page([{ exchange: 'LSE', instruments: 12, listed: 10 }]),
+    );
     await settle();
     expect(el.querySelector('#u-exchange-options option')?.getAttribute('value')).toBe('LSE');
     // CSV is for lists only.

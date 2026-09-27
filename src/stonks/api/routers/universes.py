@@ -72,11 +72,11 @@ def import_index_history(body: IndexHistoryImport, services: ServicesDep) -> Ind
     return services.universes.import_index_history(body)
 
 
-@router.get("/exchanges", response_model=list[ExchangeView], operation_id="listUniverseExchanges")
-def list_exchanges(services: ServicesDep) -> list[ExchangeView]:
+@router.get("/exchanges", response_model=Page[ExchangeView], operation_id="listUniverseExchanges")
+def list_exchanges(services: ServicesDep, page: PageDep) -> Page[ExchangeView]:
     """Exchanges our instruments name, with counts, for picking an
     ``exchange`` universe. A source may list more than we hold."""
-    return services.universes.exchanges()
+    return page_of(services.universes.exchanges(), page)
 
 
 @router.get(

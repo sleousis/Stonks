@@ -83,6 +83,8 @@ READ_TOOLS = {
     "list_universes",
     "get_universe",
     "get_universe_members",
+    "get_universe_history",
+    "list_universe_exchanges",
     "get_api_health",
     "health",
     "get_portfolio",
@@ -218,6 +220,7 @@ EDIT_TOOLS = {
 }
 GUARDED_TOOLS = {
     "create_universe",
+    "update_universe",
     "refresh_universe",
     "ensure_universe_data",
     "delete_universe",

@@ -5936,6 +5936,28 @@ export type PageDraft = {
 };
 
 /**
+ * Page[ExchangeView]
+ */
+export type PageExchangeView = {
+    /**
+     * Items
+     */
+    items: Array<ExchangeView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[FillView]
  */
 export type PageFillView = {
@@ -24025,7 +24047,18 @@ export type GetUniverseEnsureResultResponse = GetUniverseEnsureResultResponses[k
 export type ListUniverseExchangesData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
     url: '/api/universes/exchanges';
 };
 
@@ -24056,11 +24089,9 @@ export type ListUniverseExchangesError = ListUniverseExchangesErrors[keyof ListU
 
 export type ListUniverseExchangesResponses = {
     /**
-     * Response Listuniverseexchanges
-     *
      * Successful Response
      */
-    200: Array<ExchangeView>;
+    200: PageExchangeView;
 };
 
 export type ListUniverseExchangesResponse = ListUniverseExchangesResponses[keyof ListUniverseExchangesResponses];

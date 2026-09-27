@@ -476,7 +476,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/universes` | List Universes | sign-in |  | [Page_UniverseView_](#page_universeview_) |
 | POST | `/api/universes` | Create Universe | `lab.run` | [UniverseCreate](#universecreate) | [UniverseView](#universeview) |
 | GET | `/api/universes/ensure/{job_id}/result` | Get Ensure Result | sign-in |  | [EnsureReport](#ensurereport) |
-| GET | `/api/universes/exchanges` | List Exchanges | sign-in |  | list[[ExchangeView](#exchangeview)] |
+| GET | `/api/universes/exchanges` | List Exchanges | sign-in |  | [Page_ExchangeView_](#page_exchangeview_) |
 | POST | `/api/universes/index-history` | Import Index History | `lab.run` | [IndexHistoryImport](#indexhistoryimport) | [IndexHistoryView](#indexhistoryview) |
 | GET | `/api/universes/refresh/{job_id}/result` | Get Refresh Result | sign-in |  | [UniverseRefreshView](#universerefreshview) |
 | GET | `/api/universes/{universe_id}` | Get Universe | sign-in |  | [UniverseView](#universeview) |
@@ -2688,6 +2688,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[Draft](#draft)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_ExchangeView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[ExchangeView](#exchangeview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
