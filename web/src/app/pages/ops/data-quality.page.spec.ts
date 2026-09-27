@@ -84,6 +84,36 @@ describe('DataQualityPage', () => {
     await settle();
   });
 
+  it('rows stay while the next page loads', async () => {
+    const many = Array.from({ length: 50 }, (_, i) => ({
+      ...FLAGS.items[0],
+      ticker: `T${i}.US`,
+    }));
+    (await nextRequest(http, '/api/statements/flags')).flush({ ...FLAGS, items: many, total: 60 });
+    await settle();
+    const next = [...el.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === 'Next',
+    )!;
+    next.click();
+    fixture.detectChanges();
+    const req = await nextRequest(http, '/api/statements/flags');
+    expect(req.request.urlWithParams).toContain('offset=50');
+    await tick();
+    fixture.detectChanges();
+    expect(el.querySelector('app-loading-state')).toBeNull();
+    expect(el.textContent).toContain('T0.US');
+    req.flush({ ...FLAGS, items: [{ ...FLAGS.items[0], ticker: 'LAST.US' }], total: 60, offset: 50 });
+    await settle();
+    expect(el.textContent).toContain('LAST.US');
+    expect(el.textContent).not.toContain('T0.US');
+  });
+
+  it('says when it last updated', async () => {
+    (await nextRequest(http, '/api/statements/flags')).flush(FLAGS);
+    await settle();
+    expect(el.querySelector('app-updated-ago')?.textContent).toContain('Updated just now');
+  });
+
   it('explains an empty list in plain words', async () => {
     (await nextRequest(http, '/api/statements/flags')).flush({ ...FLAGS, items: [], total: 0 });
     await settle();
