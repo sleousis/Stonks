@@ -59,7 +59,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
 from typing import Any, Literal
@@ -69,6 +69,7 @@ from pydantic import ValidationError
 
 from stonks.core.interval import Interval
 from stonks.core.types import AssetClass
+from stonks.ingest.calendar_schemas import DividendEventRow, EarningsEventRow, EconomicEventRow
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.redact import format_exception, redact_exception, redact_secrets
 from stonks.ingest.schemas import (
@@ -2035,6 +2036,29 @@ class EodhdDataSource(DataSource):
                 payload=data,
             )
         )
+
+    # ---- event calendars (roadmap 20.7; parsers in eodhd_calendar.py) -------
+
+    def fetch_earnings_calendar(
+        self, start: date, end: date, tickers: Sequence[str] | None = None
+    ) -> list[EarningsEventRow]:
+        from stonks.ingest.sources import eodhd_calendar
+
+        return eodhd_calendar.fetch_earnings(self._get_json, start, end, tickers)
+
+    def fetch_dividend_calendar(
+        self, start: date, end: date, tickers: Sequence[str] | None = None
+    ) -> list[DividendEventRow]:
+        from stonks.ingest.sources import eodhd_calendar
+
+        return eodhd_calendar.fetch_dividends(self._get_json, start, end, tickers)
+
+    def fetch_economic_events(
+        self, start: date, end: date, countries: Sequence[str] | None = None
+    ) -> list[EconomicEventRow]:
+        from stonks.ingest.sources import eodhd_calendar
+
+        return eodhd_calendar.fetch_economic(self._get_json, start, end, countries)
 
     def fetch_metadata(self, ticker: str) -> MetadataBundle:
         """Assemble the full metadata bundle by hitting seven EODHD endpoints

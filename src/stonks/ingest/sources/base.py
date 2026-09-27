@@ -11,10 +11,11 @@ Normalization and persistence are the pipeline's job; sources don't touch the la
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import date
 
 from stonks.core.interval import Interval
+from stonks.ingest.calendar_schemas import DividendEventRow, EarningsEventRow, EconomicEventRow
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.schemas import (
     DefiTvlRow,
@@ -134,3 +135,31 @@ class DataSource(ABC):
         """
         del since
         raise UnsupportedCapabilityError(f"{self.source_id} does not serve DeFi TVL ({chain!r})")
+
+    # ---- event calendars (roadmap 20.7) ----------------------------------------
+    # Optional capabilities: the defaults raise UnsupportedCapabilityError so a
+    # source without calendars shows up as a failed unit, not an empty run.
+
+    def fetch_earnings_calendar(
+        self, start: date, end: date, tickers: Sequence[str] | None = None
+    ) -> Iterable[EarningsEventRow]:
+        """Earnings reports dated ``start`` to ``end``, for ``tickers`` or
+        the whole market (``None``)."""
+        del start, end, tickers
+        raise UnsupportedCapabilityError(f"{self.source_id} does not serve an earnings calendar")
+
+    def fetch_dividend_calendar(
+        self, start: date, end: date, tickers: Sequence[str] | None = None
+    ) -> Iterable[DividendEventRow]:
+        """Ex-dividend dates ``start`` to ``end``, for ``tickers`` or the
+        whole market (``None``)."""
+        del start, end, tickers
+        raise UnsupportedCapabilityError(f"{self.source_id} does not serve a dividend calendar")
+
+    def fetch_economic_events(
+        self, start: date, end: date, countries: Sequence[str] | None = None
+    ) -> Iterable[EconomicEventRow]:
+        """Scheduled macro releases ``start`` to ``end`` (UTC days), for
+        ``countries`` (ISO alpha-2) or every country (``None``)."""
+        del start, end, countries
+        raise UnsupportedCapabilityError(f"{self.source_id} does not serve economic events")
