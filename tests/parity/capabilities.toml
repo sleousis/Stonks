@@ -1177,6 +1177,15 @@ cli = "stonks health"
 mcp = { limited = "changing a safety stop stays with a person" }
 
 [[capability]]
+id = "health.stream"
+domain = "health"
+title = "Live engine status: stream health, latency and the engine dead-man"
+routes = ["GET /api/stream/status"]
+console = "getStreamStatus"
+cli = { limited = "the engine process logs its state, Prometheus scrapes /metrics" }
+mcp = "get_stream_status"
+
+[[capability]]
 id = "health.api"
 domain = "health"
 title = "API up and version"

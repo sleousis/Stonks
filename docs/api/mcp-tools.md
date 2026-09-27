@@ -73,6 +73,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_strategy`](#get_strategy) | read | no |
 | [`get_strategy_agreement`](#get_strategy_agreement) | read | no |
 | [`get_strategy_history`](#get_strategy_history) | read | no |
+| [`get_stream_status`](#get_stream_status) | read | no |
 | [`get_studio_capabilities`](#get_studio_capabilities) | read | no |
 | [`get_tax_settings`](#get_tax_settings) | read | no |
 | [`get_tca_summary`](#get_tca_summary) | read | no |
@@ -705,6 +706,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
+
+### `get_stream_status`
+
+The live intraday engine: live or not, its market, the dead-man
+(`silent` after no bar close for `deadman_minutes` in market hours), the
+stream (connected, last event age, bars built, late ticks), dispatch lag
+and event to order latency. `engines` is empty until an engine runs.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
 
 ### `get_studio_capabilities`
 
