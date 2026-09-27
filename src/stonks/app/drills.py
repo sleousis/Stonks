@@ -7,17 +7,21 @@
   never read or written, and no real order is ever sent.
 - :func:`live_soak_report` reads the paper soak report of one portfolio
   from the configured state DB (read-only).
+- :func:`reconcile_portfolio` syncs one portfolio's open orders with its
+  broker now (the runbooks' manual reconcile).
 """
 
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
 from stonks.accounts import Scope
 from stonks.app.context import AppContext
 from stonks.config import Settings, StateConfig
+from stonks.execution.reconcile import StartupReconcile
 from stonks.production.drills import (
     DRILL_REASON,
     DrillReport,
@@ -27,7 +31,7 @@ from stonks.production.drills import (
 from stonks.production.soak import SoakReport, soak_report
 from stonks.store.state import SqliteState
 
-__all__ = ["live_soak_report", "run_kill_switch_drill_scratch"]
+__all__ = ["live_soak_report", "reconcile_portfolio", "run_kill_switch_drill_scratch"]
 
 
 def run_kill_switch_drill_scratch(
@@ -86,3 +90,25 @@ def live_soak_report(
             end=end,
             model_portfolio_id=model_portfolio_id,
         )
+
+
+def reconcile_portfolio(
+    settings: Settings,
+    *,
+    portfolio_id: str,
+    brokers: Callable[[str], object | None] | None = None,
+) -> StartupReconcile | None:
+    """Reconcile one portfolio's open orders with its broker now, the way
+    the submit job does before it sends (``startup_reconcile``). ``None``
+    when the portfolio trades at no external broker. It only reads the
+    broker, it never sends or cancels."""
+    from stonks.app.halts import settings_brokers
+    from stonks.execution.reconcile import startup_reconcile
+
+    context = AppContext(settings)
+    broker = (brokers or settings_brokers(context))(portfolio_id)
+    if broker is None:
+        return None
+    with context.state() as state:
+        state.migrate()
+        return startup_reconcile(broker, state, portfolio_id=portfolio_id)  # type: ignore[arg-type]

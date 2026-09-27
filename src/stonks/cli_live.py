@@ -1,12 +1,13 @@
-"""``stonks live soak-report`` and ``stonks halts drill`` (roadmap 19.11).
+"""``stonks live soak-report|reconcile`` and ``stonks halts drill`` (roadmap 19.11).
 
 - ``live soak-report`` sums up N trading days of a broker portfolio's paper
   trading (``production.soak``). It only reads the state DB.
+- ``live reconcile`` syncs a portfolio's open orders with its broker now.
 - ``halts drill`` runs the kill switch drill (``production.drills``) on a
   scratch state DB with the simulated working-order broker. It never
   touches production data and never sends a real order.
 
-Both go through ``app.drills``, like every transport.
+All go through ``app.drills``, like every transport.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-app = typer.Typer(help="Going live: the paper soak report", no_args_is_help=True)
+app = typer.Typer(help="Going live: the paper soak report and reconcile", no_args_is_help=True)
 
 
 class _LazyConsole:
@@ -77,6 +78,34 @@ def soak_report_cmd(
     else:
         _print_soak(report)
     if strict and not report.clean:
+        raise typer.Exit(code=1)
+
+
+@app.command("reconcile")
+def reconcile_cmd(
+    portfolio: str = typer.Option("pf_default", "--portfolio", help="the portfolio id"),
+) -> None:
+    """Sync a portfolio's open orders and fills with its broker now, as the
+    submit job does before it sends. Reads the broker, never sends."""
+    from stonks.app.drills import reconcile_portfolio
+
+    out = reconcile_portfolio(_settings(), portfolio_id=portfolio)
+    if out is None:
+        console.print(f"{portfolio} trades at no external broker: nothing to reconcile")
+        return
+    s = out.summary
+    console.print(
+        f"checked {s.orders_checked} orders, updated {s.orders_updated}, "
+        f"booked {s.fills_inserted} fills"
+    )
+    for label, ids in (
+        ("still unknown", out.unresolved),
+        ("failed", s.failed_orders),
+        ("fills with no order", s.orphan_fills),
+    ):
+        if ids:
+            console.print(f"[yellow]{label}[/yellow]: {', '.join(ids)}")
+    if not out.ok:
         raise typer.Exit(code=1)
 
 

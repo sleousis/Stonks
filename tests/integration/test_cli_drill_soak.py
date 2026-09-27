@@ -7,10 +7,12 @@ import json
 import pytest
 from typer.testing import CliRunner
 
-from stonks.app.drills import run_kill_switch_drill_scratch
+from stonks.app.drills import reconcile_portfolio, run_kill_switch_drill_scratch
 from stonks.cli import app
 from stonks.config import Settings, StateConfig
+from stonks.core.types import Order
 from stonks.execution.brokers.ibkr.broker import IbkrBroker
+from stonks.production.drills import SimulatedWorkingBroker
 from stonks.store.state import SqliteState
 from tests.fakes.ib_gateway import FakeIbGateway
 
@@ -121,3 +123,32 @@ def test_live_soak_report_json_and_exit_code_when_not_clean(runner, workdir):
     assert result.exit_code == 1, result.output
     data = json.loads(result.stdout)
     assert data["days_observed"] == 1 and data["clean"] is False
+
+
+def test_live_reconcile_without_an_external_broker(runner, workdir):
+    result = runner.invoke(app, ["live", "reconcile"])
+    assert result.exit_code == 0, result.output
+    assert "no external broker" in result.output
+
+
+def test_reconcile_portfolio_syncs_open_orders(tmp_path):
+    path = tmp_path / "state.sqlite"
+    state = SqliteState(path)
+    state.migrate()
+    state.execute(
+        "INSERT INTO orders (client_id, ticker, side, quantity, order_type, limit_price, status,"
+        " created_at, updated_at, portfolio_id) VALUES ('w1', 'AAPL.US', 'buy', 1, 'limit', 50,"
+        " 'pending', '2026-09-25T21:00:00', '2026-09-25T21:00:00', 'pf_default')"
+    )
+    state.close()
+    broker = SimulatedWorkingBroker()
+    broker.place_order(Order(client_id="w1", ticker="AAPL.US", side="buy", quantity=1,
+                             order_type="limit", limit_price=50.0))  # fmt: skip
+    broker.cancel_order("w1")
+    out = reconcile_portfolio(
+        Settings(state=StateConfig(path=path)), portfolio_id="pf_default", brokers=lambda _: broker
+    )
+    assert out is not None and out.ok
+    state = SqliteState(path)
+    assert state.sql("SELECT status FROM orders WHERE client_id = 'w1'")[0]["status"] == "cancelled"
+    state.close()
