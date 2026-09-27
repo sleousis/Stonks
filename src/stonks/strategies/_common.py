@@ -38,12 +38,13 @@ with no decision interval set, which reads like a daily decision.
 
 from __future__ import annotations
 
+import copy
 import math
 import weakref
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import numpy as np
@@ -51,10 +52,12 @@ import pandas as pd
 
 from stonks.core.corporate_actions import CorporateAction, PriceBasis
 from stonks.core.interval import Interval
+from stonks.core.interval import visible_cutoff as core_visible_cutoff
 from stonks.core.timeutil import as_datetime, iso
 from stonks.core.types import Order, Portfolio
 from stonks.features.price_adjustment import SeriesAdjustment
 from stonks.store.corporate_actions import LakeCorporateActions
+from stonks.store.pit import PointInTimeLake
 
 __all__ = [
     "BarCache",
@@ -64,6 +67,7 @@ __all__ = [
     "get_last_n_bars",
     "iso",
     "long_only_decide",
+    "memo_scope",
     "sell_all_longs",
     "visible_cutoff",
 ]
@@ -99,20 +103,10 @@ def decision_interval(interval: Interval | None) -> Iterator[None]:
 def visible_cutoff(as_of: Any, interval: Interval) -> datetime:
     """The latest bar stamp of ``interval`` that is complete at a decision
     on the bar starting at ``as_of``: ``as_of + L - I`` (see the module
-    doc). Months and years use calendar offsets."""
-    at = as_datetime(as_of)
-    known = _DECISION_INTERVAL.get()
-    if known is not None:
-        length = known.to_timedelta()
-    elif interval.is_intraday:
-        return at
-    else:
-        length = _ONE_DAY if at.time() == time.min else timedelta(0)
-    reach = at + length
-    if interval.unit in ("mo", "y"):
-        months = interval.amount * (12 if interval.unit == "y" else 1)
-        return (pd.Timestamp(reach) - pd.DateOffset(months=months)).to_pydatetime()
-    return reach - interval.to_timedelta()
+    doc). Months and years use calendar offsets. The rule itself lives in
+    :func:`stonks.core.interval.visible_cutoff`; this reads ``L`` from
+    :func:`decision_interval`."""
+    return core_visible_cutoff(as_datetime(as_of), interval, _DECISION_INTERVAL.get())
 
 
 def _initial_span(interval: Interval, n: int) -> timedelta:
@@ -257,6 +251,20 @@ class BarCache:
         # pinning its lake alive when it is stored under that lake as a key.
         self._lake: Any = weakref.ref(lake) if weak else (lambda: lake)
         self._series: dict[tuple[str, str], _Series] = {}
+        #: A point-in-time view that bounds every read (BL-49), or ``None``.
+        self._cap: Any = None
+
+    def clamped(self, view: Any) -> BarCache:
+        """This cache seen through a point-in-time view: the same series
+        (read once), but no read ever goes past ``view.bar_cutoff``."""
+        out = copy.copy(self)
+        out._cap = view
+        return out
+
+    def _limit(self, series: _Series, end: int) -> int:
+        if self._cap is None:
+            return end
+        return min(end, series.end_index(self._cap.bar_cutoff(series.interval)))
 
     def _get(self, ticker: str, interval: Interval) -> _Series:
         key = (ticker, interval.code)
@@ -285,7 +293,7 @@ class BarCache:
         series = self._get(ticker, interval)
         if n <= 0 or series.frame.empty:
             return series.frame.iloc[0:0].copy()
-        end = series.visible_end(as_of)
+        end = self._limit(series, series.visible_end(as_of))
         return series.rows(max(0, end - n), end, basis)
 
     def last_n_closes(
@@ -301,7 +309,7 @@ class BarCache:
         series = self._get(ticker, interval)
         if n <= 0:
             return np.array([], dtype=float)
-        end = series.visible_end(as_of)
+        end = self._limit(series, series.visible_end(as_of))
         return series.close_slice(max(0, end - n), end, basis)
 
     def last_close(
@@ -311,7 +319,7 @@ class BarCache:
         ``as_of``, or ``None`` when there is none. The latest bar as of a
         cutoff is never adjusted, so this is the raw quote in either basis."""
         series = self._get(ticker, interval)
-        end = series.visible_end(as_of)
+        end = self._limit(series, series.visible_end(as_of))
         if end == 0:
             return None
         ts = pd.Timestamp(series.timestamps[end - 1]).to_pydatetime()
@@ -334,7 +342,7 @@ class BarCache:
         lo = int(
             np.searchsorted(series.timestamps, np.datetime64(as_datetime(start), "us"), "left")
         )
-        hi = series.end_index(end)
+        hi = self._limit(series, series.end_index(end))
         return series.rows(lo, hi, basis)
 
 
@@ -349,8 +357,18 @@ class LakeBarCaches:
 
     def __init__(self) -> None:
         self._caches: weakref.WeakKeyDictionary[Any, BarCache] = weakref.WeakKeyDictionary()
+        self._views: weakref.WeakKeyDictionary[Any, BarCache] = weakref.WeakKeyDictionary()
 
     def for_lake(self, lake: Any) -> BarCache:
+        if isinstance(lake, PointInTimeLake):
+            # One cache per underlying lake (read once per run), clamped to
+            # each view; the clamped cache is kept per view, so memos keyed
+            # by the cache object hold within one decision.
+            view = self._views.get(lake)
+            if view is None:
+                view = self.for_lake(lake.pit_session.lake).clamped(lake)
+                self._views[lake] = view
+            return view
         try:
             cache = self._caches.get(lake)
             if cache is None:
@@ -362,6 +380,16 @@ class LakeBarCaches:
 
     def __len__(self) -> int:
         return len(self._caches)
+
+
+def memo_scope(lake: Any) -> Any:
+    """The key for a per-lake memo of values stamped by bar (a signal on
+    bar ``t``). Behind a point-in-time lake it is the run's session, so the
+    memo outlives one decision's view: a value for bar ``t`` was computed
+    at a decision on or after ``t`` and on or before today, so it never
+    holds anything past today's decision. Memos of whole histories must key
+    on the lake itself (a view), never on this."""
+    return lake.pit_session if isinstance(lake, PointInTimeLake) else lake
 
 
 # ---- shared decide helpers (RS-37) ------------------------------------------

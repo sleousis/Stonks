@@ -36,8 +36,9 @@ Usage::
 
 from __future__ import annotations
 
+import calendar
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
 from typing import ClassVar
 
 _SECONDS_PER_DAY = 24 * 3600
@@ -230,3 +231,52 @@ Interval.STANDARD = (
     Interval.YEAR_1,
     Interval.YEAR_5,
 )
+
+
+# ---- bar visibility (RS-03, BL-49) -------------------------------------------
+#
+# A decision on the bar that starts at ``at`` is made at that bar's close,
+# ``at + L`` (the "reach"). A bar of interval ``I`` stamped ``S`` is complete
+# at ``S + I``, so the decision may see it when ``S + I <= at + L``. A row
+# stamped with a calendar day (a filing, a macro print, a split) is known at
+# the end of that day. The strategies' bar cache and the point-in-time lake
+# (``stonks.store.pit``) both read these functions, so the rule lives once.
+
+_ONE_DAY = timedelta(days=1)
+
+
+def decision_reach(at: datetime, decision: Interval | None) -> datetime:
+    """The close of the decision bar that starts at ``at``: ``at + L``.
+    Without a known decision interval a midnight ``at`` is a daily decision
+    (``L`` is one day) and any other time of day decides at ``at`` itself."""
+    if decision is not None:
+        return at + decision.to_timedelta()
+    return at + (_ONE_DAY if at.time() == time.min else timedelta(0))
+
+
+def _minus_months(when: datetime, months: int) -> datetime:
+    """``when`` moved back ``months`` calendar months, the day clamped to
+    the target month's length (like ``pandas.DateOffset``)."""
+    total = when.year * 12 + (when.month - 1) - months
+    year, month = divmod(total, 12)
+    day = min(when.day, calendar.monthrange(year, month + 1)[1])
+    return when.replace(year=year, month=month + 1, day=day)
+
+
+def visible_cutoff(at: datetime, interval: Interval, decision: Interval | None) -> datetime:
+    """The latest stamp of an ``interval`` bar that is complete at a decision
+    on the bar starting at ``at`` (``at + L - I``). With no decision interval
+    an intraday read keeps every bar stamped on or before ``at`` (the bar
+    the decision stands on). Months and years use calendar months."""
+    if decision is None and interval.is_intraday:
+        return at
+    reach = decision_reach(at, decision)
+    if interval.unit in ("mo", "y"):
+        return _minus_months(reach, interval.amount * (12 if interval.unit == "y" else 1))
+    return reach - interval.to_timedelta()
+
+
+def known_through(at: datetime, decision: Interval | None) -> date:
+    """The last calendar day whose day-stamped rows are known at a decision
+    on the bar starting at ``at`` (a day is known once it has ended)."""
+    return (decision_reach(at, decision) - _ONE_DAY).date()
