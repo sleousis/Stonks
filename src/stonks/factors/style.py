@@ -87,6 +87,13 @@ def sectors_of(lake: Any, tickers: Sequence[str]) -> dict[str, str]:
     }
 
 
+def _day_index(values: Any) -> pd.DatetimeIndex:
+    """``values`` as midnight timestamps."""
+    return pd.DatetimeIndex(
+        pd.DatetimeIndex(pd.to_datetime(values)).to_numpy(dtype="datetime64[D]")
+    )
+
+
 def sector_labels(lake: Any, tickers: Sequence[str], days: pd.DatetimeIndex) -> pd.DataFrame:
     """Days by tickers: the ``sector`` known on each day (P12).
 
@@ -96,21 +103,21 @@ def sector_labels(lake: Any, tickers: Sequence[str], days: pd.DatetimeIndex) -> 
     (or a lake without the table) keeps its static ``instruments.sector``.
     Empty cells where no label is known."""
     names = list(dict.fromkeys(tickers))
-    index = pd.DatetimeIndex(pd.to_datetime(days).normalize())
+    index = _day_index(days)
     out = pd.DataFrame(index=index, columns=pd.Index(names, dtype=object), dtype=object)
-    versions = pd.DataFrame()
+    versions: pd.DataFrame = pd.DataFrame()
     reader = getattr(lake, "instrument_sector_versions", None)
     if callable(reader) and names:
         try:
-            versions = reader(names)
+            versions = pd.DataFrame(reader(names))
         except Exception as exc:  # a lake from before migration 022
             _log.warning("factor.style.sector_versions_failed", error=str(exc))
     seen: set[str] = set()
     if not versions.empty:
         for ticker, rows in versions.groupby("id", sort=False):
-            known = pd.DatetimeIndex(pd.to_datetime(rows["known_at"])).normalize()
+            known = _day_index(rows["known_at"])
             labels = pd.Series(rows["sector"].to_numpy(dtype=object), index=known)
-            labels = labels[~labels.index.duplicated(keep="last")].sort_index()
+            labels = labels.loc[~labels.index.duplicated(keep="last")].sort_index()
             at = labels.index.searchsorted(index, side="right") - 1
             values = labels.to_numpy(dtype=object)[np.maximum(at, 0)]
             out[str(ticker)] = [v if isinstance(v, str) and v else None for v in values]
@@ -190,11 +197,11 @@ def _members(
     exclusive); ``None`` without membership."""
     if membership is None:
         return None
-    days = pd.DatetimeIndex(pd.to_datetime(dates).normalize())
+    days = _day_index(dates)
     mask = pd.DataFrame(False, index=days, columns=pd.Index(list(names), dtype=object))
     for ticker, lo, hi in membership_spans(membership):
         if ticker in mask.columns:
-            mask.loc[(days >= lo.normalize()) & (days < hi), ticker] = True
+            mask.loc[(days >= lo.floor("D")) & (days < hi), ticker] = True
     return mask
 
 
