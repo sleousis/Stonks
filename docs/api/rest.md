@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -330,6 +330,13 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | DELETE | `/api/push/subscriptions` | Delete Push Subscription | `notifications.manage` | [PushUnsubscribeRequest](#pushunsubscriberequest) |  |
 | DELETE | `/api/push/subscriptions/{device_id}` | Delete Push Device | `notifications.manage` |  |  |
 | GET | `/api/push/vapid-key` | Vapid Key | sign-in |  | [VapidKeyView](#vapidkeyview) |
+
+## reconcile endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/reconcile/reports` | List Reconcile Reports | `data.read` |  | list[[ReconcileReportView](#reconcilereportview)] |
+| GET | `/api/reconcile/reports/{report_id}` | Get Reconcile Report | `data.read` |  | [ReconcileReportView](#reconcilereportview) |
 
 ## risk endpoints
 
@@ -1153,6 +1160,18 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 |-------|------|----------|-------------|
 | `schedule` | list[list[any]] \| null | no |  |
 
+### DriftItemView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `broker` | number \| string \| null | yes |  |
+| `detail` | string | yes |  |
+| `explained` | boolean | yes |  |
+| `key` | string | yes |  |
+| `kind` | string | yes |  |
+| `material` | boolean | yes |  |
+| `ours` | number \| string \| null | yes |  |
+
 ### EarningsEvent
 
 | Field | Type | Required | Description |
@@ -1290,6 +1309,24 @@ What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing
 | `error` | string \| null | no |  |
 | `lookback_bars` | integer \| null | no |  |
 | `ok` | boolean | yes |  |
+
+### ExternalOrderView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `broker_order_id` | string | yes |  |
+| `quantity` | number | yes |  |
+| `side` | string | yes |  |
+| `ticker` | string | yes |  |
+
+### ExternalView
+
+The owner's own holdings and hand-placed orders: never drift.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `orders` | list[[ExternalOrderView](#externalorderview)] | yes |  |
+| `positions` | dict[str, number] | yes |  |
 
 ### FactorCatalogView
 
@@ -3386,6 +3423,24 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 |-------|------|----------|-------------|
 | `end` | string \| null | no |  |
 | `start` | string \| null | no |  |
+
+### ReconcileReportView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `detail` | string \| null | yes |  |
+| `explained` | list[[DriftItemView](#driftitemview)] | yes |  |
+| `external` | [ExternalView](#externalview) | yes |  |
+| `halt_id` | integer \| null | yes |  |
+| `id` | string | yes |  |
+| `items` | list[[DriftItemView](#driftitemview)] | yes |  |
+| `kind` | "sod" \| "submit" \| "eod" \| "adhoc" | yes |  |
+| `paused` | list[string] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `status` | "clean" \| "warn" \| "drift" \| "outage" \| "fault" | yes |  |
+| `summary` | object | yes |  |
+| `taken_at` | string | yes |  |
 
 ### RecoveryCodesView
 

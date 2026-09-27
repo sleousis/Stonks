@@ -194,6 +194,25 @@ def test_a_broker_error_pauses_auto_and_the_other_books_go_on(world):
     assert world.book.calls == []
 
 
+def test_a_short_broker_outage_skips_the_day_without_pausing(world):
+    """Roadmap 19.5: an unreachable broker is a short outage. The book skips
+    and the next day decides afresh. Only a long outage or a fault pauses."""
+    from stonks.execution.brokers.base import BrokerUnavailableError
+
+    world.book.fail = BrokerUnavailableError("gateway down")
+    result = world.tick(DAY1)
+
+    [live] = [r for r in result.portfolios if r.portfolio_id == world.live]
+    assert live.status == "error" and "auto_paused" not in live.summary
+    assert live.summary["broker_outage"] is True
+    assert world.subs.get(world.bob, world.bob_auto).paused_reason is None
+
+    world.book.fail = None
+    result = world.tick(DAY2)
+    [live] = [r for r in result.portfolios if r.portfolio_id == world.live]
+    assert live.status == "ok"
+
+
 def test_an_order_error_at_the_broker_pauses_auto(world):
     world.book.fail_orders = ProviderError("order endpoint failed", status=500)
     result = world.tick(DAY1)

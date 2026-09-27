@@ -2248,6 +2248,12 @@ def halts_clear(
     console.print(f"[green]cleared[/green]: halt #{view.id} ({view.kind})")
 
 
+# ---- reconciliation and drift (roadmap 19.5) ---------------------------------
+
+from stonks.cli_reconcile import app as reconcile_app  # noqa: E402
+
+app.add_typer(reconcile_app, name="reconcile")
+
 # ---- transaction cost analysis and the journal (BL-32) ----------------------
 
 from stonks.cli_tca import app as tca_app  # noqa: E402

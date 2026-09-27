@@ -339,6 +339,29 @@ class QuoteSource(Protocol):
     def quotes(self, tickers: Sequence[str]) -> Mapping[str, Quote]: ...
 
 
+@dataclass(frozen=True)
+class BrokerOpenOrder:
+    """A working order in the broker account, ours or placed by hand
+    (roadmap 19.5). ``client_id`` is ``None`` when the order carries no
+    reference of ours: the owner placed it in TWS or the mobile app."""
+
+    broker_order_id: str
+    client_id: str | None
+    ticker: str
+    side: OrderSide
+    quantity: float
+    filled_quantity: float = 0.0
+    state: OrderState | None = None
+
+
+@runtime_checkable
+class OpenOrderSource(Protocol):
+    """Optional capability: every working order in the account, including
+    hand-placed ones. Reconciliation compares them with the ledger."""
+
+    def open_orders(self) -> Sequence[BrokerOpenOrder]: ...
+
+
 #: Capability name per protocol, for logs, health and the console.
 CAPABILITIES: tuple[tuple[str, type], ...] = (
     ("order_state", OrderStateSource),
@@ -348,6 +371,7 @@ CAPABILITIES: tuple[tuple[str, type], ...] = (
     ("what_if", MarginPreviewer),
     ("executions", ExecutionSource),
     ("quotes", QuoteSource),
+    ("open_orders", OpenOrderSource),
 )
 
 

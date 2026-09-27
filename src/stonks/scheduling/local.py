@@ -24,7 +24,9 @@ The actions call the same services as the CLI:
   pauses auto after a long outage (roadmap 19.4, state DB only);
 - ``ibkr_reauth_reminder``: the Sunday push to approve the IBKR login;
 - ``model_retrain``: refits strategies that learn from data into
-  candidate versions (roadmap 22.6).
+  candidate versions (roadmap 22.6);
+- ``live_reconcile``: the reconciliation check (``params.kind``: ``sod``
+  or ``eod``) of every portfolio listed on an IB Gateway (roadmap 19.5).
 
 ``ingest_prices`` and ``tick`` are skipped when no instrument in the
 universe trades on the fire's date (asset classes read from the lake).
@@ -431,6 +433,60 @@ def submit_detail(result: Any) -> dict[str, Any]:
             p.portfolio_id: p.reason for p in result.portfolios if p.status in ("error", "skipped")
         },
     }
+
+
+@register_action("live_reconcile")
+def live_reconcile_action(ctx: RunContext) -> JobOutcome:
+    """Reconcile every live portfolio against its IB Gateway (skipped when
+    no gateway lists a portfolio)."""
+    from stonks.core.clock import FixedClock
+    from stonks.production.live.checks import check_kind, run_gateway_checks
+    from stonks.store.state import SqliteState
+
+    config = ctx.settings.brokers.ibkr
+    if not any(gw.portfolios for gw in config.gateways.values()):
+        return JobOutcome("skipped", {"reason": "no_gateways"})
+    kind = check_kind(str(ctx.params.get("kind", "adhoc")))
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        results = run_gateway_checks(
+            state,
+            config,
+            kind,
+            settings=ctx.settings.production.live,
+            clock=FixedClock(ctx.now),
+            actions_for=_lake_actions(ctx.settings),
+        )
+    finally:
+        state.close()
+    statuses = {r.report.portfolio_id: r.status for r in results}
+    bad = sorted(pid for pid, st in statuses.items() if st in ("drift", "outage", "fault"))
+    detail = {"kind": kind, "statuses": statuses, "reports": [r.report.id for r in results]}
+    # each check alerted its owner on its own
+    return JobOutcome("failed" if bad else "succeeded", detail, alerted=bool(bad))
+
+
+def _lake_actions(settings: Any) -> Any:
+    """Splits for the reconciliation checks, from the lake when it can be
+    read (the API may hold it). ``None`` otherwise: ownership then counts
+    raw fills."""
+
+    def actions_for(tickers: Any) -> Any:
+        from stonks.production.corporate_actions import load_corporate_actions
+        from stonks.store.lake import DuckDBLake
+
+        if not tickers:
+            return None
+        try:
+            with DuckDBLake(settings.lake.path, read_only=True) as lake:
+                return load_corporate_actions(lake, tickers)
+        except Exception as exc:
+            from stonks.logging import get_logger
+
+            get_logger("stonks.scheduling.local").info("live_reconcile.no_lake", error=str(exc))
+            return None
+
+    return actions_for
 
 
 def _open_lake_members(lake: Any) -> MembersResolver:

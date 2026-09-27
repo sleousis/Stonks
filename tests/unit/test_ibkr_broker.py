@@ -48,6 +48,7 @@ def test_has_every_live_capability():
         "what_if",
         "executions",
         "quotes",
+        "open_orders",
     }
 
 
@@ -597,3 +598,30 @@ def test_quote_errors_map():
     broker, _ = make(Odd())
     with pytest.raises(BrokerError, match="321"):
         broker.quotes(["AAPL.US"])
+
+
+# ---- open orders (roadmap 19.5) ------------------------------------------------------------
+
+
+def test_open_orders_name_ours_and_leave_hand_placed_ones_without_a_client_id():
+    broker, gw = make()
+    broker.place_order(buy())
+    manual = gw.add_manual_order(MSFT, 5)
+    orders = {o.broker_order_id: o for o in broker.open_orders()}
+    ours = orders[str(gw.trade("t1-s1-AAPL.US-buy").perm_id)]
+    assert (ours.client_id, ours.ticker, ours.side, ours.quantity) == (
+        "t1-s1-AAPL.US-buy",
+        "AAPL.US",
+        "buy",
+        10.0,
+    )
+    assert ours.state == "accepted"
+    hand = orders[str(manual.perm_id)]
+    assert hand.client_id is None and hand.quantity == 5
+
+
+def test_open_orders_leave_out_terminal_ones():
+    broker, gw = make()
+    broker.place_order(buy())
+    gw.fill("t1-s1-AAPL.US-buy", 10, 200.0)
+    assert broker.open_orders() == []

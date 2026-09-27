@@ -1826,6 +1826,40 @@ export type DrawdownScalingSettings = {
 };
 
 /**
+ * DriftItemView
+ */
+export type DriftItemView = {
+    /**
+     * Broker
+     */
+    broker: number | string | null;
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Explained
+     */
+    explained: boolean;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Material
+     */
+    material: boolean;
+    /**
+     * Ours
+     */
+    ours: number | string | null;
+};
+
+/**
  * EarningsEvent
  */
 export type EarningsEvent = {
@@ -2193,6 +2227,46 @@ export type ExpressionCheckView = {
      * Ok
      */
     ok: boolean;
+};
+
+/**
+ * ExternalOrderView
+ */
+export type ExternalOrderView = {
+    /**
+     * Broker Order Id
+     */
+    broker_order_id: string;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Side
+     */
+    side: string;
+    /**
+     * Ticker
+     */
+    ticker: string;
+};
+
+/**
+ * ExternalView
+ *
+ * The owner's own holdings and hand-placed orders: never drift.
+ */
+export type ExternalView = {
+    /**
+     * Orders
+     */
+    orders: Array<ExternalOrderView>;
+    /**
+     * Positions
+     */
+    positions: {
+        [key: string]: number;
+    };
 };
 
 /**
@@ -7814,6 +7888,63 @@ export type QuietHoursUpdate = {
      * Start
      */
     start?: string | null;
+};
+
+/**
+ * ReconcileReportView
+ */
+export type ReconcileReportView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Detail
+     */
+    detail: string | null;
+    /**
+     * Explained
+     */
+    explained: Array<DriftItemView>;
+    external: ExternalView;
+    /**
+     * Halt Id
+     */
+    halt_id: number | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Items
+     */
+    items: Array<DriftItemView>;
+    /**
+     * Kind
+     */
+    kind: 'sod' | 'submit' | 'eod' | 'adhoc';
+    /**
+     * Paused
+     */
+    paused: Array<string>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Status
+     */
+    status: 'clean' | 'warn' | 'drift' | 'outage' | 'fault';
+    /**
+     * Summary
+     */
+    summary: {
+        [key: string]: unknown;
+    };
+    /**
+     * Taken At
+     */
+    taken_at: string;
 };
 
 /**
@@ -19685,6 +19816,106 @@ export type GetVapidKeyResponses = {
 };
 
 export type GetVapidKeyResponse = GetVapidKeyResponses[keyof GetVapidKeyResponses];
+
+export type ListReconcileReportsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * one of your portfolios
+         */
+        portfolio_id?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+    };
+    url: '/api/reconcile/reports';
+};
+
+export type ListReconcileReportsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListReconcileReportsError = ListReconcileReportsErrors[keyof ListReconcileReportsErrors];
+
+export type ListReconcileReportsResponses = {
+    /**
+     * Response Listreconcilereports
+     *
+     * Successful Response
+     */
+    200: Array<ReconcileReportView>;
+};
+
+export type ListReconcileReportsResponse = ListReconcileReportsResponses[keyof ListReconcileReportsResponses];
+
+export type GetReconcileReportData = {
+    body?: never;
+    path: {
+        /**
+         * Report Id
+         */
+        report_id: string;
+    };
+    query?: never;
+    url: '/api/reconcile/reports/{report_id}';
+};
+
+export type GetReconcileReportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetReconcileReportError = GetReconcileReportErrors[keyof GetReconcileReportErrors];
+
+export type GetReconcileReportResponses = {
+    /**
+     * Successful Response
+     */
+    200: ReconcileReportView;
+};
+
+export type GetReconcileReportResponse = GetReconcileReportResponses[keyof GetReconcileReportResponses];
 
 export type GetMyRiskLimitsData = {
     body?: never;

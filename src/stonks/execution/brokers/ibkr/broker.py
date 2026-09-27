@@ -4,7 +4,8 @@ It speaks only to an :class:`~stonks.execution.brokers.ibkr.client.IbClient`
 (``IbAsyncClient`` in production, ``FakeIbGateway`` in tests) and returns
 only our types. Capabilities: ``Broker``, ``OrderStateSource``,
 ``OrderCanceller``, ``GlobalCanceller``, ``AccountReader``,
-``MarginPreviewer``, ``ExecutionSource`` and ``QuoteSource``.
+``MarginPreviewer``, ``ExecutionSource``, ``QuoteSource`` and
+``OpenOrderSource``.
 
 Safety, in the order every call meets it (:meth:`IbkrBroker.ensure_ready`):
 
@@ -38,6 +39,7 @@ from stonks.execution.borrow import BorrowSource
 from stonks.execution.brokers.base import (
     AccountType,
     BrokerError,
+    BrokerOpenOrder,
     BrokerOrderState,
     BrokerUnavailableError,
     Execution,
@@ -381,6 +383,32 @@ class IbkrBroker:
         self._guard("global cancel", self.client.global_cancel)
         _log.warning("ibkr.orders.global_cancel", open_orders=count)
         return count
+
+    # ---- OpenOrderSource (roadmap 19.5) ------------------------------------------------
+
+    def open_orders(self) -> Sequence[BrokerOpenOrder]:
+        """Every working order in the account. One with no ``orderRef`` was
+        placed by hand and has no client id."""
+        account = self.account_id
+        out: list[BrokerOpenOrder] = []
+        for t in self._guard("open orders", self.client.open_trades):
+            if t.account and t.account != account:
+                continue
+            state = ibkr_state(t.status, filled=t.filled, time_in_force=_TIF_BACK.get(t.tif or ""))
+            if state in TERMINAL:
+                continue
+            out.append(
+                BrokerOpenOrder(
+                    broker_order_id=str(t.perm_id),
+                    client_id=self._client_id_for(t.order_ref) if t.order_ref else None,
+                    ticker=self._ticker_of(t.contract),
+                    side="buy" if t.action == "BUY" else "sell",
+                    quantity=t.total_quantity,
+                    filled_quantity=t.filled,
+                    state=state,
+                )
+            )
+        return out
 
     # ---- AccountReader --------------------------------------------------------------
 

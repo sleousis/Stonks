@@ -53,3 +53,11 @@ class LiveSettings(BaseModel):
     #: use tickets.
     submit_in_window: bool = False
     submit: SubmitSettings = Field(default_factory=SubmitSettings)
+    #: Reconciliation checks in a row that could not reach the broker, on
+    #: this many distinct sessions, before the portfolio's auto
+    #: subscriptions pause. A shorter outage only skips the day (19.5).
+    outage_pause_after_sessions: int = Field(default=2, ge=1)
+    #: The start-of-day check cancels day and opening-auction orders still
+    #: working from an earlier session, so yesterday's decision never
+    #: fills late.
+    cancel_stale_orders: bool = True

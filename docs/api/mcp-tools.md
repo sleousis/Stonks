@@ -57,6 +57,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
 | [`get_portfolio_totals`](#get_portfolio_totals) | read | no |
+| [`get_reconcile_report`](#get_reconcile_report) | read | no |
 | [`get_research_session`](#get_research_session) | read | no |
 | [`get_risk_policy`](#get_risk_policy) | read | no |
 | [`get_rule_schema`](#get_rule_schema) | read | no |
@@ -99,6 +100,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_portfolios`](#list_portfolios) | read | no |
 | [`list_price_alert_events`](#list_price_alert_events) | read | no |
 | [`list_price_alerts`](#list_price_alerts) | read | no |
+| [`list_reconcile_reports`](#list_reconcile_reports) | read | no |
 | [`list_research_sessions`](#list_research_sessions) | read | no |
 | [`list_risk_snapshots`](#list_risk_snapshots) | read | no |
 | [`list_screen_metrics`](#list_screen_metrics) | read | no |
@@ -524,6 +526,18 @@ Admins only: cash and value summed across every active portfolio (no holdings).
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `get_reconcile_report`
+
+One reconcile report: every unexplained drift item, what the check
+explained itself, and the owner's own positions and orders it kept
+apart (never drift).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `report_id` | string | yes |  |  |
 
 ### `get_research_session`
 
@@ -982,6 +996,20 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `limit` | integer | no | `100` | page size |
 | `offset` | integer | no | `0` | rows to skip |
+
+### `list_reconcile_reports`
+
+The latest checks of your live portfolios against their brokers,
+newest first. Status clean, warn (an alert only), drift (opened the
+broker_drift halt and paused auto), outage (the day was skipped) or
+fault (auto paused).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` |  |
+| `limit` | integer | no | `20` |  |
 
 ### `list_research_sessions`
 

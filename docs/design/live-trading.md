@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 19. It takes Stonks from simulated paper trading to real orders at Interactive Brokers (IBKR), in stages, with a gate between each stage.
 
-Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2) and tickets, approve mode and submit (19.8). The rest is planned.
+Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2), the IBKR connection and borrow (19.3), reconciliation (19.5) and tickets, approve mode and submit (19.8). The rest is planned.
 
 Owner decisions (2026-09-27):
 
@@ -173,7 +173,7 @@ The new capabilities are `runtime_checkable` protocols in `execution/brokers/bas
 3. Otherwise it submits and stores IBKR's `permId` as `broker_order_id`. `orderId` is per API client and resets, so it is never stored as the key.
 4. `reqCompletedOrders` and `reqExecutions` only reach back about a day. So an order must be settled the same session. The end-of-day check (section 6) enforces it, and the next morning's IBKR Flex statement is the backstop for older gaps.
 
-**API client ids.** Each process role uses a fixed TWS API client id (`[brokers.ibkr] client_ids`: tick and submit 11, sync 12, health 13). The gateway's master API client id is set to the tick's id, so it sees orders from every client, and manual orders from TWS show up there too.
+**API client ids.** Each process role uses a fixed TWS API client id (`[brokers.ibkr] client_ids`: tick and submit 11, sync 12, health 13, reconcile 14). The gateway's master API client id is set to the tick's id, so it sees orders from every client, and manual orders from TWS show up there too.
 
 ### Fills and commissions
 
@@ -774,3 +774,18 @@ The `ibkr` connection, borrow checks, daily borrow rates and Flex statements. Wh
 - **Not a price source.** The borrow source is not one of the `--source` ids, so the API and its generated client are unchanged.
 - **Flex.** `execution/brokers/ibkr/flex.py` runs the two-step Flex Web Service fetch, polls while IBKR generates the statement, and parses execution-level trades and cash transactions. The token comes only from `STONKS_IBKR_FLEX_TOKEN`, is refused in TOML and is scrubbed from every error. The sync caches a statement for `refresh_hours` and never fails when Flex fails.
 - **Not yet.** The tick still builds a short book's borrow source from settings. Wiring the broker's own `IbkrBorrowSource` into the short rules, and a scheduled `ingest borrow` job, are follow-ups. Flex rows are not yet compared with our fills (that is reconciliation, 19.5).
+
+## 15. What 19.5 built
+
+Reconciliation lives in `execution/drift.py` (pure diffs) and `production/live/checks.py` (the checks). Where it differs from section 6:
+
+- **One table.** `reconcile_reports` is SQLite migration 034. Next to the design's columns it keeps `as_of` (the session), `external_json` (the owner's own positions and orders), `summary_json` (what reconciliation booked), `detail` (why the broker could not be read), `halt_id` and `paused_json`. Status is `clean`, `warn`, `drift`, `outage` or `fault`.
+- **Order of work.** A check reconciles first (`startup_reconcile`: fills from executions, states by client id), then diffs. A material difference triggers one more reconcile and a second look, so a fill that lands between two reads is booked, not called drift.
+- **Positions.** Stonks owns its net filled quantity per ticker (`owned_positions`, manual orders excluded). The broker must hold at least that on the same side. The rest is external. With `allow_manual_trades = false` positions must match exactly.
+- **Orders.** A new optional broker capability, `OpenOrderSource.open_orders()`, lists every working order with its client id, or none when placed by hand. `IbkrBroker` implements it. A broker without it (the simulated one) is checked on positions and unresolved orders only.
+- **Kinds.** Material: `position_qty`, `unknown_position`, `unknown_order`, `missing_order`, `order_state` (the ledger closed an order the broker still works, or the state machine refused the broker's report), `unknown_execution`. Alert only: `unresolved_order` (still `unknown`, blocks a submit), `stuck_order`, `commission_missing`, `stale_order` (cancelled at the start of the day).
+- **Not yet.** Cash and `rules_mismatch` are not compared: in a shared account the owner's own trades move the cash. The optional Flex statement waits for 19.3. The broker snapshot and `live_gate_days` at the end of the day wait for 19.9, and so does demoting a stage after drift that stays for 2 checks.
+- **Outage versus fault.** `auto_pause.broker_failure_kind` names a `BrokerUnavailableError`, a dropped socket or a timeout an outage, anything else a fault. The tick no longer pauses auto on an outage: the book skips the day (`broker_outage` in its summary). A check pauses after outages on `[production.live] outage_pause_after_sessions` sessions in a row (2), and at once on a fault or drift. Drift pauses with a `broker_drift: report <id>` reason.
+- **Jobs.** `live_sod_check` (open minus 60 minutes) and `live_eod_check` (close plus 15) run the `live_reconcile` action through each gateway with the new `reconcile` client id (14). Splits come from the lake when it can be opened read only.
+- **Submit gate.** `submit_gate` runs a `submit` check. The submit window of 19.8 sends only when `CheckResult.may_submit`.
+- **Surfaces.** `GET /api/reconcile/reports`, `GET /api/reconcile/reports/{id}`, `stonks reconcile list|show|run`, the MCP tools `list_reconcile_reports` and `get_reconcile_report`, and a panel on Health that stays hidden until a report exists.

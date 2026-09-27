@@ -760,6 +760,24 @@ cli = "stonks halts clear"
 mcp = { limited = "turning a safety stop off stays with a person" }
 
 [[capability]]
+id = "reconcile.reports"
+domain = "risk"
+title = "Reconciliation reports: each check of a live portfolio against its broker"
+routes = ["GET /api/reconcile/reports", "GET /api/reconcile/reports/{report_id}"]
+console = "listReconcileReports"
+cli = ["stonks reconcile list", "stonks reconcile show"]
+mcp = ["list_reconcile_reports", "get_reconcile_report"]
+
+[[capability]]
+id = "reconcile.run"
+domain = "risk"
+title = "Run a reconciliation check by hand"
+routes = []
+console = { limited = "operator check through the gateway, run by the scheduler" }
+cli = "stonks reconcile run"
+mcp = { limited = "operator check through the gateway, run by the scheduler" }
+
+[[capability]]
 id = "risk.policy"
 domain = "risk"
 title = "Risk policy"

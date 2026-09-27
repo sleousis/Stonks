@@ -6,6 +6,7 @@ import {
   getBrokerGateways,
   getLiveAllocation,
   getLiveRules,
+  listReconcileReports,
   setAccountProfile,
   setLiveAllocation,
 } from './generated/sdk.gen';
@@ -14,7 +15,8 @@ import type { AccountProfileBody, AccountProfileView, LiveAllocationUpdate } fro
 /**
  * A live portfolio's owner settings (the allocation and the account
  * profile), the live rules that act on it, and the broker gateways'
- * health. Both writes need a fresh second factor: the session interceptor
+ * health, and the reconciliation reports of your live portfolios. Both
+ * writes need a fresh second factor: the session interceptor
  * asks for a code when the API answers 403 `step_up_required`.
  */
 @Injectable({ providedIn: 'root' })
@@ -44,5 +46,10 @@ export class LiveService {
 
   gateways() {
     return unwrap(getBrokerGateways());
+  }
+
+  /** The latest checks of your live portfolios against their brokers. */
+  reconcileReports(limit = 10) {
+    return unwrap(listReconcileReports({ query: { limit } }));
   }
 }

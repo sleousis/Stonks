@@ -95,6 +95,8 @@ class IbkrClientIds(BaseModel):
     tick: int = Field(default=11, ge=0)
     sync: int = Field(default=12, ge=0)
     health: int = Field(default=13, ge=0)
+    #: The reconciliation checks (roadmap 19.5).
+    reconcile: int = Field(default=14, ge=0)
 
 
 class IbkrHealthSettings(BaseModel):
