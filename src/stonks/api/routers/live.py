@@ -15,6 +15,7 @@ from stonks.app.live import (
     AccountProfileView,
     LiveAllocationUpdate,
     LiveAllocationView,
+    LiveRulesView,
     LiveService,
 )
 from stonks.auth import Permission
@@ -85,3 +86,18 @@ def set_account_profile(
     """Set where the account is held and its type. Shorts need a margin
     account. Needs a fresh second factor."""
     return _service(services).set_profile(principal, portfolio_id, body)
+
+
+@router.get(
+    "/{portfolio_id}/live/rules",
+    response_model=LiveRulesView,
+    operation_id="getLiveRules",
+    dependencies=needs(Permission.READ),
+)
+def get_live_rules(
+    portfolio_id: PortfolioId, services: ServicesDep, principal: PrincipalDep
+) -> LiveRulesView:
+    """Which live safeguards and account rules act on this portfolio, as its
+    book follows them. Read only: the limits are set by the admin and your
+    own risk limits."""
+    return _service(services).rules(principal, portfolio_id)

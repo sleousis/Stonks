@@ -83,3 +83,114 @@ def test_account_profile_round_trip(app, client, settings, people):
         "allow_short": False,
     }
     assert client.get(url, headers=alice).json()["jurisdiction"] == "uk"
+
+
+def _rules_on(settings) -> None:
+    from stonks.production.rules._account_settings import AccountRulesSettings
+    from stonks.production.rules.capital_ramp import CapitalRampSettings
+    from stonks.production.rules.settings import RuleSettings
+
+    rules = RuleSettings(
+        capital_ramp=CapitalRampSettings(enabled=True),
+        account_rules=AccountRulesSettings(enabled=True),
+    )
+    settings.production.risk = settings.production.risk.model_copy(update={"rules": rules})
+
+
+def test_live_rules_show_what_is_on_and_what_applies(app, client, settings, people):
+    alice = people["alice"]["headers"]
+    pid = _portfolio(settings, people["alice"], "Live")
+    _rules_on(settings)
+    got = client.get(f"/api/portfolios/{pid}/live/rules", headers=alice)
+    assert got.status_code == 200, got.text
+    view = got.json()
+    on = {r["name"]: r["on"] for r in view["safeguards"]}
+    assert on == {
+        "capital_ramp": True,
+        "live_notional_caps": False,
+        "price_band": False,
+        "account_rules": True,
+        "max_orders_per_run": False,
+        "stop_cooldown": False,
+        "stop_guard": False,
+        "losing_lock": False,
+    }
+    assert view["account_rules_on"] is True and view["profile_set"] is False
+    assert not any(r["applies"] for r in view["account_rules"])
+
+    allow_step_up(app)
+    profile = {"jurisdiction": "us", "account_type": "cash"}
+    put = client.put(f"/api/portfolios/{pid}/live/account-profile", json=profile, headers=alice)
+    assert put.status_code == 200
+    view = client.get(f"/api/portfolios/{pid}/live/rules", headers=alice).json()
+    applies = {r["name"] for r in view["account_rules"] if r["applies"]}
+    assert view["profile_set"] is True
+    assert {"settled_cash", "wash_sale", "reg_sho", "restricted"} <= applies
+    assert not applies & {"buying_power", "pdt", "priips_kid", "short_disclosure"}
+
+
+def test_live_rules_of_another_person_read_as_missing(client, settings, people):
+    pid = _portfolio(settings, people["alice"], "Live")
+    for who in ("bob", "ada"):
+        got = client.get(f"/api/portfolios/{pid}/live/rules", headers=people[who]["headers"])
+        assert got.status_code == 404
+
+
+def _gateways(settings, portfolios: list[str]) -> None:
+    from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
+
+    settings.brokers.ibkr = IbkrBrokerConfig.model_validate(
+        {
+            "gateways": {
+                "live": {
+                    "host": "ibkr-live",
+                    "port": 4003,
+                    "mode": "live",
+                    "portfolios": portfolios,
+                },
+                "paper": {"host": "ibkr-paper", "port": 4004, "mode": "paper"},
+            }
+        }
+    )
+
+
+def test_gateway_health_shows_your_paused_books_only(client, settings, people):
+    mine = _portfolio(settings, people["alice"], "Alice live")
+    theirs = _portfolio(settings, people["bob"], "Bob live")
+    _gateways(settings, [mine, theirs])
+    with SqliteState(settings.state.path) as state:
+        state.execute(
+            "INSERT INTO broker_gateway_status (gateway, mode, connected, last_check_at,"
+            " last_ok_at, down_since, consecutive_failures, detail, paused_at)"
+            " VALUES ('live', 'live', 0, '2026-09-27T14:00:00+00:00',"
+            " '2026-09-25T14:00:00+00:00', '2026-09-25T14:05:00+00:00', 12,"
+            " 'ConnectionRefusedError', '2026-09-27T14:00:00+00:00')"
+        )
+        for sid, pid in (("sub_a", mine), ("sub_b", theirs)):
+            state.execute(
+                "INSERT INTO subscriptions (id, user_id, strategy_id, portfolio_id, mode,"
+                " paused_reason, created_at, updated_at)"
+                " SELECT ?, owner_id, 'bah_active', id, 'auto', 'broker error: gateway down',"
+                " '2026-09-01', '2026-09-01' FROM portfolios WHERE id = ?",
+                [sid, pid],
+            )
+    got = client.get("/api/brokers/gateways", headers=people["alice"]["headers"])
+    assert got.status_code == 200, got.text
+    view = got.json()
+    assert view["configured"] is True
+    live, paper = view["gateways"]
+    assert (live["gateway"], live["connected"], live["checked"]) == ("live", False, True)
+    assert live["last_ok_at"] == "2026-09-25T14:00:00+00:00"
+    assert live["your_portfolios"] == ["Alice live"]
+    assert [b["subscription_id"] for b in live["paused_books"]] == ["sub_a"]
+    assert live["paused_elsewhere"] == 1
+    assert (paper["gateway"], paper["checked"], paper["connected"]) == ("paper", False, False)
+    ada = client.get("/api/brokers/gateways", headers=people["ada"]["headers"]).json()
+    assert ada["gateways"][0]["paused_books"] == []
+    assert ada["gateways"][0]["paused_elsewhere"] == 2
+
+
+def test_gateway_health_is_empty_without_gateways(client, people):
+    got = client.get("/api/brokers/gateways", headers=people["vic"]["headers"])
+    assert got.status_code == 200
+    assert got.json() == {"configured": False, "gateways": []}

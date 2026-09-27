@@ -1,0 +1,327 @@
+<app-page-header
+  title="Live settings"
+  [description]="
+    portfolio()
+      ? 'What Stonks may do in ' + portfolio()!.name + ', a real-money account.'
+      : 'What Stonks may do in a real-money account.'
+  "
+>
+  @if (isLive()) {
+    <app-mode-stamp [live]="true" />
+  }
+  <a actions class="btn" routerLink="/profile">Back to your portfolios</a>
+</app-page-header>
+
+@if (ctx.state() === 'failed') {
+  <app-error-state title="Could not load your portfolios" (retry)="ctx.load(true)" [error]="null" />
+} @else if (ctx.state() !== 'ready') {
+  <app-loading-state label="Loading your portfolio" [rows]="2" />
+} @else if (!portfolio()) {
+  <app-empty-state
+    title="Portfolio not found"
+    message="It is not one of your portfolios. Pick one from your profile."
+  >
+    <a class="btn" routerLink="/profile">Your portfolios</a>
+  </app-empty-state>
+} @else if (!isLive()) {
+  <app-empty-state
+    title="This portfolio trades on paper"
+    message="Live settings are for portfolios at a real broker. Paper portfolios move no real money."
+  >
+    <a class="btn" routerLink="/profile">Your portfolios</a>
+  </app-empty-state>
+} @else {
+  <div class="page-grid">
+    <!-- Allocation ---------------------------------------------------------->
+    <section class="panel live-frame span-6" aria-labelledby="allocation-title">
+      <div class="panel-head">
+        <h2 id="allocation-title">Allocation</h2>
+      </div>
+      <div class="panel-body stack">
+        @if (allocation.error(); as err) {
+          <app-error-state
+            title="Could not load the allocation"
+            [error]="err"
+            (retry)="allocation.reload()"
+          />
+        } @else if (!allocation.hasValue()) {
+          <app-loading-state label="Loading the allocation" [rows]="2" />
+        } @else {
+          @let a = allocation.value();
+          <div class="headline">
+            <span class="figure live-figure" data-testid="allocation-figure">{{
+              allocationText(a)
+            }}</span>
+            @if (a.amount === null) {
+              <p class="warn-text">Nothing opens in this account until you set an amount.</p>
+            } @else {
+              <p class="muted">
+                The most Stonks may hold here. Changed
+                <span class="num">{{ dateTime(a.updated_at) }}</span
+                >.
+              </p>
+              @if (a.reason) {
+                <p class="muted">Why: {{ a.reason }}</p>
+              }
+            }
+          </div>
+          <p class="no-ramp" role="note">
+            <strong>No automatic steps.</strong> Stonks never raises or lowers this amount by
+            itself. A bad week sends you an alert and leaves the amount as it is. Only you change
+            it, here.
+          </p>
+        }
+
+        <form
+          class="form-grid"
+          aria-labelledby="allocation-form-title"
+          (submit)="$event.preventDefault(); saveAllocation()"
+          novalidate
+        >
+          <h3 id="allocation-form-title">Change the allocation</h3>
+          <div class="form-grid form-grid-2">
+            <div class="field">
+              <label for="allocation-amount">Amount</label>
+              <input
+                id="allocation-amount"
+                class="input num"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                autocomplete="off"
+                [disabled]="!canManage()"
+                [attr.aria-invalid]="shownErrors().amount ? true : null"
+                [attr.aria-describedby]="shownErrors().amount ? 'allocation-amount-error' : null"
+                [value]="amount()"
+                (input)="amount.set($any($event.target).value)"
+              />
+              @if (shownErrors().amount; as e) {
+                <span id="allocation-amount-error" class="error">{{ e }}</span>
+              }
+            </div>
+            <div class="field">
+              <label for="allocation-currency">Currency</label>
+              <input
+                id="allocation-currency"
+                class="input"
+                maxlength="3"
+                autocapitalize="characters"
+                autocomplete="off"
+                spellcheck="false"
+                [disabled]="!canManage()"
+                [attr.aria-invalid]="shownErrors().currency ? true : null"
+                [attr.aria-describedby]="
+                  shownErrors().currency ? 'allocation-currency-error' : null
+                "
+                [value]="currency()"
+                (input)="currency.set($any($event.target).value)"
+              />
+              @if (shownErrors().currency; as e) {
+                <span id="allocation-currency-error" class="error">{{ e }}</span>
+              }
+            </div>
+          </div>
+          <div class="field">
+            <label for="allocation-reason">Reason</label>
+            <textarea
+              id="allocation-reason"
+              class="input"
+              rows="2"
+              [attr.maxlength]="reasonMax"
+              [disabled]="!canManage()"
+              [attr.aria-invalid]="shownErrors().reason ? true : null"
+              [attr.aria-describedby]="
+                shownErrors().reason ? 'allocation-reason-error' : 'allocation-reason-hint'
+              "
+              [value]="reason()"
+              (input)="reason.set($any($event.target).value)"
+            ></textarea>
+            @if (shownErrors().reason; as e) {
+              <span id="allocation-reason-error" class="error">{{ e }}</span>
+            } @else {
+              <span id="allocation-reason-hint" class="hint"
+                >Kept in the audit log. You confirm with a code from your authenticator app.</span
+              >
+            }
+          </div>
+          <div class="actions">
+            <button
+              type="submit"
+              class="btn btn-danger"
+              [disabled]="!canManage() || savingAllocation()"
+              [attr.aria-busy]="savingAllocation()"
+            >
+              {{ savingAllocation() ? 'Setting…' : 'Set allocation' }}
+            </button>
+            <app-permission-note permission="live.manage" />
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- Account profile ----------------------------------------------------->
+    <section class="panel span-6" aria-labelledby="profile-title">
+      <div class="panel-head">
+        <h2 id="profile-title">Account profile</h2>
+      </div>
+      <div class="panel-body stack">
+        @if (profile.error(); as err) {
+          <app-error-state
+            title="Could not load the account profile"
+            [error]="err"
+            (retry)="profile.reload()"
+          />
+        } @else if (!profile.hasValue()) {
+          <app-loading-state label="Loading the account profile" [rows]="2" />
+        } @else {
+          @if (profile.value(); as saved) {
+            <p><span class="muted">Saved:</span> {{ profileText(saved) }}.</p>
+          } @else {
+            <p class="warn-text">
+              Not set. With the account rules on, nothing opens until you save a profile.
+            </p>
+          }
+          <p class="muted">
+            Where the broker holds the account, not where you live. It picks the account rules
+            below.
+          </p>
+          <div class="choice">
+            <span class="choice-label">Where the account is held</span>
+            <app-segmented
+              label="Where the account is held"
+              [options]="jurisdictions"
+              [(value)]="jurisdiction"
+            />
+          </div>
+          <div class="choice">
+            <span class="choice-label">Account type</span>
+            <app-segmented label="Account type" [options]="accountTypes" [(value)]="accountType" />
+          </div>
+          <div class="choice">
+            <span class="choice-label">Client class</span>
+            <app-segmented label="Client class" [options]="clientClasses" [(value)]="clientClass" />
+          </div>
+          <ul class="notes" aria-label="What this profile means">
+            @for (n of notes(); track n) {
+              <li>{{ n }}</li>
+            }
+          </ul>
+          <div class="actions">
+            <button
+              type="button"
+              class="btn btn-danger"
+              [disabled]="!canManage() || savingProfile() || !profileChanged()"
+              [attr.aria-busy]="savingProfile()"
+              (click)="saveProfile()"
+            >
+              {{ savingProfile() ? 'Saving…' : 'Save profile' }}
+            </button>
+            <app-permission-note permission="live.manage" />
+          </div>
+        }
+      </div>
+    </section>
+
+    <!-- Live safeguards (read only) ----------------------------------------->
+    <section class="panel span-6" aria-labelledby="safeguards-title">
+      <div class="panel-head">
+        <h2 id="safeguards-title">Live safeguards</h2>
+      </div>
+      @if (rules.error(); as err) {
+        <app-error-state
+          title="Could not load the live safeguards"
+          [error]="err"
+          (retry)="rules.reload()"
+        />
+      } @else if (!rules.hasValue()) {
+        <app-loading-state label="Loading the live safeguards" [rows]="4" />
+      } @else {
+        <div class="panel-body stack">
+          <p class="muted">
+            Your admin sets these. Your own risk limits can make them stricter. None of them ever
+            drops a sale that closes a position.
+          </p>
+          <ul class="rules">
+            @for (r of rules.value().safeguards; track r.name) {
+              <li [attr.data-on]="r.on">
+                <div class="rule-head">
+                  <span class="rule-name">{{ safeguard(r.name).label }}</span>
+                  <app-status-pill
+                    [status]="r.on ? 'on' : 'off'"
+                    [label]="r.on ? 'On' : 'Off'"
+                    [tone]="r.on ? 'positive' : 'neutral'"
+                    form="lamp"
+                  />
+                </div>
+                <p class="rule-effect">{{ safeguard(r.name).effect }}</p>
+              </li>
+            }
+          </ul>
+        </div>
+      }
+    </section>
+
+    <!-- Account rules (read only) ------------------------------------------->
+    <section class="panel span-6" aria-labelledby="account-rules-title">
+      <div class="panel-head">
+        <h2 id="account-rules-title">Account rules</h2>
+        @if (rules.hasValue()) {
+          <app-status-pill
+            [status]="rules.value().account_rules_on ? 'on' : 'off'"
+            [label]="rules.value().account_rules_on ? 'On' : 'Off'"
+            [tone]="rules.value().account_rules_on ? 'positive' : 'neutral'"
+            form="lamp"
+          />
+        }
+      </div>
+      @if (rules.error(); as err) {
+        <app-error-state
+          title="Could not load the account rules"
+          [error]="err"
+          (retry)="rules.reload()"
+        />
+      } @else if (!rules.hasValue()) {
+        <app-loading-state label="Loading the account rules" [rows]="4" />
+      } @else {
+        @let v = rules.value();
+        <div class="panel-body stack">
+          @if (!v.account_rules_on) {
+            <p class="muted">
+              The account rules are off, so they check nothing yet. Your admin turns them on.
+            </p>
+          } @else if (!v.profile_set) {
+            <p class="warn-text">
+              The account rules are on but no profile is saved, so nothing opens in this account.
+            </p>
+          }
+          @if (applying().length) {
+            <h3 class="rules-title">For this account</h3>
+            <ul class="rules">
+              @for (r of applying(); track r.name) {
+                <li>
+                  <span class="rule-name">{{ accountRule(r.name).label }}</span>
+                  <p class="rule-effect">{{ accountRule(r.name).effect }}</p>
+                </li>
+              }
+            </ul>
+          } @else if (!v.profile_set) {
+            <p class="muted">Save an account profile to see which rules apply.</p>
+          }
+          @if (notApplying().length) {
+            <details class="other-rules">
+              <summary>Not for this account ({{ notApplying().length }})</summary>
+              <ul class="rules">
+                @for (r of notApplying(); track r.name) {
+                  <li>
+                    <span class="rule-name">{{ accountRule(r.name).label }}</span>
+                    <p class="rule-effect">{{ accountRule(r.name).effect }}</p>
+                  </li>
+                }
+              </ul>
+            </details>
+          }
+        </div>
+      }
+    </section>
+  </div>
+}

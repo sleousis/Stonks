@@ -21,6 +21,11 @@ class OrderView(BaseModel):
     order_type: str
     limit_price: float | None
     status: str
+    #: The fine order state (``pending``, ``submitted``, ``accepted``,
+    #: ``partially_filled``, ``filled``, ``pending_cancel``, ``cancelled``,
+    #: ``expired``, ``rejected`` or ``unknown``). ``None`` on older rows,
+    #: which only have ``status``.
+    state: str | None = None
     #: Why the order ended in its status (e.g. the broker's rejection
     #: message); None when there is nothing to explain.
     status_reason: str | None = None

@@ -84,6 +84,12 @@ describe('splitChecks', () => {
     expect(split.freshness[0].level).toBe('critical');
     expect(split.other.map((c) => c.name)).toEqual(['freshness', 'stuck_ticks']);
   });
+
+  it('leaves broker gateway checks to their own panel, but counts them overall', () => {
+    const checks = [check('stuck_ticks', true), check('broker:live', false, 'live gateway down')];
+    expect(splitChecks(checks).other.map((c) => c.name)).toEqual(['stuck_ticks']);
+    expect(overallLevel(checks)).toBe('critical');
+  });
 });
 
 describe('checkThreshold', () => {

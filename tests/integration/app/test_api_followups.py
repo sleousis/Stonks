@@ -122,6 +122,13 @@ def test_orders_status_reason_defaults_to_null(client):
     assert items and all(o["status_reason"] is None for o in items)
 
 
+def test_orders_carry_the_fine_state(client, settings, seeded):
+    with SqliteState(settings.state.path) as state:
+        state.execute("UPDATE orders SET status = 'pending', state = 'unknown'")
+    items = client.get("/api/orders", headers=AUTH).json()["items"]
+    assert items and all(o["state"] == "unknown" for o in items)
+
+
 def test_tick_summary_types_exit_and_stale_keys():
     summary = TickSummary.model_validate(
         {"reason": "no_candidates", "exit_strategy_id": "s1", "stale_buys_dropped": ["A.US"]}

@@ -12,6 +12,7 @@ import type { FillView, RiskAdjustmentView, ShadowOutcomeView } from '../../api/
 import { OrdersService } from '../../api/orders.service';
 import { TicksService } from '../../api/ticks.service';
 import { formatDateTime, formatDuration, formatPercent } from '../../core/format/format';
+import { liveAdjustmentLabel } from '../../shared/live-rules';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -323,7 +324,7 @@ export class TickDetailPage {
   protected readonly riskColumns: TableColumn<RiskAdjustmentView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
     { key: 'side', label: 'Side' },
-    { key: 'rule', label: 'Rule', value: (r) => humanize(r.rule) },
+    { key: 'rule', label: 'Rule', value: (r) => liveAdjustmentLabel(r.rule) ?? humanize(r.rule) },
     { key: 'original_quantity', label: 'Asked', format: 'number' },
     { key: 'adjusted_quantity', label: 'Allowed', format: 'number' },
     { key: 'reason', label: 'Reason', sortable: false },
