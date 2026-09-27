@@ -6106,7 +6106,7 @@
         "open_world": true,
         "read_only": false
       },
-      "description": "Queue a market-data ingest into the lake from the configured vendor.\nReturns the job; use wait_for_job for the outcome.",
+      "description": "Queue a market-data ingest into the lake from the configured vendor,\nor from ``source``. Returns the job; use wait_for_job for the outcome.",
       "input_schema": {
         "properties": {
           "exchange": {
@@ -6158,6 +6158,24 @@
             ],
             "default": null,
             "title": "Since"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "eodhd",
+                  "yahoo",
+                  "defillama"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "data source; the default one when left out (see list_sources)",
+            "title": "Source"
           },
           "tickers": {
             "anyOf": [
