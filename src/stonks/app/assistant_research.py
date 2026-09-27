@@ -369,9 +369,7 @@ class ResearchService:
         _log.info("research.queued", session_id=session.id, job_id=job.id)
         return job
 
-    def list(
-        self, principal: Principal, *, limit: int, offset: int
-    ) -> Page[ResearchSessionView]:
+    def list(self, principal: Principal, *, limit: int, offset: int) -> Page[ResearchSessionView]:
         require(principal, Permission.READ)
         rows, total = self._store.sessions(principal.user_id, limit=limit, offset=offset)
         return Page[ResearchSessionView](

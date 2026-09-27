@@ -19,9 +19,7 @@ def register(t: ToolContext) -> None:
 
     @server.tool(annotations=JOB)
     async def start_research(
-        goal: Annotated[
-            str, Field(min_length=10, max_length=2000, description="what to look for")
-        ],
+        goal: Annotated[str, Field(min_length=10, max_length=2000, description="what to look for")],
         universe: Annotated[
             list[str] | None, Field(description="instrument ids, or give universe_id")
         ] = None,

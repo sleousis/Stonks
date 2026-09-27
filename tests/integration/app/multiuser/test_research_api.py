@@ -134,6 +134,6 @@ def test_a_session_runs_ledgered_trials_and_registers_nothing(client, people, mo
     # another person's session reads as missing
     other = client.get(f"/api/assistant/research/{session['id']}", headers=people["bob"]["headers"])
     assert other.status_code == 404
-    assert client.get("/api/assistant/research", headers=people["bob"]["headers"]).json()[
-        "total"
-    ] == 0
+    assert (
+        client.get("/api/assistant/research", headers=people["bob"]["headers"]).json()["total"] == 0
+    )
