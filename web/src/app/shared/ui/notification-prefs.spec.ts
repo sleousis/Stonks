@@ -148,6 +148,107 @@ describe('NotificationPrefs', () => {
     expect(kind(el, 'Earnings coming up').checked).toBe(false);
   });
 
+  const ECON: PreferencesView = {
+    ...VIEW,
+    economic_alerts: {
+      countries: ['US', 'EU'],
+      default_countries: true,
+      min_importance: 'high',
+      country_options: [
+        { value: 'US', label: 'United States' },
+        { value: 'EU', label: 'Euro area' },
+        { value: 'GB', label: 'United Kingdom' },
+      ],
+      importance_options: [
+        { value: 'low', label: 'All releases' },
+        { value: 'medium', label: 'Medium and high importance' },
+        { value: 'high', label: 'High importance only' },
+      ],
+    },
+  };
+
+  it('hides the economic release choices when the server sends none', async () => {
+    const el = await render();
+    expect(el.querySelector('#econ-importance')).toBeNull();
+  });
+
+  it('shows the economic countries and importance, defaults noted', async () => {
+    const el = await render(ECON);
+    expect(el.textContent).toContain('follow the currencies of your portfolios');
+    expect(kind(el, 'United States').checked).toBe(true);
+    expect(kind(el, 'Euro area').checked).toBe(true);
+    expect(kind(el, 'United Kingdom').checked).toBe(false);
+    const select = el.querySelector<HTMLSelectElement>('#econ-importance')!;
+    expect(select.value).toBe('high');
+    expect(button(el, 'Follow my portfolio currencies')).toBeUndefined();
+  });
+
+  it('saves a country added to the economic alerts', async () => {
+    const el = await render(ECON);
+    kind(el, 'United Kingdom').click();
+    const req = await nextRequest(controller, '/api/notifications/preferences', 'PUT');
+    expect(req.request.body).toEqual({ economic_alerts: { countries: ['US', 'EU', 'GB'] } });
+    req.flush({
+      ...ECON,
+      economic_alerts: {
+        ...ECON.economic_alerts!,
+        countries: ['US', 'EU', 'GB'],
+        default_countries: false,
+      },
+    });
+    await tick();
+    fixture.detectChanges();
+    expect(kind(el, 'United Kingdom').checked).toBe(true);
+    expect(button(el, 'Follow my portfolio currencies')).toBeDefined();
+  });
+
+  it('keeps at least one country', async () => {
+    const one: PreferencesView = {
+      ...ECON,
+      economic_alerts: { ...ECON.economic_alerts!, countries: ['US'] },
+    };
+    const el = await render(one);
+    kind(el, 'United States').click();
+    fixture.detectChanges();
+    expect(kind(el, 'United States').checked).toBe(true);
+    expect(el.textContent).toContain('Keep at least one country');
+  });
+
+  it('saves the importance threshold', async () => {
+    const el = await render(ECON);
+    const select = el.querySelector<HTMLSelectElement>('#econ-importance')!;
+    select.value = 'medium';
+    select.dispatchEvent(new Event('change'));
+    const req = await nextRequest(controller, '/api/notifications/preferences', 'PUT');
+    expect(req.request.body).toEqual({ economic_alerts: { min_importance: 'medium' } });
+    req.flush({ ...ECON, economic_alerts: { ...ECON.economic_alerts!, min_importance: 'medium' } });
+    await tick();
+  });
+
+  it('goes back to the portfolio currencies', async () => {
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    const el = await render({
+      ...ECON,
+      economic_alerts: { ...ECON.economic_alerts!, countries: ['GB'], default_countries: false },
+    });
+    button(el, 'Follow my portfolio currencies')!.click();
+    const req = await nextRequest(controller, '/api/notifications/preferences', 'PUT');
+    expect(req.request.body).toEqual({ economic_alerts: { default_countries: true } });
+    req.flush(ECON);
+    await tick();
+    expect(success).toHaveBeenCalledWith(expect.stringContaining('portfolio currencies'));
+  });
+
+  it('notes when economic releases are turned off', async () => {
+    const el = await render({
+      ...ECON,
+      event_alerts: VIEW.event_alerts!.map((e) =>
+        e.topic === 'economic' ? { ...e, enabled: false } : e,
+      ),
+    });
+    expect(el.textContent).toContain('Turn on Economic releases coming up to get them');
+  });
+
   it('sets and clears quiet hours', async () => {
     const el = await render();
     const set = (id: string, v: string) => {

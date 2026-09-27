@@ -55,6 +55,7 @@ function view(over: Partial<CalendarView> = {}): CalendarView {
         event_time: '2026-10-10T12:30:00Z',
         event_type: 'CPI',
         comparison: 'yoy',
+        importance: 'high',
         actual: null,
         estimate: 2.9,
         previous: 3.0,
@@ -221,6 +222,19 @@ describe('CalendarPage', () => {
     await settle(fixture);
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector<HTMLInputElement>('#cal-tickers')!.value).toBe('AAPL.US');
+  });
+
+  it('opens on the releases of one country (the economic alert link)', async () => {
+    const fixture = await render({ country: 'us', date: '2026-10-10' });
+    const req = await nextRequest(http, '/api/calendars');
+    expect(qs(req).get('countries')).toBe('US');
+    expect(qs(req).get('start')).toBe('2026-10-10');
+    req.flush(view());
+    await settle(fixture);
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.textContent).toContain('CPI');
+    expect(el.textContent).toContain('High');
+    expect(el.querySelector<HTMLInputElement>('#cal-countries')!.value).toBe('US');
   });
 
   it('shows the news of the scope, and none for everything', async () => {

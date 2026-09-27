@@ -89,6 +89,18 @@ export function timingLabel(value: EarningsEvent['before_after_market']): string
 }
 
 /** What an economic release compares against. */
+/** How much a release tends to move markets, in plain words. */
+export function importanceLabel(value: EconomicEvent['importance']): string {
+  switch (value) {
+    case 'high':
+      return 'High';
+    case 'medium':
+      return 'Medium';
+    default:
+      return 'Low';
+  }
+}
+
 export function comparisonLabel(value: EconomicEvent['comparison']): string {
   switch (value) {
     case 'mom':
