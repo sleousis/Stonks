@@ -67,6 +67,7 @@ from stonks.app.errors import AppError, ConflictError, NotFoundError, Validation
 from stonks.app.pagination import Page
 from stonks.app.serialize import to_jsonable
 from stonks.ingest.redact import format_exception, redact_secrets
+from stonks.lab.offload.executor import InProcessLabExecutor, LabExecutor
 from stonks.logging import get_logger
 from stonks.store.state import SqliteState
 
@@ -110,13 +111,29 @@ class JobStore:
 
     # ---- writes ------------------------------------------------------------
 
-    def create(self, kind: str, params: dict[str, Any], *, owner_id: str | None = None) -> Job:
+    def create(
+        self,
+        kind: str,
+        params: dict[str, Any],
+        *,
+        owner_id: str | None = None,
+        executor: str = "local",
+    ) -> Job:
+        """A new ``queued`` row. ``executor="worker"`` leaves it for a lab
+        worker process (roadmap 14.9, ``stonks.lab.offload``)."""
         job_id = f"job_{uuid.uuid4().hex}"
         with self._state() as s:
             s.execute(
-                "INSERT INTO jobs (id, kind, params_json, status, progress, created_at, owner_id) "
-                "VALUES (?, ?, ?, 'queued', 0, ?, ?)",
-                [job_id, kind, json.dumps(to_jsonable(params), sort_keys=True), _now(), owner_id],
+                "INSERT INTO jobs (id, kind, params_json, status, progress, created_at, owner_id,"
+                " executor) VALUES (?, ?, ?, 'queued', 0, ?, ?, ?)",
+                [
+                    job_id,
+                    kind,
+                    json.dumps(to_jsonable(params), sort_keys=True),
+                    _now(),
+                    owner_id,
+                    executor,
+                ],
             )
         return self.get(job_id)
 
@@ -169,12 +186,14 @@ class JobStore:
         return job
 
     def recover_interrupted(self) -> int:
-        """Mark jobs left ``queued``/``running`` by a dead process as failed."""
+        """Mark jobs left ``queued``/``running`` by a dead process as failed.
+        Worker jobs are left alone: a lab worker owns them (it fails its
+        own lost jobs through the heartbeat lease)."""
         with self._state() as s:
             cur = s.execute(
                 "UPDATE jobs SET status='failed', finished_at=?, "
                 "error='interrupted: the server stopped before the job finished' "
-                "WHERE status IN ('queued', 'running')",
+                "WHERE status IN ('queued', 'running') AND executor = 'local'",
                 [_now()],
             )
             return cur.rowcount
@@ -187,6 +206,14 @@ class JobStore:
         if not rows:
             raise NotFoundError(f"no job with id {job_id!r}")
         return _row_to_job(rows[0])
+
+    def executor_of(self, job_id: str) -> str:
+        """Who runs the job: ``"local"`` (this process) or ``"worker"``."""
+        with self._state() as s:
+            rows = s.sql("SELECT executor FROM jobs WHERE id=?", [job_id])
+        if not rows:
+            raise NotFoundError(f"no job with id {job_id!r}")
+        return str(rows[0]["executor"])
 
     def pending(self, kinds: Iterable[str]) -> list[Job]:
         """Queued or running jobs of ``kinds``, oldest first."""
@@ -296,12 +323,16 @@ class JobRunner:
         *,
         secrets: Callable[[], Iterable[str]] = tuple,
         retry_delays: Sequence[float] = DEFAULT_RETRY_DELAYS,
+        lab_executor: LabExecutor | None = None,
     ) -> None:
         """``max_workers`` bounds the general pool (unlocked jobs); every
         lock name gets one extra dedicated worker (see the module doc).
         ``secrets`` returns credential values scrubbed from every stored and
-        logged job error (on top of generic ``token=...`` patterns)."""
+        logged job error (on top of generic ``token=...`` patterns).
+        ``lab_executor`` decides which jobs a lab worker process runs
+        instead (roadmap 14.9); the default runs everything here."""
         self._store = store
+        self._lab_executor: LabExecutor = lab_executor or InProcessLabExecutor()
         self.secrets = secrets
         self._retry_delays = tuple(retry_delays)
         self._executor = ThreadPoolExecutor(
@@ -317,6 +348,10 @@ class JobRunner:
     @property
     def store(self) -> JobStore:
         return self._store
+
+    @property
+    def lab_executor(self) -> LabExecutor:
+        return self._lab_executor
 
     def register(
         self,
@@ -356,6 +391,8 @@ class JobRunner:
         reg = self._handlers.get(kind)
         if reg is None:
             raise ValidationError(f"unknown job kind {kind!r}; known: {self.kinds}")
+        if self._lab_executor.offloads(kind, params):
+            return self._offload(kind, params, owner_id)
         job = self._store.create(kind, params, owner_id=owner_id)
         ctx = JobContext(job_id=job.id, _store=self._store)
         executor = self._executor if reg.lock is None else self._lanes[reg.lock]
@@ -372,6 +409,33 @@ class JobRunner:
         future.add_done_callback(lambda _f, jid=job.id: self._forget(jid))
         _log.info("job.submitted", job_id=job.id, kind=kind, lane=reg.lock or "general")
         return job
+
+    def _offload(self, kind: str, params: dict[str, Any], owner_id: str | None) -> Job:
+        """Queue ``kind`` for the lab executor; this process never runs it."""
+        executor = self._lab_executor
+        executor.prepare(kind, params)
+        job = self._store.create(kind, params, owner_id=owner_id, executor=executor.name)
+        _log.info("job.submitted", job_id=job.id, kind=kind, lane=f"executor:{executor.name}")
+        return job
+
+    def run_claimed(self, job_id: str, ctx: JobContext | None = None) -> JobStatus:
+        """Run a job another component already moved to ``running`` (a lab
+        worker's claim), here and now, and return its final status. Errors,
+        cancellation and result storage work exactly as for submitted jobs."""
+        job = self._store.get(job_id)
+        ctx = ctx or JobContext(job_id=job_id, _store=self._store)
+        log = _log.bind(job_id=job_id, kind=job.kind)
+        if job.kind not in self._handlers:
+            self._finish_safely(job_id, "failed", error=f"unknown job kind {job.kind!r}")
+        else:
+            try:
+                self._execute(job_id, job.kind, job.params, ctx, log, claimed=True)
+            except BaseException as exc:  # same last resort as _run
+                message = format_exception(exc, self.secrets())
+                log.error("job.runner_error", error=message, error_type=type(exc).__name__)
+                self._finish_safely(job_id, "failed", error=message)
+        final = self._store.get(job_id)
+        return final.status if final.is_terminal else "failed"
 
     def run_in_lane[T](self, lane: str, fn: Callable[[], T], *, timeout: float = 30.0) -> T:
         """Run a short write ``fn`` on ``lane``'s worker and wait for it, so
@@ -427,6 +491,10 @@ class JobRunner:
                 ctx.progress(job.progress, "cancellation requested")
                 _log.info("job.cancel_requested", job_id=job_id, kind=job.kind)
                 return self._store.get(job_id)
+            if reg is not None and reg.cancellable and self._lab_executor.request_cancel(job_id):
+                self._store.set_progress(job_id, job.progress, "cancellation requested")
+                _log.info("job.cancel_requested", job_id=job_id, kind=job.kind, lane="worker")
+                return self._store.get(job_id)
             raise ConflictError(f"job {job_id} is running and cannot be cancelled")
         raise ConflictError(f"job {job_id} already finished ({job.status})")
 
@@ -435,7 +503,12 @@ class JobRunner:
         A non-terminal job that is not tracked will never be updated by this
         process (e.g. its final status write kept failing)."""
         with self._guard:
-            return job_id in self._futures
+            if job_id in self._futures:
+                return True
+        try:
+            return self._lab_executor.tracks(job_id)
+        except Exception:
+            return False
 
     def wait(self, job_id: str, timeout: float | None = None) -> Job:
         """Block until the job is terminal (or ``timeout`` elapses). Returns
@@ -454,8 +527,16 @@ class JobRunner:
             # this process (a failed status write stays non-terminal).
             return self._store.get(job_id)
         job = self._store.get(job_id)
-        while not job.is_terminal and deadline is not None and time.monotonic() < deadline:
-            time.sleep(0.02)
+        while not job.is_terminal:
+            if deadline is None:
+                # Only an offloaded job can still finish: a worker runs it.
+                if not self._lab_executor.tracks(job_id):
+                    break
+                time.sleep(0.05)
+            elif time.monotonic() < deadline:
+                time.sleep(0.02)
+            else:
+                break
             job = self._store.get(job_id)
         return job
 
@@ -558,14 +639,21 @@ class JobRunner:
             self._finish_safely(job_id, "failed", error=message)
 
     def _execute(
-        self, job_id: str, kind: str, params: dict[str, Any], ctx: JobContext, log: Any
+        self,
+        job_id: str,
+        kind: str,
+        params: dict[str, Any],
+        ctx: JobContext,
+        log: Any,
+        *,
+        claimed: bool = False,
     ) -> None:
         reg = self._handlers[kind]
         # A job still queued in its lane at shutdown must not start.
         if self._stopping.is_set():
             self._finish_safely(job_id, "cancelled", error="server shut down before start")
             return
-        if not self._retrying("claim", job_id, lambda: self._store.claim(job_id)):
+        if not claimed and not self._retrying("claim", job_id, lambda: self._store.claim(job_id)):
             log.info("job.skipped", reason="not queued (cancelled)")
             return
         log.info("job.started")
