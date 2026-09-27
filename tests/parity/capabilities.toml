@@ -1445,7 +1445,7 @@ routes = [
   "POST /api/tickets/{ticket_id}/reject",
 ]
 console = ["listTickets", "getTicketSummary", "approveTickets", "rejectTicket"]
-cli = { limited = "approving needs a fresh second factor in the web app, the shell sees orders with stonks orders list" }
+cli = ["stonks tickets list", "stonks tickets show", "stonks tickets approve", "stonks tickets reject"]
 mcp = ["list_tickets", "get_ticket"]
 
 [[capability]]

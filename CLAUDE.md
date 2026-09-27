@@ -81,6 +81,7 @@ uv run stonks report [--backtest <job-or-strategy> --start ... --end ...]
 uv run stonks tca summary|journal|order|note|edit-note|refresh   # transaction costs and the trade journal
 uv run stonks options ingest|chain|strategies|backtest [--validate]   # options research (Phase 17), nothing trades
 uv run stonks orders place|preview|change|cancel|list [--user E]   # manual orders through every check
+uv run stonks tickets list|show|approve|reject [--user E]   # order tickets; approve asks you to type APPROVE TICKETS
 uv run stonks price-alerts list|create|delete|events --user E | run   # price alerts, run = the scheduler job
 uv run stonks telegram link-code|status|unlink --user E | poll [--once]
 uv run stonks tax gains|dividends --year Y [--portfolio ID] | settings   # yearly tax CSVs, see docs/tax.md

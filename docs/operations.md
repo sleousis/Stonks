@@ -412,6 +412,14 @@ A live book can decide after the close and send before the next open (roadmap 19
 - `live_submit` sends the approved tickets from the open minus `[production.live.submit] window_minutes` (20) until the open minus `deadline_minutes` (2). Unsent tickets then expire and the next tick decides afresh. The job is never caught up late.
 - Before sending, and before each tick decides, every open order is reconciled. While one is `unknown` (a submit that got no answer), that portfolio sends and decides nothing. A kill switch or halt in force at submit time holds the tickets it covers.
 - By hand: `POST /api/tickets/submit` (admins) or `stonks schedule run-now live_submit`. Either still sends only tickets inside their window.
+- From the shell: `stonks tickets list|show|approve|reject`. The operator sees every ticket, `--user` acts as one person within their role. Approving asks you to type `APPROVE TICKETS` at a terminal and refuses a pipe or a script. API tokens and MCP still cannot approve.
+
+```bash
+uv run stonks tickets list --status awaiting_approval
+uv run stonks tickets show tkt_0123abcd
+uv run stonks tickets approve tkt_0123abcd tkt_4567ef01   # asks you to type APPROVE TICKETS
+uv run stonks tickets reject tkt_0123abcd --reason "price moved"
+```
 
 ### Allocation and account profile
 
