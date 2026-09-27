@@ -1,30 +1,37 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import type { StrategyStatus } from '../../api/models';
+import type { GoLiveReport, StrategyStatus } from '../../api/models';
+import { type CheckRow, checkRow } from '../../shared/golive-checks';
 import { LIFECYCLE, STAGES, type Stage, stageOf, stageState } from '../../shared/governance-labels';
+import { StatusPill } from '../../shared/ui/status-pill';
 
 interface NextStep {
   text: string;
   /** A link to the tool for the next step. */
   link?: { label: string; commands: string[]; query?: Record<string, string> };
-  /** Or the action on this page (Go live). */
-  action?: string;
 }
 
 /**
- * Where a strategy is on its way to live trading (Draft, Paper, Ready, Live)
- * and a link to the tool for the next step. `golivePassed` is the go-live
- * verdict for a paper strategy (null while unknown).
+ * Where a strategy is on its way to live trading (Draft, Paper, Ready, Live),
+ * the next step, and the go-live check folded underneath with a fix for each
+ * failing check (UX-23, UX-28). `golivePassed` is the go-live verdict for a
+ * paper strategy (null while unknown). The Go live button itself sits in the
+ * page header, only at the Ready stage.
  *
- *   <app-stage-bar [strategyId]="s.id" [status]="s.status" [golivePassed]="passed()" />
+ * `compact` draws the steps alone, without a frame, next step or checks
+ * (Studio's ship panel).
+ *
+ *   <app-stage-bar [strategyId]="s.id" [status]="s.status" [golivePassed]="passed()" [report]="r" />
+ *   <app-stage-bar compact [strategyId]="id" status="draft" />
  */
 @Component({
   selector: 'app-stage-bar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink],
+  imports: [RouterLink, StatusPill],
+  host: { '[class.compact]': 'compact()' },
   template: `
-    <section class="panel stage-bar" aria-labelledby="stage-title">
+    <section [class.panel]="!compact()" class="stage-bar" aria-labelledby="stage-title">
       <h2 id="stage-title" class="visually-hidden">Stage</h2>
       <ol class="stages" aria-label="Stages to live trading">
         @for (s of stages; track s.id) {
@@ -40,31 +47,67 @@ interface NextStep {
           </li>
         }
       </ol>
-      <div class="next">
-        <p class="next-text">{{ next().text }}</p>
-        @if (next().link; as l) {
-          <a class="btn" [routerLink]="l.commands" [queryParams]="l.query ?? null">{{ l.label }}</a>
+      @if (!compact()) {
+        <div class="next">
+          <p class="next-text">{{ next().text }}</p>
+          @if (next().link; as l) {
+            <a class="btn" [routerLink]="l.commands" [queryParams]="l.query ?? null">{{
+              l.label
+            }}</a>
+          }
+        </div>
+        @if (checks().length) {
+          <details class="checks" [open]="failing().length > 0 && failing().length <= 3">
+            <summary>
+              <span>Go-live check</span>
+              <app-status-pill
+                [status]="failing().length ? 'fail' : 'pass'"
+                [label]="
+                  failing().length
+                    ? failing().length + ' of ' + checks().length + ' to fix'
+                    : 'All ' + checks().length + ' passed'
+                "
+              />
+            </summary>
+            <ul class="check-list" aria-label="Go-live checks">
+              @for (c of checks(); track c.name) {
+                <li [class.failed]="!c.passed">
+                  <app-status-pill [status]="c.passed ? 'pass' : 'fail'" [label]="c.label" />
+                  @if (!c.passed) {
+                    <span class="check-detail">{{ c.detail }}</span>
+                    @if (c.fix; as f) {
+                      <span class="fix">
+                        {{ f.text }}
+                        @if (f.link; as l) {
+                          <a [routerLink]="l.commands" [queryParams]="l.query ?? null">{{
+                            l.label
+                          }}</a>
+                        }
+                      </span>
+                    }
+                  }
+                </li>
+              }
+            </ul>
+          </details>
         }
-        @if (next().action; as a) {
-          <button
-            type="button"
-            class="btn btn-primary"
-            [disabled]="!canGoLive()"
-            (click)="goLive.emit()"
-          >
-            {{ a }}
-          </button>
-        }
-      </div>
+      }
     </section>
   `,
   styles: `
     @use 'breakpoints' as bp;
 
+    :host {
+      display: block;
+      min-width: 0;
+    }
     .stage-bar {
       display: grid;
       gap: var(--space-3);
       padding: var(--space-4);
+    }
+    :host(.compact) .stage-bar {
+      padding: 0;
     }
     .stages {
       display: grid;
@@ -128,6 +171,41 @@ interface NextStep {
       min-width: 0;
       color: var(--color-ink-2);
     }
+    .checks {
+      border-top: 1px solid var(--color-border);
+      padding-top: var(--space-2);
+    }
+    .checks summary {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+      min-height: var(--touch-min);
+      cursor: pointer;
+      font-weight: var(--weight-semibold);
+    }
+    .check-list {
+      display: grid;
+      gap: var(--space-2);
+      margin: var(--space-2) 0 0;
+      padding: 0;
+      list-style: none;
+      font-size: var(--text-sm);
+    }
+    .check-list li {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .check-detail {
+      color: var(--color-ink-2);
+      overflow-wrap: anywhere;
+    }
+    .fix a {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--touch-min);
+    }
     @include bp.phone {
       .stages {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -140,16 +218,23 @@ interface NextStep {
 })
 export class StageBar {
   readonly strategyId = input.required<string>();
-  readonly status = input.required<StrategyStatus>();
+  readonly status = input.required<StrategyStatus | 'draft'>();
   readonly golivePassed = input<boolean | null>(null);
-  /** False when the user may not promote (the page shows why). */
-  readonly canGoLive = input(true);
-  /** The trader chose Go live from the Ready step. */
-  readonly goLive = output<void>();
+  /** The go-live report, folded under the bar with a fix per failing check. */
+  readonly report = input<GoLiveReport | null>(null);
+  /** Steps only: no frame, next step or checks. */
+  readonly compact = input(false, { transform: (v: boolean | '') => v !== false });
 
   protected readonly stages = STAGES;
   protected readonly stopped = computed(() => this.status() === 'retired');
   protected readonly current = computed<Stage>(() => stageOf(this.status(), this.golivePassed()));
+
+  protected readonly checks = computed<CheckRow[]>(() => {
+    const r = this.report();
+    if (!r || this.status() !== 'shadow') return [];
+    return r.checks.map((c) => checkRow(c, this.strategyId()));
+  });
+  protected readonly failing = computed(() => this.checks().filter((c) => !c.passed));
 
   protected state(id: Stage) {
     return stageState(id, this.current());
@@ -158,11 +243,11 @@ export class StageBar {
   protected readonly next = computed<NextStep>(() => {
     const id = this.strategyId();
     if (this.stopped()) {
-      return {
-        text: `Stopped. Use ${LIFECYCLE.paper.label} to run it on paper again.`,
-      };
+      return { text: `Stopped. Use ${LIFECYCLE.paper.label} to run it on paper again.` };
     }
     switch (this.current()) {
+      case 'draft':
+        return { text: `A draft. Use ${LIFECYCLE.paper.label} to watch it on real data.` };
       case 'live':
         return {
           text: 'Live: it places orders on every run. Watch what it trades.',
@@ -170,8 +255,8 @@ export class StageBar {
         };
       case 'ready':
         return {
-          text: 'It passed the go-live check. Read the checklist, then go live when you are sure.',
-          action: LIFECYCLE.live.label,
+          text: `It passed the go-live check. Read the evidence, then use ${LIFECYCLE.live.label} when you are sure.`,
+          link: { label: 'Read the evidence', commands: ['/go-live'], query: { strategy: id } },
         };
       default:
         return {

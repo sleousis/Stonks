@@ -66,7 +66,7 @@ export function barTime(timestamp: string, interval: string): string {
       } @else if (rows().length === 0) {
         <app-empty-state
           [title]="ticker() ? 'No price data for ' + ticker() : 'No price data yet'"
-          message="Run a prices or intraday ingest below to add some."
+          message="Use Update data below to fetch daily prices or intraday bars."
         />
       } @else {
         <app-data-table
@@ -111,7 +111,7 @@ export class CoveragePanel {
   private readonly market = inject(MarketService);
 
   readonly ticker = input<string | null>(null);
-  /** Bump to refetch (after an ingest). */
+  /** Bump to refetch (after a data update). */
   readonly refresh = input(0);
   readonly picked = output<CoveragePick>();
   readonly cleared = output<void>();

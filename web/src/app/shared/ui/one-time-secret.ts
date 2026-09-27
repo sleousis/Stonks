@@ -1,5 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 
+import { copyText, downloadText } from './copy-button';
+
 /**
  * A secret shown once (recovery codes, a new API token) with a Copy button.
  * The value is never stored; it lives only as long as this component.
@@ -25,8 +27,16 @@ import { ChangeDetectionStrategy, Component, computed, input, signal } from '@an
         <button type="button" class="btn" (click)="copy()">
           {{ copied() ? 'Copied' : 'Copy' }}
         </button>
+        @if (filename(); as name) {
+          <button type="button" class="btn" (click)="download(name)">Download .txt</button>
+        }
         <span class="visually-hidden" role="status">{{ copied() ? label() + ' copied' : '' }}</span>
       </div>
+      @if (blocked()) {
+        <p class="blocked" role="alert">
+          Copy is blocked here. Select and copy, or write them down.
+        </p>
+      }
     </div>
   `,
   styles: `
@@ -67,7 +77,11 @@ import { ChangeDetectionStrategy, Component, computed, input, signal } from '@an
     }
     .actions {
       display: flex;
+      flex-wrap: wrap;
       gap: var(--space-2);
+    }
+    .blocked {
+      font-size: var(--text-sm);
     }
   `,
 })
@@ -75,17 +89,23 @@ export class OneTimeSecret {
   readonly values = input.required<readonly string[]>();
   readonly label = input('Secret');
   readonly warning = input('Shown once. Save it now.');
+  /** Offer "Download .txt" under this file name (recovery codes). */
+  readonly filename = input<string | null>(null);
 
   protected readonly copied = signal(false);
+  /** The browser refused the clipboard (plain http, policy): say so (UX-50). */
+  protected readonly blocked = signal(false);
   private readonly text = computed(() => this.values().join('\n'));
 
   protected async copy(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(this.text());
-      this.copied.set(true);
-      setTimeout(() => this.copied.set(false), 2500);
-    } catch {
-      // Clipboard blocked: the values are selectable (user-select: all).
-    }
+    const ok = await copyText(this.text());
+    this.blocked.set(!ok);
+    if (!ok) return;
+    this.copied.set(true);
+    setTimeout(() => this.copied.set(false), 2500);
+  }
+
+  protected download(name: string): void {
+    downloadText(name, `${this.text()}\n`);
   }
 }

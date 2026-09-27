@@ -19,6 +19,13 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
         <app-error-state title="Could not load totals" [error]="err" (retry)="totals.reload()" />
       } @else if (!totals.hasValue()) {
         <app-loading-state label="Loading totals" [rows]="3" />
+      } @else if (suppressed()) {
+        <div class="panel-body body">
+          <p class="note">Totals appear once three or more traders have live money.</p>
+          <p class="hint">
+            Paper accounts are left out, and sums of fewer people would show theirs.
+          </p>
+        </div>
       } @else {
         <div class="panel-body body">
           <div class="tiles">
@@ -59,6 +66,10 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
         grid-column: 1 / -1;
       }
     }
+    .note {
+      margin: 0;
+      font-weight: var(--weight-medium);
+    }
     .hint {
       font-size: var(--text-xs);
       color: var(--color-ink-3);
@@ -68,6 +79,10 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
 export class TotalsCard {
   private readonly api = inject(PortfolioService);
   protected readonly totals = resource({ loader: () => this.api.totals() });
+  /** Too few live owners to sum without showing someone's money: the API sends zeros. */
+  protected readonly suppressed = computed(
+    () => this.totals.hasValue() && this.totals.value().suppressed === true,
+  );
 
   protected readonly value = computed(() =>
     this.totals.hasValue() ? formatMoney(this.totals.value().total_value) : '',

@@ -1,9 +1,10 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import { Router, provideRouter } from '@angular/router';
+import { provideRouter } from '@angular/router';
 
 import type { MeView, TokenView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { HARD_NAVIGATE } from '../../core/auth/hard-navigate';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
@@ -24,10 +25,17 @@ const TOKEN: TokenView = {
 describe('ProfilePage', () => {
   let fixture: ComponentFixture<ProfilePage>;
   let controller: HttpTestingController;
+  let hardNavigate: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    hardNavigate = vi.fn();
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+      providers: [
+        provideRouter([]),
+        ...provideApi(),
+        provideHttpClientTesting(),
+        { provide: HARD_NAVIGATE, useValue: hardNavigate },
+      ],
     });
     controller = TestBed.inject(HttpTestingController);
   });
@@ -78,6 +86,13 @@ describe('ProfilePage', () => {
     expect(el.textContent).toContain('Use at least 12 characters.');
     expect(el.textContent).toContain('The two passwords differ.');
     controller.expectNone('/api/auth/password');
+    // UX-61: each invalid field points at the error it shows.
+    for (const id of ['pw-next', 'pw-repeat']) {
+      const input = el.querySelector<HTMLInputElement>('#' + id)!;
+      expect(input.getAttribute('aria-invalid'), id).toBe('true');
+      const described = el.querySelector('#' + input.getAttribute('aria-describedby'));
+      expect(described?.classList.contains('error'), id).toBe(true);
+    }
   });
 
   it('changes the password, asking for a code when the API wants one', async () => {
@@ -166,8 +181,7 @@ describe('ProfilePage', () => {
     expect(el.textContent).toContain('Sign in with your password to create tokens.');
   });
 
-  it('signs out', async () => {
-    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+  it('signs out and reloads on the sign-in page (UX-07)', async () => {
     const el = await render();
     button(el, 'Sign out').click();
     (await nextRequest(controller, '/api/auth/logout', 'POST')).flush(null, {
@@ -175,6 +189,6 @@ describe('ProfilePage', () => {
       statusText: 'No Content',
     });
     await tick();
-    expect(navigate).toHaveBeenCalledWith('/login');
+    expect(hardNavigate).toHaveBeenCalledWith('/login');
   });
 });

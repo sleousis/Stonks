@@ -10,6 +10,8 @@ import { RouterLink } from '@angular/router';
 
 import type { StatementFlagView } from '../../api/models';
 import { OperationsService } from '../../api/operations.service';
+import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
+import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
 import { humanize } from '../../shared/ui/param-form/param-spec';
@@ -22,7 +24,8 @@ type SeverityFilter = '' | StatementFlagView['severity'];
 /**
  * Statement audit flags: periods whose income statement, balance sheet or
  * cash flow failed a check (totals that do not add up, impossible values).
- * The lab preflight warns when a run's universe has `error` flags.
+ * The lab preflight warns when a run's universe has `error` flags. The shown
+ * page stays while the next loads, and the list reloads every minute.
  */
 @Component({
   selector: 'app-data-quality-page',
@@ -36,18 +39,21 @@ type SeverityFilter = '' | StatementFlagView['severity'];
     EmptyState,
     ErrorState,
     RouterLink,
+    UpdatedAgo,
   ],
   template: `
     <app-page-header
       title="Data quality"
       description="Company report periods that failed a check. Lab runs warn when their tickers have errors here."
-    />
+    >
+      <app-updated-ago [at]="auto.updatedAt()" />
+    </app-page-header>
 
     <section class="panel" aria-labelledby="flags-title">
       <div class="panel-head">
         <h2 id="flags-title">Statement flags</h2>
-        @if (flags.hasValue()) {
-          <span class="muted">{{ flags.value().total }} flagged</span>
+        @if (shown(); as p) {
+          <span class="muted">{{ p.total }} flagged</span>
         }
       </div>
       <form class="filters panel-body" (submit)="$event.preventDefault(); apply(tickerInput.value)">
@@ -86,11 +92,12 @@ type SeverityFilter = '' | StatementFlagView['severity'];
         </div>
       </form>
 
+      @let page = shown();
       @if (flags.error(); as err) {
         <app-error-state title="Could not load flags" [error]="err" (retry)="flags.reload()" />
-      } @else if (!flags.hasValue()) {
+      } @else if (!page) {
         <app-loading-state label="Loading statement flags" [rows]="5" />
-      } @else if (flags.value().items.length === 0) {
+      } @else if (page.items.length === 0) {
         <app-empty-state
           [title]="filtered() ? 'No flags match' : 'No statement flags'"
           [message]="
@@ -100,7 +107,6 @@ type SeverityFilter = '' | StatementFlagView['severity'];
           "
         />
       } @else {
-        @let page = flags.value();
         <app-data-table
           caption="Flagged statement periods"
           [rows]="page.items"
@@ -108,6 +114,7 @@ type SeverityFilter = '' | StatementFlagView['severity'];
           [rowKey]="flagKey"
           [total]="page.total"
           [offset]="page.offset"
+          [busy]="flags.isLoading()"
           [pageSize]="pageSize"
           (pageChange)="offset.set($event.offset)"
         >
@@ -169,6 +176,9 @@ export class DataQualityPage {
     }),
     loader: ({ params }) => this.ops.statementFlags(params),
   });
+  /** The last loaded page stays on screen while the next one loads. */
+  protected readonly shown = keepLatest(this.flags);
+  protected readonly auto = autoRefresh(() => [this.flags]);
 
   protected readonly flagKey = (f: StatementFlagView) =>
     `${f.ticker}|${f.period_end}|${f.frequency}|${f.check_id}`;

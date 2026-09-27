@@ -16,6 +16,18 @@ export const SILENT_HEADERS = { [SILENT_HEADER]: '1' } as const;
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+/** Failures the trader already knows about (a step-up they cancelled). */
+const QUIET = new WeakSet<object>();
+
+/**
+ * Mark a failure as already handled, so the error interceptor does not toast
+ * it. The caller still gets the error (UX-38: a cancelled step-up).
+ */
+export function quietError<T extends object>(err: T): T {
+  QUIET.add(err);
+  return err;
+}
+
 /** Same-origin `/api/...` only: the token must never go to another host. */
 export function isApiRequest(req: HttpRequest<unknown>): boolean {
   if (req.url.startsWith('/api/') || req.url === '/api') return true;
@@ -60,7 +72,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const outgoing = silent ? req.clone({ headers: req.headers.delete(SILENT_HEADER) }) : req;
   return next(outgoing).pipe(
     catchError((err: unknown) => {
-      if (err instanceof HttpErrorResponse && !silent) {
+      if (err instanceof HttpErrorResponse && !silent && !QUIET.has(err)) {
         const apiError = toApiError(err);
         if (!SAFE_METHODS.has(req.method) || apiError.isAuth) {
           toasts.error(apiError.message, apiError.title);

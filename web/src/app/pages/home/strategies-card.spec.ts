@@ -6,6 +6,8 @@ import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
+import { ToastService } from '../../core/notify/toast.service';
+import { MODES } from '../../shared/governance-labels';
 import { TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { StrategiesCard } from './strategies-card';
@@ -65,7 +67,7 @@ describe('StrategiesCard', () => {
     req.flush(sub({ mode: 'paper', paper_days_completed: 0 }));
     await tick();
     fixture.detectChanges();
-    expect(el.textContent).toContain('Trades on paper');
+    expect(el.textContent).toContain(MODES[1].help);
   });
 
   it('turns a strategy off', async () => {
@@ -101,6 +103,97 @@ describe('StrategiesCard', () => {
     await tick();
     controller.expectNone('/api/subscriptions/sub_1');
     expect(radio(el, 'paper').checked).toBe(true);
+  });
+
+  it('auto confirm passes ticket.live true (UX-14)', async () => {
+    vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockResolvedValue(true);
+    const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(false);
+    const el = await render([sub()]);
+    radio(el, 'auto').click();
+    await tick();
+    const options = confirm.mock.calls[0][0];
+    expect(options.ticket?.live).toBe(true);
+    expect(options.ticket?.lines.map((l) => l.label)).toEqual(['Strategy', 'Portfolio', 'Mode']);
+    expect(options.ticket?.lines[2].value).toBe('Auto');
+    controller.expectNone('/api/subscriptions/sub_1');
+  });
+
+  it('re-enabling an auto subscription asks for step-up and confirm, cancel sends no PATCH (UX-02)', async () => {
+    const stepUp = vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockResolvedValue(true);
+    const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(false);
+    const el = await render([sub({ mode: 'auto', enabled: false })]);
+    const toggle = el.querySelector<HTMLButtonElement>('[role="switch"]')!;
+    toggle.click();
+    await tick();
+    fixture.detectChanges();
+    expect(stepUp).toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ ticket: expect.objectContaining({ live: true }) }),
+    );
+    controller.expectNone('/api/subscriptions/sub_1');
+    expect(toggle.disabled).toBe(false);
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+
+    confirm.mockResolvedValue(true);
+    toggle.click();
+    const req = await nextRequest(controller, '/api/subscriptions/sub_1', 'PATCH');
+    expect(req.request.body).toEqual({ enabled: true });
+    req.flush(sub({ mode: 'auto', enabled: true }));
+    await tick();
+  });
+
+  it('turning a paused auto subscription off needs no step-up', async () => {
+    const stepUp = vi.spyOn(TestBed.inject(StepUpService), 'ensure');
+    const el = await render([sub({ mode: 'auto', enabled: true })]);
+    el.querySelector<HTMLButtonElement>('[role="switch"]')!.click();
+    const req = await nextRequest(controller, '/api/subscriptions/sub_1', 'PATCH');
+    expect(stepUp).not.toHaveBeenCalled();
+    req.flush(sub({ mode: 'auto', enabled: false }));
+    await tick();
+  });
+
+  it('copes with a cancelled server step-up: no stuck busy state, no success toast', async () => {
+    const prompt = vi.spyOn(TestBed.inject(StepUpService), 'prompt').mockResolvedValue(false);
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    const el = await render([sub()]);
+    const toggle = el.querySelector<HTMLButtonElement>('[role="switch"]')!;
+    toggle.click();
+    (await nextRequest(controller, '/api/subscriptions/sub_1', 'PATCH')).flush(
+      { title: 'Step-up needed', status: 403, code: 'step_up_required' },
+      { status: 403, statusText: 'Forbidden' },
+    );
+    await tick(5);
+    fixture.detectChanges();
+    expect(prompt).toHaveBeenCalled();
+    expect(success).not.toHaveBeenCalled();
+    expect(toggle.disabled).toBe(false);
+    expect(toggle.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('two toggles: after A resolves, B stays disabled (UX-59)', async () => {
+    const el = await render([sub(), sub({ id: 'sub_2', strategy_id: 'value_1a2b3c4d' })]);
+    const [a, b] = [...el.querySelectorAll<HTMLButtonElement>('[role="switch"]')];
+    a.click();
+    const reqA = await nextRequest(controller, '/api/subscriptions/sub_1', 'PATCH');
+    b.click();
+    const reqB = await nextRequest(controller, '/api/subscriptions/sub_2', 'PATCH');
+    reqA.flush(sub({ enabled: false }));
+    await tick();
+    fixture.detectChanges();
+    expect(b.disabled).toBe(true);
+    reqB.flush(sub({ id: 'sub_2', strategy_id: 'value_1a2b3c4d', enabled: false }));
+    await tick();
+    fixture.detectChanges();
+    expect(b.disabled).toBe(false);
+  });
+
+  it('names strategies and modes in trader words (UX-27, UX-31)', async () => {
+    const el = await render([sub({ strategy_id: 'value_1a2b3c4d', strategy_status: 'shadow' })]);
+    expect(el.querySelector('.name a')!.textContent!.trim()).toBe('Value 1a2b');
+    expect(el.textContent).toContain('Paper trading');
+    expect(el.textContent).not.toMatch(/shadow/i);
+    const labels = [...el.querySelectorAll('.mode')].map((m) => m.textContent!.trim());
+    expect(labels).toEqual(MODES.map((m) => m.label));
   });
 
   it('offers a retry when the list cannot load', async () => {

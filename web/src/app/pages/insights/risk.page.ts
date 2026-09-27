@@ -21,6 +21,7 @@ import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-tab
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { PageHeader } from '../../shared/ui/page-header';
+import { NoBook, bookState } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { InsightsNav } from './insights-nav';
 import { type LimitRow, STATUS_TEXT, limitRows } from './limit-rows';
@@ -29,12 +30,19 @@ const HISTORY_PAGE = 20;
 /** Days drawn on the chart (the route's page limit). */
 const CHART_DAYS = 200;
 
-/** "3 misses, 1.2 times the expected rate (p 0.61)". */
+/** Below this Kupiec p-value the misses are more than bad luck. */
+const KUPIEC_ALARM = 0.05;
+
+/**
+ * "3 misses, 1.2 times the expected rate", plus ", more often than chance
+ * explains" when the Kupiec test says the model is off. No raw p-value.
+ */
 export function violationText(count: number, ratio: number | null, kupiec: number | null): string {
   const misses = `${count} ${count === 1 ? 'miss' : 'misses'}`;
   if (ratio == null) return misses;
-  const p = kupiec == null ? '' : ` (p ${formatNumber(kupiec, { digits: 2 })})`;
-  return `${misses}, ${formatNumber(ratio, { digits: 2 })} times the expected rate${p}`;
+  const alarm = kupiec != null && kupiec < KUPIEC_ALARM && ratio > 1;
+  const tail = alarm ? ', more often than chance explains' : '';
+  return `${misses}, ${formatNumber(ratio, { digits: 2 })} times the expected rate${tail}`;
 }
 
 /**
@@ -57,6 +65,7 @@ export function violationText(count: number, ratio: number | null, kupiec: numbe
     LoadingState,
     EmptyState,
     ErrorState,
+    NoBook,
   ],
   templateUrl: './risk.page.html',
   styleUrl: './risk.page.scss',
@@ -67,18 +76,23 @@ export class RiskPage {
   private readonly systemApi = inject(SystemService);
   private readonly portfolioCtx = inject(PortfolioContextService);
 
+  /** With no portfolio at all (UX-13) nothing asks for one. */
+  protected readonly book = computed(() => bookState(this.portfolioCtx));
+  private readonly bookParams = computed(() =>
+    this.book() === 'ready' ? { portfolio: this.portfolioCtx.selectedId() } : undefined,
+  );
   protected readonly live = resource({
-    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    params: () => this.bookParams(),
     loader: () => this.riskApi.live(),
   });
   protected readonly insights = resource({
-    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    params: () => this.bookParams(),
     loader: () => this.insightsApi.get(),
   });
   protected readonly policy = resource({ loader: () => this.systemApi.riskPolicy() });
 
   protected readonly chart = resource({
-    params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
+    params: () => this.bookParams(),
     loader: () => this.riskApi.snapshots({ limit: CHART_DAYS }),
   });
   protected readonly historyOffset = linkedSignal({
@@ -86,11 +100,14 @@ export class RiskPage {
     computation: () => 0,
   });
   protected readonly history = resource({
-    params: () => ({
-      portfolio: this.portfolioCtx.selectedId(),
-      limit: HISTORY_PAGE,
-      offset: this.historyOffset(),
-    }),
+    params: () =>
+      this.book() === 'ready'
+        ? {
+            portfolio: this.portfolioCtx.selectedId(),
+            limit: HISTORY_PAGE,
+            offset: this.historyOffset(),
+          }
+        : undefined,
     loader: ({ params }) => this.riskApi.snapshots({ limit: params.limit, offset: params.offset }),
   });
   protected readonly historyPage = keepLatest(this.history);

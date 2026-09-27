@@ -68,9 +68,11 @@
               type="password"
               formControlName="current"
               autocomplete="current-password"
+              [attr.aria-invalid]="currentInvalid()"
+              [attr.aria-describedby]="currentInvalid() ? 'pw-current-error' : null"
             />
-            @if (passwordForm.controls.current.touched && passwordForm.controls.current.invalid) {
-              <span class="error">Enter your current password.</span>
+            @if (currentInvalid()) {
+              <span id="pw-current-error" class="error">Enter your current password.</span>
             }
           </div>
           <div class="field">
@@ -81,13 +83,13 @@
               type="password"
               formControlName="next"
               autocomplete="new-password"
-              aria-describedby="pw-next-hint"
-              [attr.aria-invalid]="
-                passwordForm.controls.next.touched && passwordForm.controls.next.invalid
-              "
+              [attr.aria-invalid]="nextInvalid()"
+              [attr.aria-describedby]="nextInvalid() ? 'pw-next-error' : 'pw-next-hint'"
             />
-            @if (passwordForm.controls.next.touched && passwordForm.controls.next.invalid) {
-              <span class="error">Use at least {{ passwordMin }} characters.</span>
+            @if (nextInvalid()) {
+              <span id="pw-next-error" class="error"
+                >Use at least {{ passwordMin }} characters.</span
+              >
             } @else {
               <span id="pw-next-hint" class="hint"
                 >At least {{ passwordMin }} characters. A long phrase works well.</span
@@ -102,9 +104,11 @@
               type="password"
               formControlName="repeat"
               autocomplete="new-password"
+              [attr.aria-invalid]="repeatInvalid()"
+              [attr.aria-describedby]="repeatInvalid() ? 'pw-repeat-error' : null"
             />
-            @if (passwordForm.controls.repeat.touched && passwordForm.hasError('mismatch')) {
-              <span class="error">The two passwords differ.</span>
+            @if (repeatInvalid()) {
+              <span id="pw-repeat-error" class="error">The two passwords differ.</span>
             }
           </div>
           <div>
@@ -134,6 +138,7 @@
             <app-one-time-secret
               [values]="codes"
               label="Recovery codes"
+              filename="stonks-recovery-codes.txt"
               warning="Shown once. You cannot see these again."
             />
           }

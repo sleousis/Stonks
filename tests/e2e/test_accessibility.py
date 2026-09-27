@@ -32,7 +32,7 @@ ADMIN_PAGES = (
     "/orders",
     "/orders/fills",
     "/orders/ticks",
-    "/shadow",
+    "/paper",
     "/go-live",
     "/health",
     "/settings",

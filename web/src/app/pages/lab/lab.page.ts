@@ -6,10 +6,13 @@ import {
   computed,
   inject,
   input,
+  linkedSignal,
   resource,
   signal,
   viewChild,
 } from '@angular/core';
+
+import { RouterLink } from '@angular/router';
 
 import { JobsApiService } from '../../api/jobs-api.service';
 import { LabService } from '../../api/lab.service';
@@ -41,6 +44,8 @@ import { BacktestResultView } from '../../shared/lab-results/backtest-result';
 import { LabRunFormView } from './lab-run-form';
 import { LabRunResultView } from '../../shared/lab-results/lab-run-result';
 import { SignalIcResult } from '../../shared/lab-results/signal-ic-result';
+import { testLabel } from '../../shared/lab-results/survival-tests';
+import { type LabRunForm, SUITES, formFromRequest } from './lab-requests';
 import { SweepResult } from '../../shared/lab-results/sweep-result';
 import { LabNav } from './lab-nav';
 import { type StrategyPreset, presetFromStrategy } from './strategy-preset';
@@ -58,7 +63,29 @@ interface Followed {
   kind: LabKind;
   label: string;
   handle: JobHandle;
+  /** The request the job ran (a job's stored `params`), for a prefilled re-run. */
+  params: Readonly<Record<string, unknown>> | null;
 }
+
+/** What to do after a finished lab run (UX-22). */
+export type NextStep =
+  | { kind: 'paper'; strategyId: string }
+  | { kind: 'passed' }
+  | { kind: 'failed'; failed: string[]; total: number };
+
+export function nextStep(result: LabRunView): NextStep {
+  if (result.registered_strategy_id) {
+    return { kind: 'paper', strategyId: result.registered_strategy_id };
+  }
+  if (result.verdict === 'pass') return { kind: 'passed' };
+  return {
+    kind: 'failed',
+    failed: result.survival_reports.filter((r) => !r.passed).map((r) => testLabel(r.test_id)),
+    total: result.survival_reports.length,
+  };
+}
+
+const SUITE_PARAMS = new Set(['quick', 'standard', 'promotion']);
 
 type Shown =
   | { kind: 'backtest'; jobId: string; result: BacktestResult }
@@ -77,7 +104,7 @@ export function kindLabel(kind: string): string {
   return KIND_LABELS[kind] ?? kind;
 }
 
-/** Strategy a lab job ran, from its stored request: class name or registered id. */
+/** Strategy a lab job ran, from its stored request: class name or strategy id. */
 export function jobStrategy(job: Pick<Job, 'params'>): string {
   if (!('strategy' in job.params) && 'start' in job.params) {
     // A sweep: its strategy list, or every strategy.
@@ -116,6 +143,7 @@ export function canCancel(kind: string, status: string | null | undefined): bool
     SweepResult,
     SignalIcResult,
     LabNav,
+    RouterLink,
   ],
   templateUrl: './lab.page.html',
   styleUrl: './lab.page.scss',
@@ -135,10 +163,25 @@ export class LabPage {
   private readonly toasts = inject(ToastService);
   private readonly destroyRef = inject(DestroyRef);
 
-  protected readonly mode = signal<FormKind>('backtest');
-
-  /** Query param `?strategy=<id>`: start both forms from a registered strategy. */
+  /** Query param `?strategy=<id>`: start both forms from a saved strategy. */
   readonly strategy = input<string | undefined>();
+  /**
+   * `?preset=promotion` (or quick, standard): open the lab-run form on that
+   * suite, e.g. from a go-live check's fix link.
+   */
+  readonly preset = input<string | undefined>();
+  private readonly suiteParam = computed(() => {
+    const p = this.preset();
+    return p && SUITE_PARAMS.has(p) ? (p as LabRunForm['suite']) : null;
+  });
+  protected readonly mode = linkedSignal<FormKind>(() =>
+    this.suiteParam() ? 'lab_run' : 'backtest',
+  );
+  /** Fields the lab-run form starts from: the query's suite, or a re-run. */
+  protected readonly prefill = linkedSignal<Partial<LabRunForm> | null>(() => {
+    const suite = this.suiteParam();
+    return suite ? { suite } : null;
+  });
   /** `?tickers=AAPL.US,MSFT.US`: a watchlist opened in the lab. */
   readonly tickers = input<string | undefined>();
   protected readonly tickerList = computed(() => {
@@ -151,23 +194,24 @@ export class LabPage {
           .join(', ')
       : null;
   });
-  protected readonly registered = resource({
+  protected readonly sourceStrategy = resource({
     params: () => {
       const id = this.strategy();
       return id ? { id } : undefined;
     },
     loader: ({ params }) => this.strategiesApi.get(params.id),
   });
-  protected readonly preset = computed<StrategyPreset | null>(() =>
-    this.registered.hasValue() ? presetFromStrategy(this.registered.value()) : null,
+  protected readonly strategyPreset = computed<StrategyPreset | null>(() =>
+    this.sourceStrategy.hasValue() ? presetFromStrategy(this.sourceStrategy.value()) : null,
   );
   /** The preset's class is not in the catalog (e.g. a code strategy that is off). */
   protected readonly presetUncatalogued = computed(() => {
-    const p = this.preset();
+    const p = this.strategyPreset();
     if (!p || !this.classes.hasValue()) return false;
     return !this.classes.value().some((c) => c.class_path === p.classPath);
   });
   private readonly resultPanel = viewChild<ElementRef<HTMLElement>>('resultPanel');
+  private readonly formPanel = viewChild<ElementRef<HTMLElement>>('formPanel');
 
   // Reference data --------------------------------------------------------
   protected readonly classes = resource({ loader: () => this.system.strategyClasses() });
@@ -230,6 +274,14 @@ export class LabPage {
     );
   });
 
+  /** The next step under a finished lab run's result. */
+  protected readonly next = computed<NextStep | null>(() => {
+    const s = this.shown();
+    return s?.kind === 'lab_run' ? nextStep(s.result) : null;
+  });
+  /** A re-run can be prefilled only when the job's request is known. */
+  protected readonly canRerun = computed(() => !!this.followed()?.params);
+
   protected readonly kindLabel = kindLabel;
   protected readonly jobStrategy = jobStrategy;
   protected readonly canCancel = canCancel;
@@ -246,44 +298,80 @@ export class LabPage {
     this.selectMode(this.mode() === 'backtest' ? 'lab_run' : 'backtest', true);
   }
 
+  /** A backtest is research: it starts at once, no confirmation (UX-29). */
   async startBacktest(request: BacktestRequest): Promise<void> {
     const name = shortName(request.strategy.class_path);
-    const ok = await this.confirm.confirm({
-      title: `Run a backtest of ${name}?`,
-      message: `${basket(request)}, ${request.start} to ${request.end}, ${request.interval ?? '1d'} bars. It runs in the background.`,
-      confirmLabel: 'Run backtest',
-    });
-    if (!ok) return;
-    await this.start('backtest', name, () => this.lab.startBacktest(request), 'Started a backtest');
+    await this.start(
+      'backtest',
+      name,
+      () => this.lab.startBacktest(request),
+      'Started a backtest',
+      request,
+    );
   }
 
+  /**
+   * A lab run starts at once. When it may start paper trading, a plain
+   * confirmation says so first: paper trading places no real orders, so no
+   * typed words (those are for overrides and real money).
+   */
   async startLabRun(request: LabRunRequest): Promise<void> {
     const name = shortName(request.strategy.class_path);
     const always = !!request.register_strategy;
-    const register = always || !!request.register_if_passes;
-    const suite = request.preset
-      ? `the ${request.preset} suite`
-      : `${request.survival_tests?.length ?? 0} survival tests`;
-    const fetchFirst = request.ensure_data ? 'Fetches missing data first, then a ' : 'A ';
-    const ok = await this.confirm.confirm({
-      title: `Start a lab run of ${name}?`,
-      message:
-        `${basket(request)}. ${fetchFirst}${request.tuner ?? 'random'} search, ${request.budget ?? 20} trials, then ${suite}.` +
-        (always
-          ? ' The fitted strategy is registered in shadow when the run finishes, whatever the verdict.'
-          : register
-            ? ' The fitted strategy is registered in shadow only if every test passes.'
-            : ''),
-      confirmLabel: register ? 'Start and register' : 'Start lab run',
-      typedConfirmation: register ? name : undefined,
-    });
-    if (!ok) return;
-    await this.start('lab_run', name, () => this.lab.startLabRun(request), 'Started a lab run');
+    if (always || request.register_if_passes) {
+      const suiteLabel = SUITES.find((s) => s.id === request.preset)?.label;
+      const suite = suiteLabel
+        ? `the ${suiteLabel} suite`
+        : `${request.survival_tests?.length ?? 0} survival tests`;
+      const fetchFirst = request.ensure_data ? 'Fetches missing data first, then runs ' : 'Runs ';
+      const ok = await this.confirm.confirm({
+        title: always
+          ? `Start paper trading ${name} whatever the verdict?`
+          : `Start paper trading ${name} if it passes?`,
+        message:
+          `${fetchFirst}${suite} on ${basket(request)}. ` +
+          (always
+            ? 'When the run finishes, the fitted strategy trades on paper even if a test failed.'
+            : 'If every test passes, the fitted strategy trades on paper.') +
+          ' It decides on every trading run and places no real orders.',
+        confirmLabel: 'Start the run',
+      });
+      if (!ok) return;
+    }
+    await this.start(
+      'lab_run',
+      name,
+      () => this.lab.startLabRun(request),
+      'Started a lab run',
+      request,
+    );
+  }
+
+  /**
+   * Fill the lab-run form from the followed run's request and bring it into
+   * view. `startPaper` ticks "Start paper trading if it passes" (on the
+   * go-live suite when the run used the quick one).
+   */
+  protected rerun(startPaper: boolean): void {
+    const params = this.followed()?.params;
+    if (!params) return;
+    const form = formFromRequest(params);
+    if (startPaper) {
+      form.register = true;
+      form.registerIfPasses = true;
+      if (!form.suite || form.suite === 'quick') form.suite = 'promotion';
+    }
+    this.prefill.set(form);
+    this.mode.set('lab_run');
+    const el = this.formPanel()?.nativeElement;
+    el?.scrollIntoView?.({ block: 'start' });
+    el?.querySelector<HTMLElement>('#lab-tab-lab_run')?.focus();
+    this.toasts.info('The lab run form is filled in. Check it, then start the run.');
   }
 
   /** Follow a job from the history table (running or finished). */
   protected open(job: Job): void {
-    void this.follow(job.id, job.kind as LabKind, jobStrategy(job));
+    void this.follow(job.id, job.kind as LabKind, jobStrategy(job), job.params);
     this.revealResult();
   }
 
@@ -292,7 +380,7 @@ export class LabPage {
     const ok = await this.confirm.confirm({
       title: `Cancel this ${kindLabel(kind).toLowerCase()}?`,
       message: running
-        ? `${label} stops after the current tuning trial or survival test. Nothing is registered.`
+        ? `${label} stops after the current tuning trial or survival test. Nothing starts paper trading.`
         : `${label} has not started yet and will not run.`,
       confirmLabel: 'Cancel job',
       cancelLabel: 'Keep running',
@@ -321,6 +409,7 @@ export class LabPage {
     label: string,
     call: () => Promise<Job>,
     verb: string,
+    request: BacktestRequest | LabRunRequest,
   ): Promise<void> {
     this.starting.set(true);
     let job: Job;
@@ -333,7 +422,12 @@ export class LabPage {
     }
     this.toasts.success(`${verb} of ${label}.`);
     this.history.reload();
-    const following = this.follow(job.id, kind, label);
+    const following = this.follow(
+      job.id,
+      kind,
+      label,
+      request as unknown as Readonly<Record<string, unknown>>,
+    );
     this.revealResult();
     await following;
   }
@@ -348,12 +442,19 @@ export class LabPage {
     el.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
   }
 
-  private async follow(jobId: string, kind: LabKind, label: string): Promise<void> {
+  private async follow(
+    jobId: string,
+    kind: LabKind,
+    label: string,
+    params: Readonly<Record<string, unknown>> | null,
+  ): Promise<void> {
     this.followed()?.handle.stop();
     const handle = this.jobs.track(jobId, this.destroyRef);
-    this.followed.set({ jobId, kind, label, handle });
+    this.followed.set({ jobId, kind, label, handle, params });
     this.shown.set(null);
     this.resultError.set(null);
+    // A result still loading for the previous job is not this one's.
+    this.resultLoading.set(false);
     const last = await handle.finished;
     if (this.followed()?.jobId !== jobId) return;
     this.history.reload();
@@ -383,7 +484,8 @@ export class LabPage {
     } catch (err) {
       if (this.followed()?.jobId === jobId) this.resultError.set(err);
     } finally {
-      this.resultLoading.set(false);
+      // A stale load never clears the spinner of the job opened since (UX-62).
+      if (this.followed()?.jobId === jobId) this.resultLoading.set(false);
     }
   }
 }

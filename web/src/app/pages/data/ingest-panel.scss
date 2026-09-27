@@ -40,57 +40,6 @@
   }
 }
 
-.job {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4) var(--space-4);
-  border-top: 1px solid var(--color-border);
-}
-
-.job-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.progress-label {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-  font-size: var(--text-sm);
-  color: var(--color-ink-2);
-}
-
-progress {
-  width: 100%;
-  height: 8px;
-  border: 0;
-  border-radius: 4px;
-  background: var(--color-surface-3);
-  accent-color: var(--color-primary);
-  overflow: hidden;
-
-  &::-webkit-progress-bar {
-    background: var(--color-surface-3);
-  }
-
-  &::-webkit-progress-value {
-    background: var(--color-primary);
-    transition: width var(--dur) var(--ease);
-  }
-
-  &::-moz-progress-bar {
-    background: var(--color-primary);
-  }
-}
-
-.job-error {
-  color: var(--color-loss);
-  font-size: var(--text-sm);
-  overflow-wrap: anywhere;
-}
-
 .job-result {
   font-size: var(--text-sm);
 }

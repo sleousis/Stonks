@@ -19,8 +19,8 @@
       <app-loading-state label="Loading strategies" [rows]="2" />
     } @else if (strategies.value().items.length === 0) {
       <app-empty-state
-        title="No strategies registered"
-        message="Register one from a lab run first; shadow strategies are the usual go-live candidates."
+        title="No strategies yet"
+        message="Test one in Lab and start paper trading it. Paper trading strategies are the ones that can go live."
       >
         <a routerLink="/lab" class="btn">Open Lab</a>
       </app-empty-state>
@@ -39,7 +39,9 @@
             @for (g of groups(); track g.label) {
               <optgroup [label]="g.label">
                 @for (s of g.items; track s.id) {
-                  <option [value]="s.id" [selected]="s.id === selectedId()">{{ s.id }}</option>
+                  <option [value]="s.id" [selected]="s.id === selectedId()">
+                    {{ displayName(s.id) }}
+                  </option>
                 }
               </optgroup>
             }
@@ -81,9 +83,7 @@
     } @else if (unknownId(); as missing) {
       <app-empty-state
         title="Strategy not found"
-        [message]="
-          'No registered strategy has the id “' + missing + '”. Pick one from the list above.'
-        "
+        [message]="'No strategy has the id “' + missing + '”. Pick one from the list above.'"
       />
     } @else if (report.error(); as err) {
       <app-error-state
@@ -111,7 +111,7 @@
         @if (r.passed) {
           All {{ rows().length }} checks passed.
           @if (r.status === 'active') {
-            It is already active.
+            It is already live.
           }
         } @else {
           {{ failedCount() }} of {{ rows().length }} checks failed.
@@ -120,7 +120,7 @@
           >Paper P&amp;L from
           {{
             r.source === 'shadow'
-              ? 'the shadow book'
+              ? 'its paper book'
               : r.source === 'portfolio'
                 ? 'the shared portfolio'
                 : 'nowhere (no paper period)'
@@ -148,13 +148,21 @@
             }
             <p class="check-detail">{{ c.detail }}</p>
             <p class="check-measures">{{ c.measures }}</p>
+            @if (c.fix; as f) {
+              <p class="check-fix">
+                {{ f.text }}
+                @if (f.link; as l) {
+                  <a [routerLink]="l.commands" [queryParams]="l.query ?? null">{{ l.label }}</a>
+                }
+              </p>
+            }
           </li>
         }
       </ul>
       <section class="checklist panel-body" aria-labelledby="checklist-title">
-        <h3 id="checklist-title">Promotion checklist</h3>
+        <h3 id="checklist-title">Before you go live</h3>
         <p class="muted checklist-lead">
-          Evidence a reviewer reads before promoting. It does not change the verdict.
+          What a reviewer reads before going live. It does not change the verdict.
         </p>
         <dl class="checklist-grid">
           @for (item of checklist(); track item.key) {
@@ -196,7 +204,7 @@
           </div>
           <div>
             <dt>Account</dt>
-            <dd><app-mode-stamp [live]="!b.paper" /></dd>
+            <dd><app-mode-stamp [live]="realMoney(b)" /></dd>
           </div>
           <div>
             <dt>Live trading</dt>

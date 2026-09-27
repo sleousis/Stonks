@@ -5,6 +5,7 @@ import {
   inject,
   resource,
   signal,
+  viewChild,
 } from '@angular/core';
 
 import { RouterLink } from '@angular/router';
@@ -18,14 +19,15 @@ import { ConfirmService } from '../../core/confirm/confirm.service';
 import { formatAgo, formatDateTime } from '../../core/format/format';
 import { HaltStateService } from '../../core/halts/halt-state.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { AlertsPanel } from '../../shared/ui/alerts-panel';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { StatTile, type StatTone } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
-import { humanize } from '../../shared/ui/param-form/param-spec';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { kindLabel, sourceLabel } from '../data/data-labels';
 import { parseTickers } from '../data/ingest-request';
 import {
   CHECK_TITLES,
@@ -41,16 +43,11 @@ import {
 
 const RECENT_FAILURES = 10;
 
-const SOURCE_NAMES: Record<string, string> = {
-  eodhd: 'EODHD',
-  yahoo: 'Yahoo Finance',
-  defillama: 'DefiLlama',
-};
-
-function sourceName(id: string | null | undefined): string {
-  return id ? (SOURCE_NAMES[id] ?? humanize(id)) : '';
-}
-
+/**
+ * Is the system well: data freshness, stuck runs, recent data update and
+ * trading run failures, and the system alerts. Reloads every minute; failed
+ * trading runs link to their page.
+ */
 @Component({
   selector: 'app-health-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -66,6 +63,7 @@ function sourceName(id: string | null | undefined): string {
     ErrorState,
     AlertsPanel,
     PermissionNote,
+    UpdatedAgo,
   ],
   templateUrl: './health.page.html',
   styleUrl: './health.page.scss',
@@ -98,6 +96,14 @@ export class HealthPage {
   protected readonly failedTicks = resource({
     loader: () => this.ticksApi.list({ status: 'error', limit: RECENT_FAILURES }),
   });
+
+  private readonly alertsPanel = viewChild(AlertsPanel);
+  protected readonly auto = autoRefresh(() => [
+    this.report,
+    this.version,
+    this.failedIngest,
+    this.failedTicks,
+  ]);
 
   protected readonly refreshing = computed(
     () => this.report.isLoading() || this.failedIngest.isLoading() || this.failedTicks.isLoading(),
@@ -154,6 +160,7 @@ export class HealthPage {
       message:
         'Runs every check now, like the scheduled health job. Stale data or a stuck run stops trading for everyone until the checks pass again, and passing checks lift that stop.',
       confirmLabel: 'Run checks now',
+      tone: 'danger',
     });
     if (!ok) return;
     this.runningChecks.set(true);
@@ -222,8 +229,8 @@ export class HealthPage {
 
   protected readonly ingestColumns: TableColumn<IngestRunView>[] = [
     { key: 'started_at', label: 'Started', format: 'datetime', mobile: 'title' },
-    { key: 'source', label: 'Source', value: (r) => sourceName(r.source), mobile: 'hide' },
-    { key: 'kind', label: 'Update', value: (r) => humanize(r.kind) },
+    { key: 'source', label: 'Source', value: (r) => sourceLabel(r.source), mobile: 'hide' },
+    { key: 'kind', label: 'Update', value: (r) => kindLabel(r.kind) },
     {
       key: 'tickers',
       label: 'Tickers ok / failed',
@@ -247,6 +254,7 @@ export class HealthPage {
     },
   ];
   protected readonly tickKey = (t: TickRun) => t.id;
+  protected readonly dateTime = formatDateTime;
 
   protected applyTickers(text: string): void {
     this.tickers.set(parseTickers(text));
@@ -257,10 +265,9 @@ export class HealthPage {
     this.tickers.set([]);
   }
 
+  /** Every panel, the system alerts included. */
   protected refresh(): void {
-    this.report.reload();
-    this.version.reload();
-    this.failedIngest.reload();
-    this.failedTicks.reload();
+    this.auto.refresh();
+    this.alertsPanel()?.reload();
   }
 }

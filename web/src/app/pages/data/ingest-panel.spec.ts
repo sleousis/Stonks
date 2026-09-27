@@ -93,7 +93,7 @@ describe('IngestPanel', () => {
     (await nextRequest(http, '/api/jobs/job_1')).flush(job('succeeded', 1));
   }
 
-  it('a trader sees why Run ingest is off and nothing is asked', async () => {
+  it('a trader sees why Update data is off and nothing is asked', async () => {
     await setup(TRADER);
     const button = el.querySelector<HTMLButtonElement>('button[type=submit]')!;
     expect(button.disabled).toBe(true);
@@ -126,10 +126,11 @@ describe('IngestPanel', () => {
     await tick();
     fixture.detectChanges();
     expect(el.querySelector('app-error-state')).toBeNull();
-    expect(el.textContent).toContain('Run #7 ok');
+    expect(el.textContent).toContain('Updated 1 ticker.');
+    expect(el.textContent).not.toContain('Run #');
   });
 
-  it('cancel asks first ("Cancel job" / "Keep running") and only then cancels', async () => {
+  it('cancel asks first ("Cancel update" / "Keep running") and only then cancels', async () => {
     set('ingest-tickers', 'aapl.us');
     submit();
     await tick();
@@ -150,7 +151,8 @@ describe('IngestPanel', () => {
     cancel().click();
     await tick();
     const ask = confirm.request()!;
-    expect(ask.confirmLabel).toBe('Cancel job');
+    expect(ask.confirmLabel).toBe('Cancel update');
+    expect(el.querySelector('app-job-progress .job-line button')).not.toBeNull();
     expect(ask.cancelLabel).toBe('Keep running');
     ask.resolve(false);
     await tick();
@@ -186,8 +188,8 @@ describe('IngestPanel', () => {
     submit();
     await tick();
     const request = confirm.request()!;
-    expect(request.title).toBe('Run daily prices ingest?');
-    expect(request.confirmLabel).toBe('Run ingest');
+    expect(request.title).toBe('Update daily prices?');
+    expect(request.confirmLabel).toBe('Update data');
     request.resolve(false);
     await tick();
     http.verify();
@@ -203,7 +205,7 @@ describe('IngestPanel', () => {
 
     const request = confirm.request()!;
     expect(request.message).toBe(
-      'Fetches prices for 2 tickers (AAPL.US, MSFT.US) from yahoo since 2026-01-02 and saves them.',
+      'Fetches daily prices for 2 tickers (AAPL.US, MSFT.US) from Yahoo Finance since 2026-01-02 and saves them.',
     );
     request.resolve(true);
 
@@ -236,8 +238,9 @@ describe('IngestPanel', () => {
     await tick();
     fixture.detectChanges();
 
-    expect(el.textContent).toContain('Run #42 ok: 2 ok, 0 failed.');
-    expect(toasts.toasts().some((t) => t.message.includes('#42'))).toBe(true);
+    expect(el.querySelector('app-job-progress')).not.toBeNull();
+    expect(el.textContent).toContain('Updated 2 tickers.');
+    expect(toasts.toasts().some((t) => t.message === 'Updated 2 tickers.')).toBe(true);
     expect(el.querySelector<HTMLButtonElement>('button[type=submit]')!.disabled).toBe(false);
   });
 
@@ -258,6 +261,13 @@ describe('IngestPanel', () => {
     (await nextRequest(http, '/api/jobs/job_1')).flush({ ...job('failed'), error: 'vendor down' });
     await tick();
     fixture.detectChanges();
-    expect(el.textContent).toContain('vendor down');
+    expect(el.textContent!.match(/vendor down/g)?.length).toBe(1);
+  });
+
+  it('never says ingest, and names providers', () => {
+    expect(el.textContent).not.toMatch(/ingest/i);
+    const options = [...el.querySelectorAll<HTMLOptionElement>('#ingest-source option')];
+    expect(options[0].textContent).toContain('EODHD');
+    expect(options[1].textContent).toContain('Yahoo Finance');
   });
 });

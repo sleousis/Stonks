@@ -28,7 +28,7 @@
           }
         </datalist>
         <p id="t-tickers-hint" class="hint">
-          Separate with commas or spaces. They need bars in the lake for the window below.
+          Separate with commas or spaces. Each needs price history in our data for the window below.
         </p>
         @if (submitted() && tickersError(); as e) {
           <p class="error">{{ e }}</p>
@@ -74,51 +74,14 @@
           }
         </select>
       </div>
-      <div class="field">
-        <label for="t-cost">Costs</label>
-        <select
-          id="t-cost"
-          class="input"
-          aria-describedby="t-cost-hint"
-          [value]="cost()"
-          (change)="cost.set($any($event.target).value)"
-        >
-          <option value="zero">Zero (frictionless)</option>
-          <option value="realistic">Realistic</option>
-          <option value="custom">Custom</option>
-        </select>
-        <p id="t-cost-hint" class="hint">
-          {{ costHint() }}
-        </p>
-      </div>
-      @if (cost() === 'custom') {
-        <div class="field">
-          <label for="t-slip">Slippage (bps)</label>
-          <input
-            id="t-slip"
-            class="input"
-            type="number"
-            min="0"
-            step="any"
-            inputmode="decimal"
-            [value]="customSlippage()"
-            (change)="customSlippage.set(numberValue($any($event.target).value, 0))"
-          />
-        </div>
-        <div class="field">
-          <label for="t-fee">Fee per trade ($)</label>
-          <input
-            id="t-fee"
-            class="input"
-            type="number"
-            min="0"
-            step="any"
-            inputmode="decimal"
-            [value]="customFee()"
-            (change)="customFee.set(numberValue($any($event.target).value, 0))"
-          />
-        </div>
-      }
+      <app-cost-field
+        idPrefix="t"
+        [value]="costForm()"
+        [costModels]="presets()"
+        [errors]="costErrors()"
+        [note]="costNote()"
+        (patch)="patchCost($event)"
+      />
       <div class="field">
         <label for="t-cash">Starting cash ($)</label>
         <input
@@ -206,7 +169,7 @@
     <button
       type="button"
       class="btn btn-primary"
-      [disabled]="labBusy() || !tests().length || !canLab()"
+      [disabled]="labBusy() || !runTests().length || !canLab()"
       [attr.aria-busy]="labBusy()"
       (click)="runLab()"
     >
@@ -219,22 +182,49 @@
   <div class="panel-body lab-options">
     <fieldset class="plain">
       <legend>Survival tests</legend>
-      <div class="test-options">
-        @for (t of survivalTests; track t.id) {
-          <label class="check test-option">
+      <div class="suites" role="radiogroup" aria-label="Test suite">
+        @for (s of suites(); track s.id) {
+          <label class="check suite" [class.chosen]="suite() === s.id">
             <input
-              type="checkbox"
-              [checked]="tests().includes(t.id)"
-              (change)="toggleTest(t.id, $any($event.target).checked)"
+              type="radio"
+              name="t-suite"
+              [value]="s.id"
+              [checked]="suite() === s.id"
+              [attr.aria-describedby]="'t-suite-' + s.id + '-hint'"
+              (change)="setSuite(s.id)"
             />
             <span>
-              <span class="test-name">{{ t.label }}</span>
-              <span class="hint">{{ t.hint }}</span>
+              <span class="suite-name">{{ s.label }}</span>
+              <span class="hint" [id]="'t-suite-' + s.id + '-hint'">{{ s.description }}</span>
             </span>
           </label>
         }
       </div>
-      @if (!tests().length) {
+      @if (suite() === 'custom') {
+        <div class="test-options">
+          @for (t of pickable; track t.id) {
+            <label class="check test-option">
+              <input
+                type="checkbox"
+                [checked]="tests().includes(t.id)"
+                (change)="toggleTest(t.id, $any($event.target).checked)"
+              />
+              <span>
+                <span class="test-name">{{ t.label }}</span>
+                <span class="hint">{{ t.hint }}</span>
+              </span>
+            </label>
+          }
+        </div>
+      } @else {
+        <p class="suite-list">
+          <span class="muted">Runs:</span>
+          @for (t of runTests(); track t.id) {
+            <span class="chip">{{ t.label }}</span>
+          }
+        </p>
+      }
+      @if (!runTests().length) {
         <p class="error">Pick at least one survival test.</p>
       }
     </fieldset>

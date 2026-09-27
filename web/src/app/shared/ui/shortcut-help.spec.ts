@@ -31,4 +31,24 @@ describe('ShortcutHelp', () => {
     expect(shortcuts.singleKeys()).toBe(false);
     localStorage.clear();
   });
+
+  it('sits on the shared sheet: Escape closes it, and hidden shortcuts are left out (UX-48)', () => {
+    TestBed.configureTestingModule({ providers: [provideRouter([])] });
+    const shortcuts = TestBed.inject(ShortcutsService);
+    shortcuts.setSequences([
+      { prefix: 'g', key: 's', label: 'Strategies', path: '/strategies' },
+      { prefix: 'g', key: 'r', label: 'Users', path: '/admin/users', visible: () => false },
+    ]);
+    const fixture = TestBed.createComponent(ShortcutHelp);
+    shortcuts.openHelp();
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('app-sheet dialog')).not.toBeNull();
+    expect(el.textContent).toContain('Strategies');
+    expect(el.textContent).not.toContain('Users');
+
+    el.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true }));
+    fixture.detectChanges();
+    expect(shortcuts.helpOpen()).toBe(false);
+  });
 });

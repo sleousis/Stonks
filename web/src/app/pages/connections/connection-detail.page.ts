@@ -13,7 +13,7 @@ import { Router, RouterLink } from '@angular/router';
 import { ConnectionsService } from '../../api/connections.service';
 import type { SyncResultView } from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
-import { ConfirmService } from '../../core/confirm/confirm.service';
+import { type ConfirmOptions, ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { AgoPipe, DateTimePipe } from '../../shared/format.pipes';
@@ -141,15 +141,47 @@ export class ConnectionDetailPage implements OnInit {
     }
   }
 
+  /**
+   * Disconnecting archives the linked portfolios, so it reads as a ticket:
+   * each linked account and the portfolio it feeds, LIVE when any of them
+   * trades real money, and the provider's name typed to confirm.
+   */
+  private disconnectTicket(name: string): ConfirmOptions {
+    const accounts = this.accounts.hasValue() ? this.accounts.value() : [];
+    const linked = accounts.filter((a) => !!a.portfolio_id);
+    const books = linked.map((a) => ({
+      account: a.name,
+      portfolio: this.portfolios.options().find((p) => p.id === a.portfolio_id),
+    }));
+    const live = books.some((b) => b.portfolio?.trading === 'live');
+    const names = [...new Set(books.map((b) => b.portfolio?.name ?? 'a portfolio'))];
+    const archived = names.length
+      ? `It archives ${names.length === 1 ? 'the portfolio' : 'the portfolios'} ${names.join(', ')}.`
+      : 'No portfolio is linked, so none is archived.';
+    return {
+      title: `Disconnect ${name}?`,
+      message: `Stonks stops reading from ${name}. ${archived} Your account at ${name} is not touched. You may be asked for a fresh code.`,
+      confirmLabel: `Disconnect ${name}`,
+      tone: 'danger',
+      typedConfirmation: name,
+      ticket: {
+        live,
+        lines: books.length
+          ? books.map((b) => ({
+              label: b.account,
+              value: b.portfolio
+                ? `${b.portfolio.name} (${b.portfolio.trading === 'live' ? 'live' : 'paper'})`
+                : 'A portfolio',
+            }))
+          : [{ label: 'Linked portfolios', value: 'None' }],
+      },
+    };
+  }
+
   async disconnect(): Promise<void> {
     if (this.disconnecting()) return;
     const name = this.name();
-    const ok = await this.confirm.confirm({
-      title: `Disconnect ${name}?`,
-      message: `Stonks stops reading from ${name} and archives the portfolios linked to it. Your account at ${name} is not touched. You may be asked for a fresh code.`,
-      confirmLabel: `Disconnect ${name}`,
-      tone: 'danger',
-    });
+    const ok = await this.confirm.confirm(this.disconnectTicket(name));
     if (!ok) return;
     this.disconnecting.set(true);
     try {

@@ -99,6 +99,41 @@ describe('AdminUsersPage', () => {
     await reload([ANN, ME]);
   });
 
+  it('both password inputs are autocomplete=off with a reveal toggle (UX-40)', async () => {
+    const el = await render();
+    button(el, 'Add person').click();
+    fixture.detectChanges();
+    const first = el.querySelector<HTMLInputElement>('#user-password')!;
+    expect(first.getAttribute('autocomplete')).toBe('off');
+    expect(first.hasAttribute('data-1p-ignore')).toBe(true);
+    expect(first.getAttribute('data-lpignore')).toBe('true');
+    expect(first.type).toBe('password');
+    button(first.parentElement!, 'Show').click();
+    fixture.detectChanges();
+    expect(first.type).toBe('text');
+
+    button(rowOf(el, 'Ann'), 'Reset password').click();
+    fixture.detectChanges();
+    const reset = el.querySelector<HTMLInputElement>('#reset-password')!;
+    expect(reset.getAttribute('autocomplete')).toBe('off');
+    expect(reset.hasAttribute('data-1p-ignore')).toBe(true);
+    button(reset.parentElement!, 'Show').click();
+    fixture.detectChanges();
+    expect(reset.type).toBe('text');
+  });
+
+  it('generates a strong first password, shown and ready to copy (UX-40)', async () => {
+    const el = await render();
+    button(el, 'Add person').click();
+    fixture.detectChanges();
+    button(el, 'Generate').click();
+    fixture.detectChanges();
+    const input = el.querySelector<HTMLInputElement>('#user-password')!;
+    expect(input.value).toMatch(/^([A-Za-z2-9]{5}-){3}[A-Za-z2-9]{5}$/);
+    expect(input.type).toBe('text');
+    expect(el.querySelector('#add-user app-copy-button')).not.toBeNull();
+  });
+
   it('checks the form before sending', async () => {
     const el = await render();
     button(el, 'Add person').click();

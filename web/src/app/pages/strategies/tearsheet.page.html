@@ -1,5 +1,5 @@
 <app-page-header
-  [title]="id()"
+  [title]="displayName()"
   [description]="sheet.hasValue() ? cls() + '. ' + statusWord() + '.' : 'Tear sheet'"
 >
   <a actions class="btn btn-ghost" routerLink="/leaderboard">Leaderboard</a>
@@ -106,7 +106,7 @@
 
     <section class="panel" aria-labelledby="tests-title">
       <div class="panel-head">
-        <h2 id="tests-title">Survival tests</h2>
+        <h2 id="tests-title">Robustness tests</h2>
         @if (tests().length) {
           <span class="muted num">{{ s.strategy.survival_reports.length }} run</span>
         }
@@ -119,7 +119,7 @@
             <li class="row">
               <app-status-pill [status]="t.passed ? 'passed' : 'failed'" />
               <div class="row-text">
-                <span class="row-title">{{ t.id }}</span>
+                <span class="row-title">{{ t.label }}</span>
                 <span class="row-detail">
                   @for (f of t.figures; track f.key) {
                     <span class="figure-pair"
@@ -136,13 +136,13 @@
 
     <section class="panel span-wide" aria-labelledby="trades-title">
       <div class="panel-head">
-        <h2 id="trades-title">Recent model-book trades</h2>
+        <h2 id="trades-title">Recent paper trades</h2>
       </div>
       @if (s.recent_trades.length === 0) {
-        <p class="panel-body muted">No trades in the model book yet.</p>
+        <p class="panel-body muted">No paper trades yet.</p>
       } @else {
         <app-data-table
-          caption="Recent trades of the strategy's model book"
+          caption="Recent paper trades of this strategy"
           [rows]="s.recent_trades"
           [columns]="tradeColumns"
           [rowKey]="tradeKey"

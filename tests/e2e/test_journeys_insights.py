@@ -81,7 +81,7 @@ def test_a_trader_reads_insights_on_their_own_book(browse, stack, viewport):
 
     alloc = page.locator(".slices")
     expect(alloc).to_contain_text("equity")
-    page.get_by_role("button", name="Holding", exact=True).click()
+    page.get_by_role("radio", name="Holding", exact=True).click()
     expect(alloc).to_contain_text("AAA.US")
 
     expect(page.get_by_role("heading", name="Returns")).to_be_visible()
@@ -108,5 +108,12 @@ def test_an_admin_sees_totals_across_every_book(browse, stack, viewport):
     v = browse(stack.admin)
     page = v.go("/insights")
     expect(page.get_by_role("heading", name="All portfolios")).to_be_visible()
-    expect(page.get_by_text("Sums only. Admins never see anyone's holdings.")).to_be_visible()
+    # With fewer than three other owners the sums are held back and the card
+    # says so. Other journeys open portfolios, so which one shows depends on
+    # the order: either is right, zeros never are.
+    totals = page.locator("section", has=page.get_by_role("heading", name="All portfolios"))
+    held = "Totals appear once three or more traders have live money."
+    shown = "Sums only. Admins never see anyone's holdings."
+    expect(totals.get_by_text(held).or_(totals.get_by_text(shown))).to_be_visible()
+    expect(totals).not_to_contain_text("$0.00")
     v.check_page("insights-admin")

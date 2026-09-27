@@ -10,7 +10,8 @@ import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
 import { nextRequest, tick } from '../../../testing/http';
 import { makeDraft } from '../../../testing/studio-fixtures';
-import { DraftTest, costsFor, parseTickers } from './draft-test';
+import { defaultWindow } from '../lab/lab-requests';
+import { DraftTest } from './draft-test';
 
 const PRESETS: CostModelPreset[] = [
   { name: 'zero', description: 'No costs.', settings: {} },
@@ -82,22 +83,6 @@ function finishedHandle(jobId: string, status: 'succeeded' | 'failed' = 'succeed
   };
 }
 
-describe('draft test helpers', () => {
-  it('turns a cost preset into slippage and a flat fee for the asset class', () => {
-    expect(costsFor(PRESETS[1], 'equity')).toEqual({ slippage_bps: 3, fee_per_trade: 0 });
-    expect(costsFor(PRESETS[1], 'crypto')).toEqual({ slippage_bps: 15, fee_per_trade: 0 });
-    expect(costsFor(undefined, 'equity')).toEqual({ slippage_bps: 0, fee_per_trade: 0 });
-  });
-
-  it('parses tickers typed with commas or spaces', () => {
-    expect(parseTickers(' aapl.us, msft.us  AAPL.US;nvda.us')).toEqual([
-      'AAPL.US',
-      'MSFT.US',
-      'NVDA.US',
-    ]);
-  });
-});
-
 const labAllowed = signal(true);
 
 describe('DraftTest', () => {
@@ -132,6 +117,10 @@ describe('DraftTest', () => {
     fixture.detectChanges();
     el = fixture.nativeElement;
     (await nextRequest(controller, '/api/lab/cost-models')).flush(PRESETS);
+    (await nextRequest(controller, '/api/lab/survival-presets')).flush([
+      { name: 'quick', tests: ['oos', 'period_stability'], options: {} },
+      { name: 'promotion', tests: ['oos', 'walk_forward', 'mcpt'], options: {} },
+    ]);
     (await nextRequest(controller, '/api/market/instruments')).flush({
       items: [],
       total: 0,
@@ -184,8 +173,7 @@ describe('DraftTest', () => {
       interval: '1d',
       initial_cash: 10000,
       rebalance_every_bars: 1,
-      slippage_bps: 3,
-      fee_per_trade: 0,
+      cost_model: 'realistic',
     });
     req.flush({ ...job('job_bt', null), status: 'queued', progress: 0 });
     (await nextRequest(controller, '/api/jobs/job_bt')).flush(job('job_bt', RESULT));
@@ -201,6 +189,76 @@ describe('DraftTest', () => {
     expect(series.map((s) => s.id)).toEqual(['equity', 'drawdown']);
     expect(series[0].points[0]).toEqual({ time: '2026-01-02', value: 10_000 });
     expect(series[1].points[2].value).toBeCloseTo(-0.1);
+  });
+
+  it('default request carries non-zero costs (UX-06)', async () => {
+    const select = el.querySelector('#t-cost') as HTMLSelectElement;
+    expect(select.selectedOptions[0].textContent?.trim()).toBe('Default costs');
+    expect(el.textContent).toContain('The fees and slippage your admin set up for backtests.');
+
+    buttonNamed('Run backtest').click();
+    const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/backtests', 'POST');
+    const body = req.request.body as Record<string, unknown>;
+    // "Default costs" sends no cost fields: the server charges the configured costs.
+    expect(body['cost_model']).toBeUndefined();
+    expect(body['slippage_bps']).toBeUndefined();
+    expect(body['fee_per_trade']).toBeUndefined();
+    expect(body['start']).toBe(defaultWindow().start);
+    expect(body['end']).toBe(defaultWindow().end);
+    req.flush({ ...job('job_bt', null), status: 'queued', progress: 0 });
+    (await nextRequest(controller, '/api/jobs/job_bt')).flush(job('job_bt', RESULT));
+    await settle();
+  });
+
+  it('sends flat slippage and fee only when picked', async () => {
+    set('#t-cost', 'flat');
+    set('#t-slippage', '7', 'input');
+    set('#t-fee', '1', 'input');
+    buttonNamed('Run backtest').click();
+    const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/backtests', 'POST');
+    expect(req.request.body).toMatchObject({ slippage_bps: 7, fee_per_trade: 1 });
+    expect((req.request.body as Record<string, unknown>)['cost_model']).toBeUndefined();
+    req.flush({ ...job('job_bt', null), status: 'queued', progress: 0 });
+    (await nextRequest(controller, '/api/jobs/job_bt')).flush(job('job_bt', RESULT));
+    await settle();
+  });
+
+  it('draft-test lists the presets and sends preset: promotion (UX-21)', async () => {
+    const suites = [...el.querySelectorAll<HTMLInputElement>('input[name="t-suite"]')];
+    expect(suites.map((r) => r.value)).toEqual(['quick', 'standard', 'promotion', 'custom']);
+    const labels = [...el.querySelectorAll('.suite-name')].map((n) => n.textContent?.trim());
+    expect(labels).toContain('Go-live');
+    // The legacy alias of the permutation test is never offered.
+    expect(el.textContent).not.toContain('permutation (legacy)');
+
+    suites[2].click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Monte Carlo permutation');
+    buttonNamed('Run lab').click();
+    const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/lab-runs', 'POST');
+    const body = req.request.body as Record<string, unknown>;
+    expect(body['preset']).toBe('promotion');
+    expect(body['survival_tests']).toBeUndefined();
+    req.flush({ ...job('job_lab', null), status: 'queued', progress: 0 });
+    (await nextRequest(controller, '/api/jobs/job_lab')).flush(job('job_lab', LAB));
+    await settle();
+  });
+
+  it('sends picked tests for a custom suite, without the legacy alias', async () => {
+    const custom = el.querySelector<HTMLInputElement>('input[name="t-suite"][value="custom"]')!;
+    custom.click();
+    fixture.detectChanges();
+    const boxes = [...el.querySelectorAll<HTMLInputElement>('.test-options input[type=checkbox]')];
+    expect(boxes.length).toBeGreaterThan(10);
+    // Starts from the suite in view (quick): out of sample and period stability.
+    expect(boxes.filter((b) => b.checked)).toHaveLength(2);
+    buttonNamed('Run lab').click();
+    const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/lab-runs', 'POST');
+    expect(req.request.body).toMatchObject({ survival_tests: ['oos', 'period_stability'] });
+    expect((req.request.body as Record<string, unknown>)['preset']).toBeUndefined();
+    req.flush({ ...job('job_lab', null), status: 'queued', progress: 0 });
+    (await nextRequest(controller, '/api/jobs/job_lab')).flush(job('job_lab', LAB));
+    await settle();
   });
 
   it('refuses to run without tickers or with an inverted window', async () => {
@@ -219,7 +277,7 @@ describe('DraftTest', () => {
     expect(req.request.body).toMatchObject({
       universe: ['AAPL.US'],
       objective: 'sharpe',
-      survival_tests: ['oos', 'period_stability'],
+      preset: 'quick',
     });
     req.flush({ ...job('job_lab', null), status: 'queued', progress: 0 });
     (await nextRequest(controller, '/api/jobs/job_lab')).flush(job('job_lab', LAB));
@@ -231,7 +289,7 @@ describe('DraftTest', () => {
     const pills = [...el.querySelectorAll('app-lab-run-result .test app-status-pill')].map((p) =>
       p.textContent?.trim(),
     );
-    expect(pills).toEqual(['pass', 'fail']);
+    expect(pills).toEqual(['Passed', 'Failed']);
     expect(text).toContain('Out of sample');
     expect(text).toContain('Unstable');
   });

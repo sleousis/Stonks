@@ -1,17 +1,8 @@
-import type { SubscriptionMode, SubscriptionView } from '../../api/subscriptions.service';
+import type { SubscriptionView } from '../../api/subscriptions.service';
 
-export interface ModeOption {
-  value: SubscriptionMode;
-  label: string;
-  /** One line under the switch when this mode is on. */
-  help: string;
-}
+import { toTraderWords } from '../../shared/governance-labels';
 
-export const MODES: readonly ModeOption[] = [
-  { value: 'notify', label: 'Notify', help: 'You get the signals. Nothing is traded.' },
-  { value: 'paper', label: 'Paper', help: 'Trades on paper with pretend money.' },
-  { value: 'auto', label: 'Auto', help: 'Places real orders with your broker.' },
-];
+export { MODES, type ModeOption } from '../../shared/governance-labels';
 
 /**
  * Why auto is off limits for this subscription, in plain words, or null
@@ -29,7 +20,7 @@ export function autoBlockedReason(sub: SubscriptionView): string | null {
   }
   for (const blocker of sub.auto_blockers) {
     if (/paper trading day/i.test(blocker)) continue;
-    reasons.push(sentence(blocker));
+    reasons.push(sentence(toTraderWords(blocker)));
   }
   return reasons.length ? reasons.join(' ') : null;
 }

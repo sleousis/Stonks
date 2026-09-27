@@ -396,8 +396,10 @@ CI enforces each gate at today's value where it is still below the target, so it
 | Property tests (Hypothesis) | every money-path invariant | orders, ledger, fills, costs, risk rules, price adjustment | `tests/property/`, derandomized in CI (`HYPOTHESIS_PROFILE=deep` for 5000 examples) |
 | Surviving mutants on the money paths | under 10% | 19.8% over six targets (the risk rules still to run in full) | `tools/mutation.py`, weekly and manual (`.github/workflows/mutation.yml`) |
 | Ruff | no ignore without a comment | met | `[tool.ruff.lint]`, every ignore says why |
-| End to end, desktop and 375px phone | every journey passes | 26 passed (13 per viewport), 0 xfail, no known app issue | `uv run pytest -m e2e tests/e2e`, `.github/workflows/e2e.yml` |
+| End to end, desktop and 375px phone | every journey passes | 40 passed (20 per viewport), 2 skipped (no known axe issue to recheck), 0 xfail | `uv run pytest -m e2e tests/e2e`, `.github/workflows/e2e.yml` |
 | axe violations | 0 | 0 on every page, both viewports, admin and trader | `test_accessibility.py`, `KNOWN_AXE` is empty |
+| Lighthouse mobile, main pages (18.6) | 95+ performance, accessibility, best practices | Today 98/100/100, Strategies 99/100/100, Insights 98/100/100, Orders 98/100/100, Trade costs 98/100/100, Chart 99/100/100 (HTTPS, HTTP/2 and compression as in production; 91 to 96 performance over plain HTTP/1.1) | measured by hand, see docs/ui.md "Lighthouse budget" |
+| Console copy | trader words only | no tick, ingest, shadow, promote, register or retire in trader prose | `npm run lint` runs `scripts/check-copy.mjs` |
 
 First mutation run per target (cosmic-ray, mutants inside type annotations skipped as equivalent):
 

@@ -22,7 +22,8 @@ import { PermissionNote } from '../../shared/ui/permission-note';
 import { SideTag } from '../../shared/ui/side-tag';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { formatBps, humanize, portfolioLive, portfolioName, triggerLabel } from './trades-format';
+import { humanize } from '../../shared/ui/param-form/param-spec';
+import { formatBps, portfolioLive, portfolioName, triggerLabel } from './trades-format';
 
 const NOTE_MAX = 4000;
 

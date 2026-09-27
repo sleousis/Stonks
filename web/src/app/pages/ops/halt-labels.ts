@@ -1,4 +1,5 @@
 import type { HaltView } from '../../api/models';
+import { killStopsText } from '../../core/halts/kill-ticket';
 
 export const HALT_KIND_LABEL: Record<HaltView['kind'], string> = {
   kill: 'Kill switch',
@@ -8,9 +9,10 @@ export const HALT_KIND_LABEL: Record<HaltView['kind'], string> = {
   operational: 'Operational',
 };
 
+/** "Stops: New buys", never "Buys only", which reads as "only buys allowed" (UX-66). */
 export const HALT_STOPS_LABEL: Record<HaltView['halt'], string> = {
-  all: 'All orders',
-  buys: 'Buys only',
+  all: killStopsText(false),
+  buys: killStopsText(true),
 };
 
 /** What ends a halt of this kind, for the action column. */

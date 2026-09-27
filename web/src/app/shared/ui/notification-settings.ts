@@ -14,7 +14,7 @@ import { StatusPill } from './status-pill';
   template: `
     <section class="panel" aria-labelledby="notify-title">
       <div class="panel-head">
-        <h2 id="notify-title">Notifications</h2>
+        <h3 id="notify-title">Notifications</h3>
         <app-status-pill [status]="pill().status" [tone]="pill().tone" [label]="pill().label" />
       </div>
       <div class="panel-body">

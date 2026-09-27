@@ -59,7 +59,7 @@ function paramText(v: unknown): string {
 
     @if (r.registered_strategy_id; as id) {
       <p class="registered">
-        Registered in shadow as
+        Started paper trading as
         <a class="num" [routerLink]="['/strategies', id]">{{ id }}</a
         >.
       </p>

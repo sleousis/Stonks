@@ -16,13 +16,16 @@ import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-tab
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { STATUS_FILTERS, asStatus, strategyKindName } from './strategy-format';
+import { STATUS_WORDS } from '../../shared/governance-labels';
+import { STATUS_FILTERS, asStatus, strategyDisplayName, strategyKindName } from './strategy-format';
 
 /** Enough for any realistic registry; search and paging then run in the browser. */
 const FETCH_LIMIT = 500;
 
 /** A registry row with its paper performance, when it has a paper book. */
 export interface StrategyRow extends StrategySummary {
+  /** The name to show (UX-27). */
+  name: string;
   kind: string;
   paper_return: number | null;
   max_drawdown: number | null;
@@ -39,6 +42,7 @@ export function withPerformance(
     const p = byId.get(s.id);
     return {
       ...s,
+      name: strategyDisplayName(s.id),
       kind: strategyKindName(s.class_path),
       paper_return: p?.cumulative_return ?? null,
       max_drawdown: p?.max_drawdown ?? null,
@@ -106,6 +110,7 @@ export class StrategiesPage {
     return items.filter(
       (s) =>
         s.id.toLowerCase().includes(q) ||
+        s.name.toLowerCase().includes(q) ||
         s.kind.toLowerCase().includes(q) ||
         s.class_path.toLowerCase().includes(q) ||
         s.applicable_asset_classes.some((a) => a.toLowerCase().includes(q)),
@@ -121,7 +126,7 @@ export class StrategiesPage {
   });
 
   protected readonly columns: TableColumn<StrategyRow>[] = [
-    { key: 'id', label: 'Strategy', mobile: 'title' },
+    { key: 'id', label: 'Strategy', mobile: 'title', value: (s) => s.name },
     { key: 'status', label: 'Status' },
     { key: 'paper_return', label: 'Paper return', format: 'signedPercent', tone: true },
     { key: 'max_drawdown', label: 'Max drawdown', format: 'percent' },
@@ -133,9 +138,15 @@ export class StrategiesPage {
       value: (s) => s.applicable_asset_classes.join(', '),
       mobile: 'hide',
     },
-    { key: 'created_at', label: 'Registered', format: 'date', mobile: 'hide' },
+    { key: 'created_at', label: 'Added', format: 'date', mobile: 'hide' },
   ];
   protected readonly strategyKey = (s: StrategyRow) => s.id;
+
+  /** "live", "paper trading" or "stopped", for the empty filter message. */
+  protected readonly filterWord = computed(() => {
+    const status = this.statusFilter();
+    return status ? STATUS_WORDS[status].toLowerCase() : '';
+  });
 
   protected setStatus(value: StrategyStatus | null): void {
     this.statusFilter.set(value);

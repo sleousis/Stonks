@@ -21,7 +21,7 @@ import { PricePanel } from './price-panel';
 const FALLBACK_INTERVALS = [{ code: '1d', is_intraday: false, seconds: 86_400 }];
 
 /**
- * The price data we hold and how fresh it is, plus ingest. The page owns the
+ * The price data we hold and how fresh it is, plus data updates. The page owns the
  * selected ticker and interval; each panel owns its own resource so one
  * failing route never blanks the rest.
  */
@@ -39,7 +39,7 @@ export class DataPage {
   readonly instrument = input<string | undefined>();
   protected readonly ticker = linkedSignal<string | null>(() => this.instrument() ?? null);
   protected readonly interval = signal('1d');
-  /** Bumped after an ingest or on Refresh; panels refetch when it changes. */
+  /** Bumped after a data update or on Refresh; panels refetch when it changes. */
   protected readonly refreshKey = signal(0);
 
   private readonly search = viewChild(InstrumentSearch);

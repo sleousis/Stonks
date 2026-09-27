@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
+import { STATUS_WORDS } from '../governance-labels';
 import { BrandMark } from './brand-mark';
 
 export type PillTone = 'positive' | 'negative' | 'info' | 'progress' | 'warn' | 'neutral';
@@ -71,6 +72,19 @@ const FORMS: Record<string, PillForm> = {
   tripped: 'alarm',
 };
 
+/**
+ * Trader words for statuses that would otherwise show a system key: a
+ * strategy's lifecycle (UX-09) and a finished check's outcome.
+ */
+export const PILL_WORDS: Readonly<Record<string, string>> = {
+  ...STATUS_WORDS,
+  draft: 'Draft',
+  pass: 'Passed',
+  passed: 'Passed',
+  fail: 'Failed',
+  failed: 'Failed',
+};
+
 /** The form for a status; outcomes (passed, filled, failed...) are receipts. */
 export function pillForm(status: string | null | undefined, tone: PillTone): PillForm {
   const key = (status ?? '').toLowerCase();
@@ -82,7 +96,7 @@ export function pillForm(status: string | null | undefined, tone: PillTone): Pil
 /**
  * Status as text plus a shape, so it never relies on colour alone.
  *
- *   <app-status-pill [status]="s.status" />          active / shadow / retired
+ *   <app-status-pill [status]="s.status" />   Live / Paper trading / Stopped
  *   <app-status-pill [status]="r.passed ? 'pass' : 'fail'" />
  */
 @Component({
@@ -233,5 +247,8 @@ export class StatusPill {
   protected readonly resolvedForm = computed<PillForm>(
     () => this.form() ?? pillForm(this.status(), this.resolvedTone()),
   );
-  protected readonly text = computed(() => this.label() ?? this.status() ?? 'unknown');
+  protected readonly text = computed(() => {
+    const status = this.status();
+    return this.label() ?? PILL_WORDS[(status ?? '').toLowerCase()] ?? status ?? 'unknown';
+  });
 }

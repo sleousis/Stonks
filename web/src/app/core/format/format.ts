@@ -187,6 +187,11 @@ export function formatWeekday(value: string | null | undefined): string {
   return dateFormat(locale, { weekday: 'short', timeZone }).format(d);
 }
 
+/** A day as YYYY-MM-DD in the preferred zone (for date inputs): today by default. */
+export function isoDay(d: Date = new Date()): string {
+  return isoDate(d, activeFormat().timeZone);
+}
+
 function isoDate(d: Date, timeZone: string): string {
   // en-CA formats dates as YYYY-MM-DD.
   return dateFormat('en-CA', {

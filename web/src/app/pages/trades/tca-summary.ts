@@ -12,13 +12,14 @@ import { TcaService } from '../../api/tca.service';
 import { formatMoney, formatNumber, formatPercent } from '../../core/format/format';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { DataTable, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { bps1, formatBps, portfolioName } from './trades-format';
 
 export type Grouping = 'strategy' | 'ticker' | 'portfolio';
 
-const GROUPINGS: readonly { value: Grouping; label: string }[] = [
+const GROUPINGS: readonly SegmentOption<Grouping>[] = [
   { value: 'strategy', label: 'By strategy' },
   { value: 'ticker', label: 'By ticker' },
   { value: 'portfolio', label: 'By portfolio' },
@@ -38,7 +39,7 @@ const KEY_LABELS: Record<Grouping, string> = {
 @Component({
   selector: 'app-tca-summary',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DataTable, StatTile, EmptyState, ErrorState, LoadingState],
+  imports: [DataTable, Segmented, StatTile, EmptyState, ErrorState, LoadingState],
   styleUrl: './trades.scss',
   template: `
     <section class="panel" aria-labelledby="costs-title">
@@ -101,51 +102,39 @@ const KEY_LABELS: Record<Grouping, string> = {
       }
     </section>
 
-    <section class="panel breakdown" aria-labelledby="breakdown-title">
-      <div class="panel-head">
-        <h2 id="breakdown-title">Breakdown</h2>
-        <fieldset class="segmented">
-          <legend class="visually-hidden">Group costs</legend>
-          @for (g of groupings; track g.value) {
-            <label class="segment" [class.selected]="grouping() === g.value">
-              <input
-                type="radio"
-                name="tca-grouping"
-                class="visually-hidden"
-                [value]="g.value"
-                [checked]="grouping() === g.value"
-                (change)="grouping.set(g.value)"
-              />
-              {{ g.label }}
-            </label>
-          }
-        </fieldset>
-      </div>
+    <!-- With no trades yet the totals already say so: no second empty panel. -->
+    @if (!noTrades()) {
+      <section class="panel breakdown" aria-labelledby="breakdown-title">
+        <div class="panel-head">
+          <h2 id="breakdown-title">Breakdown</h2>
+          <app-segmented label="Group costs" [options]="groupings" [(value)]="grouping" />
+        </div>
 
-      @if (breakdown.error(); as err) {
-        <app-error-state
-          title="Could not load the breakdown"
-          [error]="err"
-          (retry)="breakdown.reload()"
-        />
-      } @else if (!breakdown.hasValue()) {
-        <app-loading-state label="Loading the breakdown" [rows]="4" />
-      } @else if (breakdown.value().groups.length === 0) {
-        <app-empty-state
-          title="No trades yet"
-          message="Costs appear after the first filled order."
-        />
-      } @else {
-        @let rows = breakdown.value().groups;
-        <app-data-table
-          [caption]="'Trade costs ' + groupingLabel().toLowerCase()"
-          [rows]="rows"
-          [columns]="columns()"
-          [rowKey]="rowKey"
-          [initialSort]="{ key: 'is_cost', dir: 'desc' }"
-        />
-      }
-    </section>
+        @if (breakdown.error(); as err) {
+          <app-error-state
+            title="Could not load the breakdown"
+            [error]="err"
+            (retry)="breakdown.reload()"
+          />
+        } @else if (!breakdown.hasValue()) {
+          <app-loading-state label="Loading the breakdown" [rows]="4" />
+        } @else if (breakdown.value().groups.length === 0) {
+          <app-empty-state
+            title="No trades yet"
+            message="Costs appear after the first filled order."
+          />
+        } @else {
+          @let rows = breakdown.value().groups;
+          <app-data-table
+            [caption]="'Trade costs ' + groupingLabel().toLowerCase()"
+            [rows]="rows"
+            [columns]="columns()"
+            [rowKey]="rowKey"
+            [initialSort]="{ key: 'is_cost', dir: 'desc' }"
+          />
+        }
+      </section>
+    }
   `,
   styles: `
     .breakdown {
@@ -176,6 +165,11 @@ export class TcaSummary {
     const g = this.totals.value().groups[0];
     return g && g.orders > 0 ? g : null;
   });
+
+  /** The totals loaded and hold no order: nothing to break down. */
+  protected readonly noTrades = computed(
+    () => this.totals.hasValue() && !this.totals.error() && this.headline() === null,
+  );
 
   protected readonly groupingLabel = computed(
     () => GROUPINGS.find((g) => g.value === this.grouping())?.label ?? '',

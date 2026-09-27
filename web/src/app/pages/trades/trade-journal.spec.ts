@@ -56,6 +56,37 @@ describe('TradeJournal', () => {
     expect(el.textContent).not.toContain('momentum-v3:AAPL');
   });
 
+  it('keeps the rows, dimmed, and focus on Next while the next page loads (UX-35)', async () => {
+    const rows = (offset: number) =>
+      Array.from({ length: 25 }, (_, i) =>
+        entry({ client_id: `c${offset + i}`, ticker: `T${offset + i}.US` }),
+      );
+    (await nextRequest(controller, '/api/tca/journal')).flush({
+      items: rows(0),
+      total: 60,
+      limit: 25,
+      offset: 0,
+    });
+    await settle();
+    const next = [...el.querySelectorAll<HTMLButtonElement>('.pager button')].find(
+      (b) => b.textContent?.trim() === 'Next',
+    )!;
+    next.focus();
+    next.click();
+    fixture.detectChanges();
+    const req = await nextRequest(controller, '/api/tca/journal');
+    expect(req.request.urlWithParams).toContain('offset=25');
+    fixture.detectChanges();
+    expect(el.querySelectorAll('tbody tr').length).toBe(25);
+    expect(el.querySelector('app-loading-state')).toBeNull();
+    expect(el.querySelector('.table-wrap')?.getAttribute('aria-busy')).toBe('true');
+    expect(document.activeElement).toBe(next);
+    req.flush({ items: rows(25), total: 60, limit: 25, offset: 25 });
+    await settle();
+    expect(el.querySelector('tbody tr')?.textContent).toContain('T25.US');
+    expect(document.activeElement).toBe(next);
+  });
+
   it('shows a calm empty state', async () => {
     (await nextRequest(controller, '/api/tca/journal')).flush({
       items: [],

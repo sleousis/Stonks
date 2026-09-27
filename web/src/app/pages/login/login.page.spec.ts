@@ -1,10 +1,14 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import type { WritableSignal } from '@angular/core';
 import { Router, provideRouter } from '@angular/router';
+import { SwPush } from '@angular/service-worker';
+import { of } from 'rxjs';
 
 import { provideApi } from '../../api/provide-api';
 import { AuthTokenService } from '../../core/auth/auth-token.service';
 import { DEVICE_INFO, NOTIFICATION_API } from '../../core/pwa/notification-permission.service';
+import { PUSH_SUBSCRIPTION_API } from '../../core/pwa/push-subscription-api';
 import { TRADER, UNAUTHORIZED, problem } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { LoginPage } from './login.page';
@@ -125,6 +129,17 @@ describe('LoginPage', () => {
     expect(heading(el)).toBe('Set up your authenticator');
     expect(el.querySelector('app-qr-code svg path')?.getAttribute('d')).toMatch(/^M/);
     expect(el.textContent).toContain('JBSW Y3DP EHPK 3PXP');
+    // UX-11: a phone cannot scan its own screen.
+    const link = el.querySelector<HTMLAnchorElement>('a.app-link')!;
+    expect(link.getAttribute('href')).toBe(
+      'otpauth://totp/Stonks:ann?secret=JBSWY3DPEHPK3PXP&issuer=Stonks',
+    );
+    expect(link.textContent?.trim()).toBe('Add to authenticator app');
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    el.querySelector<HTMLButtonElement>('app-copy-button button')!.click();
+    await settle();
+    expect(writeText).toHaveBeenCalledWith('JBSWY3DPEHPK3PXP');
 
     type(el, '#enrol-code', '123456');
     submit(el);
@@ -188,8 +203,7 @@ describe('LoginPage', () => {
 
   it('keeps token mode working: a valid API token signs in for this tab', async () => {
     const el = render();
-    [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('API token'))!.click();
-    fixture.detectChanges();
+    el.querySelector('details')!.open = true;
     type(el, '#login-token', 'stk_abc');
     el.querySelector<HTMLFormElement>('#token-form')!.dispatchEvent(new Event('submit'));
     const me = await nextRequest(controller, '/api/auth/me');
@@ -202,8 +216,7 @@ describe('LoginPage', () => {
 
   it('drops a token the API rejects', async () => {
     const el = render();
-    [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('API token'))!.click();
-    fixture.detectChanges();
+    el.querySelector('details')!.open = true;
     type(el, '#login-token', 'wrong');
     el.querySelector<HTMLFormElement>('#token-form')!.dispatchEvent(new Event('submit'));
     (await nextRequest(controller, '/api/auth/me')).flush(
@@ -213,5 +226,63 @@ describe('LoginPage', () => {
     await settle();
     expect(el.querySelector('[role="alert"]')?.textContent).toContain('token did not work');
     expect(TestBed.inject(AuthTokenService).token()).toBeNull();
+  });
+
+  it('keeps the API-token path folded under For scripts (UX-43)', () => {
+    const el = render();
+    const details = el.querySelector('details')!;
+    expect(details.querySelector('summary')?.textContent?.trim()).toBe('For scripts');
+    expect(details.open).toBe(false);
+  });
+
+  it('shows a wait, not the password form, on a reload mid sign-in (UX-70)', async () => {
+    const el = render({ step: 'code' });
+    expect(heading(el)).toBe('Signing in');
+    expect(el.querySelector('#login-password')).toBeNull();
+    (await nextRequest(controller, '/api/auth/mfa/enrol', 'POST')).flush(problem(409, 'x'), {
+      status: 409,
+      statusText: 'Conflict',
+    });
+    await settle();
+    expect(heading(el)).toBe('Enter your code');
+  });
+
+  it('with no VAPID key the push step stays and explains (UX-46)', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        ...provideApi(),
+        provideHttpClientTesting(),
+        {
+          provide: NOTIFICATION_API,
+          useValue: { permission: 'default', requestPermission: async () => 'granted' },
+        },
+        { provide: DEVICE_INFO, useValue: { ios: false, standalone: false, userAgent: 'test' } },
+        { provide: SwPush, useValue: { isEnabled: true, subscription: of(null) } },
+        {
+          provide: PUSH_SUBSCRIPTION_API,
+          useValue: { vapidPublicKey: async () => null, save: vi.fn(), remove: vi.fn() },
+        },
+      ],
+    });
+    controller = TestBed.inject(HttpTestingController);
+    navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    const el = render();
+    (fixture.componentInstance as unknown as { current: WritableSignal<string> }).current.set(
+      'push',
+    );
+    fixture.detectChanges();
+    [...el.querySelectorAll('button')]
+      .find((b) => b.textContent?.includes('Turn on alerts'))!
+      .click();
+    await settle();
+    await settle();
+    expect(heading(el)).toBe('Get alerts on this device?');
+    expect(el.textContent).toContain('This server cannot send alerts yet');
+    expect(navigate).not.toHaveBeenCalled();
+    [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Continue')!.click();
+    await settle();
+    expect(navigate).toHaveBeenCalledWith('/');
   });
 });

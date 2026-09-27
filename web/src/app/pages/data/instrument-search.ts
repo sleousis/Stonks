@@ -80,7 +80,7 @@ const DEBOUNCE_MS = 250;
           [message]="
             q() || assetClass()
               ? 'Try a shorter search or another asset class.'
-              : 'Instruments appear after a metadata or prices ingest adds them.'
+              : 'Instruments appear after a data update of company details or daily prices adds them.'
           "
         />
       } @else {

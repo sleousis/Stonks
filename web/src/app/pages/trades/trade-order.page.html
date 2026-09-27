@@ -24,9 +24,12 @@
       }
       <app-status-pill [status]="e.status" />
     </header>
-    <p class="ticket-id">
-      Order <span class="mono">{{ e.client_id }}</span>
-    </p>
+    <details class="ticket-id">
+      <summary>Technical details</summary>
+      <p>
+        Order id <span class="mono">{{ e.client_id }}</span>
+      </p>
+    </details>
     @if (e.status_reason) {
       <p class="reason">{{ e.status_reason }}</p>
     }
