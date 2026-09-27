@@ -25,9 +25,14 @@ import { SideTag } from './side-tag';
         <form class="sheet-form" method="dialog" (submit)="$event.preventDefault(); answer(true)">
           <h2 id="confirm-title">{{ req.title }}</h2>
           @if (req.ticket; as t) {
-            <div class="ticket" [class.live]="t.live" aria-label="Order ticket" role="group">
+            <div
+              class="ticket"
+              [class.live]="t.live"
+              [attr.aria-label]="t.kind ?? 'Order ticket'"
+              role="group"
+            >
               <p class="ticket-head">
-                <span class="ticket-kind">Order ticket</span>
+                <span class="ticket-kind">{{ t.kind ?? 'Order ticket' }}</span>
                 @if (t.side) {
                   <app-side-tag [side]="t.side" />
                 }

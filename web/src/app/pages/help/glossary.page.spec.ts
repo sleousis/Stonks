@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, provideRouter } from '@angular/router';
 
-import { GLOSSARY, METRIC_KEYS } from '../../core/help/glossary';
+import { GLOSSARY, GLOSSARY_KEYS, METRIC_KEYS } from '../../core/help/glossary';
 import { GlossaryPage } from './glossary.page';
 
 describe('GlossaryPage', () => {
@@ -19,10 +19,19 @@ describe('GlossaryPage', () => {
 
   it('lists every glossary term with an anchor named after its key', () => {
     const { el } = render();
-    expect(el.querySelectorAll('.term').length).toBe(METRIC_KEYS.length);
+    expect(el.querySelectorAll('.term').length).toBe(GLOSSARY_KEYS.length);
     const sharpe = el.querySelector('#sharpe')!;
     expect(sharpe.textContent).toContain(GLOSSARY.sharpe.term);
     expect(sharpe.textContent).toContain(GLOSSARY.sharpe.short);
+  });
+
+  it('opens with the trading words, then the figures (UX-42)', () => {
+    const { el } = render();
+    const headings = [...el.querySelectorAll('section.group h2')].map((h) => h.textContent);
+    expect(headings).toEqual(['Trading words', 'Figures']);
+    const trading = el.querySelector('section.group')!;
+    expect(trading.querySelector('#kill_switch')!.textContent).toContain('Kill switch');
+    expect(trading.querySelector('#dry_run')).not.toBeNull();
   });
 
   it('filters by a word in the term or its explanation', () => {

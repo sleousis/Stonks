@@ -80,6 +80,15 @@ export class HaltStateService {
   }
 
   /**
+   * Show a halt the user just turned on at once (the strip turns red before
+   * the next read), and drop any read already in flight, which predates it.
+   */
+  add(halt: HaltView): void {
+    this.sequence++;
+    this.halts.update((list) => [...list.filter((h) => h.id !== halt.id), halt]);
+  }
+
+  /**
    * Re-read active halts. A failed read keeps the last known state, and an
    * answer that arrives after a newer read started is dropped, so a slow
    * old read never brings back a kill switch that was just resumed.

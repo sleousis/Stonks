@@ -11,6 +11,8 @@ export interface TicketLine {
  * the lines in tabular mono, the side mark and PAPER or LIVE.
  */
 export interface ConfirmTicket {
+  /** The ticket's heading, "Order ticket" by default ("Kill switch"). */
+  kind?: string;
   lines: readonly TicketLine[];
   /** `buy` or `sell`, shown with <app-side-tag>. */
   side?: string;

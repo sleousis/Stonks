@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 
-import { GLOSSARY, METRIC_KEYS } from '../../core/help/glossary';
+import { GLOSSARY, GLOSSARY_GROUPS } from '../../core/help/glossary';
 import { PageHeader } from '../../shared/ui/page-header';
 
 /**
@@ -25,7 +25,7 @@ import { PageHeader } from '../../shared/ui/page-header';
   template: `
     <app-page-header
       title="Glossary"
-      description="What each figure in the console means, in plain words."
+      description="What each trading word and figure in the console means, in plain words."
     />
 
     <div class="field search">
@@ -47,17 +47,24 @@ import { PageHeader } from '../../shared/ui/page-header';
     @if (entries().length === 0) {
       <p class="empty">No term matches "{{ query() }}". Try a shorter word.</p>
     } @else {
-      <dl #list class="terms">
-        @for (e of entries(); track e.key) {
-          <div class="term" [id]="e.key" tabindex="-1" [class.target]="e.key === target()">
-            <dt>{{ e.term }}</dt>
-            <dd>{{ e.short }}</dd>
-            @if (e.aliases.length) {
-              <dd class="aliases muted">Also shown as {{ e.aliases.join(', ') }}</dd>
-            }
-          </div>
+      <div #list>
+        @for (g of groups(); track g.title) {
+          <section class="group" [attr.aria-labelledby]="'glossary-' + $index">
+            <h2 [id]="'glossary-' + $index">{{ g.title }}</h2>
+            <dl class="terms">
+              @for (e of g.entries; track e.key) {
+                <div class="term" [id]="e.key" tabindex="-1" [class.target]="e.key === target()">
+                  <dt>{{ e.term }}</dt>
+                  <dd>{{ e.short }}</dd>
+                  @if (e.aliases.length) {
+                    <dd class="aliases muted">Also shown as {{ e.aliases.join(', ') }}</dd>
+                  }
+                </div>
+              }
+            </dl>
+          </section>
         }
-      </dl>
+      </div>
     }
   `,
   styles: `
@@ -67,6 +74,13 @@ import { PageHeader } from '../../shared/ui/page-header';
     .count {
       margin: var(--space-2) 0 var(--space-4);
       font-size: var(--text-sm);
+    }
+    .group + .group {
+      margin-top: var(--space-6);
+    }
+    .group h2 {
+      margin-bottom: var(--space-3);
+      font-size: var(--text-lg);
     }
     .terms {
       display: grid;
@@ -104,22 +118,33 @@ export class GlossaryPage {
   protected readonly query = signal('');
   protected readonly target = signal<string | null>(this.route.snapshot.fragment);
 
-  private readonly all = [...METRIC_KEYS]
-    .map((key) => ({
-      key,
-      term: GLOSSARY[key].term,
-      short: GLOSSARY[key].short,
-      aliases: (GLOSSARY[key].aliases ?? []).filter((a) => /\s|[A-Z]/.test(a)),
-    }))
-    .sort((a, b) => a.term.localeCompare(b.term));
+  private readonly all = GLOSSARY_GROUPS.map((g) => ({
+    title: g.title,
+    entries: [...g.keys]
+      .map((key) => ({
+        key,
+        term: GLOSSARY[key].term,
+        short: GLOSSARY[key].short,
+        aliases: (GLOSSARY[key].aliases ?? []).filter((a) => /\s|[A-Z]/.test(a)),
+      }))
+      .sort((a, b) => a.term.localeCompare(b.term)),
+  }));
 
-  protected readonly entries = computed(() => {
+  /** The sections with the terms that match the filter; empty sections drop out. */
+  protected readonly groups = computed(() => {
     const q = this.query().trim().toLowerCase();
     if (!q) return this.all;
-    return this.all.filter((e) =>
-      [e.term, e.short, ...e.aliases].some((t) => t.toLowerCase().includes(q)),
-    );
+    return this.all
+      .map((g) => ({
+        title: g.title,
+        entries: g.entries.filter((e) =>
+          [e.term, e.short, ...e.aliases].some((t) => t.toLowerCase().includes(q)),
+        ),
+      }))
+      .filter((g) => g.entries.length > 0);
   });
+
+  protected readonly entries = computed(() => this.groups().flatMap((g) => g.entries));
 
   constructor() {
     // Bring the linked term into view and focus it, so keyboard and screen

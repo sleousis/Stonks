@@ -1,4 +1,4 @@
-import { GLOSSARY, METRIC_KEYS, findGlossary, glossaryUrl } from './glossary';
+import { GLOSSARY, GLOSSARY_KEYS, findGlossary, glossaryUrl } from './glossary';
 
 /**
  * Every metric label a shared tile, table column or survival-test row shows
@@ -117,7 +117,7 @@ const REQUIRED = [
 
 describe('glossary', () => {
   it('has a plain one-line entry for every metric key', () => {
-    for (const key of METRIC_KEYS) {
+    for (const key of GLOSSARY_KEYS) {
       const entry = GLOSSARY[key];
       expect(entry, key).toBeDefined();
       expect(entry.term.length, key).toBeGreaterThan(0);
@@ -140,7 +140,7 @@ describe('glossary', () => {
 
   it('never maps one name to two entries', () => {
     const seen = new Map<string, string>();
-    for (const key of METRIC_KEYS) {
+    for (const key of GLOSSARY_KEYS) {
       const e = GLOSSARY[key];
       for (const name of [key, e.term, ...(e.aliases ?? [])]) {
         const norm = name.toLowerCase().replace(/[^a-z0-9%]+/g, '');
@@ -159,6 +159,35 @@ describe('glossary', () => {
     expect(findGlossary('Ticker')).toBeNull();
     expect(findGlossary('')).toBeNull();
     expect(findGlossary(null)).toBeNull();
+  });
+
+  it("explains the trader's first-hour words (UX-42)", () => {
+    for (const word of [
+      'Dry run',
+      'Auto',
+      'Kill switch',
+      'Paper trading',
+      'Shadow',
+      'Live',
+      'Signals only',
+      'Notify',
+      'Stop new buys only',
+      'Buys only',
+      'Circuit breaker',
+      'Trading run',
+      'Tick',
+      'Fill',
+      'Universe',
+      'Recovery code',
+    ]) {
+      expect(findGlossary(word), word).not.toBeNull();
+    }
+    expect(findGlossary('Dry run')!.key).toBe('dry_run');
+    expect(findGlossary('Auto')!.key).toBe('auto');
+    expect(findGlossary('Kill switch')!.key).toBe('kill_switch');
+    // The system's name is given too, so operators and traders meet in the middle.
+    expect(findGlossary('Trading run')!.entry.short).toContain('Also called a tick');
+    expect(findGlossary('Paper trading')!.entry.short).toContain('Also called shadow');
   });
 
   it('links to the in-app glossary, never an outside wiki (UI-13)', () => {
