@@ -44,7 +44,9 @@ describe('OneTimeSecret', () => {
     fixture.detectChanges();
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
-    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
     const buttons = [...fixture.nativeElement.querySelectorAll('button')] as HTMLButtonElement[];
     buttons.find((b) => b.textContent?.includes('Download .txt'))!.click();
     expect(create).toHaveBeenCalled();

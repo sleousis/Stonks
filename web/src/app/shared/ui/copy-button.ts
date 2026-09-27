@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 
 /** Put text on the clipboard. False when the browser blocks it (plain http, policy). */
 export async function copyText(text: string): Promise<boolean> {
@@ -29,15 +36,13 @@ export function downloadText(filename: string, text: string): void {
   selector: 'app-copy-button',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <button
-      type="button"
-      class="btn"
-      [attr.aria-label]="label() ? 'Copy ' + label() : null"
-      (click)="copy()"
-    >
-      {{ copied() ? 'Copied' : 'Copy' }}
+    <button type="button" class="btn" (click)="copy()">
+      {{ copied() ? 'Copied' : 'Copy'
+      }}<span class="visually-hidden">{{ label() ? ' ' + label() : '' }}</span>
     </button>
-    <span class="visually-hidden" role="status">{{ copied() ? (label() || 'Text') + ' copied' : '' }}</span>
+    <span class="visually-hidden" role="status">{{
+      copied() ? (label() || 'Text') + ' copied' : ''
+    }}</span>
     @if (blocked()) {
       <span class="blocked" role="alert">{{ blockedText() }}</span>
     }

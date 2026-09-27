@@ -42,9 +42,7 @@ describe('toApiError', () => {
     const body = { title: 'Unauthorized', status: 401, detail: 'missing or invalid bearer token' };
     const err = toApiError(body, new HttpErrorResponse({ status: 401, error: body }));
     expect(err.isAuth).toBe(true);
-    expect(err.message).toBe(
-      'missing or invalid bearer token. Sign in again.',
-    );
+    expect(err.message).toBe('missing or invalid bearer token. Sign in again.');
   });
 
   it('reads the auth code at the start of the detail and says it plainly', () => {

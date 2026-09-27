@@ -12,7 +12,7 @@
 
     @switch (current()) {
       @case ('loading') {
-        <p class="lead" role="status">One moment�</p>
+        <p class="lead" role="status">One moment�</p>
       }
 
       @case ('password') {
@@ -237,20 +237,20 @@
           <p class="note" role="status">{{ problem }}</p>
           <button type="button" class="btn btn-primary wide" (click)="skipPush()">Continue</button>
         } @else {
-        <div class="choices">
-          @if (push.state() !== 'install-first') {
-            <button
-              type="button"
-              class="btn btn-primary wide"
-              [disabled]="push.busy()"
-              [attr.aria-busy]="push.busy()"
-              (click)="enablePush()"
-            >
-              {{ push.busy() ? 'Asking…' : 'Turn on alerts' }}
-            </button>
-          }
-          <button type="button" class="btn wide" (click)="skipPush()">Not now</button>
-        </div>
+          <div class="choices">
+            @if (push.state() !== 'install-first') {
+              <button
+                type="button"
+                class="btn btn-primary wide"
+                [disabled]="push.busy()"
+                [attr.aria-busy]="push.busy()"
+                (click)="enablePush()"
+              >
+                {{ push.busy() ? 'Asking…' : 'Turn on alerts' }}
+              </button>
+            }
+            <button type="button" class="btn wide" (click)="skipPush()">Not now</button>
+          </div>
         }
       }
     }

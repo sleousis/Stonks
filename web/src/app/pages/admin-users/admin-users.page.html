@@ -71,7 +71,9 @@
             data-form-type="other"
             [type]="showNewPassword() ? 'text' : 'password'"
             [attr.aria-invalid]="newPasswordInvalid()"
-            [attr.aria-describedby]="newPasswordInvalid() ? 'user-password-error' : 'user-password-hint'"
+            [attr.aria-describedby]="
+              newPasswordInvalid() ? 'user-password-error' : 'user-password-hint'
+            "
           />
           <button
             type="button"

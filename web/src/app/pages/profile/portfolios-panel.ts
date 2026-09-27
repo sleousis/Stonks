@@ -1,10 +1,4 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  computed,
-  inject,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 
 import { type PortfolioRef, PortfoliosService } from '../../api/portfolios.service';
 import { SessionService } from '../../core/auth/session.service';
