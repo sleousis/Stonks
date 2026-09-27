@@ -1,17 +1,6 @@
-import type { SubscriptionMode, SubscriptionView } from '../../api/subscriptions.service';
+import type { SubscriptionView } from '../../api/subscriptions.service';
 
-export interface ModeOption {
-  value: SubscriptionMode;
-  label: string;
-  /** One line under the switch when this mode is on. */
-  help: string;
-}
-
-export const MODES: readonly ModeOption[] = [
-  { value: 'notify', label: 'Notify', help: 'You get the signals. Nothing is traded.' },
-  { value: 'paper', label: 'Paper', help: 'Trades on paper with pretend money.' },
-  { value: 'auto', label: 'Auto', help: 'Places real orders with your broker.' },
-];
+export { MODES, type ModeOption } from '../../shared/governance-labels';
 
 /**
  * Why auto is off limits for this subscription, in plain words, or null
@@ -29,9 +18,14 @@ export function autoBlockedReason(sub: SubscriptionView): string | null {
   }
   for (const blocker of sub.auto_blockers) {
     if (/paper trading day/i.test(blocker)) continue;
-    reasons.push(sentence(blocker));
+    reasons.push(sentence(traderWords(blocker)));
   }
   return reasons.length ? reasons.join(' ') : null;
+}
+
+/** Server lines that name a status key, in the trader's words (UX-09). */
+function traderWords(text: string): string {
+  return text.replace(/\bnot active\b/gi, 'not live yet').replace(/\bshadow\b/gi, 'paper trading');
 }
 
 function sentence(text: string): string {

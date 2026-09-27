@@ -20,6 +20,10 @@ import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { modeLabel } from '../../shared/governance-labels';
+import { strategyDisplayName } from '../../shared/strategy-names';
+import { HelpTip } from '../../shared/ui/help-tip';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
@@ -27,19 +31,22 @@ import { MODES, autoBlockedReason } from './strategy-modes';
 
 interface Row {
   sub: SubscriptionView;
+  name: string;
+  modeLabel: string;
   autoReason: string | null;
   help: string;
 }
 
 /**
- * My strategies: an on/off switch and a mode switch (notify, paper, auto)
- * for each strategy the trader follows. Auto stays disabled with its reason
- * until the auto gate passes, and asks for a fresh code first.
+ * My strategies: an on/off switch and a mode switch (Signals only, Paper
+ * trading, Auto) for each strategy the trader follows. Auto stays disabled
+ * with its reason until the auto gate passes. Turning auto on, or switching
+ * an auto strategy back on, asks for a fresh code and an order ticket.
  */
 @Component({
   selector: 'app-strategies-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatusPill, LoadingState, EmptyState, ErrorState, PermissionNote],
+  imports: [RouterLink, StatusPill, HelpTip, LoadingState, EmptyState, ErrorState, PermissionNote],
   template: `
     <section class="panel" aria-labelledby="home-strategies">
       <div class="panel-head">
@@ -67,9 +74,7 @@ interface Row {
             <li>
               <div class="head">
                 <div class="name">
-                  <a [routerLink]="['/strategies', row.sub.strategy_id]">{{
-                    row.sub.strategy_id
-                  }}</a>
+                  <a [routerLink]="['/strategies', row.sub.strategy_id]">{{ row.name }}</a>
                   @if (row.sub.strategy_status !== 'active') {
                     <app-status-pill [status]="row.sub.strategy_status" />
                   }
@@ -79,8 +84,8 @@ interface Row {
                   role="switch"
                   class="switch"
                   [attr.aria-checked]="row.sub.enabled"
-                  [attr.aria-label]="'Follow ' + row.sub.strategy_id"
-                  [disabled]="busy() === row.sub.id || !canTrade()"
+                  [attr.aria-label]="'Follow ' + row.name"
+                  [disabled]="busy().has(row.sub.id) || !canTrade()"
                   (click)="toggle(row.sub)"
                 >
                   <span class="track" aria-hidden="true"><span class="thumb"></span></span>
@@ -89,7 +94,7 @@ interface Row {
               </div>
 
               <fieldset class="modes" [disabled]="!row.sub.enabled || !canTrade()">
-                <legend class="visually-hidden">Mode for {{ row.sub.strategy_id }}</legend>
+                <legend class="visually-hidden">Mode for {{ row.name }}</legend>
                 @for (m of modes; track m.value) {
                   <label
                     class="mode"
@@ -102,7 +107,7 @@ interface Row {
                       [value]="m.value"
                       [checked]="row.sub.mode === m.value"
                       [disabled]="
-                        busy() === row.sub.id ||
+                        busy().has(row.sub.id) ||
                         (m.value === 'auto' && !canAuto()) ||
                         (m.value === 'auto' && !!row.autoReason && row.sub.mode !== 'auto')
                       "
@@ -119,7 +124,7 @@ interface Row {
               @if (row.sub.paused_reason) {
                 <p class="note warn">Auto is paused. {{ row.sub.paused_reason }}</p>
               }
-              <p class="help">{{ row.help }}</p>
+              <p class="help">{{ row.help }} <app-help-tip [term]="row.modeLabel" /></p>
               @if (row.autoReason && row.sub.mode !== 'auto') {
                 <p class="why" [id]="'auto-why-' + row.sub.id">{{ row.autoReason }}</p>
               }
@@ -303,7 +308,9 @@ export class StrategiesCard {
   protected readonly canTrade = computed(() => this.session.can('portfolio.manage'));
   /** Auto places real orders: its own permission. */
   protected readonly canAuto = computed(() => this.session.can('subscription.auto_enable'));
-  protected readonly busy = signal<string | null>(null);
+  private readonly portfolios = inject(PortfolioContextService);
+  /** Subscriptions with a change in flight, so one finishing never frees another (UX-59). */
+  protected readonly busy = signal<ReadonlySet<string>>(new Set());
 
   protected readonly subs = resource({ loader: () => this.api.list() });
 
@@ -312,50 +319,76 @@ export class StrategiesCard {
   protected readonly rows = computed<Row[]>(() =>
     this.items().map((sub) => ({
       sub,
+      name: strategyDisplayName(sub.strategy_id),
+      modeLabel: modeLabel(sub.mode),
       autoReason: autoBlockedReason(sub),
       help: MODES.find((m) => m.value === sub.mode)?.help ?? '',
     })),
   );
 
   protected async toggle(sub: SubscriptionView): Promise<void> {
+    if (this.busy().has(sub.id)) return;
     const on = !sub.enabled;
-    await this.change(sub, { enabled: on }, `${sub.strategy_id} is ${on ? 'on' : 'off'}.`);
+    const name = strategyDisplayName(sub.strategy_id);
+    // Switching an auto strategy back on restarts real orders (UX-02).
+    if (on && sub.mode === 'auto' && !(await this.confirmAuto(sub, true))) return;
+    await this.change(sub, { enabled: on }, `${name} is ${on ? 'on' : 'off'}.`);
   }
 
   protected async setMode(sub: SubscriptionView, mode: SubscriptionMode): Promise<void> {
     if (mode === sub.mode) return;
-    if (mode === 'auto') {
-      const ready = await this.stepUp.ensure(`Turn on auto for ${sub.strategy_id}.`);
-      const ok =
-        ready &&
-        (await this.confirm.confirm({
-          title: `Turn on auto for ${sub.strategy_id}?`,
-          message:
-            'Stonks will place real orders with your broker for this strategy, without asking each time. You can switch back to paper at any time.',
-          confirmLabel: 'Turn on auto',
-          tone: 'danger',
-          typedConfirmation: sub.strategy_id,
-        }));
-      if (!ok) {
-        this.revert(sub);
-        return;
-      }
+    if (mode === 'auto' && !(await this.confirmAuto(sub, false))) {
+      this.revert(sub);
+      return;
     }
-    const label = MODES.find((m) => m.value === mode)?.label ?? mode;
-    await this.change(sub, { mode }, `${sub.strategy_id} is now on ${label.toLowerCase()}.`);
+    const name = strategyDisplayName(sub.strategy_id);
+    await this.change(sub, { mode }, `${name} is now on ${modeLabel(mode).toLowerCase()}.`);
+  }
+
+  /**
+   * A fresh code, then an order ticket with the name typed (UX-02, UX-14).
+   * Brass unless the portfolio is known to trade paper money.
+   */
+  private async confirmAuto(sub: SubscriptionView, again: boolean): Promise<boolean> {
+    const name = strategyDisplayName(sub.strategy_id);
+    const verb = again ? 'Turn auto back on' : 'Turn on auto';
+    if (!(await this.stepUp.ensure(`${verb} for ${name}.`))) return false;
+    const book = this.portfolios.options().find((p) => p.id === sub.portfolio_id) ?? null;
+    return this.confirm.confirm({
+      title: `${verb} for ${name}?`,
+      message:
+        'Stonks will place orders with your broker for this strategy on every trading run, ' +
+        'without asking each time. You can switch back to paper trading at any time.',
+      confirmLabel: verb,
+      tone: 'danger',
+      typedConfirmation: sub.strategy_id,
+      ticket: {
+        live: book ? book.trading === 'live' : true,
+        lines: [
+          { label: 'Strategy', value: name },
+          { label: 'Portfolio', value: book?.name ?? 'Your portfolio' },
+          { label: 'Mode', value: modeLabel('auto') },
+        ],
+      },
+    });
   }
 
   private async change(sub: SubscriptionView, body: SubscriptionUpdate, done: string) {
-    this.busy.set(sub.id);
+    this.busy.update((ids) => new Set(ids).add(sub.id));
     try {
       const updated = await this.api.update(sub.id, body);
       this.items.update((list) => list.map((s) => (s.id === updated.id ? updated : s)));
       this.toasts.success(done);
     } catch {
-      // The error interceptor already showed the API's message.
+      // The error interceptor already showed the API's message (a cancelled
+      // step-up included), so only the radio needs putting back.
       this.revert(sub);
     } finally {
-      this.busy.set(null);
+      this.busy.update((ids) => {
+        const next = new Set(ids);
+        next.delete(sub.id);
+        return next;
+      });
     }
   }
 

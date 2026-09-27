@@ -1,4 +1,5 @@
 import type { StrategyStatus } from '../api/models';
+import type { SubscriptionMode } from '../api/subscriptions.service';
 
 /**
  * One vocabulary for a strategy's lifecycle, used by Studio and Strategies
@@ -73,4 +74,30 @@ export function stageState(stage: Stage, current: Stage): 'done' | 'current' | '
   const i = order.indexOf(stage);
   const c = order.indexOf(current);
   return i < c ? 'done' : i === c ? 'current' : 'todo';
+}
+
+export interface ModeOption {
+  value: SubscriptionMode;
+  label: string;
+  /** One line on what the mode does. */
+  help: string;
+}
+
+/**
+ * How a trader follows a strategy, in one set of words for Today's switch
+ * and the strategy page's Follow panel (UX-31).
+ */
+export const MODES: readonly ModeOption[] = [
+  { value: 'notify', label: 'Signals only', help: 'You get its signals. Nothing trades.' },
+  {
+    value: 'paper',
+    label: 'Paper trading',
+    help: 'It trades simulated money in one of your portfolios.',
+  },
+  { value: 'auto', label: 'Auto', help: 'It places real orders with your broker.' },
+];
+
+/** The words for a mode, or the raw value for one this console does not know. */
+export function modeLabel(mode: string): string {
+  return MODES.find((m) => m.value === mode)?.label ?? mode;
 }
