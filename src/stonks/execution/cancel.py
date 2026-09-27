@@ -50,9 +50,13 @@ def cancel_working_orders(
     *,
     portfolio_id: str,
     sides: Sequence[OrderSide] = ("buy", "sell"),
+    openings_only: bool = False,
     now: datetime | None = None,
 ) -> CancelSummary:
-    """Cancel ``portfolio_id``'s working orders on ``sides`` at ``broker``."""
+    """Cancel ``portfolio_id``'s working orders on ``sides`` at ``broker``.
+    ``openings_only`` (a reduce-only halt, BE-12): only orders that open a
+    position, by their recorded effect (a buy with none opens), so queued
+    covers and sells of longs still go through."""
     if not isinstance(broker, OrderCanceller) or not isinstance(broker, OrderStateSource):
         _log.warning("cancel.unsupported", portfolio_id=portfolio_id)
         return CancelSummary(unsupported=True)
@@ -60,9 +64,16 @@ def cancel_working_orders(
     status_ph = ",".join("?" for _ in NON_TERMINAL_STATUSES)
     side_ph = ",".join("?" for _ in sides)
     where, params = ledger_filter(state, "orders", portfolio_id)
+    opening = ""
+    if openings_only:
+        opening = (
+            " AND (position_effect = 'open' OR (position_effect IS NULL AND side = 'buy'))"
+            if _has_effect(state)
+            else " AND side = 'buy'"
+        )
     rows = state.sql(
         f"SELECT client_id FROM orders WHERE status IN ({status_ph}) AND side IN ({side_ph})"
-        f" AND {where} ORDER BY created_at, client_id",
+        f"{opening} AND {where} ORDER BY created_at, client_id",
         [*NON_TERMINAL_STATUSES, *sides, *params],
     )
     cancelled: list[str] = []
@@ -95,3 +106,8 @@ def cancel_working_orders(
     return CancelSummary(
         cancelled=tuple(cancelled), not_cancelled=tuple(not_cancelled), failed=tuple(failed)
     )
+
+
+def _has_effect(state: SqliteState) -> bool:
+    rows = state.sql("SELECT name FROM pragma_table_info('orders')")
+    return any(r["name"] == "position_effect" for r in rows)

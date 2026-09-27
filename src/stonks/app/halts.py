@@ -334,18 +334,19 @@ class HaltService:
 
     def _cancel_working(self, state: SqliteState, scope: Scope, halt: Halt, ip: str | None) -> None:
         """Cancel the working broker orders of every portfolio ``halt``
-        covers (only buys for a ``buys`` halt). Runs on every engage, so
-        pressing again retries a cancel that failed. Never raises."""
+        covers (only opening orders for a reduce-only ``buys`` halt: buys and
+        short sales, never covers, BE-12). Runs on every engage, so pressing
+        again retries a cancel that failed. Never raises."""
         from stonks.execution.cancel import cancel_working_orders
 
-        sides = ("buy",) if halt.halt == "buys" else ("buy", "sell")
+        reduce_only = halt.halt == "buys"
         for portfolio_id in _covered_portfolios(state, halt):
             try:
                 broker = self._brokers(portfolio_id)
                 if broker is None:
                     continue
                 summary = cancel_working_orders(
-                    broker, state, portfolio_id=portfolio_id, sides=sides
+                    broker, state, portfolio_id=portfolio_id, openings_only=reduce_only
                 )
             except Exception as exc:
                 _log.error("kill_switch.cancel_failed", portfolio_id=portfolio_id, error=str(exc))
