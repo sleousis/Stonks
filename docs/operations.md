@@ -300,6 +300,15 @@ These risk rules act only on books at a real broker and never drop a closing ord
 | `price_band` | `band_pct`, `nbbo_band_pct`, `delayed_band_pct`, `max_gap_pct` | Every order gets a collared limit. An opening order is dropped when the price moved too far since the decision. |
 | `max_orders_per_run` | `max_opening_orders`, `max_closing_orders` | Opening orders over the limit are dropped. Too many closes open a `runaway` halt. |
 | `account_rules` | `enabled`, `settlement_days`, `pdt_*`, `wash_sale_window_days`, `short_disclosure_threshold` | The account rules below. |
+| `stop_cooldown` | `cooldown_days`, `count_losses` | A strategy does not reopen a ticker for some days after a stop-out on it. |
+| `stop_guard` | `max_stops`, `window_days`, `count_losses` | A strategy opens nothing after N stop-outs in the window. |
+| `losing_lock` | `max_consecutive_losses`, `lock_days` | A ticker whose last trades for the strategy all lost is locked. |
+
+Until broker-side stops exist, `count_losses = true` counts any losing exit as a stop-out.
+
+### Order states
+
+Live orders carry a fine state in `orders.state`: `pending`, `submitted`, `accepted`, `partially_filled`, `filled`, `pending_cancel`, `cancelled`, `expired`, `rejected` or `unknown`. The `status` column follows it. An order whose submit or cancel timed out is `unknown`, and nothing is sent for it again until reconciliation finds it at the broker by client id. A submit window stays shut while any order of the portfolio is `unknown`.
 
 ### Account rules
 
