@@ -248,7 +248,7 @@ def _gate_reason(gate: CheckResult) -> str:
     return f"submit check {report.id} is {report.status}{what}{detail}"
 
 
-def _price_band(risk: RiskPolicy | None, owner: Mapping[str, Any] | None) -> Any:
+def _price_band(risk: RiskPolicy | None, owner: Any) -> Any:
     """The portfolio's ``price_band`` settings: the global policy tightened
     by its owner's limits and its own, as the tick merges them."""
     from stonks.accounts.book import tighter_of
