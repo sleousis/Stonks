@@ -40,8 +40,13 @@ from stonks.execution.brokers.base import (
     Quote,
     QuoteSource,
 )
-from stonks.execution.order_state import current_state, mark_unknown, write_state
-from stonks.execution.reconcile import reconcile_order
+from stonks.execution.order_state import (
+    TERMINAL,
+    current_state,
+    mark_unknown,
+    write_state,
+)
+from stonks.execution.reconcile import NOT_FOUND_REASON, reconcile_order
 from stonks.logging import get_logger
 from stonks.production.halts import active_halts
 from stonks.production.live.checks import CheckResult, Publish, submit_gate
@@ -143,6 +148,17 @@ def submit_tickets(
         settled=settled,
     )
     return result
+
+
+#: Order states that end an order without a full fill. A ticket whose
+#: client id is in one of them is never sent again.
+ENDED: frozenset[str] = TERMINAL - {"filled"}
+
+
+def _never_arrived(state: SqliteState, client_id: str) -> bool:
+    """The order was marked rejected only because the broker never saw it."""
+    rows = state.sql("SELECT status_reason FROM orders WHERE client_id = ?", [client_id])
+    return bool(rows) and rows[0]["status_reason"] == NOT_FOUND_REASON
 
 
 @dataclass(frozen=True)
@@ -356,7 +372,19 @@ def _send(
     order = ticket.order
     cid = order.client_id
     existing = current_state(state, cid)
-    if existing is not None and existing not in ("rejected", "cancelled"):
+    if existing == "rejected" and _never_arrived(state, cid):
+        # Reconciliation found the broker never received it: nothing to
+        # bring back, so the ticket may still go out under its own id.
+        existing = None
+    if existing in ENDED:
+        # A client id names one order for good. Sending an order that was
+        # cancelled, rejected or expired again under the same id (after a
+        # resume, say) would bring it back: the person decides anew.
+        reason = f"order {cid} is already {existing}; it is never sent again"
+        _log.warning("submit.ended_order", client_id=cid, state=existing)
+        set_ticket_status(state, ticket.id, "failed", now=clock.now(), reason=reason)
+        return "failed"
+    if existing is not None:
         set_ticket_status(state, ticket.id, "submitted", now=clock.now())
         return "known"
     with state.transaction():

@@ -124,7 +124,7 @@ def test_a_burst_refuses_the_write(store):
     loop, _, bridge = _loop(
         store,
         [Script(calls=(call("create_draft", {"name": "x"}),)), Script(text="ok")],
-        write_check=lambda: "Not run: too many writes",
+        write_check=lambda _state: "Not run: too many writes",
     )
     events = _run(loop.send(conv.id, "make a draft"))
     assert next(e for e in events if e.kind == "tool_result").data["error"].startswith("Not run")
@@ -141,6 +141,48 @@ def test_research_writes_run_at_once_and_are_counted(store, path):
     assert bridge.calls == [("create_draft", {"name": "x"})]
     with SqliteState(path) as state:
         assert guard.writes_since(state, OWNER, NOW - timedelta(days=3650)) == 1
+
+
+class _TurnInside(SandboxBridge):
+    """Runs a second turn while the first turn's write is running."""
+
+    def __init__(self, second) -> None:
+        super().__init__()
+        self.second = second
+        self.second_events: list = []
+
+    async def call(self, name, arguments):
+        if name == "create_draft" and self.second is not None:
+            second, self.second = self.second, None
+            self.second_events = [e async for e in second()]
+        return await super().call(name, arguments)
+
+
+def test_two_turns_at_once_cannot_both_pass_the_write_limit(store, path):
+    envelope = AssistantEnvelope(max_writes_per_minute=1, max_writes_per_hour=10)
+    check = guard.write_limiter(OWNER, envelope, clock=lambda: datetime.now(UTC))
+    turn = [Script(calls=(call("create_draft", {"name": "x"}),)), Script(text="ok")]
+    conv_a, conv_b = store.create(OWNER), store.create(OWNER)
+    for conv in (conv_a, conv_b):
+        store.enable_category(conv.id, "studio")
+    loop_b, _, bridge_b = _loop(store, turn, write_check=check)
+    bridge_a = _TurnInside(lambda: loop_b.send(conv_b.id, "make a draft"))
+    loop_a = AgentLoop(
+        FakeChatModel(list(turn)),
+        bridge_a,
+        store,
+        AssistantConfig(base_url="http://x"),
+        gate=Gate(research_only=False, order_tools=True),
+        write_check=check,
+        owner_id=OWNER,
+    )
+    _run(loop_a.send(conv_a.id, "make a draft"))
+    ran = [c for c in bridge_a.calls + bridge_b.calls if c[0] == "create_draft"]
+    assert len(ran) == 1
+    refused = next(e for e in bridge_a.second_events if e.kind == "tool_result").data
+    assert refused["error"].startswith("Not run")
+    with SqliteState(path) as state:
+        assert guard.frozen_until(state, OWNER, datetime.now(UTC)) is not None
 
 
 # ---- grounding ----------------------------------------------------------------------

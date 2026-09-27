@@ -955,6 +955,7 @@ class AuthService:
             self._human(UserRepository(state), user_id)
             self._set_password(state, user_id, new_hash)
             self._revoke_tokens(state, user_id)
+            self._drop_telegram(state, user_id, actor=principal.actor, reason="password_reset")
             AuditLog(state).record(principal.actor, "auth.password.reset", "user", user_id, ip=ip)
 
     def reset_mfa(self, principal: Principal, user_id: str, *, ip: str | None = None) -> None:
@@ -974,6 +975,7 @@ class AuthService:
             state.execute("DELETE FROM recovery_codes WHERE user_id = ?", [user_id])
             self._revoke_all(state, user_id)
             self._revoke_tokens(state, user_id)
+            self._drop_telegram(state, user_id, actor=actor, reason="mfa_reset")
             AuditLog(state).record(actor, "auth.mfa.reset", "user", user_id, ip=ip)
 
     @staticmethod
@@ -991,6 +993,23 @@ class AuthService:
             "UPDATE api_tokens SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
             [_iso(self._now()), user_id],
         )
+
+    def _drop_telegram(self, state: SqliteState, user_id: str, *, actor: str, reason: str) -> None:
+        """A reset usually means a suspected leak, and a linked Telegram chat
+        acts as the person. Drop the link and any unused link code."""
+        links = state.sql("SELECT chat_id FROM telegram_links WHERE user_id = ?", [user_id])
+        state.execute("DELETE FROM telegram_links WHERE user_id = ?", [user_id])
+        state.execute(
+            "DELETE FROM telegram_link_codes WHERE user_id = ? AND used_at IS NULL", [user_id]
+        )
+        for row in links:
+            AuditLog(state).record(
+                actor,
+                "telegram.unlink",
+                "telegram_chat",
+                row["chat_id"],
+                details={"reason": reason},
+            )
 
     def _set_password(self, state: SqliteState, user_id: str, password_hash: str) -> None:
         state.execute(
@@ -1078,5 +1097,6 @@ class AuthService:
             except NotFound:
                 raise NotFoundError("no user with that email") from None
             self._set_password(state, user.id, new_hash)
+            self._drop_telegram(state, user.id, actor=actor, reason="password_reset")
             AuditLog(state).record(actor, "auth.password.reset", "user", user.id)
             return user

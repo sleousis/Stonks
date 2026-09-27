@@ -189,7 +189,7 @@ uv run python -m stonks.streaming sources|run|record|replay   # live streams int
 - `borrow_rates (ticker, as_of, source, currency, isin, available_shares, fee_rate_annual, rebate_rate_annual; PK (ticker, as_of, source))` (021): daily stock borrow terms, rates as yearly fractions. Read through `execution.borrow.LakeBorrowSource`.
 - `instrument_sector_versions (ticker, sector, gic_sector, known_at)` (022): every sector label an instrument has had, with the time Stonks first saw it. Factor attribution reads the label known on each day (`factors.style.sector_labels`).
 
-**State (SQLite, migrations 001-039):**
+**State (SQLite, migrations 001-040):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -219,6 +219,7 @@ uv run python -m stonks.streaming sources|run|record|replay   # live streams int
 - 037: `portfolios.live_stage` (`sim_paper`, `broker_paper`, `live_small`, `live_scale`), `live_stage_changes` (append only, a trigger refuses an unlogged stage write) and `live_gate_days` (roadmap 19.9).
 - 038: `economic_alert_prefs (user_id, countries_json, min_importance, updated_at)` (roadmap 20.9).
 - 039: `order_tickets.hold` also takes `hard_to_borrow` (table rebuilt, roadmap 19.16).
+- 040: `account_profiles` loses `jurisdiction` and `base_currency`: they live once, in `portfolio_tax_settings.jurisdiction` and `portfolios.base_currency`, and existing rows are reconciled (the newer wins). `wash_sale_mode` only acts when `portfolio_tax_settings.wash_sales` is on.
 
 ## Conventions to match
 

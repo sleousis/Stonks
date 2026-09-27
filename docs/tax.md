@@ -10,6 +10,10 @@ This is not tax advice. The files help you or your accountant file. Check them b
 - Cash is taken as already in the base currency.
 - An instrument with no currency in the lake is taken to trade in the base currency.
 
+## One home per setting
+
+The tax settings hold the jurisdiction and whether wash sales apply. The portfolio holds the base currency. A live portfolio's account profile reads all three from there, and saving a profile writes the jurisdiction and base currency there. The profile's own `wash_sale_mode` only says what the pre-trade guard does when wash sales apply: `warn` or `block`. Turn wash sales off here and the guard is off too. While a portfolio trades real money (`live_small` or `live_scale`), the jurisdiction and base currency are locked here like the profile.
+
 ## FX rates
 
 Rates live in the lake table `fx_rates`. One row per pair and day: how many units of the quote currency one unit of the base currency buys at the close.
@@ -18,7 +22,7 @@ Rates live in the lake table `fx_rates`. One row per pair and day: how many unit
 uv run stonks ingest fx --pairs EURUSD,GBPUSD --since 2024-01-01
 ```
 
-EODHD serves them (`EURUSD.FOREX`). To convert on a day, Stonks takes the latest rate on or before that day. It uses the inverse pair when only that one is stored, and a cross through USD when needed. London prices in pence (`GBX`) count as GBP / 100.
+EODHD serves them (`EURUSD.FOREX`). To convert on a day, Stonks takes the latest rate on or before that day. It uses the inverse pair when only that one is stored, and a cross through USD when needed. London prices in pence (`GBX`) count as GBP / 100. Orders, stops and the portfolio view show London prices in pounds, and a manual limit for a London stock is in pounds too.
 
 A missing rate is never guessed. The amount stays unconverted, the base total is empty, and `fx_missing` names the currency. `GET /api/fx/rate?base=EUR&quote=USD` shows the rate Stonks would use.
 

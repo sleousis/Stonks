@@ -39,6 +39,7 @@ from stonks.strategies._vectorized import forecast_weights
 from stonks.strategies.examples._forecast_trend import (
     MIN_ESTIMATION_BARS,
     ForecastTrendStrategy,
+    closed_period_ends,
     forecast_specs,
     period_end_mask,
     require_fixed_modes,
@@ -141,7 +142,8 @@ class TimeSeriesMomentum(ForecastTrendStrategy):
         with ``rebalance="monthly"``) sized the ``vol_target`` way, for a
         whole table of daily closes. Close to the event engine, not exact:
         no 10% no-trade buffer and an IDM of 1. Month ends follow the US
-        equity calendar. Only the fixed scalar and FDM modes are supported."""
+        equity calendar and closed bars only (a row never learns from the
+        next bar that the month ended). Only the fixed scalar and FDM modes are supported."""
         strategy = cls(dict(params))
         require_fixed_modes(strategy.params)
         monthly = strategy.params["rebalance"] == "monthly"
@@ -150,8 +152,12 @@ class TimeSeriesMomentum(ForecastTrendStrategy):
             combined = strategy._combine(strategy.rule_forecasts(column))
             if not monthly or combined.empty:
                 return combined
-            ends = period_end_mask(column.index, "equity", "month")
-            return combined.where(ends).ffill()
+            # closed bars only: a row holds the forecast of the latest month
+            # end known on its close, never one found from the next bar
+            source = closed_period_ends(column.index, "equity", "month")
+            values = combined.to_numpy(dtype=float)
+            held = np.where(source >= 0, values[np.maximum(source, 0)], np.nan)
+            return pd.Series(held, index=combined.index)
 
         return forecast_weights(
             closes, forecast, tau=float(strategy.params["tau"]), allow_short=strategy.supports_short

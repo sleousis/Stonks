@@ -36,8 +36,8 @@ A strategy retrains when its `retrainable` flag is true. By default that means t
 
 The `model_retrain` job runs every Saturday at 06:00 UTC on all three scheduler backends (`api`, `in_process`, `local`). For each retrainable strategy of `[lifecycle].statuses` it:
 
-1. takes the lab universe and interval from the artifact, else the production universe;
-2. fits on the last `lookback_days` up to the fire date, through the lab process pool;
+1. takes the lab universe and interval from the artifact, else the production universe. A lab run on a stored universe is refit on that universe's members over the new window, names that left included;
+2. fits on the last `lookback_days` up to the day before the fire date, through the lab process pool. The version's `train_end` is that last day;
 3. saves the fit as a candidate. An older candidate is replaced.
 
 A strategy fitted within `min_days_between_fits` days is skipped, so a re-run does nothing. `force` refits anyway. Nothing trades yet.

@@ -19,6 +19,9 @@ from stonks.assistant.model import ChatMessage, Role, ToolCall
 from stonks.store.state import SqliteState
 
 StateFactory = Callable[[], AbstractContextManager[SqliteState]]
+#: Checks one more write inside a write transaction; returns why it is
+#: refused (a burst), or None.
+WriteCheck = Callable[[SqliteState], "str | None"]
 ActionStatus = Literal["pending", "approved", "rejected", "done", "failed"]
 
 TITLE_MAX = 80
@@ -315,9 +318,32 @@ class ConversationStore:
     def add_action(
         self, conversation_id: str, tool_call_id: str, tool_name: str, arguments: dict[str, Any]
     ) -> PendingAction:
+        action, _ = self.reserve_action(conversation_id, tool_call_id, tool_name, arguments)
+        assert action is not None
+        return action
+
+    def run_check(self, check: WriteCheck) -> str | None:
+        """``check`` inside a write transaction (it may write a freeze)."""
+        with self._open() as state, state.transaction():
+            return check(state)
+
+    def reserve_action(
+        self,
+        conversation_id: str,
+        tool_call_id: str,
+        tool_name: str,
+        arguments: dict[str, Any],
+        check: WriteCheck | None = None,
+    ) -> tuple[PendingAction | None, str | None]:
+        """``(action, None)``, or ``(None, refusal)`` when ``check`` refuses.
+        The check and the new row share one write transaction (``BEGIN
+        IMMEDIATE``), so a parallel turn waits and then counts this row."""
         aid = f"act_{secrets.token_hex(8)}"
         now = _now()
-        with self._open() as state:
+        with self._open() as state, state.transaction():
+            refusal = check(state) if check is not None else None
+            if refusal is not None:
+                return None, refusal
             state.execute(
                 "INSERT INTO assistant_pending_actions (id, conversation_id, tool_call_id,"
                 " tool_name, arguments_json, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -331,9 +357,10 @@ class ConversationStore:
                     now,
                 ],
             )
-        return PendingAction(
+        action = PendingAction(
             aid, conversation_id, tool_call_id, tool_name, arguments, "pending", None, now, None
         )
+        return action, None
 
     def action(self, conversation_id: str, action_id: str) -> PendingAction:
         with self._open() as state:

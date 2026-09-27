@@ -225,7 +225,7 @@ flowchart LR
 - Ambiguity is never guessed. Several matches, or a match whose currency or primary exchange disagrees with the instrument, refuse the ticker.
 - Entries are re-verified weekly and when a split, ticker change or delisting reaches the lake.
 - The reverse map for positions is by `conId`. An IBKR position with no mapped ticker is kept with its raw symbol, as the connection seam already does ("not covered"), and counts as drift for an auto book.
-- London prices are quoted in pence (GBX) for many stocks. `contracts.py` keeps the price unit next to the currency, and the band and notional math converts both ways.
+- London prices are quoted in pence (GBX) for many stocks. The lake keeps EODHD's pence, marked by `instruments.currency = 'GBX'`. Production reads every price in the major unit (`fx/units.py`): the tick's prices and history, protective stop ATRs, risk marks, TCA benchmarks and the portfolio view. So a decision price, a limit, a stop and the sizing are in pounds, as the IBKR adapter and the cash are. Research keeps the lake's units. Flex statements for London come out in pounds too: a `GBX` statement is divided by 100, and so is a price in pence next to proceeds in pounds.
 
 ### Market data and pacing
 
@@ -479,7 +479,7 @@ flowchart LR
   ALL --> V
 ```
 
-**Account profile.** `account_profiles (portfolio_id, jurisdiction, account_type, client_class, base_currency, fx_policy, wash_sale_mode, allow_short, updated_at, updated_by)`, set in the console (`PUT /api/portfolios/{id}/live/account-profile`, step-up, audited):
+**Account profile.** `account_profiles (portfolio_id, account_type, client_class, fx_policy, wash_sale_mode, allow_short, updated_at, updated_by)`, plus the jurisdiction from `portfolio_tax_settings` and the base currency from `portfolios` (their one home since migration 040), set in the console (`PUT /api/portfolios/{id}/live/account-profile`, step-up, audited):
 
 - `jurisdiction` in {`us`, `eu`, `uk`}. It follows the IBKR entity that holds the account, not the owner's passport.
 - `account_type` in {`cash`, `margin`}, default `cash`. The owner's first live account is a cash account, long only. Shorts need `margin` (`allow_short` is refused on a cash profile, by the service and by the table). Margin with longs and shorts is a later follow-up.
@@ -518,7 +518,7 @@ flowchart LR
 ### Where the numbers come from
 
 - The broker is the source of truth for cash, settled cash, buying power and day trades remaining.
-- Our own counters (`settlement_ledger (portfolio_id, fill_id, currency, amount, trade_date, settle_date)`, day-trade count) exist to explain a refusal before IBKR sends it, and to catch drift. If ours and IBKR's disagree, the stricter one is used and the difference is reported as drift.
+- Our own counters (`settlement_ledger (portfolio_id, fill_id, currency, amount, trade_date, settle_date)`, day-trade count) exist to explain a refusal before IBKR sends it, and to catch drift. If ours and IBKR's disagree, the stricter one is used and the difference is reported as drift. A row holds the security's currency. A commission the broker reports in another currency is converted at the stored FX rate of the trade day first. With no rate the fee is left out, so sale proceeds count in full, and the row is recorded once a rate exists.
 
 ## 6. Reconciliation
 

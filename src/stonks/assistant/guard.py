@@ -10,13 +10,16 @@ model says:
 - **Kill switch.** While a kill switch covers the person (global or theirs),
   the assistant is research only too.
 - **Writes are counted** from ``assistant_pending_actions``: every write the
-  assistant ran or proposed is a row there.
+  assistant ran or proposed is a row there. The check and the row are one
+  write transaction (:meth:`ConversationStore.reserve_action`), so two turns
+  at once cannot both pass the limit.
 
 Any error while checking counts as frozen: fail closed.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -92,6 +95,31 @@ def over_rate(
     if hour >= envelope.max_writes_per_hour:
         return f"more than {envelope.max_writes_per_hour} writes in an hour"
     return None
+
+
+def write_limiter(
+    user_id: str, envelope: AssistantEnvelope, *, clock: Callable[[], datetime]
+) -> Callable[[SqliteState], str | None]:
+    """The loop's write check for one person: refuse (and freeze) on a
+    burst. It runs inside the store's write transaction, so the count and
+    the new action row are atomic. Fails closed."""
+
+    def check(state: SqliteState) -> str | None:
+        now = clock()
+        try:
+            burst = over_rate(state, user_id, envelope, now)
+            if burst is None:
+                return None
+            until = freeze(state, user_id, envelope.freeze_minutes, burst, now)
+        except Exception as exc:
+            _log.error("assistant.write_check_failed", error=str(exc))
+            return "Not run: the safety check failed, so nothing was changed."
+        return (
+            f"Not run: {burst}. The assistant is frozen until {until}. The person can "
+            "unfreeze it in the web app."
+        )
+
+    return check
 
 
 def kill_in_force(state: SqliteState, user_id: str, now: datetime) -> bool:

@@ -225,6 +225,10 @@ def test_wash_sale_warns_or_blocks():
     old = {"AAPL.US": date(2026, 8, 1)}
     kept, verdicts = run([buy("AAPL.US", 1.0)], inputs(blocking, loss_sales=old))
     assert kept and not verdicts
+    # wash sales switched off in the tax settings: the guard stays quiet
+    off = profile("us", wash_sale_mode="block", wash_sales=False)
+    kept, verdicts = run([buy("AAPL.US", 1.0)], inputs(off, loss_sales=sold))
+    assert kept and not verdicts
 
 
 def test_reg_sho_needs_a_locate_and_respects_the_price_test():

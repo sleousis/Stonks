@@ -23675,10 +23675,11 @@
         "description": "Whether a portfolio trades paper or live money, and through what.",
         "properties": {
           "broker": {
-            "description": "simulated (the Stonks ledger), alpaca (the configured account, default portfolio only) or connection (a linked broker account, synced read-only).",
+            "description": "simulated (the Stonks ledger), alpaca (the configured account, default portfolio only), ibkr (the IB Gateway that serves the default portfolio) or connection (a linked broker account, synced read-only).",
             "enum": [
               "simulated",
               "alpaca",
+              "ibkr",
               "connection"
             ],
             "title": "Broker",

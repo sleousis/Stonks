@@ -14,6 +14,7 @@ from typing import Any
 
 from stonks.accounts.rules import AccountRuleInputs, InstrumentFacts
 from stonks.execution.brokers.base import AccountReader, LiveAccountState, Quote, QuoteSource
+from stonks.fx import FxRates
 from stonks.logging import get_logger
 from stonks.production.ledger import ledger_columns
 from stonks.production.live.stages import LiveStage, get_stage
@@ -123,6 +124,22 @@ def instrument_facts(lake: Any, tickers: Sequence[str]) -> dict[str, InstrumentF
     return out
 
 
+def _fee_fx(state: SqliteState, portfolio_id: str, as_of: date, lake: Any) -> FxRates | None:
+    """The FX rates the settlement ledger needs for commissions reported in
+    another currency, or ``None`` when no lake or no such fill."""
+    from stonks.accounts.rules.settlement import fee_currencies
+    from stonks.fx import load_fx_rates
+
+    codes = fee_currencies(state, portfolio_id, as_of)
+    if lake is None or not codes:
+        return None
+    try:
+        return load_fx_rates(lake, end=as_of)  # every pair: the row currency varies
+    except Exception as exc:  # no rates: fees stay out, proceeds count in full
+        _log.warning("live.fee_fx_unreadable", portfolio_id=portfolio_id, error=str(exc))
+        return None
+
+
 def build_live_context(
     state: SqliteState,
     portfolio_id: str,
@@ -157,6 +174,7 @@ def build_live_context(
         except Exception as exc:
             _log.warning("live.quotes_unreadable", portfolio_id=portfolio_id, error=str(exc))
     allocation = get_allocation(state, portfolio_id)
+    fx = _fee_fx(state, portfolio_id, as_of, lake)
     inputs = load_account_inputs(
         state,
         portfolio_id,
@@ -165,6 +183,7 @@ def build_live_context(
         account=account,
         instruments=instrument_facts(lake, tickers),
         shortable=shortable,
+        fx=fx,
     )
     return LiveContext(
         portfolio_id=portfolio_id,

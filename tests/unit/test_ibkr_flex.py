@@ -156,3 +156,29 @@ def test_from_env_reads_the_token(monkeypatch):
     monkeypatch.setenv("STONKS_IBKR_FLEX_TOKEN", TOKEN)
     assert FlexClient.from_env(IbkrFlexSettings()) is None  # no query configured
     assert isinstance(FlexClient.from_env(settings), FlexClient)
+
+
+def _london(currency: str, price: str, proceeds: str) -> str:
+    return f"""<FlexQueryResponse><FlexStatements count="1">
+<FlexStatement accountId="U1" fromDate="20260921" toDate="20260925"><Trades>
+<Trade accountId="U1" currency="{currency}" assetCategory="STK" symbol="VOD" conid="1"
+  listingExchange="LSE" tradeID="1" ibExecID="e1" tradeDate="20260925" quantity="100"
+  tradePrice="{price}" proceeds="{proceeds}" ibCommission="-3" ibCommissionCurrency="GBP"
+  levelOfDetail="EXECUTION"/>
+</Trades></FlexStatement></FlexStatements></FlexQueryResponse>"""
+
+
+@pytest.mark.parametrize(
+    ("currency", "price", "proceeds"),
+    [
+        ("GBP", "72.5", "-72.5"),  # a price in pence against proceeds in pounds
+        ("GBX", "72.5", "-7250"),  # everything in pence
+        ("GBP", "0.725", "-72.5"),  # already in pounds
+    ],
+)
+def test_london_prices_come_out_in_pounds(currency, price, proceeds):
+    [statement] = parse_flex_statements(_london(currency, price, proceeds))
+    [trade] = statement.trades
+    assert trade.price == pytest.approx(0.725)
+    assert trade.proceeds == pytest.approx(-72.5)
+    assert trade.currency == "GBP"

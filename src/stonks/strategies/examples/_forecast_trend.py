@@ -30,6 +30,7 @@ does the rest the same way for all three:
 
 from __future__ import annotations
 
+import functools
 import math
 import weakref
 from collections.abc import Mapping, Sequence
@@ -199,6 +200,31 @@ def period_end_mask(days: Any, asset_class: str, period: str) -> np.ndarray:
     mask[:-1] = keys[1:] != keys[:-1]
     mask[-1] = _last_bar_of_open_period(index[-1].date(), asset_class, period)
     return mask
+
+
+@functools.lru_cache(maxsize=65536)
+def _calendar_end(day: date, asset_class: str, period: str) -> bool:
+    return _last_bar_of_open_period(day, asset_class, period)
+
+
+def closed_period_ends(days: Any, asset_class: str, period: str) -> np.ndarray:
+    """For each bar, the position of the latest period-end bar as seen on
+    that bar's close, or -1: what :func:`period_end_mask` gives for the
+    table cut at that bar. A past bar ends its period when a later bar sits
+    in a later period (both closed). The bar itself only from the calendar,
+    never from the bar after it."""
+    index = pd.DatetimeIndex(days)
+    n = len(index)
+    if n == 0:
+        return np.zeros(0, dtype=np.int64)
+    whole = period_end_mask(index, asset_class, period)
+    # whole[j] for j < n - 1 compares bar j with bar j + 1: known on bar j + 1
+    known_after = np.where(whole[:-1], np.arange(n - 1), -1)
+    latest_past = np.full(n, -1, dtype=np.int64)
+    if n > 1:
+        latest_past[1:] = np.maximum.accumulate(known_after)
+    today = np.array([_calendar_end(d.date(), asset_class, period) for d in index], dtype=bool)
+    return np.where(today, np.arange(n), latest_past)
 
 
 @dataclass(frozen=True)

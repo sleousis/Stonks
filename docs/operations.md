@@ -455,6 +455,7 @@ PUT /api/portfolios/{id}/live/account-profile   {"jurisdiction": "us", "account_
 - In the console: Profile, then Live settings next to the LIVE portfolio. The page also lists which live safeguards and account rules act on it (`GET /api/portfolios/{id}/live/rules`). Gateway health and the reconcile reports show on Health (`GET /api/brokers/gateways`, `GET /api/reconcile/reports`).
 - The allocation is the most Stonks may hold in the book. There are no automatic steps. A bad week alerts but never changes it.
 - The profile picks the account rules: `us`, `eu` or `uk`, `cash` (default) or `margin`, `retail` (default) or `professional`. Shorts need a margin account.
+- The jurisdiction and base currency are stored once, in the tax settings and the portfolio (see [tax.md](tax.md)). Saving the profile updates them, and the tax settings page shows the same values.
 - The account is shared with your own trading. Stonks only trades the positions it opened (`[production.live] allow_manual_trades = true`).
 - The profile is locked while the portfolio trades real money (`live_small` or up). Move it down to `broker_paper` to change it.
 
@@ -525,7 +526,7 @@ fallback_pct = 0.10   # distance as a share of the entry when there is no ATR
 
 ### Order states
 
-Live orders carry a fine state in `orders.state`: `pending`, `submitted`, `accepted`, `partially_filled`, `filled`, `pending_cancel`, `cancelled`, `expired`, `rejected` or `unknown`. The `status` column follows it. An order whose submit or cancel timed out is `unknown`, and nothing is sent for it again until reconciliation finds it at the broker by client id. A submit window stays shut while any order of the portfolio is `unknown`.
+Live orders carry a fine state in `orders.state`: `pending`, `submitted`, `accepted`, `partially_filled`, `filled`, `pending_cancel`, `cancelled`, `expired`, `rejected` or `unknown`. The `status` column follows it. An order whose submit or cancel timed out is `unknown`, and nothing is sent for it again until reconciliation finds it at the broker by client id. A submit window stays shut while any order of the portfolio is `unknown`. A client id names one order for good: a ticket whose order is already `cancelled`, `rejected` or `expired` fails and is never sent again under that id, a resume included.
 
 `uv run stonks live reconcile --portfolio <id>` syncs a portfolio's open orders and fills with its broker now, the way the tick and `live_submit` do before they act. It only reads the broker. It exits 1 while an order is still unknown.
 
@@ -723,7 +724,7 @@ Columns: `date`, `value` (cash plus marked positions), `change`, `daily`, `cumul
 - **Money-weighted return (MWR):** the yearly rate (XIRR) that turns the start value and the flows into the latest value. It shows what your money earned, timing included.
 - **Net deposits:** deposits less withdrawals inside the range.
 
-Only deposits and withdrawals are flows. Dividends, interest and fees stay inside the return. A broker book's flows come from its sync. On a simulated book, record them yourself. Recording one also moves the book's cash:
+Only deposits and withdrawals are flows. Dividends, interest and fees stay inside the return. A broker book's flows come from its sync. A broker flow in another currency than its account is converted to the account currency at the stored FX rate of its day. When no rate exists, TWR and MWR are left out and the view names the currency. On a simulated book, record them yourself. Recording one also moves the book's cash:
 
 ```bash
 uv run stonks cash-flows record --kind deposit --amount 5000 [--date YYYY-MM-DD] [--note ...] --user you@example.com

@@ -12676,9 +12676,9 @@ export type TradingModeView = {
     /**
      * Broker
      *
-     * simulated (the Stonks ledger), alpaca (the configured account, default portfolio only) or connection (a linked broker account, synced read-only).
+     * simulated (the Stonks ledger), alpaca (the configured account, default portfolio only), ibkr (the IB Gateway that serves the default portfolio) or connection (a linked broker account, synced read-only).
      */
-    broker: 'simulated' | 'alpaca' | 'connection';
+    broker: 'simulated' | 'alpaca' | 'ibkr' | 'connection';
     /**
      * Detail
      */

@@ -41,6 +41,53 @@ def test_profile_round_trip_is_audited(state):
     assert json.loads(row[0]["details_json"])["previous"] is None
 
 
+def _tax_row(state):
+    rows = state.sql(
+        "SELECT jurisdiction, wash_sales FROM portfolio_tax_settings WHERE portfolio_id = ?",
+        ["pf_default"],
+    )
+    return rows[0] if rows else None
+
+
+def _base(state) -> str:
+    return state.sql("SELECT base_currency FROM portfolios WHERE id = 'pf_default'")[0][0]
+
+
+def test_jurisdiction_and_base_currency_have_one_home(state):
+    """The tax settings hold the jurisdiction and portfolios the base
+    currency. The account profile reads and writes them there."""
+    assert "jurisdiction" not in _cols(state, "account_profiles")
+    assert "base_currency" not in _cols(state, "account_profiles")
+    set_profile(
+        state,
+        AccountProfile(portfolio_id="pf_default", jurisdiction="uk", base_currency="gbp"),
+        actor="user:u",
+    )
+    assert _tax_row(state)["jurisdiction"] == "uk" and _base(state) == "GBP"
+    # a change on the tax side is what the account rules see
+    state.execute(
+        "UPDATE portfolio_tax_settings SET jurisdiction = 'eu' WHERE portfolio_id = 'pf_default'"
+    )
+    state.execute("UPDATE portfolios SET base_currency = 'EUR' WHERE id = 'pf_default'")
+    got = get_profile(state, "pf_default")
+    assert got is not None and (got.jurisdiction, got.base_currency) == ("eu", "EUR")
+
+
+def test_the_wash_sale_guard_follows_the_tax_setting(state):
+    set_profile(state, AccountProfile("pf_default", "us", wash_sale_mode="block"), actor="user:u")
+    got = get_profile(state, "pf_default")
+    assert got is not None and got.wash_sales
+    state.execute(
+        "UPDATE portfolio_tax_settings SET wash_sales = 0 WHERE portfolio_id = 'pf_default'"
+    )
+    got = get_profile(state, "pf_default")
+    assert got is not None and not got.wash_sales
+
+
+def _cols(state, table: str) -> set[str]:
+    return {r["name"] for r in state.sql(f"PRAGMA table_info({table})")}
+
+
 def test_a_cash_profile_cannot_allow_shorts(state):
     with pytest.raises(ProfileError):
         set_profile(
@@ -87,6 +134,41 @@ def test_settlements_are_read_before_and_after_they_are_recorded(state):
         state, "pf_default", SETTINGS, currency_of=usd, as_of=date(2026, 9, 28)
     )
     assert after == before
+
+
+def test_a_commission_in_another_currency_is_converted_before_it_enters_the_ledger(state):
+    from stonks.fx import FxRates
+
+    _fill(state, "c1", "buy", 10.0, 100.0, FRIDAY)
+    _fill(state, "c2", "sell", 10.0, 90.0, date(2026, 9, 28))
+    state.execute("UPDATE fills SET fee = 2.0, fee_currency = 'EUR'")
+    usd = lambda _t: "USD"  # noqa: E731
+    fx = FxRates([("EUR", "USD", date(2026, 9, 1), 1.5)])
+    got = load_settlements(
+        state, "pf_default", SETTINGS, currency_of=usd, as_of=date(2026, 9, 28), fx=fx
+    )
+    assert [(e.currency, e.amount) for e in got] == [("USD", -1003.0), ("USD", 897.0)]
+    assert (
+        record_settlements(
+            state, "pf_default", SETTINGS, currency_of=usd, as_of=date(2026, 9, 28), fx=fx
+        )
+        == 2
+    )
+    stored = state.sql("SELECT amount FROM settlement_ledger ORDER BY id")
+    assert [r["amount"] for r in stored] == [-1003.0, 897.0]
+
+
+def test_a_commission_with_no_rate_is_never_guessed_or_recorded(state):
+    _fill(state, "c2", "sell", 10.0, 90.0, date(2026, 9, 28))
+    state.execute("UPDATE fills SET fee = 2.0, fee_currency = 'EUR'")
+    usd = lambda _t: "USD"  # noqa: E731
+    got = load_settlements(state, "pf_default", SETTINGS, currency_of=usd, as_of=date(2026, 9, 28))
+    # Unsettled proceeds count in full (the stricter figure) until a rate exists.
+    assert [e.amount for e in got] == [900.0]
+    assert (
+        record_settlements(state, "pf_default", SETTINGS, currency_of=usd, as_of=date(2026, 9, 28))
+        == 0
+    )
 
 
 def test_day_trades_and_loss_sales_from_fills():

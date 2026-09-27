@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date
+import json
+from datetime import date, timedelta
 
+import pandas as pd
 import pytest
 
 from stonks.lifecycle.retrain import retrain_models
@@ -49,7 +51,9 @@ def test_retrain_adds_a_candidate_and_keeps_the_live_model(env):
     versions = ModelVersionRegistry.on(registry)
     assert {v.version: v.status for v in versions.list(sid)} == {1: "live", 2: "candidate"}
     candidate = versions.get(sid, 2)
-    assert candidate.train_end == AS_OF
+    # the fit's own last day: the day before as_of
+    assert candidate.train_end == AS_OF - timedelta(days=1)
+    assert candidate.fit["train_window"][1] == "2026-03-19"
     assert candidate.fit["train_window"][0] == "2026-01-19"
     assert candidate.artifact_path.is_dir()
     fitted = versions.load(sid, 2)
@@ -65,7 +69,7 @@ def test_same_day_rerun_is_a_no_op_unless_forced(env):
     _run(env)
     again = _run(env)
     assert [(o.status, o.detail) for o in again.outcomes] == [
-        ("skipped", "fitted up to 2026-03-20 already")
+        ("skipped", "fitted up to 2026-03-19 already")
     ]
     forced = _run(env, force=True)
     assert [(o.status, o.version) for o in forced.outcomes] == [("candidate", 3)]
@@ -114,3 +118,36 @@ def test_parallel_fits_match_serial(env):
     versions = ModelVersionRegistry.on(registry)
     means = {sid: versions.get(sid, 2).fit["mean_close"] for sid in (a, b)}
     assert means[a] > 150 > means[b]
+
+
+def test_a_stored_universe_is_resolved_over_the_new_window(env):
+    lake, _, registry = env
+    sid = registry.register(MeanFit({"ticker": "UP.US"}), reports=[])
+    handle = next(h for h in registry.list_all() if h.id == sid)
+    meta_path = handle.artifact_path / "meta.json"
+    meta = json.loads(meta_path.read_text())
+    meta["manifest"] = {"dataset": {"universe": ["DOWN.US"], "universe_id": "u_live"}}
+    meta_path.write_text(json.dumps(meta))
+    lake.upsert_universe_membership(
+        pd.DataFrame(
+            [
+                {
+                    "universe_id": "u_live",
+                    "ticker": "DOWN.US",
+                    "start_date": date(2020, 1, 1),
+                    "end_date": date(2025, 6, 1),
+                },
+                {
+                    "universe_id": "u_live",
+                    "ticker": "UP.US",
+                    "start_date": date(2025, 6, 1),
+                    "end_date": None,
+                },
+            ]
+        )
+    )
+    summary = _run(env, universe=[])
+    assert [o.status for o in summary.outcomes] == ["candidate"]
+    version = ModelVersionRegistry.on(registry).get(sid, 2)
+    stored = json.loads((version.artifact_path / "meta.json").read_text())
+    assert stored["universe"] == ["UP.US"] and stored["universe_id"] == "u_live"

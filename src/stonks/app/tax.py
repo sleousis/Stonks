@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from stonks.accounts import Scope
 from stonks.accounts.audit import AuditLog
 from stonks.app.context import AppContext
-from stonks.app.errors import ValidationError
+from stonks.app.errors import ConflictError, ValidationError
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.fx import FxRates, load_fx_rates
@@ -117,6 +117,7 @@ class TaxService:
             merged = current.model_copy(
                 update={k: v for k, v in body.model_dump().items() if v is not None}
             )
+            _refuse_locked_change(state, portfolio_id, current, merged)
             now = _now()
             state.execute(
                 "INSERT INTO portfolio_tax_settings (portfolio_id, jurisdiction, lot_method,"
@@ -379,6 +380,26 @@ def _fill(state: SqliteState, portfolio_id: str, fill_id: int) -> Any:
         [fill_id, portfolio_id],
     )
     return rows[0] if rows else None
+
+
+def _refuse_locked_change(
+    state: SqliteState, portfolio_id: str, current: TaxSettingsView, merged: TaxSettingsView
+) -> None:
+    """The jurisdiction and base currency are the live account profile's
+    too (migration 040), so they are locked while the portfolio trades real
+    money, like the profile."""
+    from stonks.production.live.stages import get_stage, trades_real_money
+
+    changed = (merged.jurisdiction, merged.base_currency) != (
+        current.jurisdiction,
+        current.base_currency,
+    )
+    stage = get_stage(state, portfolio_id)
+    if changed and trades_real_money(stage):
+        raise ConflictError(
+            "the jurisdiction and base currency are locked while the portfolio trades real"
+            f" money ({stage}): demote it to broker_paper to change them"
+        )
 
 
 def _settings_view(state: SqliteState, portfolio_id: str) -> TaxSettingsView:

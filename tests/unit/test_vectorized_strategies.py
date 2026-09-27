@@ -150,6 +150,30 @@ def test_weights_never_read_later_rows(cls, params):
     pd.testing.assert_frame_equal(full.iloc[:cut], again.iloc[:cut])
 
 
+def test_tsmom_month_ends_come_from_closed_bars_only():
+    """A missing month-end bar must not let the fast path learn from the
+    next bar that the month ended: each row equals the last row of the
+    table cut there."""
+    from stonks.strategies.examples._forecast_trend import period_end_mask
+
+    closes = _closes()
+    calendar_ends = period_end_mask(closes.index, "equity", "month")
+    calendar_ends[-1] = False
+    ends = closes.index[calendar_ends]
+    gappy = closes.drop(index=ends[ends >= pd.Timestamp("2022-01-01")])
+    params = {"lookbacks": "125", "mode": "scaled"}
+    full = TimeSeriesMomentum.target_positions(gappy, params)
+    before_gap = [
+        i + 1
+        for i in range(300, len(gappy) - 1)
+        if gappy.index[i + 1].month != gappy.index[i].month
+    ]
+    assert before_gap
+    for k in before_gap:
+        cut = TimeSeriesMomentum.target_positions(gappy.iloc[:k], params)
+        pd.testing.assert_series_equal(cut.iloc[-1], full.iloc[k - 1], check_names=False)
+
+
 def test_forecast_weights_share_the_budget_and_cap_gross():
     closes = _closes()
     weights = EWMACTrend.target_positions(closes, {"speeds": "8,16,32,64"})

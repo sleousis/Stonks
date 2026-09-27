@@ -104,12 +104,12 @@ def test_risk_halt_rows_survive_the_rebuild(tmp_path):
 def test_account_profile_refuses_shorts_on_a_cash_account(state):
     with pytest.raises(sqlite3.IntegrityError):
         state.execute(
-            "INSERT INTO account_profiles (portfolio_id, jurisdiction, account_type, allow_short,"
-            " updated_at, updated_by) VALUES ('pf_default', 'us', 'cash', 1, 'x', 'u')"
+            "INSERT INTO account_profiles (portfolio_id, account_type, allow_short,"
+            " updated_at, updated_by) VALUES ('pf_default', 'cash', 1, 'x', 'u')"
         )
     state.execute(
-        "INSERT INTO account_profiles (portfolio_id, jurisdiction, updated_at, updated_by)"
-        " VALUES ('pf_default', 'uk', 'x', 'u')"
+        "INSERT INTO account_profiles (portfolio_id, updated_at, updated_by)"
+        " VALUES ('pf_default', 'x', 'u')"
     )
     row = state.sql("SELECT * FROM account_profiles")[0]
     assert row["account_type"] == "cash" and row["client_class"] == "retail"

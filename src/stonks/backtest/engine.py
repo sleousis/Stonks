@@ -873,6 +873,7 @@ class Backtester:
             list(self._config.universe),
             end,
             bars=self._config.history_bars + days,
+            major_units=False,  # the backtest prices and fills in the lake's units
         )
         self._raw_closes = self._load_raw_closes(end)
         return history

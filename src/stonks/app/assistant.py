@@ -374,24 +374,7 @@ class AssistantService:
                 state, principal.user_id, envelope, research_only=research_only, now=self._clock()
             )
 
-        def write_check() -> str | None:
-            """Refuse (and freeze) on a burst of writes. Fails closed."""
-            now = self._clock()
-            try:
-                with self._ctx.state() as state:
-                    burst = guard.over_rate(state, principal.user_id, envelope, now)
-                    if burst is None:
-                        return None
-                    until = guard.freeze(
-                        state, principal.user_id, envelope.freeze_minutes, burst, now
-                    )
-            except Exception as exc:
-                _log.error("assistant.write_check_failed", error=str(exc))
-                return "Not run: the safety check failed, so nothing was changed."
-            return (
-                f"Not run: {burst}. The assistant is frozen until {until}. The person can "
-                "unfreeze it in the web app."
-            )
+        write_check = guard.write_limiter(principal.user_id, envelope, clock=self._clock)
 
         bridge = self.bridge_factory(app, principal)
         loop = AgentLoop(

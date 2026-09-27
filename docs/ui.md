@@ -1483,6 +1483,9 @@ flowchart LR
   `GET /api/portfolios` lists your portfolios, each with `trading` (paper
   or live). The console reads the PAPER or LIVE stamp from there, not from
   `GET /api/portfolios/trading-modes` (MCP uses that one).
+  The default portfolio at Alpaca or an IB Gateway is LIVE only when its
+  orders really go to a live account (`broker` is `alpaca` or `ibkr`), the
+  same answer the order paths use.
 - **Profile** (`pages/profile/`): password, new recovery codes, your
   portfolios and API tokens (a new token is shown once). "Your portfolios"
   lists each with its PAPER or LIVE stamp, renames one
