@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 19. It takes Stonks from simulated paper trading to real orders at Interactive Brokers (IBKR), in stages, with a gate between each stage.
 
-Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2). The rest is proposed. What wave 1 changed against this design is listed in section 11, and what 19.2 changed in section 12.
+Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2) and reconciliation (19.5). The rest is proposed. What wave 1 changed against this design is listed in section 11, what 19.2 changed in section 12, and what 19.5 changed in section 13.
 
 Owner decisions (2026-09-27):
 
@@ -728,3 +728,18 @@ The IBKR adapter lives in `execution/brokers/ibkr/`. Where it differs from secti
 - **Health.** `broker_health` logs in through the adapter by default (`IbkrLoginProbe`, the health client id, one try within `probe_timeout_seconds`). `[brokers.ibkr.health] probe = "socket"` keeps the port-only check.
 - **Legacy book.** `make_broker(kind="ibkr")` builds the broker of the gateway that lists `pf_default` (or the only gateway). It connects on first use.
 - **Tests.** `tests/fakes/ib_gateway.py` scripts every failure section 8 lists. Properties: no client id is sent twice across crashes, drops, restarts and faults, and reported executions and commissions equal the gateway's. Live contract tests are in `tests/integration/live/test_ibkr_live.py`.
+
+## 13. What 19.5 built
+
+Reconciliation lives in `execution/drift.py` (pure diffs) and `production/live/checks.py` (the checks). Where it differs from section 6:
+
+- **One table.** `reconcile_reports` is SQLite migration 032. Next to the design's columns it keeps `as_of` (the session), `external_json` (the owner's own positions and orders), `summary_json` (what reconciliation booked), `detail` (why the broker could not be read), `halt_id` and `paused_json`. Status is `clean`, `warn`, `drift`, `outage` or `fault`.
+- **Order of work.** A check reconciles first (`startup_reconcile`: fills from executions, states by client id), then diffs. A material difference triggers one more reconcile and a second look, so a fill that lands between two reads is booked, not called drift.
+- **Positions.** Stonks owns its net filled quantity per ticker (`owned_positions`, manual orders excluded). The broker must hold at least that on the same side. The rest is external. With `allow_manual_trades = false` positions must match exactly.
+- **Orders.** A new optional broker capability, `OpenOrderSource.open_orders()`, lists every working order with its client id, or none when placed by hand. `IbkrBroker` implements it. A broker without it (the simulated one) is checked on positions and unresolved orders only.
+- **Kinds.** Material: `position_qty`, `unknown_position`, `unknown_order`, `missing_order`, `order_state` (the ledger closed an order the broker still works, or the state machine refused the broker's report), `unknown_execution`. Alert only: `unresolved_order` (still `unknown`, blocks a submit), `stuck_order`, `commission_missing`, `stale_order` (cancelled at the start of the day).
+- **Not yet.** Cash and `rules_mismatch` are not compared: in a shared account the owner's own trades move the cash. The optional Flex statement waits for 19.3. The broker snapshot and `live_gate_days` at the end of the day wait for 19.9, and so does demoting a stage after drift that stays for 2 checks.
+- **Outage versus fault.** `auto_pause.broker_failure_kind` names a `BrokerUnavailableError`, a dropped socket or a timeout an outage, anything else a fault. The tick no longer pauses auto on an outage: the book skips the day (`broker_outage` in its summary). A check pauses after outages on `[production.live] outage_pause_after_sessions` sessions in a row (2), and at once on a fault or drift. Drift pauses with a `broker_drift: report <id>` reason.
+- **Jobs.** `live_sod_check` (open minus 60 minutes) and `live_eod_check` (close plus 15) run the `live_reconcile` action through each gateway with the new `reconcile` client id (14). Splits come from the lake when it can be opened read only.
+- **Submit gate.** `submit_gate` runs a `submit` check. The submit window of 19.8 sends only when `CheckResult.may_submit`.
+- **Surfaces.** `GET /api/reconcile/reports`, `GET /api/reconcile/reports/{id}`, `stonks reconcile list|show|run`, the MCP tools `list_reconcile_reports` and `get_reconcile_report`, and a panel on Health that stays hidden until a report exists.

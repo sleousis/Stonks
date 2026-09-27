@@ -16,7 +16,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 15 | Mostly done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Open: order placement for real providers. |
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
 | 17 | Planned. |
-| 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. The IBKR adapter (19.2) done. Design: `docs/design/live-trading.md`. |
+| 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. The IBKR adapter (19.2) done. Reconciliation and drift (19.5) done. Design: `docs/design/live-trading.md`. |
 | 20 | 20.1 to 20.6 done, backend and console. 20.7 and 20.8 in progress. |
 | 22 | 22.1, 22.2, 22.3, 22.5, 22.7, 22.8 and 22.9 done. 22.4 and 22.6 are next. Factors: `docs/factors.md`. |
 
@@ -421,7 +421,7 @@ Pyright strict plan. Strict mode comes one package at a time, smallest first, ea
 
 ## Phase 19: Go live with real money
 
-**Status:** wave 1 done (19.1, 19.4, 19.6, 19.7), with its console screens: Live settings per live portfolio (allocation, account profile, and the live rules read only), broker gateway health on Health, and the fine order state in the orders views. Design: `docs/design/live-trading.md`.
+**Status:** wave 1 done (19.1, 19.4, 19.6, 19.7), with its console screens: Live settings per live portfolio (allocation, account profile, and the live rules read only), broker gateway health on Health, and the fine order state in the orders views. Then 19.2 (the IBKR adapter) and 19.5 (reconciliation and drift, with the reconcile reports on Health). Design: `docs/design/live-trading.md`.
 
 Stonks moves from simulated paper to real orders at Interactive Brokers, in stages. IB Gateway runs headless in Docker next to Stonks, and `ib_async` sits behind the `Broker` and `BrokerConnection` seams. Alpaca stays off. The IBKR login lives only in the gateway container's secret files. The account location is not decided, so account rules for the US and for the EU and UK are built and chosen per portfolio. The IBKR account is shared with the owner's own trading: Stonks only trades the positions it opened. The first live account is a cash account, long only.
 
@@ -440,7 +440,7 @@ A clean week has no unresolved reconciliation drift, no stuck orders, rejections
 | 19.2 IBKR adapter | `IbClient` protocol over `ib_async`, session thread and reconnects, contract resolution with a `conId` cache, order mapping (`orderRef` idempotency, collared opening-auction limits, no outside hours), error mapping, account safety check, `FakeIbGateway`. | `execution/brokers/ibkr/*`, `tests/fakes/ib_gateway.py`, a new SQLite migration | done (migration 029) |
 | 19.3 IBKR connection and borrow | `ibkr` provider with trade and short capabilities, sync, borrow quotes, daily borrow rates into the lake, optional Flex statements. | `connections/providers/ibkr.py`, `execution/brokers/ibkr/{borrow,flex}.py`, `ingest/sources/ibkr_borrow.py`, a new DuckDB migration | planned |
 | 19.4 Gateway deployment | `ibkr-paper` and `ibkr-live` Compose profiles on an internal network, Docker secrets, weekly re-auth reminder, broker health and metrics. | `deploy/compose.yaml`, `deploy/ibkr/*`, `production/broker_health.py`, `scheduling/metrics.py` | done |
-| 19.5 Reconciliation and drift | Start-of-day, submit and end-of-day checks, drift reports, `broker_drift` halt, auto pause on drift, short outage versus fault. | `execution/drift.py`, `production/live/checks.py`, `production/auto_pause.py`, `production/halts.py`, a new SQLite migration | planned |
+| 19.5 Reconciliation and drift | Start-of-day, submit and end-of-day checks, drift reports, `broker_drift` halt, auto pause on drift, short outage versus fault. | `execution/drift.py`, `production/live/checks.py`, `production/auto_pause.py`, `production/halts.py`, a new SQLite migration | done (migration 032) |
 | 19.6 Live safeguards | An allocation cap the owner sets by hand (`capital_ramp`), per-order and per-day notional caps, fat-finger price bands against the last trade and NBBO, max orders per run with a `runaway` halt, and per-strategy protections (cooldown after a stop-out, pause after N stops, lock on a losing ticker). Settings under `[production.risk.rules.*]`, off by default. | `production/rules/{__init__,capital_ramp,live_caps,price_band,max_orders}.py`, `production/rules/settings.py`, `production/live/{settings,quotes,context,allocation,runaway}.py` | done |
 | 19.7 Account rules engine | Account profiles per portfolio, cash-account rules (settled cash only, no free-riding, no shorts, no margin), US rules (pattern day trader, wash sales, Reg SHO), EU and UK rules (PRIIPs, short disclosure), settlement per market, buying power, FX funding. Transaction taxes in the cost model moved to a later wave. | `accounts/rules/*`, `production/rules/account_rules.py`, a new SQLite migration | done (taxes open) |
 | 19.8 Tickets, approve mode and submit | `approve` mode between paper and auto, order tickets with step-up approval in the console and by push, decide after the close and submit before the open for live books. | `accounts/{models,subscriptions}.py`, `production/{tickets,submit,tick}.py`, `app/tickets.py`, `api/routers/tickets.py`, `web/src/app/tickets/*`, a new SQLite migration | planned |

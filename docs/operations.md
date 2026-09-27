@@ -55,9 +55,11 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `connections_sync`: broker connections whose sync is due | every hour | none |
 | `broker_health`: probes each IB Gateway (see Live trading) | every 5 minutes | none |
 | `ibkr_reauth_reminder`: push to approve the weekly IBKR login | Sunday 18:00 New York | none |
+| `live_sod_check`: reconcile each live portfolio with its broker (see Live trading) | open - 60 min | none |
+| `live_eod_check`: the same after the close, before the tick decides | close + 15 min | none |
 | `calendars_refresh`: earnings, dividend and economic calendars, then the event alerts (see [calendars](calendars.md)) | 06:00 UTC daily | none |
 
-Session jobs run on NYSE trading days. The two IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty. `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
+Session jobs run on NYSE trading days. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 
 The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 
@@ -400,6 +402,19 @@ List the gateways under `[brokers.ibkr.gateways.<name>]` (`host`, `port`, `mode`
 - A short outage only skips the day. Yesterday's decisions are never sent late.
 - `ibkr_reauth_reminder` pushes on Sunday evening: approve the IBKR login on your phone.
 
+### Reconciliation and drift
+
+The broker is the source of truth. `live_sod_check` and `live_eod_check` reconcile every portfolio listed on a gateway, and a submit window waits for the same check (`submit`). Each check books the fills first, then compares the broker with the ledger and stores a report.
+
+- Only Stonks' own positions and orders count. Your own trades in the same account are listed as external and never drift.
+- `clean` or `warn`: nothing stops. A warning (an order still working after the close, a missing commission) pushes an alert.
+- `drift`: one share off, an order the broker lost, or a reference Stonks never wrote. It opens a `broker_drift` halt (new buys stop, closes still work), pauses the portfolio's auto subscriptions and pushes a high-urgency alert.
+- `outage`: the broker did not answer. The day is skipped. Outages on 2 sessions in a row (`[production.live] outage_pause_after_sessions`) pause auto.
+- `fault`: a wrong account or a refused login. Auto pauses at once.
+- The start-of-day check cancels day and auction orders left from an earlier session (`cancel_stale_orders`).
+
+Runbook for drift: read the report (`stonks reconcile list`, `stonks reconcile show <id>`, or Health in the console), find the cause (a missed fill, a manual sale of Stonks' shares, a split), fix it at the broker or let the next check book it, run `stonks reconcile run --portfolio <id>` until it is clean, then `stonks halts clear <id> --reason "..."` and resume auto with a fresh code.
+
 ### Allocation and account profile
 
 Each live portfolio needs two owner settings before anything opens. Both need a fresh second factor (`live.manage`) and write an audit row:
@@ -409,7 +424,7 @@ PUT /api/portfolios/{id}/live/allocation        {"amount": 2500, "currency": "US
 PUT /api/portfolios/{id}/live/account-profile   {"jurisdiction": "us", "account_type": "cash"}
 ```
 
-- In the console: Profile, then Live settings next to the LIVE portfolio. The page also lists which live safeguards and account rules act on it (`GET /api/portfolios/{id}/live/rules`). Gateway health shows on Health (`GET /api/brokers/gateways`).
+- In the console: Profile, then Live settings next to the LIVE portfolio. The page also lists which live safeguards and account rules act on it (`GET /api/portfolios/{id}/live/rules`). Gateway health and the reconcile reports show on Health (`GET /api/brokers/gateways`, `GET /api/reconcile/reports`).
 - The allocation is the most Stonks may hold in the book. There are no automatic steps. A bad week alerts but never changes it.
 - The profile picks the account rules: `us`, `eu` or `uk`, `cash` (default) or `margin`, `retail` (default) or `professional`. Shorts need a margin account.
 - The account is shared with your own trading. Stonks only trades the positions it opened (`[production.live] allow_manual_trades = true`).
