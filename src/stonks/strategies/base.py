@@ -20,6 +20,13 @@ copies their data into every worker snapshot and modified lake, next to the
 universe (RS-01). Read it through :func:`strategy_data_tickers`. An optional ``asset_classes`` instance param
 overrides ``applicable_asset_classes``, for opt-in use of a strategy outside
 its evidence base.
+
+Shorts (roadmap 16.3): a strategy whose negative scores can mean "short"
+sets ``short_capable = True``. It then accepts a ``short_mode`` param
+(``flat``, the default, or ``short``) without declaring it in its spec, so
+the params of a long-only instance stay exactly as before.
+``supports_short`` is true only with ``short_mode = "short"``. A strategy
+may still set ``supports_short = True`` on the class directly.
 """
 
 from __future__ import annotations
@@ -53,6 +60,10 @@ _ASSET_CLASSES: tuple[str, ...] = get_args(AssetClass)
 
 #: Instance param that overrides ``applicable_asset_classes``.
 ASSET_CLASSES_PARAM = "asset_classes"
+#: Instance param of a short-capable strategy: ``flat`` or ``short``.
+SHORT_MODE_PARAM = "short_mode"
+ShortMode = Literal["flat", "short"]
+SHORT_MODES: tuple[str, ...] = get_args(ShortMode)
 
 
 @dataclass(frozen=True)
@@ -147,8 +158,11 @@ class BaseStrategy:
     applicable_asset_classes: ClassVar[tuple[AssetClass, ...]] = ("equity",)
     #: Negative scores mean "short", not only "less long" (roadmap 16).
     #: A short opens only when the strategy and the book both allow it;
-    #: off by default. Read with ``getattr`` so any Strategy works.
-    supports_short: ClassVar[bool] = False
+    #: off by default. Read with ``getattr`` so any Strategy works. A
+    #: ``short_capable`` strategy sets it per instance from ``short_mode``.
+    supports_short: bool = False
+    #: The strategy can emit short scores when ``short_mode = "short"``.
+    short_capable: ClassVar[bool] = False
     #: ``estimate_return`` keeps no per-day state that ``decide`` reads, so
     #: the tick may score this strategy in worker processes (see
     #: ``stonks.production.scoring``). Off unless a strategy opts in.
@@ -178,8 +192,17 @@ class BaseStrategy:
         if ASSET_CLASSES_PARAM in params and not any(s.name == ASSET_CLASSES_PARAM for s in spec):
             override = _parse_asset_classes(params[ASSET_CLASSES_PARAM])
             params[ASSET_CLASSES_PARAM] = list(override)
+        spec_names = {s.name for s in spec}
+        short_mode = params.get(SHORT_MODE_PARAM) if SHORT_MODE_PARAM not in spec_names else None
+        if short_mode is not None:
+            self._check_short_mode(short_mode)
         validate_params(
-            {k: v for k, v in params.items() if override is None or k != ASSET_CLASSES_PARAM},
+            {
+                k: v
+                for k, v in params.items()
+                if (override is None or k != ASSET_CLASSES_PARAM)
+                and (short_mode is None or k != SHORT_MODE_PARAM)
+            },
             spec,
         )
         defaults = {s.name: s.default for s in spec}
@@ -187,10 +210,24 @@ class BaseStrategy:
         if override is not None:
             self.applicable_asset_classes = override  # type: ignore[misc]
             self._asset_classes_override = override
+        if type(self).short_capable:
+            self.supports_short = self.params.get(SHORT_MODE_PARAM, "flat") == "short"
         for attr, value in self.param_metadata().items():
             if attr not in ("label_horizon_bars", "required_history_bars"):
                 raise ValueError(f"param_metadata may not set {attr!r}")
             setattr(self, attr, max(0, int(value)))
+
+    @classmethod
+    def _check_short_mode(cls, value: Any) -> None:
+        if value not in SHORT_MODES:
+            raise ValueError(f"short_mode must be one of {SHORT_MODES}, got {value!r}")
+        if value == "short" and not cls.short_capable:
+            raise ValueError(f"{cls.__name__} cannot short, so short_mode must be 'flat'")
+
+    @property
+    def short_mode(self) -> ShortMode:
+        """``short`` when this instance may emit short scores."""
+        return "short" if self.supports_short else "flat"
 
     def param_metadata(self) -> dict[str, int]:
         """``label_horizon_bars`` / ``required_history_bars`` that depend on

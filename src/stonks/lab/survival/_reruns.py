@@ -59,6 +59,10 @@ class Rerun:
     #: only applied when ``override_costs``.
     costs: Any = None
     override_costs: bool = False
+    #: Shorting override (a ``ShortingSettings``); only applied when
+    #: ``override_shorting``.
+    shorting: Any = None
+    override_shorting: bool = False
     #: Also score the strategy with the run's objective (train window).
     score_objective: bool = False
 
@@ -79,6 +83,8 @@ class RerunResult:
     turnover_annual: float = 0.0
     cost_drag_annual: float = 0.0
     costs_paid: float = 0.0
+    #: Borrow fees and debit interest paid (0 for a long-only backtest).
+    financing_paid: float = 0.0
     #: The objective's score when asked for (``score_objective``).
     objective_score: float | None = None
     error: str | None = None
@@ -140,6 +146,8 @@ def _run_one(state: _State, rerun: Rerun) -> RerunResult:
             dataset = _with_universe(dataset, list(rerun.universe))
         if rerun.override_costs:
             dataset = dataclasses.replace(dataset, costs=rerun.costs)
+        if rerun.override_shorting:
+            dataset = dataclasses.replace(dataset, shorting=rerun.shorting)
         objective_score: float | None = None
         if rerun.score_objective:
             assert state.objective is not None
@@ -164,6 +172,9 @@ def _run_one(state: _State, rerun: Rerun) -> RerunResult:
         turnover_annual=float(stats.turnover_annual),
         cost_drag_annual=float(stats.cost_drag_annual),
         costs_paid=float(stats.costs_paid),
+        financing_paid=(
+            float(report.short_book.financing_total) if report.short_book is not None else 0.0
+        ),
         objective_score=objective_score,
     )
 

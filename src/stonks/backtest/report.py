@@ -18,6 +18,16 @@ Annualization conventions
   (``end <= 0``) reports ``-1.0``. When the annualized figure is too large
   to represent as a float (tiny intraday spans with any gain) it reports
   ``math.inf`` instead of raising ``OverflowError``.
+
+Long/short books (roadmap 16.4)
+-------------------------------
+A backtest that allows shorts attaches a :class:`ShortBookReport` as
+``short_book``: every financing charge (borrow fees, debit interest), the
+orders the engine forced (margin calls, borrow recalls), the long and short
+exposure after every bar as fractions of equity, and, once the trade
+ledger is attached, the P&L of the long and the short round trips. A
+long-only backtest leaves ``short_book`` as ``None``, so its report is
+unchanged.
 """
 
 from __future__ import annotations
@@ -25,13 +35,17 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
+from typing import TYPE_CHECKING
 
 from stonks.backtest import metrics
 from stonks.backtest.calendar import calendar_for_universe
 from stonks.backtest.corporate_actions import CorporateActionRecord
 from stonks.backtest.trades import RoundTrip, TradeStats
 from stonks.core.interval import Interval
-from stonks.core.types import AssetClass
+from stonks.core.types import AssetClass, Order
+
+if TYPE_CHECKING:
+    from stonks.backtest.simulated_broker import FinancingEvent
 
 _TRADING_DAYS_PER_YEAR = 252
 
@@ -44,6 +58,73 @@ def periods_per_year(
     ``stonks.backtest.calendar``: crypto trades 24/7/365, every other class
     252 sessions of 6.5h; a mixed universe uses the densest calendar)."""
     return calendar_for_universe(asset_classes).periods_per_year(interval)
+
+
+@dataclass(frozen=True)
+class ExposurePoint:
+    """Long and short market value after one bar, as fractions of equity
+    (``short`` is a positive magnitude)."""
+
+    timestamp: date
+    long: float
+    short: float
+
+    @property
+    def gross(self) -> float:
+        return self.long + self.short
+
+    @property
+    def net(self) -> float:
+        return self.long - self.short
+
+
+@dataclass(frozen=True)
+class ShortBookReport:
+    """What a long/short backtest adds to its report (see the module doc)."""
+
+    financing: tuple[FinancingEvent, ...] = ()
+    forced_orders: tuple[Order, ...] = ()
+    exposure: tuple[ExposurePoint, ...] = ()
+    #: P&L of the long and short round trips (open lots marked); set by
+    #: ``stonks.backtest.trades.with_trades``.
+    long_pnl: float = 0.0
+    short_pnl: float = 0.0
+    n_long_trades: int = 0
+    n_short_trades: int = 0
+
+    @property
+    def borrow_fees(self) -> float:
+        """Borrow fees paid (a positive cost)."""
+        return -sum(e.amount for e in self.financing if e.kind == "borrow_fee")
+
+    @property
+    def debit_interest(self) -> float:
+        """Interest paid on negative cash (a positive cost)."""
+        return -sum(e.amount for e in self.financing if e.kind == "debit_interest")
+
+    @property
+    def financing_total(self) -> float:
+        return self.borrow_fees + self.debit_interest
+
+    @property
+    def n_margin_calls(self) -> int:
+        return sum(1 for o in self.forced_orders if o.strategy_id == "margin")
+
+    @property
+    def n_recalls(self) -> int:
+        return sum(1 for o in self.forced_orders if o.strategy_id == "recall")
+
+    @property
+    def max_gross(self) -> float:
+        return max((p.gross for p in self.exposure), default=0.0)
+
+    @property
+    def max_short(self) -> float:
+        return max((p.short for p in self.exposure), default=0.0)
+
+    @property
+    def mean_net(self) -> float:
+        return sum(p.net for p in self.exposure) / len(self.exposure) if self.exposure else 0.0
 
 
 @dataclass(frozen=True)
@@ -93,6 +174,9 @@ class BacktestReport:
     trade_stats: TradeStats = TradeStats()  # noqa: RUF009 - frozen, safe to share
     #: Tulchinsky fitness; needs turnover, so ``None`` until trades attach.
     fitness: float | None = None
+    #: Financing, forced orders, exposure and long/short attribution of a
+    #: backtest that allows shorts; ``None`` for a long-only one.
+    short_book: ShortBookReport | None = None
 
     @property
     def profit_factor(self) -> float:

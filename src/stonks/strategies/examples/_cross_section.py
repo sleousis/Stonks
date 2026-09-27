@@ -99,9 +99,11 @@ def orders_from_constructor(
     *,
     strategy_id: str,
     buffer_fraction: float = 0.0,
+    allow_short: bool = False,
 ) -> list[Order]:
     """Size ``inp`` with ``constructor`` and diff the target book into
-    orders (sells first; buys never spend more than cash plus proceeds)."""
+    orders (sells first; buys never spend more than cash plus proceeds).
+    ``allow_short`` diffs signed targets (roadmap 16.3)."""
     book = constructor.target_weights(inp)
     if book.meta.get("unfunded"):
         _log.info("strategy.unfunded", strategy_id=strategy_id, tickers=book.meta["unfunded"])
@@ -112,4 +114,5 @@ def orders_from_constructor(
         buffer_fraction=buffer_fraction,
         as_of=inp.as_of,
         strategy_id=strategy_id,
+        allow_short=allow_short,
     )

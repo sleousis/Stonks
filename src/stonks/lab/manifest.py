@@ -12,6 +12,8 @@ manifest is stored in ``lab_runs.manifest_json`` and in the artifact's
   ``last`` timestamp and an md5 of the ordered ``close|adj_close`` sequence
   over the lab window, from one DuckDB query, plus one sha256 over all of it;
 - ``costs``: the cost-model settings in force;
+- ``shorting``: the margin model and borrow fees, only for a dataset that
+  may short (roadmap 16.4);
 - ``dataset``: universe, windows and interval;
 - ``seeds``.
 """
@@ -53,7 +55,13 @@ def build_manifest(settings: Any, dataset: Any, seeds: Mapping[str, Any]) -> dic
         "dataset": dataset_summary(dataset),
         "seeds": _jsonable(dict(seeds)),
         "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
+        **_shorting(dataset),
     }
+
+
+def _shorting(dataset: Any) -> dict[str, Any]:
+    shorting = getattr(dataset, "shorting", None)
+    return {} if shorting is None else {"shorting": _jsonable(shorting)}
 
 
 # ---- code identity -------------------------------------------------------------

@@ -4,7 +4,7 @@ Design for roadmap Phase 16. Stonks is long-only today: `SimulatedBroker` reject
 
 Goal: long/short books as an **opt-in**, with long-only behaviour byte-identical by default.
 
-Status: 16.1 and 16.2 are built and off by default. 16.3 and 16.4 are planned. Section 10 lists what was built and where it differs from this design.
+Status: 16.1 to 16.4 are built and off by default. Section 10 lists what was built and where it differs from this design.
 
 Non-goals: naked shorting, short options (see `options.md`), portfolio margin, securities lending income.
 
@@ -154,7 +154,7 @@ The registry-wide property test changes from "buy notional never increases, sell
 
 ## 10. Status
 
-16.1 and 16.2 are built. Every switch is off, so long-only runs are unchanged. 16.3 and 16.4 are planned.
+16.1 to 16.4 are built. Every switch is off, so long-only runs are unchanged.
 
 **Built in 16.1**
 - `Order.position_effect`, `execution/orders.classify` and `classify_all`, side tokens `short` and `cover` in client ids.
@@ -174,6 +174,23 @@ The registry-wide property test changes from "buy notional never increases, sell
 - `sell_within_position` lets short sales through only in a book that allows shorts.
 - A cover skips every order rule, and the batch rules only scale opening orders, so a forced cover is never blocked.
 
+**Built in 16.3**
+- `BaseStrategy.short_capable` and the `short_mode` param (`flat` or `short`). It sits outside the param spec, so a long-only instance keeps exactly its old params. `supports_short` is on only with `short_mode = "short"`.
+- The ranker takes `allow_short`. It keeps short scores (`score < -threshold`) of strategies that support shorts in `SignalSet.shorts`, apart from `scores`. `SignalSet.for_book(allow_short)` is what a book reads. The tick asks for shorts when any book allows them.
+- Constructor settings gain `min_net`, `max_net` and `neutral` (`none`, `dollar`, `beta`), and `max_gross` may reach 4.0 when `long_only` is off. A long-only book still stops at 1.0.
+- `equal_weight_top_n` shorts the `n_short` lowest z-scores in long/short mode. `vol_target` keeps short forecasts. Both read betas (given, or estimated against the equal-weight universe).
+- The pipeline runs a cash book's constructor long-only at no more than 1.0 gross, whatever its settings say.
+- The backtest engine passes short picks to a strategy's own `decide` too.
+- `ewmac_trend` and `tsmom` short their down trends (`ath_trend` has no short side). New strategies: `ls_momentum` (long/short 12-1 momentum) and `pairs_reversion` (spread z-score with a half-life check, `features/pairs.py`).
+
+**Built in 16.4**
+- `BacktestReport.short_book` (`ShortBookReport`): financing charges, forced orders, long and short exposure after every bar, and the P&L and trade count of each leg. The tear sheet shows it.
+- `backtest/shorting.py`: `ShortingSettings` (margin model, borrow fees, a fee multiplier) and `ScaledBorrow`. `LabDataset.shorting` turns shorts on for every lab backtest, and the manifest records it.
+- `cost_stress` multiplies borrow fees with the other costs, adds one run at 3x borrow fees that must keep a positive Sharpe, and reports the fee it charged.
+- `stress` adds a `short_squeeze` scenario: the largest short's ticker jumps 50% over 3 bars, and the drawdown must stay above -30%.
+- Go-live adds `short_borrow_costs` for a strategy registered with `short_mode = "short"`: the lab must have charged at least 0.25% a year and the 3x borrow stress must pass.
+- Tests confirm the trade Monte Carlo and the runs test score short round trips like long ones.
+
 **Changes from the design**
 - `squeeze_stop` is named `squeeze_guard`. It also covers on a price spike over a few bars.
 - A new `margin_call` rule does the forced cover on a margin breach in the tick and blocks new opens. The design only blocked opens and raised a notification. The notification is not built yet.
@@ -183,5 +200,8 @@ The registry-wide property test changes from "buy notional never increases, sell
 - Rules and the engine read `allow_short` from the book. The backtest raises an error when the config and the broker disagree, instead of dropping orders quietly.
 - The tick does not call `accrue` yet. The tick keeps no state between runs, so it needs the last accrual date. `accrue(since=)` is ready for that.
 - Only the default book runs in the tick today and it is long-only, so tick shorts wait for per-portfolio plans. The tick ranker still drops negative scores (16.3).
-- Constructors still cap gross at 1.0 (`max_gross`). Books above 1.0 gross wait for 16.3.
-- Financing charges sit on `SimulatedBroker.financing` and forced orders on `Backtester.forced_orders`. Reports show them in 16.4.
+- The neurotrader888 short legs are not re-enabled. Each port maps its short signal to flat inside its indicator code, so each needs its own change.
+- Notify subscribers do not see short signals labelled "short (info only)" yet.
+- The "hard to borrow" cost scenario and the check that both legs earn their keep are not built.
+- `benchmark_relative` still compares a market-neutral book with the dataset's benchmark.
+- The CLI, API and console cannot set `LabDataset.shorting` yet, so short lab runs are set up in code.

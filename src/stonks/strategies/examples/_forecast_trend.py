@@ -9,9 +9,11 @@ does the rest the same way for all three:
 - **Look-ahead.** Bars are read through the look-ahead-safe ``BarCache`` on
   the adjusted basis, only up to ``as_of``'s session. A ticker whose last
   bar is stale (delisted, halted) gets no forecast.
-- **Long only.** ``estimate_return`` is the forecast when it is positive and
-  ``None`` otherwise: a short forecast goes flat. Once the book can short
-  (roadmap Phase 16) the negative forecasts are the short legs.
+- **Long only by default.** ``estimate_return`` is the forecast when it is
+  positive and ``None`` otherwise: a short forecast goes flat. With
+  ``short_mode = "short"`` (roadmap 16.3) a negative forecast is returned
+  as is, so a book that may short holds the down trend short, sized the
+  same way. A long-only book still drops the short legs.
 - **Sizing** goes through the ``vol_target`` constructor (Carver:
   ``w = tau * IDM * F / 10 / sigma / N``) over every ticker evaluated that
   day, flat ones included, so a single long name is not levered up to the
@@ -209,6 +211,7 @@ class ForecastTrendStrategy(BaseStrategy):
     alpha_family = "trend"
     premise = "trend"
     applicable_asset_classes: ClassVar[tuple[AssetClass, ...]] = ("equity", "crypto", "commodity")
+    short_capable: ClassVar[bool] = True
 
     def __init__(self, params: Any) -> None:
         super().__init__(params)
@@ -341,7 +344,9 @@ class ForecastTrendStrategy(BaseStrategy):
 
     def estimate_return(self, ticker: str, as_of: Any, lake: Any) -> float | None:
         f = self.forecast(ticker, as_of, lake)
-        return f if f is not None and f > 0 else None
+        if f is None or f == 0:
+            return None
+        return f if f > 0 or self.supports_short else None
 
     def decide(
         self,
@@ -351,7 +356,8 @@ class ForecastTrendStrategy(BaseStrategy):
         as_of: Any,
     ) -> list[Order]:
         day, _ = session_cutoff(as_of)
-        picked = {t for r, t in my_picks if r > 0}
+        shorts = self.supports_short
+        picked = {t for r, t in my_picks if r > 0 or (shorts and r < 0)}
         lake = self._last_lake() if self._last_lake is not None else None
         seen = list(self._seen.get(lake, {})) if lake is not None else []
         if not seen:
@@ -360,7 +366,10 @@ class ForecastTrendStrategy(BaseStrategy):
         # day came in between, e.g. a wrapper replaying past bars)
         evaluated = {t: self._row(t, as_of, lake) for t in seen}
         rows = {t: r for t, r in evaluated.items() if r is not None}
-        signals = {t: (max(r.forecast, 0.0) if t in picked else 0.0) for t, r in rows.items()}
+        signals = {
+            t: ((r.forecast if shorts else max(r.forecast, 0.0)) if t in picked else 0.0)
+            for t, r in rows.items()
+        }
         vols = {t: r.sigma_annual for t, r in rows.items() if r.sigma_annual is not None}
         returns = {t: r.returns for t, r in rows.items() if not r.returns.empty}
         inp = ConstructionInput(
@@ -371,12 +380,15 @@ class ForecastTrendStrategy(BaseStrategy):
             vols_annual=vols,  # type: ignore[arg-type]
             returns_history=pd.DataFrame(returns) if returns else None,
         )
-        constructor = get_constructor("vol_target", tau=float(self.params["tau"]))
+        constructor = get_constructor(
+            "vol_target", tau=float(self.params["tau"]), long_only=not shorts
+        )
         return orders_from_constructor(
             constructor,
             inp,
             strategy_id=self.id,
             buffer_fraction=float(self.params["buffer_fraction"]),
+            allow_short=shorts,
         )
 
     def _exits_only(
@@ -391,9 +403,12 @@ class ForecastTrendStrategy(BaseStrategy):
         equity = portfolio.total_value(prices)
         if not equity > 0:
             return []
+        shorts = self.supports_short
         keep = {
             t: q * prices[t] / equity
             for t, q in portfolio.positions.items()
-            if q > 0 and t in picked and prices.get(t)
+            if (q > 0 or (shorts and q < 0)) and t in picked and prices.get(t)
         }
-        return orders_from_targets(keep, portfolio, prices, as_of=day, strategy_id=self.id)
+        return orders_from_targets(
+            keep, portfolio, prices, as_of=day, strategy_id=self.id, allow_short=shorts
+        )

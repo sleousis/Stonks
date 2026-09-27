@@ -37,8 +37,12 @@ A short opens only when the book allows it (``BookInput.allow_short``) and
 the strategy does (``supports_short``, read with ``getattr``). Otherwise
 everything is exactly as above. In a short book the target-weight route
 keeps negative scores of the strategies that support shorts (the others
-are clipped at 0), lets the constructor keep negative weights, and diffs
-signed targets (``orders_from_targets(allow_short=True)``). In
+are clipped at 0), lets the constructor keep negative weights (its
+long/short mode, roadmap 16.3: its own normalisation, gross and net
+limits, neutrality), and diffs signed targets
+(``orders_from_targets(allow_short=True)``). A book that cannot short runs
+its constructor long-only at no more than 1.0 gross, whatever its
+settings say. In
 ``single_winner`` the winner's orders are split at zero
 (:func:`stonks.execution.orders.classify`) and the opening sell legs are
 dropped unless the winner supports shorts. Client ids carry the side token
@@ -302,10 +306,12 @@ def _from_targets(
         # subscribed): hold rather than read it as "exit everything".
         _log.warning("pipeline.no_signals", held=sorted(_held(book.portfolio)))
         return PipelineResult(orders=[], target_book=TargetBook(), reason="no_signals")
-    method = book.construction.signal_method or constructor.signal_method
     shorting = book.allow_short and _any_shorts(signals, strategies)
     if shorting:
         constructor = _long_short(book.construction)
+    elif not constructor.settings.long_only:
+        constructor = _long_only(book.construction)
+    method = book.construction.signal_method or constructor.normalization()
     normalised = normalize(
         signals,
         method,
@@ -387,6 +393,18 @@ def _any_shorts(
 def _long_short(construction: ConstructionSettings) -> PortfolioConstructor:
     """The book's constructor with negative weights allowed."""
     params = {**construction.params, "long_only": False}
+    return construction.model_copy(update={"params": params}).build()
+
+
+def _long_only(construction: ConstructionSettings) -> PortfolioConstructor:
+    """The book's constructor as a cash book: long-only, at most 1.0 gross,
+    no neutrality (a book that cannot short, or has no strategy that may)."""
+    params = {
+        **construction.params,
+        "long_only": True,
+        "max_gross": min(float(construction.params.get("max_gross", 1.0)), 1.0),
+        "neutral": "none",
+    }
     return construction.model_copy(update={"params": params}).build()
 
 
