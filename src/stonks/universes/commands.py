@@ -85,6 +85,61 @@ def _print_ensure(report: Any) -> None:
         console.print(f"[yellow]failed[/yellow] {', '.join(report.failed)}")
 
 
+def _spec_body(
+    kind: str, tickers: str | None, csv: Path | None, spec: str | None
+) -> dict[str, Any]:
+    """The spec from ``--spec``, ``--tickers`` or ``--csv`` (the last two
+    for list universes)."""
+    from stonks.universes.providers.static_list import parse_list_csv
+
+    if kind not in _KINDS:
+        raise typer.BadParameter(f"--kind must be one of {list(_KINDS)}, got {kind!r}")
+    if (tickers or csv) and kind != "list":
+        raise typer.BadParameter("--tickers and --csv are for list universes")
+    try:
+        body: Any = json.loads(spec) if spec else {}
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter(f"--spec is not JSON: {exc}") from None
+    if not isinstance(body, dict):
+        raise typer.BadParameter("--spec must be a JSON object")
+    try:
+        if csv is not None:
+            body = parse_list_csv(csv.read_text(encoding="utf-8"))
+        elif tickers:
+            body["tickers"] = [t.strip() for t in tickers.split(",") if t.strip()]
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from None
+    return body
+
+
+def _definition(
+    universe_id: str,
+    kind: str,
+    tickers: str | None,
+    csv: Path | None,
+    spec: str | None,
+    name: str | None,
+    description: str | None,
+    *,
+    current: dict[str, Any] | None = None,
+) -> Any:
+    """A validated definition. ``current`` is the stored spec an update
+    keeps when no new one is given."""
+    from stonks.universes import UniverseDefinition
+
+    body = _spec_body(kind, tickers, csv, spec)
+    if current is not None and not (tickers or csv or spec):
+        body = current
+    try:
+        definition = UniverseDefinition(
+            id=universe_id, kind=kind, name=name, description=description, spec=body
+        )
+        definition.validated()
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from None
+    return definition
+
+
 @app.command("list")
 def list_universes() -> None:
     """Every stored universe with its kind, member count and last refresh."""
@@ -136,30 +191,9 @@ def create(
     description: str | None = typer.Option(None, "--description"),
 ) -> None:
     """Store a universe definition. It has no members until its first refresh."""
-    from stonks.universes import UniverseDefinition, UniverseStore
-    from stonks.universes.providers.static_list import parse_list_csv
+    from stonks.universes import UniverseStore
 
-    if kind not in _KINDS:
-        raise typer.BadParameter(f"--kind must be one of {list(_KINDS)}, got {kind!r}")
-    if (tickers or csv) and kind != "list":
-        raise typer.BadParameter("--tickers and --csv are for list universes")
-    try:
-        body: dict[str, Any] = json.loads(spec) if spec else {}
-    except json.JSONDecodeError as exc:
-        raise typer.BadParameter(f"--spec is not JSON: {exc}") from None
-    if not isinstance(body, dict):
-        raise typer.BadParameter("--spec must be a JSON object")
-    try:
-        if csv is not None:
-            body = parse_list_csv(csv.read_text(encoding="utf-8"))
-        elif tickers:
-            body["tickers"] = [t.strip() for t in tickers.split(",") if t.strip()]
-        definition = UniverseDefinition(
-            id=universe_id, kind=kind, name=name, description=description, spec=body
-        )
-        definition.validated()
-    except ValueError as exc:
-        raise typer.BadParameter(str(exc)) from None
+    definition = _definition(universe_id, kind, tickers, csv, spec, name, description)
     settings = _settings()
     with _lake(settings) as lake:
         store = UniverseStore(lake)
@@ -167,6 +201,71 @@ def create(
             _fail(f"universe {universe_id!r} already exists")
         store.save(definition)
     console.print(f"[green]created {universe_id}[/green] ({kind}); refresh it to add members")
+
+
+@app.command("update")
+def update(
+    universe_id: str = typer.Argument(..., help="universe id"),
+    kind: str | None = typer.Option(None, "--kind", help="|".join(_KINDS) + " (default: as is)"),
+    tickers: str | None = typer.Option(
+        None, "--tickers", help="list only: comma-separated tickers"
+    ),
+    csv: Path | None = _CSV,
+    spec: str | None = typer.Option(None, "--spec", help="new kind settings as a JSON object"),
+    name: str | None = typer.Option(None, "--name"),
+    description: str | None = typer.Option(None, "--description"),
+) -> None:
+    """Change a definition. What you leave out stays. The members stay as
+    they are until the next refresh."""
+    from stonks.universes import UniverseStore
+
+    settings = _settings()
+    with _lake(settings) as lake:
+        store = UniverseStore(lake)
+        try:
+            current = store.get(universe_id)
+        except KeyError:
+            _fail(f"no universe {universe_id!r}")
+            return
+        new_kind = kind or current.kind
+        keep = current.spec if new_kind == current.kind else {}
+        definition = _definition(
+            universe_id,
+            new_kind,
+            tickers,
+            csv,
+            spec,
+            current.name if name is None else name,
+            current.description if description is None else description,
+            current=keep,
+        )
+        store.save(definition)
+    console.print(f"[green]updated {universe_id}[/green]; refresh it to rebuild the members")
+
+
+@app.command("history")
+def history(
+    universe_id: str = typer.Argument(..., help="universe id"),
+    ticker: str | None = typer.Option(None, "--ticker", help="tickers containing this"),
+    limit: int = typer.Option(100, "--limit", min=1, help="rows to show"),
+) -> None:
+    """Membership spans, latest change first: who joined and left, when."""
+    from stonks.universes import UniverseStore
+    from stonks.universes.base import EARLIEST
+
+    settings = _settings()
+    with _lake(settings) as lake:
+        store = UniverseStore(lake)
+        if not store.exists(universe_id):
+            _fail(f"no universe {universe_id!r}")
+        spans, total = store.membership_history(universe_id, ticker=ticker, limit=limit)
+    table = Table(title=f"{universe_id}: {total} spans")
+    for col in ("ticker", "joined", "left"):
+        table.add_column(col)
+    for s in spans:
+        joined = "from the start" if s.start_date <= EARLIEST else s.start_date.isoformat()
+        table.add_row(s.ticker, joined, "" if s.end_date is None else s.end_date.isoformat())
+    console.print(table)
 
 
 @app.command("delete")

@@ -476,11 +476,14 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/universes` | List Universes | sign-in |  | [Page_UniverseView_](#page_universeview_) |
 | POST | `/api/universes` | Create Universe | `lab.run` | [UniverseCreate](#universecreate) | [UniverseView](#universeview) |
 | GET | `/api/universes/ensure/{job_id}/result` | Get Ensure Result | sign-in |  | [EnsureReport](#ensurereport) |
+| GET | `/api/universes/exchanges` | List Exchanges | sign-in |  | list[[ExchangeView](#exchangeview)] |
 | POST | `/api/universes/index-history` | Import Index History | `lab.run` | [IndexHistoryImport](#indexhistoryimport) | [IndexHistoryView](#indexhistoryview) |
 | GET | `/api/universes/refresh/{job_id}/result` | Get Refresh Result | sign-in |  | [UniverseRefreshView](#universerefreshview) |
 | GET | `/api/universes/{universe_id}` | Get Universe | sign-in |  | [UniverseView](#universeview) |
+| PUT | `/api/universes/{universe_id}` | Update Universe | `lab.run` | [UniverseUpdate](#universeupdate) | [UniverseView](#universeview) |
 | DELETE | `/api/universes/{universe_id}` | Delete Universe | `strategy.promote` |  | [UniverseView](#universeview) |
 | POST | `/api/universes/{universe_id}/ensure` | Ensure Data | `lab.run` | [EnsureDataRequest](#ensuredatarequest) | [Job](#job) |
+| GET | `/api/universes/{universe_id}/history` | Get History | sign-in |  | [Page_MembershipSpanView_](#page_membershipspanview_) |
 | GET | `/api/universes/{universe_id}/members` | Get Members | sign-in |  | [UniverseMembers](#universemembers) |
 | POST | `/api/universes/{universe_id}/refresh` | Refresh Universe | `lab.run` |  | [Job](#job) |
 
@@ -1298,6 +1301,16 @@ What an ensure did. ``run_id`` is the ``ingest_runs`` row (``None`` when nothing
 | `enabled` | boolean | yes |  |
 | `label` | string | yes |  |
 | `topic` | string | yes |  |
+
+### ExchangeView
+
+An exchange our instruments name, for the exchange picker.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `exchange` | string | yes |  |
+| `instruments` | integer | yes |  |
+| `listed` | integer | yes |  |
 
 ### Exposure
 
@@ -2326,6 +2339,16 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `user_id` | string | yes |  |
 | `via` | "session" \| "token" \| "legacy" \| "cli" \| "scheduler" \| "assistant" \| "telegram" | yes |  |
 
+### MembershipSpanView
+
+One stretch of membership: a member from ``start_date`` up to the day before ``end_date``.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `end_date` | date \| null | no |  |
+| `start_date` | date \| null | no |  |
+| `ticker` | string | yes |  |
+
 ### MessageCreate
 
 | Field | Type | Required | Description |
@@ -2737,6 +2760,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[LotPickView](#lotpickview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_MembershipSpanView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[MembershipSpanView](#membershipspanview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -4823,6 +4855,18 @@ One recorded turn: the model, the prompt version, every tool call and result, an
 | `spans` | integer | yes |  |
 | `universe_id` | string | yes |  |
 | `warnings` | list[string] | no |  |
+
+### UniverseUpdate
+
+A universe's new definition. The members stay as they are until the next refresh.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `csv` | string \| null | no |  |
+| `description` | string \| null | no |  |
+| `kind` | "list" \| "exchange" \| "rule" \| "index" | yes |  |
+| `name` | string \| null | no |  |
+| `spec` | object | no |  |
 
 ### UniverseView
 

@@ -148,6 +148,33 @@ cli = "stonks universe create"
 mcp = "create_universe"
 
 [[capability]]
+id = "universes.update"
+domain = "universes"
+title = "Edit a universe's definition"
+routes = ["PUT /api/universes/{universe_id}"]
+console = "updateUniverse"
+cli = "stonks universe update"
+mcp = "update_universe"
+
+[[capability]]
+id = "universes.history"
+domain = "universes"
+title = "Membership history: who joined and left, when"
+routes = ["GET /api/universes/{universe_id}/history"]
+console = "getUniverseHistory"
+cli = "stonks universe history"
+mcp = "get_universe_history"
+
+[[capability]]
+id = "universes.exchanges"
+domain = "universes"
+title = "Exchanges our instruments name, for an exchange universe"
+routes = ["GET /api/universes/exchanges"]
+console = "listUniverseExchanges"
+cli = { limited = "the CLI takes the exchange code, and stonks ingest exchanges lists the source's" }
+mcp = "list_universe_exchanges"
+
+[[capability]]
 id = "universes.delete"
 domain = "universes"
 title = "Delete a universe"

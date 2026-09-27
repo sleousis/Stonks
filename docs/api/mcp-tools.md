@@ -75,6 +75,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_tick`](#get_tick) | read | no |
 | [`get_ticket`](#get_ticket) | read | no |
 | [`get_universe`](#get_universe) | read | no |
+| [`get_universe_history`](#get_universe_history) | read | no |
 | [`get_universe_members`](#get_universe_members) | read | no |
 | [`get_watchlist`](#get_watchlist) | read | no |
 | [`health`](#health) | read | no |
@@ -120,6 +121,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_ticks`](#list_ticks) | read | no |
 | [`list_trade_journal`](#list_trade_journal) | read | no |
 | [`list_trading_modes`](#list_trading_modes) | read | no |
+| [`list_universe_exchanges`](#list_universe_exchanges) | read | no |
 | [`list_universes`](#list_universes) | read | no |
 | [`list_watchlists`](#list_watchlists) | read | no |
 | [`live_risk`](#live_risk) | read | no |
@@ -157,6 +159,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`update_price_alert`](#update_price_alert) | job | no |
 | [`update_screen`](#update_screen) | job | no |
 | [`update_subscription`](#update_subscription) | guarded | yes |
+| [`update_universe`](#update_universe) | guarded | yes |
 | [`update_watchlist`](#update_watchlist) | job | no |
 | [`validate_draft`](#validate_draft) | job | no |
 | [`validate_rule_spec`](#validate_rule_spec) | read | no |
@@ -727,6 +730,21 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `universe_id` | string | yes |  | universe id, e.g. sp500 or us_common |
 
+### `get_universe_history`
+
+Membership spans of a universe, latest change first: each ticker
+joined on start_date (null: from the start) and left on end_date
+(null: still a member).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `universe_id` | string | yes |  | universe id, e.g. sp500 or us_common |
+| `ticker` | string \| null | no | `null` | keep tickers containing this, e.g. AAPL |
+| `limit` | integer | no | `100` |  |
+| `offset` | integer | no | `0` |  |
+
 ### `get_universe_members`
 
 Members of a universe on a date (default today), point in time:
@@ -1225,6 +1243,15 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 For each of your portfolios: paper or live money, and the broker
 (simulated ledger, the configured Alpaca account, or a linked
 connection).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
+### `list_universe_exchanges`
+
+Exchanges our instruments name, with instrument counts, for an
+exchange universe's spec. The data source may list more.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
@@ -2291,6 +2318,24 @@ Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes*
 | `enabled` | boolean \| null | no | `null` |  |
 | `mode` | "notify" \| "paper" \| "auto" \| null | no | `null` | notify or paper; auto is switched on in the web app (second factor) |
 | `reason` | string \| null | no | `null` | audited |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `update_universe`
+
+Replace a universe's definition. The members stay as they are
+until the next refresh (refresh_universe). Without confirm=true
+returns a preview with the current definition.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `universe_id` | string | yes |  | universe id, e.g. sp500 or us_common |
+| `kind` | "list" \| "exchange" \| "rule" \| "index" | yes |  |  |
+| `spec` | object \| null | no | `null` | kind settings. list: {tickers, spans}. exchange: {exchange, source, security_types, include_delisted}. rule: {start, end, rebalance, min_adv, min_price, asset_classes, sectors, exclude_sectors, exchanges}. index: {index_id, source, start_date} |
+| `name` | string \| null | no | `null` |  |
+| `description` | string \| null | no | `null` |  |
+| `csv` | string \| null | no | `null` | list only: CSV with a ticker column (replaces spec) |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ## Resources

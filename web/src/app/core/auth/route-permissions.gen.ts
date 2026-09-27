@@ -149,4 +149,5 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'PUT /api/tax/lots/picks': 'portfolio.manage',
   'PUT /api/tax/settings': 'portfolio.manage',
   'PUT /api/tca/notes/{note_id}': 'portfolio.manage',
+  'PUT /api/universes/{universe_id}': 'lab.run',
 };

@@ -95,6 +95,27 @@ async def test_delete_needs_confirm(mcp, test_client):
     assert (await call(mcp, "list_universes"))["items"] == []
 
 
+@pytest.mark.anyio
+async def test_update_needs_confirm_then_history_and_exchanges(mcp, test_client):
+    args = {"universe_id": "ed", "kind": "list", "spec": {"tickers": ["UP.US"]}}
+    await call(mcp, "create_universe", {**args, "confirm": True})
+    change = {"universe_id": "ed", "kind": "list", "spec": {"tickers": ["UP.US", "DOWN.US"]}}
+    preview = await call(mcp, "update_universe", change)
+    assert preview["preview"] is True
+    assert preview["target"]["current"]["spec"] == {"tickers": ["UP.US"]}
+    assert (await call(mcp, "get_universe", {"universe_id": "ed"}))["spec"]["tickers"] == ["UP.US"]
+    updated = await call(mcp, "update_universe", {**change, "confirm": True})
+    assert updated["applied"] is True
+    assert updated["universe"]["spec"]["tickers"] == ["UP.US", "DOWN.US"]
+
+    queued = await call(mcp, "refresh_universe", {"universe_id": "ed", "confirm": True})
+    await call(mcp, "wait_for_job", {"job_id": queued["job"]["id"]})
+    history = await call(mcp, "get_universe_history", {"universe_id": "ed", "ticker": "down"})
+    assert history["total"] == 1 and history["items"][0]["ticker"] == "DOWN.US"
+    exchanges = await call(mcp, "list_universe_exchanges")
+    assert isinstance(exchanges["items"], list)
+
+
 def test_universe_and_lab_ensure_jobs_have_typed_result_routes():
     from stonks.mcp.tools.jobs import RESULT_ROUTES
 

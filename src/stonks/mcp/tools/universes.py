@@ -115,6 +115,64 @@ def register(t: ToolContext) -> None:
         created = await t.post("/api/universes", body)
         return {"preview": False, "applied": True, "universe": created}
 
+    @server.tool(annotations=READ)
+    async def get_universe_history(
+        universe_id: UniverseId,
+        ticker: Annotated[
+            str | None, Field(description="keep tickers containing this, e.g. AAPL")
+        ] = None,
+        limit: Annotated[int, Field(ge=1, le=500)] = 100,
+        offset: Annotated[int, Field(ge=0)] = 0,
+    ) -> dict[str, Any]:
+        """Membership spans of a universe, latest change first: each ticker
+        joined on start_date (null: from the start) and left on end_date
+        (null: still a member)."""
+        return await t.get(
+            f"/api/universes/{seg(universe_id)}/history",
+            drop_none({"ticker": ticker, "limit": limit, "offset": offset}),
+        )
+
+    @server.tool(annotations=READ)
+    async def list_universe_exchanges() -> dict[str, Any]:
+        """Exchanges our instruments name, with instrument counts, for an
+        exchange universe's spec. The data source may list more."""
+        return items(await t.get("/api/universes/exchanges"))
+
+    @server.tool(annotations=UNIVERSE_WRITE)
+    async def update_universe(
+        universe_id: UniverseId,
+        kind: Kind,
+        spec: Spec = None,
+        name: str | None = None,
+        description: str | None = None,
+        csv: Annotated[
+            str | None, Field(description="list only: CSV with a ticker column (replaces spec)")
+        ] = None,
+        confirm: Confirm = False,
+    ) -> dict[str, Any]:
+        """Replace a universe's definition. The members stay as they are
+        until the next refresh (refresh_universe). Without confirm=true
+        returns a preview with the current definition."""
+        uid = seg(universe_id)
+        body = drop_none(
+            {
+                "kind": kind,
+                "spec": spec or {},
+                "name": name,
+                "description": description,
+                "csv": csv,
+            }
+        )
+        if not confirm:
+            current = await t.get(f"/api/universes/{uid}")
+            return _preview(
+                "update",
+                {"current": current, "new": body},
+                ["replaces the definition; refresh afterwards to rebuild the members"],
+            )
+        updated = await t.put(f"/api/universes/{uid}", body)
+        return {"preview": False, "applied": True, "universe": updated}
+
     @server.tool(annotations=UNIVERSE_FETCH)
     async def refresh_universe(universe_id: UniverseId, confirm: Confirm = False) -> dict[str, Any]:
         """Queue a refresh that rebuilds the universe's membership (an

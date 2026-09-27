@@ -2190,6 +2190,26 @@ export type EventAlertSwitchView = {
 };
 
 /**
+ * ExchangeView
+ *
+ * An exchange our instruments name, for the exchange picker.
+ */
+export type ExchangeView = {
+    /**
+     * Exchange
+     */
+    exchange: string;
+    /**
+     * Instruments
+     */
+    instruments: number;
+    /**
+     * Listed
+     */
+    listed: number;
+};
+
+/**
  * Exposure
  */
 export type Exposure = {
@@ -5033,6 +5053,27 @@ export type MeView = {
 };
 
 /**
+ * MembershipSpanView
+ *
+ * One stretch of membership: a member from ``start_date`` up to the
+ * day before ``end_date``.
+ */
+export type MembershipSpanView = {
+    /**
+     * End Date
+     */
+    end_date?: string | null;
+    /**
+     * Start Date
+     */
+    start_date?: string | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+};
+
+/**
  * MessageCreate
  */
 export type MessageCreate = {
@@ -6056,6 +6097,28 @@ export type PageLotPickView = {
      * Items
      */
     items: Array<LotPickView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[MembershipSpanView]
+ */
+export type PageMembershipSpanView = {
+    /**
+     * Items
+     */
+    items: Array<MembershipSpanView>;
     /**
      * Limit
      */
@@ -11711,6 +11774,37 @@ export type UniverseRefreshView = {
      * Warnings
      */
     warnings?: Array<string>;
+};
+
+/**
+ * UniverseUpdate
+ *
+ * A universe's new definition. The members stay as they are until the
+ * next refresh.
+ */
+export type UniverseUpdate = {
+    /**
+     * Csv
+     */
+    csv?: string | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Kind
+     */
+    kind: 'list' | 'exchange' | 'rule' | 'index';
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Spec
+     */
+    spec?: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -23928,6 +24022,49 @@ export type GetUniverseEnsureResultResponses = {
 
 export type GetUniverseEnsureResultResponse = GetUniverseEnsureResultResponses[keyof GetUniverseEnsureResultResponses];
 
+export type ListUniverseExchangesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/universes/exchanges';
+};
+
+export type ListUniverseExchangesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListUniverseExchangesError = ListUniverseExchangesErrors[keyof ListUniverseExchangesErrors];
+
+export type ListUniverseExchangesResponses = {
+    /**
+     * Response Listuniverseexchanges
+     *
+     * Successful Response
+     */
+    200: Array<ExchangeView>;
+};
+
+export type ListUniverseExchangesResponse = ListUniverseExchangesResponses[keyof ListUniverseExchangesResponses];
+
 export type ImportIndexHistoryData = {
     body: IndexHistoryImport;
     path?: never;
@@ -24107,6 +24244,52 @@ export type GetUniverseResponses = {
 
 export type GetUniverseResponse = GetUniverseResponses[keyof GetUniverseResponses];
 
+export type UpdateUniverseData = {
+    body: UniverseUpdate;
+    path: {
+        /**
+         * Universe Id
+         */
+        universe_id: string;
+    };
+    query?: never;
+    url: '/api/universes/{universe_id}';
+};
+
+export type UpdateUniverseErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdateUniverseError = UpdateUniverseErrors[keyof UpdateUniverseErrors];
+
+export type UpdateUniverseResponses = {
+    /**
+     * Successful Response
+     */
+    200: UniverseView;
+};
+
+export type UpdateUniverseResponse = UpdateUniverseResponses[keyof UpdateUniverseResponses];
+
 export type EnsureUniverseDataData = {
     body: EnsureDataRequest;
     path: {
@@ -24152,6 +24335,69 @@ export type EnsureUniverseDataResponses = {
 };
 
 export type EnsureUniverseDataResponse = EnsureUniverseDataResponses[keyof EnsureUniverseDataResponses];
+
+export type GetUniverseHistoryData = {
+    body?: never;
+    path: {
+        /**
+         * Universe Id
+         */
+        universe_id: string;
+    };
+    query?: {
+        /**
+         * Ticker
+         *
+         * tickers containing this
+         */
+        ticker?: string | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/universes/{universe_id}/history';
+};
+
+export type GetUniverseHistoryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetUniverseHistoryError = GetUniverseHistoryErrors[keyof GetUniverseHistoryErrors];
+
+export type GetUniverseHistoryResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageMembershipSpanView;
+};
+
+export type GetUniverseHistoryResponse = GetUniverseHistoryResponses[keyof GetUniverseHistoryResponses];
 
 export type GetUniverseMembersData = {
     body?: never;
