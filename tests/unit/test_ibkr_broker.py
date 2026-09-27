@@ -674,3 +674,27 @@ def test_open_orders_leave_out_terminal_ones():
     broker.place_order(buy())
     gw.fill("t1-s1-AAPL.US-buy", 10, 200.0)
     assert broker.open_orders() == []
+
+
+# ---- intraday books send day orders (roadmap 21.2.3) ----------------------------------------
+
+
+def test_intraday_broker_sends_day_orders():
+    broker, gw = make(intraday=True)
+    broker.place_order(buy())
+    _, req = gw.sent[0]
+    assert req.tif == "DAY"
+
+
+def test_daily_broker_keeps_the_opening_auction_default():
+    broker, gw = make()
+    broker.place_order(buy())
+    _, req = gw.sent[0]
+    assert req.tif == "OPG"
+
+
+def test_intraday_broker_refuses_an_opening_auction_order():
+    broker, gw = make(intraday=True)
+    with pytest.raises(OrderRejectedError, match="intraday"):
+        broker.place_order(buy(time_in_force="opg"))
+    assert gw.sent == []
