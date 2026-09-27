@@ -114,7 +114,7 @@ export function shown(policy: RiskPolicy, f: LimitField): string {
   template: `
     <section class="panel" aria-labelledby="limits-title">
       <div class="panel-head">
-        <h2 id="limits-title">Your risk limits</h2>
+        <h3 id="limits-title">Your risk limits</h3>
       </div>
       @if (limits.error(); as err) {
         <app-error-state

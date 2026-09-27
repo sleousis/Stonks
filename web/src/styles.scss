@@ -277,7 +277,9 @@ textarea {
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border);
 
-  h2 {
+  // h3 when the panel sits in a group with its own h2 (Settings).
+  h2,
+  h3 {
     font-size: var(--text-lg);
   }
 }

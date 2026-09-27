@@ -26,7 +26,7 @@
     <!-- Profile -------------------------------------------------------------->
     <section class="panel" aria-labelledby="profile-title">
       <div class="panel-head">
-        <h2 id="profile-title">Sign-in and security</h2>
+        <h3 id="profile-title">Sign-in and security</h3>
       </div>
       <div class="panel-body">
         <p class="lead">
@@ -37,104 +37,10 @@
       </div>
     </section>
 
-    <!-- Token ----------------------------------------------------------------->
-    <section class="panel" aria-labelledby="token-title">
-      <div class="panel-head">
-        <h2 id="token-title">API token</h2>
-        <app-status-pill
-          [status]="hasToken() ? 'ok' : 'disabled'"
-          [label]="hasToken() ? 'Set for this tab' : 'Not set'"
-        />
-      </div>
-      <div class="panel-body">
-        <p class="lead">
-          Signed in? You need no token. To use one, create it on your Profile page and paste it
-          here. It stays in this tab only and is cleared when the tab closes.
-        </p>
-
-        <form class="form-grid" [formGroup]="tokenForm" (ngSubmit)="saveToken()">
-          <div class="field">
-            <label for="api-token">{{ hasToken() ? 'Replace token' : 'Token' }}</label>
-            <div class="with-button">
-              <input
-                id="api-token"
-                class="input"
-                formControlName="token"
-                autocomplete="off"
-                autocapitalize="off"
-                spellcheck="false"
-                [type]="showToken() ? 'text' : 'password'"
-                [attr.aria-invalid]="
-                  tokenForm.controls.token.touched && tokenForm.controls.token.invalid
-                "
-                aria-describedby="api-token-hint api-token-error"
-              />
-              <button
-                type="button"
-                class="btn"
-                [attr.aria-pressed]="showToken()"
-                [attr.aria-label]="showToken() ? 'Hide token' : 'Show token'"
-                (click)="showToken.set(!showToken())"
-              >
-                {{ showToken() ? 'Hide' : 'Show' }}
-              </button>
-            </div>
-            @if (
-              tokenForm.controls.token.touched && tokenForm.controls.token.hasError('required')
-            ) {
-              <span id="api-token-error" class="error">Enter the token to save it.</span>
-            } @else {
-              <span id="api-token-hint" class="hint">Paste a token from your Profile page.</span>
-            }
-          </div>
-          <div class="actions">
-            <button type="submit" class="btn btn-primary">Save token</button>
-            <button
-              type="button"
-              class="btn"
-              [disabled]="testing()"
-              [attr.aria-busy]="testing()"
-              (click)="testToken()"
-            >
-              {{ testing() ? 'Testing…' : 'Test token' }}
-            </button>
-            @if (hasToken()) {
-              <button type="button" class="btn" (click)="clearToken()">Remove token</button>
-            }
-          </div>
-        </form>
-
-        <div class="token-result" role="status" aria-live="polite">
-          @if (tokenCheck(); as check) {
-            <p class="check-result" [attr.data-state]="check.state">
-              <app-status-pill
-                [status]="check.state"
-                [tone]="
-                  check.state === 'valid'
-                    ? 'positive'
-                    : check.state === 'invalid'
-                      ? 'negative'
-                      : 'warn'
-                "
-                [label]="
-                  check.state === 'valid'
-                    ? 'Accepted'
-                    : check.state === 'invalid'
-                      ? 'Rejected'
-                      : 'Not verified'
-                "
-              />
-              <span>{{ check.message }}</span>
-            </p>
-          }
-        </div>
-      </div>
-    </section>
-
     <!-- Theme ----------------------------------------------------------------->
     <section class="panel" aria-labelledby="theme-title">
       <div class="panel-head">
-        <h2 id="theme-title">Theme</h2>
+        <h3 id="theme-title">Theme</h3>
         <span class="muted">Now {{ theme.resolved() }}</span>
       </div>
       <div class="panel-body">
@@ -167,7 +73,7 @@
     <!-- Keyboard -------------------------------------------------------------->
     <section class="panel" aria-labelledby="keys-title">
       <div class="panel-head">
-        <h2 id="keys-title">Keyboard</h2>
+        <h3 id="keys-title">Keyboard</h3>
       </div>
       <div class="panel-body">
         <p class="lead">
@@ -177,6 +83,103 @@
         </p>
       </div>
     </section>
+
+    <!-- For scripts: the tab's API token, folded away (UX-43) ------------------>
+    <details class="scripts">
+      <summary>For scripts</summary>
+          <section class="panel" aria-labelledby="token-title">
+        <div class="panel-head">
+          <h3 id="token-title">API token</h3>
+          <app-status-pill
+            [status]="hasToken() ? 'ok' : 'disabled'"
+            [label]="hasToken() ? 'Set for this tab' : 'Not set'"
+          />
+        </div>
+        <div class="panel-body">
+          <p class="lead">
+            Signed in? You need no token. To use one, create it on your Profile page and paste it
+            here. It stays in this tab only and is cleared when the tab closes.
+          </p>
+
+          <form class="form-grid" [formGroup]="tokenForm" (ngSubmit)="saveToken()">
+            <div class="field">
+              <label for="api-token">{{ hasToken() ? 'Replace token' : 'Token' }}</label>
+              <div class="with-button">
+                <input
+                  id="api-token"
+                  class="input"
+                  formControlName="token"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  [type]="showToken() ? 'text' : 'password'"
+                  [attr.aria-invalid]="
+                    tokenForm.controls.token.touched && tokenForm.controls.token.invalid
+                  "
+                  aria-describedby="api-token-hint api-token-error"
+                />
+                <button
+                  type="button"
+                  class="btn"
+                  [attr.aria-pressed]="showToken()"
+                  [attr.aria-label]="showToken() ? 'Hide token' : 'Show token'"
+                  (click)="showToken.set(!showToken())"
+                >
+                  {{ showToken() ? 'Hide' : 'Show' }}
+                </button>
+              </div>
+              @if (
+                tokenForm.controls.token.touched && tokenForm.controls.token.hasError('required')
+              ) {
+                <span id="api-token-error" class="error">Enter the token to save it.</span>
+              } @else {
+                <span id="api-token-hint" class="hint">Paste a token from your Profile page.</span>
+              }
+            </div>
+            <div class="actions">
+              <button type="submit" class="btn btn-primary">Save token</button>
+              <button
+                type="button"
+                class="btn"
+                [disabled]="testing()"
+                [attr.aria-busy]="testing()"
+                (click)="testToken()"
+              >
+                {{ testing() ? 'Testing…' : 'Test token' }}
+              </button>
+              @if (hasToken()) {
+                <button type="button" class="btn" (click)="clearToken()">Remove token</button>
+              }
+            </div>
+          </form>
+
+          <div class="token-result" role="status" aria-live="polite">
+            @if (tokenCheck(); as check) {
+              <p class="check-result" [attr.data-state]="check.state">
+                <app-status-pill
+                  [status]="check.state"
+                  [tone]="
+                    check.state === 'valid'
+                      ? 'positive'
+                      : check.state === 'invalid'
+                        ? 'negative'
+                        : 'warn'
+                  "
+                  [label]="
+                    check.state === 'valid'
+                      ? 'Accepted'
+                      : check.state === 'invalid'
+                        ? 'Rejected'
+                        : 'Not verified'
+                  "
+                />
+                <span>{{ check.message }}</span>
+              </p>
+            }
+          </div>
+        </div>
+      </section>
+    </details>
   </section>
 
   @if (showSystem()) {
@@ -187,13 +190,9 @@
       <!-- Broker ---------------------------------------------------------------->
       <section class="panel" aria-labelledby="broker-title">
         <div class="panel-head">
-          <h2 id="broker-title">Broker</h2>
+          <h3 id="broker-title">Broker</h3>
           @if (broker.hasValue()) {
-            <app-status-pill
-              [status]="broker.value().paper ? 'paper' : 'live'"
-              [tone]="broker.value().paper ? 'info' : 'warn'"
-              [label]="broker.value().paper ? 'Paper' : 'Live'"
-            />
+            <app-mode-stamp [live]="!broker.value().paper" />
           }
         </div>
         @if (broker.error(); as err) {
@@ -215,7 +214,7 @@
           </dl>
           @if (broker.value().kind === 'alpaca') {
             <div class="sub">
-              <h3>Alpaca connection</h3>
+              <h4>Alpaca connection</h4>
               @if (alpaca.error(); as err) {
                 <app-error-state
                   title="Could not check Alpaca"
@@ -253,7 +252,7 @@
       <!-- Risk ------------------------------------------------------------------>
       <section class="panel" aria-labelledby="risk-title">
         <div class="panel-head">
-          <h2 id="risk-title">Risk policy</h2>
+          <h3 id="risk-title">Risk policy</h3>
         </div>
         @if (risk.error(); as err) {
           <app-error-state
@@ -278,7 +277,7 @@
       <!-- Sources --------------------------------------------------------------->
       <section class="panel" aria-labelledby="sources-title">
         <div class="panel-head">
-          <h2 id="sources-title">Data sources</h2>
+          <h3 id="sources-title">Data sources</h3>
         </div>
         @if (sources.error(); as err) {
           <app-error-state
@@ -319,7 +318,7 @@
       <!-- Cost models ----------------------------------------------------------->
       <section class="panel" aria-labelledby="costs-title">
         <div class="panel-head">
-          <h2 id="costs-title">Cost-model presets</h2>
+          <h3 id="costs-title">Cost-model presets</h3>
         </div>
         @if (costModels.error(); as err) {
           <app-error-state
@@ -334,7 +333,7 @@
         } @else {
           @for (preset of costModels.value(); track preset.name) {
             <div class="preset">
-              <h3>{{ preset.name }}</h3>
+              <h4>{{ preset.name }}</h4>
               <p class="list-detail">{{ preset.description }}</p>
               <table class="mini">
                 <caption class="visually-hidden">
