@@ -16,6 +16,8 @@ left out of portfolio lists.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from stonks.accounts.audit import iso_now
 from stonks.accounts.models import Portfolio
 from stonks.store.state import SqliteState
@@ -51,12 +53,25 @@ def paper_account_id(portfolio_id: str) -> str:
     return f"{portfolio_id}_paper"
 
 
-def ensure_paper_account(state: SqliteState, portfolio: Portfolio) -> Portfolio:
+def ensure_paper_account(
+    state: SqliteState, portfolio: Portfolio, *, create: bool = True
+) -> Portfolio:
     """The simulated paper account of broker portfolio ``portfolio``,
     created on first use with the same owner, cash, universe, risk policy
-    and construction. Call inside or outside a transaction."""
+    and construction. Call inside or outside a transaction. ``create=False``
+    (a dry run) writes nothing: a missing account is returned as it would be
+    created, without its row (BE-52)."""
     account_id = paper_account_id(portfolio.id)
     rows = state.sql("SELECT * FROM portfolios WHERE id = ?", [account_id])
+    if not rows and not create:
+        return replace(
+            portfolio,
+            id=account_id,
+            name=f"{portfolio.name} (paper)",
+            kind="simulated",
+            broker_connection_id=None,
+            external_account_id=None,
+        )
     if not rows:
         name = f"{portfolio.name} (paper)"
         taken = state.sql(

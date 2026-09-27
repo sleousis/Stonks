@@ -69,3 +69,55 @@ def ensure_default_subscription(state: SqliteState, strategy_id: str, mode: Mode
             details={"strategy_id": strategy_id, "mode": mode.value, "reason": "default_book"},
         )
     return sub_id
+
+
+def align_default_book(state: SqliteState, broker_kind: str) -> list[str]:
+    """On an install that trades at an external broker, turn the system's
+    paper ``pf_default`` subscriptions to auto (BE-10).
+
+    Migration 022 subscribed ``pf_default`` in paper when it was a
+    ``simulated`` portfolio (as migration 010 created it), even where the
+    old single book traded live through ``[brokers].kind``. Without this the
+    live default book would get no auto strategy and place no orders, not
+    even exits. Only rows the system created for the default book
+    (``reason = default_book``) whose mode no one changed since are
+    touched. Each switch is audited as ``service:system``. Returns the ids
+    switched (none on the simulated broker)."""
+    if default_mode(broker_kind) is not Mode.AUTO:
+        return []
+    rows = state.sql(
+        "SELECT s.id FROM subscriptions s WHERE s.portfolio_id = ? AND s.mode = 'paper'"
+        " AND EXISTS (SELECT 1 FROM audit_log a WHERE a.target_kind = 'subscription'"
+        " AND a.target_id = s.id AND a.action = 'subscription.create' AND a.actor = ?"
+        " AND json_extract(a.details_json, '$.reason') = 'default_book')"
+        " AND NOT EXISTS (SELECT 1 FROM audit_log a WHERE a.target_kind = 'subscription'"
+        " AND a.target_id = s.id AND a.action = 'subscription.mode')"
+        " ORDER BY s.id",
+        [DEFAULT_PORTFOLIO_ID, SYSTEM_ACTOR],
+    )
+    ids = [r["id"] for r in rows]
+    if not ids:
+        return []
+    now = iso_now()
+    audit = AuditLog(state)
+    with state.transaction():
+        for sub_id in ids:
+            state.execute(
+                "UPDATE subscriptions SET mode = 'auto', auto_enabled_at = ?, auto_enabled_by = ?,"
+                " paused_reason = NULL, updated_at = ? WHERE id = ? AND mode = 'paper'",
+                [now, SYSTEM_ACTOR, now, sub_id],
+            )
+            audit.record(
+                SYSTEM_ACTOR,
+                "subscription.mode",
+                "subscription",
+                sub_id,
+                portfolio_id=DEFAULT_PORTFOLIO_ID,
+                details={
+                    "from": "paper",
+                    "to": "auto",
+                    "reason": "default_book_live_broker",
+                    "broker_kind": broker_kind,
+                },
+            )
+    return ids

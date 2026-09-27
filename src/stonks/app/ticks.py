@@ -196,7 +196,7 @@ class TickService:
                     dry_run=request.dry_run,
                     notifier=runtime.notifier,
                     broker_factory=runtime.broker_factory,
-                    plan=runtime.plan_for(state),
+                    plan=runtime.plan_for(state, dry_run=request.dry_run),
                 )
             except BackdatedTickError as exc:
                 raise ConflictError(str(exc)) from None

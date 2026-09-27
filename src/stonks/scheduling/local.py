@@ -189,7 +189,7 @@ def tick_action(ctx: RunContext) -> JobOutcome:
                     dry_run=bool(ctx.params.get("dry_run", False)),
                     notifier=runtime.notifier,
                     broker_factory=runtime.broker_factory,
-                    plan=runtime.plan_for(state),
+                    plan=runtime.plan_for(state, dry_run=bool(ctx.params.get("dry_run", False))),
                 )
             except BackdatedTickError as exc:
                 return JobOutcome("skipped", {"reason": "backdated", "error": str(exc)})

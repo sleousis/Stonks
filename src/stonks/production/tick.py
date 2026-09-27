@@ -64,6 +64,7 @@ from datetime import UTC, date, datetime, time
 from typing import Any, Literal, get_args
 
 from stonks.accounts.book import BookSpec
+from stonks.accounts.default_book import align_default_book
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Mode, Subscription
 from stonks.accounts.models import Portfolio as AccountPortfolio
 from stonks.accounts.paper import ensure_paper_account
@@ -309,6 +310,8 @@ class TickPlan:
     #: Opens a connection's trading adapter for auto books (``None``: auto
     #: books other than the legacy live default are skipped).
     traders: TraderFactory | None = field(default=None, compare=False)
+    #: Problems the plan found that an operator should hear about (BE-10).
+    notices: tuple[str, ...] = ()
 
     @classmethod
     def default(cls, settings: TickSettings) -> TickPlan:
@@ -412,6 +415,19 @@ def run_tick(
         raise
     if result.status == "partial":
         _safe_notify(notifier, _partial_notification(result, as_of), log)
+    if not dry_run:
+        for notice in plan.notices:
+            log.warning("tick.plan_notice", notice=notice)
+            _safe_notify(
+                notifier,
+                Notification(
+                    level="warning",
+                    title="default book unmanaged",
+                    message=notice,
+                    fields={"tick_id": tick_id, "as_of": as_of.isoformat()},
+                ),
+                log,
+            )
     return result
 
 
@@ -1296,7 +1312,11 @@ def recover_interrupted_ticks(state: SqliteState, *, now: datetime | None = None
 
 
 def load_tick_plan(
-    state: SqliteState, settings: TickSettings, traders: TraderFactory | None = None
+    state: SqliteState,
+    settings: TickSettings,
+    traders: TraderFactory | None = None,
+    *,
+    dry_run: bool = False,
 ) -> TickPlan:
     """The books of every active portfolio (of an active owner), plus every
     enabled notify-mode subscription (design section 5, S6):
@@ -1314,8 +1334,16 @@ def load_tick_plan(
 
     The simulated default portfolio keeps a book while it holds positions,
     even with no strategy subscribed, so corporate actions on its holdings
-    still apply. Every book is tightened by its owner's risk limits."""
+    still apply. Every book is tightened by its owner's risk limits.
+
+    At an external broker the system's paper ``pf_default`` rows turn auto
+    first (:func:`~stonks.accounts.default_book.align_default_book`, BE-10),
+    and a live default that holds positions with no auto strategy is named
+    in ``notices``. A dry run writes nothing (no paper account rows, no
+    mode switch, BE-52)."""
     live_default = settings.broker_kind != "simulated"
+    if live_default and not dry_run:
+        align_default_book(state, settings.broker_kind)
     rows = state.sql(
         "SELECT p.*, u.risk_policy_json AS owner_risk_json FROM portfolios p"
         " JOIN users u ON u.id = p.owner_id WHERE p.status = 'active' AND u.status = 'active'"
@@ -1352,7 +1380,7 @@ def load_tick_plan(
         account: AccountPortfolio | None = portfolio
         parent: str | None = None
         if mode == "paper" and trades_at_broker(portfolio):
-            paper = ensure_paper_account(state, portfolio)
+            paper = ensure_paper_account(state, portfolio, create=not dry_run)
             spec = replace(spec, portfolio_id=paper.id, broker="simulated")
             account, parent = paper, portfolio.id
         books.append(
@@ -1388,7 +1416,14 @@ def load_tick_plan(
         paper = [s for s in own if s.mode is Mode.PAPER]
         add(portfolio, paper, owner_risk, "paper", keep_holdings=keep)
     notify = tuple(s for s in subs if s.mode is Mode.NOTIFY)
-    return TickPlan(books=tuple(books), notify=notify, traders=traders)
+    notices: list[str] = []
+    auto_default = any(b.portfolio_id == DEFAULT_PORTFOLIO_ID and b.mode == "auto" for b in books)
+    if live_default and not auto_default and holds_positions(DEFAULT_PORTFOLIO_ID):
+        notices.append(
+            f"{DEFAULT_PORTFOLIO_ID} trades at {settings.broker_kind} and holds positions,"
+            " but no auto subscription runs on it: nothing manages those holdings"
+        )
+    return TickPlan(books=tuple(books), notify=notify, traders=traders, notices=tuple(notices))
 
 
 def _pause_on_broker_error(

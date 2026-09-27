@@ -384,3 +384,12 @@ def test_be03_a_scoped_tick_never_orders_outside_its_scope(world, own_universe):
     run_tick(world.state, world.lake, world.registry, scoped, as_of=DAY2, plan=plan)
     day2 = [o for o in world.orders(world.sim) if o["client_id"].startswith("2026-03-18")]
     assert all(o["ticker"] == "DOWN.US" for o in day2), day2
+
+
+def test_be52_a_dry_run_plan_writes_no_paper_account(world):
+    plan = load_tick_plan(world.state, SETTINGS, traders=world.traders, dry_run=True)
+    assert paper_account_id(world.live) in {b.portfolio_id for b in plan.books}
+    assert not world.state.sql("SELECT 1 FROM portfolios WHERE paper_of IS NOT NULL")
+    run_tick(world.state, world.lake, world.registry, SETTINGS, as_of=DAY1, plan=plan,
+             dry_run=True)  # fmt: skip
+    assert not world.state.sql("SELECT 1 FROM portfolios WHERE paper_of IS NOT NULL")
