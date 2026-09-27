@@ -2148,6 +2148,20 @@ export type EquityPoint = {
 };
 
 /**
+ * EquityPointView
+ */
+export type EquityPointView = {
+    /**
+     * Date
+     */
+    date: string;
+    /**
+     * Value
+     */
+    value: number;
+};
+
+/**
  * EventAlertKindView
  */
 export type EventAlertKindView = {
@@ -5641,6 +5655,60 @@ export type Opinion = {
 };
 
 /**
+ * OptionChainRow
+ */
+export type OptionChainRow = {
+    call?: OptionQuoteView | null;
+    put?: OptionQuoteView | null;
+    /**
+     * Strike
+     */
+    strike: number;
+};
+
+/**
+ * OptionChainView
+ */
+export type OptionChainView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Days To Expiry
+     */
+    days_to_expiry?: number | null;
+    /**
+     * Expiries
+     */
+    expiries: Array<string>;
+    /**
+     * Expiry
+     */
+    expiry?: string | null;
+    /**
+     * Models
+     */
+    models: Array<string>;
+    /**
+     * Rows
+     */
+    rows: Array<OptionChainRow>;
+    /**
+     * Spot
+     */
+    spot?: number | null;
+    /**
+     * Synthetic
+     */
+    synthetic: boolean;
+    /**
+     * Underlying
+     */
+    underlying: string;
+};
+
+/**
  * OptionGreekLimitsSettings
  */
 export type OptionGreekLimitsSettings = {
@@ -5700,6 +5768,334 @@ export type OptionMaxLossSettings = {
      * Max Loss Total
      */
     max_loss_total?: number | null;
+};
+
+/**
+ * OptionPayoffRequest
+ */
+export type OptionPayoffRequest = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+    /**
+     * Delta
+     */
+    delta?: number | null;
+    /**
+     * Dte
+     */
+    dte?: number;
+    /**
+     * Long Delta
+     */
+    long_delta?: number | null;
+    /**
+     * Short Delta
+     */
+    short_delta?: number | null;
+    /**
+     * Structure
+     */
+    structure: string;
+    /**
+     * Underlying
+     */
+    underlying: string;
+    /**
+     * Wing Delta
+     */
+    wing_delta?: number | null;
+};
+
+/**
+ * OptionPayoffView
+ */
+export type OptionPayoffView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Breakevens
+     */
+    breakevens: Array<number>;
+    /**
+     * Cost
+     */
+    cost: number;
+    /**
+     * Legs
+     */
+    legs: Array<PayoffLegView>;
+    /**
+     * Max Gain
+     */
+    max_gain?: number | null;
+    /**
+     * Max Loss
+     */
+    max_loss?: number | null;
+    /**
+     * Points
+     */
+    points: Array<PayoffPointView>;
+    /**
+     * Spot
+     */
+    spot: number;
+    /**
+     * Structure
+     */
+    structure: string;
+    /**
+     * Synthetic
+     */
+    synthetic: boolean;
+    /**
+     * Underlying
+     */
+    underlying: string;
+};
+
+/**
+ * OptionQuoteView
+ */
+export type OptionQuoteView = {
+    /**
+     * Ask
+     */
+    ask?: number | null;
+    /**
+     * Bid
+     */
+    bid?: number | null;
+    /**
+     * Contract Id
+     */
+    contract_id: string;
+    /**
+     * Delta
+     */
+    delta?: number | null;
+    /**
+     * Gamma
+     */
+    gamma?: number | null;
+    /**
+     * Iv
+     */
+    iv?: number | null;
+    /**
+     * Mark
+     */
+    mark?: number | null;
+    /**
+     * Open Interest
+     */
+    open_interest?: number | null;
+    /**
+     * Theta
+     */
+    theta?: number | null;
+    /**
+     * Vega
+     */
+    vega?: number | null;
+    /**
+     * Volume
+     */
+    volume?: number | null;
+};
+
+/**
+ * OptionStrategyView
+ */
+export type OptionStrategyView = {
+    /**
+     * Hypothesis
+     */
+    hypothesis: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Parameters
+     */
+    parameters: Array<ParameterInfo>;
+    /**
+     * Structures
+     */
+    structures: Array<string>;
+};
+
+/**
+ * OptionStructureView
+ */
+export type OptionStructureView = {
+    /**
+     * Holds Shares
+     */
+    holds_shares: boolean;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Params
+     */
+    params: Array<string>;
+};
+
+/**
+ * OptionUnderlyingView
+ */
+export type OptionUnderlyingView = {
+    /**
+     * Contracts
+     */
+    contracts: number;
+    /**
+     * Days
+     */
+    days: number;
+    /**
+     * First Day
+     */
+    first_day: string;
+    /**
+     * Last Day
+     */
+    last_day: string;
+    /**
+     * Sources
+     */
+    sources: Array<string>;
+    /**
+     * Synthetic
+     */
+    synthetic: boolean;
+    /**
+     * Underlying
+     */
+    underlying: string;
+};
+
+/**
+ * OptionsBacktestRequest
+ */
+export type OptionsBacktestRequest = {
+    /**
+     * Cash
+     */
+    cash?: number;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Params
+     */
+    params?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * Strategy
+     */
+    strategy: string;
+    /**
+     * Trials
+     */
+    trials?: number;
+    /**
+     * Underlyings
+     */
+    underlyings: Array<string>;
+    /**
+     * Validation
+     */
+    validation?: boolean;
+};
+
+/**
+ * OptionsBacktestView
+ */
+export type OptionsBacktestView = {
+    /**
+     * Cagr
+     */
+    cagr?: number | null;
+    /**
+     * Days
+     */
+    days: number;
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Equity
+     */
+    equity: Array<EquityPointView>;
+    /**
+     * Fills
+     */
+    fills: number;
+    /**
+     * Final Return
+     */
+    final_return?: number | null;
+    /**
+     * Max Drawdown
+     */
+    max_drawdown?: number | null;
+    /**
+     * Rejected
+     */
+    rejected: number;
+    /**
+     * Rejection Reasons
+     */
+    rejection_reasons: {
+        [key: string]: number;
+    };
+    /**
+     * Sharpe
+     */
+    sharpe?: number | null;
+    /**
+     * Sources
+     */
+    sources: Array<string>;
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * Strategy
+     */
+    strategy: string;
+    /**
+     * Synthetic
+     */
+    synthetic: boolean;
+    /**
+     * Underlyings
+     */
+    underlyings: Array<string>;
+    /**
+     * Validation
+     */
+    validation: Array<SurvivalReportView>;
+    /**
+     * Verdict
+     */
+    verdict: 'passed' | 'failed' | 'not_run';
 };
 
 /**
@@ -7049,6 +7445,54 @@ export type PausedBookView = {
      * Subscription Id
      */
     subscription_id: string;
+};
+
+/**
+ * PayoffLegView
+ */
+export type PayoffLegView = {
+    /**
+     * Expiry
+     */
+    expiry?: string | null;
+    /**
+     * Instrument
+     */
+    instrument: string;
+    /**
+     * Kind
+     */
+    kind: 'option' | 'shares';
+    /**
+     * Price
+     */
+    price: number;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Right
+     */
+    right?: 'call' | 'put' | null;
+    /**
+     * Strike
+     */
+    strike?: number | null;
+};
+
+/**
+ * PayoffPointView
+ */
+export type PayoffPointView = {
+    /**
+     * Profit
+     */
+    profit: number;
+    /**
+     * Spot
+     */
+    spot: number;
 };
 
 /**
@@ -18563,6 +19007,318 @@ export type GetSystemChecklistResponses = {
 };
 
 export type GetSystemChecklistResponse = GetSystemChecklistResponses[keyof GetSystemChecklistResponses];
+
+export type StartOptionsBacktestData = {
+    body: OptionsBacktestRequest;
+    path?: never;
+    query?: never;
+    url: '/api/options/backtests';
+};
+
+export type StartOptionsBacktestErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartOptionsBacktestError = StartOptionsBacktestErrors[keyof StartOptionsBacktestErrors];
+
+export type StartOptionsBacktestResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type StartOptionsBacktestResponse = StartOptionsBacktestResponses[keyof StartOptionsBacktestResponses];
+
+export type GetOptionsBacktestResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/options/backtests/{job_id}/result';
+};
+
+export type GetOptionsBacktestResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetOptionsBacktestResultError = GetOptionsBacktestResultErrors[keyof GetOptionsBacktestResultErrors];
+
+export type GetOptionsBacktestResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: OptionsBacktestView;
+};
+
+export type GetOptionsBacktestResultResponse = GetOptionsBacktestResultResponses[keyof GetOptionsBacktestResultResponses];
+
+export type GetOptionChainData = {
+    body?: never;
+    path: {
+        /**
+         * Underlying
+         */
+        underlying: string;
+    };
+    query?: {
+        /**
+         * As Of
+         */
+        as_of?: string | null;
+        /**
+         * Expiry
+         */
+        expiry?: string | null;
+    };
+    url: '/api/options/chains/{underlying}';
+};
+
+export type GetOptionChainErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetOptionChainError = GetOptionChainErrors[keyof GetOptionChainErrors];
+
+export type GetOptionChainResponses = {
+    /**
+     * Successful Response
+     */
+    200: OptionChainView;
+};
+
+export type GetOptionChainResponse = GetOptionChainResponses[keyof GetOptionChainResponses];
+
+export type GetOptionPayoffData = {
+    body: OptionPayoffRequest;
+    path?: never;
+    query?: never;
+    url: '/api/options/payoff';
+};
+
+export type GetOptionPayoffErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetOptionPayoffError = GetOptionPayoffErrors[keyof GetOptionPayoffErrors];
+
+export type GetOptionPayoffResponses = {
+    /**
+     * Successful Response
+     */
+    200: OptionPayoffView;
+};
+
+export type GetOptionPayoffResponse = GetOptionPayoffResponses[keyof GetOptionPayoffResponses];
+
+export type ListOptionStrategiesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/options/strategies';
+};
+
+export type ListOptionStrategiesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListOptionStrategiesError = ListOptionStrategiesErrors[keyof ListOptionStrategiesErrors];
+
+export type ListOptionStrategiesResponses = {
+    /**
+     * Response Listoptionstrategies
+     *
+     * Successful Response
+     */
+    200: Array<OptionStrategyView>;
+};
+
+export type ListOptionStrategiesResponse = ListOptionStrategiesResponses[keyof ListOptionStrategiesResponses];
+
+export type ListOptionStructuresData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/options/structures';
+};
+
+export type ListOptionStructuresErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListOptionStructuresError = ListOptionStructuresErrors[keyof ListOptionStructuresErrors];
+
+export type ListOptionStructuresResponses = {
+    /**
+     * Response Listoptionstructures
+     *
+     * Successful Response
+     */
+    200: Array<OptionStructureView>;
+};
+
+export type ListOptionStructuresResponse = ListOptionStructuresResponses[keyof ListOptionStructuresResponses];
+
+export type ListOptionUnderlyingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/options/underlyings';
+};
+
+export type ListOptionUnderlyingsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListOptionUnderlyingsError = ListOptionUnderlyingsErrors[keyof ListOptionUnderlyingsErrors];
+
+export type ListOptionUnderlyingsResponses = {
+    /**
+     * Response Listoptionunderlyings
+     *
+     * Successful Response
+     */
+    200: Array<OptionUnderlyingView>;
+};
+
+export type ListOptionUnderlyingsResponse = ListOptionUnderlyingsResponses[keyof ListOptionUnderlyingsResponses];
 
 export type ListOrdersData = {
     body?: never;

@@ -59,6 +59,8 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_my_risk_limits`](#get_my_risk_limits) | read | no |
 | [`get_news`](#get_news) | read | no |
 | [`get_notification_preferences`](#get_notification_preferences) | read | no |
+| [`get_option_chain`](#get_option_chain) | read | no |
+| [`get_option_payoff`](#get_option_payoff) | read | no |
 | [`get_order_tca`](#get_order_tca) | read | no |
 | [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
@@ -100,6 +102,9 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_model_candidates`](#list_model_candidates) | read | no |
 | [`list_model_versions`](#list_model_versions) | read | no |
 | [`list_notifications`](#list_notifications) | read | no |
+| [`list_option_strategies`](#list_option_strategies) | read | no |
+| [`list_option_structures`](#list_option_structures) | read | no |
+| [`list_option_underlyings`](#list_option_underlyings) | read | no |
 | [`list_order_drafts`](#list_order_drafts) | read | no |
 | [`list_orders`](#list_orders) | read | no |
 | [`list_portfolio_snapshots`](#list_portfolio_snapshots) | read | no |
@@ -144,6 +149,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`run_factor_tearsheet`](#run_factor_tearsheet) | job | no |
 | [`run_ingest`](#run_ingest) | job | no |
 | [`run_lab`](#run_lab) | guarded | yes |
+| [`run_options_backtest`](#run_options_backtest) | job | no |
 | [`run_screen`](#run_screen) | read | no |
 | [`run_signal_ic`](#run_signal_ic) | job | no |
 | [`run_sweep`](#run_sweep) | job | no |
@@ -559,6 +565,39 @@ shows its host only.
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `get_option_chain`
+
+One expiry of a stored option chain with our implied vol and
+Greeks, calls and puts by strike. Theta is money per share per day,
+vega money per share per vol point.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `underlying` | string | yes |  | instrument id, e.g. AAPL.US or BTC-USD.CC |
+| `as_of` | date \| null | no | `null` | the last stored day on or before it; default latest |
+| `expiry` | date \| null | no | `null` | default: the expiry nearest 30 days out |
+
+### `get_option_payoff`
+
+One unit of a structure picked from a stored chain, its legs and
+its profit at expiry over a range of underlying prices, with max
+loss, max gain (null: no bound) and breakevens.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `underlying` | string | yes |  | instrument id, e.g. AAPL.US or BTC-USD.CC |
+| `structure` | string | yes |  | a name from list_option_structures |
+| `as_of` | date \| null | no | `null` | YYYY-MM-DD |
+| `dte` | integer | no | `35` | target days to expiry |
+| `delta` | number \| null | no | `null` | absolute target delta, e.g. 0.30 |
+| `long_delta` | number \| null | no | `null` | absolute target delta, e.g. 0.30 |
+| `short_delta` | number \| null | no | `null` | absolute target delta, e.g. 0.30 |
+| `wing_delta` | number \| null | no | `null` | absolute target delta, e.g. 0.30 |
 
 ### `get_order_tca`
 
@@ -1001,6 +1040,34 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `unread_only` | boolean | no | `false` |  |
 | `limit` | integer | no | `50` |  |
 | `before_id` | integer \| null | no | `null` | page: only items with a lower id |
+
+### `list_option_strategies`
+
+The options strategy catalog: each strategy's hypothesis, the
+structures it opens and its parameters.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
+### `list_option_structures`
+
+Structures a payoff can be drawn for, with the parameters each
+reads (dte, delta, long_delta, short_delta, wing_delta).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
+### `list_option_underlyings`
+
+Underlyings with stored option chains: first and last day, days,
+contracts and sources. synthetic=true means generated chains, fine
+for trying the tools but never evidence.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
 
 ### `list_order_drafts`
 
@@ -1679,6 +1746,25 @@ Safety: writes, non-destructive, not idempotent, open world. Needs confirm: no.
 | `since` | date \| null | no | `null` | YYYY-MM-DD |
 | `until` | date \| null | no | `null` | YYYY-MM-DD |
 | `interval` | string \| null | no | `null` | for intraday, e.g. 5m |
+
+### `run_options_backtest`
+
+Queue an options backtest on the stored chains, with its
+validation checks and a verdict. Returns the job; use wait_for_job
+for the result. Research only: nothing trades options.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy` | string | yes |  | an id from list_option_strategies |
+| `underlyings` | list[string] | yes |  |  |
+| `start` | date | yes |  | YYYY-MM-DD |
+| `end` | date | yes |  | YYYY-MM-DD |
+| `cash` | number | no | `100000.0` |  |
+| `params` | object \| null | no | `null` | strategy parameters; defaults otherwise |
+| `validation` | boolean | no | `true` | also run out of sample, deflated Sharpe and stress checks |
+| `trials` | integer | no | `1` | trials run so far, for the deflated Sharpe |
 
 ### `run_signal_ic`
 

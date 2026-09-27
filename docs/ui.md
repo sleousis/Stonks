@@ -3,7 +3,7 @@
 The Angular app in `web/` is the trader console: sign-in, a simple home,
 profile, the first-run guide, watchlists, charts, the calendar, strategies, orders and
 trade costs, insights, notifications, the research pages (paper trading,
-leaderboard and tear sheets, screener, studio, lab, go live) and the admin pages
+leaderboard and tear sheets, screener, options, studio, lab, go live) and the admin pages
 (overview, health, schedule and backups, data, data quality, universes,
 halts, users). It talks only to the
 REST API (`src/stonks/api/`) through a client generated from the checked-in
@@ -894,6 +894,27 @@ flowchart LR
 - `TableColumn.display` gives a column its own text (a unit per column) while sorting still uses `value`.
 - `provideFakeCalendars()` (`src/testing/fake-calendars.ts`) keeps specs of pages that embed a calendar piece free of calendar calls.
 
+## Options research (17.6)
+
+| Page | Route | What it does |
+|---|---|---|
+| Options | `/options` | Read a stored chain with IV and Greeks, draw a structure's payoff, list the options strategies and backtest one. Research only |
+
+```mermaid
+flowchart LR
+  U[GET /api/options/underlyings] --> P[Underlying and date]
+  P --> C["GET /api/options/chains/{underlying}"] --> T[Chain table]
+  P --> Y[POST /api/options/payoff] --> D[Payoff diagram]
+  B[Backtest form] --> J[POST /api/options/backtests] --> R[Equity, figures, checks]
+```
+
+- **Research note.** The page opens with "Research only, nothing trades options." No order, paper book or live book uses anything on it.
+- **Chain.** `pages/options/options.page.ts`. Underlying, date (empty means the latest stored day), expiry and a Show switch for both sides, calls or puts. The table is `<app-data-table>` with the strike as the card title on phones. With both sides, phone cards keep bid, ask and delta of each. A hint names the units: theta per share per day, vega per share per vol point. Generated chains carry a tag, "Generated chains, not market quotes".
+- **Payoff.** Pick a structure from `GET /api/options/structures`. Its fields follow the parameters it reads (days to expiry, delta, long leg, short leg or wing delta). `<app-payoff-diagram>` (`payoff-diagram.ts`) draws the profit at expiry in SVG: the line, gain and loss shaded on either side of zero, today's price dashed. The cost, max loss, max gain ("Unlimited" when there is no bound) and breakevens sit above it and the legs below. The SVG has `role="img"` and a one sentence summary. A payoff the chain cannot supply shows inline with Retry.
+- **Strategies.** Each options strategy with its structures and hypothesis.
+- **Backtest.** `<app-options-backtest>` (`options-backtest.ts`) fills the underlying and window from the first stored underlying. Strategy parameters use `<app-param-form>`. It needs `lab.run` (a permission note otherwise), runs as a job followed with `JobFollower`, and shows return, Sharpe, drawdown, fills, the equity chart and each validation check with the verdict. On generated chains it says the result is never evidence.
+- Pure helpers (chain columns, payoff scaling, leg text, the backtest form) live in `options-view.ts`.
+
 ## Shared pieces from the usability pass (18.6)
 
 | Piece | Where | Use it for |
@@ -1015,6 +1036,7 @@ about the same thing.
 | Telegram link | `/api/telegram/link` | `stonks telegram` | none |
 | Calendar, News | `/api/calendars`, `/api/calendars/news` | `stonks calendars` | `get_calendar`, `get_news`, `get_earnings_warnings`, `list_event_alert_kinds` |
 | Screener, Your screens, Save as a universe | `/api/screener/*` | `stonks screener` | `run_screen`, `list_screens`, `create_screen`, `save_screen_as_universe`, ... |
+| Options (chain, payoff, strategies, backtest) | `/api/options/*` | `stonks options` | `get_option_chain`, `get_option_payoff`, `list_option_strategies`, `run_options_backtest`, ... |
 
 "Buys only" was called `flatten` before 1.0. It never closed a position,
 so the old name was misleading. The API, the CLI (`--flatten`) and MCP

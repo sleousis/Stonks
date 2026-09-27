@@ -1311,18 +1311,46 @@ id = "options.ingest"
 domain = "options"
 title = "Fetch end-of-day option chains into the lake"
 routes = []
-console = { limited = "options are research only until live options follow 17.5" }
+console = { limited = "an operator job that needs the vendor's options subscription, run from the CLI" }
 cli = "stonks options ingest"
-mcp = { limited = "options are research only until live options follow 17.5" }
+mcp = { limited = "an operator job that needs the vendor's options subscription, run from the CLI" }
 
 [[capability]]
-id = "options.research"
+id = "options.chains"
 domain = "options"
-title = "Read a chain with Greeks, list options strategies, backtest and validate one"
-routes = []
-console = { limited = "options are research only until live options follow 17.5" }
-cli = ["stonks options chain", "stonks options strategies", "stonks options backtest"]
-mcp = { limited = "options are research only until live options follow 17.5" }
+title = "Underlyings with stored chains, and one chain with implied vol and Greeks"
+routes = ["GET /api/options/underlyings", "GET /api/options/chains/{underlying}"]
+console = ["listOptionUnderlyings", "getOptionChain"]
+cli = "stonks options chain"
+mcp = ["list_option_underlyings", "get_option_chain"]
+
+[[capability]]
+id = "options.strategies"
+domain = "options"
+title = "The options strategy catalog with each hypothesis"
+routes = ["GET /api/options/strategies"]
+console = "listOptionStrategies"
+cli = "stonks options strategies"
+mcp = "list_option_strategies"
+
+[[capability]]
+id = "options.payoff"
+domain = "options"
+title = "A structure's legs from a stored chain and its payoff at expiry"
+routes = ["GET /api/options/structures", "POST /api/options/payoff"]
+console = ["listOptionStructures", "getOptionPayoff"]
+cli = { limited = "a picture, shown in the console" }
+mcp = ["list_option_structures", "get_option_payoff"]
+
+[[capability]]
+id = "options.backtest"
+domain = "options"
+title = "Backtest an options strategy on stored chains and validate it"
+routes = ["POST /api/options/backtests", "GET /api/options/backtests/{job_id}/result"]
+console = ["startOptionsBacktest", "getOptionsBacktestResult"]
+cli = "stonks options backtest"
+mcp = "run_options_backtest"
+
 # ---- Phase 20: complete product -------------------------------------------------
 
 [[capability]]

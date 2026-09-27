@@ -183,3 +183,23 @@ def test_chain_values():
     assert snap.filter(right="call", two_sided=True) == [q]
     assert snap.filter(right="put") == []
     assert list(snap) == [q, one_sided]
+
+
+def test_underlyings_summarise_the_stored_chains(lake):
+    store = OptionStore(lake)
+    assert store.underlyings() == []
+    src = SyntheticOptionSource(
+        {"AAPL.US": closes(3), "MSFT.US": closes(2, 300.0)},
+        fixed_strikes={"AAPL.US": [95, 100, 105], "MSFT.US": [300]},
+    )
+    ingest_option_quotes(src, lake, ["AAPL.US", "MSFT.US"])
+    got = store.underlyings()
+    assert [u.underlying for u in got] == ["AAPL.US", "MSFT.US"]
+    aapl = got[0]
+    assert (aapl.first_day, aapl.last_day, aapl.days) == (D0, D0 + timedelta(days=2), 3)
+    assert aapl.contracts > 0 and aapl.sources == ("synthetic",)
+    assert store.latest_day("AAPL.US", D0 + timedelta(days=10)) == D0 + timedelta(days=2)
+    assert store.latest_day("AAPL.US", D0 + timedelta(days=1)) == D0 + timedelta(days=1)
+    assert store.latest_day("AAPL.US", D0 - timedelta(days=1)) is None
+    assert store.latest_day("AAPL.US") == D0 + timedelta(days=2)
+    assert store.sources(["AAPL.US"], D0, D0 + timedelta(days=5)) == ["synthetic"]

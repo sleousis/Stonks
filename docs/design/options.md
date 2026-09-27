@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 17. When it was written Stonks had no derivatives: positions were keyed by ticker, valued at `qty × price`, and every instrument lived in `instruments`.
 
-**Status:** stages 1 to 4 are built as research, off by default (roadmap 17.1 to 17.5). Nothing in the tick, the console or MCP trades options. Stage 5 (live) waits for Phase 19. Section 9 lists what changed from this design.
+**Status:** stages 1 to 4 are built as research, off by default (roadmap 17.1 to 17.5), and the console and MCP can read chains, draw payoffs and run options backtests (17.6, section 10). Nothing in the tick, the console or MCP trades options. Stage 5 (live) waits for Phase 19. Section 9 lists what changed from this design.
 
 Staging is the main decision: **read-only analytics first** (chains, implied volatility, Greeks, "what would a covered call on my holdings pay"), then backtests, then paper, and live trading last behind its own go-live.
 
@@ -191,4 +191,33 @@ The build follows the sections above, with these differences.
 **Strategies and validation.**
 - The volatility strategy sells iron condors when at-the-money implied vol is rich against realized vol. IV rank needs an IV history we do not store yet.
 - Options strategies have their own catalog and are not tuned in the lab. `stonks options backtest --validate` runs the tests that apply to any equity curve: out of sample PSR, deflated Sharpe, wider fills, missing quote days and doubled fees.
-- There are no console pages or MCP tools yet. The CLI is `stonks options ingest|chain|strategies|backtest`.
+- The CLI is `stonks options ingest|chain|strategies|backtest`. The console and MCP came with 17.6 (section 10). Loading chains stays a CLI job for operators.
+
+## 10. Console and MCP (17.6)
+
+Research only: nothing here places an order or writes to the lake.
+
+```mermaid
+flowchart LR
+  L[(option_quotes)] --> S[OptionsService<br/>app/options.py]
+  S --> A["/api/options/*"]
+  A --> C[Console: Options page]
+  A --> M[MCP tools]
+```
+
+| Route | Permission | What it returns |
+|---|---|---|
+| `GET /api/options/underlyings` | `data.read` | Underlyings with stored chains: first and last day, days, contracts, sources |
+| `GET /api/options/chains/{underlying}` | `data.read` | One expiry of a chain with our IV and Greeks, calls and puts by strike |
+| `GET /api/options/strategies` | `data.read` | The options strategy catalog with hypotheses and parameters |
+| `GET /api/options/structures` | `data.read` | Structures a payoff can be drawn for, with the parameters each reads |
+| `POST /api/options/payoff` | `data.read` | One unit of a structure picked from a chain, its legs and its payoff at expiry |
+| `POST /api/options/backtests` | `lab.run` | Queues an `options_backtest` job |
+| `GET /api/options/backtests/{job_id}/result` | `data.read` | The equity curve, figures, validation checks and a verdict |
+
+- **Chains.** `as_of` picks the last stored day on or before it, so a weekend shows Friday. The expiry defaults to the one nearest 30 days out. Greeks come from the `PricingModel` seam through `options/analytics.py`: theta per share per day, vega per share per vol point.
+- **Payoff.** `options/payoff.py` builds one unit of the structure with the structure builders the backtest uses (over expiries up to 400 days out), then values the legs at expiry. The payoff is piecewise linear with kinks at the strikes, so max loss, max gain and breakevens are exact. Covered calls and protective puts include one contract's worth of shares. `null` means no bound.
+- **Backtest.** The job runs `OptionsBacktester` and, unless `validation` is false, the checks in `options/validation.py`. The verdict is `passed` only when every check passes. A request is checked before it queues: a known strategy, valid parameters, and stored chains in the window.
+- **Synthetic chains.** Every view says `synthetic: true` when all quotes came from the synthetic source. The console then warns that the result is never evidence.
+- **MCP.** `list_option_underlyings`, `get_option_chain`, `list_option_strategies`, `list_option_structures`, `get_option_payoff` and `run_options_backtest`. The job tool follows the other research jobs: no confirm, and `wait_for_job` returns the typed result.
+- **Console.** The Options page under Research (`/options`). See `docs/ui.md`.

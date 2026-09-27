@@ -66,6 +66,8 @@ export const routes: Routes = [
   // 20.7 and 20.8: event calendars and news, the screener
   { path: 'calendar', loadChildren: () => import('./pages/calendar/calendar.routes') },
   { path: 'screener', loadChildren: () => import('./pages/screener/screener.routes') },
+  // 17.6: options research (nothing trades options)
+  { path: 'options', loadChildren: () => import('./pages/options/options.routes') },
   {
     path: '**',
     title: 'Not found',

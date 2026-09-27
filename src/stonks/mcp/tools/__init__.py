@@ -15,6 +15,7 @@ from stonks.mcp.tools import (
     live,
     model_versions,
     notifications,
+    options,
     orders,
     price_alerts,
     reads,
@@ -54,6 +55,7 @@ MODULES = (
     calendars,
     screener,
     live,
+    options,
 )
 
 
