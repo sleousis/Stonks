@@ -152,6 +152,18 @@ class _Capture:
     seen: bool = False
 
 
+def live_book(plan: Any, portfolio_id: str) -> Any:
+    """The plan's live book of ``portfolio_id`` (its approve and auto
+    subscriptions, or the legacy default book). ``PreviewError`` without one."""
+    for book in plan.books:
+        if book.portfolio_id == portfolio_id and book.mode != "paper":
+            return book
+    raise PreviewError(
+        f"portfolio {portfolio_id!r} has no live book: it needs an approve or auto"
+        " subscription at a broker"
+    )
+
+
 def run_preview(
     state: SqliteState,
     lake: Any,
@@ -168,12 +180,7 @@ def run_preview(
     opens is wrapped in :class:`PreviewBroker` and closed afterwards."""
     from stonks.production.tick import BookDecision, run_tick
 
-    books = [b for b in plan.books if b.portfolio_id == portfolio_id and b.mode != "paper"]
-    if not books:
-        raise PreviewError(
-            f"portfolio {portfolio_id!r} has no live book: it needs an approve or auto"
-            " subscription at a broker"
-        )
+    books = [live_book(plan, portfolio_id)]
     opened: list[PreviewBroker] = []
 
     def wrap(open_broker: Callable[[Any], Broker]) -> Callable[[Any], Broker]:
