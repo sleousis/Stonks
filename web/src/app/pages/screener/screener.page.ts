@@ -29,14 +29,12 @@ import { PermissionNote } from '../../shared/ui/permission-note';
 import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { SaveUniverseSheet } from './save-universe-sheet';
+import { ScreenFilters } from './screen-filters';
 import {
   ASSET_CLASSES,
   type AssetClass,
-  type FilterRow,
-  MAX_FILTERS,
   type ScreenForm,
   emptyForm,
-  filterRow,
   formatMetric,
   fromSpec,
   toSpec,
@@ -74,6 +72,7 @@ interface OpenScreen {
     ErrorState,
     EmptyState,
     SaveUniverseSheet,
+    ScreenFilters,
   ],
   templateUrl: './screener.page.html',
   styleUrl: './screener.page.scss',
@@ -89,7 +88,6 @@ export class ScreenerPage {
 
   protected readonly assetClasses = ASSET_CLASSES;
   protected readonly order = ORDER;
-  protected readonly maxFilters = MAX_FILTERS;
 
   protected readonly metrics = resource({ loader: () => this.api.metrics() });
   protected readonly screens = resource({ loader: () => this.api.list() });
@@ -108,7 +106,7 @@ export class ScreenerPage {
   protected readonly canSave = computed(() => this.session.can('portfolio.manage'));
   protected readonly canUniverse = computed(() => this.session.can('lab.run'));
 
-  private readonly metricList = computed<MetricView[]>(() =>
+  protected readonly metricList = computed<MetricView[]>(() =>
     this.metrics.hasValue() ? this.metrics.value() : [],
   );
   protected readonly priceMetrics = computed(() =>
@@ -173,31 +171,6 @@ export class ScreenerPage {
   protected toggleColumn(id: string, on: boolean): void {
     const now = this.form().columns.filter((c) => c !== id);
     this.patch({ columns: on ? [...now, id] : now });
-  }
-
-  protected addFilter(): void {
-    this.patch({ filters: [...this.form().filters, filterRow()] });
-  }
-
-  protected editFilter(key: number, change: Partial<FilterRow>): void {
-    this.patch({
-      filters: this.form().filters.map((f) => (f.key === key ? { ...f, ...change } : f)),
-    });
-  }
-
-  protected removeFilter(key: number): void {
-    this.patch({ filters: this.form().filters.filter((f) => f.key !== key) });
-  }
-
-  protected metric(id: string): MetricView | undefined {
-    return this.metricList().find((m) => m.id === id);
-  }
-
-  protected unitHint(id: string): string {
-    const unit = this.metric(id)?.unit;
-    if (unit === 'percent') return 'In percent: 8 means 8%.';
-    if (unit === 'money') return 'In the instrument’s currency.';
-    return '';
   }
 
   protected startOver(): void {

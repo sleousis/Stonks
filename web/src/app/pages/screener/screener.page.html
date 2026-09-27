@@ -41,6 +41,7 @@
                   }
                 }
               </select>
+              <span class="hint"><a routerLink="/universes">See or make universes</a></span>
             </div>
             <div class="field">
               <label for="sc-asof">On date</label>
@@ -138,81 +139,12 @@
 
         <fieldset class="group">
           <legend>Filters</legend>
-          @if (form().filters.length === 0) {
-            <p class="hint">No filters yet. Add one to keep only what passes it.</p>
-          }
-          <ul class="filters" aria-label="Metric filters">
-            @for (f of form().filters; track f.key; let i = $index) {
-              <li class="filter">
-                <div class="field metric">
-                  <label [for]="'sc-f-metric-' + f.key">Metric {{ i + 1 }}</label>
-                  <select
-                    class="input"
-                    [id]="'sc-f-metric-' + f.key"
-                    [attr.aria-describedby]="'sc-f-hint-' + f.key"
-                    (change)="editFilter(f.key, { metric: $any($event.target).value })"
-                  >
-                    <option value="" [selected]="!f.metric">Pick a metric</option>
-                    <optgroup label="Price">
-                      @for (m of priceMetrics(); track m.id) {
-                        <option [value]="m.id" [selected]="f.metric === m.id">{{ m.label }}</option>
-                      }
-                    </optgroup>
-                    <optgroup label="Fundamentals">
-                      @for (m of fundamentalMetrics(); track m.id) {
-                        <option [value]="m.id" [selected]="f.metric === m.id">{{ m.label }}</option>
-                      }
-                    </optgroup>
-                  </select>
-                  <span class="hint" [id]="'sc-f-hint-' + f.key"
-                    >{{ metric(f.metric)?.description }} {{ unitHint(f.metric) }}</span
-                  >
-                </div>
-                <div class="field bound">
-                  <label [for]="'sc-f-min-' + f.key">At least</label>
-                  <input
-                    class="input num"
-                    type="number"
-                    inputmode="decimal"
-                    step="any"
-                    [id]="'sc-f-min-' + f.key"
-                    [value]="f.min"
-                    (input)="editFilter(f.key, { min: $any($event.target).value })"
-                  />
-                </div>
-                <div class="field bound">
-                  <label [for]="'sc-f-max-' + f.key">At most</label>
-                  <input
-                    class="input num"
-                    type="number"
-                    inputmode="decimal"
-                    step="any"
-                    [id]="'sc-f-max-' + f.key"
-                    [value]="f.max"
-                    (input)="editFilter(f.key, { max: $any($event.target).value })"
-                  />
-                </div>
-                <button
-                  type="button"
-                  class="btn btn-ghost remove"
-                  [attr.aria-label]="'Remove filter ' + (i + 1)"
-                  (click)="removeFilter(f.key)"
-                >
-                  Remove
-                </button>
-              </li>
-            }
-          </ul>
-          <div>
-            <button
-              type="button"
-              class="btn"
-              [disabled]="form().filters.length >= maxFilters"
-              (click)="addFilter()"
-            >
-              Add a filter
-            </button>
-          </div>
+          <app-screen-filters
+            idPrefix="sc"
+            [metrics]="metricList()"
+            [filters]="form().filters"
+            (filtersChange)="patch({ filters: $event })"
+          />
         </fieldset>
 
         <fieldset class="group">
@@ -396,7 +328,10 @@
       @for (w of u.warnings ?? []; track w) {
         <p class="warning">{{ w }}</p>
       }
-      <a class="btn btn-ghost" routerLink="/lab">Open the lab</a>
+      <div class="universe-links">
+        <a class="btn" [routerLink]="['/universes', u.universe.id]">Open the universe</a>
+        <a class="btn btn-ghost" routerLink="/lab">Open the lab</a>
+      </div>
     </div>
   </section>
 }
