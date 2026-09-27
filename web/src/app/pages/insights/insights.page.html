@@ -66,18 +66,12 @@
       <h2 id="alloc-title">Where the money sits</h2>
     </div>
     <div class="panel-body">
-      <div class="segments" role="group" aria-label="Group by">
-        @for (d of dimensions; track d.key) {
-          <button
-            type="button"
-            class="btn btn-ghost segment"
-            [attr.aria-pressed]="dimension() === d.key"
-            (click)="dimension.set(d.key)"
-          >
-            {{ d.label }}
-          </button>
-        }
-      </div>
+      <app-segmented
+        class="segments"
+        label="Group by"
+        [options]="dimensions"
+        [(value)]="dimension"
+      />
       @if (insights.error()) {
         <p class="muted">The allocation shows once insights load.</p>
       } @else if (!insights.hasValue()) {

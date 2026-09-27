@@ -101,12 +101,12 @@ describe('InsightsPage', () => {
   it('switches the allocation between asset class, sector, currency and holding', async () => {
     setup();
     await flushAll();
-    const holding = [...el.querySelectorAll<HTMLButtonElement>('.segment')].find(
+    const holding = [...el.querySelectorAll<HTMLButtonElement>('[role=radio]')].find(
       (b) => b.textContent?.trim() === 'Holding',
     )!;
     holding.click();
     fixture.detectChanges();
-    expect(holding.getAttribute('aria-pressed')).toBe('true');
+    expect(holding.getAttribute('aria-checked')).toBe('true');
     const slices = el.querySelector('.slices')!.textContent ?? '';
     expect(slices).toContain('AAPL.US');
     expect(slices).not.toContain('equity');

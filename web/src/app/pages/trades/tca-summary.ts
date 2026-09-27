@@ -12,13 +12,14 @@ import { TcaService } from '../../api/tca.service';
 import { formatMoney, formatNumber, formatPercent } from '../../core/format/format';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { DataTable, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { bps1, formatBps, portfolioName } from './trades-format';
 
 export type Grouping = 'strategy' | 'ticker' | 'portfolio';
 
-const GROUPINGS: readonly { value: Grouping; label: string }[] = [
+const GROUPINGS: readonly SegmentOption<Grouping>[] = [
   { value: 'strategy', label: 'By strategy' },
   { value: 'ticker', label: 'By ticker' },
   { value: 'portfolio', label: 'By portfolio' },
@@ -38,7 +39,7 @@ const KEY_LABELS: Record<Grouping, string> = {
 @Component({
   selector: 'app-tca-summary',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DataTable, StatTile, EmptyState, ErrorState, LoadingState],
+  imports: [DataTable, Segmented, StatTile, EmptyState, ErrorState, LoadingState],
   styleUrl: './trades.scss',
   template: `
     <section class="panel" aria-labelledby="costs-title">
@@ -104,22 +105,7 @@ const KEY_LABELS: Record<Grouping, string> = {
     <section class="panel breakdown" aria-labelledby="breakdown-title">
       <div class="panel-head">
         <h2 id="breakdown-title">Breakdown</h2>
-        <fieldset class="segmented">
-          <legend class="visually-hidden">Group costs</legend>
-          @for (g of groupings; track g.value) {
-            <label class="segment" [class.selected]="grouping() === g.value">
-              <input
-                type="radio"
-                name="tca-grouping"
-                class="visually-hidden"
-                [value]="g.value"
-                [checked]="grouping() === g.value"
-                (change)="grouping.set(g.value)"
-              />
-              {{ g.label }}
-            </label>
-          }
-        </fieldset>
+        <app-segmented label="Group costs" [options]="groupings" [(value)]="grouping" />
       </div>
 
       @if (breakdown.error(); as err) {

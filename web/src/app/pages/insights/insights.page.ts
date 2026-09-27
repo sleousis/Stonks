@@ -27,6 +27,7 @@ import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { ExportButton } from '../../shared/ui/export-button';
 import { PageHeader } from '../../shared/ui/page-header';
+import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { InsightsNav } from './insights-nav';
@@ -34,11 +35,11 @@ import { InsightsNav } from './insights-nav';
 const HISTORY_PAGE = 20;
 
 export type AllocationDimension = 'asset_class' | 'sector' | 'currency' | 'ticker';
-export const DIMENSIONS: readonly { key: AllocationDimension; label: string }[] = [
-  { key: 'asset_class', label: 'Asset class' },
-  { key: 'sector', label: 'Sector' },
-  { key: 'currency', label: 'Currency' },
-  { key: 'ticker', label: 'Holding' },
+export const DIMENSIONS: readonly SegmentOption<AllocationDimension>[] = [
+  { value: 'asset_class', label: 'Asset class' },
+  { value: 'sector', label: 'Sector' },
+  { value: 'currency', label: 'Currency' },
+  { value: 'ticker', label: 'Holding' },
 ];
 
 export const PERIOD_LABELS: Record<PeriodPnl['period'], string> = {
@@ -81,6 +82,7 @@ export function agreementLine(h: HoldingAgreement): string {
     PageHeader,
     ExportButton,
     InsightsNav,
+    Segmented,
     StatTile,
     DataTable,
     HelpTip,

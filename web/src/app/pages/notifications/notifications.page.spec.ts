@@ -177,6 +177,38 @@ describe('NotificationsPage', () => {
     expect(button(el, 'Show older')).toBeUndefined();
   });
 
+  it('drops an older page that arrives after the filter changed (UX-33)', async () => {
+    const page = Array.from({ length: FEED_PAGE }, (_, i) => ({
+      ...RISK,
+      id: 100 - i,
+      title: `Item ${100 - i}`,
+    }));
+    const { el } = await render({ items: page, unread_count: 0 });
+    button(el, 'Show older')!.click();
+    const older = await nextRequest(http, '/api/notifications');
+    expect(older.request.urlWithParams).toContain('before_id=');
+
+    button(el, 'Unread only')!.click();
+    fixture.detectChanges();
+    const unread = await nextRequest(http, '/api/notifications');
+    expect(unread.request.urlWithParams).toContain('unread_only=true');
+    unread.flush({ items: [{ ...RISK, id: 200, title: 'Fresh unread' }], unread_count: 1 });
+    await settle();
+
+    older.flush({ items: [{ ...RISK, id: 5, title: 'Stale older' }], unread_count: 0 });
+    await settle();
+    expect(el.textContent).toContain('Fresh unread');
+    expect(el.textContent).not.toContain('Stale older');
+    expect(items(el).length).toBe(1);
+  });
+
+  it('shows the filter as a radio group', async () => {
+    const { el } = await render();
+    const radios = [...el.querySelectorAll('[role=radiogroup] [role=radio]')];
+    expect(radios.map((r) => r.textContent?.trim())).toEqual(['All', 'Unread only']);
+    expect(radios[0].getAttribute('aria-checked')).toBe('true');
+  });
+
   it('locks mark-read for a user who may not manage notifications', async () => {
     allowed = false;
     const { el } = await render();
