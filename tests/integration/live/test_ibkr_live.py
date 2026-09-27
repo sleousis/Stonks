@@ -1,11 +1,13 @@
 """Live contract tests against an IB Gateway logged in to a PAPER account
-(roadmap 19.2, ``docs/design/live-trading.md`` section 8).
+(roadmap 19.2 and 19.11, ``docs/design/live-trading.md`` section 8).
 
 Gated behind ``STONKS_RUN_LIVE_TESTS=1`` plus ``STONKS_IBKR_HOST``,
 ``STONKS_IBKR_PORT`` and ``STONKS_IBKR_ACCOUNT``. They refuse to run unless
 the account starts with ``DU`` (paper). No credential is read: the gateway
 holds the login. The order round trip places a far-from-market limit buy,
-finds it by ``orderRef`` and cancels it.
+finds it by ``orderRef`` and cancels it. Before any test runs, the module
+checks that every account the gateway manages is a paper (``DU``) account
+and stops the whole run otherwise, so a live login can never take an order.
 """
 
 from __future__ import annotations
@@ -53,6 +55,10 @@ def client():
     )
     c = IbAsyncClient(endpoint)
     c.connect()
+    accounts = [a for a in c.managed_accounts() if a]
+    if not accounts or not all(a.upper().startswith("DU") for a in accounts):
+        c.close()
+        pytest.exit("the gateway is not logged in to a paper (DU) account only", returncode=2)
     yield c
     c.close()
 
@@ -116,6 +122,29 @@ def test_live_far_limit_round_trip(broker):
     broker.place_order(order)  # found: never sent twice
     assert broker.cancel_order(cid) is True
     broker.executions(datetime.now(UTC) - timedelta(days=1))
+
+
+def test_live_executions_and_completed_orders(client, broker):
+    since = datetime.now(UTC) - timedelta(days=1)
+    for execution in broker.executions(since):
+        assert execution.broker_exec_id and execution.quantity > 0 and execution.price > 0
+        assert execution.executed_at >= since
+    for trade in client.completed_trades():
+        assert trade.status
+
+
+def test_live_reconnect_rechecks_the_account(client, broker):
+    """A dropped session comes back on the next call, and the account check
+    runs again before anything is sent."""
+    broker.login_check()
+    before = client.status().connects
+    client.disconnect()
+    assert not client.status().connected
+    broker.ensure_ready()  # reconnects
+    status = client.status()
+    assert status.connected and status.connects == before + 1
+    assert broker.account_id == ACCOUNT
+    assert broker.fetch_account().equity > 0
 
 
 def test_live_quotes(broker):
