@@ -160,6 +160,8 @@ READ_TOOLS = {
     "get_fx_rate",
     "list_order_drafts",
     "list_cash_flows",
+    "list_tickets",
+    "get_ticket",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {

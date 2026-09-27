@@ -2195,6 +2195,30 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "One order ticket: the order, why the book wants it, the rules\nthat touched it, and what became of it.",
+      "input_schema": {
+        "properties": {
+          "ticket_id": {
+            "title": "Ticket Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticket_id"
+        ],
+        "title": "get_ticketArguments",
+        "type": "object"
+      },
+      "name": "get_ticket",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One stored universe definition.",
       "input_schema": {
         "properties": {
@@ -3740,6 +3764,60 @@
         "type": "object"
       },
       "name": "list_tax_lot_picks",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your order tickets, newest first: the orders a live book decided\nafter the close. Approve mode tickets wait for your approval in the\nweb app (a fresh second factor, never through MCP). Approved ones are\nsent before the next open.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "awaiting_approval",
+                  "approved",
+                  "rejected",
+                  "expired",
+                  "submitted",
+                  "filled",
+                  "unfilled",
+                  "cancelled",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          }
+        },
+        "title": "list_ticketsArguments",
+        "type": "object"
+      },
+      "name": "list_tickets",
       "needs_confirm": false
     },
     {

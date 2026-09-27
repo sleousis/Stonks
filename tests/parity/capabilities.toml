@@ -1344,6 +1344,30 @@ cli = { limited = "drafts come from the assistant and MCP, the shell places orde
 mcp = ["draft_order", "list_order_drafts"]
 
 [[capability]]
+id = "orders.tickets"
+domain = "trading"
+title = "Order tickets: what live books decided after the close, approve with a fresh second factor, reject with a reason"
+routes = [
+  "GET /api/tickets",
+  "GET /api/tickets/summary",
+  "GET /api/tickets/{ticket_id}",
+  "POST /api/tickets/approve",
+  "POST /api/tickets/{ticket_id}/reject",
+]
+console = ["listTickets", "getTicketSummary", "approveTickets", "rejectTicket"]
+cli = { limited = "approving needs a fresh second factor in the web app, the shell sees orders with stonks orders list" }
+mcp = ["list_tickets", "get_ticket"]
+
+[[capability]]
+id = "orders.tickets.submit"
+domain = "trading"
+title = "Send the approved order tickets inside their window now"
+routes = ["POST /api/tickets/submit"]
+console = { limited = "the live_submit job sends them before each open" }
+cli = { limited = "the live_submit job runs it, stonks schedule run-now live_submit by hand" }
+mcp = { limited = "sending real orders stays with the scheduler and operators" }
+
+[[capability]]
 id = "assistant.safety"
 domain = "assistant"
 title = "The assistant's trace and freeze: recorded turns, and unfreezing after a burst"

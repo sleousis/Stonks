@@ -59,6 +59,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_tca_summary`](#get_tca_summary) | read | no |
 | [`get_tear_sheet`](#get_tear_sheet) | read | no |
 | [`get_tick`](#get_tick) | read | no |
+| [`get_ticket`](#get_ticket) | read | no |
 | [`get_universe`](#get_universe) | read | no |
 | [`get_universe_members`](#get_universe_members) | read | no |
 | [`get_watchlist`](#get_watchlist) | read | no |
@@ -93,6 +94,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_survival_presets`](#list_survival_presets) | read | no |
 | [`list_survival_tests`](#list_survival_tests) | read | no |
 | [`list_tax_lot_picks`](#list_tax_lot_picks) | read | no |
+| [`list_tickets`](#list_tickets) | read | no |
 | [`list_ticks`](#list_ticks) | read | no |
 | [`list_trade_journal`](#list_trade_journal) | read | no |
 | [`list_trading_modes`](#list_trading_modes) | read | no |
@@ -522,6 +524,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `tick_id` | string | yes |  |  |
 | `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 
+### `get_ticket`
+
+One order ticket: the order, why the book wants it, the rules
+that touched it, and what became of it.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `ticket_id` | string | yes |  |  |
+
 ### `get_universe`
 
 One stored universe definition.
@@ -893,6 +906,20 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 | `sell_fill_id` | integer \| null | no | `null` |  |
+
+### `list_tickets`
+
+Your order tickets, newest first: the orders a live book decided
+after the close. Approve mode tickets wait for your approval in the
+web app (a fresh second factor, never through MCP). Approved ones are
+sent before the next open.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `status` | "awaiting_approval" \| "approved" \| "rejected" \| "expired" \| "submitted" \| "filled" \| "unfilled" \| "cancelled" \| "failed" \| null | no | `null` |  |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 
 ### `list_ticks`
 

@@ -38,6 +38,7 @@ from stonks.app.stream_tokens import IssuedStreamToken, StreamTokenSigner
 from stonks.app.studio import RuleStrategySource, StudioService, user_strategies_dir
 from stonks.app.subscriptions import SubscriptionService
 from stonks.app.telegram import TelegramService
+from stonks.app.tickets import TicketService
 from stonks.app.ticks import TickService
 from stonks.app.trial_ledger import TrialLedgerService
 from stonks.app.universes import UniverseService
@@ -181,6 +182,7 @@ class Services:
     orders: OrdersService
     manual_orders: ManualOrdersService
     order_drafts: OrderDraftService
+    tickets: TicketService
     price_alerts: PriceAlertService
     ingest: IngestService
     ticks: TickService
@@ -247,6 +249,7 @@ class Services:
             orders=orders,
             manual_orders=manual_orders,
             order_drafts=OrderDraftService(context, manual_orders),
+            tickets=TicketService(context),
             price_alerts=PriceAlertService(context),
             ingest=IngestService(context, runner),
             ticks=TickService(context, orders, runner),
