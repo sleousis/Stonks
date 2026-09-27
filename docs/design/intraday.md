@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 21. It takes Stonks from one decision a day to decisions on minute bars, with live prices, a live event engine, intraday strategies, and the risk and monitoring an always-on loop needs.
 
-Status: 21.1 (streaming data) built. 21.2 and 21.3 are planned and split into small work packages (section 9).
+Status: 21.1 (streaming data) and 21.3.1 (intraday strategies) built. The rest of 21.2 and 21.3 is planned and split into small work packages (section 9).
 
 Owner decisions this page follows:
 
@@ -100,7 +100,7 @@ flowchart LR
 
 ### 21.3 Intraday strategies, risk and monitoring (planned)
 
-- **Strategies**: a few reference strategies that declare minute intervals (opening range breakout, VWAP reversion, intraday time-series momentum), each with a hypothesis card (P1) and lab support on sessions (walk-forward by session, embargo in bars, P9).
+- **Strategies** (21.3.1, built): `intraday_orb`, `intraday_vwap_reversion` and `intraday_momentum` in `strategies/examples/`, each with a hypothesis card (P1). They read the regular session from the exchange calendar, decide on closed minute bars only and are flat before every close. The lab splits an intraday dataset by whole sessions, with an embargo of whole sessions (P9), and walk-forward folds count sessions. See `docs/strategies/intraday.md`.
 - **Risk**: registered `RiskRule`s and halts for the intraday loop (section 6).
 - **Monitoring**: stream and engine health on the metrics endpoint, a dead-man on the engine heartbeat, event-to-order latency, a live panel in the console, and alerts.
 
