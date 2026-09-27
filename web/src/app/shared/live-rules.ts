@@ -34,15 +34,22 @@ export const SAFEGUARD_WORDS: Record<string, RuleWords> = {
   },
   stop_cooldown: {
     label: 'Cool down after a stop',
-    effect: 'A strategy waits some days before it buys a ticker again after a losing exit.',
+    effect:
+      'A strategy waits some days before it buys a ticker again after a stop-out. Without protective stops, any losing exit counts.',
   },
   stop_guard: {
     label: 'Stop guard',
-    effect: 'A strategy buys nothing new after too many losing exits in a short window.',
+    effect:
+      'A strategy buys nothing new after too many stop-outs in a short window. Without protective stops, any losing exit counts.',
   },
   losing_lock: {
     label: 'Losing streak lock',
     effect: 'A ticker whose last trades all lost is locked for a while.',
+  },
+  protective_stops: {
+    label: 'Protective stops',
+    effect:
+      'Each new position gets a stop order at the broker that stays until the position closes. It sells if the price falls too far, even while Stonks is offline.',
   },
 };
 

@@ -98,6 +98,39 @@ export function orderStatusView(
   };
 }
 
+/** A stop order in plain words: what it is and when it trades. */
+export interface StopWords {
+  /** "Protective stop" or "Stop order". */
+  label: string;
+  /** When it trades, e.g. "Sells if the price falls to $90.50." */
+  trigger: string;
+  /** How long it lasts, for a protective stop. */
+  lasts: string | null;
+}
+
+/** Plain words for a stop order, or null for any other order. */
+export function stopWords(
+  order: Pick<OrderView, 'side' | 'stop_price' | 'protective' | 'order_type'>,
+  money: (value: number) => string,
+): StopWords | null {
+  const isStop = order.order_type === 'stop' || order.order_type === 'stop_limit';
+  if (!isStop && !order.protective) return null;
+  const at = order.stop_price != null ? money(order.stop_price) : null;
+  const trigger =
+    at === null
+      ? 'Trades when the price reaches its stop.'
+      : order.side === 'sell'
+        ? `Sells if the price falls to ${at}.`
+        : `Buys back if the price rises to ${at}.`;
+  return order.protective
+    ? {
+        label: 'Protective stop',
+        trigger,
+        lasts: 'Works at the broker until the position closes, and follows its size.',
+      }
+    : { label: 'Stop order', trigger, lasts: null };
+}
+
 /** Why the ledger says the order ended in its status (`status_reason`). */
 export function orderReason(order: OrderView): string | null {
   return order.status_reason ?? null;
