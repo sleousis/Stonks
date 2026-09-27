@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 
 import { PortfolioService } from '../../api/portfolio.service';
 import { formatMoney, formatNumber, formatPercent, toneClass } from '../../core/format/format';
+import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
@@ -13,12 +14,17 @@ const TOP_HOLDINGS = 8;
 @Component({
   selector: 'app-portfolio-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatTile, LoadingState, EmptyState, ErrorState],
+  imports: [RouterLink, StatTile, ModeStamp, LoadingState, EmptyState, ErrorState],
   template: `
-    <section class="panel" aria-labelledby="home-portfolio">
+    <section class="panel" [class.live-frame]="live()" aria-labelledby="home-portfolio">
       <div class="panel-head">
         <h2 id="home-portfolio">My portfolio</h2>
-        <a routerLink="/dashboard" class="more">Details</a>
+        <span class="head-end">
+          @if (mode(); as m) {
+            <app-mode-stamp [live]="m === 'live'" />
+          }
+          <a routerLink="/dashboard" class="more">Details</a>
+        </span>
       </div>
       @if (portfolio.error(); as err) {
         <app-error-state
@@ -32,11 +38,21 @@ const TOP_HOLDINGS = 8;
         <app-empty-state
           title="No portfolio yet"
           message="You get signals from the strategies you follow. To paper trade them, ask your admin for a portfolio."
-        />
+        >
+          <a routerLink="/strategies" class="btn">Browse strategies</a>
+        </app-empty-state>
       } @else {
         <div class="panel-body body">
           <div class="tiles">
-            <app-stat-tile label="Value" featured [value]="value()" [help]="false" />
+            <app-stat-tile
+              label="Value"
+              featured
+              [live]="live()"
+              [value]="value()"
+              [amount]="total()"
+              [format]="money"
+              [help]="false"
+            />
             <app-stat-tile
               label="Today"
               [value]="dayChange() ?? 'No change yet'"
@@ -49,7 +65,9 @@ const TOP_HOLDINGS = 8;
             <app-empty-state
               title="No holdings yet"
               message="Holdings show here after your first paper or auto trade."
-            />
+            >
+              <a routerLink="/orders" class="btn">See orders</a>
+            </app-empty-state>
           } @else {
             <ul class="holdings" aria-label="Holdings">
               @for (h of holdings(); track h.ticker) {
@@ -81,6 +99,17 @@ const TOP_HOLDINGS = 8;
     .tiles {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-3);
+    }
+    /* Phones: the headline figure gets the whole width. */
+    @media (max-width: 767.98px) {
+      .tiles .featured {
+        grid-column: 1 / -1;
+      }
+    }
+    .head-end {
+      display: inline-flex;
+      align-items: center;
       gap: var(--space-3);
     }
     .more {
@@ -161,6 +190,14 @@ export class PortfolioCard {
     const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
     return book ? formatMoney(book.total_value) : '';
   });
+  protected readonly total = computed(() => {
+    const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
+    return book ? book.total_value : null;
+  });
+  protected readonly money = (n: number) => formatMoney(n);
+  /** Paper or live, when the portfolio list is known. Brass means live. */
+  protected readonly mode = computed(() => this.portfolioCtx.current()?.trading ?? null);
+  protected readonly live = computed(() => this.mode() === 'live');
   protected readonly dayChange = computed(() => {
     const row = this.latest();
     return row?.daily_change == null ? null : formatMoney(row.daily_change, { signed: true });

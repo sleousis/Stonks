@@ -170,6 +170,14 @@ export function formatTime(value: string | null | undefined): string {
   }).format(d);
 }
 
+/** A day spelled out in the preferred zone and locale: "Sunday, September 27". */
+export function formatLongDay(value: Date | string): string {
+  const d = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return MISSING;
+  const { locale, timeZone } = activeFormat();
+  return dateFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone }).format(d);
+}
+
 /** Short weekday in the preferred zone and locale: "Mon". */
 export function formatWeekday(value: string | null | undefined): string {
   if (!value) return MISSING;

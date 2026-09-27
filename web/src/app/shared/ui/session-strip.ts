@@ -12,10 +12,10 @@ import {
 import { RouterLink } from '@angular/router';
 
 import type { MarketSessionsView, ScheduledJobView } from '../../api/models';
-import { ScheduleService } from '../../api/schedule.service';
 import { SessionService } from '../../core/auth/session.service';
 import { formatTime, formatWeekday } from '../../core/format/format';
 import { HaltStateService } from '../../core/halts/halt-state.service';
+import { TradingDayService } from '../../core/schedule/trading-day.service';
 import { haltSummary } from '../../core/halts/halt-view';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { humanize } from './param-form/param-spec';
@@ -398,14 +398,14 @@ export function sessionPhase(market: MarketSessionsView, now: number): SessionPh
   `,
 })
 export class SessionStrip {
-  private readonly schedule = inject(ScheduleService);
   private readonly halts = inject(HaltStateService);
   private readonly pollMs = inject(SCHEDULE_POLL_MS);
   private readonly session = inject(SessionService);
   protected readonly portfolios = inject(PortfolioContextService);
 
-  private readonly jobs = signal<readonly ScheduledJobView[]>([]);
-  private readonly market = signal<MarketSessionsView | null>(null);
+  private readonly day = inject(TradingDayService);
+  private readonly jobs = this.day.jobs;
+  private readonly market = this.day.market;
   private readonly now = signal(Date.now());
 
   protected readonly halted = computed(() => haltSummary(this.halts.active()));
@@ -448,12 +448,6 @@ export class SessionStrip {
 
   private async load(): Promise<void> {
     if (!this.session.canRead()) return;
-    try {
-      const view = await this.schedule.overview({ limit: 1 }, true);
-      this.jobs.set(view.jobs);
-      this.market.set(view.market ?? null);
-    } catch {
-      // No scheduler or signed out: the strip just shows no next run.
-    }
+    await this.day.load();
   }
 }

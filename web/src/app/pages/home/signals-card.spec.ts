@@ -5,7 +5,19 @@ import { provideRouter } from '@angular/router';
 import type { FeedItemView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { nextRequest, tick } from '../../../testing/http';
-import { SignalsCard, appLink, todaysSignals } from './signals-card';
+import type { TickRun } from '../../api/models';
+import { SignalsCard, appLink, runDetail, todaysRuns, todaysSignals } from './signals-card';
+
+function run(overrides: Partial<TickRun>): TickRun {
+  return {
+    id: 't1',
+    started_at: new Date(Date.now() - 60_000).toISOString(),
+    finished_at: new Date().toISOString(),
+    status: 'ok',
+    summary: { orders_placed: 3, fills: 1 },
+    ...overrides,
+  };
+}
 
 function item(overrides: Partial<FeedItemView>): FeedItemView {
   return {
@@ -42,6 +54,22 @@ describe('todaysSignals', () => {
   });
 });
 
+describe('trading runs on the blotter', () => {
+  it('keeps runs from the last 24 hours and says what they did', () => {
+    const now = new Date('2026-09-26T12:00:00Z');
+    const runs = [
+      run({ id: 'a', started_at: '2026-09-26T11:00:00Z' }),
+      run({ id: 'b', started_at: '2026-09-24T11:00:00Z' }),
+    ];
+    expect(todaysRuns(runs, now).map((r) => r.id)).toEqual(['a']);
+    expect(runDetail(run({}))).toBe('3 orders, 1 fill.');
+    expect(runDetail(run({ status: 'running' }))).toContain('now');
+    expect(runDetail(run({ status: 'error', summary: { error: 'Broker down' } }))).toBe(
+      'Broker down',
+    );
+  });
+});
+
 describe('SignalsCard', () => {
   let controller: HttpTestingController;
 
@@ -63,6 +91,12 @@ describe('SignalsCard', () => {
       items: [item({ id: 7 }), item({ id: 8, read_at: '2026-09-26T10:00:00Z', title: 'Sell X' })],
       unread_count: 1,
     });
+    (await nextRequest(controller, '/api/ticks')).flush({
+      items: [],
+      total: 0,
+      limit: 10,
+      offset: 0,
+    });
     await tick();
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
@@ -78,5 +112,28 @@ describe('SignalsCard', () => {
     await tick();
     fixture.detectChanges();
     expect(el.textContent).toContain('No signals today');
+  });
+
+  it('puts runs and signals in one time line, newest first', async () => {
+    const fixture = TestBed.createComponent(SignalsCard);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/notifications')).flush({
+      items: [item({ id: 1, created_at: new Date(Date.now() - 3_600_000).toISOString() })],
+      unread_count: 1,
+    });
+    (await nextRequest(controller, '/api/ticks')).flush({
+      items: [run({ id: 'tk9' })],
+      total: 1,
+      limit: 10,
+      offset: 0,
+    });
+    await tick();
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const rows = [...el.querySelectorAll('li.row')];
+    expect(rows.map((r) => r.getAttribute('data-kind'))).toEqual(['run', 'signal']);
+    expect(rows[0].querySelector('a.title')?.getAttribute('href')).toBe('/orders/ticks/tk9');
+    expect(rows[0].querySelector('app-status-pill')?.textContent).toContain('succeeded');
+    expect(rows[0].textContent).toContain('3 orders, 1 fill.');
   });
 });
