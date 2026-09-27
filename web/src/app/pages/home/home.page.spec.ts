@@ -80,6 +80,12 @@ describe('HomePage', () => {
   async function flushCommon() {
     (await nextRequest(controller, '/api/notifications')).flush({ items: [], unread_count: 0 });
     (await nextRequest(controller, '/api/subscriptions')).flush(page([]));
+    (await nextRequest(controller, '/api/ticks')).flush(page([]));
+  }
+
+  async function flushTape() {
+    (await nextRequest(controller, '/api/orders/fills')).flush(page([]));
+    (await nextRequest(controller, '/api/orders')).flush(page([]));
   }
 
   function page<T>(items: T[]) {
@@ -96,13 +102,15 @@ describe('HomePage', () => {
     (await nextRequest(controller, '/api/portfolio')).flush(PORTFOLIO);
     (await nextRequest(controller, '/api/pnl')).flush(PNL);
     await flushCommon();
+    await flushTape();
     await tick();
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
 
     expect(el.querySelector('h1')?.textContent).toContain('Hello, Ann');
+    expect(el.querySelector('app-fills-tape')?.textContent).toContain('No fills this week');
     const headings = [...el.querySelectorAll('h2')].map((h) => h.textContent?.trim());
-    expect(headings).toEqual(['My portfolio', "Today's signals", 'My strategies']);
+    expect(headings).toEqual(['My portfolio', "Today's signals and runs", 'My strategies']);
     expect(el.textContent).toContain('$76,750.00');
     expect(el.textContent).toContain('-$1,250.00');
     // Biggest holding first.
@@ -121,6 +129,7 @@ describe('HomePage', () => {
       portfolios: 4,
       owners: 3,
     });
+    (await nextRequest(controller, '/api/portfolios')).flush(page([]));
     await flushCommon();
     await tick();
     fixture.detectChanges();
@@ -145,10 +154,11 @@ describe('HomePage', () => {
     );
     (await nextRequest(controller, '/api/pnl')).flush(PNL);
     await flushCommon();
+    await flushTape();
     await tick();
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('h1')?.textContent).toContain('Home');
+    expect(el.querySelector('h1')?.textContent).toContain('Today');
     expect(el.querySelector('.banner a')?.getAttribute('href')).toBe('/login');
   });
 
@@ -165,5 +175,7 @@ describe('HomePage', () => {
     expect(el.textContent).not.toContain('Could not load');
     controller.expectNone('/api/portfolio');
     controller.expectNone('/api/pnl');
+    controller.expectNone('/api/orders/fills');
+    expect(el.querySelector('app-fills-tape section')).toBeNull();
   });
 });

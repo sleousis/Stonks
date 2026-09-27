@@ -36,8 +36,12 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
       flex: 1 1 18rem;
     }
     h1 {
-      font-size: var(--text-xl);
-      letter-spacing: -0.01em;
+      font-family: var(--font-display);
+      font-stretch: var(--display-stretch);
+      font-size: var(--text-title);
+      font-weight: var(--weight-bold);
+      letter-spacing: var(--tracking-display);
+      line-height: var(--leading-tight);
       outline: none;
       overflow-wrap: anywhere;
     }

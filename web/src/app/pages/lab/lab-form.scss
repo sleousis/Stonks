@@ -156,13 +156,13 @@
 
   input {
     margin-top: 3px;
-    accent-color: var(--color-brass);
+    accent-color: var(--color-accent);
     flex: none;
   }
 
   &.chosen {
-    border-color: var(--color-brass);
-    box-shadow: inset 3px 0 0 var(--color-brass);
+    border-color: var(--color-accent);
+    box-shadow: inset 3px 0 0 var(--color-accent);
   }
 
   &:focus-within {

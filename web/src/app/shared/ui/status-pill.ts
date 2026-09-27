@@ -1,6 +1,23 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
+import { BrandMark } from './brand-mark';
+
 export type PillTone = 'positive' | 'negative' | 'info' | 'progress' | 'warn' | 'neutral';
+
+/**
+ * How a status looks, by what kind of thing it describes, so a halted book,
+ * a live strategy and a finished backtest never look alike:
+ *
+ * - `lamp`: a lifecycle state that lasts (active, shadow, retired). A round
+ *   pill with a lamp dot.
+ * - `receipt`: the outcome of something that finished (passed, filled,
+ *   failed). A square outlined tag with a tick, cross or dash.
+ * - `working`: something still going (queued, running). The brand mark
+ *   drawing itself, no box.
+ * - `alarm`: trading is stopped or broken (halted, unhealthy). A solid
+ *   block that cannot be missed.
+ */
+export type PillForm = 'lamp' | 'receipt' | 'working' | 'alarm';
 
 const TONES: Record<string, PillTone> = {
   active: 'positive',
@@ -23,6 +40,7 @@ const TONES: Record<string, PillTone> = {
   canceled: 'neutral',
   skipped: 'neutral',
   disabled: 'neutral',
+  paused: 'neutral',
   warn: 'warn',
   warning: 'warn',
   stale: 'warn',
@@ -32,7 +50,34 @@ const TONES: Record<string, PillTone> = {
   error: 'negative',
   rejected: 'negative',
   unhealthy: 'negative',
+  halted: 'negative',
+  tripped: 'negative',
 };
+
+const FORMS: Record<string, PillForm> = {
+  active: 'lamp',
+  shadow: 'lamp',
+  draft: 'lamp',
+  retired: 'lamp',
+  disabled: 'lamp',
+  paused: 'lamp',
+  healthy: 'lamp',
+  pending: 'working',
+  queued: 'working',
+  running: 'working',
+  submitted: 'working',
+  unhealthy: 'alarm',
+  halted: 'alarm',
+  tripped: 'alarm',
+};
+
+/** The form for a status; outcomes (passed, filled, failed...) are receipts. */
+export function pillForm(status: string | null | undefined, tone: PillTone): PillForm {
+  const key = (status ?? '').toLowerCase();
+  if (FORMS[key]) return FORMS[key];
+  if (key in TONES) return 'receipt';
+  return tone === 'progress' ? 'working' : 'lamp';
+}
 
 /**
  * Status as text plus a shape, so it never relies on colour alone.
@@ -43,68 +88,133 @@ const TONES: Record<string, PillTone> = {
 @Component({
   selector: 'app-status-pill',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { '[attr.data-tone]': 'resolvedTone()' },
-  template: `<span class="mark" aria-hidden="true"></span>{{ text() }}`,
+  imports: [BrandMark],
+  host: { '[attr.data-tone]': 'resolvedTone()', '[attr.data-form]': 'resolvedForm()' },
+  template: `@if (resolvedForm() === 'working') {
+      <app-brand-mark class="spin" mode="loading" [size]="14" />
+    } @else {
+      <span class="mark" aria-hidden="true"></span>
+    }
+    {{ text() }}`,
   styles: `
     :host {
+      --tone: var(--color-ink-2);
+      --tone-soft: var(--color-neutral-soft);
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 1px 8px 1px 6px;
-      border-radius: 999px;
       font-size: var(--text-xs);
       font-weight: var(--weight-medium);
       line-height: 18px;
       white-space: nowrap;
-      background: var(--color-neutral-soft);
-      color: var(--color-ink-2);
-    }
-    .mark {
-      width: 7px;
-      height: 7px;
-      flex: none;
-      border-radius: 50%;
-      background: currentColor;
+      color: var(--tone);
     }
     :host([data-tone='positive']) {
-      background: var(--color-gain-soft);
-      color: var(--color-gain);
+      --tone: var(--color-gain);
+      --tone-soft: var(--color-gain-soft);
     }
     :host([data-tone='negative']) {
-      background: var(--color-loss-soft);
-      color: var(--color-loss);
-    }
-    :host([data-tone='negative']) .mark {
-      border-radius: 1px;
-      transform: rotate(45deg);
+      --tone: var(--color-loss);
+      --tone-soft: var(--color-loss-soft);
     }
     :host([data-tone='info']) {
-      background: var(--color-info-soft);
-      color: var(--color-info);
-    }
-    :host([data-tone='info']) .mark {
-      background: transparent;
-      border: 1.5px solid currentColor;
+      --tone: var(--color-info);
+      --tone-soft: var(--color-info-soft);
     }
     :host([data-tone='progress']) {
-      background: var(--color-brass-soft);
-      color: var(--color-warn);
-    }
-    :host([data-tone='progress']) .mark {
-      background: transparent;
-      border: 1.5px dashed currentColor;
+      --tone: var(--color-accent);
+      --tone-soft: var(--color-accent-soft);
     }
     :host([data-tone='warn']) {
-      background: var(--color-warn-soft);
-      color: var(--color-warn);
+      --tone: var(--color-warn);
+      --tone-soft: var(--color-warn-soft);
     }
-    :host([data-tone='warn']) .mark {
-      border-radius: 0;
-      clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    .mark {
+      flex: none;
     }
-    :host([data-tone='neutral']) .mark {
+
+    /* Lamp: lifecycle. Round pill, a lamp dot (solid on, ring for shadow, a
+       dash when off). */
+    :host([data-form='lamp']) {
+      padding: 1px 9px 1px 7px;
+      border-radius: var(--radius-pill);
+      background: var(--tone-soft);
+    }
+    :host([data-form='lamp']) .mark {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 25%, transparent);
+    }
+    :host([data-form='lamp'][data-tone='info']) .mark {
+      background: transparent;
+      border: 1.5px solid currentColor;
+      box-shadow: none;
+    }
+    :host([data-form='lamp'][data-tone='neutral']) .mark {
       height: 2px;
       border-radius: 1px;
+      box-shadow: none;
+    }
+
+    /* Receipt: an outcome. Square outlined tag with a tick, cross, dash or
+       bang drawn in CSS. */
+    :host([data-form='receipt']) {
+      padding: 0 7px 0 5px;
+      border: 1px solid currentColor;
+      border-radius: var(--radius-xs);
+      background: transparent;
+    }
+    :host([data-form='receipt']) .mark {
+      width: 9px;
+      height: 9px;
+      position: relative;
+    }
+    :host([data-form='receipt'][data-tone='positive']) .mark {
+      width: 5px;
+      height: 9px;
+      margin: 0 2px 2px;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(45deg);
+    }
+    :host([data-form='receipt'][data-tone='negative']) .mark,
+    :host([data-form='receipt'][data-tone='neutral']) .mark {
+      background: linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat;
+    }
+    :host([data-form='receipt'][data-tone='negative']) .mark {
+      transform: rotate(45deg);
+      background:
+        linear-gradient(currentColor, currentColor) center / 100% 2px no-repeat,
+        linear-gradient(currentColor, currentColor) center / 2px 100% no-repeat;
+    }
+    :host([data-form='receipt'][data-tone='warn']) .mark,
+    :host([data-form='receipt'][data-tone='info']) .mark,
+    :host([data-form='receipt'][data-tone='progress']) .mark {
+      width: 8px;
+      background: currentColor;
+      clip-path: polygon(50% 0, 100% 100%, 0 100%);
+    }
+
+    /* Working: no box, the mark draws itself. */
+    :host([data-form='working']) {
+      padding: 1px 0;
+    }
+
+    /* Alarm: a solid block. */
+    :host([data-form='alarm']) {
+      padding: 1px 8px 1px 6px;
+      border-radius: var(--radius-xs);
+      background: var(--tone);
+      color: var(--color-surface);
+      font-weight: var(--weight-bold);
+    }
+    :host([data-form='alarm']) .mark {
+      width: 8px;
+      height: 8px;
+      background: currentColor;
+      transform: rotate(45deg);
     }
   `,
 })
@@ -114,9 +224,14 @@ export class StatusPill {
   readonly label = input<string | null>(null);
   /** Override the tone mapping. */
   readonly tone = input<PillTone | null>(null);
+  /** Override the form (see `PillForm`). */
+  readonly form = input<PillForm | null>(null);
 
   protected readonly resolvedTone = computed<PillTone>(
     () => this.tone() ?? TONES[(this.status() ?? '').toLowerCase()] ?? 'neutral',
+  );
+  protected readonly resolvedForm = computed<PillForm>(
+    () => this.form() ?? pillForm(this.status(), this.resolvedTone()),
   );
   protected readonly text = computed(() => this.label() ?? this.status() ?? 'unknown');
 }

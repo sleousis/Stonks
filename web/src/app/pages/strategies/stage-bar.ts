@@ -86,7 +86,7 @@ interface NextStep {
       border-top-color: var(--color-ink-3);
     }
     .stages li[data-state='current'] {
-      border-top-color: var(--color-brass);
+      border-top-color: var(--color-accent);
     }
     .dot {
       flex: none;

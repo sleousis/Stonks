@@ -106,7 +106,7 @@ let nextId = 0;
     }
     .trigger:hover,
     .trigger[aria-expanded='true'] {
-      color: var(--color-brass);
+      color: var(--color-accent);
     }
     .panel-tip:popover-open {
       display: block;

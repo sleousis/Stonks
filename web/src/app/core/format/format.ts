@@ -157,6 +157,36 @@ export function formatDateTime(value: string | null | undefined): string {
   return `${isoDate(d, timeZone)} ${time}`;
 }
 
+/** Clock time in the preferred zone, 24-hour: "14:05". For the tape and the session strip. */
+export function formatTime(value: string | null | undefined): string {
+  if (!value) return MISSING;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return dateFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: activeFormat().timeZone,
+  }).format(d);
+}
+
+/** A day spelled out in the preferred zone and locale: "Sunday, September 27". */
+export function formatLongDay(value: Date | string): string {
+  const d = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(d.getTime())) return MISSING;
+  const { locale, timeZone } = activeFormat();
+  return dateFormat(locale, { weekday: 'long', day: 'numeric', month: 'long', timeZone }).format(d);
+}
+
+/** Short weekday in the preferred zone and locale: "Mon". */
+export function formatWeekday(value: string | null | undefined): string {
+  if (!value) return MISSING;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const { locale, timeZone } = activeFormat();
+  return dateFormat(locale, { weekday: 'short', timeZone }).format(d);
+}
+
 function isoDate(d: Date, timeZone: string): string {
   // en-CA formats dates as YYYY-MM-DD.
   return dateFormat('en-CA', {

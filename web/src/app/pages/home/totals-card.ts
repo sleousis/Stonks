@@ -22,7 +22,14 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
       } @else {
         <div class="panel-body body">
           <div class="tiles">
-            <app-stat-tile label="Total value" featured [value]="value()" [help]="false" />
+            <app-stat-tile
+              label="Total value"
+              featured
+              [value]="value()"
+              [amount]="totalValue()"
+              [format]="money"
+              [help]="false"
+            />
             <app-stat-tile label="Cash" [value]="cash()" [help]="false" />
             <app-stat-tile label="Portfolios" [value]="portfolios()" [help]="false" />
             <app-stat-tile label="Traders" [value]="owners()" [help]="false" />
@@ -46,6 +53,12 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: var(--space-3);
     }
+    /* Phones: the headline figure gets the whole width. */
+    @media (max-width: 767.98px) {
+      .tiles .featured {
+        grid-column: 1 / -1;
+      }
+    }
     .hint {
       font-size: var(--text-xs);
       color: var(--color-ink-3);
@@ -59,6 +72,10 @@ export class TotalsCard {
   protected readonly value = computed(() =>
     this.totals.hasValue() ? formatMoney(this.totals.value().total_value) : '',
   );
+  protected readonly totalValue = computed(() =>
+    this.totals.hasValue() ? this.totals.value().total_value : null,
+  );
+  protected readonly money = (n: number) => formatMoney(n);
   protected readonly cash = computed(() =>
     this.totals.hasValue() ? formatMoney(this.totals.value().cash) : '',
   );

@@ -99,12 +99,16 @@ export function categoryLabel(category: string | null): string {
           <app-empty-state
             title="Nothing unread"
             message="You are all caught up. Choose All to see older notifications."
-          />
+          >
+            <button type="button" class="btn" (click)="unreadOnly.set(false)">Show all</button>
+          </app-empty-state>
         } @else {
           <app-empty-state
             title="No notifications yet"
             message="Signals from the strategies you follow, order fills, risk alerts and system news land here. They stay here even when push is off or you missed one on your phone."
-          />
+          >
+            <a class="btn" routerLink="/strategies">Find strategies to follow</a>
+          </app-empty-state>
         }
       } @else {
         <ul class="feed">

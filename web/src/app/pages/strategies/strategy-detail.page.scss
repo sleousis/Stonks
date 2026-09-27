@@ -210,7 +210,7 @@ dd {
 blockquote {
   margin: var(--space-1) 0 0;
   padding: var(--space-2) var(--space-3);
-  border-left: 3px solid var(--color-brass);
+  border-left: 3px solid var(--color-accent);
   background: var(--color-surface-2);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   max-width: 70ch;
@@ -274,8 +274,8 @@ blockquote {
   }
 
   li:first-child .dot {
-    border-color: var(--color-brass);
-    background: var(--color-brass);
+    border-color: var(--color-accent);
+    background: var(--color-accent);
   }
 
   li.override .dot {

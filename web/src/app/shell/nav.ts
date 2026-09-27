@@ -139,7 +139,7 @@ const ADVANCED_KEY = 'stonks.navAdvanced';
       color: var(--color-ink);
     }
     a.active {
-      background: var(--color-surface-3);
+      background: var(--color-surface-2);
       color: var(--color-ink);
       font-weight: var(--weight-semibold);
     }
@@ -151,7 +151,7 @@ const ADVANCED_KEY = 'stonks.navAdvanced';
       bottom: 7px;
       width: 3px;
       border-radius: 2px;
-      background: var(--color-brass);
+      background: var(--color-accent);
     }
     kbd {
       font: inherit;

@@ -21,12 +21,53 @@
   }
 }
 
+// The rail: sidebar, phone top bar and drawer share a slate slab in both
+// themes. Inside it the colour tokens are remapped, so every component that
+// sits there (nav, bell, buttons) reads light-on-slate without its own rules.
+@mixin rail-scope {
+  color-scheme: dark;
+  --color-surface: var(--color-rail);
+  --color-surface-2: var(--color-rail-2);
+  --color-surface-3: color-mix(in srgb, var(--color-rail-2) 70%, var(--color-rail-ink));
+  --color-border: color-mix(in srgb, var(--color-rail) 80%, var(--color-rail-ink));
+  --color-border-strong: color-mix(in srgb, var(--color-rail) 60%, var(--color-rail-ink));
+  --color-ink: var(--color-rail-ink);
+  --color-ink-2: var(--color-rail-ink-2);
+  --color-ink-3: var(--color-rail-ink-2);
+  --color-primary: var(--color-rail-accent);
+  --color-accent: var(--color-rail-accent);
+  --color-focus: var(--color-rail-accent);
+  background: var(--color-rail);
+  color: var(--color-rail-ink);
+}
+
 .brand {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-bold);
-  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   color: var(--color-ink);
   text-decoration: none;
+}
+
+.brand-mark {
+  flex: none;
+
+  path {
+    fill: none;
+    stroke: var(--color-accent);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-stretch: var(--display-stretch);
+  font-size: 1.375rem;
+  font-weight: 800;
+  letter-spacing: -0.005em;
+  line-height: 1;
 }
 
 // Phone top bar ------------------------------------------------------------
@@ -41,8 +82,7 @@
   padding: env(safe-area-inset-top) calc(var(--space-2) + env(safe-area-inset-right)) 0
     calc(var(--space-2) + env(safe-area-inset-left));
   min-height: calc(52px + env(safe-area-inset-top));
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  @include rail-scope;
 
   .brand {
     display: inline-flex;
@@ -116,12 +156,7 @@
     grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
     min-height: 100dvh;
     // Keep the sidebar colour running the full page height.
-    background: linear-gradient(
-      to right,
-      var(--color-surface) calc(var(--sidebar-w) - 1px),
-      var(--color-border) 0 var(--sidebar-w),
-      transparent 0
-    );
+    background: linear-gradient(to right, var(--color-rail) var(--sidebar-w), transparent 0);
   }
 }
 
@@ -138,8 +173,7 @@
     overflow-y: auto;
     padding: var(--space-4) var(--space-3);
     padding-left: calc(var(--space-3) + env(safe-area-inset-left));
-    background: var(--color-surface);
-    border-right: 1px solid var(--color-border);
+    @include rail-scope;
 
     > .sidebar-head > .brand {
       padding: var(--space-1) var(--space-3) var(--space-2);
@@ -232,9 +266,7 @@ main.bare {
   margin: 0;
   padding: 0;
   border: 0;
-  border-right: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-ink);
+  @include rail-scope;
   box-shadow: var(--shadow-2);
 
   &::backdrop {

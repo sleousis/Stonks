@@ -183,7 +183,7 @@ export class ShadowPage {
         id: 'real',
         label: 'Real portfolio',
         kind: 'line',
-        color: 'brass',
+        color: this.portfolioCtx.live() ? 'brass' : 'muted',
         format: 'number',
         points: input.real,
       },

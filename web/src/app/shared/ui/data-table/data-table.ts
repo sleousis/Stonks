@@ -203,6 +203,11 @@ export class DataTable<T extends object> {
     return !!col.format && NUMERIC.includes(col.format);
   }
 
+  /** Numbers, dates and times are set in the mono figure face. */
+  protected isFigure(col: TableColumn<T>): boolean {
+    return this.isNumeric(col) || col.format === 'date' || col.format === 'datetime';
+  }
+
   protected alignEnd(col: TableColumn<T>): boolean {
     return (col.align ?? (this.isNumeric(col) ? 'end' : 'start')) === 'end';
   }

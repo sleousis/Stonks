@@ -77,17 +77,17 @@ progress {
   border-radius: 999px;
   overflow: hidden;
   background: var(--color-surface-3);
-  accent-color: var(--color-brass);
+  accent-color: var(--color-accent);
 
   &::-webkit-progress-bar {
     background: var(--color-surface-3);
   }
   &::-webkit-progress-value {
-    background: var(--color-brass);
+    background: var(--color-accent);
     transition: width var(--dur) var(--ease);
   }
   &::-moz-progress-bar {
-    background: var(--color-brass);
+    background: var(--color-accent);
   }
 }
 

@@ -1,4 +1,5 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideRouter } from '@angular/router';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 
 import type { HealthReportView, IngestRunView, Page, TickRun } from '../../api/models';
@@ -68,7 +69,9 @@ describe('HealthPage', () => {
   }
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [...provideApi(), provideHttpClientTesting()] });
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+    });
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(HealthPage);
     el = fixture.nativeElement;

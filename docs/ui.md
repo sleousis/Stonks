@@ -57,7 +57,7 @@ When the backend changes a route: `uv run python -m stonks.api.openapi` (writes
   client, so interceptors apply). Never edit it; ESLint and Prettier skip it.
 - TradingView Lightweight Charts, behind the `ChartEngine` seam.
 - `@angular/service-worker` for the app-shell cache and Web Push.
-- Public Sans (self-hosted via `@fontsource-variable/public-sans`).
+- Public Sans, Archivo and IBM Plex Mono, self-hosted from `@fontsource` (see [Identity](#identity)).
 - Vitest (Angular's default runner) with jsdom; ESLint; Prettier.
 
 ## Folders
@@ -290,8 +290,8 @@ outside `shared/chart/lightweight-chart-engine.ts`.
 ```
 
 Series: `{ id, label, kind: 'line' | 'area', color: 'brass' | 'primary' | 'gain' | 'loss' | 'muted', pane?: 0 | 1, format?: 'money' | 'percent' | 'number', points: { time, value }[] }`.
-`time` is `YYYY-MM-DD` for daily data or an ISO timestamp. Equity is a brass
-line in pane 0; drawdown is a `loss` area in pane 1. Always pass a one or two
+`time` is `YYYY-MM-DD` for daily data or an ISO timestamp. Equity is a
+`primary` line in pane 0 (`brass` only for a live portfolio); drawdown is a `loss` area in pane 1. Always pass a one or two
 sentence `summary` (the canvas is invisible to screen readers). Tests use
 `provideFakeChart()` from `src/testing/fake-chart.ts`.
 
@@ -345,7 +345,7 @@ look-ahead (`<app-signal-ic-result>`). Both follow the job with
 
 - Numbers through `formatMoney/formatPercent/...` or the `money`, `pct`, `num`,
   `day`, `dateTime`, `ago` pipes; percentages are fractions from the API.
-  Numeric cells get `.num` (tabular figures). Never call `Intl` or
+  Numeric cells get `.num` (mono tabular figures). Never call `Intl` or
   `toLocaleString` yourself: the formatters follow the trader's locale, time
   zone and date style from Settings (`FormatService`, kept in `localStorage`)
   and re-render when they change. Defaults: the browser's locale and zone,
@@ -543,40 +543,96 @@ copy. `npm run lint` runs `scripts/check-copy.mjs`, which fails on
   are pending (it waits for them); flush, then `await tick()` and
   `fixture.detectChanges()` (see `dashboard.page.spec.ts`).
 
-## Design system
+## Identity
 
-Direction: a calm trading desk. Cool mist background, flat bordered panels (no
-shadow stack), one signature colour (brass) used only for the active nav marker,
-focus rings, the headline tile rule and the equity line. Gains and losses keep
-their conventional green and red, always paired with a sign or shape, never
-colour alone.
+The console should read as a trading desk, not an admin template. Three rules,
+layered, apply to every page and shared component:
 
-Tokens (`styles/_tokens.scss`), always via `var(--…)`:
+1. **The trading day is the spine.** `<app-session-strip>` sits on top of
+   every page: the market phase (pre-open, open, closed) with a track from
+   pre-open to the close, and the next scheduled run with a live countdown,
+   from `GET /api/schedule` (`market`, `jobs`, read once through
+   `TradingDayService`). It turns red for a kill switch and amber for a
+   breaker. Home is **Today**: a blotter of the next run, trading runs and
+   signals in time order, a tape of the latest fills, the portfolio and my
+   strategies.
+2. **Tape and ticket.** Every price, quantity, date and time is set in the
+   mono figure face (`.num`, and the figure columns of the data table). Sides
+   are `<app-side-tag>`: a solid B and an outlined S. Money confirmations are
+   order tickets (`.ticket`, `.ticket-lines`) with an `<app-mode-stamp>`.
+3. **Brass means real money.** `--color-live` (brass) is used only for real
+   money: a live portfolio's headline figure and frame (`.live-frame`,
+   `<app-stat-tile featured live>`), the LIVE stamp, the live equity line
+   and the ring around the kill switch. Paper and research stay in cool
+   greys and blues (`--color-paper`, `--color-accent`, `--color-primary`).
+   Use `PortfolioContextService.live()` to decide.
+
+```mermaid
+flowchart LR
+  S[Session strip on every page] --> T[Today: blotter, tape, portfolio, strategies]
+  T --> K[Tickets and stamps for money actions]
+  K --> B{Real money?}
+  B -->|yes| Br[Brass: figure, frame, LIVE, kill ring]
+  B -->|no| C[Cool greys and blues]
+```
+
+**Brand mark.** The favicon's rising line (`<app-brand-mark>`) is the loading
+indicator (it draws itself), the empty-state mark (still) and the error mark
+(it turns down). It also leads the wordmark in the rail and on sign-in.
+
+**States are moments.** `<app-loading-state>` shows the drawing mark and the
+label. `<app-empty-state>` shows the mark, a title in the display face, one
+line on what fills the space, and one action in its content slot.
+`<app-error-state>` shows the broken mark, the API's message and Try again.
+
+**Status differs by form** (`<app-status-pill>`, `pillForm()`): a lifecycle
+state is a round `lamp` pill (active, shadow, retired), an outcome is a
+square `receipt` tag with a tick or cross (passed, filled, failed), work in
+progress is the drawing mark (queued, running), and a stop is a solid
+`alarm` block (halted, unhealthy). A live portfolio or broker uses the LIVE
+stamp, never a pill.
+
+**Motion.** Only three things move without being asked: the headline figure
+counts up (`countUp()`, `--dur-count`), the countdowns tick, and the fills
+tape scrolls once it is full (paused on hover or focus). All three stop
+under `prefers-reduced-motion`, and the tape then scrolls by hand.
+
+**The rail.** The sidebar, the phone top bar and the drawer are a slate slab
+in both themes (`--color-rail*`). Inside it the colour tokens are remapped
+(`rail-scope` in `shell.scss`), so components placed there need no rules of
+their own.
+
+Tokens (`styles/_tokens.scss`), always via `var(--…)`. Light and dark each
+define every colour.
 
 | Group | Tokens |
 |---|---|
-| Colour | `--color-bg`, `--color-surface`, `-surface-2`, `-surface-3`, `--color-border`, `-border-strong`, `--color-ink`, `-ink-2` (secondary), `-ink-3` (muted, still 4.5:1), `--color-brass`, `--color-primary`, `--color-gain`, `--color-loss`, `--color-warn`, `--color-info`, each with a `-soft` background, `--color-focus`, `--color-scrim` |
-| Type | `--font-sans` (Public Sans), `--text-xs` 12 / `sm` 13 / `md` 14 (body) / `lg` 16 / `xl` 22 / `2xl` 30, `--weight-*`, `--leading-*` |
-| Space | `--space-1`…`--space-8` = 4, 8, 12, 16, 24, 32, 48, 64 px; `--gutter` (24px, 16px on phones) |
-| Radius | `--radius-sm` 4 (controls, pills), `--radius-md` 8 (panels), `--radius-lg` 12 (dialogs) |
-| Elevation | `--shadow-1` (panels, hairline), `--shadow-2` (dialogs, drawer, toasts) |
-| Motion | `--dur-fast` 120ms, `--dur` 200ms, `--ease`; both 0 under reduced motion |
-| Size | `--control-h` 32, `--touch-min` 44, `--row-h` 34, `--sidebar-w` 220 |
+| Colour | `--color-bg`, `-surface`, `-surface-2`, `-surface-3`, `-border`, `-border-strong`, `-control-border`, `-ink`, `-ink-2`, `-ink-3`. `--color-primary` (research blue), `--color-accent` (markers). `--color-live`, `-live-ink`, `-live-soft` (brass, real money only). `--color-paper`, `-paper-soft`. `--color-gain`, `-loss`, `-warn`, `-info`, each with `-soft`. `--color-focus`, `--color-scrim`. `--color-rail`, `-rail-2`, `-rail-ink`, `-rail-ink-2`, `-rail-accent`. `--color-brass` stays as an alias of `--color-live`. |
+| Type | `--font-sans` (Public Sans, body), `--font-display` (Archivo at `--display-stretch` 76%: page titles, headline figures, empty-state titles, stamps), `--font-mono` (IBM Plex Mono for figures, at `--mono-scale`). `--text-xs` 12, `sm` 13, `md` 14, `lg` 16, `xl` 20, `2xl` 26, `title` 30, `figure` 44 (smaller on phones). `--weight-*`, `--leading-*`, `--tracking-display`, `--tracking-stamp` |
+| Space | `--space-1`…`--space-8` = 4, 8, 12, 16, 24, 32, 48, 64 px. `--gutter` (24px, 16px on phones) |
+| Radius | `--radius-xs` 2 (tags, stamps, tickets), `-sm` 4 (controls), `-md` 6 (panels), `-lg` 10 (dialogs), `-pill` (lifecycle status only) |
+| Border | `--border-live` 3px (real money), `--border-rule` |
+| Elevation | `--shadow-0`, `--shadow-1` (panels), `--shadow-2` (dialogs, drawer, toasts), `--shadow-ticket`, `--ring-live` |
+| Motion | `--dur-fast` 120ms, `--dur` 200ms, `--dur-slow` 420ms, `--dur-count` 700ms, `--tape-speed`, `--ease`, `--ease-out`. Durations are 0 under reduced motion |
+| Size | `--control-h` 32, `--touch-min` 44, `--row-h` 34, `--sidebar-w` 224, `--strip-h` 40 |
 
-Themes: light by default; dark when the OS prefers dark, or forced with the
-toggle (`html[data-theme]`, remembered in `localStorage`). Charts re-read the
-tokens when the theme changes.
+Fonts are self-hosted from npm (`@fontsource-variable/public-sans`,
+`@fontsource-variable/archivo` with its width axis, `@fontsource/ibm-plex-mono`),
+so they work offline and under the API's content policy. Each has a fallback
+stack (Arial Narrow and Roboto Condensed for the display face, the system
+monospace for figures).
 
 Global primitives (`styles.scss`): `.btn` (+ `.btn-primary`, `.btn-danger`,
 `.btn-ghost`, `.btn-icon`), `.field` / `.input` / `.check` / `.hint` / `.error`,
 `.form-grid` (+ `.form-grid-2`), `.panel` / `.panel-head` / `.panel-body`,
-`.page-grid` with `.span-4…12`, `.num`, `.gain`, `.loss`, `.muted`,
-`.visually-hidden`.
+`.page-grid` with `.span-4…12`, `.num`, `.figure`, `.display`, `.ticket`,
+`.live-frame`, `.gain`, `.loss`, `.muted`, `.visually-hidden`.
 
 Reusable components: `app-page-header`, `app-stat-tile` (`featured` for the one
-headline figure), `app-status-pill` (active/shadow/retired, pass/fail,
-job and order statuses, `tone` override), `app-data-table`, `app-loading-state`,
-`app-empty-state`, `app-error-state`, `app-time-series-chart`; the shell hosts
+headline figure, `live`, and `amount` with `format` to count up),
+`app-status-pill`, `app-side-tag`, `app-mode-stamp`, `app-brand-mark`,
+`app-data-table`, `app-loading-state`, `app-empty-state`, `app-error-state`,
+`app-time-series-chart`, `app-session-strip`. The shell hosts
 `app-confirm-dialog` and `app-toast-outlet`.
 
 ## Mobile and responsive rules
@@ -629,7 +685,7 @@ automate it.
 
 - Semantic landmarks: skip link, `nav aria-label="Main"`, `main`, sections
   labelled by their `h2`. One `h1` per page (from the page header).
-- Keyboard: everything reachable by Tab with the brass focus ring.
+- Keyboard: everything reachable by Tab with the blue focus ring.
   Ctrl+K / Cmd+K opens the command palette (ARIA combobox: the input keeps
   focus, arrows move `aria-activedescendant`, Enter runs, Escape closes and
   returns focus); `?` lists every shortcut; `g` then a key jumps between
@@ -645,16 +701,17 @@ automate it.
   announces sort changes.
 - Colour pairs meet WCAG AA (4.5:1 text, 3:1 focus and UI) in both themes.
   Checked for every text token on `bg`, `surface`, `surface-2`, `surface-3`
-  and each `-soft` background: all at least 4.5:1. Brass is never text in
-  the light theme (4.4:1); it marks focus and active state only (at least
-  3:1). Text fields use `--color-control-border` (at least 3:1); buttons are
+  and each `-soft` background: all at least 4.5:1. Brass (`--color-live`)
+  is at least 4.5:1 on surfaces in both themes, so the LIVE stamp and a
+  live headline figure can be text. Text fields use `--color-control-border` (at least 3:1); buttons are
   identified by their label, so they keep `--color-border-strong`.
 - Targets: 44px on phones and coarse pointers, at least 24px elsewhere (WCAG
   2.2, 2.5.8), including the help tip. On phones the sticky top bar never
   hides the focused element (`scroll-padding-top`, 2.4.11), and fields use
   16px text so iOS does not zoom.
-- Motion is limited to the drawer slide, toast rise and skeleton shimmer, all
-  off under `prefers-reduced-motion` (a global rule also stops any stray
+- Motion is limited to the drawer slide, toast rise, the loading mark, the
+  headline count-up, the countdowns and the fills tape, all off under
+  `prefers-reduced-motion` (a global rule also stops any stray
   animation or transition). Forced-colours mode keeps the focus ring.
 - Help tips open on click or tap, never on hover alone.
 
@@ -693,7 +750,7 @@ flowchart LR
   every page gets `authGuard` unless it has `data: { public: true }`.
   `data: { bare: true }` shows a page without the app frame (sign-in).
   `/admin/users` also has `adminGuard`. Home is `/`; the dashboard is
-  `/dashboard`. The nav keeps Home, Profile (and Users for admins) on top and
+  `/dashboard`. The nav keeps Today, Profile (and Users for admins) on top and
   folds the rest under **Advanced** (closed for traders and viewers, open for
   admins, tokens and dev mode, remembered per browser).
 - **Session.** `SessionService` asks `GET /api/auth/me` once (with the tab's
@@ -716,9 +773,11 @@ flowchart LR
   API tokens cannot step up; the prompt says to sign in instead.
 - **QR codes** are drawn in the browser by `uqr` (pinned), behind
   `core/auth/qr.ts`. The secret never leaves the page.
-- **Home** (`pages/home/`): my portfolio (value, today's change, biggest
-  holdings; admins get totals across traders instead, never holdings),
-  today's signals (the feed's `signal` items from the last 24 hours), and my
+- **Today** (`pages/home/`): my portfolio (value, today's change, biggest
+  holdings; admins get totals across traders instead, never holdings), a
+  tape of the latest session's fills, today's signals and trading runs in
+  one time line with the next run on top (the feed's `signal` items and the
+  runs from the last 24 hours), and my
   strategies with an on/off switch and a notify, paper or auto switch. Auto
   stays disabled with the reason until 20 paper days and the server's other
   checks pass, then asks for the step-up and a typed confirm.

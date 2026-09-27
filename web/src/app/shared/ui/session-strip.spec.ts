@@ -9,7 +9,8 @@ import { SessionService } from '../../core/auth/session.service';
 import { HaltStateService } from '../../core/halts/halt-state.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { tick } from '../../../testing/http';
-import { SCHEDULE_POLL_MS, SessionStrip, countdown, nextJob } from './session-strip';
+import { activeFormat, browserFormat } from '../../core/format/format';
+import { SCHEDULE_POLL_MS, SessionStrip, countdown, nextJob, sessionPhase } from './session-strip';
 import { book } from '../../../testing/portfolio-fixtures';
 
 const NOW = Date.parse('2026-09-26T18:00:00Z');
@@ -51,6 +52,58 @@ describe('session strip helpers', () => {
     expect(countdown(4 * 60_000 + 9_000)).toBe('4m 09s');
     expect(countdown(2 * 3_600_000 + 5 * 60_000)).toBe('2h 05m');
     expect(countdown(3 * 86_400_000)).toBe('3d 0h');
+  });
+});
+
+const MARKET = {
+  calendar: 'XNYS',
+  is_open: false,
+  today: {
+    date: '2026-09-28',
+    pre_open: '2026-09-28T08:00:00Z',
+    open: '2026-09-28T13:30:00Z',
+    close: '2026-09-28T20:00:00Z',
+  },
+  next: {
+    date: '2026-09-29',
+    pre_open: '2026-09-29T08:00:00Z',
+    open: '2026-09-29T13:30:00Z',
+    close: '2026-09-29T20:00:00Z',
+  },
+};
+
+describe('sessionPhase', () => {
+  beforeEach(() => activeFormat.set({ locale: 'en-US', timeZone: 'UTC', dateStyle: 'iso' }));
+  afterEach(() => activeFormat.set(browserFormat()));
+
+  it('before pre-open: closed, opens today', () => {
+    const p = sessionPhase(MARKET, Date.parse('2026-09-28T06:00:00Z'));
+    expect(p.phase).toBe('closed');
+    expect(p.event).toBe('Opens');
+    expect(p.at).toBe('13:30');
+    expect(p.track?.now).toBe(0);
+  });
+
+  it('pre-open, then open with the time to the close', () => {
+    const pre = sessionPhase(MARKET, Date.parse('2026-09-28T09:00:00Z'));
+    expect(pre.phase).toBe('pre');
+    expect(pre.label).toBe('Pre-open');
+    const open = sessionPhase(MARKET, Date.parse('2026-09-28T19:00:00Z'));
+    expect(open.phase).toBe('open');
+    expect(open.label).toBe('Market open');
+    expect(open.event).toBe('Closes');
+    expect(open.at).toBe('20:00');
+    expect(open.inMs).toBe(3_600_000);
+    expect(open.track?.openAt).toBeCloseTo(5.5 / 12);
+  });
+
+  it('after the close or on a day off: the next open with its weekday', () => {
+    const after = sessionPhase(MARKET, Date.parse('2026-09-28T21:00:00Z'));
+    expect(after.phase).toBe('closed');
+    expect(after.at).toBe('Tue 13:30');
+    const off = sessionPhase({ ...MARKET, today: null }, Date.parse('2026-09-27T12:00:00Z'));
+    expect(off.track).toBeNull();
+    expect(off.at).toBe('Tue 13:30');
   });
 });
 
@@ -110,6 +163,14 @@ describe('SessionStrip', () => {
     expect(next.textContent).toContain('Ingest prices');
     expect(next.querySelector('.clock')!.textContent).toBe('2h 05m');
     expect(el.querySelector('.strip')!.getAttribute('data-tone')).toBe('calm');
+  });
+
+  it('shows the market phase and the day track when the schedule has sessions', async () => {
+    overview.mockResolvedValue({ ...schedule(), market: { ...MARKET, today: null } });
+    const el = await render();
+    expect(el.querySelector('.phase')!.textContent).toContain('Market closed');
+    expect(el.querySelector('.phase')!.getAttribute('data-phase')).toBe('closed');
+    expect(el.querySelector('.track')).toBeNull();
   });
 
   it('turns red while a kill switch is on and links to the halts page', async () => {

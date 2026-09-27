@@ -71,6 +71,8 @@ export class DashboardPage {
   private readonly strategiesApi = inject(StrategiesService);
 
   private readonly portfolioCtx = inject(PortfolioContextService);
+  /** Real money: the headline figure and the value line turn brass. */
+  protected readonly live = this.portfolioCtx.live;
 
   // The picked portfolio is in the params so a new pick reloads these.
   protected readonly portfolio = resource({
@@ -154,6 +156,8 @@ export class DashboardPage {
   protected money(value: number | null | undefined): string {
     return formatMoney(value, { currency: this.currency() });
   }
+  /** For the headline count-up. */
+  protected readonly moneyFormat = (value: number) => this.money(value);
   protected readonly percent = formatPercent;
 
   // Chart -------------------------------------------------------------------
@@ -164,7 +168,7 @@ export class DashboardPage {
         id: 'value',
         label: 'Value',
         kind: 'line',
-        color: 'brass',
+        color: this.live() ? 'brass' : 'primary',
         format: 'money',
         points: rows.map((r) => ({ time: r.day, value: r.total_value })),
       },

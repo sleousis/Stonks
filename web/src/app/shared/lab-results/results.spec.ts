@@ -49,7 +49,7 @@ describe('BacktestResultView', () => {
     expect(el.textContent).toContain('$10,000.00 to $10,420.00');
 
     const [equity, drawdown] = engine.last!;
-    expect(equity).toMatchObject({ id: 'equity', color: 'brass', kind: 'line' });
+    expect(equity).toMatchObject({ id: 'equity', color: 'primary', kind: 'line' });
     expect(equity.points.map((p) => p.time)).toEqual([
       '2026-01-02',
       '2026-01-05',

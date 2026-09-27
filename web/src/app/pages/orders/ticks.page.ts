@@ -81,7 +81,11 @@ const TICK_STATUSES = [
                 ? 'Pick another status or show all runs.'
                 : 'Start a dry run to see what the active strategies would trade.'
             "
-          />
+          >
+            @if (status()) {
+              <button type="button" class="btn" (click)="status.set('')">Show all runs</button>
+            }
+          </app-empty-state>
         } @else {
           @for (k of [status()]; track k) {
             <app-data-table

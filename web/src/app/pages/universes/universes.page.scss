@@ -20,7 +20,7 @@ textarea.input {
 }
 
 .code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
 }
 

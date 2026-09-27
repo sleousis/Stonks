@@ -135,7 +135,9 @@
       <app-empty-state
         title="No shadow strategies"
         message="A strategy in shadow trades on paper with every real tick. Move one to shadow from its strategy page."
-      />
+      >
+        <a class="btn" routerLink="/strategies">Open strategies</a>
+      </app-empty-state>
     } @else {
       <app-data-table
         caption="Shadow strategies against the real portfolio over the same days"
