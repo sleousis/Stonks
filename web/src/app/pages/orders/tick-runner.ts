@@ -16,7 +16,7 @@ import { SystemService } from '../../api/system.service';
 import { TicksService } from '../../api/ticks.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
-import { isoDay } from '../../core/format/format';
+import { formatDate } from '../../core/format/format';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { JobProgress, JobResult } from '../../shared/ui/job-progress';
@@ -30,11 +30,13 @@ import {
   tickRequest,
   tickTicket,
 } from './tick-confirm';
+import { latestRealRunDay } from './tick-mode';
 
 /**
  * Starts a trading run. Dry run is on by default and needs one click to
  * confirm; a real run shows an order ticket with the broker's PAPER or LIVE
- * stamp and needs the broker label typed, and always trades today. Both need
+ * stamp and needs the broker label typed, and cannot go behind the last real
+ * run (the server refuses that, so Start waits). Both need
  * `operations.run` (admins). Progress follows the run's background job in
  * <app-job-progress>; the result links to the run, and a failed result read
  * offers Try again.
@@ -101,11 +103,11 @@ import {
             />
             @if (backdated()) {
               <span class="hint warn" role="alert"
-                >A real run trades today. Clear the date, or turn on dry run to replay a past
-                day.</span
+                >A real run cannot go behind the last one, on {{ lastRealText() }}. Pick that day or
+                later, clear the date, or turn on dry run.</span
               >
             } @else {
-              <span class="hint">Blank uses today. Only a dry run can replay a past day.</span>
+              <span class="hint">Blank uses today. A real run cannot go behind the last one.</span>
             }
           </div>
           <div class="field">
@@ -297,10 +299,26 @@ export class TickRunner {
   protected readonly live = computed(
     () => this.broker.hasValue() && isLiveBroker(this.broker.value()),
   );
-  /** A real run with a past date: the server refuses it, so Start waits. */
-  protected readonly backdated = computed(
-    () => !this.dryRun() && !!this.asOf() && this.asOf() < isoDay(),
-  );
+  /** Recent runs, to know the last real run's date (admins only start runs). */
+  private readonly recent = resource({
+    params: () => (this.allowed() ? { limit: 20 } : undefined),
+    loader: ({ params }) => this.ticksApi.list(params),
+  });
+  /** A real run started here moves the floor without a reload. */
+  private readonly ranRealOn = signal<string | null>(null);
+  protected readonly lastRealDay = computed(() => {
+    const listed = this.recent.hasValue() ? latestRealRunDay(this.recent.value().items) : null;
+    const here = this.ranRealOn();
+    if (!listed) return here;
+    if (!here) return listed;
+    return here > listed ? here : listed;
+  });
+  protected readonly lastRealText = computed(() => formatDate(this.lastRealDay()));
+  /** A real run dated before the last real run: the server refuses it, so Start waits. */
+  protected readonly backdated = computed(() => {
+    const floor = this.lastRealDay();
+    return !this.dryRun() && !!this.asOf() && !!floor && this.asOf() < floor;
+  });
 
   protected readonly running = computed(() => {
     const h = this.job();
@@ -341,6 +359,10 @@ export class TickRunner {
       let result: TickResultView | null = null;
       if (last?.status === 'succeeded') {
         result = await this.resultRead.load(() => this.ticksApi.result(job.id));
+        if (result && !result.dry_run) {
+          const day = this.asOf() || null;
+          if (day) this.ranRealOn.set(day);
+        }
         if (result) {
           this.toasts.success(
             `Ran the ${result.dry_run ? 'dry run' : 'trading run'}: ` +

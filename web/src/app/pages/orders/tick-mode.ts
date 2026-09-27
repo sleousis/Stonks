@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
-import type { TickSummary } from '../../api/models';
+import type { TickRun, TickSummary } from '../../api/models';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 
 /** A rehearsal, or where the orders went. */
@@ -17,6 +17,19 @@ export function tickMode(summary: TickSummary | null | undefined): TickMode | nu
   const mode = summary['broker_mode'];
   if (mode === 'live' || mode === 'paper') return mode;
   return null;
+}
+
+/**
+ * The trading date of the newest real run in `runs` (newest first): a real
+ * run may not go behind it, the server refuses that. Failed runs and runs
+ * known to be dry runs do not count.
+ */
+export function latestRealRunDay(runs: readonly TickRun[]): string | null {
+  const run = runs.find(
+    (r) =>
+      !!r.as_of && r.status !== 'error' && r.status !== 'running' && tickMode(r.summary) !== 'dry',
+  );
+  return run?.as_of ?? null;
 }
 
 /**

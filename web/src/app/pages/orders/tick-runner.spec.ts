@@ -72,6 +72,31 @@ describe('TickRunner', () => {
     el = fixture.nativeElement.querySelector('app-tick-runner');
     fixture.detectChanges();
     (await nextRequest(controller, '/api/brokers')).flush(PAPER);
+    if (me.role === 'admin') {
+      (await nextRequest(controller, '/api/ticks')).flush({
+        items: [
+          {
+            id: 'd',
+            as_of: '2026-09-26',
+            status: 'ok',
+            started_at: '',
+            finished_at: null,
+            summary: { dry_run: true },
+          },
+          {
+            id: 'r',
+            as_of: '2026-09-25',
+            status: 'ok',
+            started_at: '',
+            finished_at: null,
+            summary: null,
+          },
+        ],
+        total: 2,
+        limit: 20,
+        offset: 0,
+      });
+    }
     await settle();
   }
 
@@ -231,6 +256,15 @@ describe('TickRunner', () => {
 
   it('dry run off plus a past date disables Start', async () => {
     const date = el.querySelector<HTMLInputElement>('#tick-as-of')!;
+    // After the last real run (a later dry run does not count): allowed.
+    date.value = '2026-09-25';
+    date.dispatchEvent(new Event('change'));
+    dryRunBox().click();
+    await settle();
+    expect(runButton().disabled).toBe(false);
+    dryRunBox().click();
+    await settle();
+
     date.value = '2020-01-02';
     date.dispatchEvent(new Event('change'));
     await settle();
@@ -239,7 +273,7 @@ describe('TickRunner', () => {
     dryRunBox().click();
     await settle();
     expect(runButton().disabled).toBe(true);
-    expect(el.textContent).toContain('A real run trades today');
+    expect(el.textContent).toContain('A real run cannot go behind the last one, on 2026-09-25');
 
     date.value = '';
     date.dispatchEvent(new Event('change'));
