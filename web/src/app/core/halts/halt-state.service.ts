@@ -41,6 +41,8 @@ export class HaltStateService {
   private timer: ReturnType<typeof setInterval> | null = null;
   /** Numbers each read; only the newest one may write (UX-52). */
   private sequence = 0;
+  /** Reads in flight; a poll never stacks on top of one. */
+  private reading = 0;
 
   /** Every active halt from the last read. */
   readonly active = this.halts.asReadonly();
@@ -72,7 +74,9 @@ export class HaltStateService {
     );
     destroyRef.onDestroy(() => ref.destroy());
     if (this.timer || this.pollMs <= 0) return;
-    this.timer = setInterval(() => void this.refresh(), this.pollMs);
+    this.timer = setInterval(() => {
+      if (this.reading === 0) void this.refresh();
+    }, this.pollMs);
     destroyRef.onDestroy(() => {
       if (this.timer) clearInterval(this.timer);
       this.timer = null;
@@ -96,11 +100,14 @@ export class HaltStateService {
   async refresh(): Promise<void> {
     if (!this.session.canRead()) return;
     const mine = ++this.sequence;
+    this.reading++;
     try {
       const list = await this.api.list(false, true);
       if (mine === this.sequence) this.halts.set(list);
     } catch {
       // Offline or signed out: keep what we had rather than hiding a live kill switch.
+    } finally {
+      this.reading--;
     }
   }
 }
