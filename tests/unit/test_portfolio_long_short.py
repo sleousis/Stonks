@@ -41,7 +41,7 @@ def _ew(**settings):
 
 
 def test_cash_book_may_not_exceed_one_gross():
-    with pytest.raises(ValidationError, match="1.0 gross"):
+    with pytest.raises(ValidationError, match=r"1.0 gross"):
         ConstructorSettings(max_gross=1.5)
 
 

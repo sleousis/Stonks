@@ -165,9 +165,9 @@ class EqualWeightTopN(PortfolioConstructor):
             weights = {t: s.max_gross / len(chosen) for t in chosen}
             return self.finalize(weights, attribution)
         shorts = _bottom(eligible, s.n if s.n_short is None else s.n_short)
-        names = len(chosen) + len(shorts)
-        weights = {t: s.max_gross / names for t in chosen}
-        weights.update({t: -s.max_gross / names for t in shorts})
+        each = s.max_gross / max(len(chosen) + len(shorts), 1)
+        weights = dict.fromkeys(chosen, each)
+        weights.update(dict.fromkeys(shorts, -each))
         return self.finalize(weights, attribution, betas=self._betas(inp, weights))
 
     def _betas(self, inp: ConstructionInput, weights: Mapping[str, float]) -> dict[str, float]:
