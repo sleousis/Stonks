@@ -154,7 +154,7 @@ def test_migration_backfills_existing_rows_as_their_first_version():
     try:
         for table in ("income_statement", "balance_sheet", "cash_flow_statement"):
             db.con.execute(f"DROP TABLE {table}_versions")
-        db.con.execute("DELETE FROM schema_migrations WHERE version = 20")
+        db.con.execute("DELETE FROM schema_migrations WHERE version = 18")
         db.con.execute(
             "INSERT INTO income_statement (ticker, period_end, frequency, filing_date, revenue)"
             " VALUES ('A.US', DATE '2024-03-31', 'Q', DATE '2024-05-01', 100.0),"
