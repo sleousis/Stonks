@@ -27,3 +27,7 @@ class ProtectiveStopSettings(BaseModel):
     #: The distance as a share of the entry price when the ATR cannot be
     #: computed (too few bars).
     fallback_pct: float = Field(default=0.10, gt=0.0, lt=1.0)
+
+    @property
+    def active(self) -> bool:
+        return self.enabled

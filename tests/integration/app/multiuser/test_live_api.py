@@ -87,12 +87,14 @@ def test_account_profile_round_trip(app, client, settings, people):
 
 def _rules_on(settings) -> None:
     from stonks.production.rules._account_settings import AccountRulesSettings
+    from stonks.production.rules._stop_settings import ProtectiveStopSettings
     from stonks.production.rules.capital_ramp import CapitalRampSettings
     from stonks.production.rules.settings import RuleSettings
 
     rules = RuleSettings(
         capital_ramp=CapitalRampSettings(enabled=True),
         account_rules=AccountRulesSettings(enabled=True),
+        protective_stops=ProtectiveStopSettings(enabled=True, atr_multiple=2.5),
     )
     settings.production.risk = settings.production.risk.model_copy(update={"rules": rules})
 
@@ -114,7 +116,10 @@ def test_live_rules_show_what_is_on_and_what_applies(app, client, settings, peop
         "stop_cooldown": False,
         "stop_guard": False,
         "losing_lock": False,
+        "protective_stops": True,
     }
+    stops = next(r for r in view["safeguards"] if r["name"] == "protective_stops")
+    assert stops["settings"]["atr_multiple"] == 2.5
     assert view["account_rules_on"] is True and view["profile_set"] is False
     assert not any(r["applies"] for r in view["account_rules"])
 
