@@ -67,7 +67,7 @@ flowchart LR
 - **`BarBuilder`**: ticks to 1m bars with the columns of `bars`. Trades set open, high, low, close and volume. Quote-only feeds (forex, IBKR snapshots) build bars from the last price or the mid, with volume 0. A bar closes when a later tick arrives or when its minute plus a grace period has passed on the clock. A tick for a minute already closed is counted as late and dropped. `adj_close` equals `close`, like the REST intraday ingest.
 - **`BarWriter`**: batches closed bars and upserts them into the `BarStore` (last write wins per `(ticker, timestamp, interval)`), so a replay, a backfill or a restart never duplicates a bar.
 - **`StreamRecorder`**: writes every event, heartbeats included, to Parquet chunks under `<dir>/<day>/`. DuckDB writes the files, so no new Parquet library is needed.
-- **`StreamRunner`**: the supervised loop. It reconnects with exponential backoff and jitter, and treats a silent stream during market hours as a disconnect. A gap (a disconnect, a silence, or the time since the open at startup) is backfilled through the REST intraday ingest once data flows again. Health (state, connects, events per kind, bars written, late ticks, gaps, backfills, last error) renders as Prometheus families.
+- **`StreamRunner`**: the supervised loop. It reconnects with exponential backoff and jitter (reset once a connection delivers), never retries a refused login, and treats a silent stream during market hours as a disconnect. A gap (a disconnect, a silence, or the time since the open at startup) is backfilled through the REST intraday ingest `backfill_delay_seconds` after data flows again, so the vendor has finished the minute the stream came back in. The vendor's bars land after the stream's, and last write wins. Subscribers (the engine of 21.2, price alerts) get every event and every closed bar. One that raises is counted, never allowed to stop the stream. Health (state, connects, events per kind, bars written, late ticks, gaps, backfills, last error) renders as Prometheus families.
 - **Settings**: `[streaming]` in `config/default.toml`, `enabled = false`. Operator entry point: `python -m stonks.streaming sources|run|record|replay`.
 
 ### 21.2 Live event engine (planned)
@@ -144,8 +144,10 @@ flowchart LR
 
 - `core/stream.py`: the event types.
 - `streaming/`: `base.py` (the seam and errors), `registry.py`, `sources/eodhd_ws.py`, `sources/ibkr.py`, `sources/replay.py`, `bars.py` (`BarBuilder`), `writer.py` (`BarWriter`), `recorder.py` (`StreamRecorder`, `read_recording`), `runner.py` (`StreamRunner`, `Backoff`, `PipelineBackfiller`), `health.py`, `settings.py`, `__main__.py`.
-- `[streaming]` settings, off by default. A new `stream` role for the IBKR client ids.
+- `[streaming]` settings, off by default. A new `stream` role for the IBKR client ids (14, read only). `websockets` is a direct dependency, imported only in `sources/eodhd_ws.py`.
 - No migration. Bars go to the existing `bars` store and recordings are Parquet files.
+- Tests: unit tests per module, `tests/fakes/eodhd_ws.py` (the fake server), EODHD message fixtures in `tests/fixtures/streaming/` shaped after the vendor's documented messages, end to end runner tests (drop, reconnect, backfill, record and replay into the same bars), and a live contract test.
+- The lake has one writer. `python -m stonks.streaming run` opens the lake itself, so it cannot run next to `stonks serve` on the DuckDB bar table. The Parquet bar store, or running the stream inside the process that owns the lake (21.2.5), avoids that.
 - Not yet: the quality checker on streamed bars (the REST ingest keeps it), a scheduler job that starts the runner at the open (21.2.5), and the stream health on the API metrics endpoint (21.3.4).
 
 ## 9. Work packages

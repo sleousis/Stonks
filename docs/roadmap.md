@@ -18,6 +18,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 17 | Planned. |
 | 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. The IBKR adapter (19.2) done. Design: `docs/design/live-trading.md`. |
 | 20 | 20.1 to 20.6 done, backend and console. 20.7 and 20.8 in progress. |
+| 21 | 21.1 (streaming data) done, off by default. 21.2 and 21.3 planned in small work packages. Design: `docs/design/intraday.md`. |
 | 22 | 22.1, 22.2, 22.3, 22.5, 22.6, 22.7, 22.8 and 22.9 done. 22.4 is next. Factors: `docs/factors.md`. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
