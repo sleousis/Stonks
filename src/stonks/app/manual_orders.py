@@ -302,13 +302,14 @@ class ManualOrdersService:
 
     def _live(self, account: AccountPortfolio) -> bool:
         """Whether orders in ``account`` are real money (the same rule as
-        the trading-mode view): a broker portfolio, or the default one at a
-        live Alpaca account."""
+        the trading-mode view): a broker portfolio, or the default one when
+        ``broker_mode`` is live (a live Alpaca account or IB Gateway)."""
+        from stonks.execution.brokers import broker_mode
+
         if account.kind == "broker":
             return True
-        brokers = self._ctx.settings.brokers
-        if account.id == DEFAULT_PORTFOLIO_ID and brokers.kind == "alpaca":
-            return not brokers.alpaca.paper and brokers.alpaca.allow_live
+        if account.id == DEFAULT_PORTFOLIO_ID:
+            return broker_mode(self._ctx.settings) == "live"
         return False
 
     def _book(self, state: SqliteState, account: AccountPortfolio) -> ManualBook:
