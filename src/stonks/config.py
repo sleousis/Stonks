@@ -21,8 +21,8 @@ from stonks.assistant.settings import AssistantConfig
 from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
-from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
 from stonks.engine.settings import EngineSettings
+from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
 from stonks.factors.settings import FactorSettings
 from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig

@@ -250,6 +250,62 @@ def closed_day_outcome(
     return JobOutcome("skipped", {"reason": "market_closed", "as_of": ctx.fire.as_of.isoformat()})
 
 
+# ---- the intraday engine (roadmap 21.2.5) ------------------------------------------
+
+
+def engine_launcher() -> Any:
+    """The launcher ``engine_start`` uses (tests swap it for a fake)."""
+    from stonks.engine.control import SubprocessLauncher
+
+    return SubprocessLauncher()
+
+
+def _engine_control(ctx: RunContext) -> Any:
+    from stonks.engine.control import EngineControl
+    from stonks.engine.settings import control_dir_for
+
+    return EngineControl(control_dir_for(ctx.settings.engine, ctx.settings.state.path))
+
+
+def engine_start_job(ctx: RunContext) -> JobOutcome:
+    """Start the engine process for the fire's session, before the open.
+    Skips while ``[engine]`` is off or has no books, on a closed day, and
+    when an engine already runs. The engine talks to no API, so every
+    backend starts it the same way (a detached ``python -m stonks.engine
+    run``)."""
+    from stonks.engine.process import session_window
+
+    cfg = ctx.settings.engine
+    session = ctx.fire.as_of
+    if not cfg.enabled:
+        return JobOutcome("skipped", {"reason": "engine_off"})
+    if not cfg.books:
+        return JobOutcome("skipped", {"reason": "no_books"})
+    if session_window(cfg.calendar, session) is None:
+        return JobOutcome("skipped", {"reason": "market_closed", "as_of": session.isoformat()})
+    control = _engine_control(ctx)
+    if control.running():
+        return JobOutcome("skipped", {"reason": "already_running"})
+    result = engine_launcher().launch(control, session)
+    return JobOutcome("succeeded", {"pid": result.pid, "session": session.isoformat()})
+
+
+def engine_stop_job(ctx: RunContext) -> JobOutcome:
+    """Ask the running engine to stop after the close and wait for it
+    (``[engine] stop_timeout_seconds``). The engine stops itself at the same
+    time, so this is the backstop. It runs even with ``[engine]`` off, so an
+    engine left running is still stopped."""
+    control = _engine_control(ctx)
+    if not control.running():
+        reason = "not_running" if ctx.settings.engine.enabled else "engine_off"
+        return JobOutcome("skipped", {"reason": reason})
+    control.request_stop(f"scheduler job {ctx.spec.name}")
+    timeout = ctx.settings.engine.stop_timeout_seconds
+    if control.wait_stopped(timeout):
+        return JobOutcome("succeeded", {"stopped": True})
+    return JobOutcome("failed", {"stopped": False, "waited_seconds": timeout})
+
+
 # ---- building specs from config ----------------------------------------------------
 
 

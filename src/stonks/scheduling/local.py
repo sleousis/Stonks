@@ -677,3 +677,20 @@ def live_gate_days_action(ctx: RunContext) -> JobOutcome:
             "dirty_weeks": list(run.dirty_weeks),
         },
     )
+
+
+@register_action("engine_start")
+def engine_start_action(ctx: RunContext) -> JobOutcome:
+    """The engine is its own process, controlled through files next to the
+    state DB, so every backend starts it the same way (roadmap 21.2.5)."""
+    from stonks.scheduling.jobs import engine_start_job
+
+    return engine_start_job(ctx)
+
+
+@register_action("engine_stop")
+def engine_stop_action(ctx: RunContext) -> JobOutcome:
+    """Every backend stops the engine the same way (roadmap 21.2.5)."""
+    from stonks.scheduling.jobs import engine_stop_job
+
+    return engine_stop_job(ctx)
