@@ -27,6 +27,7 @@ from stonks.tax import (
     DividendEvent,
     TaxFill,
     TaxSettings,
+    TaxSplit,
     dividend_rows,
     gains_rows,
     realized_disposals,
@@ -244,6 +245,19 @@ class TaxService:
                 " WHERE portfolio_id = ? ORDER BY sell_fill_id, buy_fill_id",
                 [portfolio_id],
             )
+            split_rows = state.sql(
+                "SELECT ticker, ex_date, value FROM corporate_action_ledger"
+                " WHERE portfolio_id = ? AND kind = 'split' ORDER BY ex_date, ticker",
+                [portfolio_id],
+            )
+        splits = [
+            TaxSplit(
+                ticker=r["ticker"],
+                ex_date=date.fromisoformat(str(r["ex_date"])[:10]),
+                ratio=float(r["value"]),
+            )
+            for r in split_rows
+        ]
         currencies = self._currencies(sorted({r["ticker"] for r in raw}))
         fills = [
             TaxFill(
@@ -271,6 +285,7 @@ class TaxService:
                 wash_sales=view.wash_sales,
             ),
             picks,
+            splits,
         )
         fx = self._fx({f.currency for f in fills if f.currency}, view.base_currency)
         return to_csv(GAINS_COLUMNS, gains_rows(disposals, year, view.base_currency, fx))

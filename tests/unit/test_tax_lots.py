@@ -145,3 +145,19 @@ def test_wash_sale_does_not_use_a_lot_already_sold_as_replacement():
     ]
     d = realized_disposals(fills, TaxSettings())
     assert sum(x.gain for x in d) == pytest.approx(-400)
+
+
+def test_a_split_rescales_open_lots():
+    from datetime import date
+
+    from stonks.tax.lots import TaxSplit
+
+    fills = [
+        fill(1, "buy", 100, 100, "2024-01-02"),
+        fill(2, "sell", 400, 26, "2024-03-01"),
+    ]
+    splits = [TaxSplit(ticker="A", ex_date=date(2024, 2, 1), ratio=4.0)]
+    d = realized_disposals(fills, NO_WASH, splits=splits)
+    assert [(x.kind, x.quantity) for x in d] == [("long", 400)]
+    assert d[0].gain == pytest.approx(400)
+    assert d[0].acquired == date(2024, 1, 2)
