@@ -204,7 +204,7 @@ Enforced: `lab/parallel.py` is the one process pool for tuners, folds, permutati
 
 **P46. Every lab result can be reproduced.**
 Why: a verdict you can't rerun can't be trusted or debugged (Slatkin; Strimpel; López de Prado).
-Enforced: today `RandomTuner` is seeded (`lab/tuning/random.py:19-25`). BL-06 records the git SHA, a config hash, a data fingerprint and the seeds. The data fingerprint hashes open, high, low, close, adjusted close and volume, 550 days of warm-up history, and every split and dividend row.
+Enforced: today `RandomTuner` is seeded (`lab/tuning/random.py:19-25`). BL-06 records the git SHA, a config hash, a data fingerprint and the seeds. The data fingerprint hashes open, high, low, close, adjusted close and volume, 550 days of warm-up history, and every split and dividend row, for the universe, each strategy's reference tickers and the benchmark. An intraday run also hashes the daily bars.
 
 **P47. Third-party libraries sit behind our seams, and statistics use numpy and scipy.**
 Why: vendor types must not leak (CLAUDE.md). The ADIA Lab reference code shows that PSR, DSR and PBO need nothing heavier.
