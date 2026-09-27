@@ -107,3 +107,49 @@ def test_run_gateway_checks_uses_the_reconcile_client_id(state):
     assert list(gateways) == [14]
     assert result.status == "clean"
     assert result.report.external["positions"] == {"AAPL.US": 3.0}
+
+
+def test_the_eod_gateway_check_reads_the_flex_statement_when_configured(state, monkeypatch):
+    """Roadmap 19.15: Flex is read through the shared statement cache and
+    statements of other accounts are ignored."""
+    from stonks.execution.brokers.ibkr import statements as st
+    from stonks.execution.drift import BrokerStatement, StatementExecution
+
+    fetched = []
+
+    def fake_cached(client):
+        fetched.append(client.settings.query_id)
+        return ["flex"]
+
+    def fake_map(_flex):
+        foreign = StatementExecution(exec_id="x.1", quantity=1, order_ref="t1-s1-AAPL.US-buy")
+        return BrokerStatement("U999", T0.date(), T0.date(), (foreign,))
+
+    monkeypatch.setattr(st, "cached_statements", fake_cached)
+    monkeypatch.setattr(st, "to_broker_statement", fake_map)
+    monkeypatch.setenv("STONKS_IBKR_FLEX_TOKEN", "t" * 24)
+
+    def factory(endpoint):
+        gw = FakeIbGateway()
+        gw.set_values(NetLiquidation="1000", TotalCashValue="1000")
+        return gw
+
+    config = IbkrBrokerConfig(
+        gateways={
+            "paper": {
+                "host": "h",
+                "port": 4004,
+                "mode": "paper",
+                "portfolios": ["pf_default"],
+                "account_id": "DU1234567",
+            }
+        },
+        flex={"query_id": "555"},
+    )
+    [result] = run_gateway_checks(
+        state, config, "eod", clock=FakeClock(T0), client_factory=factory, publish=lambda e: None
+    )
+    assert fetched == ["555"]
+    assert result.status == "clean"
+    assert result.report.summary["statement"] == {"status": "ok", "statements": 0}
+    assert result.report.summary["cash"]["compared"] is False

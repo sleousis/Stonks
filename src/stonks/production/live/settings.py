@@ -37,6 +37,29 @@ class SubmitSettings(BaseModel):
         return self
 
 
+class ReconcileSettings(BaseModel):
+    """``[production.live.reconcile]``: the cash and broker statement
+    comparisons of the end-of-day check (roadmap 19.15)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Compare the broker's change in cash and settled cash since the last
+    #: end-of-day check with the change Stonks can explain.
+    compare_cash: bool = True
+    #: A cash difference up to the larger of this many currency units and
+    #: ``cash_tolerance_fraction`` of net liquidation is noise.
+    cash_tolerance: float = Field(default=1.0, ge=0.0)
+    cash_tolerance_fraction: float = Field(default=0.0001, ge=0.0, le=0.1)
+    #: A cash difference only warns: the owner's own trades, deposits and
+    #: interest move the same cash. ``true`` makes it drift (halt and pause).
+    cash_is_drift: bool = False
+    #: Compare the broker's statement (IBKR Flex, when configured) with
+    #: Stonks' fills for its own orders.
+    compare_statement: bool = True
+    #: A commission difference up to this much is noise.
+    commission_tolerance: float = Field(default=0.01, ge=0.0)
+
+
 class LiveSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -61,3 +84,4 @@ class LiveSettings(BaseModel):
     #: working from an earlier session, so yesterday's decision never
     #: fills late.
     cancel_stale_orders: bool = True
+    reconcile: ReconcileSettings = Field(default_factory=ReconcileSettings)

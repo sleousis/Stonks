@@ -488,9 +488,9 @@ def _commission_item(e: StatementExecution, f: BookedFill, tolerance: float) -> 
         return []
     if f.fee is None:
         detail = f"no commission booked yet, the statement says {e.commission:g}"
-    elif e.commission_currency and f.fee_currency and e.commission_currency != f.fee_currency:
-        return []
-    elif abs(e.commission - f.fee) <= tolerance + _EPS:
+    elif (
+        e.commission_currency and f.fee_currency and e.commission_currency != f.fee_currency
+    ) or abs(e.commission - f.fee) <= tolerance + _EPS:
         return []
     else:
         detail = f"the ledger booked a commission of {f.fee:g}, the statement says {e.commission:g}"

@@ -165,6 +165,7 @@ def run_cmd(
             which,
             settings=settings.production.live,
             portfolio_ids=[portfolio],
+            settlement=settings.production.risk.rules.account_rules,
         )
     finally:
         state.close()

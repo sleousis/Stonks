@@ -158,6 +158,15 @@ calendar = "XNYS"
 window_minutes = 20                # the live_submit job fires at open minus this
 deadline_minutes = 2               # unsent tickets expire at open minus this
 
+[production.live.reconcile]
+# The end-of-day check's cash and statement comparisons (roadmap 19.15).
+compare_cash = true
+cash_tolerance = 1.0               # currency units
+cash_tolerance_fraction = 0.0001   # of net liquidation, the larger wins
+cash_is_drift = false              # true: a cash difference halts buys
+compare_statement = true           # IBKR Flex, when configured
+commission_tolerance = 0.01
+
 [production.health]
 # `stonks health` thresholds.
 max_bar_age_days = 4
