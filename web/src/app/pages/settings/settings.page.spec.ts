@@ -16,6 +16,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { SettingsPage } from './settings.page';
+import { provideFakeCalendars } from '../../../testing/fake-calendars';
 
 const SECRET = 'sk-test-7f3a9c2e1d';
 
@@ -113,7 +114,12 @@ describe('SettingsPage', () => {
   beforeEach(() => {
     sessionStorage.clear();
     TestBed.configureTestingModule({
-      providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
+      providers: [
+        ...provideApi(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        provideFakeCalendars(),
+      ],
     });
     http = TestBed.inject(HttpTestingController);
   });

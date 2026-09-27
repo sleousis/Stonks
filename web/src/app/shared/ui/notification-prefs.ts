@@ -14,6 +14,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { ApiError } from '../../core/http/api-error';
+import { EventAlertKinds } from './event-alert-kinds';
 import { PermissionNote } from './permission-note';
 import { ErrorState, LoadingState } from './states';
 
@@ -44,7 +45,7 @@ const ALWAYS_ON = 'inapp';
 @Component({
   selector: 'app-notification-prefs',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LoadingState, ErrorState, PermissionNote],
+  imports: [LoadingState, ErrorState, PermissionNote, EventAlertKinds],
   template: `
     <section class="panel" aria-labelledby="prefs-title">
       <div class="panel-head">
@@ -115,6 +116,8 @@ const ALWAYS_ON = 'inapp';
               </table>
             </div>
           }
+
+          <app-event-alert-kinds />
 
           <fieldset class="quiet">
             <legend>Quiet hours</legend>
