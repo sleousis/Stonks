@@ -26,12 +26,12 @@ from stonks.mcp.tools.common import (
     RegisterConfirm,
     RegisterIfPasses,
     RegisterStrategy,
+    SamplerName,
     SurvivalPreset,
     SurvivalTestName,
     TestOptions,
     Tickers,
     ToolContext,
-    SamplerName,
     TunerName,
     drop_none,
     iso,
@@ -144,6 +144,18 @@ class McptOptions(_Options):
     seed: int | None = None
 
 
+class HeatmapOptions(_Options):
+    """A 2D sweep of two parameters around the tuned set, with the plateau
+    verdict on it. Every cell counts as a trial."""
+
+    x: str | None = Field(default=None, description="param across (default: first numeric)")
+    y: str | None = Field(default=None, description="param down (default: next numeric)")
+    grid_size: int | None = Field(default=None, description="points per axis, 2..15 (default 7)")
+    fast: bool | None = Field(
+        default=None, description="score cells on the vectorised fast path (default true)"
+    )
+
+
 def strategy_ref(
     strategy_id: str | None, class_path: str | None, params: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -254,6 +266,10 @@ def register(t: ToolContext) -> None:
         test_options: TestOptions = None,
         benchmark: Benchmark = None,
         embargo_bars: EmbargoBars = None,
+        heatmap: Annotated[
+            HeatmapOptions | None,
+            Field(description="parameter heatmap around the tuned set (22.5)"),
+        ] = None,
     ) -> dict[str, Any]:
         """Queue a lab run: tune a strategy class, fit, run the survival suite and
         give a pass/fail verdict. Returns the job; use wait_for_job for the result.
@@ -293,6 +309,7 @@ def register(t: ToolContext) -> None:
                 "test_options": test_options,
                 "benchmark": benchmark,
                 "embargo_bars": embargo_bars,
+                "heatmap": heatmap.body() if heatmap else None,
             }
         )
         return await queue_lab_run(t, "/api/lab/runs", body, confirm)

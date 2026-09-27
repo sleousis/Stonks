@@ -1378,6 +1378,20 @@ _LAB_OBJECTIVES = (
 _LAB_COST_MODELS = ("config", "zero", "realistic")
 
 
+def _heatmap_option(spec: str | None, grid: int, full: bool) -> Any:
+    """``--heatmap auto`` or ``--heatmap x,y`` as ``HeatmapOptions``."""
+    if spec is None:
+        return None
+    from stonks.lab.heatmap import HeatmapOptions
+
+    if spec.strip().lower() == "auto":
+        return HeatmapOptions(grid_size=grid, fast=not full)
+    names = [n.strip() for n in spec.split(",") if n.strip()]
+    if len(names) != 2:
+        raise typer.BadParameter("give 'auto' or two names: x,y", param_hint="--heatmap")
+    return HeatmapOptions(x=names[0], y=names[1], grid_size=grid, fast=not full)
+
+
 def _preset_choices() -> tuple[str, ...]:
     from stonks.lab.survival.registry import preset_names
 
@@ -1529,6 +1543,15 @@ def lab_run(
     ),
     prune: bool = typer.Option(
         False, "--prune", help="optuna: stop trials whose fast score trails (they still count)"
+    ),
+    heatmap: str | None = typer.Option(
+        None,
+        "--heatmap",
+        help="sweep two params around the tuned set: 'auto' or 'x,y' (every cell is a trial)",
+    ),
+    heatmap_grid: int = typer.Option(7, "--heatmap-grid", min=2, max=15, help="points per axis"),
+    heatmap_full: bool = typer.Option(
+        False, "--heatmap-full", help="score heatmap cells with full backtests, not the fast path"
     ),
     objective: str = typer.Option(
         "sharpe",
@@ -1711,6 +1734,7 @@ def lab_run(
             seed=seed,
             sampler=sampler,  # type: ignore[arg-type]
             prune=prune,
+            heatmap=_heatmap_option(heatmap, heatmap_grid, heatmap_full),
             objective=objective,  # type: ignore[arg-type]
             survival_tests=suite,
             walk_forward=(
@@ -1793,6 +1817,10 @@ def lab_run(
             f"excess CAGR {s.excess_cagr:+.2%}, IR {s.information_ratio:.2f}, "
             f"beta {s.beta:.2f}, alpha t {s.alpha_tstat:.2f}"
         )
+    if result.heatmap is not None:
+        from stonks.reporting.heatmap import heatmap_text
+
+        console.print(heatmap_text(result.heatmap), markup=False, highlight=False)
     colour = "green" if result.verdict == "pass" else "red"
     console.print(f"[{colour}]verdict: {result.verdict}[/{colour}]")
     if register_if_passes:
@@ -1827,6 +1855,7 @@ def lab_run(
             "registered_id": registered_id,
             "benchmark": execution.view().benchmark,
             "preflight": preflight,
+            "heatmap": result.heatmap.to_dict() if result.heatmap is not None else None,
         }
         Path(json_out).write_text(json.dumps(to_jsonable(doc), indent=2, sort_keys=True))
 
