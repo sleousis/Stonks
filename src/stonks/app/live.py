@@ -421,6 +421,20 @@ class LiveService:
     ) -> LiveStageView:
         """One stage up. The gate report is computed now and must pass."""
         require(principal, Permission.LIVE_MANAGE)
+        return self._promote(principal, principal.actor, portfolio_id, body)
+
+    def promote_from_shell(
+        self, principal: Principal, portfolio_id: str, body: StagePromoteBody, *, actor: str
+    ) -> LiveStageView:
+        """``stonks live stage promote``: the operator's shell, trusted like
+        ``stonks users``. The typed confirmation stands in for the second
+        factor. The gate report must still pass."""
+        require(principal, Permission.PORTFOLIO_TRADE)
+        return self._promote(principal, actor, portfolio_id, body)
+
+    def _promote(
+        self, principal: Principal, actor: str, portfolio_id: str, body: StagePromoteBody
+    ) -> LiveStageView:
         if body.confirm.strip() != body.to_stage:
             raise ValidationError(f"type {body.to_stage} to confirm the promotion")
         with self._ctx.state() as state:
@@ -439,7 +453,7 @@ class LiveService:
                     state,
                     portfolio_id,
                     body.to_stage,
-                    actor=principal.actor,
+                    actor=actor,
                     reason=body.reason,
                     gate_report=report.as_dict(),
                 )
@@ -448,10 +462,15 @@ class LiveService:
             return _stage_view(state, portfolio_id, 30)
 
     def demote(
-        self, principal: Principal, portfolio_id: str, body: StageDemoteBody
+        self,
+        principal: Principal,
+        portfolio_id: str,
+        body: StageDemoteBody,
+        *,
+        actor: str | None = None,
     ) -> LiveStageView:
         """Down any number of stages. It only reduces risk, so it needs no
-        second factor and no report."""
+        second factor and no report. ``actor``: the shell's own name."""
         require(principal, Permission.PORTFOLIO_TRADE)
         with self._ctx.state() as state:
             self._owned(state, principal, portfolio_id)
@@ -460,7 +479,11 @@ class LiveService:
                 raise ConflictError(f"the portfolio is in {current}: demote to a lower stage")
             try:
                 change_stage(
-                    state, portfolio_id, body.to_stage, actor=principal.actor, reason=body.reason
+                    state,
+                    portfolio_id,
+                    body.to_stage,
+                    actor=actor or principal.actor,
+                    reason=body.reason,
                 )
             except StageError as exc:
                 raise ConflictError(str(exc)) from exc

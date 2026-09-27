@@ -419,6 +419,40 @@ def live_submit_action(ctx: RunContext) -> JobOutcome:
     return JobOutcome("failed" if result.failed or detail["errors"] else "succeeded", detail)
 
 
+@register_action("live_gate_days")
+def live_gate_days_action(ctx: RunContext) -> JobOutcome:
+    """Record the session's gate metrics for every portfolio in
+    ``broker_paper`` or higher (roadmap 19.9) and alert the owner of a week
+    that was not clean. It never changes a stage or an allocation. Skips
+    while no portfolio is past ``sim_paper``."""
+    from stonks.core.clock import FixedClock
+    from stonks.production.live.gates import live_portfolios, owner_alert, record_gate_days
+    from stonks.store.state import SqliteState
+
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        if not live_portfolios(state):
+            return JobOutcome("skipped", {"reason": "no_live_portfolios"})
+        run = record_gate_days(
+            state,
+            ctx.fire.as_of,
+            settings=ctx.settings.production.live.stages,
+            alert=owner_alert(state),
+            clock=FixedClock(ctx.now),
+        )
+    finally:
+        state.close()
+    return JobOutcome(
+        "succeeded",
+        {
+            "session": run.day.isoformat(),
+            "recorded": len(run.recorded),
+            "clean": sum(1 for g in run.recorded if g.clean),
+            "dirty_weeks": list(run.dirty_weeks),
+        },
+    )
+
+
 def submit_detail(result: Any) -> dict[str, Any]:
     """A job run's detail for a :class:`~stonks.production.submit.SubmitResult`."""
     return {

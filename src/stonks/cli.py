@@ -2478,5 +2478,11 @@ from stonks.cli_assistant import app as assistant_app  # noqa: E402
 
 app.add_typer(assistant_app, name="assistant")
 
+# ---- live stages, gates and the preview (roadmap 19.9) ------------------------
+
+from stonks.cli_live import app as live_app  # noqa: E402
+
+app.add_typer(live_app, name="live")
+
 if __name__ == "__main__":
     app()

@@ -363,3 +363,12 @@ def in_process_live_submit(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import live_submit_action
 
     return live_submit_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("live_gate_days")
+def in_process_live_gate_days(ctx: RunContext) -> JobOutcome:
+    """Gate metrics read and write the state DB only, so every backend
+    records them the same way (the lake is not needed)."""
+    from stonks.scheduling.local import live_gate_days_action
+
+    return live_gate_days_action(ctx)
