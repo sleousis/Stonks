@@ -19,7 +19,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. 19.2 IBKR adapter, 19.3 connection and borrow, 19.5 reconciliation and drift, and 19.8 tickets and approve mode done. Design: `docs/design/live-trading.md`. |
 | 20 | 20.1 to 20.8 done, backend and console. |
 | 21 | 21.1 (streaming data) done, off by default. 21.2 and 21.3 planned in small work packages. Design: `docs/design/intraday.md`. |
-| 22 | All of 22.1 to 22.9 done. Factors: `docs/factors.md`. |
+| 22 | All of 22.1 to 22.10 done. Factors: `docs/factors.md`. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
 
@@ -519,6 +519,7 @@ From the competitor study of 44 open-source projects (Qlib, alphalens, vectorbt,
 | 22.7 Forecast weights | Carver-style forecast weights estimated net of costs, and rules dropped when too costly for an instrument. Done: the `ForecastWeightEstimator` seam (`handcraft`, `bootstrap`, `equal`), the speed limit, the `forecast_blend` strategy and a tear sheet section. See [forecast weights](strategies/forecast-weights.md). |
 | 22.8 Factor library | Done. An Alpha158-style factor set with a next-open label, plus the fundamentals scores as factors. `stonks factors dataset` exports features and the label for a model. |
 | 22.9 AI research loop | The assistant proposes hypotheses and runs lab trials under a budget, each counted in the trial ledger. Done: `assistant/research.py`, `POST /api/assistant/research`, the `start_research` MCP tool, SQLite `030_research_loop`, research cases in `stonks assistant eval`. Only validation windows after the model's training cutoff (`[assistant.research] model_cutoff`) count, budgets are enforced in code, and nothing registers. The console lists sessions, starts one, and shows each proposal with its budget use and lab run (Lab, Research sessions). |
+| 22.10 Research polish | Done. Factor attribution uses the sector known on each day (DuckDB `022_instrument_sector_versions`) and a stored universe's membership, with a look-ahead test. The tick reads style exposures when only a strategy's risk override turns the `style_exposure` rule on. `forecast_blend` takes its cost model through the `CostAware` seam (`strategies/costs.py`), bound by the lab, the backtest and the tick, with realistic defaults. The Approvals nav item shows how many tickets wait. The accessibility audit covers `/calendar`, `/screener`, `/lab/factors` and `/lab/research`. |
 
 ## Execution order
 
