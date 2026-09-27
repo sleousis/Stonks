@@ -52,6 +52,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `health`: checks, and opens or clears the operational halt | every 4 hours | none |
 | `backup`: `[backup]` target and retention | 05:00 UTC daily | 120 min |
 | `connections_sync`: broker connections whose sync is due | every hour | none |
+| `calendars_refresh`: earnings, dividend and economic calendars, then the event alerts (see [calendars](calendars.md)) | 06:00 UTC daily | none |
 
 Session jobs run on NYSE trading days. `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 

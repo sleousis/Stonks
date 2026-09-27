@@ -43,6 +43,12 @@ uv run stonks universe create ID [--kind list|exchange|rule|index] [--tickers ..
 uv run stonks universe refresh ID | delete ID --yes | import-index INDEX FILE
 uv run stonks universe ensure ID --start ... --end ... [--interval 1d --source eodhd]
 
+# Screener and calendars (docs/universes.md#screener, docs/calendars.md)
+uv run stonks screener metrics | run --spec JSON [--as-of ...] | save NAME --spec JSON | list | delete ID
+uv run stonks screener universe ID (--spec JSON|--screen ID) [--mode rule|snapshot]   # a screen as a universe
+uv run stonks calendars show|news [--scope holdings|watchlists|tickers|all] | earnings-check TICKERS
+uv run stonks calendars refresh [--source eodhd] [--no-alerts]   # also the daily calendars_refresh job
+
 # Lab and registry
 uv run stonks lab run momentum --start 2023-01-01 --end 2025-01-01 --tickers AAPL.US,MSFT.US --preset promotion
 uv run stonks lab run ... --strict | --no-preflight   # data preflight: warnings as errors, or skip it
@@ -125,6 +131,8 @@ uv run python -m stonks.security keygen
 - **`app/`**: the service layer (`services.py` wires lake, state, registry, lab, backtests, ticks, studio, jobs). No business logic in any transport.
 - **`auth/`**: sign-in with passwords, sessions, mandatory TOTP 2FA, recovery codes, API tokens and role permissions (`stonks users`). Every API route declares the permission it needs.
 - **`universes/`**: stored universe definitions (list, exchange, rule, index) behind `UniverseProvider` and `IndexSource` registries, refreshed into point-in-time membership. See `docs/universes.md`.
+- **`screener/`**: `ScreenSpec` (the rule filters plus metric bounds, sort and top N), `ScreenMetric` seam and registry (`metrics/`: price, returns, volatility, valuation and quality), `ScreenData` (point-in-time lake reads), `run_screen`. A `rule` universe's spec is a screen, run at each rebalance. Service in `app/screener.py`.
+- **`calendars/`**: `CalendarStore` over the calendar tables plus news reads, `timing.py` (earnings before the next open), `tracking.py` (held and watched tickers), upcoming-event alerts (`alerts.py`, `alert_kinds/` registry). Ingest via `IngestPipeline.run_calendars` and the EODHD adapter `ingest/sources/eodhd_calendar.py`. Service in `app/calendars.py`. See `docs/calendars.md`.
 - **`api/`**: FastAPI app (`stonks serve`), session or API-token auth with per-route permissions (`STONKS_API_TOKEN` is a legacy credential), background jobs with SSE, OpenAPI contract, serves `web/dist`.
 - **`mcp/`**: `stonks mcp`, an MCP server that talks to the running REST API. Write tools need an explicit confirm.
 - **`web/`**: Angular console (dashboard, strategies, lab, studio, data, orders, shadow, go-live, health, settings), typed client generated from the OpenAPI spec, installable PWA. See `docs/ui.md`.
@@ -132,7 +140,7 @@ uv run python -m stonks.security keygen
 
 ## Canonical schemas (current)
 
-**Lake (DuckDB, migrations 001-016):**
+**Lake (DuckDB, migrations 001-017):**
 - `instruments (id, asset_class, exchange, currency, ipo_date, sector, industry, is_delisted, name, identifiers, GICS, address, ...)`: renamed from `tickers` in 007. `asset_class` in {equity, crypto, commodity, bond}.
 - `bars (ticker, timestamp, interval, open, high, low, close, adj_close, volume; PK (ticker, timestamp, interval))`: OHLCV at any `Interval` code (1m, 5m, 1h, 4h, 1d, 1w, 1mo, ...). `prices` is a read-only view of `interval='1d'`. Write with `upsert_bars` or the daily `upsert_prices` shim. With the Parquet backend the rows live under `<lake dir>/bars` instead of the table.
 - Statements (008, equity only), keyed `(ticker, period_end, frequency)`: `income_statement`, `balance_sheet`, `cash_flow_statement`, each with `filing_date` and `currency`. `upsert_<statement>` reindexes sparse frames and uses `COALESCE(EXCLUDED.col, table.col)`, so a NULL never overwrites a stored value but a real restated value does.
@@ -146,8 +154,9 @@ uv run python -m stonks.security keygen
 - `statement_flags (ticker, period_end, frequency, check_id, severity, detail, flagged_at)` (014): the statement audit's findings, replaced per audited ticker.
 - `universe_membership (universe_id, ticker, start_date, end_date)` (015): point-in-time universes, delisted names included.
 - `universe_definitions`, `index_constituent_snapshots`, `index_constituent_changes`, `bar_fetch_ranges` (016): stored universe definitions (list, exchange, rule, index), index history, and the bar ranges already requested so on-demand fetches skip them. See `docs/universes.md`.
+- `earnings_calendar (ticker, period_end, report_date, before_after_market, eps_estimate, eps_actual, ...)`, `dividend_calendar (ticker, ex_date, amount, record_date, pay_date, ...)`, `economic_events (country, event_time, event_type, comparison, actual, previous, estimate, ...)` (017): event calendars, vendor neutral. See `docs/calendars.md`.
 
-**State (SQLite, migrations 001-026):**
+**State (SQLite, migrations 001-027):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -163,7 +172,7 @@ uv run python -m stonks.security keygen
 - 019: `risk_snapshots` (daily VaR, ES, violations and decay per book and strategy sleeve).
 - 020: `signals`, `signal_events`, `portfolio_runs`, `portfolios.paper_of` (a broker portfolio's paper account), `subscriptions.paper_since`, `users.risk_policy_json`.
 - 021: `orders.position_effect` (`open` or `close`). 022: a `pf_default` subscription for every active strategy. 023: `financing_accruals`, `financing_charges`.
-- 025: lab offload queue (`jobs.executor`, `lab_workers`). 026: `onboarding_steps`, `onboarding_status` (first-run guide) and `watchlists` (per-user ticker lists).
+- 025: lab offload queue (`jobs.executor`, `lab_workers`). 026: `onboarding_steps`, `onboarding_status` (first-run guide) and `watchlists` (per-user ticker lists). 027: `screens` (per-user saved screener specs).
 
 ## Conventions to match
 
