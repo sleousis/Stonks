@@ -113,7 +113,7 @@ class ScheduledRunView(BaseModel):
 
 
 #: ``tick_runs.status`` in the scheduled runs' words.
-_TICK_RUN_STATUS = {"ok": "succeeded", "partial": "partial", "error": "failed"}
+_TICK_RUN_STATUS: dict[str, str] = {"ok": "succeeded", "partial": "partial", "error": "failed"}
 
 
 def _utc_datetime(value: str) -> datetime:
@@ -153,7 +153,7 @@ def outside_trading_runs(state: Any, *, job_name: str, limit: int) -> list[Sched
                 run_key=f"outside:{row['id']}",
                 scheduled_for=started,
                 as_of=as_of.isoformat() if as_of else None,
-                status=_TICK_RUN_STATUS.get(row["status"], row["status"]),
+                status=_TICK_RUN_STATUS.get(row["status"]) or str(row["status"]),
                 catch_up=False,
                 started_at=started,
                 finished_at=_utc_datetime(row["finished_at"]) if row["finished_at"] else None,
