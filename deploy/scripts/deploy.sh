@@ -87,7 +87,11 @@ if ! wait_healthy 180; then
 fi
 trap - ERR
 
-printf '%s\n' "$previous" >.previous-tag
+# A redeploy of the same tag keeps the recorded previous tag, so rollback.sh
+# still goes back to an older version instead of to this one.
+if [ "$previous" != "$tag" ]; then
+	printf '%s\n' "$previous" >.previous-tag
+fi
 printf '%s\n' "$tag" >.deployed-tag
 snapshot_prune 5
 
