@@ -116,6 +116,8 @@ class OutOfSampleTest:
             "n_trades": float(trades.n_trades),
             "trade_expectancy": trades.expectancy,
             **self._psr_metrics(returns, mom),
+            # 23.1: lot rounding and the minimum capital, reported only
+            **(report.lots.metrics() if report.lots is not None else {}),
         }
 
         failures: list[str] = []

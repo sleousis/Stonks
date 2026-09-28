@@ -14,6 +14,8 @@ manifest is stored in ``lab_runs.manifest_json`` and in the artifact's
 - ``costs``: the cost-model settings in force;
 - ``shorting``: the margin model and borrow fees, only for a dataset that
   may short (roadmap 16.4);
+- ``lots``: the lot settings, only for a dataset that rounds orders to
+  lots (roadmap 23.1);
 - ``dataset``: universe, windows and interval;
 - ``seeds``.
 """
@@ -56,7 +58,15 @@ def build_manifest(settings: Any, dataset: Any, seeds: Mapping[str, Any]) -> dic
         "seeds": _jsonable(dict(seeds)),
         "created_at": datetime.now(UTC).isoformat(timespec="seconds"),
         **_shorting(dataset),
+        **_lots(dataset),
     }
+
+
+def _lots(dataset: Any) -> dict[str, Any]:
+    lots = getattr(dataset, "lots", None)
+    if lots is None or getattr(lots, "profile", "fractional") == "fractional":
+        return {}
+    return {"lots": _jsonable(lots)}
 
 
 def _shorting(dataset: Any) -> dict[str, Any]:

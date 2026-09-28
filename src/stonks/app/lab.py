@@ -848,6 +848,7 @@ def lab_dataset(
             execution=settings.backtest.execution,
             construction=settings.backtest.construction,
             universe_id=request.universe_id,
+            lots=getattr(settings.backtest, "lots", None),
         )
     except ValueError as exc:  # e.g. [lab] embargo_bars leaves no validation window
         raise ValidationError(str(exc)) from None
@@ -931,6 +932,7 @@ def backtest_report(
         # Load every name of the window, trade each only while a member
         # (point in time, P14, BE-07).
         universe_id=universe_id,
+        lots=getattr(settings.backtest, "lots", None),
     )
     report = Backtester(strategies=[strategy], broker=broker, lake=lake, config=config).run()
     report = with_trades(report, broker.fills, reference_price=broker.reference_price)

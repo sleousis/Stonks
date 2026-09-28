@@ -32,6 +32,7 @@ from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.lifecycle.settings import ModelLifecycleSettings
 from stonks.ops.config import BackupConfig
 from stonks.options.live.settings import OptionsLiveSettings
+from stonks.portfolio.lots import LotSettings
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.decay import DecaySettings
 from stonks.production.intraday_pnl_settings import IntradayPnlSettings
@@ -504,6 +505,9 @@ class BacktestSettings(BaseModel):
     #: production construction pipeline (``None``: each strategy decides
     #: alone, today's behaviour).
     construction: ConstructionSettings | None = None
+    #: ``[backtest.lots]``: round order sizes to tradable lots in backtests,
+    #: the lab and paper books (roadmap 23.1, ``fractional`` by default).
+    lots: LotSettings = LotSettings()
 
 
 class LabSettings(BaseModel):

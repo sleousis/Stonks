@@ -198,3 +198,16 @@ def test_all_nan_returns_fail():
     report = OutOfSampleTest().evaluate(_with_returns(_report([0.01] * 50), [nan] * 50))
     assert report.passed is False
     assert "insufficient data" in report.notes
+
+
+def test_lot_figures_ride_on_the_report_without_changing_the_verdict():
+    from stonks.portfolio.lots import LotReport
+
+    base = _report(_returns(0.6, 252 * 20))
+    lots = LotReport(profile="whole_shares", orders=10, skipped=2, min_capital=5_000.0)
+    with_lots = dataclasses.replace(base, lots=lots)
+    test = OutOfSampleTest(max_drawdown_limit=-1.0)
+    out = test.evaluate(with_lots)
+    assert out.metrics["min_capital"] == 5_000.0
+    assert out.metrics["lot_skipped_orders"] == 2.0
+    assert out.passed == test.evaluate(base).passed
