@@ -80,8 +80,8 @@ def test_a_trader_reads_the_calendar_and_news(browse, stack, viewport):
 
     # The event alerts sit with the alert settings: one switch per kind, on
     # until turned off, and the economic release choices.
-    v.go("/settings")
-    prefs = page.locator("app-notification-prefs")
+    v.go("/notifications/settings")
+    prefs = page.locator("app-notification-prefs").first
     events = prefs.locator("fieldset", has=page.get_by_text("Upcoming events", exact=True))
     earnings = events.get_by_label("Earnings coming up")
     expect(earnings).to_be_checked()
