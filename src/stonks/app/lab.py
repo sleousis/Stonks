@@ -96,7 +96,7 @@ ObjectiveName = Literal[
     "cv_cagr",
     "cv_final_return",
 ]
-CostModelName = Literal["zero", "realistic"]
+CostModelName = Literal["zero", "realistic", "ibkr_tiered", "ibkr_fixed"]
 
 #: API names kept from before the survival-test registry (BL-10).
 _LEGACY_TEST_NAMES: dict[str, str] = {"permutation": "mcpt"}
@@ -161,6 +161,16 @@ _COST_MODELS: dict[str, tuple[str, Callable[[], CostModelSettings]]] = {
     "realistic": (
         "Retail-broker-ish per-asset-class fees and spreads plus square-root market impact.",
         CostModelSettings.realistic,
+    ),
+    "ibkr_tiered": (
+        "Realistic spreads and impact with IBKR Pro Tiered commissions and US sell fees "
+        "on equities.",
+        lambda: CostModelSettings.ibkr("tiered"),
+    ),
+    "ibkr_fixed": (
+        "Realistic spreads and impact with IBKR Pro Fixed commissions and US sell fees "
+        "on equities.",
+        lambda: CostModelSettings.ibkr("fixed"),
     ),
 }
 

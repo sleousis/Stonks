@@ -686,6 +686,8 @@ _COST_WORDS = {
     "fee_bps": "a fee",
     "half_spread_bps": "the spread",
     "impact_bps": "market impact",
+    "commission": "a broker commission",
+    "us_sell_fees": "US regulatory fees",
 }
 _NO_PAPER_RESULTS = "No paper trading results yet"
 
@@ -805,6 +807,12 @@ def _nonzero_cost_inputs(costs: Any) -> list[str]:
             if key in _COST_INPUTS:
                 number = _finite(value)
                 if number is not None and number > 0:
+                    found.append(key)
+            elif key == "commission":  # a broker schedule by name (23.2)
+                if isinstance(value, str) and value != "none":
+                    found.append(key)
+            elif key == "us_sell_fees":
+                if value is True:
                     found.append(key)
             else:
                 found.extend(_nonzero_cost_inputs(value))

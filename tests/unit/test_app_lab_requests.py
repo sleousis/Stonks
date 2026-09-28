@@ -93,6 +93,14 @@ def test_lab_cost_model_accepts_a_preset_name_or_settings():
         _req(cost_model="expensive")
 
 
+def test_ibkr_cost_presets_resolve_to_commission_schedules():
+    from stonks.app.lab import lab_costs
+
+    for name, schedule in (("ibkr_tiered", "ibkr_tiered"), ("ibkr_fixed", "ibkr_fixed")):
+        costs = lab_costs(None, _req(cost_model=name).cost_model)
+        assert costs.for_asset_class("equity").commission == schedule
+
+
 def test_backtest_cost_model_accepts_settings_too():
     req = BacktestRequest(
         strategy=StrategyRef(class_path="stonks.strategies.examples.momentum:Momentum"),
