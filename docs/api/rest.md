@@ -4522,6 +4522,7 @@ Rename, replace the spec, or both. Unset fields stay.
 | `jobs` | list[[ScheduledJobView](#scheduledjobview)] | yes |  |
 | `market` | [MarketSessionsView](#marketsessionsview) \| null | no |  |
 | `recent` | list[[ScheduledRunView](#scheduledrunview)] | yes |  |
+| `running` | boolean | no |  |
 
 ### ScheduledJobView
 
@@ -4531,6 +4532,7 @@ Rename, replace the spec, or both. Unset fields stay.
 | `name` | string | yes |  |
 | `next_as_of` | date \| null | yes |  |
 | `next_run_at` | date-time \| null | yes |  |
+| `off_reason` | "engine_off" \| "options_off" \| "no_gateway" \| null | no |  |
 | `trigger` | string | yes |  |
 | `trigger_text` | string | no |  |
 
@@ -4546,6 +4548,7 @@ Rename, replace the spec, or both. Unset fields stay.
 | `finished_at` | date-time \| null | yes |  |
 | `id` | string | yes |  |
 | `job_name` | string | yes |  |
+| `origin` | "schedule" \| "run_now" \| "outside" | no |  |
 | `run_key` | string | yes |  |
 | `scheduled_for` | date-time | yes |  |
 | `started_at` | date-time | yes |  |
