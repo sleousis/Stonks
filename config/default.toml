@@ -612,3 +612,18 @@ max_budget_per_proposal = 50      # tuning trials per proposal
 survival_tests = ["oos", "deflated_sharpe", "pbo"]
 min_hypothesis_chars = 40
 min_premortem_chars = 20
+
+# Estimated tax rates for the pre-trade tax preview and the tax owed this
+# year (roadmap 23.5). A guide, not tax advice: set the rates that apply to
+# you. short_term: held one year or less; long_term: held longer.
+[tax.rates.us]
+short_term = 0.32
+long_term = 0.15
+
+[tax.rates.eu]
+short_term = 0.26
+long_term = 0.26
+
+[tax.rates.uk]
+short_term = 0.24
+long_term = 0.24

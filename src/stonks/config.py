@@ -44,6 +44,7 @@ from stonks.screener.settings import ScreenerSettings
 from stonks.store.audit import AuditTolerances
 from stonks.store.bars import BarBackend
 from stonks.streaming.settings import StreamingSettings
+from stonks.tax.settings import TaxConfig
 from stonks.telegram.settings import TelegramConfig
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -596,6 +597,8 @@ class Settings(BaseSettings):
     screener: ScreenerSettings = Field(default_factory=ScreenerSettings)
     # ``[engine]``: the intraday engine process (roadmap 21.2.5). Off by default.
     engine: EngineSettings = Field(default_factory=EngineSettings)
+    # ``[tax]``: estimated tax rates per jurisdiction (roadmap 23.5).
+    tax: TaxConfig = TaxConfig()
 
 
 #: Secrets read straight from the environment by blocks that keep their own

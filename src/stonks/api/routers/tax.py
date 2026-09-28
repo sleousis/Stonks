@@ -5,7 +5,7 @@ otherwise). CSV routes answer ``text/csv`` as an attachment."""
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel
@@ -24,9 +24,11 @@ from stonks.app.pagination import Page, page_of
 from stonks.app.tax import (
     LotPicksUpdate,
     LotPickView,
+    TaxPreviewView,
     TaxService,
     TaxSettingsUpdate,
     TaxSettingsView,
+    TaxYearView,
 )
 from stonks.auth import Permission
 
@@ -160,6 +162,35 @@ def export_tax_lots(
     day = as_of or datetime.now(UTC).date()
     body = _service(services).open_lots_csv(portfolio_id, day)
     return _csv(body, f"tax-lots-{portfolio_id}-{day.isoformat()}.csv")
+
+
+@router.get("/preview", response_model=TaxPreviewView, operation_id="previewTradeTax")
+def preview_trade_tax(
+    services: ServicesDep,
+    portfolio_id: PortfolioIdDep,
+    ticker: Annotated[str, Query(pattern=r"^[A-Za-z0-9][A-Za-z0-9._\-^=]{0,31}$")],
+    side: Annotated[Literal["buy", "sell"], Query()],
+    quantity: Annotated[float, Query(gt=0, le=1e9)],
+    price: Annotated[float | None, Query(gt=0, description="Default: the latest close")] = None,
+) -> TaxPreviewView:
+    """Before you trade: the lots a sell closes under your lot method, the
+    realised gain and holding period, the estimated tax at the configured
+    rate, the after-tax proceeds and a wash sale warning. An estimate, not
+    tax advice. Nothing is placed."""
+    return _service(services).preview(
+        portfolio_id, ticker=ticker, side=side, quantity=quantity, price=price
+    )
+
+
+@router.get("/year", response_model=TaxYearView, operation_id="getTaxYear")
+def get_tax_year(
+    services: ServicesDep,
+    portfolio_id: PortfolioIdDep,
+    year: Annotated[int | None, Query(ge=1900, le=2200, description="Default: this year")] = None,
+) -> TaxYearView:
+    """Gains realised this year so far and the estimated tax owed on them,
+    in the base currency. An estimate at the configured rates."""
+    return _service(services).year(portfolio_id, year)
 
 
 class FxRateView(BaseModel):
