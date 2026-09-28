@@ -21,6 +21,9 @@ Every factor lives in a module of `stonks/factors/library/`. Each module is a se
 | `alpha158` | 157 price and volume features ported from Qlib's Alpha158: candle shapes, price ratios and 29 rolling features at 5, 10, 20, 30 and 60 bars. |
 | `classic` | Momentum (12-1, 6-1), one-month reversal, low volatility, distance from the 52-week high and size (log dollar volume), each with a hypothesis. |
 | `fundamentals` | The value, quality and forensic scores (EBIT/TEV, book to market, Piotroski F, Altman Z, accruals, Beneish M and more), equities only. |
+| `published` | Published anomalies that EODHD bars and statements can build: the MAX effect, Amihud illiquidity, seasonality, long-term reversal, asset growth, gross profitability and net share issuance. |
+| `setups` | Named chart setups: engulfing, hammer and shooting star, morning and evening star, inside bar, NR7, the volatility contraction pattern and the squeeze. |
+| `filings` | Insider net buying from Form 4 trades (`stonks ingest edgar`). |
 
 A new factor or set is one new module with a `factors()` function. Nothing else is edited.
 
@@ -30,6 +33,28 @@ Each factor has a `direction`: `+1` when higher values should earn more, `-1` wh
 uv run stonks factors list [--set alpha158] [--family momentum] [--kind fundamental]
 uv run stonks factors show mom_12_1
 ```
+
+## Provenance
+
+A factor taken from a paper carries its source: the paper, its sample years, the year it was published and what it reported. `stonks factors show` prints it.
+
+```bash
+uv run stonks factors show gross_profitability
+```
+
+Sixteen factors have a source today: the whole `published` set, and 12-1 and 6-1 momentum, one-month reversal, low volatility, the 52-week high, book to market, accruals, net operating assets, the F-score and insider net buying.
+
+These are ports of the published definitions, not replications. The papers use CRSP and Compustat over long samples. EODHD history is shorter, so most of it falls after publication.
+
+## Chart setups
+
+Traders ask about candlestick patterns and breakout setups all the time. The `setups` set turns each one into a factor, so a tear sheet or the bench can answer with evidence.
+
+- Directional setups are signed: `+1` bullish, `-1` bearish, `0` none.
+- NR7, the inside bar and the squeeze have no direction of their own. They take the sign of the trend (the close against its moving average).
+- The volatility contraction pattern is `1` or `0`.
+
+Each setup is also a screener metric, `setup_<id>`, for example `setup_nr7`. Expect most to show no edge after costs. Published tests found little value in candlestick patterns.
 
 ## The expression language
 
@@ -52,6 +77,7 @@ Anywhere a factor id is accepted, a formula works too.
 - Bars are adjusted for splits and dividends as they were known on each date.
 - With a stored universe, a ticker counts only while it was a member (from `start_date` up to the day before `end_date`). History before it joined still feeds rolling windows.
 - Fundamentals count from the day after their filing.
+- Insider trades count from the acceptance time of the Form 4 that reported them.
 
 ## Panel cache
 
@@ -84,6 +110,38 @@ A tear sheet shows, for any factor:
 | Turnover | How fast the ranking and the top bucket change, a proxy for cost. |
 
 Returns start at the next open and never read past the window end. Universes under 10 tickers come back `n/a`. Values are raw: a `-1` factor that works shows a negative IC. Sector and asset class are today's labels, not point in time.
+
+For a factor with a source, the tear sheet adds **Source and decay**: the IC and the top minus bottom spread split into the paper's sample, the years after it and before publication, and the years after publication. McLean and Pontiff found returns about a third lower after publication.
+
+## The factor bench
+
+The bench scores many factors at once on one universe and window, and says which still work.
+
+```bash
+uv run stonks factors bench classic,published,setups --universe-id sp500 \
+  --start 2015-01-01 --end 2025-01-01 --horizon 21 --q 0.1
+```
+
+```mermaid
+flowchart LR
+  F[Every named factor] --> I[IC and HAC t-stat at one horizon]
+  I --> B[Benjamini-Hochberg at q]
+  B --> A[alive]
+  B --> R[reversed]
+  B --> D[dead]
+  I --> L[(Trial ledger: one trial per factor)]
+```
+
+| Label | Meaning |
+|-------|---------|
+| `alive` | Significant after the false discovery rate control, with the sign its hypothesis predicts. |
+| `reversed` | Significant, but with the opposite sign. |
+| `dead` | Not significant after the control. |
+| `n/a` | No IC: no values or too few names. |
+
+The default factors are `classic,fundamentals,published,setups`. `all` benches the whole library. For a factor with a source the bench also shows its IC after publication.
+
+Every factor benched is one trial in the trial ledger, in the research family `factor_bench` (P2). The count of factors ever looked at survives across runs, so a later test can deflate for it. `--no-record` skips the ledger for a dry look.
 
 ## Values at a date
 

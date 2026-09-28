@@ -1,0 +1,82 @@
+{
+ "cik": "0001067983",
+ "entityType": "operating",
+ "name": "BERKSHIRE HATHAWAY INC",
+ "tickers": [
+  "BRK-B",
+  "BRK-A"
+ ],
+ "exchanges": [
+  "NYSE",
+  "NYSE"
+ ],
+ "filings": {
+  "recent": {
+   "accessionNumber": [
+    "0001193125-26-352200",
+    "0001193125-26-226661"
+   ],
+   "filingDate": [
+    "2026-08-14",
+    "2026-05-15"
+   ],
+   "reportDate": [
+    "2026-06-30",
+    "2026-03-31"
+   ],
+   "acceptanceDateTime": [
+    "2026-08-14T20:05:04.000Z",
+    "2026-05-15T20:06:05.000Z"
+   ],
+   "act": [
+    "34",
+    "34"
+   ],
+   "form": [
+    "13F-HR",
+    "13F-HR"
+   ],
+   "fileNumber": [
+    "028-04545",
+    "028-04545"
+   ],
+   "filmNumber": [
+    "261281164",
+    "26987113"
+   ],
+   "items": [
+    "",
+    ""
+   ],
+   "core_type": [
+    "13F-HR",
+    "13F-HR"
+   ],
+   "size": [
+    51654,
+    52188
+   ],
+   "isXBRL": [
+    0,
+    0
+   ],
+   "isInlineXBRL": [
+    0,
+    0
+   ],
+   "isXBRLNumeric": [
+    0,
+    0
+   ],
+   "primaryDocument": [
+    "xslForm13F_X02/primary_doc.xml",
+    "xslForm13F_X02/primary_doc.xml"
+   ],
+   "primaryDocDescription": [
+    "",
+    ""
+   ]
+  },
+  "files": []
+ }
+}

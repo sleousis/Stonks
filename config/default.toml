@@ -522,6 +522,15 @@ user = "shortstock"
 timeout_seconds = 30
 markets = ["usa"]
 
+[sources.edgar]
+# SEC EDGAR filings for `stonks ingest edgar` (roadmap 23.13): Form 4
+# insider trades, 8-K items and 13F holdings, free and keyless. The SEC
+# asks every client to name itself with a contact address. Set it here or
+# in STONKS_EDGAR_USER_AGENT, e.g. "Jane Trader jane@example.com".
+user_agent = ""
+min_request_interval_seconds = 0.125   # the SEC allows 10 requests a second
+forms = ["8-K", "8-K/A", "10-Q", "10-K", "10-K/A"]
+
 [brokers]
 # Broker `stonks tick` (CLI and API) trades through. "simulated" (default)
 # fills in memory against the last portfolio snapshot and needs no keys.

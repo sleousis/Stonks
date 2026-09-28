@@ -686,6 +686,63 @@ def ingest_funds(
     _print_result(result)
 
 
+@ingest_app.command("edgar")
+def ingest_edgar(
+    tickers: str | None = typer.Option(
+        None, "--tickers", help="US tickers for filings and insider trades, e.g. AAPL.US"
+    ),
+    filers: str | None = typer.Option(
+        None, "--filers", help="manager CIKs for 13F holdings, e.g. 1067983"
+    ),
+    kinds: str = typer.Option(
+        "filings,insiders", "--kinds", help="comma-separated: filings, insiders, holdings"
+    ),
+    since: str | None = typer.Option(
+        None, "--since", help="earliest acceptance day (YYYY-MM-DD)", callback=_validate_iso_date
+    ),
+    until: str | None = typer.Option(
+        None, "--until", help="latest acceptance day (YYYY-MM-DD)", callback=_validate_iso_date
+    ),
+) -> None:
+    """Pull SEC EDGAR filings into the lake: filings with
+    their acceptance time and 8-K items, Form 4 insider trades and 13F
+    holdings. Needs \\[sources.edgar] user_agent (a name and an email)."""
+    from stonks.ingest.sources.base import DataSourceError
+    from stonks.ingest.sources.edgar import EdgarDataSource
+
+    chosen = {k.strip() for k in kinds.split(",") if k.strip()}
+    unknown = chosen - {"filings", "insiders", "holdings"}
+    if unknown or not chosen:
+        raise typer.BadParameter(
+            "--kinds takes filings, insiders and holdings", param_hint="--kinds"
+        )
+    names = _parse_tickers(tickers) if tickers else []
+    ciks = [c.strip() for c in (filers or "").split(",") if c.strip()]
+    if chosen & {"filings", "insiders"} and not names:
+        raise typer.BadParameter("name --tickers for filings or insiders", param_hint="--tickers")
+    if "holdings" in chosen and not ciks:
+        raise typer.BadParameter("name --filers for holdings", param_hint="--filers")
+    if not all(c.isdigit() for c in ciks):
+        raise typer.BadParameter("a filer is a numeric CIK", param_hint="--filers")
+    settings = _settings()
+    try:
+        source = EdgarDataSource.from_config(settings.sources.edgar)
+    except DataSourceError as exc:
+        raise typer.BadParameter(str(exc)) from None
+    since_d = date.fromisoformat(since) if since else None
+    until_d = date.fromisoformat(until) if until else None
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        pipeline = build_ingest_pipeline(settings, source, lake)
+        if "filings" in chosen:
+            forms = list(settings.sources.edgar.forms) or None
+            _print_result(pipeline.run_filings(names, since=since_d, until=until_d, forms=forms))
+        if "insiders" in chosen:
+            _print_result(pipeline.run_insider_filings(names, since=since_d, until=until_d))
+        if "holdings" in chosen:
+            _print_result(pipeline.run_institutional_holdings(ciks, since=since_d, until=until_d))
+
+
 @ingest_app.command("aggregate")
 def ingest_aggregate(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),

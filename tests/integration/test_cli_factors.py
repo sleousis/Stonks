@@ -127,3 +127,22 @@ def test_dataset_export(runner, workdir):
          "--end", "2026-03-31", "--out", "d.csv", "--no-label"],
     )  # fmt: skip
     assert bad.exit_code != 0
+
+
+def test_bench_labels_factors_and_counts_trials(runner, workdir):
+    args = [
+        "factors", "bench", "classic,setups", "--tickers", ",".join(TICKERS),
+        "--start", "2025-09-01", "--end", "2026-03-31", "--horizon", "5",
+    ]  # fmt: skip
+    out = runner.invoke(app, [*args, "--json", "bench.json"])
+    assert out.exit_code == 0, out.output
+    assert "factors benched so far" in out.output
+    result = json.loads((workdir / "bench.json").read_text())
+    assert len(result["rows"]) == 13
+    assert {r["label"] for r in result["rows"]} <= {"alive", "reversed", "dead", "n/a"}
+    again = runner.invoke(app, [*args, "--json", "bench2.json"])
+    assert again.exit_code == 0, again.output
+    assert json.loads((workdir / "bench2.json").read_text())["n_trials_family"] == 26
+    dry = runner.invoke(app, [*args, "--no-record", "--json", "bench3.json"])
+    assert dry.exit_code == 0, dry.output
+    assert json.loads((workdir / "bench3.json").read_text())["run_id"] is None

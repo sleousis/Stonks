@@ -18,13 +18,19 @@ close of ``t`` (P12).
 should earn more, ``-1`` when lower values should. Tear sheets report raw
 values; :class:`~stonks.strategies.examples.factor_strategy.FactorStrategy`
 and ranking helpers use the direction.
+
+A factor taken from a paper carries its :class:`Provenance` (roadmap 23.13):
+the paper, its sample years, the year it was published and the statistic it
+reported. Tear sheets then split the IC into in-sample, post-sample and
+post-publication periods, the decay McLean and Pontiff (2016) measured.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from datetime import datetime
+from dataclasses import asdict, dataclass
+from datetime import date, datetime
 from typing import Any, Literal
 
 import pandas as pd
@@ -33,9 +39,50 @@ from stonks.core.interval import Interval
 from stonks.factors.engine import PanelRequest, latest_values, panel_from_lake
 from stonks.factors.expression import Node, lookback, parse_factor
 
-__all__ = ["ExpressionFactor", "Factor", "FactorKind"]
+__all__ = ["ExpressionFactor", "Factor", "FactorKind", "Period", "Provenance"]
 
 FactorKind = Literal["expression", "fundamental"]
+#: Where a date falls against a paper: before its sample, inside it, after
+#: the sample but before publication, or after publication.
+Period = Literal["pre_sample", "in_sample", "post_sample", "post_publication"]
+
+
+@dataclass(frozen=True)
+class Provenance:
+    """Where a published factor comes from. Years are calendar years."""
+
+    #: Authors, year, title and journal.
+    paper: str
+    #: The year the paper was published (its journal issue).
+    published: int
+    #: First and last year of the paper's sample.
+    sample_start: int
+    sample_end: int
+    #: What the paper reported, in its own terms (a spread, a t-stat).
+    reported: str
+    #: The headline t-statistic, when the paper gives one.
+    t_stat: float | None = None
+
+    def __post_init__(self) -> None:
+        if not self.paper.strip():
+            raise ValueError("a provenance needs a paper")
+        if self.sample_start > self.sample_end:
+            raise ValueError("the sample must start before it ends")
+        if self.published < self.sample_end:
+            raise ValueError("a paper is published after its sample ends")
+
+    def period_of(self, day: date) -> Period:
+        """Where ``day`` falls against the paper's sample and publication."""
+        if day.year < self.sample_start:
+            return "pre_sample"
+        if day.year <= self.sample_end:
+            return "in_sample"
+        if day.year < self.published:
+            return "post_sample"
+        return "post_publication"
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 class Factor(ABC):
@@ -56,6 +103,8 @@ class Factor(ABC):
     tables: tuple[str, ...] = ()
     #: Asset classes it applies to (fundamentals exist for equities only).
     asset_classes: tuple[str, ...] = ("equity", "crypto", "commodity", "bond")
+    #: The paper it comes from, for a published factor.
+    provenance: Provenance | None = None
 
     @property
     def cache_token(self) -> str:
@@ -103,6 +152,7 @@ class Factor(ABC):
             "expression": getattr(self, "expression", None),
             "lookback_bars": self.lookback_bars,
             "asset_classes": list(self.asset_classes),
+            "provenance": self.provenance.to_dict() if self.provenance else None,
         }
 
 
@@ -120,6 +170,7 @@ class ExpressionFactor(Factor):
         family: str = "custom",
         direction: int = 1,
         hypothesis: str = "",
+        provenance: Provenance | None = None,
     ) -> None:
         if direction not in (1, -1):
             raise ValueError(f"direction must be 1 or -1, got {direction}")
@@ -131,6 +182,7 @@ class ExpressionFactor(Factor):
         self.family = family
         self.direction = direction
         self.hypothesis = hypothesis
+        self.provenance = provenance
 
     @classmethod
     def adhoc(cls, text: str) -> ExpressionFactor:

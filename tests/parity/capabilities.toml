@@ -31,10 +31,10 @@ mcp = "run_ingest"
 [[capability]]
 id = "ingest.bulk"
 domain = "data"
-title = "Ingest macro, DeFi TVL, exchanges, fund holdings and stock borrow rates, derive intervals"
+title = "Ingest macro, DeFi TVL, exchanges, fund holdings, stock borrow rates and SEC EDGAR filings, derive intervals"
 routes = []
 console = { limited = "operator bulk jobs, run by the scheduler" }
-cli = ["stonks ingest macro", "stonks ingest tvl", "stonks ingest funds", "stonks ingest exchanges", "stonks ingest borrow", "stonks ingest aggregate", "stonks ingest all-intervals"]
+cli = ["stonks ingest macro", "stonks ingest tvl", "stonks ingest funds", "stonks ingest exchanges", "stonks ingest borrow", "stonks ingest edgar", "stonks ingest aggregate", "stonks ingest all-intervals"]
 mcp = { limited = "operator bulk jobs, run by the scheduler" }
 
 [[capability]]
@@ -319,6 +319,15 @@ routes = []
 console = { limited = "a file export for model training, run from the shell" }
 cli = "stonks factors dataset"
 mcp = { limited = "a file export for model training, run from the shell" }
+
+[[capability]]
+id = "factors.bench"
+domain = "lab"
+title = "Factor bench: score every factor on a universe, label it with FDR, count it in the trial ledger"
+routes = []
+console = { limited = "a long research run over the whole library, run from the shell" }
+cli = "stonks factors bench"
+mcp = { limited = "a long research run over the whole library, run from the shell" }
 
 [[capability]]
 id = "lab.survival_tests"

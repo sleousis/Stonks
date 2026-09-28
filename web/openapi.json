@@ -2433,6 +2433,14 @@
             "title": "End",
             "type": "string"
           },
+          "filings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FilingEvent"
+            },
+            "title": "Filings",
+            "type": "array"
+          },
           "scope": {
             "enum": [
               "all",
@@ -6429,6 +6437,13 @@
             "title": "Note",
             "type": "string"
           },
+          "periods": {
+            "items": {
+              "$ref": "#/components/schemas/PeriodICView"
+            },
+            "title": "Periods",
+            "type": "array"
+          },
           "quantile_curves": {
             "$ref": "#/components/schemas/QuantileCurvesView"
           },
@@ -6662,6 +6677,16 @@
             "title": "Lookback Bars",
             "type": "integer"
           },
+          "provenance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProvenanceView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "set": {
             "anyOf": [
               {
@@ -6818,6 +6843,69 @@
           "unread_count"
         ],
         "title": "FeedView",
+        "type": "object"
+      },
+      "FilingEvent": {
+        "description": "A current report (8-K) a company filed (roadmap 23.13).",
+        "properties": {
+          "accepted_at": {
+            "format": "date-time",
+            "title": "Accepted At",
+            "type": "string"
+          },
+          "form": {
+            "title": "Form",
+            "type": "string"
+          },
+          "item_names": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Item Names",
+            "type": "array"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "ticker",
+          "form",
+          "accepted_at"
+        ],
+        "title": "FilingEvent",
         "type": "object"
       },
       "FillView": {
@@ -18005,6 +18093,67 @@
         "title": "PendingActionView",
         "type": "object"
       },
+      "PeriodICView": {
+        "properties": {
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "mean_ic": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Ic"
+          },
+          "n_dates": {
+            "title": "N Dates",
+            "type": "integer"
+          },
+          "period": {
+            "title": "Period",
+            "type": "string"
+          },
+          "spread_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Mean"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          },
+          "t_stat_hac": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Stat Hac"
+          }
+        },
+        "required": [
+          "period",
+          "start",
+          "end",
+          "n_dates"
+        ],
+        "title": "PeriodICView",
+        "type": "object"
+      },
       "PeriodPnl": {
         "properties": {
           "change": {
@@ -20364,6 +20513,51 @@
           }
         },
         "title": "ProtectiveStopSettings",
+        "type": "object"
+      },
+      "ProvenanceView": {
+        "description": "The paper a published factor comes from (roadmap 23.13).",
+        "properties": {
+          "paper": {
+            "title": "Paper",
+            "type": "string"
+          },
+          "published": {
+            "title": "Published",
+            "type": "integer"
+          },
+          "reported": {
+            "title": "Reported",
+            "type": "string"
+          },
+          "sample_end": {
+            "title": "Sample End",
+            "type": "integer"
+          },
+          "sample_start": {
+            "title": "Sample Start",
+            "type": "integer"
+          },
+          "t_stat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T Stat"
+          }
+        },
+        "required": [
+          "paper",
+          "published",
+          "sample_start",
+          "sample_end",
+          "reported"
+        ],
+        "title": "ProvenanceView",
         "type": "object"
       },
       "ProviderView": {

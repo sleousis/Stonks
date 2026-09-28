@@ -24,6 +24,10 @@ a daily decision). Then:
   known when its day ends, but a monthly print needs the caller's lag),
   share counts :data:`SHARE_COUNT_LAG_DAYS` after the period date they
   carry, dividends, splits, bond yields and TVL by their day;
+- **filings** (roadmap 23.13) by their acceptance time ``known_at``: a
+  filing accepted after the decision's close is hidden. An insider trade
+  with no acceptance time counts from the day after its filing date;
+
 - **universe membership** shows spans that started by then, and an exit
   dated later reads as still open (nobody knew it yet);
 - **names** (``bar_tickers``) are listed once their first bar is visible;
@@ -137,6 +141,9 @@ _READERS: Mapping[str, str] = {
     "get_corporate_actions": "get_corporate_actions",
     "get_bond_yields": "get_bond_yields",
     "get_defi_tvl": "get_defi_tvl",
+    "get_insider_transactions": "get_insider_transactions",
+    "get_corporate_filings": "get_corporate_filings",
+    "get_institutional_holdings": "get_institutional_holdings",
     "members_as_of": "members_between",
     "members_between": "members_between",
     "get_universe_membership": "get_universe_membership",
@@ -355,6 +362,38 @@ class PointInTimeLake:
         return self._dated(
             ("dividends", ticker), lambda: self._lake.get_dividends(ticker), "ex_date"
         )
+
+    # ---- filings (roadmap 23.13) -------------------------------------------------
+
+    def _accepted(self, frame: pd.DataFrame) -> pd.Series:
+        """Rows whose acceptance time is at or before the decision's close."""
+        known = pd.to_datetime(frame["known_at"])
+        return known.notna() & (known <= pd.Timestamp(self._reach))
+
+    def _read_get_insider_transactions(self, ticker: str) -> pd.DataFrame:
+        full = self._cached(
+            ("insiders", ticker), lambda: self._lake.get_insider_transactions(ticker)
+        )
+        if full.empty:
+            return full
+        by_filing = full["known_at"].isna() & _on_or_before(
+            pd.Series(full["filing_date"]), self._filed_by - timedelta(days=1)
+        )
+        return _rows(full, self._accepted(full) | by_filing)
+
+    def _read_get_corporate_filings(self, tickers: Any = None, **kwargs: Any) -> pd.DataFrame:
+        key = (
+            "filings",
+            tuple(tickers) if tickers is not None else None,
+            repr(sorted(kwargs.items())),
+        )
+        full = self._cached(key, lambda: self._lake.get_corporate_filings(tickers, **kwargs))
+        return full if full.empty else _rows(full, self._accepted(full))
+
+    def _read_get_institutional_holdings(self, **kwargs: Any) -> pd.DataFrame:
+        key = ("holdings", repr(sorted(kwargs.items())))
+        full = self._cached(key, lambda: self._lake.get_institutional_holdings(**kwargs))
+        return full if full.empty else _rows(full, self._accepted(full))
 
     def _read_get_corporate_actions(self, tickers: list[str]) -> pd.DataFrame:
         key = ("corporate_actions", tuple(tickers))

@@ -19,6 +19,7 @@ from stonks.calendars.models import (
     DividendEvent,
     EarningsEvent,
     EconomicEvent,
+    FilingEvent,
     NewsItem,
     SentimentDay,
 )
@@ -172,6 +173,34 @@ class CalendarStore:
             r["period_end"] = _as_date(r["period_end"])
             r["report_date"] = _as_date(r["report_date"])
             out.append(EarningsEvent(**r))
+        return out
+
+    def filings(
+        self, start: date, end: date, *, tickers: Sequence[str] | None = None
+    ) -> list[FilingEvent]:
+        """Current reports (8-K) accepted from ``start`` to ``end`` (UTC days),
+        oldest first, with each item's meaning (roadmap 23.13)."""
+        from stonks.ingest.filing_schemas import CURRENT_REPORT_ITEMS
+
+        if tickers is not None and not tickers:
+            return []
+        clause, params = _ticker_clause(tickers, "f.ticker")
+        df = self._lake.sql(
+            f"""
+            SELECT f.ticker, i.name, f.form, f.known_at AS accepted_at, f.items, f.url
+              FROM corporate_filings f LEFT JOIN instruments i ON i.id = f.ticker
+             WHERE f.form IN ('8-K', '8-K/A')
+               AND CAST(f.known_at AS DATE) BETWEEN ? AND ?{clause}
+             ORDER BY f.known_at, f.ticker
+            """,
+            [start, end, *params],
+        )
+        out = []
+        for r in _records(df):
+            items = [c for c in str(r.pop("items") or "").split(",") if c]
+            r["accepted_at"] = pd.Timestamp(r["accepted_at"]).to_pydatetime()
+            names = [CURRENT_REPORT_ITEMS.get(c, "item " + c) for c in items]
+            out.append(FilingEvent(**r, items=items, item_names=names))
         return out
 
     def dividends(

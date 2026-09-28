@@ -16,6 +16,7 @@ from datetime import date
 
 from stonks.core.interval import Interval
 from stonks.ingest.calendar_schemas import DividendEventRow, EarningsEventRow, EconomicEventRow
+from stonks.ingest.filing_schemas import CorporateFilingRow, InstitutionalHoldingRow
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.option_schemas import OptionQuoteRow
 from stonks.ingest.schemas import (
@@ -25,6 +26,7 @@ from stonks.ingest.schemas import (
     FinancialStatementsBundle,
     FundHoldingRow,
     FxRateRow,
+    InsiderTransactionRow,
     IntradayBar,
     MacroIndicatorRow,
     RawPriceBar,
@@ -193,6 +195,41 @@ class DataSource(ABC):
         shows up as a failed fund instead of a silent empty run."""
         raise UnsupportedCapabilityError(
             f"{self.source_id} does not serve fund holdings ({fund!r})"
+        )
+
+    # ---- regulatory filings (roadmap 23.13) -----------------------------------
+    # Optional capabilities: the defaults raise UnsupportedCapabilityError.
+
+    def fetch_filings(
+        self,
+        ticker: str,
+        since: date | None = None,
+        until: date | None = None,
+        forms: Sequence[str] | None = None,
+    ) -> Iterable[CorporateFilingRow]:
+        """Filings the company made with an acceptance day in ``[since,
+        until]``, of ``forms`` (``None``: every form)."""
+        del since, until, forms
+        raise UnsupportedCapabilityError(f"{self.source_id} does not serve filings ({ticker!r})")
+
+    def fetch_insider_filings(
+        self, ticker: str, since: date | None = None, until: date | None = None
+    ) -> Iterable[InsiderTransactionRow]:
+        """Insider trades from ownership reports accepted in ``[since,
+        until]``, each with the report's acceptance time as ``known_at``."""
+        del since, until
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve insider filings ({ticker!r})"
+        )
+
+    def fetch_institutional_holdings(
+        self, filer_cik: str, since: date | None = None, until: date | None = None
+    ) -> Iterable[InstitutionalHoldingRow]:
+        """The lines of every quarterly holdings report a manager filed in
+        ``[since, until]``."""
+        del since, until
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve institutional holdings ({filer_cik!r})"
         )
 
     # ---- event calendars (roadmap 20.7) ----------------------------------------

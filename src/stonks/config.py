@@ -98,11 +98,34 @@ class IbkrBorrowSourceConfig(BaseModel):
     markets: tuple[str, ...] = ("usa",)
 
 
+class EdgarSourceConfig(BaseModel):
+    """SEC EDGAR filings (``stonks ingest edgar``, roadmap 23.13). Free and
+    keyless, but the SEC's fair access rules ask every client to name
+    itself: set ``user_agent`` to a name and a contact address, for example
+    ``"Jane Trader jane@example.com"`` (or ``STONKS_EDGAR_USER_AGENT``). It
+    is not a secret. The SEC allows at most 10 requests a second; the
+    default spacing stays under that."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_agent: str = ""
+    base_url: str = "https://www.sec.gov"
+    data_url: str = "https://data.sec.gov"
+    timeout_seconds: float = 30.0
+    max_retries: int = Field(default=3, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=1.0, ge=0.0)
+    #: At least this long between two requests (0.125 s = 8 a second).
+    min_request_interval_seconds: float = Field(default=0.125, ge=0.1)
+    #: Forms ``stonks ingest edgar --kinds filings`` keeps.
+    forms: tuple[str, ...] = ("8-K", "8-K/A", "10-Q", "10-K", "10-K/A")
+
+
 class SourcesConfig(BaseModel):
     eodhd: EodhdSourceConfig = EodhdSourceConfig()
     yahoo: YahooSourceConfig = YahooSourceConfig()
     defillama: DefiLlamaSourceConfig = DefiLlamaSourceConfig()
     ibkr_borrow: IbkrBorrowSourceConfig = IbkrBorrowSourceConfig()
+    edgar: EdgarSourceConfig = EdgarSourceConfig()
 
 
 def _env_secret(name: str) -> SecretStr | None:
@@ -702,6 +725,10 @@ def _overlay_env(data: dict) -> None:
     api_key = os.environ.get("EODHD_API_KEY")
     if api_key:
         data.setdefault("sources", {}).setdefault("eodhd", {})["api_key"] = api_key
+
+    edgar_agent = os.environ.get("STONKS_EDGAR_USER_AGENT")
+    if edgar_agent:
+        data.setdefault("sources", {}).setdefault("edgar", {})["user_agent"] = edgar_agent
 
     webhook_url = os.environ.get("STONKS_NOTIFY_WEBHOOK_URL")
     if webhook_url:
