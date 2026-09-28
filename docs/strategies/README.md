@@ -51,6 +51,12 @@ uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --prese
 | `ath_trend` | Buys weekly closes at all-time highs, exits on a wide ATR trailing stop. Equity and crypto. |
 | `forecast_blend` | EWMAC and TSMOM rules combined with weights fitted after costs, and rules too costly for an instrument dropped ([details](forecast-weights.md)). Equity, crypto, commodity. |
 
+## Forecasting models ([details](../forecasting.md))
+
+| Id | What it does |
+|----|--------------|
+| `forecast_signal` | Buys when a forecaster (the Theta baseline, Chronos, TimesFM or Kronos) expects a rise over the next bars. The model is fixed per run and must pass `forecast_skill`. Equity, crypto, commodity. |
+
 ## Intraday ([details](intraday.md))
 
 They decide on minute bars inside the regular session of the ticker's exchange, read closed bars only, and are flat before every close. The lab splits their windows by whole sessions.
