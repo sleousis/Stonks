@@ -17,6 +17,7 @@ import { ExportButton } from '../../shared/ui/export-button';
 import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { robustnessWords } from '../../shared/lab-results/robustness';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { SystemService } from '../../api/system.service';
 import { humanize } from '../../shared/ui/param-form/param-spec';
@@ -89,12 +90,11 @@ export function searchName(tuner: string): string {
       <section class="panel" aria-labelledby="run-title">
         <div class="panel-head">
           <h2 id="run-title">{{ strategyName() }}, {{ when(r.started_at) }}</h2>
-          @if (r.verdict) {
-            <span class="verdict">
-              <span class="muted">Robustness verdict</span>
-              <app-status-pill [status]="r.verdict" />
-            </span>
-          }
+          @let w = robustness(r.robustness);
+          <span class="verdict">
+            <span class="muted">Status</span>
+            <app-status-pill [status]="w.status" [label]="w.label" />
+          </span>
         </div>
         <div class="panel-body">
           <div class="tiles">
@@ -187,6 +187,7 @@ export class LedgerRunPage {
   /** The catalog, for the strategy's plain name. */
   private readonly classes = resource({ loader: () => this.system.strategyClasses() });
 
+  protected readonly robustness = robustnessWords;
   protected readonly run = resource({
     params: () => ({ id: this.runId() }),
     loader: ({ params }) => this.lab.ledgerRun(params.id),

@@ -160,7 +160,7 @@ describe('LabRunResultView', () => {
   it('renders the verdict, best score and best params', () => {
     const el = render();
     expect(tiles(el)).toEqual({
-      'Robustness verdict': 'Failed',
+      Status: 'Did not hold up',
       'Best score': '1.12',
       // Older results carry no trial counts.
       'Trials this run': 'n/a',

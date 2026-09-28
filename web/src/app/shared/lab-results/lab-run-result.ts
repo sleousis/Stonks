@@ -13,6 +13,7 @@ import { ParamHeatmap } from './param-heatmap';
 import { PreflightIssues } from './preflight-issues';
 import { testHint, testLabel } from './survival-tests';
 import { FigureGrid, benchmarkFigures, benchmarkName } from './result-figures';
+import { robustnessWords } from './robustness';
 
 export { formatMetric, metricLabel } from '../metrics';
 
@@ -22,10 +23,12 @@ export { testLabel } from './survival-tests';
  * "It held up: it passed all 7 robustness tests..." or "It did not hold up:
  * it failed 2 of 7 robustness tests (Higher costs, Nearby settings)...".
  */
-export function verdictSentence(r: Pick<LabRunView, 'verdict' | 'survival_reports'>): string {
+export function verdictSentence(
+  r: Pick<LabRunView, 'verdict' | 'survival_reports' | 'robustness'>,
+): string {
   const total = r.survival_reports.length;
   const tests = total === 1 ? 'test' : 'tests';
-  if (r.verdict === 'pass') {
+  if (heldUp(r)) {
     return (
       `It held up: it passed ${total === 1 ? 'the' : `all ${total}`} robustness ${tests} ` +
       'on data the search never tuned on. That makes luck less likely, not impossible.'
@@ -39,6 +42,11 @@ export function verdictSentence(r: Pick<LabRunView, 'verdict' | 'survival_report
     `It did not hold up: it failed ${failed.length} of ${total} robustness ${tests} ` +
     `(${failed.join(', ')}). The good backtest may be luck or fitted to the past.`
   );
+}
+
+/** The run's status from the API's `robustness`, else from its verdict. */
+export function heldUp(r: Pick<LabRunView, 'verdict' | 'robustness'>): boolean {
+  return r.robustness ? r.robustness === 'survived' : r.verdict === 'pass';
 }
 
 function paramText(v: unknown): string {
@@ -62,12 +70,12 @@ function paramText(v: unknown): string {
     <div class="summary">
       <app-stat-tile
         class="verdict"
-        label="Robustness verdict"
+        label="Status"
         help="lab_verdict"
         featured
-        [value]="r.verdict === 'pass' ? 'Passed' : 'Failed'"
+        [value]="status().label"
         [detail]="passedText()"
-        [detailTone]="r.verdict === 'pass' ? 'gain' : 'loss'"
+        [detailTone]="held() ? 'gain' : 'loss'"
       />
       <app-stat-tile label="Best score" [value]="score()" [detail]="className()" />
       <app-stat-tile
@@ -84,7 +92,7 @@ function paramText(v: unknown): string {
       />
     </div>
 
-    <div class="plain" [class.failed]="r.verdict !== 'pass'" role="note">
+    <div class="plain" [class.failed]="!held()" role="note">
       <p class="plain-verdict">{{ verdictText() }}</p>
       <p class="muted">
         Trials are the settings the search tried. A trial only says a setting ran. The verdict comes
@@ -330,6 +338,11 @@ export class LabRunResultView {
 
   /** The verdict in one plain sentence, naming what failed. */
   protected readonly verdictText = computed(() => verdictSentence(this.result()));
+  /** The run's status in the Lab's words: Held up or Did not hold up. */
+  protected readonly held = computed(() => heldUp(this.result()));
+  protected readonly status = computed(() =>
+    robustnessWords(this.held() ? 'survived' : 'did_not_survive'),
+  );
 
   protected readonly params = computed(() =>
     Object.entries(this.result().best_params).map(([name, value]) => ({

@@ -43,7 +43,7 @@ import { BacktestFormView } from './backtest-form';
 import { BacktestResultView } from '../../shared/lab-results/backtest-result';
 import { LabRunFormView } from './lab-run-form';
 import { SimpleTestFormView } from './simple-test-form';
-import { LabRunResultView } from '../../shared/lab-results/lab-run-result';
+import { LabRunResultView, heldUp } from '../../shared/lab-results/lab-run-result';
 import { SignalIcResult } from '../../shared/lab-results/signal-ic-result';
 import { testLabel } from '../../shared/lab-results/survival-tests';
 import { type LabRunForm, SUITES, formFromRequest, strategyTitle } from './lab-requests';
@@ -79,7 +79,7 @@ export function nextStep(result: LabRunView): NextStep {
   if (result.registered_strategy_id) {
     return { kind: 'paper', strategyId: result.registered_strategy_id };
   }
-  if (result.verdict === 'pass') return { kind: 'passed' };
+  if (heldUp(result)) return { kind: 'passed' };
   return {
     kind: 'failed',
     failed: result.survival_reports.filter((r) => !r.passed).map((r) => testLabel(r.test_id)),

@@ -18,6 +18,7 @@ import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { ExportButton } from '../../shared/ui/export-button';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { robustnessWords } from '../../shared/lab-results/robustness';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { LabNav } from './lab-nav';
 import { strategyTitle } from './lab-requests';
@@ -129,12 +130,9 @@ export function scoreText(score: number | null | undefined): string {
                     when(r.started_at)
                   }}</a>
                 </ng-template>
-                <ng-template appCell="verdict" [appCellOf]="p.items" let-r>
-                  @if (r.verdict) {
-                    <app-status-pill [status]="r.verdict" />
-                  } @else {
-                    <span class="muted">Running or stopped</span>
-                  }
+                <ng-template appCell="robustness" [appCellOf]="p.items" let-r>
+                  @let w = robustness(r.robustness);
+                  <app-status-pill [status]="w.status" [label]="w.label" />
                 </ng-template>
               </app-data-table>
             }
@@ -158,6 +156,7 @@ export class LedgerPage {
 
   protected readonly pageSize = PAGE_SIZE;
   protected readonly key = (r: LedgerRunView) => r.id;
+  protected readonly robustness = robustnessWords;
   protected readonly when = (iso: string) => formatDateTime(iso);
 
   private readonly classes = resource({ loader: () => this.system.strategyClasses() });
@@ -207,7 +206,13 @@ export class LedgerPage {
       sortable: false,
       value: (r) => scoreText(r.best_score),
     },
-    { key: 'verdict', label: 'Robustness verdict', sortable: false, help: 'lab_verdict' },
+    {
+      key: 'robustness',
+      label: 'Status',
+      sortable: false,
+      help: 'lab_verdict',
+      value: (r) => robustnessWords(r.robustness).label,
+    },
   ];
 
   protected setClass(value: string): void {

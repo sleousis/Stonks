@@ -79,12 +79,19 @@ describe('LedgerPage', () => {
     expect(req.request.urlWithParams).toContain('limit=25');
     expect(req.request.urlWithParams).toContain('offset=0');
     expect(req.request.urlWithParams).not.toContain('strategy_class');
-    req.flush({ items: [run(1), run(2, { verdict: null })], total: 60, limit: 25, offset: 0 });
+    req.flush({
+      items: [run(1), run(2, { verdict: null, robustness: 'running' })],
+      total: 60,
+      limit: 25,
+      offset: 0,
+    });
     await settle();
     expect(el.textContent).toContain('60 runs');
     expect(el.textContent).toContain('Trends persist for a few weeks.');
     expect(el.textContent).toContain('0.81');
-    expect(el.textContent).toContain('Running or stopped');
+    // The run's status is its robustness, in the Lab's words.
+    expect(el.textContent).toContain('Did not hold up');
+    expect(el.textContent).toContain('Running');
     expect(el.querySelector('a[href="/lab/ledger/lab_1"]')).not.toBeNull();
     expect(el.textContent).toContain('more likely a good result is luck');
     expect(el.querySelector('nav[aria-label="Lab screens"] a[href="/lab/ledger"]')).not.toBeNull();
