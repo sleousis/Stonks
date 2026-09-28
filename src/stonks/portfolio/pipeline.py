@@ -172,6 +172,8 @@ class PipelineResult:
     reason: NoTradeReason | None = None
     #: Per ticker, each strategy's share of what this decision targeted.
     attribution: dict[str, dict[str, float]] = field(default_factory=dict)
+    #: The orders before the stale-price guard and the risk rules (23.7).
+    proposed: list[Order] = field(default_factory=list)
 
 
 def build_orders(
@@ -292,6 +294,7 @@ def _single_winner(
         decided_by=winner,
         winner_return=None if exit_only else picks[0][0],
         exit_only=exit_only,
+        proposed=list(proposed),
         # every opening order, long or short, is the winner's share (BE-50)
         attribution={o.ticker: {winner: 1.0} for o in orders if _opens(o, book.portfolio)},
     )
@@ -358,6 +361,7 @@ def _from_targets(
         adjustments=list(risk.adjustments),
         stale_buys=stale,
         attribution={t: dict(s) for t, s in target.attribution.items() if t in target.weights},
+        proposed=owned,
     )
 
 

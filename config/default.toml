@@ -154,6 +154,12 @@ min_window = 60
 ratio_low = 0.5
 ratio_high = 1.5
 
+[production.decisions]
+# Why did or didn't we trade (roadmap 23.7): per tick, book and ticker, the
+# step that kept a ticker out or trimmed it. Rows older than keep_days go.
+enabled = true
+keep_days = 120
+
 [production.decay]
 # Alpha decay per strategy sleeve: fires when the short-window IR stays
 # negative for negative_days, or the long-window IR falls below
