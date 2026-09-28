@@ -394,6 +394,24 @@ def test_an_open_session_bar_in_a_fetch_is_dropped_and_asked_again(lake):
     assert _stored(lake, "A.US").set_index("date").loc[day, "close"] == 12.0
 
 
+def test_an_open_session_is_asked_again_with_no_settle_days(lake):
+    # settle_days=0 records every fetched range at once: the day whose
+    # session was still open must not be recorded as fetched
+    day = date(2025, 7, 1)
+    served = bars("A.US", date(2025, 6, 23), date(2025, 6, 30)) + [_bar("A.US", day, 11.0)]
+    source = FakeListingSource(prices={"A.US": served})
+    settings = EnsureSettings(settle_days=0)
+    DataEnsurer(lake, source, settings, clock=_at(2025, 7, 1, 15)).ensure(
+        ["A.US"], date(2025, 6, 23), day
+    )
+    assert _stored(lake, "A.US")["date"].max() == date(2025, 6, 30)
+    served[-1] = _bar("A.US", day, 12.0)
+    DataEnsurer(lake, source, settings, clock=_at(2025, 7, 1, 21)).ensure(
+        ["A.US"], date(2025, 6, 23), day
+    )
+    assert _stored(lake, "A.US").set_index("date").loc[day, "close"] == 12.0
+
+
 def test_a_partial_bar_stored_by_hand_is_overwritten_by_the_next_fetch(lake):
     # a manual ingest at 11:00 ET stored 1 July with the 11:00 price
     seed_daily_bars(lake, "A.US", date(2025, 6, 2), date(2025, 6, 30))
