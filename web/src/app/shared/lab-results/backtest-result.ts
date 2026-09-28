@@ -249,7 +249,8 @@ export class BacktestResultView {
 
   protected readonly summary = computed(() => {
     const r = this.result();
-    const worst = Math.min(0, ...this.drawdowns());
+    // A loop, not Math.min(...): a minute backtest has more points than a call takes.
+    const worst = this.drawdowns().reduce((min, d) => (d < min ? d : min), 0);
     let text =
       `Equity from ${r.start} to ${r.end}: ${this.endValue()}, total return ` +
       `${formatPercent(r.final_return, { signed: true })}. Worst drawdown ${formatPercent(worst)}.`;
