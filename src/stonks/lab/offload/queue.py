@@ -24,6 +24,11 @@ from stonks.store.state import SqliteState
 
 WORKER_EXECUTOR = "worker"
 
+#: A job a worker without the server's artifacts can run: it names no
+#: registered strategy (``LabRunRequest.strategy.strategy_id``). Sweeps name
+#: catalog classes only.
+_PORTABLE_SQL = "json_extract(params_json, '$.strategy.strategy_id') IS NULL"
+
 Outcome = Literal["succeeded", "failed", "cancelled"]
 _OUTCOME_COLUMNS: dict[str, str] = {
     "succeeded": "jobs_succeeded",
@@ -67,24 +72,54 @@ class LabQueue:
 
     # ---- jobs ------------------------------------------------------------------
 
-    def claim_next(self, worker_id: str, kinds: Sequence[str]) -> str | None:
+    def claim_next(
+        self, worker_id: str, kinds: Sequence[str], *, portable_only: bool = False
+    ) -> str | None:
         """Move the oldest queued worker job of ``kinds`` to ``running`` for
-        ``worker_id``; its id, or ``None`` when nothing waits."""
+        ``worker_id``; its id, or ``None`` when nothing waits.
+
+        ``portable_only`` (a remote worker) skips jobs that name a registered
+        strategy: its artifact lives on the server, not on the worker."""
         wanted = sorted(set(kinds))
         if not wanted:
             return None
         marks = ", ".join("?" * len(wanted))
+        portable = f" AND {_PORTABLE_SQL}" if portable_only else ""
         now = self._now()
         with self._state() as s:
             rows = s.sql(
                 "UPDATE jobs SET status='running', started_at=?, worker_id=?, heartbeat_at=? "
                 "WHERE status='queued' AND id = ("
                 "  SELECT id FROM jobs WHERE executor=? AND status='queued'"
-                f"  AND kind IN ({marks}) ORDER BY created_at, rowid LIMIT 1"
+                f"  AND kind IN ({marks}){portable} ORDER BY created_at, rowid LIMIT 1"
                 ") RETURNING id",
                 [now, worker_id, now, WORKER_EXECUTOR, *wanted],
             )
         return str(rows[0]["id"]) if rows else None
+
+    def is_running_on(self, job_id: str, worker_id: str) -> bool:
+        """True while ``job_id`` is a running worker job claimed by ``worker_id``."""
+        with self._state() as s:
+            rows = s.sql(
+                "SELECT 1 FROM jobs WHERE id=? AND worker_id=? AND executor=? AND status='running'",
+                [job_id, worker_id, WORKER_EXECUTOR],
+            )
+        return bool(rows)
+
+    def release(self, job_id: str, worker_id: str) -> bool:
+        """Hand a running job back to the queue because ``worker_id`` is
+        shutting down (a remote worker, whose job row never left
+        ``running`` here). False when the job is not that worker's running
+        job, or a user asked to cancel it (then it ends ``cancelled``)."""
+        with self._state() as s:
+            cur = s.execute(
+                "UPDATE jobs SET status='queued', started_at=NULL, worker_id=NULL, "
+                "heartbeat_at=NULL, progress=0, progress_message=NULL "
+                "WHERE id=? AND worker_id=? AND executor=? AND status='running' "
+                "AND cancel_requested_at IS NULL",
+                [job_id, worker_id, WORKER_EXECUTOR],
+            )
+            return cur.rowcount == 1
 
     def heartbeat(self, job_id: str, worker_id: str) -> None:
         with self._state() as s:
