@@ -70,6 +70,9 @@ class InnerStrategyWrapper(BaseStrategy):
     """Base for wrappers; subclasses set ``id_suffix`` and add behavior."""
 
     id_suffix: ClassVar[str] = "wrapped"
+    #: The wrapper's own logic only handles long trades: it never shorts,
+    #: whatever its inner strategy does.
+    long_only: ClassVar[bool] = False
     # Instances mirror their inner strategy; the class default admits all.
     applicable_asset_classes: tuple[AssetClass, ...] = get_args(AssetClass)
 
@@ -90,8 +93,11 @@ class InnerStrategyWrapper(BaseStrategy):
         self.applicable_asset_classes = tuple(
             getattr(inner, "applicable_asset_classes", ("equity",))
         )
-        # BE-14: a wrapper shorts exactly when its inner strategy does
-        self.supports_short = bool(getattr(inner, "supports_short", False))
+        # BE-14: a wrapper shorts exactly when its inner strategy does,
+        # unless its own logic is long-only
+        self.supports_short = not type(self).long_only and bool(
+            getattr(inner, "supports_short", False)
+        )
         # RS-02: the embargo, walk-forward and the preflight read these from
         # the wrapper, so they must cover what the inner strategy needs.
         cls = type(self)
