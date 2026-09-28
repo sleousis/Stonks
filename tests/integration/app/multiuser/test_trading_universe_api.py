@@ -74,3 +74,14 @@ def test_a_trader_cannot_rewrite_the_index_the_trading_universe_follows(client, 
         headers=people["alice"]["headers"],
     )
     assert other.status_code == 200, other.text
+
+
+def test_a_trader_cannot_create_the_trading_universe_while_it_is_missing(client, people):
+    # the setting may name a universe that does not exist yet (or was deleted)
+    alice = people["alice"]["headers"]
+    body = {"id": TRADING, "kind": "list", "spec": {"tickers": ["DOWN.US"]}}
+    assert client.post("/api/universes", json=body, headers=alice).status_code == 403
+    screen = {"universe_id": TRADING, "spec": {}, "refresh": False}
+    resp = client.post("/api/screener/universes", json=screen, headers=alice)
+    assert resp.status_code == 403, resp.text
+    assert client.get(f"/api/universes/{TRADING}", headers=alice).status_code == 404

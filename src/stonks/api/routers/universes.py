@@ -49,7 +49,7 @@ def _trading_universe(services: ServicesDep) -> str | None:
     return universe if isinstance(universe, str) else None
 
 
-def _guard_trading(services: ServicesDep, principal: Principal, universe_id: str) -> None:
+def guard_trading_universe(services: ServicesDep, principal: Principal, universe_id: str) -> None:
     """The trading universe decides what every book buys. Changing it is an
     admin setting, so changing its definition is admin work too."""
     if universe_id == _trading_universe(services):
@@ -82,9 +82,12 @@ def list_universes(services: ServicesDep, page: PageDep) -> Page[UniverseView]:
     operation_id="createUniverse",
     dependencies=_lab,
 )
-def create_universe(body: UniverseCreate, services: ServicesDep) -> UniverseView:
+def create_universe(
+    body: UniverseCreate, services: ServicesDep, principal: PrincipalDep
+) -> UniverseView:
     """Store a universe definition (409 when the id exists). It has no
     members until its first refresh."""
+    guard_trading_universe(services, principal, body.id)
     return services.universes.create(body)
 
 
@@ -150,7 +153,7 @@ def update_universe(
     """Replace the definition. The members stay as they are until the next
     refresh. The trading universe (``[production].universe``) needs
     ``strategy.promote``."""
-    _guard_trading(services, principal, universe_id)
+    guard_trading_universe(services, principal, universe_id)
     return services.universes.update(universe_id, body)
 
 

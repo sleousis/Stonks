@@ -11,6 +11,7 @@ from fastapi import APIRouter, Path, Response
 from stonks.api.deps import PageDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
+from stonks.api.routers.universes import guard_trading_universe
 from stonks.app.jobs import Job
 from stonks.app.pagination import Page, page_of
 from stonks.app.screener import (
@@ -161,4 +162,5 @@ def save_as_universe(
     """Store a screen as a universe (409 when the id exists) and queue its
     refresh. Rule mode reruns the screen at each rebalance date, so the
     lab sees who passed on each day. Snapshot mode stores today's matches."""
+    guard_trading_universe(services, principal, body.universe_id)
     return services.screener.to_universe(principal, body)
