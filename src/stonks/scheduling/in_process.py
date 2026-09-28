@@ -262,6 +262,7 @@ def start_in_process_scheduler(
         config=config,
         pinger=HttpPinger(timeout_seconds=config.ping_timeout_seconds),
         executor=executor,
+        settings_provider=_context_settings(services),
     )
     thread = threading.Thread(
         target=scheduler.run_forever,
@@ -280,6 +281,15 @@ def start_in_process_scheduler(
     from stonks.scheduling.delivery import start_delivery_worker
 
     return SchedulerHandle(scheduler, thread, lock, delivery=start_delivery_worker(settings))
+
+
+def _context_settings(services: Any) -> Any:
+    """The server's effective settings (console overrides re-read every
+    few seconds), or ``None`` for a container without an app context."""
+    context = getattr(services, "context", None)
+    if context is None:
+        return None
+    return lambda: context.settings
 
 
 @IN_PROCESS_ACTIONS.register("backup")

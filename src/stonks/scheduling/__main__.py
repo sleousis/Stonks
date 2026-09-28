@@ -41,6 +41,8 @@ class _Loaded:
     config: SchedulerConfig
     executor: JobExecutor
     specs: list[JobSpec]
+    #: The TOML and env settings, without the console overrides.
+    base: Any = None
 
 
 def _load(config_path: Path | None, transport: Any = None) -> _Loaded:
@@ -53,12 +55,13 @@ def _load(config_path: Path | None, transport: Any = None) -> _Loaded:
     load_dotenv(override=False)
     from stonks.config_overrides import with_overrides
 
-    settings = with_overrides(load_settings(config_path))
+    base = load_settings(config_path)
+    settings = with_overrides(base)
     configure_logging(level=settings.logging.level)
     config = scheduler_config_from(settings, config_path)
     executor = build_executor(config, transport=transport)
     specs = build_job_specs(config, actions=executor.actions())
-    return _Loaded(settings, config, executor, specs)
+    return _Loaded(settings, config, executor, specs, base)
 
 
 def _store(settings: Any) -> RunStore:
@@ -81,9 +84,11 @@ def _watchdog(ld: _Loaded, store: RunStore, notifier: Any) -> Any:
 
 
 def _scheduler(ld: _Loaded, store: RunStore, notifier: Any) -> Any:
+    from stonks.config_overrides import with_overrides
     from stonks.scheduling.deadman import HttpPinger
     from stonks.scheduling.scheduler import Scheduler
 
+    base = ld.base if ld.base is not None else ld.settings
     return Scheduler(
         ld.specs,
         store,
@@ -92,6 +97,8 @@ def _scheduler(ld: _Loaded, store: RunStore, notifier: Any) -> Any:
         config=ld.config,
         pinger=HttpPinger(timeout_seconds=ld.config.ping_timeout_seconds),
         executor=ld.executor,
+        # next_run overrides written in the console apply from the next job
+        settings_provider=lambda: with_overrides(base),
     )
 
 

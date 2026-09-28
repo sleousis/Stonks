@@ -135,10 +135,15 @@ class Scheduler:
         clock: Clock | None = None,
         instance_id: str | None = None,
         executor: JobExecutor | None = None,
+        settings_provider: Callable[[], Any] | None = None,
     ) -> None:
+        """``settings_provider`` returns the settings each run gets (the
+        base with the console overrides as they are now), so ``next_run``
+        overrides apply without a restart; ``settings`` is the fallback."""
         self.specs = list(specs)
         self.store = store
         self.settings = settings
+        self._settings_provider = settings_provider
         self.notifier = notifier
         self.config = config or SchedulerConfig()
         self.pinger = pinger or NullPinger()
@@ -325,7 +330,7 @@ class Scheduler:
             fire=fire,
             run_id=run_id,
             now=now,
-            settings=self.settings,
+            settings=self._current_settings(log),
             notifier=self.notifier,
             executor=self.executor,
         )
@@ -334,6 +339,15 @@ class Scheduler:
         except Exception as exc:
             log.error("scheduler.run_raised", error=str(exc), error_type=type(exc).__name__)
             return JobOutcome("failed", {"error": f"{type(exc).__name__}: {exc}"})
+
+    def _current_settings(self, log: Any) -> Any:
+        if self._settings_provider is None:
+            return self.settings
+        try:
+            return self._settings_provider()
+        except Exception as exc:  # a locked state DB must not fail the job
+            log.warning("scheduler.settings_unreadable", error=str(exc))
+            return self.settings
 
     # ---- the loop ----------------------------------------------------------
 
