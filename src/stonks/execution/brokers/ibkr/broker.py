@@ -22,8 +22,8 @@ Safety, in the order every call meets it (:meth:`IbkrBroker.ensure_ready`):
 4. calls that change orders also need ``allow_live`` on a live gateway;
 5. an order that may open a position at a live gateway also needs the
    portfolio's live stage (``stage_lookup``) at ``live_small`` or higher
-   (roadmap 19.9). Closes and cancels still go out at a lower stage, so a
-   demoted book can wind down (P28).
+   (roadmap 19.9). Closes (covers of shorts too) and cancels still go out
+   at a lower stage, so a demoted book can wind down (P28).
 
 Idempotency: IBKR does not dedupe on ``orderRef``, so :meth:`place_order`
 first looks the client id up (open orders, completed orders, executions)
@@ -293,8 +293,11 @@ class IbkrBroker:
     def _ensure_stage_allows(self, order: Order) -> None:
         """At a live gateway an order that may open needs the portfolio at
         ``live_small`` or higher. A close (a sell that does not open a
-        short) goes out at any stage."""
-        if self.mode != "live" or (order.side == "sell" and order.position_effect != "open"):
+        short, or a buy marked as covering one) goes out at any stage."""
+        closes = order.position_effect == "close" or (
+            order.side == "sell" and order.position_effect != "open"
+        )
+        if self.mode != "live" or closes:
             return
         try:
             stage = self._stage_lookup() if self._stage_lookup is not None else None
