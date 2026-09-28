@@ -119,6 +119,11 @@ describe('HealthPage', () => {
     expect(overall.textContent).toContain('API 1.2.3');
   });
 
+  it('shows the price check panel once', async () => {
+    await flushAll();
+    expect(el.querySelectorAll('app-price-check-panel').length).toBe(1);
+  });
+
   it('lists freshness per ticker, worst first', async () => {
     await flushAll();
     const text = el.querySelector('[aria-labelledby="fresh-title"]')!.textContent!;
