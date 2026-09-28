@@ -75,6 +75,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_strategy`](#get_strategy) | read | no |
 | [`get_strategy_agreement`](#get_strategy_agreement) | read | no |
 | [`get_strategy_history`](#get_strategy_history) | read | no |
+| [`get_stream_status`](#get_stream_status) | read | no |
 | [`get_studio_capabilities`](#get_studio_capabilities) | read | no |
 | [`get_tax_settings`](#get_tax_settings) | read | no |
 | [`get_tca_summary`](#get_tca_summary) | read | no |
@@ -98,6 +99,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_fills`](#list_fills) | read | no |
 | [`list_halts`](#list_halts) | read | no |
 | [`list_ingest_runs`](#list_ingest_runs) | read | no |
+| [`list_intraday_snapshots`](#list_intraday_snapshots) | read | no |
 | [`list_jobs`](#list_jobs) | read | no |
 | [`list_ledger_runs`](#list_ledger_runs) | read | no |
 | [`list_model_candidates`](#list_model_candidates) | read | no |
@@ -748,6 +750,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
 
+### `get_stream_status`
+
+The live intraday engine: live or not, its market, the dead-man
+(`silent` after no bar close for `deadman_minutes` in market hours), the
+stream (connected, last event age, bars built, late ticks), dispatch lag
+and event to order latency. `engines` is empty until an engine runs.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
 ### `get_studio_capabilities`
 
 What the Studio allows on this server: whether code drafts are allowed (an operator setting MCP cannot change) and the draft kinds you can create.
@@ -992,6 +1005,25 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `status` | string \| null | no | `null` |  |
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
+
+### `list_intraday_snapshots`
+
+Intraday P&L and risk snapshots of one of your portfolios for one
+day, newest first, one every few minutes of the session: realised
+and unrealised P&L from live marks, fees, the day's return, the
+drawdown from the day's high, gross and net exposure, and how many
+held names had a stale or missing mark.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` |  |
+| `day` | string \| null | no | `null` | YYYY-MM-DD; default the latest day with rows |
+| `strategy_id` | string \| null | no | `null` | one strategy's sleeve; default the whole portfolio |
+| `all_books` | boolean | no | `false` | every book: the whole portfolio and each sleeve |
+| `limit` | integer | no | `50` |  |
+| `offset` | integer | no | `0` |  |
 
 ### `list_jobs`
 

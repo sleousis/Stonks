@@ -5,9 +5,9 @@ import { provideRouter } from '@angular/router';
 import type { StreamStatusView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { StreamService } from '../../api/stream.service';
-import { nextRequest, tick } from '../../../testing/http';
+import { nextRequest, page, tick } from '../../../testing/http';
 import { LivePage } from './live.page';
-import { engine, status } from './live-test-fixtures';
+import { engine, pnlRow, status, statusWithPnl } from './live-test-fixtures';
 
 describe('LivePage', () => {
   let fixture: ComponentFixture<LivePage>;
@@ -79,12 +79,37 @@ describe('LivePage', () => {
     expect(el.textContent).toContain('Intraday trading is off');
   });
 
-  it('shows the intraday P&L note while live marks are missing', async () => {
+  it('says when intraday P&L is not kept, and reads no rows', async () => {
     const el = await render(status());
     const pnl = el.querySelector('.pnl')!;
     expect(pnl.querySelector('h2')!.textContent).toContain('Intraday P&L by portfolio');
-    expect(pnl.textContent).toContain('21.3.3');
+    expect(pnl.textContent).toContain('not kept');
+    expect(pnl.querySelector('.pnl-line')).toBeNull();
     expect(el.querySelector('.footnote')!.textContent).toContain('5 minutes');
+  });
+
+  it('shows the latest intraday P&L of the default portfolio', async () => {
+    const el = await render(statusWithPnl());
+    const req = await nextRequest(http, '/api/risk/intraday');
+    expect(req.request.urlWithParams).toContain('limit=1');
+    expect(req.request.urlWithParams).not.toContain('portfolio_id');
+    req.flush(page([pnlRow({ stale_marks: 1, unmarked: 1 })]));
+    await tick();
+    fixture.detectChanges();
+    const line = el.querySelector('.pnl-line')!;
+    expect(line.querySelector('h3')!.textContent).toContain('Your portfolio');
+    expect(line.textContent).toContain('+1.25%');
+    expect(line.textContent).toContain('-0.25%');
+    expect(line.textContent).toContain('1,250');
+    expect(line.querySelector('.problem')!.textContent).toContain('2 held names');
+  });
+
+  it('says when a portfolio has no intraday rows yet', async () => {
+    const el = await render(statusWithPnl());
+    (await nextRequest(http, '/api/risk/intraday')).flush(page([]));
+    await tick();
+    fixture.detectChanges();
+    expect(el.querySelector('.pnl-line')!.textContent).toContain('No intraday rows yet');
   });
 
   it('labels each engine section by its heading', async () => {

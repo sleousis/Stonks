@@ -5,8 +5,9 @@ The engine runs in its own process and writes its ``engine_status`` row
 person needs to judge it: is the engine live, is its market open, is the
 dead-man about to fire, how is the stream, how fast does it decide.
 
-Intraday P&L per book comes with roadmap 21.3.3. Until that route exists,
-the view says so in ``intraday_pnl``.
+``intraday_pnl`` says whether intraday P&L rows are kept (roadmap 21.3.3,
+``[production.intraday_pnl]``). The rows themselves are per portfolio and
+come from ``GET /api/risk/intraday``, scoped to the caller's portfolios.
 """
 
 from __future__ import annotations
@@ -87,7 +88,10 @@ class EngineView(BaseModel):
 
 
 class IntradayPnlView(BaseModel):
+    #: ``[production.intraday_pnl] enabled`` and the snapshot table exists.
     available: bool
+    #: Minutes between stored rows per book.
+    snapshot_minutes: int
     note: str
 
 
@@ -101,8 +105,12 @@ class StreamStatusView(BaseModel):
     intraday_pnl: IntradayPnlView
 
 
-INTRADAY_PNL_NOTE = (
-    "Intraday P&L per book arrives with live marks (roadmap 21.3.3). "
+INTRADAY_PNL_ON = (
+    "Intraday P&L per portfolio from the engine's live marks, stored every {minutes} minutes. "
+    "Daily P&L stays on the portfolio pages."
+)
+INTRADAY_PNL_OFF = (
+    "Intraday P&L is not kept on this server, so there is nothing to show here. "
     "Daily P&L stays on the portfolio pages."
 )
 
@@ -248,5 +256,18 @@ class StreamService:
             deadman_minutes=monitor.deadman_minutes,
             stale_after_seconds=monitor.stale_after_seconds,
             engines=engines,
-            intraday_pnl=IntradayPnlView(available=False, note=INTRADAY_PNL_NOTE),
+            intraday_pnl=self._pnl_view(),
+        )
+
+    def _pnl_view(self) -> IntradayPnlView:
+        from stonks.production.intraday_pnl import intraday_snapshots_enabled
+
+        cfg = self._ctx.settings.production.intraday_pnl
+        with self._ctx.state() as state:
+            available = cfg.enabled and intraday_snapshots_enabled(state)
+        note = (
+            INTRADAY_PNL_ON.format(minutes=cfg.snapshot_minutes) if available else INTRADAY_PNL_OFF
+        )
+        return IntradayPnlView(
+            available=available, snapshot_minutes=cfg.snapshot_minutes, note=note
         )

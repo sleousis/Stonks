@@ -1,4 +1,9 @@
-import type { EngineView, LatencyView, StreamHealthView } from '../../api/models';
+import type {
+  EngineView,
+  IntradaySnapshotView,
+  LatencyView,
+  StreamHealthView,
+} from '../../api/models';
 import type { PillTone } from '../../shared/ui/status-pill';
 
 /** How an engine stands, in words and a tone, never colour alone. */
@@ -104,4 +109,22 @@ export function errorLines(errors: Record<string, number>): { name: string; coun
   return Object.entries(errors)
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+/** One portfolio's line on the Live page: its latest intraday P&L row. */
+export interface PnlLine {
+  id: string;
+  name: string;
+  row: IntradaySnapshotView | null;
+  /** The read failed (a network error): the line says so, the others still show. */
+  failed: boolean;
+}
+
+/** "2 held names have old or missing prices", or null when every mark is fresh. */
+export function staleMarksText(row: IntradaySnapshotView): string | null {
+  const n = row.stale_marks + row.unmarked;
+  if (n === 0) return null;
+  return n === 1
+    ? '1 held name has an old or missing price'
+    : `${n} held names have old or missing prices`;
 }

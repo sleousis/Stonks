@@ -181,6 +181,62 @@
       <h2 id="pnl-title">Intraday P&amp;L by portfolio</h2>
     </div>
     <p class="note">{{ status.value().intraday_pnl.note }}</p>
+    @if (status.value().intraday_pnl.available) {
+      @if (pnl.error(); as err) {
+        <app-error-state
+          title="Could not load intraday P&amp;L"
+          [error]="err"
+          (retry)="pnl.reload()"
+        />
+      } @else if (!pnl.hasValue()) {
+        <app-loading-state label="Loading intraday P&amp;L" [rows]="2" />
+      } @else {
+        <ul class="pnl-list" aria-label="Intraday P&amp;L by portfolio">
+          @for (line of pnl.value(); track line.id) {
+            <li class="pnl-line">
+              <h3>{{ line.name }}</h3>
+              @if (line.failed) {
+                <p class="muted">Could not read this portfolio.</p>
+              } @else if (line.row; as row) {
+                <dl class="facts">
+                  <div>
+                    <dt>P&amp;L today</dt>
+                    <dd class="num" [class]="tone(row.pnl)">{{ money(row.pnl) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Return today</dt>
+                    <dd class="num" [class]="tone(row.day_return)">
+                      {{ percent(row.day_return) }}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Down from the day's high</dt>
+                    <dd class="num">{{ percent(row.drawdown) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Gross exposure</dt>
+                    <dd class="num">{{ plainMoney(row.gross_exposure) }}</dd>
+                  </div>
+                  <div>
+                    <dt>Fills today</dt>
+                    <dd class="num">{{ count(row.fills) }}</dd>
+                  </div>
+                  <div>
+                    <dt>As of</dt>
+                    <dd>{{ when(row.at) }}</dd>
+                  </div>
+                </dl>
+                @if (stale(row); as warning) {
+                  <p class="problem" role="note">{{ warning }}</p>
+                }
+              } @else {
+                <p class="muted">No intraday rows yet.</p>
+              }
+            </li>
+          }
+        </ul>
+      }
+    }
   </section>
 
   <p class="muted footnote">

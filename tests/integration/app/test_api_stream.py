@@ -40,7 +40,16 @@ def test_status_with_no_engine(client):
     assert body["streaming_enabled"] is False
     assert body["deadman_minutes"] == 5
     assert body["intraday_pnl"]["available"] is False
-    assert "21.3.3" in body["intraday_pnl"]["note"]
+    assert "not kept" in body["intraday_pnl"]["note"]
+
+
+def test_status_says_when_intraday_pnl_is_kept(client, settings):
+    settings.production.intraday_pnl.enabled = True
+    settings.production.intraday_pnl.snapshot_minutes = 10
+    pnl = client.get("/api/stream/status", headers=AUTH).json()["intraday_pnl"]
+    assert pnl["available"] is True
+    assert pnl["snapshot_minutes"] == 10
+    assert "every 10 minutes" in pnl["note"]
 
 
 def test_status_reads_the_engine_row(client, settings):
