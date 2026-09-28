@@ -67,6 +67,17 @@ describe('strategyVerdict (F33)', () => {
     expect(v.reasons[0]).toContain('worst drop on trial');
   });
 
+  it('treats a check with no figures as missing data, never a bad sign', () => {
+    const v = strategyVerdict({
+      status: 'active',
+      golive: report([check('max_drift', false), check('quit_rule', false)]),
+      trial: null,
+    });
+    expect(v.level).toBe('promising');
+    expect(v.reasons.join(' ')).not.toContain('–');
+    expect(v.reasons).toContain('Its trial return cannot be compared with its backtest yet.');
+  });
+
   it('holds back a passed check while the trial is losing money', () => {
     const v = strategyVerdict({
       status: 'active',

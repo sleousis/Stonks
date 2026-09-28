@@ -146,5 +146,9 @@ describe('governance labels', () => {
       '3 days on trial on the test book',
     );
     expect(toTraderWords("run the 'promotion' preset")).toBe('run the full robustness tests');
+    expect(toTraderWords('Paper trading, measured on its paper trading results')).toBe(
+      'On trial, measured on its trial results',
+    );
+    expect(toTraderWords('0 paper trades filled')).toBe('0 trial trades filled');
   });
 });

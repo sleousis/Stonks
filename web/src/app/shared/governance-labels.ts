@@ -78,6 +78,11 @@ export function toTraderWords(text: string): string {
     .replace(/\bnot active\b/gi, 'not approved yet')
     .replace(/\b(model|shadow|paper) book\b/gi, 'test book')
     .replace(/\b(days?) of paper trading\b/gi, '$1 on trial')
+    .replace(/\bpaper trading results\b/gi, 'trial results')
+    .replace(/\bpaper trades\b/gi, 'trial trades')
+    .replace(/^paper trading, measured\b/i, 'On trial, measured')
+    .replace(/\bfull test suite\b/gi, 'full robustness tests')
+    .replace(/\bauto mode\b/gi, 'Automatic')
     .replace(/\bin shadow\b/gi, 'on trial')
     .replace(/\bshadow\b/gi, 'on trial');
 }

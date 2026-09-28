@@ -12,6 +12,9 @@ export const VERDICT_PILL: Readonly<Record<VerdictLevel, 'pass' | 'warn' | 'fail
 
 let nextId = 0;
 
+/** Reasons shown before the rest fold under Details. */
+export const REASONS_SHOWN = 4;
+
 /**
  * One plain verdict for a strategy (F33): the headline, the reasons in plain
  * sentences, and the quant figures folded under "Details" (projected with a
@@ -38,15 +41,29 @@ let nextId = 0;
         </h2>
         @if (verdict().reasons.length) {
           <ul class="reasons">
-            @for (r of verdict().reasons; track $index) {
+            @for (r of firstReasons(); track $index) {
               <li>{{ r }}</li>
             }
           </ul>
         }
-        @if (details()) {
+        @if (details() || moreReasons().length) {
           <details class="details">
-            <summary>Details</summary>
-            <div class="details-body"><ng-content select="[details]" /></div>
+            <summary>
+              Details
+              @if (moreReasons().length) {
+                <span class="more">({{ moreReasons().length }} more reasons)</span>
+              }
+            </summary>
+            <div class="details-body">
+              @if (moreReasons().length) {
+                <ul class="reasons">
+                  @for (r of moreReasons(); track $index) {
+                    <li>{{ r }}</li>
+                  }
+                </ul>
+              }
+              <ng-content select="[details]" />
+            </div>
           </details>
         }
       </section>
@@ -59,6 +76,12 @@ let nextId = 0;
     }
     :host(.compact) {
       display: inline-flex;
+      max-width: 100%;
+    }
+    /* A long verdict wraps in a narrow table cell instead of clipping. */
+    :host(.compact) app-status-pill {
+      white-space: normal;
+      align-items: flex-start;
     }
     .verdict {
       display: grid;
@@ -104,7 +127,14 @@ let nextId = 0;
       font-weight: var(--weight-semibold);
     }
     .details-body {
+      display: grid;
+      gap: var(--space-2);
       padding-top: var(--space-2);
+    }
+    .more {
+      margin-left: var(--space-1);
+      color: var(--color-ink-3);
+      font-weight: var(--weight-regular);
     }
   `,
 })
@@ -119,4 +149,7 @@ export class StrategyVerdict {
 
   protected readonly id = `verdict-${nextId++}`;
   protected readonly pill = computed(() => VERDICT_PILL[this.verdict().level]);
+  /** The most important reasons stay in view; the rest fold under Details. */
+  protected readonly firstReasons = computed(() => this.verdict().reasons.slice(0, REASONS_SHOWN));
+  protected readonly moreReasons = computed(() => this.verdict().reasons.slice(REASONS_SHOWN));
 }

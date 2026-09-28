@@ -23,7 +23,7 @@ import { StrategyVerdict } from '../../shared/ui/strategy-verdict';
 type SortKey = NonNullable<NonNullable<GetLeaderboardData['query']>['sort']>;
 
 export const SORTS: readonly { id: SortKey; label: string }[] = [
-  { id: 'sharpe', label: 'Return for the risk taken (Sharpe)' },
+  { id: 'sharpe', label: 'Risk-adjusted (Sharpe)' },
   { id: 'return', label: 'Total return' },
   { id: 'drawdown', label: 'Smallest drop' },
   { id: 'trades', label: 'Most trades' },

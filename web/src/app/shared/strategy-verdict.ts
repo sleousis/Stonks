@@ -64,27 +64,53 @@ function pct(v: number | null | undefined, signed = false): string {
   return formatPercent(v === 0 ? 0 : v, { signed });
 }
 
+/** Both figures are known, so a sentence can quote them. */
+function measured(c: GoLiveCheckView): boolean {
+  return c.value != null && c.limit != null;
+}
+
+/**
+ * A failing check that shows the strategy did badly. One without figures
+ * only says there is no data yet, so it counts as "needs more data".
+ */
+export function isBadSign(c: GoLiveCheckView): boolean {
+  return !c.passed && BAD_SIGNS.has(c.name) && measured(c);
+}
+
 /** Why one failing check matters, in one plain sentence. */
 export function failReason(c: GoLiveCheckView): string {
+  const known = measured(c);
   switch (c.name) {
     case 'status':
       return 'It is not on trial, so it has no trial record.';
     case 'min_days':
-      return `It has ${count(c.value)} of the ${count(c.limit)} trial days it needs.`;
+      return known
+        ? `It has ${count(c.value)} of the ${count(c.limit)} trial days it needs.`
+        : 'It has no trial days yet.';
     case 'min_trades':
-      return `It made ${count(c.value)} of the ${count(c.limit)} trial trades it needs.`;
+      return known
+        ? `It made ${count(c.value)} of the ${count(c.limit)} trial trades it needs.`
+        : 'It has made no trial trades yet.';
     case 'max_drawdown':
-      return `Its worst drop on trial, ${pct(c.value)}, is deeper than the ${pct(c.limit)} allowed.`;
+      return known
+        ? `Its worst drop on trial, ${pct(c.value)}, is deeper than the ${pct(c.limit)} allowed.`
+        : 'Its worst drop on trial is not known yet.';
     case 'max_drift':
-      return `Its trial return is ${pct(c.value, true)} away from what its backtest expects, more than the ${pct(c.limit)} allowed.`;
+      return known
+        ? `Its trial return is ${pct(c.value, true)} away from what its backtest expects, more than the ${pct(c.limit)} allowed.`
+        : 'Its trial return cannot be compared with its backtest yet.';
     case 'survival':
-      return c.value != null && c.limit != null
+      return known
         ? `It passed ${count(c.value)} of ${count(c.limit)} robustness tests. It needs to pass all of them.`
-        : 'It did not pass every robustness test.';
+        : 'No robustness tests are on record.';
     case 'within_mc_band':
-      return 'Its drop on trial is worse than its backtest says is likely.';
+      return known
+        ? 'Its drop on trial is worse than its backtest says is likely.'
+        : 'There is not enough trial data to compare its drops with its backtest.';
     case 'quit_rule':
-      return 'Its drop on trial reached the point where the plan says to stop it.';
+      return known
+        ? 'Its drop on trial reached the point where the plan says to stop it.'
+        : 'There is not enough trial data to check its drops against the plan.';
     case 'promotion_preset':
       return 'The full robustness tests have not run yet.';
     case 'nonzero_costs':
@@ -92,7 +118,9 @@ export function failReason(c: GoLiveCheckView): string {
     case 'hypothesis_recorded':
       return 'Nobody has written down why it should work.';
     case 'backtest_min_trades':
-      return `Its backtest closed ${count(c.value)} trades, fewer than the ${count(c.limit)} needed to trust it.`;
+      return known
+        ? `Its backtest closed ${count(c.value)} trades, fewer than the ${count(c.limit)} needed to trust it.`
+        : 'Its backtest has no closed trades on record.';
   }
   return c.detail;
 }
@@ -123,8 +151,8 @@ export function strategyVerdict(input: VerdictInput): Verdict {
 
   if (g) {
     const failing = g.checks.filter((c) => !c.passed && c.name !== 'status');
-    const bad = failing.filter((c) => BAD_SIGNS.has(c.name));
-    const young = failing.filter((c) => !BAD_SIGNS.has(c.name));
+    const bad = failing.filter(isBadSign);
+    const young = failing.filter((c) => !isBadSign(c));
     if (bad.length) {
       return verdict('not_yet', [
         ...bad.map(failReason),
