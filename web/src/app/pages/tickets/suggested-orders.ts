@@ -289,7 +289,10 @@ export class SuggestedOrders {
   }
 
   protected async approve(d: OrderDraftView): Promise<void> {
-    const live = this.isLive(d);
+    // A portfolio missing from the list (not loaded, failed) may trade real
+    // money: ask as for real money rather than confirm it as paper.
+    const known = this.ctx.options().some((p) => p.id === d.portfolio_id);
+    const live = known ? this.isLive(d) : true;
     const ok = await this.stepUp.ensure(`Approve the order for ${d.ticker}.`);
     if (!ok) return;
     const confirmed = await this.confirm.confirm({

@@ -174,6 +174,23 @@ describe('SuggestedOrders', () => {
     expect(el.querySelector('.failure')?.textContent).toContain('Not placed');
   });
 
+  it('asks as for real money when the portfolio is not in the list', async () => {
+    // The list failed to load, or the draft's portfolio is missing from it:
+    // never confirm a possibly real-money order as paper.
+    setup();
+    const el = await render([draft({ portfolio_id: 'pf_unknown' })]);
+    button(el, 'Approve').click();
+    const req = await nextRequest(http, '/api/orders/drafts/od_1/approve', 'POST');
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typedConfirmation: 'AAA.US',
+        ticket: expect.objectContaining({ live: true }),
+      }),
+    );
+    req.flush({}, { status: 409, statusText: 'Conflict' });
+    await settle();
+  });
+
   it('does nothing without the code', async () => {
     setup();
     const el = await render([draft()]);
