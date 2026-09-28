@@ -36,7 +36,7 @@ describe('ConnectionDetailPage', () => {
     return [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === text);
   }
 
-  async function setUp(allowed = true): Promise<void> {
+  async function setUp(allowed = true, accountsFail = false): Promise<void> {
     confirm = vi.fn().mockResolvedValue(true);
     TestBed.configureTestingModule({
       providers: [
@@ -60,12 +60,20 @@ describe('ConnectionDetailPage', () => {
     (await nextRequest(http, '/api/connections/con_1')).flush(
       connection({ last_sync_at: new Date().toISOString(), last_sync_status: 'ok' }),
     );
-    (await nextRequest(http, '/api/connections/con_1/accounts')).flush(
-      page([
-        account(),
-        account({ external_account_id: 'acc_2', name: 'IRA', portfolio_id: 'pf_broker' }),
-      ]),
-    );
+    const accounts = await nextRequest(http, '/api/connections/con_1/accounts');
+    if (accountsFail) {
+      accounts.flush(
+        { title: 'Server error', status: 500, detail: 'broker store is busy' },
+        { status: 500, statusText: 'Server Error' },
+      );
+    } else {
+      accounts.flush(
+        page([
+          account(),
+          account({ external_account_id: 'acc_2', name: 'IRA', portfolio_id: 'pf_broker' }),
+        ]),
+      );
+    }
     await settle();
   }
 
@@ -201,6 +209,20 @@ describe('ConnectionDetailPage', () => {
     expect(options.ticket.lines).toContainEqual({ label: 'IRA', value: 'Alpaca mirror (live)' });
     expect(options.message).toContain('Alpaca mirror');
     expect(options.message).toContain('archives');
+  });
+
+  it('never says no portfolio is linked when the accounts could not be read', async () => {
+    await setUp(true, true);
+    confirm.mockResolvedValueOnce(false);
+    button('Disconnect')!.click();
+    await settle();
+    const options = confirm.mock.calls[0][0];
+    expect(options.message).not.toContain('No portfolio is linked');
+    expect(options.ticket.live).toBe(true);
+    expect(options.ticket.lines).toContainEqual({
+      label: 'Linked portfolios',
+      value: 'Not known',
+    });
   });
 
   it('hides sync and disconnect from a viewer and disables linking', async () => {
