@@ -93,6 +93,7 @@ from stonks.ingest.schemas import (
     EsgSnapshotRow,
     ExchangeInfo,
     FinancialStatementsBundle,
+    FundHoldingRow,
     FxRateRow,
     IncomeStatementRow,
     InsiderTransactionRow,
@@ -1183,6 +1184,77 @@ def parse_officers_from_fundamentals(ticker: str, payload: Any) -> Iterator[Offi
         )
 
 
+#: Vendor country names of fund holdings to ISO 3166-1 alpha-2. Unknown
+#: names are logged and left empty, never stored raw.
+_COUNTRY_CODES: dict[str, str] = {
+    "united states": "US", "usa": "US", "canada": "CA", "mexico": "MX", "brazil": "BR",
+    "united kingdom": "GB", "uk": "GB", "ireland": "IE", "germany": "DE", "france": "FR",
+    "netherlands": "NL", "switzerland": "CH", "italy": "IT", "spain": "ES", "sweden": "SE",
+    "norway": "NO", "denmark": "DK", "finland": "FI", "belgium": "BE", "austria": "AT",
+    "portugal": "PT", "luxembourg": "LU", "japan": "JP", "china": "CN", "hong kong": "HK",
+    "taiwan": "TW", "south korea": "KR", "korea": "KR", "india": "IN", "singapore": "SG",
+    "australia": "AU", "new zealand": "NZ", "israel": "IL", "south africa": "ZA",
+    "bermuda": "BM", "jersey": "JE", "cayman islands": "KY", "uruguay": "UY",
+}  # fmt: skip
+
+
+def _country_code(raw: Any) -> str | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    text = raw.strip()
+    if len(text) == 2 and text.isalpha():
+        return text.upper()
+    code = _COUNTRY_CODES.get(text.lower())
+    if code is None:
+        _log_unknown_vendor_value("eodhd.fund_holdings.unknown_country", raw)
+    return code
+
+
+def parse_fund_holdings_from_fundamentals(
+    fund: str, payload: Any, *, today: date | None = None
+) -> list[FundHoldingRow]:
+    """The ``ETF_Data.Holdings`` block of an EODHD ``/fundamentals`` payload
+    as :class:`FundHoldingRow` (roadmap 23.14). ``Assets_%`` becomes a
+    fraction, ``Country`` an ISO alpha-2 code. The list is dated
+    ``General.UpdatedAt`` but never after ``today``. A stock (no
+    ``ETF_Data``) or a text error returns no rows. Rows without a positive
+    weight are dropped."""
+    today = today or datetime.now(UTC).date()
+    if not isinstance(payload, dict):
+        return []
+    etf = payload.get("ETF_Data")
+    holdings = etf.get("Holdings") if isinstance(etf, dict) else None
+    if not isinstance(holdings, dict):
+        return []
+    general = payload.get("General") if isinstance(payload.get("General"), dict) else {}
+    stated = _parse_date(str(general.get("UpdatedAt") or "")[:10]) if general else None
+    as_of = min(stated, today) if stated else today
+    rows: list[FundHoldingRow] = []
+    dropped = 0
+    for key, item in holdings.items():
+        if not isinstance(item, dict):
+            dropped += 1
+            continue
+        pct = _coerce_optional_float(item.get("Assets_%"))
+        if pct is None or pct <= 0:
+            dropped += 1
+            continue
+        rows.append(
+            FundHoldingRow(
+                fund=fund,
+                holding=str(key),
+                as_of=as_of,
+                weight=pct / 100.0,
+                name=item.get("Name") or None,
+                sector=item.get("Sector") or None,
+                country=_country_code(item.get("Country")),
+                source=EodhdDataSource.source_id,
+            )
+        )
+    _log_parse_drops("parse_fund_holdings_from_fundamentals", fund, len(rows), dropped)
+    return rows
+
+
 def parse_shares_outstanding_history(ticker: str, payload: Any) -> Iterator[SharesOutstandingRow]:
     """Fundamentals has an ``outstandingShares`` section with both
     ``annual`` and ``quarterly`` dicts — each period dict carries
@@ -2018,6 +2090,13 @@ class EodhdDataSource(DataSource):
         url = f"{self._base_url}/fundamentals/{ticker}"
         data = self._get(url, params={"fmt": "json"})
         return parse_financial_statements_response(ticker, data)
+
+    def fetch_fund_holdings(self, fund: str) -> Iterable[FundHoldingRow]:
+        """A fund's holdings from the ``ETF_Data`` block of ``/fundamentals``
+        (roadmap 23.14). A stock returns no rows."""
+        data = self._get(f"{self._base_url}/fundamentals/{fund}", params={"fmt": "json"})
+        _check_free_tier(data)
+        return parse_fund_holdings_from_fundamentals(fund, data)
 
     # EODHD natively supports 1-minute, 5-minute, and 1-hour bars on the
     # /api/intraday endpoint. Everything else is derived via aggregation.

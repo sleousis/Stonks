@@ -1,0 +1,29 @@
+{
+  "General": {
+    "Code": "SPY",
+    "Type": "ETF",
+    "Name": "SPDR S&P 500 ETF Trust",
+    "Exchange": "NYSE ARCA",
+    "CurrencyCode": "USD",
+    "CountryISO": "US",
+    "UpdatedAt": "2026-09-25"
+  },
+  "Technicals": {"Beta": 1.0},
+  "ETF_Data": {
+    "ISIN": "US78462F1030",
+    "Company_Name": "State Street Global Advisors",
+    "Holdings_Count": 503,
+    "Top_10_Holdings": {
+      "AAPL.US": {"Code": "AAPL", "Exchange": "US", "Name": "Apple Inc", "Assets_%": 7.1}
+    },
+    "Holdings": {
+      "AAPL.US": {"Code": "AAPL", "Exchange": "US", "Name": "Apple Inc", "Sector": "Technology", "Industry": "Consumer Electronics", "Country": "United States", "Region": "North America", "Assets_%": 7.1},
+      "MSFT.US": {"Code": "MSFT", "Exchange": "US", "Name": "Microsoft Corporation", "Sector": "Technology", "Industry": "Software", "Country": "United States", "Region": "North America", "Assets_%": "6.5"},
+      "ASML.AS": {"Code": "ASML", "Exchange": "AS", "Name": "ASML Holding NV", "Sector": "Technology", "Country": "Netherlands", "Region": "Europe", "Assets_%": 0.4},
+      "XYZ": {"Code": "XYZ", "Name": "Odd row", "Country": "Atlantis", "Assets_%": 0.1},
+      "BAD.US": {"Code": "BAD", "Exchange": "US", "Name": "No weight"},
+      "NEG.US": {"Code": "NEG", "Exchange": "US", "Assets_%": -3}
+    },
+    "Sector_Weights": {"Technology": {"Equity_%": "30.1"}}
+  }
+}

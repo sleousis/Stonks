@@ -663,6 +663,24 @@ def ingest_borrow(
     _print_result(result)
 
 
+@ingest_app.command("funds")
+def ingest_funds(
+    tickers: str = typer.Option(..., "--tickers", help="comma-separated funds, e.g. SPY.US,QQQ.US"),
+    source_id: str = _source_option(),
+) -> None:
+    """Pull each fund's latest holdings (an ETF's stocks and their weights)
+    into ``fund_holdings`` (roadmap 23.14). Insights then show your real
+    weight in a name across the funds you hold. Each fund is one unit of
+    the ``ingest_runs`` row, and a re-run is idempotent."""
+    settings = _settings()
+    source = _build_source(settings, source_id)
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        pipeline = build_ingest_pipeline(settings, source, lake)
+        result = pipeline.run_fund_holdings(_parse_tickers(tickers))
+    _print_result(result)
+
+
 @ingest_app.command("aggregate")
 def ingest_aggregate(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
