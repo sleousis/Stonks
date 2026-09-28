@@ -93,3 +93,46 @@ class HoldingAgreement(BaseModel):
     agree: int
     disagree: int
     opinions: list[Opinion]
+
+
+class LookThroughSlice(BaseModel):
+    """One sector or country with funds split into what they hold (23.14)."""
+
+    key: str = Field(description="A sector, an ISO country code, cash, not listed or unknown.")
+    value: float = Field(description="Market value in the group, funds split by weight.")
+    weight: float | None = Field(description="value / the book's total value.")
+    direct_value: float = Field(description="Part held directly, not through a fund.")
+    fund_value: float = Field(description="Part held through funds.")
+
+
+class LookThroughName(BaseModel):
+    """One company with its direct and fund holdings added up (23.14)."""
+
+    key: str = Field(description="The ticker, or the fund's own code for the holding.")
+    name: str | None
+    value: float = Field(description="Direct value plus each fund's value times its weight.")
+    weight: float | None = Field(description="value / the book's total value.")
+    direct_value: float
+    fund_value: float
+    funds: list[str] = Field(description="Held funds that own this name.")
+
+
+class FundCoverage(BaseModel):
+    fund: str
+    as_of: date = Field(description="The day the fund's holdings list describes.")
+    source: str
+    value: float = Field(description="Market value of the fund in the book.")
+    holdings: int = Field(description="Holdings listed for the fund.")
+    covered: float = Field(description="Share of the fund the listed holdings explain (0 to 1).")
+
+
+class LookThrough(BaseModel):
+    sector: list[LookThroughSlice]
+    country: list[LookThroughSlice]
+    names: list[LookThroughName] = Field(description="Largest single names, funds split.")
+    funds: list[FundCoverage] = Field(description="Held funds with a holdings list.")
+    fund_value: float = Field(description="Value of every held fund with a holdings list.")
+    listed_fund_value: float = Field(
+        description="Part of fund_value the listed holdings explain. The rest shows as "
+        "'not listed'."
+    )

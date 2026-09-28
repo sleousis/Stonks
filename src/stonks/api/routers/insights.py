@@ -11,7 +11,7 @@ from fastapi import APIRouter, Query
 
 from stonks.api.deps import PortfolioIdDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
-from stonks.app.insights import AgreementView, InsightsTotalsView, InsightsView
+from stonks.app.insights import AgreementView, InsightsTotalsView, InsightsView, LookThroughView
 from stonks.auth import Permission
 
 router = APIRouter(prefix="/api/insights", tags=["insights"], responses=PROBLEM_RESPONSES)
@@ -41,6 +41,23 @@ def get_agreement(services: ServicesDep, portfolio_id: PortfolioIdDep) -> Agreem
     """For each holding, whether every active strategy's latest signal
     agrees or disagrees with it, and why."""
     return services.insights.agreement(portfolio_id)
+
+
+@router.get(
+    "/look-through",
+    response_model=LookThroughView,
+    operation_id="getLookThrough",
+    dependencies=needs(Permission.READ),
+)
+def get_look_through(
+    services: ServicesDep,
+    portfolio_id: PortfolioIdDep,
+    top: Annotated[int, Query(ge=1, le=100, description="Single names to list.")] = 20,
+) -> LookThroughView:
+    """Exposure by sector, country and single name with each held fund
+    (an ETF) split into what it holds, from the latest holdings lists. Your
+    real weight in Apple counts AAPL plus its share of SPY and QQQ."""
+    return services.insights.look_through(portfolio_id, top=top)
 
 
 @router.get(

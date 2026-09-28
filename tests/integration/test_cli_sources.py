@@ -128,6 +128,13 @@ def test_ingest_fundamentals_from_yahoo_soft_fails(runner, cli_env, yahoo_calls)
     assert "status=error" in result.output
 
 
+def test_ingest_funds_from_yahoo_soft_fails(runner, cli_env, yahoo_calls):
+    """Yahoo serves no fund holdings: the run records a failed fund."""
+    result = runner.invoke(app, ["ingest", "funds", "--source", "yahoo", "--tickers", "SPY.US"])
+    assert result.exit_code == 0, result.output
+    assert "status=error" in result.output
+
+
 def test_yahoo_exchange_discovery_is_a_usage_error(runner, cli_env, yahoo_calls):
     result = runner.invoke(app, ["ingest", "prices", "--source", "yahoo", "--exchange", "US"])
     assert result.exit_code == 2, result.output
@@ -167,6 +174,7 @@ def test_missing_eodhd_key_is_a_usage_error(runner, cli_env):
         ["exchanges"],
         ["prices", "--tickers", "X.US"],
         ["fundamentals", "--tickers", "X.US"],
+        ["funds", "--tickers", "SPY.US"],
         ["metadata", "--tickers", "X.US"],
         ["intraday", "--tickers", "X.US"],
         ["macro", "--countries", "USA"],

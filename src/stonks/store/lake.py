@@ -2091,6 +2091,80 @@ class DuckDBLake:
         out["as_of"] = _as_calendar_date(out["as_of"])
         return out
 
+    _FUND_HOLDING_COLS = (
+        "fund",
+        "holding",
+        "as_of",
+        "source",
+        "weight",
+        "name",
+        "sector",
+        "country",
+    )
+
+    def upsert_fund_holdings(self, df: pd.DataFrame, *, known_at: datetime | None = None) -> int:
+        """Upsert fund holdings keyed by ``(fund, holding, as_of, source)``
+        (roadmap 23.14). A new row is stamped ``known_at`` (default now,
+        naive UTC). A re-run updates the values but keeps the first
+        ``known_at``, so a point-in-time read never moves backward."""
+        if df.empty:
+            return 0
+        frame = df.copy()
+        for col in self._FUND_HOLDING_COLS:
+            if col not in frame.columns:
+                frame[col] = None
+        frame = _last_per_key(
+            frame.reindex(columns=list(self._FUND_HOLDING_COLS)),
+            ("fund", "holding", "as_of", "source"),
+        )
+        stamp = (known_at or datetime.now(UTC)).replace(tzinfo=None)
+        frame["known_at"] = stamp
+        cols = [*self._FUND_HOLDING_COLS, "known_at"]
+        updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in ("weight", "name", "sector", "country"))
+        with self._registered(frame.reindex(columns=cols)):
+            self.con.execute(
+                f"INSERT INTO fund_holdings ({', '.join(cols)}) SELECT {', '.join(cols)} FROM _in"
+                f" ON CONFLICT (fund, holding, as_of, source) DO UPDATE SET {updates}"
+            )
+        return len(frame)
+
+    def fund_holdings(self, funds: Any, *, as_of: Any) -> pd.DataFrame:
+        """Each fund's holdings known on ``as_of`` (roadmap 23.14, P12): per
+        fund the latest ``as_of`` on or before the day whose rows Stonks had
+        stored by the end of it, from one source (the first by name). Columns
+        ``_FUND_HOLDING_COLS``, largest weight first."""
+        names = sorted({str(f) for f in funds})
+        cols = ", ".join(f"h.{c}" for c in self._FUND_HOLDING_COLS)
+        if not names:
+            return pd.DataFrame(columns=list(self._FUND_HOLDING_COLS))
+        day = _as_calendar_date(as_of)
+        df = self.con.execute(
+            f"""
+            WITH known AS (
+                SELECT * FROM fund_holdings
+                 WHERE fund = ANY(?) AND as_of <= ? AND known_at < ?
+            ),
+            pick AS (
+                SELECT fund, max(as_of) AS as_of FROM known GROUP BY fund
+            ),
+            chosen AS (
+                SELECT k.fund, k.as_of, min(k.source) AS source
+                  FROM known k JOIN pick p ON k.fund = p.fund AND k.as_of = p.as_of
+                 GROUP BY k.fund, k.as_of
+            )
+            SELECT {cols} FROM known h
+              JOIN chosen c ON h.fund = c.fund AND h.as_of = c.as_of AND h.source = c.source
+             ORDER BY h.fund, h.weight DESC, h.holding
+            """,
+            [names, day, datetime.combine(day + timedelta(days=1), datetime.min.time())],
+        ).fetchdf()
+        return _dates_to_python(df, ("as_of",))
+
+    def funds_with_holdings(self) -> list[str]:
+        """Every fund with stored holdings, sorted."""
+        rows = self.con.execute("SELECT DISTINCT fund FROM fund_holdings ORDER BY fund").fetchall()
+        return [str(r[0]) for r in rows]
+
     def upsert_institutional_holders(self, df: pd.DataFrame) -> int:
         return self._upsert_on_change(
             df,

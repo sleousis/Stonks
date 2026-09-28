@@ -2370,6 +2370,76 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Look-through exposure of one of your portfolios: each held fund\n(an ETF) split into what it holds, then summed by sector, country\nand single name. Your real Apple weight counts AAPL plus its share\nof SPY and QQQ. Funds without a holdings list stay whole.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "top": {
+            "default": 20,
+            "description": "single names to list",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Top",
+            "type": "integer"
+          }
+        },
+        "title": "get_look_throughArguments",
+        "type": "object"
+      },
+      "name": "get_look_through",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Market breadth from the lake, display only: advances and declines,\nthe share of stocks above their 50 and 200 day averages, new one year\nhighs and lows, and distribution days on the index (falls of 0.2% or\nmore on higher volume), each with a plain sentence.",
+      "input_schema": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "As Of"
+          }
+        },
+        "title": "get_market_breadthArguments",
+        "type": "object"
+      },
+      "name": "get_market_breadth",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "A strategy's append-only version log (baseline, candidate, swap,\nreject, supersede, fail), with actor, reason and swap check result.",
       "input_schema": {
         "properties": {

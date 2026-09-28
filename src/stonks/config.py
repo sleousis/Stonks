@@ -20,6 +20,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from stonks.assistant.settings import AssistantConfig
 from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
+from stonks.breadth.settings import BreadthSettings
 from stonks.core.types import AssetClass
 from stonks.engine.settings import EngineSettings
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
@@ -604,6 +605,8 @@ class Settings(BaseSettings):
     screener: ScreenerSettings = Field(default_factory=ScreenerSettings)
     # ``[engine]``: the intraday engine process (roadmap 21.2.5). Off by default.
     engine: EngineSettings = Field(default_factory=EngineSettings)
+    # ``[breadth]``: the market breadth card on Today (roadmap 23.14).
+    breadth: BreadthSettings = Field(default_factory=BreadthSettings)
 
 
 #: Secrets read straight from the environment by blocks that keep their own

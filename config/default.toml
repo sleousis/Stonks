@@ -74,6 +74,7 @@ min_order_notional = 0.0
 # max_holding_bars = 60            # force-sell positions held 60+ bars
 # [production.risk.rules.sector_cap]
 # max_weight_per_sector = 0.3
+# look_through = true              # count a held fund's sectors too (23.14)
 # [production.risk.rules.liquidity]
 # max_pct_adv = 0.05               # buys up to 5% of 20-day average volume
 # [production.risk.rules.portfolio_vol]
@@ -659,3 +660,14 @@ max_budget_per_proposal = 50      # tuning trials per proposal
 survival_tests = ["oos", "deflated_sharpe", "pbo"]
 min_hypothesis_chars = 40
 min_premortem_chars = 20
+
+[breadth]
+# The market breadth card on Today (roadmap 23.14). Display only. Without a
+# universe_id it measures every equity with daily bars in the lake.
+# universe_id = "sp500"
+index = "SPY.US"                  # distribution days are counted on it
+min_history = 60                  # sessions before a stock counts for highs and lows
+high_low_window = 252             # about one year
+distribution_window = 25          # sessions
+distribution_drop = 0.002         # an index fall of 0.2 % or more on higher volume
+lookback_days = 400

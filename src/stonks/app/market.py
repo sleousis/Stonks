@@ -6,12 +6,13 @@ from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from stonks.app.context import AppContext
 from stonks.app.errors import ValidationError
 from stonks.app.pagination import Page
 from stonks.app.serialize import finite
+from stonks.breadth import Breadth
 from stonks.core.interval import Interval
 from stonks.core.timeutil import day_end, day_start
 
@@ -166,6 +167,65 @@ class MarketDataService:
         ]
         return Page[CoverageRow](items=items, total=total, limit=limit, offset=offset)
 
+    # ---- breadth (roadmap 23.14) -----------------------------------------------
+
+    def breadth(self, *, as_of: date | None = None) -> BreadthView:
+        """Market breadth on the last day with bars on or before ``as_of``:
+        advances and declines, the share above the 50 and 200 day averages,
+        new highs and lows and distribution days on the index. Display
+        only."""
+        from datetime import timedelta
+
+        from stonks.breadth import market_breadth
+
+        settings = self._ctx.settings.breadth
+        with self._ctx.lake() as lake:
+            end = as_of or _last_price_day(lake)
+            if end is None:
+                empty = pd.DataFrame(columns=["ticker", "date", "close", "volume"])
+                return BreadthView(
+                    universe=_universe_label(settings.universe_id),
+                    breadth=market_breadth(empty, None, settings=settings),
+                )
+            start = end - timedelta(days=settings.lookback_days)
+            members = self._breadth_members(lake, settings, end)
+            bars = (
+                lake.sql(
+                    "SELECT ticker, date, COALESCE(adj_close, close) AS close FROM prices"
+                    " WHERE ticker = ANY(?) AND date > ? AND date <= ?",
+                    [members, start, end],
+                )
+                if members
+                else pd.DataFrame(columns=["ticker", "date", "close"])
+            )
+            index = (
+                lake.sql(
+                    "SELECT date, COALESCE(adj_close, close) AS close, volume FROM prices"
+                    " WHERE ticker = ? AND date > ? AND date <= ? ORDER BY date",
+                    [settings.index, start, end],
+                )
+                if settings.index
+                else None
+            )
+        return BreadthView(
+            universe=_universe_label(settings.universe_id),
+            breadth=market_breadth(bars, index, settings=settings, as_of=end),
+        )
+
+    @staticmethod
+    def _breadth_members(lake: Any, settings: Any, day: date) -> list[str]:
+        """The stored universe's members on ``day``, else every equity in
+        the lake. Funds with a holdings list and the index are left out."""
+        if settings.universe_id:
+            return sorted(lake.members_as_of(settings.universe_id, day))
+        df = lake.sql(
+            "SELECT id FROM instruments WHERE asset_class = 'equity'"
+            " AND id NOT IN (SELECT DISTINCT fund FROM fund_holdings)"
+            " AND id IS DISTINCT FROM ?",
+            [settings.index],
+        )
+        return sorted(str(t) for t in df["id"])
+
 
 _PRICE_COLS = ("open", "high", "low", "close", "adj_close", "volume")
 
@@ -198,3 +258,21 @@ def _clean(record: dict[str, Any]) -> dict[str, Any]:
     if out.get("is_delisted") is not None:
         out["is_delisted"] = bool(out["is_delisted"])
     return out
+
+
+class BreadthView(BaseModel):
+    universe: str = Field(description="What was measured, in words.")
+    breadth: Breadth
+
+
+def _universe_label(universe_id: str | None) -> str:
+    return f"universe {universe_id}" if universe_id else "every stock in the lake"
+
+
+def _last_price_day(lake: Any) -> date | None:
+    df = lake.sql("SELECT max(date) AS d FROM prices")
+    value = df["d"].iloc[0] if not df.empty else None
+    if value is None or pd.isna(value):
+        return None
+    day = pd.Timestamp(value)
+    return date.fromisoformat(str(day.date()))

@@ -73,6 +73,9 @@ def test_reconnects_after_a_drop_backfills_and_writes_bars(lake):
             store=lake.bar_store,
             backfiller=backfill,
             subscribers=[stop_after_trades(box, len(TRADES))],
+            # before the recorded session (2026-09-28 13:30 UTC): only the
+            # trades close bars, whatever the wall clock says
+            clock=FakeClock(datetime(2026, 9, 28, tzinfo=UTC)),
         )
         box.append(runner)
         t = run_in_thread(runner)

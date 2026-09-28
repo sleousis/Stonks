@@ -204,7 +204,7 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "atr_multiple": max,
         "max_var": _min_optional,
     },
-    "sector_cap": {"max_weight_per_sector": _min_optional},
+    "sector_cap": {"max_weight_per_sector": _min_optional, "look_through": _either},
     "liquidity": {
         "max_pct_adv": _min_optional,
         "min_median_dollar_volume": _max_optional,

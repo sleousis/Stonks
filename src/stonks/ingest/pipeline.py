@@ -306,6 +306,21 @@ class IngestPipeline:
             units=[({"ticker": m, "market": m}, partial(ingest, m)) for m in markets],
         )
 
+    def run_fund_holdings(self, funds: Sequence[str]) -> IngestRunResult:
+        """Pull each fund's latest holdings into ``fund_holdings`` (roadmap
+        23.14). One fund is one unit of soft-fail accounting."""
+
+        def ingest(fund: str) -> dict[str, Any]:
+            rows = list(self._source.fetch_fund_holdings(fund))
+            self._lake.upsert_fund_holdings(_rows_to_df(rows))
+            return {"rows": len(rows)}
+
+        return self._run_units(
+            kind="funds",
+            event="fund",
+            units=[({"ticker": f}, partial(ingest, f)) for f in funds],
+        )
+
     def run_calendars(
         self,
         start: date,

@@ -98,6 +98,7 @@ uv run stonks telegram link-code|status|unlink --user E | poll [--once]
 uv run stonks tax gains|dividends --year Y [--portfolio ID] | lots [--as-of D] | settings   # tax CSVs, see docs/tax.md
 uv run stonks ingest fx --pairs EURUSD,GBPUSD [--since ...]   # FX rates into the lake
 uv run stonks ingest borrow [--markets usa,uk]   # IBKR short stock files into borrow_rates
+uv run stonks ingest funds --tickers SPY.US,QQQ.US   # ETF holdings into fund_holdings (look-through, docs/look-through.md)
 uv run stonks cash-flows record|list --user E --portfolio ID   # deposits and withdrawals (TWR, MWR)
 uv run stonks assistant eval [--base-url URL --model M]   # the assistant's eval set
 
@@ -176,7 +177,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 
 ## Canonical schemas (current)
 
-**Lake (DuckDB, migrations 001-022):**
+**Lake (DuckDB, migrations 001-023):**
 - `instruments (id, asset_class, exchange, currency, ipo_date, sector, industry, is_delisted, name, identifiers, GICS, address, ...)`: renamed from `tickers` in 007. `asset_class` in {equity, crypto, commodity, bond}.
 - `bars (ticker, timestamp, interval, open, high, low, close, adj_close, volume; PK (ticker, timestamp, interval))`: OHLCV at any `Interval` code (1m, 5m, 1h, 4h, 1d, 1w, 1mo, ...). `prices` is a read-only view of `interval='1d'`. Write with `upsert_bars` or the daily `upsert_prices` shim. With the Parquet backend the rows live under `<lake dir>/bars` instead of the table.
 - Statements (008, equity only), keyed `(ticker, period_end, frequency)`: `income_statement`, `balance_sheet`, `cash_flow_statement`, each with `filing_date` and `currency`. `upsert_<statement>` reindexes sparse frames and uses `COALESCE(EXCLUDED.col, table.col)`, so a NULL never overwrites a stored value but a real restated value does.
@@ -196,6 +197,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - `earnings_calendar (ticker, period_end, report_date, before_after_market, eps_estimate, eps_actual, ...)`, `dividend_calendar (ticker, ex_date, amount, record_date, pay_date, ...)`, `economic_events (country, event_time, event_type, comparison, actual, previous, estimate, ...)` (020): event calendars, vendor neutral. See `docs/calendars.md`.
 - `borrow_rates (ticker, as_of, source, currency, isin, available_shares, fee_rate_annual, rebate_rate_annual; PK (ticker, as_of, source))` (021): daily stock borrow terms, rates as yearly fractions. Read through `execution.borrow.LakeBorrowSource`.
 - `instrument_sector_versions (ticker, sector, gic_sector, known_at)` (022): every sector label an instrument has had, with the time Stonks first saw it. Factor attribution reads the label known on each day (`factors.style.sector_labels`).
+- `fund_holdings (fund, holding, as_of, source, weight, name, sector, country, known_at; PK (fund, holding, as_of, source))` (025): what each ETF holds, weights as fractions, read point in time by `known_at` (`stonks.funds`). Insights look-through and the sector cap's `look_through` read it.
 
 **State (SQLite, migrations 001-049):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.

@@ -179,6 +179,10 @@ class RiskContext:
     #: ``size``, ``value``, ``volatility``, ``sector``; roadmap 22.4). The
     #: style exposure rule reads the bars instead when ``None``.
     factor_exposures: pd.DataFrame | None = None
+    #: Each held or bought fund's sector weights (fund -> sector -> share,
+    #: roadmap 23.14), from its holdings list known at ``as_of``. Filled
+    #: only when the sector cap's look-through is on.
+    fund_sectors: Mapping[str, Mapping[str, float]] = field(default_factory=dict)
     #: The state of an intraday book at one event (roadmap 21.3.2): the
     #: event time, the session's equity marks, bar times and orders sent.
     #: ``None`` for a daily book, so the intraday rules do nothing there.

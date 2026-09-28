@@ -23,6 +23,7 @@ from stonks.ingest.schemas import (
     DefiTvlRow,
     ExchangeInfo,
     FinancialStatementsBundle,
+    FundHoldingRow,
     FxRateRow,
     IntradayBar,
     MacroIndicatorRow,
@@ -180,6 +181,18 @@ class DataSource(ABC):
         data shows up as a failed market instead of a silent empty run."""
         raise UnsupportedCapabilityError(
             f"{self.source_id} does not serve borrow rates ({market!r})"
+        )
+
+    def fetch_fund_holdings(self, fund: str) -> Iterable[FundHoldingRow]:
+        """The latest published holdings of one fund (an ETF), roadmap
+        23.14. A stock or a fund the vendor lists no holdings for returns
+        an empty list.
+
+        Optional capability: the default raises
+        :class:`UnsupportedCapabilityError`, so a source without fund data
+        shows up as a failed fund instead of a silent empty run."""
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve fund holdings ({fund!r})"
         )
 
     # ---- event calendars (roadmap 20.7) ----------------------------------------

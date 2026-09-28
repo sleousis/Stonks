@@ -58,6 +58,8 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_live_risk`](#get_live_risk) | read | no |
 | [`get_live_rules`](#get_live_rules) | read | no |
 | [`get_live_stage`](#get_live_stage) | read | no |
+| [`get_look_through`](#get_look_through) | read | no |
+| [`get_market_breadth`](#get_market_breadth) | read | no |
 | [`get_model_version_history`](#get_model_version_history) | read | no |
 | [`get_my_risk_limits`](#get_my_risk_limits) | read | no |
 | [`get_news`](#get_news) | read | no |
@@ -580,6 +582,33 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `portfolio_id` | string | yes |  | a portfolio id of yours (pf_...) |
 | `days` | integer | no | `30` |  |
+
+### `get_look_through`
+
+Look-through exposure of one of your portfolios: each held fund
+(an ETF) split into what it holds, then summed by sector, country
+and single name. Your real Apple weight counts AAPL plus its share
+of SPY and QQQ. Funds without a holdings list stay whole.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `top` | integer | no | `20` | single names to list |
+
+### `get_market_breadth`
+
+Market breadth from the lake, display only: advances and declines,
+the share of stocks above their 50 and 200 day averages, new one year
+highs and lows, and distribution days on the index (falls of 0.2% or
+more on higher volume), each with a plain sentence.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `as_of` | date \| null | no | `null` | YYYY-MM-DD |
 
 ### `get_model_version_history`
 

@@ -186,6 +186,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/insights` | Get Insights | sign-in |  | [InsightsView](#insightsview) |
 | GET | `/api/insights/agreement` | Get Agreement | sign-in |  | [AgreementView](#agreementview) |
+| GET | `/api/insights/look-through` | Get Look Through | `data.read` |  | [LookThroughView](#lookthroughview) |
 | GET | `/api/insights/totals` | Get Totals | `portfolio.totals` |  | [InsightsTotalsView](#insightstotalsview) |
 
 ## jobs endpoints
@@ -266,6 +267,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
 | GET | `/api/market/bars` | Get Bars | sign-in |  | [BarSeries](#barseries) |
+| GET | `/api/market/breadth` | Get Breadth | `data.read` |  | [BreadthView](#breadthview) |
 | GET | `/api/market/coverage` | List Coverage | sign-in |  | [Page_CoverageRow_](#page_coveragerow_) |
 | GET | `/api/market/instruments` | List Instruments | sign-in |  | [Page_InstrumentView_](#page_instrumentview_) |
 
@@ -556,6 +558,15 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | DELETE | `/api/watchlists/{watchlist_id}` | Delete Watchlist | `portfolio.manage` |  |  |
 
 ## Schemas
+
+### AboveAverage
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `count` | integer | yes | Stocks closing above it. |
+| `days` | integer | yes | The average's length in sessions. |
+| `eligible` | integer | yes | Stocks with enough bars to have the average. |
+| `pct` | number \| null | yes | count / eligible; null when none is eligible. |
 
 ### AccountProfileBody
 
@@ -892,6 +903,42 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `hard` | list[string] | no |  |
 | `hard_fee_rate_annual` | number | no |  |
 | `none` | list[string] | no |  |
+
+### Breadth
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `above_200` | [AboveAverage](#aboveaverage) | yes |  |
+| `above_50` | [AboveAverage](#aboveaverage) | yes |  |
+| `advance_decline_ratio` | number \| null | yes | advancers / decliners; null without decliners. |
+| `advancers` | integer | yes |  |
+| `as_of` | date \| null | yes | The last day with bars; null for an empty lake. |
+| `decliners` | integer | yes |  |
+| `distribution_dates` | list[date] | yes |  |
+| `distribution_days` | integer \| null | yes | Null without index bars. |
+| `distribution_window` | integer | yes |  |
+| `high_low_window` | integer | yes | Sessions in the high and low window. |
+| `index` | string \| null | yes | The index distribution days are counted on. |
+| `lines` | list[[BreadthLine](#breadthline)] | yes | What the numbers mean, in plain words. |
+| `members` | integer | yes | Stocks with a close on as_of and the day before. |
+| `new_highs` | integer | yes |  |
+| `new_lows` | integer | yes |  |
+| `unchanged` | integer | yes |  |
+
+### BreadthLine
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | "advance_decline" \| "above_average" \| "highs_lows" \| "distribution" \| "empty" | yes |  |
+| `text` | string | yes | One plain sentence. |
+| `tone` | "good" \| "neutral" \| "bad" | yes |  |
+
+### BreadthView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `breadth` | [Breadth](#breadth) | yes |  |
+| `universe` | string | yes | What was measured, in words. |
 
 ### BreakdownView
 
@@ -1753,6 +1800,17 @@ One go-live check that failed (``GoLiveCheck`` without ``passed``).
 | `side` | string \| null | no |  |
 | `tick_id` | string \| null | yes |  |
 | `ticker` | string | yes |  |
+
+### FundCoverage
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes | The day the fund's holdings list describes. |
+| `covered` | number | yes | Share of the fund the listed holdings explain (0 to 1). |
+| `fund` | string | yes |  |
+| `holdings` | integer | yes | Holdings listed for the fund. |
+| `source` | string | yes |  |
+| `value` | number | yes | Market value of the fund in the book. |
 
 ### FxRateView
 
@@ -2687,6 +2745,56 @@ One recorded lab run: what was tested, why, and how it came out.
 | `display_name` | string | yes |  |
 | `next_step` | "enrol" \| "verify" | yes |  |
 | `user_id` | string | yes |  |
+
+### LookThrough
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `country` | list[[LookThroughSlice](#lookthroughslice)] | yes |  |
+| `fund_value` | number | yes | Value of every held fund with a holdings list. |
+| `funds` | list[[FundCoverage](#fundcoverage)] | yes | Held funds with a holdings list. |
+| `listed_fund_value` | number | yes | Part of fund_value the listed holdings explain. The rest shows as 'not listed'. |
+| `names` | list[[LookThroughName](#lookthroughname)] | yes | Largest single names, funds split. |
+| `sector` | list[[LookThroughSlice](#lookthroughslice)] | yes |  |
+
+### LookThroughName
+
+One company with its direct and fund holdings added up (23.14).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `direct_value` | number | yes |  |
+| `fund_value` | number | yes |  |
+| `funds` | list[string] | yes | Held funds that own this name. |
+| `key` | string | yes | The ticker, or the fund's own code for the holding. |
+| `name` | string \| null | yes |  |
+| `value` | number | yes | Direct value plus each fund's value times its weight. |
+| `weight` | number \| null | yes | value / the book's total value. |
+
+### LookThroughSlice
+
+One sector or country with funds split into what they hold (23.14).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `direct_value` | number | yes | Part held directly, not through a fund. |
+| `fund_value` | number | yes | Part held through funds. |
+| `key` | string | yes | A sector, an ISO country code, cash, not listed or unknown. |
+| `value` | number | yes | Market value in the group, funds split by weight. |
+| `weight` | number \| null | yes | value / the book's total value. |
+
+### LookThroughView
+
+A portfolio's exposure with each held fund split into what it holds (roadmap 23.14).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes | Fund holdings are the lists known on this day. |
+| `currency` | string | yes | Reporting currency. Amounts are not FX-converted. |
+| `look_through` | [LookThrough](#lookthrough) | yes |  |
+| `notes` | list[string] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `total_value` | number | yes |  |
 
 ### LosingLockSettings
 
@@ -4925,6 +5033,7 @@ Store a screen (``spec`` or ``screen_id``) as a universe.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `look_through` | boolean | no |  |
 | `max_weight_per_sector` | number \| null | no |  |
 
 ### SentimentDay
