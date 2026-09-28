@@ -84,6 +84,20 @@ export interface Candle {
 }
 
 /**
+ * True when the price chart should fit its time scale again: the first data,
+ * or other bars. Candles rebuilt for the same bars (a moving average or the
+ * volume toggled) keep the trader's zoom.
+ */
+export function newCandleWindow(prev: readonly Candle[], next: readonly Candle[]): boolean {
+  return (
+    prev.length === 0 ||
+    prev.length !== next.length ||
+    prev[0]?.time !== next[0]?.time ||
+    prev.at(-1)?.time !== next.at(-1)?.time
+  );
+}
+
+/**
  * A mark on a bar: your fill (`buy` below the bar, `sell` above it) or a
  * strategy's signal (`entry` below, `exit` above, `change` on the bar).
  * `text` is one or two characters (B, S).
