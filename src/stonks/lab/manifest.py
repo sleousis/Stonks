@@ -203,13 +203,46 @@ def data_fingerprint(dataset: Any) -> dict[str, Any]:
     from stonks.lab.dataset import data_tickers
 
     start, end = dataset.full_window
-    interval = _interval_code(dataset)
     universe = sorted(set(dataset.universe))
     references = sorted(set(data_tickers(dataset)) - set(universe))
+    return _fingerprint(dataset.lake, universe, references, _interval_code(dataset), start, end)
+
+
+def refingerprint(lake: Any, stored: dict[str, Any]) -> dict[str, Any]:
+    """A stored :func:`data_fingerprint` recomputed on ``lake`` today: the
+    same tickers, references, window and interval, so the two hashes match
+    exactly when no bar or corporate action they cover changed (roadmap
+    23.9, ``stonks lab verify``)."""
+    start, end = (date.fromisoformat(str(d)[:10]) for d in stored["window"])
+    return _fingerprint(
+        lake,
+        sorted(stored.get("tickers") or {}),
+        sorted(stored.get("references") or {}),
+        str(stored.get("interval") or "1d"),
+        start,
+        end,
+    )
+
+
+def fingerprint_changes(stored: dict[str, Any], current: dict[str, Any]) -> list[str]:
+    """Tickers whose bars or corporate actions differ between two
+    fingerprints of the same data, sorted."""
+    changed: set[str] = set()
+    for part in ("tickers", "references", "daily"):
+        before, after = stored.get(part) or {}, current.get(part) or {}
+        for ticker in set(before) | set(after):
+            if before.get(ticker) != after.get(ticker):
+                changed.add(ticker)
+    return sorted(changed)
+
+
+def _fingerprint(
+    lake: Any, universe: list[str], references: list[str], interval: str, start: Any, end: Any
+) -> dict[str, Any]:
     everyone = universe + references
     stop = _as_date(end) + timedelta(days=1)
-    bars = _bars_hashes(dataset.lake, everyone, interval, _as_date(start), stop)
-    actions = _actions_hashes(dataset.lake, everyone, stop)
+    bars = _bars_hashes(lake, everyone, interval, _as_date(start), stop)
+    actions = _actions_hashes(lake, everyone, stop)
 
     def entries(names: list[str], hashes: dict[str, dict[str, Any]]) -> dict[str, Any]:
         out: dict[str, dict[str, Any]] = {}
@@ -227,7 +260,7 @@ def data_fingerprint(dataset: Any) -> dict[str, Any]:
         "references": entries(references, bars),
     }
     if _is_intraday(interval):
-        daily = _bars_hashes(dataset.lake, everyone, "1d", _as_date(start), stop)
+        daily = _bars_hashes(lake, everyone, "1d", _as_date(start), stop)
         body["daily"] = {t: dict(daily.get(t, _NO_BARS)) for t in everyone}
     digest = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
     return {**body, "hash": digest}
