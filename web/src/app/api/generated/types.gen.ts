@@ -1252,6 +1252,78 @@ export type ClearHaltRequest = {
 };
 
 /**
+ * ColumnMapping
+ *
+ * Which CSV column holds which field. Only ``date`` is required, plus
+ * either a ``type`` column (with ``types`` mapping its values to kinds) or
+ * one fixed ``kind`` for every row.
+ */
+export type ColumnMapping = {
+    /**
+     * Amount
+     */
+    amount?: string | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Date
+     */
+    date: string;
+    /**
+     * Date Format
+     */
+    date_format?: string | null;
+    /**
+     * Default Currency
+     */
+    default_currency?: string;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Exchange
+     */
+    exchange?: string | null;
+    /**
+     * Fee
+     */
+    fee?: string | null;
+    /**
+     * Kind
+     */
+    kind?: 'trade' | 'dividend' | 'interest' | 'fee' | 'deposit' | 'withdrawal' | 'split' | 'other' | null;
+    /**
+     * Price
+     */
+    price?: string | null;
+    /**
+     * Quantity
+     */
+    quantity?: string | null;
+    /**
+     * Sell Values
+     */
+    sell_values?: Array<string>;
+    /**
+     * Symbol
+     */
+    symbol?: string | null;
+    /**
+     * Type
+     */
+    type?: string | null;
+    /**
+     * Types
+     */
+    types?: {
+        [key: string]: 'trade' | 'dividend' | 'interest' | 'fee' | 'deposit' | 'withdrawal' | 'split' | 'other';
+    };
+};
+
+/**
  * ComparePoint
  */
 export type ComparePoint = {
@@ -1656,6 +1728,127 @@ export type DataSourceInfo = {
      * Id
      */
     id: 'eodhd' | 'yahoo' | 'defillama';
+};
+
+/**
+ * DemoPointView
+ */
+export type DemoPointView = {
+    /**
+     * Day
+     */
+    day: string;
+    /**
+     * Value
+     */
+    value: number;
+};
+
+/**
+ * DemoPortfolioView
+ *
+ * Your demo portfolio. ``exists`` is false until you open one: then
+ * the other fields are empty.
+ */
+export type DemoPortfolioView = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+    /**
+     * Cash
+     */
+    cash?: number | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Currency
+     */
+    currency?: string;
+    /**
+     * Curve
+     */
+    curve?: Array<DemoPointView>;
+    /**
+     * Day Change
+     */
+    day_change?: number | null;
+    /**
+     * Exists
+     */
+    exists: boolean;
+    /**
+     * Label
+     */
+    label?: string;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Positions
+     */
+    positions?: Array<DemoPositionView>;
+    /**
+     * Start Value
+     */
+    start_value?: number | null;
+    /**
+     * Total Return
+     */
+    total_return?: number | null;
+    /**
+     * Total Value
+     */
+    total_value?: number | null;
+};
+
+/**
+ * DemoPositionView
+ */
+export type DemoPositionView = {
+    /**
+     * Cost
+     */
+    cost: number;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Pnl Pct
+     */
+    pnl_pct: number;
+    /**
+     * Price
+     */
+    price: number;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Sector
+     */
+    sector: string;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Value
+     */
+    value: number;
+    /**
+     * Weight
+     */
+    weight: number;
 };
 
 /**
@@ -7847,6 +8040,50 @@ export type PageSavedScreenView = {
 };
 
 /**
+ * Page[ScreenAlertEventView]
+ */
+export type PageScreenAlertEventView = {
+    /**
+     * Items
+     */
+    items: Array<ScreenAlertEventView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[ScreenAlertView]
+ */
+export type PageScreenAlertView = {
+    /**
+     * Items
+     */
+    items: Array<ScreenAlertView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[ShadowDecisionView]
  */
 export type PageShadowDecisionView = {
@@ -7920,6 +8157,28 @@ export type PageStatementFlagView = {
      * Items
      */
     items: Array<StatementFlagView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[StatementImportView]
+ */
+export type PageStatementImportView = {
+    /**
+     * Items
+     */
+    items: Array<StatementImportView>;
     /**
      * Limit
      */
@@ -8962,7 +9221,7 @@ export type PreferenceItem = {
     /**
      * Category
      */
-    category: 'signal' | 'order' | 'risk' | 'system' | 'price_alert' | 'event_alert';
+    category: 'signal' | 'order' | 'risk' | 'system' | 'price_alert' | 'event_alert' | 'screen_alert';
     /**
      * Channel
      */
@@ -10801,6 +11060,152 @@ export type ScheduledRunView = {
 };
 
 /**
+ * ScreenAlertEventView
+ */
+export type ScreenAlertEventView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Matched
+     */
+    matched: number;
+    /**
+     * Screen Id
+     */
+    screen_id: string;
+    /**
+     * Screen Name
+     */
+    screen_name: string | null;
+    /**
+     * Tickers
+     */
+    tickers: Array<string>;
+};
+
+/**
+ * ScreenAlertRunRequest
+ */
+export type ScreenAlertRunRequest = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+};
+
+/**
+ * ScreenAlertRunView
+ */
+export type ScreenAlertRunView = {
+    /**
+     * Alerts
+     */
+    alerts: number;
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Baselines
+     */
+    baselines: number;
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Fired
+     */
+    fired: number;
+    /**
+     * Published
+     */
+    published: number;
+    /**
+     * Ran
+     */
+    ran: number;
+};
+
+/**
+ * ScreenAlertSet
+ *
+ * Turn an alert on for one of your saved screens, or change it.
+ */
+export type ScreenAlertSet = {
+    /**
+     * Cadence
+     */
+    cadence?: 'daily' | 'weekly';
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Weekday
+     *
+     * Weekly: the day it runs, 0 = Monday.
+     */
+    weekday?: number | null;
+};
+
+/**
+ * ScreenAlertView
+ */
+export type ScreenAlertView = {
+    /**
+     * Cadence
+     */
+    cadence: 'daily' | 'weekly';
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Last As Of
+     */
+    last_as_of: string | null;
+    /**
+     * Last Error
+     */
+    last_error: string | null;
+    /**
+     * Matched
+     */
+    matched: number;
+    /**
+     * Screen Id
+     */
+    screen_id: string;
+    /**
+     * Screen Name
+     */
+    screen_name: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Weekday
+     */
+    weekday: number | null;
+};
+
+/**
  * ScreenResult
  */
 export type ScreenResult = {
@@ -11668,6 +12073,196 @@ export type StatementFlagView = {
      * Ticker
      */
     ticker: string;
+};
+
+/**
+ * StatementImportRequest
+ *
+ * A CSV to preview or import, into ``portfolio_id`` (a broker portfolio
+ * of yours) or into a new portfolio named ``new_portfolio``.
+ */
+export type StatementImportRequest = {
+    /**
+     * Content
+     *
+     * The CSV text.
+     */
+    content: string;
+    /**
+     * Currency
+     */
+    currency?: string;
+    /**
+     * Filename
+     */
+    filename?: string | null;
+    /**
+     * Column mapping; blank guesses it from the headers.
+     */
+    mapping?: ColumnMapping | null;
+    /**
+     * New Portfolio
+     */
+    new_portfolio?: string | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
+};
+
+/**
+ * StatementImportView
+ */
+export type StatementImportView = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Filename
+     */
+    filename: string | null;
+    /**
+     * First Date
+     */
+    first_date: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Last Date
+     */
+    last_date: string | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Portfolio Name
+     */
+    portfolio_name: string | null;
+    /**
+     * Rows Added
+     */
+    rows_added: number;
+    /**
+     * Rows Duplicate
+     */
+    rows_duplicate: number;
+    /**
+     * Rows Skipped
+     */
+    rows_skipped: number;
+    /**
+     * Rows Total
+     */
+    rows_total: number;
+    /**
+     * Undone At
+     */
+    undone_at: string | null;
+};
+
+/**
+ * StatementPreview
+ */
+export type StatementPreview = {
+    /**
+     * Duplicate
+     */
+    duplicate: number;
+    /**
+     * First Date
+     */
+    first_date: string | null;
+    /**
+     * Guessed
+     */
+    guessed: boolean;
+    /**
+     * Headers
+     */
+    headers: Array<string>;
+    /**
+     * Last Date
+     */
+    last_date: string | null;
+    mapping: ColumnMapping;
+    /**
+     * New
+     */
+    new: number;
+    /**
+     * Rows
+     */
+    rows: Array<StatementRowView>;
+    /**
+     * Skipped
+     */
+    skipped: number;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Unmapped
+     */
+    unmapped: Array<string>;
+};
+
+/**
+ * StatementRowView
+ */
+export type StatementRowView = {
+    /**
+     * Amount
+     */
+    amount?: number | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Day
+     */
+    day?: string | null;
+    /**
+     * Fee
+     */
+    fee?: number | null;
+    /**
+     * Kind
+     */
+    kind?: string | null;
+    /**
+     * Line
+     */
+    line: number;
+    /**
+     * Price
+     */
+    price?: number | null;
+    /**
+     * Quantity
+     */
+    quantity?: number | null;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+    /**
+     * Status
+     */
+    status: 'new' | 'duplicate' | 'skipped';
+    /**
+     * Symbol
+     */
+    symbol?: string | null;
+    /**
+     * Ticker
+     */
+    ticker?: string | null;
 };
 
 /**
@@ -17348,6 +17943,129 @@ export type SyncConnectionResponses = {
 };
 
 export type SyncConnectionResponse = SyncConnectionResponses[keyof SyncConnectionResponses];
+
+export type RemoveDemoPortfolioData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/demo';
+};
+
+export type RemoveDemoPortfolioErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RemoveDemoPortfolioError = RemoveDemoPortfolioErrors[keyof RemoveDemoPortfolioErrors];
+
+export type RemoveDemoPortfolioResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type RemoveDemoPortfolioResponse = RemoveDemoPortfolioResponses[keyof RemoveDemoPortfolioResponses];
+
+export type GetDemoPortfolioData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/demo';
+};
+
+export type GetDemoPortfolioErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetDemoPortfolioError = GetDemoPortfolioErrors[keyof GetDemoPortfolioErrors];
+
+export type GetDemoPortfolioResponses = {
+    /**
+     * Successful Response
+     */
+    200: DemoPortfolioView;
+};
+
+export type GetDemoPortfolioResponse = GetDemoPortfolioResponses[keyof GetDemoPortfolioResponses];
+
+export type OpenDemoPortfolioData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/demo';
+};
+
+export type OpenDemoPortfolioErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type OpenDemoPortfolioError = OpenDemoPortfolioErrors[keyof OpenDemoPortfolioErrors];
+
+export type OpenDemoPortfolioResponses = {
+    /**
+     * Successful Response
+     */
+    200: DemoPortfolioView;
+};
+
+export type OpenDemoPortfolioResponse = OpenDemoPortfolioResponses[keyof OpenDemoPortfolioResponses];
 
 export type ExportFillsData = {
     body?: never;
@@ -23631,6 +24349,158 @@ export type RunScheduledJobNowResponses = {
 
 export type RunScheduledJobNowResponse = RunScheduledJobNowResponses[keyof RunScheduledJobNowResponses];
 
+export type ListScreenAlertsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/screener/alerts';
+};
+
+export type ListScreenAlertsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListScreenAlertsError = ListScreenAlertsErrors[keyof ListScreenAlertsErrors];
+
+export type ListScreenAlertsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageScreenAlertView;
+};
+
+export type ListScreenAlertsResponse = ListScreenAlertsResponses[keyof ListScreenAlertsResponses];
+
+export type EvaluateScreenAlertsData = {
+    /**
+     * Body
+     */
+    body?: ScreenAlertRunRequest | null;
+    path?: never;
+    query?: never;
+    url: '/api/screener/alerts/evaluate';
+};
+
+export type EvaluateScreenAlertsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type EvaluateScreenAlertsError = EvaluateScreenAlertsErrors[keyof EvaluateScreenAlertsErrors];
+
+export type EvaluateScreenAlertsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScreenAlertRunView;
+};
+
+export type EvaluateScreenAlertsResponse = EvaluateScreenAlertsResponses[keyof EvaluateScreenAlertsResponses];
+
+export type ListScreenAlertEventsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Screen Id
+         */
+        screen_id?: string | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/screener/alerts/events';
+};
+
+export type ListScreenAlertEventsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListScreenAlertEventsError = ListScreenAlertEventsErrors[keyof ListScreenAlertEventsErrors];
+
+export type ListScreenAlertEventsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageScreenAlertEventView;
+};
+
+export type ListScreenAlertEventsResponse = ListScreenAlertEventsResponses[keyof ListScreenAlertEventsResponses];
+
 export type SubmitScreenJobData = {
     body: ScreenRunRequest;
     path?: never;
@@ -24033,6 +24903,144 @@ export type UpdateScreenResponses = {
 
 export type UpdateScreenResponse = UpdateScreenResponses[keyof UpdateScreenResponses];
 
+export type DeleteScreenAlertData = {
+    body?: never;
+    path: {
+        /**
+         * Screen Id
+         */
+        screen_id: string;
+    };
+    query?: never;
+    url: '/api/screener/screens/{screen_id}/alert';
+};
+
+export type DeleteScreenAlertErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type DeleteScreenAlertError = DeleteScreenAlertErrors[keyof DeleteScreenAlertErrors];
+
+export type DeleteScreenAlertResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteScreenAlertResponse = DeleteScreenAlertResponses[keyof DeleteScreenAlertResponses];
+
+export type GetScreenAlertData = {
+    body?: never;
+    path: {
+        /**
+         * Screen Id
+         */
+        screen_id: string;
+    };
+    query?: never;
+    url: '/api/screener/screens/{screen_id}/alert';
+};
+
+export type GetScreenAlertErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetScreenAlertError = GetScreenAlertErrors[keyof GetScreenAlertErrors];
+
+export type GetScreenAlertResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScreenAlertView;
+};
+
+export type GetScreenAlertResponse = GetScreenAlertResponses[keyof GetScreenAlertResponses];
+
+export type SetScreenAlertData = {
+    body: ScreenAlertSet;
+    path: {
+        /**
+         * Screen Id
+         */
+        screen_id: string;
+    };
+    query?: never;
+    url: '/api/screener/screens/{screen_id}/alert';
+};
+
+export type SetScreenAlertErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetScreenAlertError = SetScreenAlertErrors[keyof SetScreenAlertErrors];
+
+export type SetScreenAlertResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScreenAlertView;
+};
+
+export type SetScreenAlertResponse = SetScreenAlertResponses[keyof SetScreenAlertResponses];
+
 export type SizeScreenData = {
     body: ScreenRunRequest;
     path?: never;
@@ -24328,6 +25336,186 @@ export type ListDataSourcesResponses = {
 };
 
 export type ListDataSourcesResponse = ListDataSourcesResponses[keyof ListDataSourcesResponses];
+
+export type ListStatementImportsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/statement-imports';
+};
+
+export type ListStatementImportsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListStatementImportsError = ListStatementImportsErrors[keyof ListStatementImportsErrors];
+
+export type ListStatementImportsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageStatementImportView;
+};
+
+export type ListStatementImportsResponse = ListStatementImportsResponses[keyof ListStatementImportsResponses];
+
+export type CommitStatementImportData = {
+    body: StatementImportRequest;
+    path?: never;
+    query?: never;
+    url: '/api/statement-imports';
+};
+
+export type CommitStatementImportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CommitStatementImportError = CommitStatementImportErrors[keyof CommitStatementImportErrors];
+
+export type CommitStatementImportResponses = {
+    /**
+     * Successful Response
+     */
+    201: StatementImportView;
+};
+
+export type CommitStatementImportResponse = CommitStatementImportResponses[keyof CommitStatementImportResponses];
+
+export type PreviewStatementImportData = {
+    body: StatementImportRequest;
+    path?: never;
+    query?: never;
+    url: '/api/statement-imports/preview';
+};
+
+export type PreviewStatementImportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type PreviewStatementImportError = PreviewStatementImportErrors[keyof PreviewStatementImportErrors];
+
+export type PreviewStatementImportResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatementPreview;
+};
+
+export type PreviewStatementImportResponse = PreviewStatementImportResponses[keyof PreviewStatementImportResponses];
+
+export type UndoStatementImportData = {
+    body?: never;
+    path: {
+        /**
+         * Import Id
+         */
+        import_id: string;
+    };
+    query?: never;
+    url: '/api/statement-imports/{import_id}/undo';
+};
+
+export type UndoStatementImportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UndoStatementImportError = UndoStatementImportErrors[keyof UndoStatementImportErrors];
+
+export type UndoStatementImportResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatementImportView;
+};
+
+export type UndoStatementImportResponse = UndoStatementImportResponses[keyof UndoStatementImportResponses];
 
 export type ListStatementFlagsData = {
     body?: never;
