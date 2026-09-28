@@ -132,8 +132,19 @@ def authorize(
     if safe and _reads_open(request):
         return
     principal = _resolve(request, creds)
+    if principal.confined and not _route_grants(request, principal):
+        raise PermissionDenied("this credential only reaches its own routes")
     if not safe and not principal.can_write and not _route_allows_readers(request):
         raise PermissionDenied("this credential is read-only")
+
+
+def _route_grants(request: Request, principal: Principal) -> bool:
+    """True when the matched route declares a permission one of
+    ``principal``'s scopes grants (a lab worker token on a worker route)."""
+    route = request.scope.get("route")
+    dependant = getattr(route, "dependant", None)
+    permission = _declared_permission(dependant) if dependant is not None else None
+    return permission is not None and bool(POLICY[permission].scopes & principal.scopes)
 
 
 def _route_allows_readers(request: Request) -> bool:

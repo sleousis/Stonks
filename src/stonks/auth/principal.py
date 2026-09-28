@@ -20,6 +20,11 @@ class ApiScope(StrEnum):
     TRADE = "trade"  # orders, modes (not enabling auto), kill switch on
     LAB = "lab"  # jobs, backtests, lab runs
     ADMIN = "admin"
+    #: A remote lab worker (``python -m stonks.lab.offload worker --api``):
+    #: claims queued lab jobs and uploads their results. Admins only. A token
+    #: that holds only this scope reaches the lab worker routes and nothing
+    #: else (see :data:`CONFINED_SCOPES`).
+    LAB_WORKER = "lab_worker"
 
 
 ROLE_SCOPES: dict[Role, frozenset[ApiScope]] = {
@@ -29,7 +34,11 @@ ROLE_SCOPES: dict[Role, frozenset[ApiScope]] = {
 }
 
 #: Scopes that allow any unsafe HTTP method (the method-keyed floor).
-WRITE_SCOPES = frozenset({ApiScope.TRADE, ApiScope.LAB, ApiScope.ADMIN})
+WRITE_SCOPES = frozenset({ApiScope.TRADE, ApiScope.LAB, ApiScope.ADMIN, ApiScope.LAB_WORKER})
+
+#: Machine scopes: a credential holding only these may call just the routes
+#: whose permission one of them grants, reads included.
+CONFINED_SCOPES = frozenset({ApiScope.LAB_WORKER})
 
 #: ``assistant`` and ``telegram``: a signed-in user acting through the in-app
 #: assistant or a linked Telegram chat. Like a token, they never pass step-up.
@@ -94,3 +103,8 @@ class Principal:
     @property
     def can_write(self) -> bool:
         return bool(self.scopes & WRITE_SCOPES)
+
+    @property
+    def confined(self) -> bool:
+        """True for a machine credential (only :data:`CONFINED_SCOPES`)."""
+        return bool(self.scopes) and self.scopes <= CONFINED_SCOPES
