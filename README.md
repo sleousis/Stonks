@@ -34,7 +34,7 @@ Tests: `uv run pytest -n auto` (no network needed).
 - [Deploy guide](docs/deploy.md): one server with Docker Compose.
 - [Capacity and cost](docs/capacity.md): measured sizes, VM sizes and limits.
 - [Strategies](docs/strategies/README.md) and [principles](docs/principles.md).
-- [Roadmap](docs/roadmap.md) and [changelog](CHANGELOG.md).
+- [Roadmap](docs/roadmap.md), [changelog](CHANGELOG.md) and the [1.0 release checklist](docs/release-1.0.md).
 - [Contributing](CONTRIBUTING.md) and [security](SECURITY.md).
 
 ## Upgrading an older lake

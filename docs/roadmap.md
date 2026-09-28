@@ -10,13 +10,14 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 9 | Waves 1 to 5 done. Details under Phase 9. |
 | 10 | Done: 10.1 to 10.5. |
 | 11 | Done except parts of 11.6. 11.8 is this docs refresh. |
-| 12 | Mostly done. Open: three runbooks (tick failed, broker unreachable, disk full). |
+| 12 | Mostly done. Open: two runbooks (tick failed, disk full). Broker unreachable is `docs/runbooks/broker-outage.md`. |
 | 13 | Done: 13.1 to 13.14. |
 | 14 | Done. |
-| 15 | Mostly done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Open: order placement for real providers. |
-| 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
-| 17 | Planned. |
-| 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. 19.2 IBKR adapter, 19.3 connection and borrow, 19.5 reconciliation and drift, 19.15 deeper reconciliation, 19.8 tickets and approve mode, and 19.16 broker edge cases done. Design: `docs/design/live-trading.md`. |
+| 15 | Done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Auto books place orders through the `ibkr` connection. The SnapTrade and Alpaca connections stay read-only. |
+| 16 | Done: 16.1 to 16.4, off by default. |
+| 17 | Done: 17.1 to 17.7 and 17.9, research only, off by default. |
+| 18 | 18.1 to 18.7 done. 18.8 ready: tag pending. Version 1.0.0, changelog, docs pass and deploy dry run are in. The owner pushes `v1.0.0` (`docs/release-1.0.md`). |
+| 19 | Built up to 19.18 except 19.12 and 19.13: the IBKR adapter, connection and borrow, gateway deployment, safeguards and account rules, reconciliation and drift, tickets and approve mode, stages and gates, protective stops, live tests and runbooks, with console screens. Planned: 19.12 go live (operations) and 19.13 margin accounts. Design: `docs/design/live-trading.md`. |
 | 20 | 20.1 to 20.11 done, backend and console. |
 | 21 | All of 21.1 to 21.3.5 done and connected in the engine process, off by default. Design: `docs/design/intraday.md`. |
 | 22 | All of 22.1 to 22.10 done. Factors: `docs/factors.md`. |
@@ -383,7 +384,7 @@ The last phase. The whole project is reviewed file by file, fixed, tested throug
 | 18.5 Console identity | A visual identity specific to Stonks (type, colour, motion, data display, empty states, copy voice), applied to every page. Plain words for traders, no template look. |
 | 18.6 Usability and polish | Walk every flow as a new trader, cut steps and jargon, fix copy, loading and error states, mobile, accessibility and performance until the gates pass. |
 | 18.7 Feature completeness | A capability matrix of API, console, CLI and MCP. Fill every gap and add the parity test. |
-| 18.8 Release | Changelog, docs and wiki final pass, version 1.0 tag and a deploy dry run. |
+| 18.8 Release | Changelog, docs and wiki final pass, version 1.0 tag and a deploy dry run. Ready: tag pending. Version 1.0.0, the `1.0.0` changelog with "Upgrading", the docs pass and the deploy dry run are done. The owner pushes the `v1.0.0` tag, which runs the release and deploy workflows. Checklist and results: `docs/release-1.0.md`. |
 
 **Gate status (integration step 7, measured 2026-09-27)**
 
@@ -398,7 +399,7 @@ CI enforces each gate at today's value where it is still below the target, so it
 | Coverage `auth/` | 95 | 98.5 | floor 95 |
 | Coverage `portfolio/` | 95 | 96.5 | floor 95 |
 | Pyright strict over `core/` and `execution/` | 0 errors | 0 | `strict` in `[tool.pyright]`; `tools/pyright_gate.py` fails on any error under a strict path, baselined or not |
-| Pyright basic over `src/stonks` | 0 errors | 489 errors, all in the baseline (9.5.6 fixed 4 and added none) | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
+| Pyright basic over `src/stonks` | 0 errors | 465 errors, all in the baseline (measured 2026-09-28 for 18.8) | `tools/pyright_gate.py` fails on any error not in `tools/pyright-baseline.json` |
 | Property tests (Hypothesis) | every money-path invariant | orders, ledger, fills, costs, risk rules, price adjustment | `tests/property/`, derandomized in CI (`HYPOTHESIS_PROFILE=deep` for 5000 examples) |
 | Surviving mutants on the money paths | under 10% | 19.8% over six targets (the risk rules still to run in full) | `tools/mutation.py`, weekly and manual (`.github/workflows/mutation.yml`) |
 | Ruff | no ignore without a comment | met | `[tool.ruff.lint]`, every ignore says why |

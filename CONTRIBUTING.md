@@ -28,13 +28,15 @@ One line in the imperative, starting with a verb: `Add ...`, `Fix ...`, `Remove 
 Versions follow [Semantic Versioning](https://semver.org): breaking change = major, feature = minor, fix = patch.
 
 ```bash
-# 1. bump version in pyproject.toml, then
-git cliff --tag v1.2.3 -o CHANGELOG.md
+# 1. bump version in pyproject.toml and src/stonks/__init__.py
+# 2. list the commits since the last tag, then write the "## [1.2.3]"
+#    section of CHANGELOG.md by hand, grouped by area
+git cliff --unreleased
 git commit -am "Release v1.2.3"
 git tag v1.2.3 && git push origin main v1.2.3
 ```
 
-The tag builds the image, publishes a GitHub release with the changelog and deploys it ([docs/deploy.md](docs/deploy.md)).
+The tag builds the image, publishes a GitHub release with that CHANGELOG section (or the `git cliff` list when there is none) and deploys it ([docs/deploy.md](docs/deploy.md)).
 
 ## Security
 

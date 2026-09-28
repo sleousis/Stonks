@@ -14,7 +14,7 @@ flowchart LR
 | Step | Command | What it does |
 |------|---------|--------------|
 | 1 | `uv run stonks ingest prices --tickers AAPL.US,MSFT.US` | Pulls the latest daily bars, checks them, upserts them. |
-| 2 | `uv run stonks tick` | Scores active strategies, trades the default portfolio (`pf_default`), advances the model books, runs the hooks. |
+| 2 | `uv run stonks tick` | Scores active strategies, trades one book per portfolio from its subscriptions (`pf_default` follows every active strategy), advances the model books, runs the hooks. |
 | 3 | `uv run stonks report` | Writes the HTML report (`data/reports/report.html` by default). |
 | 4 | `uv run stonks health --notify` | Checks data freshness and stuck or failed runs. Exits 1 and alerts when unhealthy. |
 
@@ -383,7 +383,7 @@ Before switching models, run the eval set: `uv run stonks assistant eval` checks
 
 ## Broker connections
 
-Connections sync a user's broker accounts read-only: positions, cash and activities, into a linked `broker` portfolio. No provider works until an admin enables it.
+Connections sync a user's broker accounts: positions, cash and activities, into a linked `broker` portfolio. A provider that can trade (`ibkr`) also places the orders of that portfolio's auto and approve books. Providers are `alpaca`, `snaptrade`, `ibkr` (an IB Gateway named in `[brokers.ibkr.gateways]`, see [Live trading](#live-trading)) and the fakes for tests. No provider works until an admin enables it.
 
 ```bash
 export STONKS_SECRET_KEYS="$(uv run python -m stonks.security keygen 2>/dev/null)"   # once; keep it secret
@@ -423,7 +423,7 @@ uv run stonks orders list --manual --user you@example.com
 
 ## Live trading
 
-Phase 19 wave 1 is in place: the seams, the safeguards, the account rules and the gateway deployment. The IBKR adapter itself is the next wave, so no real order can go out yet. `[brokers] kind = "ibkr"` refuses to start until it lands. Design: `docs/design/live-trading.md`.
+Phase 19 is built up to 19.18: the IBKR adapter (`execution/brokers/ibkr/`), the `ibkr` connection, the gateway deployment, the safeguards and account rules, tickets and approve mode, reconciliation, stages and gates, and protective stops. Only 19.12 (running the stages with real money) and 19.13 (margin accounts) remain. `[brokers] kind = "ibkr"` trades the default portfolio through the gateway that lists it, and a broker portfolio trades through its `ibkr` connection. Real money waits for each stage gate (see [Stages, gates and the preview](#stages-gates-and-the-preview)). Design: `docs/design/live-trading.md`.
 
 ### IB Gateway health
 
@@ -635,7 +635,7 @@ flowchart LR
 | `operational` | The scheduled health job or `stonks health` finds stale data or a stuck run. | When one of them passes again. |
 | `kill` | A person turns on the kill switch. | Resume with the typed confirmation. |
 | `runaway` | A live run tries to close more positions than `max_orders_per_run.max_closing_orders`, or an intraday book goes over `intraday_order_rate`. | Only when a person clears it. |
-| `broker_drift` | Reconciliation finds a difference it cannot explain (roadmap 19.5, not wired yet). | Only when a person clears it. |
+| `broker_drift` | Reconciliation finds a difference it cannot explain (see [Reconciliation and drift](#reconciliation-and-drift)). New buys stop, closes still work. | Only when a person clears it. |
 | `intraday_loss` | An intraday book loses more than `intraday_loss_limit.max_loss` within its window (buys), or `hard_loss` (all, unless it flattens). | Only when a person clears it. |
 
 - The breaker limits live in `[production.risk.rules.circuit_breaker]` (`max_month_loss`, `max_week_loss`, `max_drawdown_halt`, `cooldown`). They are off until set. The same rule runs in backtests.

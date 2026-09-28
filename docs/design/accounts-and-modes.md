@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 15 (WP 15.1). It turns Stonks from one owner with one book into a small team: several traders, each with their own portfolios, broker connections, strategy subscriptions and notifications. Market data and the strategy catalog stay shared.
 
-Status: proposed. Code on `feat/roadmap` at `ee5b60f` assumes one portfolio, one bearer token and one notifier; this doc says what changes and in which order.
+Status: built. The tick trades one book per portfolio from its subscriptions, sign-in has roles and 2FA, and notifications go per user. This doc keeps the design and the order it was built in.
 
 ## 1. Goals and non-goals
 
