@@ -12,6 +12,8 @@ from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from stonks.assistant.grounding import GroundingSettings
+
 API_KEY_ENV = "STONKS_ASSISTANT_API_KEY"
 
 
@@ -120,6 +122,8 @@ class AssistantConfig(BaseModel):
     envelope: AssistantEnvelope = Field(default_factory=AssistantEnvelope)
     #: The research loop: the model's cutoff and the budgets.
     research: AssistantResearch = Field(default_factory=AssistantResearch)
+    #: The numeric grounding check on every reply (roadmap 23.8).
+    grounding: GroundingSettings = Field(default_factory=GroundingSettings)
 
     @property
     def enabled(self) -> bool:
