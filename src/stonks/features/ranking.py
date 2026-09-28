@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -35,6 +35,7 @@ from stonks.lab.cv import PurgedKFold
 
 __all__ = [
     "CVDiagnostic",
+    "RankerReport",
     "cross_sectional_ranks",
     "daily_ic",
     "ic_summary",
@@ -45,6 +46,49 @@ __all__ = [
 _DATE_LEVEL = "timestamp"
 #: Names a date needs before its IC counts.
 _MIN_NAMES = 3
+
+
+@dataclass(frozen=True)
+class RankerReport:
+    """What a report shows about a fitted ranking model: its settings, the
+    training window, the out-of-fold IC and each feature's importance."""
+
+    model: str
+    hyperparameters: dict[str, Any]
+    feature_names: list[str]
+    horizon_bars: int
+    n_rows: int
+    n_dates: int
+    train_start: str | None
+    train_end: str | None
+    cv_folds: int
+    #: ``ic_mean``, ``ic_std``, ``ic_ir``, ``ic_hit_rate`` (``None`` when unknown).
+    summary: dict[str, float | None]
+    #: Feature name -> permutation importance (drop in out-of-fold IC).
+    importance: dict[str, float]
+    #: ISO date -> out-of-fold IC.
+    ic_by_date: dict[str, float]
+
+    @classmethod
+    def from_state(cls, state: dict[str, Any]) -> RankerReport:
+        """From a ranker's ``fitted_state``; missing keys become empty."""
+        return cls(
+            model=str(state.get("model", "")),
+            hyperparameters=dict(state.get("hyperparameters") or {}),
+            feature_names=[str(n) for n in state.get("feature_names") or []],
+            horizon_bars=int(state.get("horizon_bars") or 0),
+            n_rows=int(state.get("n_rows") or 0),
+            n_dates=int(state.get("n_dates") or 0),
+            train_start=state.get("train_start"),
+            train_end=state.get("train_end"),
+            cv_folds=int(state.get("cv_folds") or 0),
+            summary={
+                k: None if state.get(k) is None else float(state[k])
+                for k in ("ic_mean", "ic_std", "ic_ir", "ic_hit_rate")
+            },
+            importance={str(k): float(v) for k, v in (state.get("importance") or {}).items()},
+            ic_by_date={str(k): float(v) for k, v in (state.get("ic_by_date") or {}).items()},
+        )
 
 
 def cross_sectional_ranks(frame: pd.DataFrame, columns: Sequence[str]) -> pd.DataFrame:
@@ -81,7 +125,7 @@ def daily_ic(pred: Any, label: Any, dates: Any) -> pd.Series:
         b = rows["label"].rank().to_numpy()
         if np.ptp(a) == 0 or np.ptp(b) == 0:
             continue
-        out[pd.Timestamp(day)] = float(np.corrcoef(a, b)[0, 1])
+        out[cast(pd.Timestamp, pd.Timestamp(cast(Any, day)))] = float(np.corrcoef(a, b)[0, 1])
     return pd.Series(out, dtype=float)
 
 

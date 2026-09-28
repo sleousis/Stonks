@@ -41,7 +41,7 @@ import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from scipy.stats import norm
@@ -307,7 +307,7 @@ class GradientBoostingRegressor(Regressor):
             max_leaf_nodes=self.max_leaf_nodes,
             min_samples_leaf=self.min_samples_leaf,
             l2_regularization=self.l2_regularization,
-            early_stopping=False,
+            early_stopping=cast(Any, False),
             random_state=self.seed,
         )
         model.fit(x, y, sample_weight=weights)
@@ -318,7 +318,7 @@ class GradientBoostingRegressor(Regressor):
             raise RuntimeError("regressor is not fitted")
         x = np.atleast_2d(np.asarray(x, dtype=float))
         if self._model is None:
-            return np.full(len(x), float(self._constant))
+            return np.full(len(x), cast(float, self._constant))
         return np.asarray(self._model.predict(x), dtype=float)
 
     def save(self, path: Path) -> None:
