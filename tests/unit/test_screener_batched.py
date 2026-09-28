@@ -310,8 +310,10 @@ def test_batched_metrics_match_the_per_ticker_reference(random_lake):
     for as_of in (AS_OF, AS_OF - timedelta(days=40), date(2024, 3, 15)):
         data = ScreenData(lake, names, as_of)
         want = _reference(data, lake, names)
-        assert set(want) == set(metric_ids())
-        for metric in metric_ids():
+        # the chart setups (roadmap 23.13) are factor reads, tested on their own
+        batched = [m for m in metric_ids() if not m.startswith("setup_")]
+        assert set(want) == set(batched)
+        for metric in batched:
             _assert_same(data.metric(metric), want[metric], metric)
         # the reference sees some of everything, so the comparison means something
         assert len(want["volatility_3m"]) > 5 and len(want["revenue_growth"]) > 5
