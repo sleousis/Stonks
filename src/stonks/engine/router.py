@@ -30,6 +30,13 @@ intraday broker (``engine/sim_broker.py``) and for IBKR:
   submit with no answer is ``unknown``: nothing more is sent for that
   ticker until reconciliation settles it, while other tickers still trade.
   A client id already in the ledger is ``known`` and never sent twice.
+- **One working order per ticker at a real broker** (``hold_working``).
+  The step decides from what the book holds, and an order still working
+  at the broker is not held yet, so the next bar would decide the same
+  trade again under a new client id and stack a second order on the
+  first. A ticker with a working order of the book is ``held`` until that
+  order settles. The simulated broker keeps the backtest's model (a
+  deferred rest carries next to new orders), so it is not held there.
 - **Per event** :meth:`IntradayRouter.on_bar_close` lets the simulated
   broker fill its working orders against the new bars (next-bar fills, P21),
   then reconciles the book's open orders through
@@ -45,6 +52,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from datetime import UTC, timedelta
 from typing import Literal, Protocol, runtime_checkable
 
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
@@ -81,6 +89,8 @@ _log = get_logger("stonks.engine.router")
 
 #: Driver priority of the router: after the session gates, before the step.
 ROUTER_PRIORITY = -10
+#: How long an order of an intraday book can still be working (a day order).
+WORKING_WINDOW = timedelta(days=1)
 #: Times in force an intraday book may use: orders that end with the session.
 INTRADAY_TIFS: frozenset[TimeInForce] = frozenset({"day", "ioc"})
 
@@ -141,6 +151,7 @@ class IntradayRouter:
         *,
         portfolio_id: str = DEFAULT_PORTFOLIO_ID,
         clock: Clock = SYSTEM_CLOCK,
+        hold_working: bool = False,
     ) -> None:
         if not isinstance(broker, OrderStateSource):
             raise TypeError("the intraday router needs a broker that looks orders up by client id")
@@ -148,6 +159,7 @@ class IntradayRouter:
         self.state = state
         self.portfolio_id = portfolio_id
         self.clock = clock
+        self.hold_working = hold_working
         self.ready = False
         self.last_reconcile: ReconcileSummary | None = None
         self._log = _log.bind(portfolio_id=portfolio_id)
@@ -176,9 +188,10 @@ class IntradayRouter:
             reason = "the router is not started: run start() to reconcile first"
             return tuple(RouteAck(o.client_id, o.ticker, "held", None, reason) for o in orders)
         held = self._unknown_tickers()
+        working = self._working_tickers() if self.hold_working else set()
         acks: list[RouteAck] = []
         for order in orders:
-            ack = self._route_one(order, held)
+            ack = self._route_one(order, held, working)
             if ack.status == "unknown":
                 held.add(order.ticker)
             acks.append(ack)
@@ -201,7 +214,7 @@ class IntradayRouter:
 
     # ---- internals -------------------------------------------------------------------
 
-    def _route_one(self, order: Order, held: set[str]) -> RouteAck:
+    def _route_one(self, order: Order, held: set[str], working: set[str]) -> RouteAck:
         from stonks.production.tick import _record_order
 
         cid = order.client_id
@@ -210,6 +223,9 @@ class IntradayRouter:
             return RouteAck(cid, order.ticker, "known", existing)
         if order.ticker in held:
             reason = f"{order.ticker} has an order in an unknown state: reconcile first"
+            return RouteAck(cid, order.ticker, "held", None, reason)
+        if order.ticker in working:
+            reason = f"{order.ticker} has an order still working at the broker"
             return RouteAck(cid, order.ticker, "held", None, reason)
         try:
             order = as_day_order(order)
@@ -253,6 +269,22 @@ class IntradayRouter:
         marks = ",".join("?" for _ in ids)
         rows = self.state.sql(f"SELECT DISTINCT ticker FROM orders WHERE client_id IN ({marks})",
                               list(ids))  # fmt: skip
+        return {r["ticker"] for r in rows}
+
+    def _working_tickers(self) -> set[str]:
+        """Tickers with a non-terminal order of the book, taken before the
+        batch is sent (both legs of an order that crosses zero go out).
+        Only orders of the last day count: an intraday day order cannot
+        work longer, so a row a failed reconcile left open never holds a
+        ticker for good."""
+        where, params = ledger_filter(self.state, "orders", self.portfolio_id)
+        marks = ",".join("?" for _ in NON_TERMINAL_STATUSES)
+        since = (self.clock.now() - WORKING_WINDOW).astimezone(UTC).isoformat(timespec="seconds")
+        rows = self.state.sql(
+            f"SELECT DISTINCT ticker FROM orders WHERE status IN ({marks}) AND {where}"
+            " AND created_at >= ?",
+            [*NON_TERMINAL_STATUSES, *params, since],
+        )
         return {r["ticker"] for r in rows}
 
     def _has_open_orders(self) -> bool:

@@ -25,6 +25,7 @@ as IBKR:
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
@@ -48,6 +49,9 @@ from stonks.execution.order_state import TERMINAL, ledger_status
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.engine.sim_broker")
+
+#: Bars of quotes the broker keeps per ticker (plus the newest older one).
+QUOTE_WINDOW_BARS = 5
 
 #: The session a bar belongs to (any value that compares equal within one
 #: session), or ``None`` outside every session.
@@ -157,7 +161,11 @@ class IntradaySimBroker:
         self._sim.set_interval(interval)
         self._orders: dict[str, _Working] = {}
         self._executions: list[Execution] = []
-        self._quotes: dict[str, QuoteTick] = {}
+        #: Recent quotes per ticker, oldest first: live, quotes keep coming
+        #: while a fill bar forms, and the fill wants the last one before
+        #: that bar opened.
+        self._quotes: dict[str, deque[QuoteTick]] = {}
+        self._quote_window = self._step * QUOTE_WINDOW_BARS
 
     # ---- market data -----------------------------------------------------------------
 
@@ -165,10 +173,19 @@ class IntradaySimBroker:
         self._sim.set_asset_classes(asset_classes)
 
     def on_quote(self, tick: QuoteTick) -> None:
-        """Remember the last recorded quote of a ticker (for the half spread)."""
-        known = self._quotes.get(tick.ticker)
-        if known is None or tick.timestamp >= known.timestamp:
-            self._quotes[tick.ticker] = tick
+        """Remember a recorded quote of a ticker (for the half spread). The
+        last few bars of quotes are kept, and always the newest one older
+        than that, so a fill finds the quote before its bar opened."""
+        quotes = self._quotes.setdefault(tick.ticker, deque())
+        if quotes and tick.timestamp < quotes[-1].timestamp:
+            items = sorted([*quotes, tick], key=lambda q: q.timestamp)
+            quotes.clear()
+            quotes.extend(items)
+        else:
+            quotes.append(tick)
+        cutoff = quotes[-1].timestamp - self._quote_window
+        while len(quotes) > 1 and quotes[1].timestamp <= cutoff:
+            quotes.popleft()
 
     def on_bar_close(self, event: BarClose) -> list[Execution]:
         """Fill the working orders against the bars of ``event``. Returns
@@ -314,8 +331,10 @@ class IntradaySimBroker:
         _log.debug("sim.order_ended", client_id=work.order.client_id, state=state, reason=reason)
 
     def _quote_before(self, ticker: str, at: datetime) -> QuoteTick | None:
-        quote = self._quotes.get(ticker)
-        return quote if quote is not None and quote.timestamp <= at else None
+        for quote in reversed(self._quotes.get(ticker, ())):
+            if quote.timestamp <= at:
+                return quote
+        return None
 
     def _new_session(self, ticker: str, decided_bar: datetime, bar_start: datetime) -> bool:
         if self._session_key is None:

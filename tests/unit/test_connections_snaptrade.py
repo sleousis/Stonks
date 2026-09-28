@@ -337,3 +337,18 @@ def test_client_uses_the_rate_limiter(context):
 def test_client_repr_hides_keys(context):
     client = SnapTradeClient(context.config.snaptrade, transport=context.transport)
     assert CONSUMER_KEY not in repr(client)
+
+
+def test_the_http_request_log_never_carries_the_user_secret(context, caplog):
+    """httpx2 logs every request URL at INFO, and SnapTrade's user secret
+    travels in the query. The logged URL keeps its path, never its query."""
+    import logging
+
+    conn = SnapTradeConnection.open(_creds(), context)
+    with caplog.at_level(logging.INFO, logger="httpx2"):
+        conn.accounts()
+    lines = [r.getMessage() for r in caplog.records if r.name == "httpx2"]
+    assert lines and "/accounts" in lines[0]
+    for secret in (USER_SECRET, CONSUMER_KEY):
+        assert all(secret not in line for line in lines)
+    assert all("userSecret" not in line for line in lines)

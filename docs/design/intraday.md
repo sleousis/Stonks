@@ -257,6 +257,8 @@ flowchart LR
 
 **The state machine.** Each order is committed `pending`, sent, then `submitted`, then synced by client id (`accepted` once the broker lists it). A rejection ends it `rejected`. A submit with no answer is `unknown`, and nothing more is sent for that ticker until reconciliation settles it. Other tickers keep trading. A missing `decided_at` is set to the clock.
 
+**A book at a real broker.** The step sees only what the book's own fills bought (`production.ownership.managed_view`), never the owner's shares or another book's in the same account. A ticker with an order of the book still working at the broker gets no new order until that one settles, so the next bar never stacks a second order on the first. The simulated broker keeps the backtest's model.
+
 **Day orders.** Every order goes out as a day order (`as_day_order`). No time in force means `day`, `ioc` stays, and `opg` or `gtc` are refused, since an intraday book ends with the session. `IbkrBroker(intraday=True)` checks the same rule again in `to_ib_order(intraday=True)`, so a day order is sent even though the daily default is the opening auction.
 
 **Per event.** Register the router on the driver at `ROUTER_PRIORITY` (-10), before the step. On each bar close it first lets the simulated broker fill its working orders against the new bars, then reconciles the book's open orders through `execution.reconcile.reconcile_orders`. Both brokers report executions and order state, so the execution path books one fill per execution id, with its fee, and a repeat books nothing. With no open order the reconcile is skipped.
@@ -266,7 +268,7 @@ flowchart LR
 - `place_order` never fills. The order waits for the next bar of its ticker. A bar that began before the decision bar closed is never used (P21).
 - Each bar close runs every working order through `MinuteFillModel`. Cash, margin, short rules and the cost model come from a wrapped `SimulatedBroker`, and the cost model's fee is the execution's commission.
 - The session of a bar comes from the ticker's exchange calendar (`calendar_session_key`). A day order whose next bar is in a later session expires. `expire_open()` ends every working order at the close.
-- `on_quote` keeps the last recorded quote per ticker. Only a quote from before the fill bar's open is used.
+- `on_quote` keeps the last few bars of recorded quotes per ticker. The fill uses the last quote from before the fill bar's open, even when later quotes arrived while that bar formed.
 
 **Minute fills** (`backtest/fills.py`, `MinuteFillModel` and `MinuteFillSettings`). The daily `BarFillModel` is unchanged. The minute model uses it for order types and the participation cap, then adds:
 

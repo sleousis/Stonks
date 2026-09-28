@@ -350,3 +350,26 @@ def test_the_job_skips_when_no_portfolio_trades_options(tmp_path):
         st.migrate()
     out = LOCAL_ACTIONS.get("options_live")(_job_ctx(settings, "plan"))
     assert out.status == "skipped" and out.detail["reason"] == "no_option_portfolios"
+
+
+def test_an_event_whose_fills_failed_to_book_is_booked_on_the_next_run(state, monkeypatch):
+    """The event row, its orders and its fills land together: a run that
+    dies before the fills are booked leaves nothing, so the next run books
+    the event in full instead of skipping it as known."""
+    import stonks.execution.reconcile as reconcile
+    from stonks.options.live.events import OptionEvent, book_events
+
+    event = OptionEvent("E9", "assignment", PUT_190, -2.0, EXP)
+    real = reconcile.book_executions
+
+    def crash(*args, **kwargs):
+        raise RuntimeError("the process died here")
+
+    monkeypatch.setattr(reconcile, "book_executions", crash)
+    with pytest.raises(RuntimeError):
+        book_events(state, PID, [event])
+    monkeypatch.setattr(reconcile, "book_executions", real)
+
+    assert len(book_events(state, PID, [event])) == 1
+    fills = state.sql("SELECT ticker, quantity FROM fills ORDER BY ticker")
+    assert [(r["ticker"], r["quantity"]) for r in fills] == [("AAPL.US", 200.0), (PUT_190, 2.0)]

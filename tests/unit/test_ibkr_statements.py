@@ -89,3 +89,13 @@ def test_the_statement_source_returns_broker_statements_and_raises_flex_errors()
     st.clear_statement_cache()
     with pytest.raises(FlexError):
         broken()
+
+
+def test_a_corrected_execution_keeps_the_id_the_ledger_booked():
+    """A correction's id differs only after the last period. The statement
+    names it by the first version's id, the one reconciliation books."""
+    text = STATEMENT.replace('ibExecID="0001f4e8.1"', 'ibExecID="0000e0d5.6576f7c6.01.02"')
+    assert text != STATEMENT
+    (flex,) = parse_flex_statements(text)
+    buy, _ = st.to_broker_statement(flex).executions
+    assert buy.exec_id == "0000e0d5.6576f7c6.01.01"

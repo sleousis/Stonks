@@ -58,7 +58,13 @@ from stonks.execution.brokers.base import (
     LiveTradingRefusedError,
 )
 from stonks.execution.brokers.ibkr.broker import IbkrBroker
-from stonks.execution.brokers.ibkr.client import IbClient, IbContract, IbEndpoint, IbExecution
+from stonks.execution.brokers.ibkr.client import (
+    IbClient,
+    IbContract,
+    IbEndpoint,
+    IbExecution,
+    execution_key,
+)
 from stonks.execution.brokers.ibkr.contracts import ticker_for_contract
 from stonks.execution.brokers.ibkr.factory import (
     ClientFactory,
@@ -418,7 +424,10 @@ def _flex_trade_activity(t: FlexTrade, account_id: str) -> Activity:
     fee = abs(t.commission) if t.commission is not None else None
     amount = t.proceeds if t.proceeds is not None else -t.quantity * t.price
     return Activity(
-        provider_activity_id=f"exec:{t.exec_id}" if t.exec_id else f"trade:{t.trade_id}",
+        # a correction is the activity of the execution it corrects
+        provider_activity_id=(
+            f"exec:{execution_key(t.exec_id)}" if t.exec_id else f"trade:{t.trade_id}"
+        ),
         account_id=account_id,
         kind="trade",
         trade_date=t.trade_date,
