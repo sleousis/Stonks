@@ -200,7 +200,7 @@ class Visit:
             self.page.get_by_role("button", name="Open navigation").click()
         nav = self.page.locator("#nav-drawer" if self.phone else "aside.sidebar")
         folds = nav.locator("details.fold:not([open]) > summary")
-        for i in range(folds.count()):
+        for _ in range(folds.count()):
             folds.nth(0).click()
 
     def check_page(self, name: str) -> None:
