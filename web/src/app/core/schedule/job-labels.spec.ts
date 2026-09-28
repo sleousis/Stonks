@@ -15,6 +15,21 @@ describe('job labels', () => {
     expect(jobLabel(job('connections_sync', null))).toBe('Broker sync');
   });
 
+  it('names every default job in words, never by its id', () => {
+    expect(jobLabel(job('live_reconcile', null, 'live_sod_check'))).toBe(
+      'Broker check before the open',
+    );
+    expect(jobLabel(job('live_reconcile', null, 'live_eod_check'))).toBe(
+      'Broker check after the close',
+    );
+    expect(jobLabel(job('options_live', null, 'options_expiry_watch'))).toBe(
+      'Options expiry watch',
+    );
+    expect(jobLabel(job('broker_health', null))).toBe('Broker gateway check');
+    expect(jobLabel(job('engine_start', null))).toBe('Intraday engine start');
+    expect(jobLabel(job('ingest_borrow', null))).toBe('Borrow rates update');
+  });
+
   it('humanizes an unknown action from its name', () => {
     expect(jobLabel(job('custom_thing', null, 'nightly_export'))).toBe('Nightly export');
   });

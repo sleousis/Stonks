@@ -17,6 +17,99 @@
   color: var(--color-ink-2);
 }
 
+// Is a scheduler running: a lamp and a sentence, never colour alone.
+.scheduler-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--text-sm);
+
+  .lamp {
+    flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-gain);
+  }
+
+  &[data-running='false'] {
+    background: var(--color-warn-soft);
+
+    .lamp {
+      border-radius: 1px;
+      background: var(--color-warn);
+    }
+  }
+}
+
+.btn-run {
+  white-space: nowrap;
+}
+
+// Jobs whose feature is off: folded away, no Run now.
+.off-jobs {
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border);
+
+  summary {
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+    cursor: pointer;
+    font-weight: var(--weight-medium);
+
+    @include bp.coarse {
+      min-height: var(--touch-min);
+    }
+  }
+
+  .off-intro {
+    margin: var(--space-1) 0 var(--space-2);
+    font-size: var(--text-sm);
+  }
+
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--space-1) var(--space-3);
+    padding: var(--space-2) 0;
+    font-size: var(--text-sm);
+
+    & + li {
+      border-top: 1px solid var(--color-border);
+    }
+  }
+}
+
+.off-name {
+  font-weight: var(--weight-medium);
+}
+
+.cell-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+
+  @include bp.phone {
+    min-height: var(--touch-min);
+  }
+
+  @include bp.coarse {
+    min-height: var(--touch-min);
+  }
+}
+
 .row-actions {
   display: flex;
   flex-wrap: wrap;

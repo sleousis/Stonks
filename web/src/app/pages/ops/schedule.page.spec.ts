@@ -1,5 +1,6 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
+import { provideRouter } from '@angular/router';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 
 import type { BackupView, BrokerInfo, Job, MeView, Page, ScheduleView } from '../../api/models';
@@ -163,6 +164,7 @@ describe('SchedulePage', () => {
     stepUp = vi.fn().mockResolvedValue(true);
     TestBed.configureTestingModule({
       providers: [
+        provideRouter([]),
         ...provideApi(),
         provideHttpClientTesting(),
         { provide: ConfirmService, useValue: { confirm } },
@@ -196,7 +198,7 @@ describe('SchedulePage', () => {
 
     it('shows jobs, recent runs and backups', () => {
       const jobs = el.querySelector('[aria-labelledby="jobs-title"]')!;
-      expect(jobs.textContent).toContain('Runs inside the server');
+      expect(jobs.textContent).toContain('The scheduler runs inside the server.');
       expect(jobs.textContent).toContain('45 minutes after the New York market closes');
       expect(jobs.textContent).not.toContain('XNYS close +45m');
       expect(jobs.textContent).toContain('Never');
@@ -211,11 +213,27 @@ describe('SchedulePage', () => {
       expect(runs.textContent).toContain('broker down');
       const backups = el.querySelector('[aria-labelledby="backups-title"]')!;
       expect(backups.textContent).toContain('5 MB');
-      expect(
-        backups.querySelector('button[aria-label="Verify backup stonks-20260925T020000Z"]'),
-      ).not.toBeNull();
+      expect(backups.querySelector('button[aria-label^="Verify the backup from"]')).not.toBeNull();
       expect(el.textContent).not.toContain('command line');
       expect(el.textContent).not.toContain('[scheduler]');
+      // One status vocabulary.
+      expect(runs.textContent).toContain('Done');
+      expect(runs.textContent).toContain('Failed');
+      expect(el.textContent).not.toMatch(/\bsucceeded\b/i);
+    });
+
+    it('names a checked backup by when it was made, not by its id', async () => {
+      el.querySelector<HTMLButtonElement>('button[aria-label^="Verify the backup from"]')!.click();
+      (await nextRequest(http, `/api/backups/${BACKUP.id}/verify`, 'POST')).flush({
+        backup_id: BACKUP.id,
+        ok: true,
+        problems: [],
+      });
+      await settle();
+      const outcome = el.querySelector('.outcome')!;
+      expect(outcome.textContent).toContain('The backup from');
+      expect(outcome.textContent).toContain('checks out');
+      expect(outcome.textContent).not.toContain(BACKUP.id);
     });
 
     it('asks a plain confirm in trader words for jobs that place no orders', async () => {
@@ -283,6 +301,78 @@ describe('SchedulePage', () => {
     });
   });
 
+  describe('runs from outside the scheduler and jobs that are off', () => {
+    const view: ScheduleView = {
+      ...SCHEDULE,
+      hosted: false,
+      running: false,
+      jobs: [
+        ...SCHEDULE.jobs,
+        {
+          name: 'engine_start',
+          action: 'engine_start',
+          trigger: 'XNYS open -15m',
+          next_run_at: inDays(1),
+          next_as_of: null,
+          off_reason: 'engine_off',
+        },
+      ],
+      recent: [
+        {
+          id: 'tick_2026-09-24_a',
+          job_name: 'tick',
+          action: 'tick',
+          run_key: 'outside:tick_2026-09-24_a',
+          scheduled_for: '2026-09-24T21:00:00Z',
+          as_of: '2026-09-24',
+          status: 'partial',
+          catch_up: false,
+          started_at: '2026-09-24T21:00:00Z',
+          finished_at: '2026-09-24T21:01:00Z',
+          detail: { tick_id: 'tick_2026-09-24_a' },
+          error: null,
+          origin: 'outside',
+        },
+      ],
+    };
+
+    beforeEach(() => setup(ADMIN, SIMULATED, view));
+
+    it('lists a trading run started by hand, so the page never says No runs yet after one', () => {
+      const runs = el.querySelector('[aria-labelledby="runs-title"]')!;
+      expect(runs.textContent).not.toContain('No runs yet');
+      expect(runs.textContent).toContain('Trading run');
+      expect(runs.textContent).toContain('Partly done');
+      expect(runs.textContent).toContain('By hand');
+      const link = runs.querySelector<HTMLAnchorElement>('tbody a')!;
+      expect(link.getAttribute('href')).toBe('/orders/ticks/tick_2026-09-24_a');
+      // The trading run job's Last run counts it.
+      const jobs = el.querySelector('[aria-labelledby="jobs-title"]')!;
+      const tickRow = [...jobs.querySelectorAll('tbody tr')].find((r) =>
+        r.textContent?.includes('Trading run'),
+      )!;
+      expect(tickRow.textContent).toContain('Partly done');
+    });
+
+    it('folds jobs whose feature is off away from Run now', () => {
+      const jobs = el.querySelector('[aria-labelledby="jobs-title"]')!;
+      expect(jobs.querySelector('button[aria-label="Run now: Intraday engine start"]')).toBeNull();
+      const off = jobs.querySelector('details.off-jobs')!;
+      expect(off.textContent).toContain('Waiting on a feature that is off (1)');
+      expect(off.textContent).toContain('Intraday engine start');
+      expect(off.textContent).toContain('Intraday trading is off.');
+      expect(jobs.textContent).not.toContain('engine_start');
+    });
+
+    it('says when no scheduler is running and what the admin can do', () => {
+      const state = el.querySelector('.scheduler-state')!;
+      expect(state.getAttribute('data-running')).toBe('false');
+      expect(state.textContent).toContain('No scheduler is running');
+      expect(state.textContent).toContain('Start the scheduler service');
+      expect(el.textContent).not.toContain('Ask your admin');
+    });
+  });
+
   describe('the trading run job, as an admin with a live broker', () => {
     beforeEach(() => setup(ADMIN, ALPACA_LIVE));
 
@@ -327,9 +417,7 @@ describe('SchedulePage', () => {
     beforeEach(() => setup(ADMIN));
 
     it('verifies a backup and says what it found', async () => {
-      el.querySelector<HTMLButtonElement>(
-        'button[aria-label="Verify backup stonks-20260925T020000Z"]',
-      )!.click();
+      el.querySelector<HTMLButtonElement>('button[aria-label^="Verify the backup from"]')!.click();
       (await nextRequest(http, `/api/backups/${BACKUP.id}/verify`, 'POST')).flush({
         backup_id: BACKUP.id,
         ok: false,
@@ -343,9 +431,7 @@ describe('SchedulePage', () => {
     });
 
     it('result 500 after success shows inline error with retry (restore)', async () => {
-      el.querySelector<HTMLButtonElement>(
-        'button[aria-label="Restore backup stonks-20260925T020000Z"]',
-      )!.click();
+      el.querySelector<HTMLButtonElement>('button[aria-label^="Restore the backup from"]')!.click();
       (await nextRequest(http, `/api/backups/${BACKUP.id}/restore`, 'POST')).flush(
         backupJob({ id: 'job_r', kind: 'backup_restore', status: 'queued' }),
       );
@@ -370,9 +456,7 @@ describe('SchedulePage', () => {
 
     it('restores only after the typed words and a step-up, and never touches live data', async () => {
       const success = vi.spyOn(TestBed.inject(ToastService), 'success');
-      el.querySelector<HTMLButtonElement>(
-        'button[aria-label="Restore backup stonks-20260925T020000Z"]',
-      )!.click();
+      el.querySelector<HTMLButtonElement>('button[aria-label^="Restore the backup from"]')!.click();
       const post = await nextRequest(http, `/api/backups/${BACKUP.id}/restore`, 'POST');
       expect(confirm).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -402,9 +486,7 @@ describe('SchedulePage', () => {
 
     it('does nothing when the step-up is cancelled', async () => {
       stepUp.mockResolvedValue(false);
-      el.querySelector<HTMLButtonElement>(
-        'button[aria-label="Restore backup stonks-20260925T020000Z"]',
-      )!.click();
+      el.querySelector<HTMLButtonElement>('button[aria-label^="Restore the backup from"]')!.click();
       await settle();
       expect(http.match(`/api/backups/${BACKUP.id}/restore`)).toEqual([]);
     });
