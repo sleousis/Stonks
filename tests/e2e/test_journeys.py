@@ -229,8 +229,15 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     admin.check_page("strategy-promote-override")
     dialog = page.locator("dialog[open]")
     fill_status_dialog(dialog, "override", "Seeded e2e strategy, override recorded on purpose.")
-    override.click()
-    expect(page.locator("main")).to_contain_text("Live")
+    # The page always shows the lifecycle ladder, "Live" step included, so
+    # wait for the promote call itself before reading the audit trail.
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and re.search(promote_url, r.url) is not None
+    ) as promoted:
+        override.click()
+    assert promoted.value.ok, promoted.value.status
+    status = admin.api("GET", f"/api/strategies/{sid}").json()["status"]
+    assert status == "active"
     history = admin.api("GET", f"/api/strategies/{sid}/history").json()
     rows = history if isinstance(history, list) else history["items"]
     assert any(r.get("override") and r.get("to_status") == "active" for r in rows), rows
