@@ -82,10 +82,18 @@ describe('DataTable', () => {
     await fixture.whenStable();
     expect(firstCells()).toEqual(['c', 'b', 'a']);
 
-    // Numbers start high-to-low; missing values sort as smallest.
+    // Numbers start high-to-low; missing values go last either way.
     valueBtn.click();
     await fixture.whenStable();
     expect(firstCells()).toEqual(['a', 'b', 'c']);
+    valueBtn.click();
+    await fixture.whenStable();
+    expect(firstCells()).toEqual(['b', 'a', 'c']);
+  });
+
+  it('puts missing values last on an ascending first sort (Not scheduled after the next run)', async () => {
+    const { firstCells } = await render({ initialSort: { key: 'value', dir: 'asc' } });
+    expect(firstCells()).toEqual(['b', 'a', 'c']);
   });
 
   it('paginates client-side', async () => {

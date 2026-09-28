@@ -180,7 +180,7 @@ export class DataTable<T extends object> {
     const col = this.columns().find((c) => c.key === sort.key);
     if (!col) return rows;
     const factor = sort.dir === 'asc' ? 1 : -1;
-    return [...rows].sort((a, b) => factor * compare(this.raw(a, col), this.raw(b, col)));
+    return [...rows].sort((a, b) => compare(this.raw(a, col), this.raw(b, col), factor));
   });
 
   protected readonly serverMode = computed(() => this.total() !== null);
@@ -301,11 +301,13 @@ export class DataTable<T extends object> {
   }
 }
 
-function compare(a: CellValue, b: CellValue): number {
-  // Missing values always sort last-ish (treated as smallest).
+/** `factor` is 1 for ascending, -1 for descending. Missing values go last either way. */
+function compare(a: CellValue, b: CellValue, factor: number): number {
   const aMissing = a === null || a === undefined || a === '';
   const bMissing = b === null || b === undefined || b === '';
-  if (aMissing || bMissing) return aMissing === bMissing ? 0 : aMissing ? -1 : 1;
-  if (typeof a === 'number' && typeof b === 'number') return a - b;
-  return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+  if (aMissing || bMissing) return aMissing === bMissing ? 0 : aMissing ? 1 : -1;
+  if (typeof a === 'number' && typeof b === 'number') return factor * (a - b);
+  return (
+    factor * String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' })
+  );
 }
