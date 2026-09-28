@@ -7,7 +7,13 @@ import math
 import numpy as np
 import pytest
 
-from stonks.stats.data_snooping import bootstrap_means, reality_check, romano_wolf, spa
+from stonks.stats.data_snooping import (
+    bootstrap_means,
+    data_snooping,
+    reality_check,
+    romano_wolf,
+    spa,
+)
 
 # ---- exact values from hand-picked resamples -------------------------------------
 
@@ -142,3 +148,12 @@ def test_rejects_bad_input(bad: np.ndarray) -> None:
 def test_rejects_out_of_range_indices() -> None:
     with pytest.raises(ValueError):
         bootstrap_means(D1, indices=np.array([[0, 1, 2, 4]]))
+
+
+def test_combined_run_matches_separate_calls() -> None:
+    d = np.random.default_rng(4).normal(0.01, 1.0, size=(150, 6))
+    both = data_snooping(d, alpha=0.1, n_boot=300, seed=3)
+    assert both.reality_check == reality_check(d, n_boot=300, seed=3)
+    assert both.spa == spa(d, n_boot=300, seed=3)
+    rw = romano_wolf(d, alpha=0.1, n_boot=300, seed=3)
+    assert both.romano_wolf.p_values.tolist() == rw.p_values.tolist()

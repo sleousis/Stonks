@@ -25,6 +25,11 @@ export const SURVIVAL_TESTS: readonly SurvivalTestInfo[] = [
     hint: 'The Sharpe survives the number of trials.',
   },
   { id: 'pbo', label: 'Overfitting (PBO)', hint: 'The best trial is not just the luckiest.' },
+  {
+    id: 'data_snooping',
+    label: 'Data snooping (SPA)',
+    hint: 'The best trial beats cash once every trial tried is counted.',
+  },
   { id: 'mc_trades', label: 'Monte Carlo trades', hint: 'Reshuffled trades rarely ruin it.' },
   { id: 'cost_stress', label: 'Cost stress', hint: 'Still works at two or three times the costs.' },
   { id: 'plateau', label: 'Parameter plateau', hint: 'Nearby parameters also work.' },

@@ -127,6 +127,8 @@ class LabRunContext:
     #: Trials of the class or the family, each counted once: everything
     #: searched on the way to this result (P2). 0 when not known.
     n_trials_searched: int = 0
+    #: The run's research family (roadmap 22.9), else None.
+    family: str | None = None
 
 
 class TrialLedger:
@@ -305,6 +307,19 @@ class TrialLedger:
             )
             for r in rows
         ]
+
+    def family_trial_matrices(self, family: str) -> list[tuple[str, TrialMatrix]]:
+        """``(run_id, matrix)`` of every run in ``family`` that saved per-bar
+        trial returns, oldest first (roadmap 23.9)."""
+        rows = self.state.sql(
+            "SELECT id FROM lab_runs WHERE family = ? ORDER BY started_at, id", [family]
+        )
+        out = []
+        for row in rows:
+            matrix = self.trial_matrix(str(row["id"]))
+            if matrix is not None:
+                out.append((str(row["id"]), matrix))
+        return out
 
     def trial_matrix(self, run_id: str) -> TrialMatrix | None:
         path = self.trials_dir / f"{run_id}.npz"

@@ -324,6 +324,7 @@ class LabRunner:
             n_trials_class=n_class,
             n_trials_family=n_family,
             n_trials_searched=n_searched,
+            family=family,
         )
         for test in self._suite.tests:
             bind = getattr(test, "bind_tuning", None)

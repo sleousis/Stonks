@@ -35,10 +35,12 @@ import numpy as np
 from stonks.stats.bootstrap import stationary_bootstrap_indices
 
 __all__ = [
+    "DataSnoopingResult",
     "RealityCheckResult",
     "RomanoWolfResult",
     "SPAResult",
     "bootstrap_means",
+    "data_snooping",
     "reality_check",
     "romano_wolf",
     "spa",
@@ -128,7 +130,11 @@ def reality_check(
     means, boot = bootstrap_means(
         d, n_boot=n_boot, mean_block=mean_block, seed=seed, indices=indices
     )
-    root_t = math.sqrt(np.asarray(d).shape[0])
+    return _reality_check(means, boot, _bars(d))
+
+
+def _reality_check(means: np.ndarray, boot: np.ndarray, t: int) -> RealityCheckResult:
+    root_t = math.sqrt(t)
     stat = root_t * float(means.max())
     null = root_t * (boot - means).max(axis=1)
     return RealityCheckResult(
@@ -158,7 +164,10 @@ def spa(
     means, boot = bootstrap_means(
         d, n_boot=n_boot, mean_block=mean_block, seed=seed, indices=indices
     )
-    t = np.asarray(d).shape[0]
+    return _spa(means, boot, _bars(d), studentize)
+
+
+def _spa(means: np.ndarray, boot: np.ndarray, t: int, studentize: bool) -> SPAResult:
     root_t = math.sqrt(t)
     omega = _omega(means, boot, t) if studentize else np.ones_like(means)
     stats = _ratio(root_t * means, omega)
@@ -207,7 +216,12 @@ def romano_wolf(
     means, boot = bootstrap_means(
         d, n_boot=n_boot, mean_block=mean_block, seed=seed, indices=indices
     )
-    t = np.asarray(d).shape[0]
+    return _romano_wolf(means, boot, _bars(d), alpha, studentize)
+
+
+def _romano_wolf(
+    means: np.ndarray, boot: np.ndarray, t: int, alpha: float, studentize: bool
+) -> RomanoWolfResult:
     root_t = math.sqrt(t)
     omega = _omega(means, boot, t) if studentize else np.ones_like(means)
     stats = _ratio(root_t * means, omega)
@@ -224,6 +238,42 @@ def romano_wolf(
         alpha=alpha,
         n_boot=boot.shape[0],
     )
+
+
+@dataclass(frozen=True)
+class DataSnoopingResult:
+    reality_check: RealityCheckResult
+    spa: SPAResult
+    romano_wolf: RomanoWolfResult
+
+
+def data_snooping(
+    d: np.ndarray,
+    alpha: float = 0.05,
+    *,
+    n_boot: int = 1000,
+    mean_block: float = 10.0,
+    seed: int | None = 0,
+    indices: np.ndarray | None = None,
+) -> DataSnoopingResult:
+    """All three tests on one shared bootstrap (studentized SPA and
+    Romano-Wolf): the same answers as the separate calls, a third of the
+    work."""
+    if not 0.0 < alpha < 1.0:
+        raise ValueError(f"alpha must lie in (0, 1), got {alpha}")
+    means, boot = bootstrap_means(
+        d, n_boot=n_boot, mean_block=mean_block, seed=seed, indices=indices
+    )
+    t = _bars(d)
+    return DataSnoopingResult(
+        reality_check=_reality_check(means, boot, t),
+        spa=_spa(means, boot, t, True),
+        romano_wolf=_romano_wolf(means, boot, t, alpha, True),
+    )
+
+
+def _bars(d: np.ndarray) -> int:
+    return int(np.asarray(d).shape[0])
 
 
 def _check(d: np.ndarray) -> np.ndarray:

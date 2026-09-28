@@ -712,6 +712,7 @@ _TEST_NAMES = {
     "walk_forward": "Walk-forward",
     "deflated_sharpe": "Deflated Sharpe",
     "pbo": "Overfitting (PBO)",
+    "data_snooping": "Data snooping (SPA)",
     "mc_trades": "Monte Carlo trades",
     "cost_stress": "Cost stress",
     "plateau": "Parameter plateau",
