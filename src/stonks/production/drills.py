@@ -361,9 +361,7 @@ def run_kill_switch_drill(
         return True, f"global cancel sent ({count} open before)"
 
     def resume() -> tuple[bool, str]:
-        nonlocal halt_id
-        if halt_id is None:
-            return False, "no halt to clear"
+        assert halt_id is not None  # only runs after engage_kill set it
         clear_halt(state, halt_id, actor=DRILL_ACTOR, reason="drill finished")
         return True, f"halt #{halt_id} cleared (a real resume needs RESUME TRADING)"
 
