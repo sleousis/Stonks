@@ -26,6 +26,12 @@ A manual order takes the same road as a tick's orders, minus the signal:
    committed ``pending`` before the submit and synced by client id after,
    exactly like the tick (``reconcile_order``).
 
+   Strategy orders in a paper book fill at the next open, like a backtest
+   (P21, ``production.paper_fills``). Manual orders keep the latest close on
+   purpose: they have no backtest to match, the person sees and accepts the
+   price on the ticket, and manual holdings stay out of every strategy's
+   decisions, attribution and go-live evidence.
+
 Every manual order is recorded with ``origin = 'manual'``, no strategy, who
 placed it and why (migration 027), and an ``audit_log`` row. The tick never
 trades manual holdings (``ownership.manual_positions``).

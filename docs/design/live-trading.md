@@ -164,7 +164,7 @@ The new capabilities are `runtime_checkable` protocols in `execution/brokers/bas
 | (none) | `account` | Always set to the portfolio's linked account id, so a login with several accounts never trades the wrong one. |
 | (none) | `transmit` | `True`. A preview uses `whatIf` instead. |
 
-**Default live order.** The tick decides at the close and the backtest fills at the next open. So a live book sends a limit-on-open order (`LMT` with `tif = OPG`) with a collar: the limit is the reference price plus the fat-finger band for a buy, minus it for a sell. This matches the backtest's fill convention (P21) and closes the gap TCA records today as `convention`. An order the auction does not fill is cancelled by IBKR and reported as unfilled. TCA books its opportunity cost.
+**Default live order.** The tick decides at the close and the backtest fills at the next open. So a live book sends a limit-on-open order (`LMT` with `tif = OPG`) with a collar: the limit is the reference price plus the fat-finger band for a buy, minus it for a sell. This matches the backtest's fill convention (P21), which paper books already follow, and closes the gap TCA records as `convention`. An order the auction does not fill is cancelled by IBKR and reported as unfilled. TCA books its opportunity cost.
 
 **Idempotency.** IBKR has no server-side dedupe on `orderRef`, so the adapter does it:
 

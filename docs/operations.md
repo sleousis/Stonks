@@ -25,6 +25,26 @@ Every step is safe to rerun: ingest upserts, the tick reuses client ids for the 
 - `stonks tick --tickers ...` (or `--asset-class`) runs a scoped tick. It trades only those tickers and leaves every other holding alone, not even selling it. A tick over `[production].universe` still sells a holding that left the universe. Add `--full` to trade the whole book over those tickers. The CLI and the API tick job run the same code.
 - When the broker fills less than an order asked for (a simulated buy scaled down to cash), the order row keeps the filled quantity. Its `status_reason` says what was asked for.
 
+### How paper books fill
+
+A paper book fills the way a backtest does (principle P21). The tick decides after the close, and the order fills at the open of the next session.
+
+```mermaid
+flowchart LR
+  D[tick on day t: decide at the close] --> W[order working, nothing filled]
+  W --> S[tick on day t+1: fill at the open of t+1]
+  S --> N[then decide again at the close of t+1]
+```
+
+- The tick that decides records each order as working (`pending`, state `accepted`). The snapshot of that day holds no new fills.
+- The next tick fills it before it decides. It uses the first daily bar of the ticker after the decision day, with the same fill model (`[backtest.execution]`) and cost model (`[backtest.costs]`) as a backtest: the open as the price, the participation cap on that bar's volume, the gap guard, limit orders against the bar's range.
+- What the fill model leaves unfilled is cancelled with the reason "replaced by the next decision", as a backtest replaces its queue at each rebalance. The fill that did happen stays.
+- An order the fill model refuses outright (the gap guard, a limit not reached, no cash) expires.
+- A split between the decision and the fill rescales the order.
+- The fill is booked by the next tick, not by a job after the open. The daily bar with that open is only in the lake after the session's price ingest.
+- `[production] paper_fills = "close"` keeps the old rule: fill at once at the latest close. Books at a broker are not affected. They send before the next open (tickets and the submit window).
+- `tests/integration/test_paper_fill_parity.py` runs one strategy through the paper tick day by day and through a backtest, and checks the fills are the same, a capped partial fill included.
+
 ## Scheduler
 
 The built-in scheduler runs the loop on the exchange calendar, catches up missed runs, alerts on missed deadlines and pings an external monitor.
@@ -421,7 +441,8 @@ uv run stonks orders list --manual --user you@example.com
 - Every order goes through the kill switch, every halt and every risk rule of the book, like a strategy's order. The account rules and live safeguards of Phase 19 are risk rules too, so they apply as soon as they are registered.
 - A rule that would drop the order refuses it. A rule that would make it smaller refuses it too and says what is allowed, unless the person accepts a smaller order (`allow_reduce`). The answer lists each rule's adjustment.
 - The same client id places the order once. The ledger id is `manual:<portfolio>:<key>`.
-- A simulated book fills at once at the latest close. A limit order fills only when that close is at or better than the limit, else it is recorded as rejected. A book at a broker sends it through the broker and books fills when the broker reports them.
+- A simulated book fills a manual order at once at the latest close. A limit order fills only when that close is at or better than the limit, else it is recorded as rejected. A book at a broker sends it through the broker and books fills when the broker reports them.
+- Manual orders keep that rule on purpose, while strategy orders in paper books fill at the next open. Principle P21 asks a strategy to fill live the way its backtest filled, so its paper record can be compared with its backtest and feed go-live. A manual order has no backtest to match. The person sees the price on the ticket and places the order at it. Manual holdings stay out of every strategy's decisions, attribution and go-live evidence, so this rule never touches a strategy's record.
 - A book that trades real money needs a fresh second factor in the web app, so MCP and API tokens can only preview there. The CLI asks you to type `PLACE LIVE ORDER`.
 - A change cancels the working order and places a new one (`<id>.r1`, `<id>.r2`, ...) through every check again. Only a working manual order can change. Cancel works on any working order of your portfolio.
 - Each order is recorded with `origin = manual`, no strategy, who placed it and why, and an `audit_log` row. An order is refused while a tick runs.
@@ -752,6 +773,8 @@ A short book at IBKR (a margin gateway) reads borrow from the broker instead of 
 - `shadow_decisions`: one row per hypothetical order.
 - `shadow_portfolio_snapshots`: one row per strategy per `as_of`.
 
+Model books fill like paper books. With `paper_fills = "next_open"` a day's decisions are written as `working`. The next tick fills them at the next session's open before the book decides again, and marks each row `filled` (with `filled_on`, the day of that open) or `expired`. Version books (`model_version_decisions`) work the same way.
+
 A failing model book is reported in the tick summary and never affects real books. Turn it off with `[production].shadow_enabled = false`; `--dry-run` writes nothing.
 
 ## Go-live and promotion
@@ -824,10 +847,10 @@ The summary shows implementation shortfall in basis points of the traded value a
 - `fees`: the fees charged.
 - `IS`: all three together.
 - `opportunity`: what the unfilled part cost, measured at the next session's close.
-- `convention`: how much more the live fill paid than a backtest would have, which fills at the next session's open.
+- `convention`: how much more the live fill paid than a backtest would have, which fills at the next session's open. A paper book fills at that open, so its `convention` is zero.
 - `model` and `gap`: the cost model's estimate and the realised shortfall minus that estimate. A gap that stays above zero means the cost model is too cheap.
 
-The next session's open and close arrive a day later. The tick fills them in after every run, and `stonks tca refresh` does it by hand. For an external broker the arrival price is that next open.
+The next session's open and close arrive a day later. The tick fills them in after every run, and `stonks tca refresh` does it by hand. For an external broker the arrival price is that next open. For a paper book it is the open it filled at, before costs.
 
 The go-live report shows the strategy's live shortfall next to the modelled cost. The same numbers are in the API under `/api/tca` and in the MCP tools `tca_summary`, `trade_journal` and `order_tca`. A trader only sees the orders of their own portfolios and edits only their own notes.
 
