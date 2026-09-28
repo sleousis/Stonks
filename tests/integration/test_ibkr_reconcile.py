@@ -106,3 +106,43 @@ def test_contract_cache_is_shared_across_processes(state):
     broker_for(state, gw).place_order(order())
     broker_for(state, gw).place_order(order("t1-s1-AAPL.US-buy-2"))
     assert len(gw.lookups) == 1
+
+
+def test_a_sync_by_client_id_leaves_fills_to_the_executions(state):
+    """The tick, the submit window, manual orders and the kill switch sync
+    one order by client id right after they touch it. At a broker that
+    reports executions that sync must not book the cumulative fill too, or
+    the executions book the same shares a second time."""
+    from stonks.execution.reconcile import reconcile_order
+
+    gw = FakeIbGateway()
+    broker = broker_for(state, gw)
+    insert_order(state)
+    broker.place_order(order())
+    write_state(state, CID, "submitted")
+    gw.fill(CID, 4, 200.0)
+
+    reconcile_order(broker, state, CID, now=NOW, reject_unknown=False)
+    reconcile_orders(broker, state, now=NOW)
+
+    rows = fills(state)
+    assert sum(r["quantity"] for r in rows) == 4
+    assert [r["broker_exec_id"] for r in rows] == ["0001.0001"]
+    assert current_state(state, CID) == "partially_filled"
+
+
+def test_the_kill_switch_cancel_never_books_a_partial_fill_twice(state):
+    from stonks.execution.cancel import cancel_working_orders
+
+    gw = FakeIbGateway()
+    broker = broker_for(state, gw)
+    insert_order(state)
+    broker.place_order(order())
+    write_state(state, CID, "submitted")
+    gw.fill(CID, 4, 200.0)
+
+    summary = cancel_working_orders(broker, state, portfolio_id="pf_default", now=NOW)
+    assert summary.cancelled == (CID,)
+    reconcile_orders(broker, state, now=NOW)
+
+    assert sum(r["quantity"] for r in fills(state)) == 4

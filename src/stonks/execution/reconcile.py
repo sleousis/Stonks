@@ -185,7 +185,7 @@ def reconcile_order(
     *,
     now: datetime | None = None,
     reject_unknown: bool = True,
-    book_fill: bool = True,
+    book_fill: bool | None = None,
 ) -> OrderSync:
     """Sync one ``orders`` row with the broker's state for its client_id:
     book the not-yet-recorded fill delta and update status and
@@ -199,8 +199,13 @@ def reconcile_order(
     anomaly and the row is left alone. ``reject_unknown=False`` never
     rejects (right after a submit the broker may not list the order yet).
     ``book_fill=False`` syncs status and broker id only: brokers that
-    report executions book their fills from those (roadmap 19.1)."""
+    report executions book their fills from those (roadmap 19.1). The
+    default (``None``) books the cumulative fill only at a broker that does
+    not report executions, so a fill is never booked once here and again
+    by its execution id."""
     now = now or datetime.now(UTC)
+    if book_fill is None:
+        book_fill = not isinstance(broker, ExecutionSource)
     broker_state = broker.get_order_state(client_id)
     if broker_state is None:
         _log.warning("reconcile.order_unknown_to_broker", client_id=client_id)
