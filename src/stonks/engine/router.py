@@ -52,6 +52,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from datetime import UTC, timedelta
 from typing import Literal, Protocol, runtime_checkable
 
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
@@ -88,6 +89,8 @@ _log = get_logger("stonks.engine.router")
 
 #: Driver priority of the router: after the session gates, before the step.
 ROUTER_PRIORITY = -10
+#: How long an order of an intraday book can still be working (a day order).
+WORKING_WINDOW = timedelta(days=1)
 #: Times in force an intraday book may use: orders that end with the session.
 INTRADAY_TIFS: frozenset[TimeInForce] = frozenset({"day", "ioc"})
 
@@ -270,12 +273,17 @@ class IntradayRouter:
 
     def _working_tickers(self) -> set[str]:
         """Tickers with a non-terminal order of the book, taken before the
-        batch is sent (both legs of an order that crosses zero go out)."""
+        batch is sent (both legs of an order that crosses zero go out).
+        Only orders of the last day count: an intraday day order cannot
+        work longer, so a row a failed reconcile left open never holds a
+        ticker for good."""
         where, params = ledger_filter(self.state, "orders", self.portfolio_id)
         marks = ",".join("?" for _ in NON_TERMINAL_STATUSES)
+        since = (self.clock.now() - WORKING_WINDOW).astimezone(UTC).isoformat(timespec="seconds")
         rows = self.state.sql(
-            f"SELECT DISTINCT ticker FROM orders WHERE status IN ({marks}) AND {where}",
-            [*NON_TERMINAL_STATUSES, *params],
+            f"SELECT DISTINCT ticker FROM orders WHERE status IN ({marks}) AND {where}"
+            " AND created_at >= ?",
+            [*NON_TERMINAL_STATUSES, *params, since],
         )
         return {r["ticker"] for r in rows}
 

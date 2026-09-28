@@ -388,3 +388,23 @@ def test_hold_working_keeps_one_working_order_per_ticker(state, clock) -> None:
     router.on_bar_close(close_of(1, sbar(1)))
     assert current_state(state, "c1") == "filled"
     assert [a.status for a in router.route([buy("c5")])] == ["sent"]
+
+
+def test_hold_working_ignores_a_stale_row_from_an_earlier_session(state, clock) -> None:
+    """A day order cannot work past its session. A row left open from days
+    ago (the broker forgot it) must not hold the ticker for ever."""
+    from stonks.production.tick import _record_order
+
+    broker = IntradaySimBroker(
+        Portfolio(cash=1_000_000.0, positions={}), clock=clock, session_key=same_day
+    )
+    router = IntradayRouter(broker, state, portfolio_id=PF, clock=clock, hold_working=True)
+    _record_order(state, buy("old"), status="pending", portfolio_id=PF)
+    stale = (clock.now() - timedelta(days=3)).isoformat(timespec="seconds")
+    state.execute(
+        "UPDATE orders SET state = 'accepted', broker_order_id = 'b-9', created_at = ?"
+        " WHERE client_id = 'old'",
+        [stale],
+    )
+    router.ready = True  # the stale row is what a failed reconcile leaves behind
+    assert [a.status for a in router.route([buy("c1")])] == ["sent"]
