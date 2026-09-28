@@ -59,6 +59,23 @@ class IbContractQuery:
     exchange: str = "SMART"
     primary_exchange: str | None = None
     isin: str | None = None
+    #: An option (``sec_type = "OPT"``, roadmap 17.8): the expiry as
+    #: ``YYYYMMDD``, the strike, ``C`` or ``P`` and the multiplier.
+    last_trade_date: str | None = None
+    strike: float | None = None
+    right: str | None = None
+    multiplier: str | None = None
+
+
+@dataclass(frozen=True)
+class IbComboLeg:
+    """One leg of a combo (``BAG``) contract: a contract, a whole ratio and
+    the leg's own action."""
+
+    con_id: int
+    ratio: int
+    action: IbAction
+    exchange: str = "SMART"
 
 
 @dataclass(frozen=True)
@@ -73,6 +90,14 @@ class IbContract:
     primary_exchange: str | None = None
     trading_class: str | None = None
     local_symbol: str | None = None
+    #: Option fields (``OPT``): the expiry as ``YYYYMMDD``, the strike,
+    #: ``C`` or ``P`` and the multiplier as IBKR writes it (``"100"``).
+    last_trade_date: str | None = None
+    strike: float | None = None
+    right: str | None = None
+    multiplier: str | None = None
+    #: The legs of a combo (``BAG``) contract, in the order they were sent.
+    combo_legs: tuple[IbComboLeg, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -281,6 +306,78 @@ class IbShortableClient(Protocol):
     long-only accounts."""
 
     def shortability(self, contracts: Sequence[IbContract]) -> Sequence[IbShortability]: ...
+
+
+@dataclass(frozen=True)
+class IbOptionParams:
+    """What ``reqSecDefOptParams`` lists for one underlying on one exchange:
+    the expiries (``YYYYMMDD``) and strikes of a trading class."""
+
+    exchange: str
+    trading_class: str
+    multiplier: str
+    expirations: tuple[str, ...]
+    strikes: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class IbOptionSnapshot:
+    """A market data snapshot of one option, with IBKR's model Greeks.
+    Greeks are per share: theta per day, vega per vol point. ``None``
+    where IBKR sent nothing."""
+
+    con_id: int
+    bid: float | None
+    ask: float | None
+    last: float | None
+    time: datetime
+    volume: float | None = None
+    open_interest: float | None = None
+    iv: float | None = None
+    delta: float | None = None
+    gamma: float | None = None
+    vega: float | None = None
+    theta: float | None = None
+    underlying_price: float | None = None
+    market_data_type: int = 1
+
+
+#: What happened to an option position at IBKR outside an order.
+IbOptionEventKind = Literal["assignment", "exercise", "expiry"]
+
+
+@dataclass(frozen=True)
+class IbOptionEvent:
+    """An assignment, exercise or expiry of an option position. ``quantity``
+    is the signed position the event removed (negative: a short was
+    assigned). Physical delivery moves ``quantity x multiplier`` shares at
+    the strike."""
+
+    event_id: str
+    account: str
+    contract: IbContract
+    kind: IbOptionEventKind
+    quantity: float
+    time: datetime
+
+
+@runtime_checkable
+class IbOptionDataClient(Protocol):
+    """An ``IbClient`` that can read option chains and option quotes with
+    Greeks (roadmap 17.8). Needs IBKR's OPRA market data for live quotes."""
+
+    def option_params(self, symbol: str, underlying_con_id: int) -> Sequence[IbOptionParams]: ...
+
+    def option_snapshots(self, contracts: Sequence[IbContract]) -> Sequence[IbOptionSnapshot]: ...
+
+
+@runtime_checkable
+class IbOptionEventClient(Protocol):
+    """A source of option assignments, exercises and expiries (roadmap
+    17.8): the Flex statement's ``OptionEAE`` rows in production, the fake
+    gateway in tests."""
+
+    def option_events(self) -> Sequence[IbOptionEvent]: ...
 
 
 @dataclass(frozen=True)

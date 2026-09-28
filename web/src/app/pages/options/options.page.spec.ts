@@ -125,7 +125,7 @@ describe('OptionsPage', () => {
   it('says it is research only and opens the first stored chain', async () => {
     await open();
     expect(el.querySelector('[role="note"]')!.textContent).toContain(
-      'Research only, nothing trades options.',
+      'Research only, nothing on this page trades options.',
     );
     const chain = panel('Chain');
     expect(chain.textContent).toContain('Generated chains, not market quotes');

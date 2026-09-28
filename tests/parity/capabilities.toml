@@ -1680,6 +1680,26 @@ console = ["setLiveAllocation", "setAccountProfile"]
 cli = { limited = "needs a fresh second factor, done in the web app" }
 mcp = { limited = "needs a fresh second factor, done in the web app" }
 
+# ---- live options (roadmap 17.8, off by default) ------------------------------------
+
+[[capability]]
+id = "live.options.read"
+domain = "trading"
+title = "Whether options may open in a live portfolio, and why not"
+routes = ["GET /api/portfolios/{portfolio_id}/live/options"]
+console = "getOptionsLive"
+cli = { limited = "owner settings live in the console, the API has them now" }
+mcp = "get_options_live"
+
+[[capability]]
+id = "live.options.approval"
+domain = "trading"
+title = "Set a portfolio's options approval level (step-up)"
+routes = ["PUT /api/portfolios/{portfolio_id}/live/options/approval"]
+console = "setOptionsApproval"
+cli = { limited = "needs a fresh second factor, done in the web app" }
+mcp = { limited = "needs a fresh second factor, done in the web app" }
+
 # ---- live stages, gates and the preview (roadmap 19.9) ----------------------------
 
 [[capability]]

@@ -231,6 +231,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - 043: `intraday_snapshots (portfolio_id, strategy_id, day, at, start_value, value, realised, unrealised, fees, pnl, day_return, high_water_pnl, drawdown, gross_exposure, net_exposure, exposures_json, fills, unmarked, stale_marks, max_mark_age_seconds)`: intraday P&L per book and strategy sleeve every few minutes, unique on `(portfolio_id, strategy_id, at)` (roadmap 21.3.3).
 - 044: `engine_status (engine_id, calendar, state, started_at, updated_at, stopped_at, last_dispatch_at, snapshot_json)`: the engine monitor's status row, read by `/metrics`, `/api/stream/status` and the engine dead-man (roadmap 21.3.4).
 - 045: `margin_checks (portfolio_id, checked_at, source, currency, equity, initial_margin, maintenance_margin, excess_liquidity, available_funds, buying_power, cushion, level, reported_type)`: each read of a margin account's cushion by the tick or the `live_margin` job, level in {ok, warn, reduce, call} (roadmap 19.13, margin accounts, off by default).
+- 046: `option_approvals` (per-portfolio options approval level), `option_events` (assignments, exercises, expiries, append only), and `order_tickets.hold` also takes `options` (roadmap 17.8).
 - 047: `shadow_decisions` and `model_version_decisions` statuses gain `working` and `expired`, plus `filled_on` (paper and model books fill at the next open).
 
 ## Conventions to match

@@ -463,3 +463,93 @@ def test_cancel_prefers_this_clients_order_on_an_id_clash(pair):
     ib.cancelOrder = lambda order: cancelled.append(order.orderRef)
     c.cancel_order(1)
     assert cancelled == ["b"]
+
+
+# ---- options (roadmap 17.8) -------------------------------------------------------------
+
+
+def test_option_contracts_keep_their_expiry_right_strike_and_multiplier():
+    from stonks.execution.brokers.ibkr.ib_async_client import from_contract
+
+    opt = Contract(conId=1001, symbol="AAPL", secType="OPT", exchange="SMART", currency="USD",
+                   lastTradeDateOrContractMonth="20261016", strike=200.0, right="C",
+                   multiplier="100")  # fmt: skip
+    got = from_contract(opt)
+    assert (got.sec_type, got.last_trade_date, got.strike, got.right, got.multiplier) == (
+        "OPT",
+        "20261016",
+        200.0,
+        "C",
+        "100",
+    )
+    assert from_contract(AAPL).strike is None
+
+
+def test_an_option_query_names_every_field():
+    q = query_contract(
+        IbContractQuery(
+            symbol="AAPL",
+            currency="USD",
+            sec_type="OPT",
+            last_trade_date="20261016",
+            strike=200.0,
+            right="P",
+            multiplier="100",
+        )
+    )
+    assert (q.secType, q.lastTradeDateOrContractMonth, q.strike, q.right, q.multiplier) == (
+        "OPT",
+        "20261016",
+        200.0,
+        "P",
+        "100",
+    )
+
+
+def test_a_bag_contract_carries_its_legs():
+    from stonks.execution.brokers.ibkr.client import IbComboLeg
+    from stonks.execution.brokers.ibkr.ib_async_client import from_contract, to_contract
+
+    bag = IbContract(0, "AAPL", "BAG", "USD",
+                     combo_legs=(IbComboLeg(1001, 1, "BUY"), IbComboLeg(1002, 1, "SELL")))  # fmt: skip
+    c = to_contract(bag)
+    assert c.secType == "BAG" and [(leg.conId, leg.action) for leg in c.comboLegs] == [
+        (1001, "BUY"),
+        (1002, "SELL"),
+    ]
+    assert from_contract(c).combo_legs == bag.combo_legs
+
+
+def test_option_tickers_map_ibkrs_model_greeks():
+    from ib_async import OptionComputation
+
+    from stonks.execution.brokers.ibkr.ib_async_client import from_option_ticker
+
+    t = Ticker(contract=Contract(conId=1001, right="C"), time=NOW, marketDataType=1)
+    t.bid, t.ask, t.callOpenInterest = 5.0, 5.2, 900.0
+    t.modelGreeks = OptionComputation(0, 0.31, 0.55, 5.1, 0.0, 0.02, 0.25, -0.05, 203.0)
+    s = from_option_ticker(t)
+    assert (s.bid, s.ask, s.last, s.iv, s.delta, s.theta, s.underlying_price) == (
+        5.0,
+        5.2,
+        None,
+        0.31,
+        0.55,
+        -0.05,
+        203.0,
+    )
+    assert s.open_interest == 900.0
+
+
+def test_option_params_map_expiries_and_strikes():
+    from ib_async import OptionChain
+
+    from stonks.execution.brokers.ibkr.ib_async_client import from_option_params
+
+    p = from_option_params(OptionChain("SMART", 265598, "AAPL", "100", ["20261016"], [200.0]))
+    assert (p.exchange, p.multiplier, p.expirations, p.strikes) == (
+        "SMART",
+        "100",
+        ("20261016",),
+        (200.0,),
+    )

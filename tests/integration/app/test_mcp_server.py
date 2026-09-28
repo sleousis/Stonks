@@ -198,6 +198,7 @@ READ_TOOLS = {
     "get_live_allocation",
     "get_live_rules",
     "get_live_margin",
+    "get_options_live",
     "get_broker_gateways",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.

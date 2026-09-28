@@ -11,15 +11,18 @@ import {
   getLiveRules,
   listReconcileReports,
   getLiveStage,
+  getOptionsLive,
   previewLiveOrders,
   promoteLiveStage,
   setAccountProfile,
   setLiveAllocation,
+  setOptionsApproval,
 } from './generated/sdk.gen';
 import type {
   AccountProfileBody,
   AccountProfileView,
   LiveAllocationUpdate,
+  OptionsApprovalUpdate,
   StageDemoteBody,
   StagePromoteBody,
 } from './models';
@@ -86,6 +89,16 @@ export class LiveService {
 
   demote(portfolioId: string, body: StageDemoteBody) {
     return unwrap(demoteLiveStage({ path: { portfolio_id: portfolioId }, body }));
+  }
+
+  /** Whether options may open here (off by default), and why not. */
+  optionsLive(portfolioId: string) {
+    return unwrap(getOptionsLive({ path: { portfolio_id: portfolioId } }));
+  }
+
+  /** The options approval level. Needs a fresh second factor. */
+  setOptionsApproval(portfolioId: string, body: OptionsApprovalUpdate) {
+    return unwrap(setOptionsApproval({ path: { portfolio_id: portfolioId }, body }));
   }
 
   /** A dry run through the broker's what-if. It never sends an order. */

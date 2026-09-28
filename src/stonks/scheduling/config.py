@@ -106,7 +106,9 @@ def default_jobs() -> list[JobConfig]:
     ``live_submit`` (open minus 20 minutes) sends approved order tickets and
     skips while none is open. ``live_stops`` (open plus 30 minutes) places
     the protective stops of the entries that just filled, and skips while no
-    live book turns stops on.
+    live book turns stops on. ``options_live`` (close plus 55 minutes) and
+    ``options_expiry_watch`` (close minus 60 minutes) handle live options
+    and skip while ``[production.options] live = false``.
     ``live_gate_days`` (close plus 75 minutes)
     records the live stages' gate metrics and skips while no portfolio is
     past ``sim_paper``. ``engine_start`` (open minus 15 minutes) and
@@ -236,6 +238,24 @@ def default_jobs() -> list[JobConfig]:
             name="live_stops",
             action="live_stops",
             trigger=SessionTriggerConfig(anchor="open", offset_minutes=30),
+            catch_up="none",
+        ),
+        # Live options (roadmap 17.8), both skip while [production.options]
+        # live = false: after the tick, expiry closes and rolls as held
+        # tickets; on expiry days an hour before the close, an alert for a
+        # short option still in the money. Never caught up late.
+        JobConfig(
+            name="options_live",
+            action="options_live",
+            trigger=SessionTriggerConfig(offset_minutes=55),
+            params={"phase": "plan"},
+            catch_up="none",
+        ),
+        JobConfig(
+            name="options_expiry_watch",
+            action="options_live",
+            trigger=SessionTriggerConfig(offset_minutes=-60),
+            params={"phase": "watch"},
             catch_up="none",
         ),
         # The live stages' gate metrics for the session, after the tick

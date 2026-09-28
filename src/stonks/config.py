@@ -31,6 +31,7 @@ from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.lifecycle.settings import ModelLifecycleSettings
 from stonks.ops.config import BackupConfig
+from stonks.options.live.settings import OptionsLiveSettings
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.decay import DecaySettings
 from stonks.production.intraday_pnl_settings import IntradayPnlSettings
@@ -294,6 +295,9 @@ class ProductionConfig(BaseModel):
     decay: DecaySettings = DecaySettings()
     # ``[production.live]``: live trading at a real broker (roadmap 19).
     live: LiveSettings = LiveSettings()
+    # ``[production.options]``: live options at a real broker (roadmap
+    # 17.8). Off by default.
+    options: OptionsLiveSettings = OptionsLiveSettings()
     # ``[production.intraday_pnl]``: live marks and intraday P&L snapshots
     # of the engine's books (roadmap 21.3.3). Off by default.
     intraday_pnl: IntradayPnlSettings = IntradayPnlSettings()

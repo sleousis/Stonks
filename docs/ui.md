@@ -689,7 +689,7 @@ flowchart LR
 
 | Page | Route | What it does |
 |---|---|---|
-| Live settings | `/profile/live/:id` | A live portfolio's allocation and account profile, and which live safeguards and account rules act on it |
+| Live settings | `/profile/live/:id` | A live portfolio's stage, allocation and account profile, which live safeguards and account rules act on it, and its options state ("Options live: off" by default) with the options approval level |
 | Broker gateways | `/health` (a panel) | Each IB Gateway: connected or down, the last good check, the fault, and the auto strategies it paused |
 
 ```mermaid
@@ -718,6 +718,13 @@ flowchart LR
   each live safeguard with On or Off from the policy the book follows, and
   each account rule with whether it applies to the profile. Words for every
   rule live in `shared/live-rules.ts`.
+- **Options** (roadmap 17.8, `live-options-card.ts`). A lamp reads
+  "Options live: off" until the admin's switch, a `live_small` stage and an
+  approval level all hold, and the card lists every missing one. The owner
+  picks the level (None, Covered, Spreads, Naked) with a reason, then the
+  order ticket (LIVE) and a fresh code. `GET` and `PUT
+  /api/portfolios/{id}/live/options[/approval]`, permission `live.manage`
+  for the change.
 - **Trading run detail.** A risk adjustment tagged `account_rules.<rule>`
   reads "Account rule: Settled cash only", a live safeguard its own name
   (`liveAdjustmentLabel()`).

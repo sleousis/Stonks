@@ -27,6 +27,7 @@ from stonks.app.live import (
     StageDemoteBody,
     StagePromoteBody,
 )
+from stonks.app.options_live import OptionsApprovalUpdate, OptionsLiveService, OptionsLiveView
 from stonks.auth import Permission
 
 router = APIRouter(prefix="/api/portfolios", tags=["live"], responses=PROBLEM_RESPONSES)
@@ -212,3 +213,39 @@ def preview_live_orders(
     """The orders the live book would send now: a dry run through every
     rule and the broker's what-if. It never transmits an order."""
     return _service(services).preview(principal, portfolio_id)
+
+
+# ---- live options (17.8) ----------------------------------------------------------------
+
+
+@router.get(
+    "/{portfolio_id}/live/options",
+    response_model=OptionsLiveView,
+    operation_id="getOptionsLive",
+    dependencies=needs(Permission.READ),
+)
+def get_options_live(
+    portfolio_id: PortfolioId, services: ServicesDep, principal: PrincipalDep
+) -> OptionsLiveView:
+    """Whether an option order may open in this portfolio, and every
+    reason it may not: the admin's switch, the live stage and the options
+    approval level. Off by default."""
+    return OptionsLiveService(services.context).view(principal, portfolio_id)
+
+
+@router.put(
+    "/{portfolio_id}/live/options/approval",
+    response_model=OptionsLiveView,
+    operation_id="setOptionsApproval",
+    dependencies=needs(Permission.LIVE_MANAGE),
+)
+def set_options_approval(
+    portfolio_id: PortfolioId,
+    body: OptionsApprovalUpdate,
+    services: ServicesDep,
+    principal: PrincipalDep,
+) -> OptionsLiveView:
+    """Set the options approval level (none, covered, spreads or naked)
+    with a reason. Needs a fresh second factor. It never turns options on
+    by itself: the switch and the stage still apply."""
+    return OptionsLiveService(services.context).set_level(principal, portfolio_id, body)

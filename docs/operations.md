@@ -83,12 +83,14 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `model_retrain`: refit strategies that learn from data into candidate versions (see [Model lifecycle](model-lifecycle.md)) | Saturday 06:00 UTC | none |
 | `live_submit`: send approved order tickets (see Live trading) | open - 20 min | none |
 | `live_stops`: protective stops for the entries the opening auction filled (see Protective stops) | open + 30 min | none |
+| `options_live`: book option assignments, plan expiry closes and rolls as held tickets (see Live options) | close + 55 min | none |
+| `options_expiry_watch`: alert on a short option still in the money on its expiry day (see Live options) | close - 60 min | none |
 | `live_gate_days`: the live stages' gate metrics for the session (see Live trading) | close + 75 min | none |
 | `live_margin`: the margin cushion of each margin account, with an alert when it is thin (see Margin accounts) | every 30 minutes | none |
 | `engine_start`: start the intraday engine process (see [intraday](design/intraday.md)) | open - 15 min | none |
 | `engine_stop`: ask the intraday engine to stop, and wait for it | close + 10 min | none |
 
-Session jobs run on NYSE trading days. The two engine jobs skip while `[engine] enabled = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio, and `live_margin` while no portfolio has a margin profile). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
+Session jobs run on NYSE trading days. The two engine jobs skip while `[engine] enabled = false`. The two options jobs skip while `[production.options] live = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio, and `live_margin` while no portfolio has a margin profile). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 
 The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 
@@ -900,6 +902,47 @@ uv run stonks options backtest vertical_spread --underlyings AAPL.US --start 202
 ```
 
 EODHD serves US options as a separate Marketplace subscription (not part of All-In-One). `ingest` keeps strikes within 30% of spot and expiries within a year by default (`--strike-band`, `--max-expiry-days`). Each run writes one `ingest_runs` row of kind `options`, and a failed underlying is a soft fail.
+
+## Live options
+
+Live options at IBKR (roadmap 17.8) are built and off. Turn them on only after live stock trading is stable and the IBKR options data add-on (OPRA) is bought. An option order opens only when all three hold:
+
+1. `[production.options] live = true` (the admin's switch).
+2. the portfolio is at stage `live_small` or higher.
+3. its owner set an options approval level above `none` on the Live settings page, with a reason and a fresh code.
+
+| Level | May open |
+|-------|----------|
+| `none` | nothing (the default) |
+| `covered` | covered calls, cash-secured puts, long calls and puts, protective puts |
+| `spreads` | plus verticals and iron condors |
+| `naked` | plus uncovered short puts. Naked short calls stay refused. |
+
+Keep the level at or below what IBKR granted the account. A close never needs the three conditions: a book can always wind down.
+
+```toml
+[production.options]
+live = false
+collar_share = 0.0            # limit at the mid, 1.0 at the touch. Never market orders.
+max_spread_pct = 0.5          # no order on a quote wider than this share of its mid
+auto_approve_closes = false   # every option order waits for a person
+max_loss_per_group = 0.02     # of equity, when option_max_loss sets none
+max_loss_total = 0.10
+
+[production.options.expiry]
+close_sessions = 1            # close or roll on the session before expiry
+action = "close"              # or "roll"
+roll_target_days = 35
+close_longs = true
+watch_band = 0.01
+```
+
+- `options_live` runs after the tick. It books IBKR's assignments, exercises and expiries into the ledger (from the Flex statement, so set up Flex), plans a close for every option with `close_sessions` sessions or fewer left, or a roll with `action = "roll"`, prices each at the mid from live quotes, runs the option risk rules on the live book and previews the margin with IBKR's what-if. Each leg becomes a ticket held for you (hold `options`). The owner hears when tickets wait.
+- Live books always run the defined-risk rules: `short_option_guard` capped at the approval level, `option_margin`, and `option_max_loss` at the tighter of its own limits and the ones above. Greek limits follow `[production.risk.rules.option_greek_limits]`.
+- Approve the tickets on the Tickets page. `live_submit` sends them before the next open: a single leg as a day limit, a roll or a spread as one combo order at its net limit. A combo waits whole while any leg is not approved.
+- `options_expiry_watch` runs an hour before the close. A short option that expires today, still held and in or near the money, sends a high urgency alert. It never sends an order. Close it by hand from the ticket, or in TWS.
+- A quote with no bid and ask, or one too wide, makes no order. The job reports it, and the watch still alerts on expiry day.
+- Shares an assignment or exercise delivers are booked at the strike and belong to no strategy. Keep them or sell them with a manual order.
 
 ## Without the scheduler
 

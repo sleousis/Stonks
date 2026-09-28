@@ -456,6 +456,39 @@ def live_submit_action(ctx: RunContext) -> JobOutcome:
     return JobOutcome("failed" if result.failed or detail["errors"] else "succeeded", detail)
 
 
+@register_action("options_live")
+def options_live_action(ctx: RunContext) -> JobOutcome:
+    """Live options (roadmap 17.8). ``params.phase``: ``plan`` (after the
+    close: book assignments, plan expiry closes and rolls as held tickets)
+    or ``watch`` (expiry day: alert on a short option still held in or near
+    the money). Skips while ``[production.options] live = false``."""
+    from stonks.options.live.run import run_options_live
+    from stonks.production.settings_builder import submit_broker_opener
+    from stonks.store.state import SqliteState
+
+    settings = ctx.settings.production.options
+    if not settings.live:
+        return JobOutcome("skipped", {"reason": "options_live_off"})
+    phase = "watch" if ctx.params.get("phase") == "watch" else "plan"
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        result = run_options_live(
+            state,
+            submit_broker_opener(ctx.settings, state),
+            settings=settings,
+            live=ctx.settings.production.live,
+            risk=ctx.settings.production.risk,
+            as_of=ctx.fire.as_of,
+            phase=phase,
+        )
+    finally:
+        state.close()
+    detail = result.detail()
+    if not result.portfolios:
+        return JobOutcome("skipped", {"reason": "no_option_portfolios", **detail})
+    return JobOutcome("failed" if result.errors else "succeeded", detail)
+
+
 @register_action("live_stops")
 def live_stops_action(ctx: RunContext) -> JobOutcome:
     """Place, resize and cancel the protective stops of every live book

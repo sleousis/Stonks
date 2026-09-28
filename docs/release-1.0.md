@@ -62,6 +62,12 @@ Docker is not installed on the machine that prepared the release, so `docker com
     3. Run the live contract test on the paper account first, to see which account value IBKR sends for the margin type (`STONKS_RUN_LIVE_TESTS=1 uv run pytest -m live -k margin_type`).
     4. In Live settings, set the account profile to Margin, tick the risks and save with a fresh code. Stonks refuses it unless IBKR reports a margin account.
     5. Check the Buying power and margin panel, and that the `live_margin` job runs. See [operations.md](operations.md#margin-accounts).
+11. **Live options** (roadmap 17.8) ship off. Turn them on only once live stock trading is stable:
+    1. Buy the IBKR options market data add-on (OPRA, US options) for the live account, and ask IBKR for the options trading level you want.
+    2. Set up the Flex statement (`STONKS_IBKR_FLEX_TOKEN` and a query with the "Option Exercises, Assignments and Expirations" section), so assignments reach the ledger.
+    3. Set `[production.options] live = true` and restart the api and scheduler services.
+    4. On the Live settings page of a portfolio at `live_small` or higher, set its options approval level, at or below what IBKR granted. It shows "Options live: on" once all three hold.
+    5. Every option order waits on the Tickets page. See [operations.md](operations.md#live-options).
 
 ## Could not be checked here
 

@@ -34,6 +34,7 @@ from typing import Any, Protocol
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock
 from stonks.core.instruments import InstrumentSpec
+from stonks.core.options import is_option_id, parse_contract_id
 from stonks.execution.brokers.base import UnsupportedTickerError
 from stonks.execution.brokers.ibkr.client import (
     IbApiError,
@@ -134,6 +135,13 @@ class ResolvedContract:
         """The shared instrument spec. The tick size is in the currency's
         major unit (IBKR's minimum tick over the price magnifier)."""
         c = self.contract
+        if c.sec_type == "OPT" and is_option_id(self.ticker):
+            return InstrumentSpec.for_option(
+                parse_contract_id(self.ticker, currency=c.currency),
+                exchange=c.exchange,
+                tick_size=self.min_tick,
+                broker_ids=((BROKER, str(c.con_id)),),
+            )
         return InstrumentSpec.spot(
             self.ticker,
             currency=c.currency,
@@ -276,6 +284,10 @@ def ticker_for_contract(contract: IbContract) -> str | None:
     """Our ticker for a stock contract IBKR reports (a position of a manual
     trade, say), from its primary exchange and currency. ``None`` when it
     is not a stock or its market is not one we trade ("not covered")."""
+    if contract.sec_type == "OPT":
+        from stonks.execution.brokers.ibkr.options import option_id_for_contract
+
+        return option_id_for_contract(contract)
     if contract.sec_type != "STK":
         return None
     venue = (contract.primary_exchange or "").upper()
@@ -345,9 +357,16 @@ class ContractResolver:
         found = self.cache.by_con_id(con_id)
         return found.ticker if found is not None else None
 
+    def details(self, query: IbContractQuery) -> Sequence[IbContractDetails]:
+        """Every contract IBKR lists for ``query`` (none when it finds
+        nothing), unfiltered. The option chain reads one expiry at a time."""
+        return self._details(query)
+
     # ---- internals ------------------------------------------------------------
 
     def _look_up(self, ticker: str) -> ResolvedContract:
+        if is_option_id(ticker):
+            return self._look_up_option(ticker)
         profile = self.lookup(ticker) if self.lookup is not None else None
         symbol_query = build_query(ticker, profile, by_isin=False)
         matches: list[IbContractDetails] = []
@@ -370,6 +389,26 @@ class ContractResolver:
             verified_at=self.clock.now(),
             price_magnifier=max(1, found.price_magnifier),
             isin=found.isin or (profile.isin if profile is not None else None),
+        )
+
+    def _look_up_option(self, ticker: str) -> ResolvedContract:
+        """An option contract (roadmap 17.8): exactly one ``OPT`` whose
+        expiry, right, strike, multiplier and currency agree."""
+        from stonks.execution.brokers.ibkr.options import contract_of, matches, option_query
+
+        contract = contract_of(ticker)
+        query = option_query(contract)
+        found = {d.contract.con_id: d for d in self._details(query) if matches(d, contract)}
+        if len(found) != 1:
+            why = "no IBKR option" if not found else f"{len(found)} IBKR options"
+            _log.warning("ibkr.contract.refused", ticker=ticker, matches=len(found))
+            raise UnsupportedTickerError(f"{ticker}: {why} match; refusing to guess")
+        details = next(iter(found.values()))
+        return ResolvedContract(
+            ticker=ticker,
+            contract=details.contract,
+            min_tick=details.min_tick,
+            verified_at=self.clock.now(),
         )
 
     def _matches(

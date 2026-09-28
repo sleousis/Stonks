@@ -358,6 +358,13 @@
       }
     </section>
 
+    <!-- Live options (17.8), off by default --------------------------------->
+    <app-live-options-card
+      class="span-12"
+      [portfolioId]="portfolio()!.id"
+      [portfolioName]="portfolio()!.name"
+    />
+
     <!-- Order preview (19.9) ------------------------------------------------>
     <app-live-preview-panel class="span-12" [portfolioId]="portfolio()!.id" />
   </div>
