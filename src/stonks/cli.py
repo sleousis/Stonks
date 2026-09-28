@@ -2231,16 +2231,27 @@ def halts_resume(
     halt_id: int = typer.Argument(..., help="the kill switch's halt id"),
     reason: str = typer.Option(..., "--reason", help="why trading may resume (audited)"),
     user: str | None = _HALT_USER,
+    override_checks: bool = typer.Option(
+        False, "--override-checks", help="resume although a resume check failed (audited)"
+    ),
 ) -> None:
-    """Turn a kill switch off. Asks you to type RESUME TRADING."""
+    """Turn a kill switch off. Shows the resume checks, then asks you to
+    type RESUME TRADING."""
     from stonks.app.halts import RESUME_PHRASE, ResumeRequest
 
     context, service = _halt_service()
     who = _halt_scope(context, user)
+    checks = _halt_call(lambda: service.resume_checks(who, halt_id))
+    for c in checks.checks:
+        mark = {True: "[green]ok[/green]", False: "[red]FAIL[/red]", None: "[yellow]?[/yellow]"}
+        where = f" {c.portfolio_id}" if c.portfolio_id else ""
+        console.print(f"{mark[c.passed]} {c.name}{where}: {c.detail}")
+    if not checks.passed and not override_checks:
+        console.print("[red]resume checks failed[/red]: fix them or pass --override-checks")
+        raise typer.Exit(code=1)
     typed = typer.prompt(f"Type {RESUME_PHRASE} to resume trading")
-    view = _halt_call(
-        lambda: service.resume_kill(who, halt_id, ResumeRequest(confirmation=typed, reason=reason))
-    )
+    body = ResumeRequest(confirmation=typed, reason=reason, override_checks=override_checks)
+    view = _halt_call(lambda: service.resume_kill(who, halt_id, body))
     console.print(f"[green]trading resumed[/green]: halt #{view.id} cleared")
 
 
