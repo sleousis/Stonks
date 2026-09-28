@@ -75,6 +75,24 @@ A few weeks of returns are mostly noise, so the check never compares raw cumulat
 
 The next tick after a swap trades the new model. A retired strategy never swaps.
 
+## Live calibration
+
+A classifier forecasts a probability that its trade wins. Each tick stores the live and candidate versions' forecasts (`model_forecasts`), and the outcome once the holding horizon has passed. The calibration report says how good those probabilities were (roadmap 23.9):
+
+| Field | Meaning |
+|---|---|
+| `brier` | Mean squared gap between forecast and outcome. Lower is better. |
+| `brier_base_rate` | The Brier score of always forecasting the base rate. |
+| `skill` | `1 - brier / brier_base_rate`. Above 0 beats the base rate. |
+| `ece` | Expected calibration error over the reliability bins. |
+| `bins` | Reliability: mean forecast against the hit rate, per bin. |
+
+A version with no resolved forecast has `null` scores. Strategies that forecast no probability have none at all.
+
+```bash
+uv run stonks registry calibration mom_ml_1a2b 2
+```
+
 ## Audit
 
 Every change writes one row to `model_version_events` first: baseline, candidate, swap, reject, supersede or fail, with the actor, the reason and the swap check report. The table is append-only. Database triggers refuse a live version or a new `strategies.artifact_path` that did not come through a logged swap.
@@ -108,6 +126,7 @@ An old config with `max_underperformance` still loads. The key is ignored with a
 |---|---|---|
 | List versions, log, candidates | `GET /api/strategies/{id}/versions`, `.../versions/history`, `GET /api/model-versions/candidates` | `list_model_versions`, `get_model_version_history`, `list_model_candidates` |
 | Swap check | `GET /api/strategies/{id}/versions/{version}/check` | `check_model_swap` |
+| Calibration | `GET /api/strategies/{id}/versions/{version}/calibration` | `get_model_calibration` |
 | Swap, reject | `POST .../versions/{version}/swap`, `.../reject` (strategy.promote) | `swap_model_version`, `reject_model_version` (confirm) |
 | Retrain | `POST /api/model-versions/retrain` (lab.run), `GET /api/model-versions/jobs/{job_id}/result` | `retrain_models` (confirm) |
 
@@ -115,4 +134,4 @@ The assistant never gets the swap or reject tools.
 
 ## Console
 
-Each strategy page has a Model versions tab: the versions, the candidate's model book against the live model, the swap check, Swap in (a reason, then a fresh code), Reject, a retrain of that strategy, and the log. Admins see every candidate and Retrain all on `/ops/models`. See `docs/ui.md`.
+Each strategy page has a Model versions tab: the versions, the candidate's model book against the live model, the swap check, the forecast calibration of the live and candidate models, Swap in (a reason, then a fresh code), Reject, a retrain of that strategy, and the log. Admins see every candidate and Retrain all on `/ops/models`. See `docs/ui.md`.

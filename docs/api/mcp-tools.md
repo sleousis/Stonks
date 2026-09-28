@@ -57,6 +57,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_live_risk`](#get_live_risk) | read | no |
 | [`get_live_rules`](#get_live_rules) | read | no |
 | [`get_live_stage`](#get_live_stage) | read | no |
+| [`get_model_calibration`](#get_model_calibration) | read | no |
 | [`get_model_version_history`](#get_model_version_history) | read | no |
 | [`get_my_risk_limits`](#get_my_risk_limits) | read | no |
 | [`get_news`](#get_news) | read | no |
@@ -179,6 +180,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`update_watchlist`](#update_watchlist) | job | no |
 | [`validate_draft`](#validate_draft) | job | no |
 | [`validate_rule_spec`](#validate_rule_spec) | read | no |
+| [`verify_lab_results`](#verify_lab_results) | job | no |
 | [`wait_for_job`](#wait_for_job) | read | no |
 | [`whoami`](#whoami) | read | no |
 
@@ -558,6 +560,19 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `portfolio_id` | string | yes |  | a portfolio id of yours (pf_...) |
 | `days` | integer | no | `30` |  |
+
+### `get_model_calibration`
+
+Live calibration of a classifier version's probability forecasts:
+Brier score against the base rate, skill, expected calibration error
+and the reliability table. Empty for a model with no forecasts.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `strategy_id` | string | yes |  |  |
+| `version` | integer | yes |  | the model version number |
 
 ### `get_model_version_history`
 
@@ -2020,6 +2035,21 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `tickers` | list[string] \| null | no | `null` | lake tickers to smoke-run on; default sample data |
 | `as_of` | date \| null | no | `null` | YYYY-MM-DD |
 | `bars` | integer \| null | no | `null` | bars to evaluate |
+
+### `verify_lab_results`
+
+Queue a rerun of lab results from their stored manifests: per
+target the stored and rerun objective score, whether it moved beyond
+the tolerance, and the tickers whose bars or corporate actions changed
+since (vendor restatements). Returns the job; use wait_for_job for the
+result. Research only: writes nothing.
+
+Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `targets` | list[string] \| null | no | `null` | lab run ids or strategy ids (default: every active strategy) |
+| `tolerance` | number \| null | no | `null` | allowed score drift (default [lab.verify] tolerance) |
 
 ## Guarded tools
 
