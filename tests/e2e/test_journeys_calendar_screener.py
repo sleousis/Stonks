@@ -78,12 +78,23 @@ def test_a_trader_reads_the_calendar_and_news(browse, stack, viewport):
     whose.get_by_role("radio", name="Everything").click()
     expect(page.get_by_text("Pick whose news to show")).to_be_visible()
 
-    # The event alerts sit with the alert settings.
+    # The event alerts sit with the alert settings: one switch per kind, on
+    # until turned off, and the economic release choices.
     v.go("/settings")
-    events = page.locator("app-event-alert-kinds")
-    expect(events).to_contain_text("Upcoming events")
-    expect(events).to_contain_text("Earnings coming up")
-    expect(events).to_contain_text("2 days ahead")
+    prefs = page.locator("app-notification-prefs")
+    events = prefs.locator("fieldset", has=page.get_by_text("Upcoming events", exact=True))
+    earnings = events.get_by_label("Earnings coming up")
+    expect(earnings).to_be_checked()
+    expect(events.get_by_label("Ex-dividend dates coming up")).to_be_checked()
+    expect(events.get_by_label("Economic releases coming up")).to_be_checked()
+    expect(prefs.get_by_label("Importance")).to_be_visible()
+    with page.expect_response(
+        lambda r: r.request.method == "PUT" and r.url.endswith("/api/notifications/preferences")
+    ) as saved:
+        earnings.uncheck()
+    assert saved.value.ok, saved.value.status
+    page.reload()
+    expect(earnings).not_to_be_checked()
     v.guard.assert_clean()
 
 
