@@ -21,6 +21,12 @@ tag="${1:?usage: deploy.sh <tag, e.g. v1.2.3>}"
 	exit 2
 }
 chmod 600 .env
+# The example file's old placeholder is a working credential: this token
+# signs in as the admin.
+if [ "$(env_get STONKS_API_TOKEN)" = "change-me" ]; then
+	log "STONKS_API_TOKEN in .env is still the placeholder 'change-me'; set a real value first"
+	exit 2
+fi
 
 previous="$(cat .deployed-tag 2>/dev/null || true)"
 ts="$(date -u +%Y%m%dT%H%M%SZ)"

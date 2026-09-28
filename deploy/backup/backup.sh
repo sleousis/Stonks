@@ -41,6 +41,13 @@ hc="$(env_get HC_PING_BACKUP)"
 	log "RESTIC_REPOSITORY not set; skipping"
 	exit 0
 }
+# The example file's old placeholder encrypts the off-server copy with a
+# password anyone can guess. Warn on every run, but still back up: no copy
+# at all is worse. To fix, add a new key and remove the old one:
+#   restic key add, then restic key remove <old id>, then update .env.
+if [ "$(env_get RESTIC_PASSWORD)" = "change-me" ]; then
+	notify warning "RESTIC_PASSWORD in .env is the placeholder 'change-me'; change the repository key"
+fi
 ping_hc "$hc" start
 
 restarted=0
