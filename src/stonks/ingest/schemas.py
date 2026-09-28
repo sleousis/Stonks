@@ -403,6 +403,9 @@ class InsiderTransactionRow(FrozenRow):
     value: float | None = None  # derived: shares * price
     post_transaction_amount: float | None = None
     sec_link: str | None = None  # URL to the underlying Form 4
+    #: When the regulator accepted the filing (naive UTC), for sources that
+    #: know it (roadmap 23.13). ``None``: only ``filing_date`` is known.
+    known_at: datetime | None = None
 
 
 class NewsArticleRow(FrozenRow):

@@ -111,7 +111,8 @@ def test_migration_010_removes_existing_null_duplicates(tmp_path, monkeypatch):
     lk = DuckDBLake(tmp_path / "lake.duckdb")
     try:
         lk.migrate()
-        cols = list(DuckDBLake._INSIDER_COLS)
+        # the old schema has no known_at (DuckDB 024)
+        cols = [c for c in DuckDBLake._INSIDER_COLS if c != "known_at"]
         dupes = pd.DataFrame([_row(value=1.0), _row(value=2.0), _row(value=3.0), _row(shares=7.0)])[
             cols
         ]

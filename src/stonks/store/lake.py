@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import re
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -1492,6 +1492,7 @@ class DuckDBLake:
         "value",
         "post_transaction_amount",
         "sec_link",
+        "known_at",
     )
     _INSIDER_NATURAL_KEY = (
         "ticker",
@@ -1764,7 +1765,9 @@ class DuckDBLake:
     def upsert_insider_transactions(self, df: pd.DataFrame) -> int:
         # Deduplicates on the NULL-safe ``natural_key`` column (migration
         # 010) derived from _INSIDER_NATURAL_KEY; the synthetic id column
-        # is excluded from insert.
+        # is excluded from insert. ``known_at`` (DuckDB 024) is optional.
+        if not df.empty and "known_at" not in df.columns:
+            df = df.assign(known_at=pd.NaT)
         return self._upsert(
             df,
             table="insider_transactions",
@@ -1772,6 +1775,162 @@ class DuckDBLake:
             pk=self._INSIDER_NATURAL_KEY,
             natural_key_sql=_INSIDER_NATURAL_KEY_SQL,
         )
+
+    def get_insider_transactions(self, ticker: str) -> pd.DataFrame:
+        """One ticker's insider trades, oldest trade first."""
+        cols = ", ".join(self._INSIDER_COLS)
+        df = self.con.execute(
+            f"SELECT {cols} FROM insider_transactions WHERE ticker = ?"
+            " ORDER BY transaction_date, known_at NULLS LAST",
+            [ticker],
+        ).fetchdf()
+        return _dates_to_python(df, ("transaction_date", "filing_date"))
+
+    # ---- regulatory filings (roadmap 23.13, migration 024) -------------------
+
+    _FILING_COLS = (
+        "accession_number",
+        "ticker",
+        "issuer_cik",
+        "form",
+        "filing_date",
+        "known_at",
+        "period_of_report",
+        "items",
+        "url",
+        "source",
+        "updated_at",
+    )
+    _HOLDING_COLS = (
+        "accession_number",
+        "line",
+        "filer_cik",
+        "filer_name",
+        "report_period",
+        "filing_date",
+        "known_at",
+        "cusip",
+        "issuer_name",
+        "security_class",
+        "ticker",
+        "amount",
+        "amount_type",
+        "value_usd",
+        "put_call",
+        "investment_discretion",
+        "source",
+    )
+
+    def upsert_corporate_filings(self, df: pd.DataFrame) -> int:
+        """Upsert filings keyed by accession number. ``items`` may be a
+        sequence of item codes; it is stored comma separated."""
+        if df.empty:
+            return 0
+        frame = df.copy()
+        if "items" in frame.columns:
+            frame["items"] = [
+                ",".join(v) if isinstance(v, list | tuple) else v for v in frame["items"]
+            ]
+            frame["items"] = frame["items"].replace("", None)
+        for col in self._FILING_COLS:
+            if col not in frame.columns:
+                frame[col] = None
+        if frame["updated_at"].isna().all():
+            frame["updated_at"] = datetime.now(UTC).replace(tzinfo=None)
+        return self._upsert(
+            frame, table="corporate_filings", cols=self._FILING_COLS, pk=("accession_number",)
+        )
+
+    def get_corporate_filings(
+        self,
+        tickers: Sequence[str] | None = None,
+        *,
+        start: Any = None,
+        end: Any = None,
+        forms: Sequence[str] | None = None,
+        items: Sequence[str] | None = None,
+    ) -> pd.DataFrame:
+        """Stored filings, oldest acceptance first. ``start`` and ``end``
+        bound the acceptance day; ``forms`` and ``items`` narrow the rows
+        (a filing matches when it carries any of ``items``). ``items`` comes
+        back as a list of codes."""
+        clauses: list[str] = []
+        params: list[Any] = []
+        if tickers is not None:
+            clauses.append("ticker = ANY(?)")
+            params.append(list(tickers))
+        if start is not None:
+            clauses.append("CAST(known_at AS DATE) >= ?")
+            params.append(_as_calendar_date(start))
+        if end is not None:
+            clauses.append("CAST(known_at AS DATE) <= ?")
+            params.append(_as_calendar_date(end))
+        if forms is not None:
+            clauses.append("form = ANY(?)")
+            params.append(list(forms))
+        if items is not None:
+            clauses.append("list_has_any(string_split(COALESCE(items, ''), ','), ?)")
+            params.append(list(items))
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        df = self.con.execute(
+            f"SELECT {', '.join(self._FILING_COLS)} FROM corporate_filings{where}"
+            " ORDER BY known_at, accession_number",
+            params,
+        ).fetchdf()
+        df["items"] = [
+            [c for c in str(v).split(",") if c] if isinstance(v, str) else [] for v in df["items"]
+        ]
+        return _dates_to_python(df, ("filing_date", "period_of_report"))
+
+    def upsert_institutional_holdings(self, df: pd.DataFrame) -> int:
+        """Upsert holdings report lines keyed by ``(accession_number, line)``."""
+        if df.empty:
+            return 0
+        frame = df.copy()
+        for col in self._HOLDING_COLS:
+            if col not in frame.columns:
+                frame[col] = None
+        return self._upsert(
+            frame,
+            table="institutional_holdings",
+            cols=self._HOLDING_COLS,
+            pk=("accession_number", "line"),
+        )
+
+    def get_institutional_holdings(
+        self, *, ticker: str | None = None, cusip: str | None = None, filer_cik: str | None = None
+    ) -> pd.DataFrame:
+        """Holdings report lines for one security (by ticker or CUSIP) or one
+        filer, oldest report first."""
+        clauses: list[str] = []
+        params: list[Any] = []
+        for column, value in (("ticker", ticker), ("cusip", cusip), ("filer_cik", filer_cik)):
+            if value is not None:
+                clauses.append(f"{column} = ?")
+                params.append(value)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        df = self.con.execute(
+            f"SELECT {', '.join(self._HOLDING_COLS)} FROM institutional_holdings{where}"
+            " ORDER BY report_period, known_at, accession_number, line",
+            params,
+        ).fetchdf()
+        return _dates_to_python(df, ("report_period", "filing_date"))
+
+    def tickers_by_cusip(self, cusips: Sequence[str]) -> dict[str, str]:
+        """``cusip -> instrument id`` for the CUSIPs the lake knows. Where a
+        CUSIP maps to several listings, the primary ticker wins, then the
+        first id."""
+        if not cusips:
+            return {}
+        rows = self.con.execute(
+            "SELECT cusip, id FROM instruments WHERE cusip = ANY(?)"
+            " ORDER BY cusip, (primary_ticker = id) DESC NULLS LAST, id",
+            [sorted({str(c).upper() for c in cusips})],
+        ).fetchall()
+        out: dict[str, str] = {}
+        for cusip, ident in rows:
+            out.setdefault(str(cusip).upper(), str(ident))
+        return out
 
     def upsert_news(self, df: pd.DataFrame) -> int:
         return self._upsert(
