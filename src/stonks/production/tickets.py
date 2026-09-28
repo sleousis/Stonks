@@ -202,11 +202,14 @@ def order_from_json(text: str) -> Order:
 
 
 def _preview(order: Order) -> dict[str, Any]:
-    """The reference price and notional the person approves."""
+    """The reference price and notional the person approves, and the
+    execution algo that will work the order (roadmap 23.16)."""
     price = order.limit_price or order.decision_price
     preview: dict[str, Any] = {"reference_price": order.decision_price}
     if price is not None:
         preview["notional"] = round(order.quantity * float(price), 6)
+    if order.algo:
+        preview["algo"] = dict(order.algo)
     return preview
 
 
@@ -293,6 +296,10 @@ def write_tickets(
     adjustments that touched each order, by client id. ``previews``: extra
     preview fields (a what-if answer) by client id. An order whose client
     id has a ticket already is left out. Returns the tickets written."""
+    from stonks.execution.algos.settings import attach_algos, settings_recorded
+
+    if settings_recorded(state):  # roadmap 23.16: how each order is worked
+        orders = attach_algos(state, orders, portfolio_id)
     written: list[str] = []
     stamp = _iso(now)
     with state.transaction():
@@ -477,7 +484,7 @@ def sync_submitted(state: SqliteState, *, now: datetime) -> int:
         " WHERE t.status = 'submitted'"
     )
     changed = 0
-    for row in rows:
+    for row in [*rows, *_parent_rows(state)]:
         final = row["state"] or row["status"]
         outcome = _FROM_ORDER.get(final)
         if outcome is None:
@@ -488,6 +495,21 @@ def sync_submitted(state: SqliteState, *, now: datetime) -> int:
         set_ticket_status(state, row["id"], outcome, now=now, reason=note)
         changed += 1
     return changed
+
+
+def _parent_rows(state: SqliteState) -> list[Any]:
+    """Submitted tickets whose order Stonks works as child slices (roadmap
+    23.16): the parent's state and what its children filled."""
+    if not state.sql("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'algo_parents'"):
+        return []
+    return state.sql(
+        "SELECT t.id, p.state AS status, p.state, p.state_reason AS status_reason,"
+        " (SELECT COALESCE(SUM(f.quantity), 0) FROM fills f JOIN algo_slices s"
+        "  ON s.child_client_id = f.order_client_id WHERE s.parent_client_id = p.client_id)"
+        " AS filled"
+        " FROM order_tickets t JOIN algo_parents p ON p.client_id = t.client_id"
+        " WHERE t.status = 'submitted'"
+    )
 
 
 # ---- reads -------------------------------------------------------------------------

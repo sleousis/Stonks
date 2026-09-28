@@ -69,8 +69,19 @@ _BPS = 10_000.0
 DecisionTrigger = Literal["signal", "exit_no_pick", "risk_rule", "manual", "stop"]
 
 #: How :func:`summarize` groups orders.
-GroupBy = Literal["all", "strategy", "ticker", "portfolio", "day", "week", "month"]
-GROUP_BYS: tuple[GroupBy, ...] = ("all", "strategy", "ticker", "portfolio", "day", "week", "month")
+#: ``algo``: the execution algo that worked the order (``plain`` for none,
+#: roadmap 23.16).
+GroupBy = Literal["all", "strategy", "ticker", "portfolio", "algo", "day", "week", "month"]
+GROUP_BYS: tuple[GroupBy, ...] = (
+    "all",
+    "strategy",
+    "ticker",
+    "portfolio",
+    "algo",
+    "day",
+    "week",
+    "month",
+)
 
 
 # ---- shortfall math ---------------------------------------------------------------
@@ -366,6 +377,8 @@ class OrderTca:
     decided_at: datetime | None
     shortfall: Shortfall
     context: Mapping[str, Any] | None = None
+    #: The execution algo that worked it (``None``: a plain order).
+    algo: str | None = None
 
 
 @dataclass
@@ -421,6 +434,8 @@ def group_key(row: OrderTca, by: GroupBy) -> str:
         return row.ticker
     if by == "portfolio":
         return row.portfolio_id or "(none)"
+    if by == "algo":
+        return row.algo or "plain"
     day = row.decided_at.date() if row.decided_at is not None else None
     if day is None:
         return "(unknown)"
@@ -650,6 +665,7 @@ def _order_tca(row: Mapping[str, Any], legs: Sequence[FillLeg]) -> OrderTca:
         decided_at=_parse_ts(row.get("decided_at")),
         shortfall=shortfall,
         context=_context_of(row.get("decision_context_json")),
+        algo=row.get("exec_algo"),
     )
 
 

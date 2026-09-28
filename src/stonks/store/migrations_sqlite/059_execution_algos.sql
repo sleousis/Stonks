@@ -8,7 +8,7 @@
 -- orders.parent_client_id  the parent order of a child slice Stonks sent.
 -- algo_parents             a parent order Stonks works as child slices, at a
 --                          broker that does not run the algo itself. Its
---                          state follows its children (execution/algos/slicer.py).
+--                          state follows its children (production/algo_slices.py).
 -- algo_slices              the parent's planned child orders.
 
 CREATE TABLE IF NOT EXISTS execution_algo_settings (

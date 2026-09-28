@@ -20,7 +20,13 @@ For each portfolio with tickets due:
    committed ``pending`` first, then sent, then ``submitted``. A rejection
    fails the ticket. A submit with no answer is ``unknown`` until
    reconciliation settles it, never sent twice.
-6. Live option combos (roadmap 17.8): the tickets of a multi-leg combo
+6. Execution algos (roadmap 23.16): a ticket whose order carries an algo
+   gets its window for the next session. A broker that runs the algo
+   itself (``NativeAlgoBroker``, IBKR) receives one algo order. Otherwise
+   a TWAP or VWAP ticket becomes a parent whose child slices the
+   ``algo_slices`` job sends (``production.algo_slices``), and an
+   Adaptive ticket goes out as a plain order.
+7. Live option combos (roadmap 17.8): the tickets of a multi-leg combo
    are sent together as one order (the broker's ``place_combo``), and
    only when every leg's ticket is sendable. Option tickets skip the gap
    check: their limit at the mid already bounds the price.
@@ -33,13 +39,16 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock, today
 from stonks.core.options import is_option_id
 from stonks.core.protocols import Broker
+from stonks.core.types import Order
 from stonks.execution.brokers.base import (
+    NativeAlgoBroker,
     OrderRejectedError,
     OrderStateSource,
     Quote,
@@ -245,10 +254,11 @@ def _submit_portfolio(
         _alert_gaps(state, portfolio_id, gapped, reasons, clock, run.publish)
 
     sent = failed = 0
+    calendar = run.live.submit.calendar
     for ticket in sendable:
         if ticket.client_id in reasons:
             continue
-        outcome = _send(state, broker, ticket, clock)
+        outcome = _send(state, broker, ticket, clock, calendar=calendar)
         sent += outcome == "sent"
         failed += outcome == "failed"
     for legs in combos:
@@ -375,15 +385,65 @@ def _reduces(ticket: Ticket) -> bool:
     return reduces(ticket.order)
 
 
+SendOutcome = Literal["sent", "failed", "known"]
+
+
+def _session_bounds(calendar: str, as_of: date) -> tuple[datetime, datetime]:
+    """The open and close of the first session after the decision day."""
+    from stonks.scheduling.calendar import get_calendar
+
+    session = get_calendar(calendar).next_session(as_of)
+    return session.open, session.close
+
+
+def _route_algo(
+    state: SqliteState, broker: Broker, ticket: Ticket, clock: Clock, calendar: str
+) -> Order | SendOutcome:
+    """The order to send for a ticket with an algo (its window resolved),
+    or the outcome when it is not sent as one order (see the module doc)."""
+    from stonks.execution.algos import AlgoParamsError, route_for, with_window
+    from stonks.production.algo_slices import is_parent, start_parent
+
+    order = ticket.order
+    if is_parent(state, order.client_id):
+        set_ticket_status(state, ticket.id, "submitted", now=clock.now())
+        return "known"
+    native = broker.native_algos if isinstance(broker, NativeAlgoBroker) else frozenset()
+    try:
+        route = route_for(str((order.algo or {}).get("name")), native)
+        if route == "plain":
+            _log.info("submit.algo_plain", client_id=order.client_id)
+            return replace(order, algo=None)
+        opens, closes = _session_bounds(calendar, ticket.as_of)
+        resolved = replace(order, algo=with_window(order.algo or {}, opens, closes))
+        if route == "native":
+            return resolved
+        start_parent(
+            state, resolved, portfolio_id=ticket.portfolio_id, ticket_id=ticket.id, now=clock.now()
+        )
+    except (AlgoParamsError, ValueError) as exc:
+        _log.warning("submit.algo_refused", client_id=order.client_id, error=str(exc))
+        set_ticket_status(state, ticket.id, "failed", now=clock.now(), reason=str(exc))
+        return "failed"
+    set_ticket_status(state, ticket.id, "submitted", now=clock.now())
+    return "sent"
+
+
 def _send(
-    state: SqliteState, broker: Broker, ticket: Ticket, clock: Clock
-) -> Literal["sent", "failed", "known"]:
+    state: SqliteState, broker: Broker, ticket: Ticket, clock: Clock, *, calendar: str = "XNYS"
+) -> SendOutcome:
     """Send one ticket's order. ``known``: the order was sent before (a
     crash after the send): the ticket just follows it."""
+    from stonks.execution.algos import algo_name_of
     from stonks.production.tick import _record_order
 
     order = ticket.order
     cid = order.client_id
+    if algo_name_of(order.algo) is not None and current_state(state, cid) is None:
+        routed = _route_algo(state, broker, ticket, clock, calendar)
+        if isinstance(routed, str):
+            return routed
+        order = routed
     existing = current_state(state, cid)
     if existing == "rejected" and _never_arrived(state, cid):
         # Reconciliation found the broker never received it: nothing to

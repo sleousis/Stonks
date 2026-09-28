@@ -115,7 +115,9 @@ def default_jobs() -> list[JobConfig]:
     ``engine_stop`` (close plus 10 minutes) run the intraday engine process
     and skip while ``[engine] enabled = false``. ``live_margin`` (every 30
     minutes) reads the margin cushion of each margin account and skips
-    while there is none (the default)."""
+    while there is none (the default). ``algo_slices`` (every 5 minutes)
+    sends the due child slices of TWAP and VWAP parents at a broker that
+    does not run them, and skips while no parent is working."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -267,6 +269,14 @@ def default_jobs() -> list[JobConfig]:
         ),
         # The margin cushion of every margin account (roadmap 19.13), with
         # an alert when it is thin. Skips while no margin profile exists.
+        # Child slices of execution algos Stonks works itself (roadmap
+        # 23.16). Skips while no parent order is working.
+        JobConfig(
+            name="algo_slices",
+            action="algo_slices",
+            trigger=IntervalTriggerConfig(every_minutes=5),
+            catch_up="none",
+        ),
         JobConfig(
             name="live_margin",
             action="live_margin",

@@ -42,7 +42,7 @@ def tca_summary(
     tca: TcaDep,
     portfolio_id: PortfolioIdDep,
     by: Annotated[
-        GroupBy, Query(description="group by strategy, ticker, portfolio, day, week or month")
+        GroupBy, Query(description="group by strategy, ticker, portfolio, algo, day, week or month")
     ] = "all",
     since: Since = None,
     until: Annotated[date | None, Query(description="orders decided on or before this day")] = None,

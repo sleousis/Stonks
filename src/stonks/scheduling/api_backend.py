@@ -508,6 +508,15 @@ def api_options_live(ctx: RunContext) -> JobOutcome:
     return options_live_action(ctx)
 
 
+@API_ACTIONS.register("algo_slices")
+def api_algo_slices(ctx: RunContext) -> JobOutcome:
+    """Child slices of parent orders live in the state DB and at the
+    broker, so every backend works them the same way (roadmap 23.16)."""
+    from stonks.scheduling.local import algo_slices_action
+
+    return algo_slices_action(ctx)
+
+
 @API_ACTIONS.register("live_stops")
 def api_live_stops(ctx: RunContext) -> JobOutcome:
     """Protective stops live in the state DB and at the broker, so every

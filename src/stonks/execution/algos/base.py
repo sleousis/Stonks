@@ -286,7 +286,7 @@ def discover_algos() -> None:
 
 
 #: Modules of the package that hold no algo.
-_NOT_ALGOS = frozenset({"base", "settings", "slicer", "routing"})
+_NOT_ALGOS = frozenset({"base", "settings"})
 
 
 def algo_names() -> list[str]:
