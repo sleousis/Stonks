@@ -39,4 +39,33 @@ describe('monthly returns', () => {
     // the scroller is reachable by keyboard on a phone
     expect(el.querySelector('.months-scroll')?.getAttribute('tabindex')).toBe('0');
   });
+
+  it('names the last column Year total, not a second Year', () => {
+    const fixture = TestBed.createComponent(MonthlyReturns);
+    fixture.componentRef.setInput('months', MONTHS);
+    fixture.componentRef.setInput('caption', 'Return by month');
+    fixture.detectChanges();
+    const heads = [...(fixture.nativeElement as HTMLElement).querySelectorAll('thead th')];
+    expect(heads.map((h) => h.textContent?.trim()).filter((t) => t?.startsWith('Year'))).toEqual([
+      'Year',
+      'Year total',
+    ]);
+  });
+
+  it('stacks by year with only the months that have a return (never hides the only one)', () => {
+    const [only] = yearRows([{ month: '2026-09', value: 0.012 }]);
+    expect(only.span.map((c) => [c.month, c.text])).toEqual([['Sep', '+1.2%']]);
+    const [y2026] = yearRows(MONTHS);
+    // Jan and Feb have returns; Mar is empty and trails, so it is left out.
+    expect(y2026.span.map((c) => c.month)).toEqual(['Jan', 'Feb']);
+
+    const fixture = TestBed.createComponent(MonthlyReturns);
+    fixture.componentRef.setInput('months', [{ month: '2026-09', value: 0.012 }]);
+    fixture.componentRef.setInput('caption', 'Return by month');
+    fixture.detectChanges();
+    const stacked = (fixture.nativeElement as HTMLElement).querySelector('.stacked')!;
+    expect(stacked.querySelector('.year-head')?.textContent).toContain('Year total');
+    expect([...stacked.querySelectorAll('dt')].map((d) => d.textContent)).toEqual(['Sep']);
+    expect(stacked.querySelector('dd')?.textContent?.trim()).toBe('+1.2%');
+  });
 });
