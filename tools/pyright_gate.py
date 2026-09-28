@@ -78,11 +78,22 @@ def _run_pyright() -> dict[str, Any]:
         text=True,
         check=False,
     )
+    # 0: no errors, 1: errors found. Anything else is a fatal, config or
+    # command-line problem, and the JSON (if any) says nothing about the code.
+    if proc.returncode not in (0, 1):
+        sys.stderr.write(proc.stdout + proc.stderr)
+        raise SystemExit(2)
     try:
         return json.loads(proc.stdout)
     except json.JSONDecodeError:
         sys.stderr.write(proc.stdout + proc.stderr)
         raise SystemExit(2) from None
+
+
+def analysed_nothing(report: dict[str, Any]) -> bool:
+    """True when pyright checked no file at all (a wrong ``include`` or an
+    unreadable config), which would otherwise pass as zero errors."""
+    return report.get("summary", {}).get("filesAnalyzed") == 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -96,6 +107,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     report = json.loads(args.report.read_text()) if args.report else _run_pyright()
+    if analysed_nothing(report):
+        print("pyright analysed no files: check [tool.pyright] include in pyproject.toml")
+        return 2
     counts = error_counts(report)
     strict = strict_errors(counts, args.strict if args.strict else strict_paths())
     if strict:
