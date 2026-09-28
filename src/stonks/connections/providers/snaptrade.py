@@ -26,6 +26,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import time
 from collections.abc import Callable, Mapping
 from datetime import date, datetime
@@ -93,6 +94,26 @@ _ACTIVITY_KINDS: dict[str, ActivityKind] = {
 }
 
 
+class _NoQueryInRequestLogs(logging.Filter):
+    """httpx2 logs every request URL at INFO. SnapTrade's user secret
+    travels in the query, so the logged URL keeps only its path."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and any(isinstance(a, httpx2.URL) for a in args):
+            record.args = tuple(
+                a.copy_with(query=None) if isinstance(a, httpx2.URL) and a.query else a
+                for a in args
+            )
+        return True
+
+
+def _quiet_request_logs() -> None:
+    logger = logging.getLogger("httpx2")
+    if not any(isinstance(f, _NoQueryInRequestLogs) for f in logger.filters):
+        logger.addFilter(_NoQueryInRequestLogs())
+
+
 class SnapTradeClient:
     """Signed JSON calls against the SnapTrade API. Knows nothing about our
     types; :class:`SnapTradeConnection` does the mapping."""
@@ -120,6 +141,7 @@ class SnapTradeClient:
         self._limiter = limiter
         self._connection_key = connection_key
         self._clock = clock
+        _quiet_request_logs()
         self._http = httpx2.Client(transport=transport, timeout=config.timeout_seconds)
         self._extra_secrets: list[str] = []
 
