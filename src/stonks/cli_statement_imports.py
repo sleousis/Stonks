@@ -30,6 +30,7 @@ _MAPPING = typer.Option(
 _PORTFOLIO = typer.Option(None, "--portfolio", help="a portfolio made by an earlier import")
 _NEW = typer.Option(None, "--new", help="import into a new portfolio with this name")
 _CURRENCY = typer.Option("USD", "--currency", help="currency of a new portfolio")
+_FILE = typer.Argument(..., help="the CSV file")
 
 
 def _service() -> tuple[Any, Any]:
@@ -69,7 +70,7 @@ def _request(
 
 @app.command("preview")
 def preview(
-    file: Path = typer.Argument(..., help="the CSV file"),
+    file: Path = _FILE,
     mapping: str | None = _MAPPING,
     portfolio: str | None = _PORTFOLIO,
     new: str | None = _NEW,
@@ -103,7 +104,7 @@ def preview(
 
 @app.command("commit")
 def commit(
-    file: Path = typer.Argument(..., help="the CSV file"),
+    file: Path = _FILE,
     mapping: str | None = _MAPPING,
     portfolio: str | None = _PORTFOLIO,
     new: str | None = _NEW,

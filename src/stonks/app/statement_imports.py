@@ -36,7 +36,7 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from stonks.accounts import NotFound, PortfolioRepository
-from stonks.accounts.audit import AuditLog, iso_now
+from stonks.accounts.audit import AuditLog
 from stonks.accounts.scope import Scope, owned_portfolio
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
