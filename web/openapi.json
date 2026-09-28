@@ -376,6 +376,176 @@
         "title": "AlertView",
         "type": "object"
       },
+      "AlgoInfo": {
+        "properties": {
+          "cost_assumption": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "spread_factor, impact_factor and timing_bps the backtest assumes.",
+            "title": "Cost Assumption",
+            "type": "object"
+          },
+          "defaults": {
+            "additionalProperties": true,
+            "title": "Defaults",
+            "type": "object"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "params_schema": {
+            "additionalProperties": true,
+            "title": "Params Schema",
+            "type": "object"
+          },
+          "sliceable": {
+            "description": "Stonks can send it as child orders at other brokers.",
+            "title": "Sliceable",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "description",
+          "sliceable",
+          "params_schema",
+          "defaults",
+          "cost_assumption"
+        ],
+        "title": "AlgoInfo",
+        "type": "object"
+      },
+      "AlgoList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlgoInfo"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "AlgoList",
+        "type": "object"
+      },
+      "AlgoSettingList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlgoSettingView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "AlgoSettingList",
+        "type": "object"
+      },
+      "AlgoSettingUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "algo": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Algo",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_.\\-]{1,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          }
+        },
+        "required": [
+          "algo"
+        ],
+        "title": "AlgoSettingUpdate",
+        "type": "object"
+      },
+      "AlgoSettingView": {
+        "properties": {
+          "algo": {
+            "title": "Algo",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Empty: the portfolio's own setting.",
+            "title": "Strategy Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "strategy_id",
+          "algo",
+          "params",
+          "updated_by",
+          "updated_at"
+        ],
+        "title": "AlgoSettingView",
+        "type": "object"
+      },
       "AllocationSlice": {
         "properties": {
           "holdings": {
@@ -2873,6 +3043,16 @@
               "half_spread_bps": 0.0
             }
           },
+          "exec_algo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecAlgoAssumption"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "half_spread_model": {
             "default": "class",
             "enum": [
@@ -4751,6 +4931,26 @@
           "listed"
         ],
         "title": "ExchangeView",
+        "type": "object"
+      },
+      "ExecAlgoAssumption": {
+        "additionalProperties": false,
+        "description": "``[backtest.costs.exec_algo]``: the execution algo the fills assume.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ExecAlgoAssumption",
         "type": "object"
       },
       "Exposure": {
@@ -10217,6 +10417,49 @@
         "title": "LotPicksUpdate",
         "type": "object"
       },
+      "LotSaleView": {
+        "properties": {
+          "acquired": {
+            "format": "date",
+            "title": "Acquired",
+            "type": "string"
+          },
+          "cost_basis": {
+            "title": "Cost Basis",
+            "type": "number"
+          },
+          "gain": {
+            "title": "Gain",
+            "type": "number"
+          },
+          "holding_period": {
+            "enum": [
+              "short",
+              "long"
+            ],
+            "title": "Holding Period",
+            "type": "string"
+          },
+          "proceeds": {
+            "title": "Proceeds",
+            "type": "number"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          }
+        },
+        "required": [
+          "acquired",
+          "quantity",
+          "cost_basis",
+          "proceeds",
+          "gain",
+          "holding_period"
+        ],
+        "title": "LotSaleView",
+        "type": "object"
+      },
       "ManualOrderChange": {
         "additionalProperties": false,
         "description": "A new quantity or limit for one of your working manual orders. It is\ncancelled at the broker and replaced by a new order.",
@@ -15093,6 +15336,95 @@
         "title": "ParameterInfo",
         "type": "object"
       },
+      "ParentOrderList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ParentOrderView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ParentOrderList",
+        "type": "object"
+      },
+      "ParentOrderView": {
+        "description": "A parent order Stonks works as child slices.",
+        "properties": {
+          "algo": {
+            "title": "Algo",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "filled": {
+            "title": "Filled",
+            "type": "number"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "slices": {
+            "items": {
+              "$ref": "#/components/schemas/SliceView"
+            },
+            "title": "Slices",
+            "type": "array"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          },
+          "window_end": {
+            "format": "date-time",
+            "title": "Window End",
+            "type": "string"
+          },
+          "window_start": {
+            "format": "date-time",
+            "title": "Window Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "portfolio_id",
+          "ticker",
+          "side",
+          "quantity",
+          "filled",
+          "algo",
+          "state",
+          "window_start",
+          "window_end",
+          "slices"
+        ],
+        "title": "ParentOrderView",
+        "type": "object"
+      },
       "PasswordChangeRequest": {
         "properties": {
           "current_password": {
@@ -15439,6 +15771,349 @@
           "change_pct"
         ],
         "title": "PeriodPnl",
+        "type": "object"
+      },
+      "PlanConfirm": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_.\\-]{1,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Idempotency key. Default: one from the plan's trades.",
+            "title": "Key"
+          },
+          "long_term_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Long Term Rate"
+          },
+          "min_trade_value": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Min Trade Value",
+            "type": "number"
+          },
+          "portfolio_id": {
+            "pattern": "^[A-Za-z0-9_.\\-]{1,64}$",
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "short_term_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Term Rate"
+          },
+          "source": {
+            "description": "strategy: the strategy's latest model book weights; targets: your list.",
+            "enum": [
+              "strategy",
+              "targets"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_.\\-]{1,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/PlanTarget"
+            },
+            "maxItems": 500,
+            "title": "Targets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "source",
+          "reason"
+        ],
+        "title": "PlanConfirm",
+        "type": "object"
+      },
+      "PlanConfirmResult": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "plan": {
+            "$ref": "#/components/schemas/RebalancePlanView"
+          },
+          "ticket_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ticket Ids",
+            "type": "array"
+          },
+          "written": {
+            "description": "New tickets. A repeat of the same key writes none.",
+            "title": "Written",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan",
+          "key",
+          "ticket_ids",
+          "written"
+        ],
+        "title": "PlanConfirmResult",
+        "type": "object"
+      },
+      "PlanLineView": {
+        "properties": {
+          "cost": {
+            "title": "Cost",
+            "type": "number"
+          },
+          "cost_bps": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Bps"
+          },
+          "current_quantity": {
+            "title": "Current Quantity",
+            "type": "number"
+          },
+          "current_weight": {
+            "title": "Current Weight",
+            "type": "number"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "side": {
+            "anyOf": [
+              {
+                "enum": [
+                  "buy",
+                  "sell"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          },
+          "skipped": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skipped"
+          },
+          "target_quantity": {
+            "title": "Target Quantity",
+            "type": "number"
+          },
+          "target_weight": {
+            "title": "Target Weight",
+            "type": "number"
+          },
+          "tax": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TaxPreviewView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "weight_after": {
+            "title": "Weight After",
+            "type": "number"
+          }
+        },
+        "required": [
+          "ticker",
+          "price",
+          "current_quantity",
+          "current_weight",
+          "target_weight",
+          "target_quantity",
+          "side",
+          "quantity",
+          "value",
+          "cost_bps",
+          "cost",
+          "weight_after",
+          "skipped",
+          "tax"
+        ],
+        "title": "PlanLineView",
+        "type": "object"
+      },
+      "PlanRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "long_term_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Long Term Rate"
+          },
+          "min_trade_value": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Min Trade Value",
+            "type": "number"
+          },
+          "portfolio_id": {
+            "pattern": "^[A-Za-z0-9_.\\-]{1,64}$",
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "short_term_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Short Term Rate"
+          },
+          "source": {
+            "description": "strategy: the strategy's latest model book weights; targets: your list.",
+            "enum": [
+              "strategy",
+              "targets"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_.\\-]{1,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/PlanTarget"
+            },
+            "maxItems": 500,
+            "title": "Targets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "source"
+        ],
+        "title": "PlanRequest",
+        "type": "object"
+      },
+      "PlanTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "ticker": {
+            "pattern": "^[A-Za-z0-9._\\-^=:]{1,40}$",
+            "title": "Ticker",
+            "type": "string"
+          },
+          "weight": {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "ticker",
+          "weight"
+        ],
+        "title": "PlanTarget",
         "type": "object"
       },
       "PlateauOverlayView": {
@@ -17642,6 +18317,134 @@
           }
         },
         "title": "QuietHoursUpdate",
+        "type": "object"
+      },
+      "RebalancePlanView": {
+        "properties": {
+          "algo": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The execution algo the trades would use.",
+            "title": "Algo"
+          },
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "buys": {
+            "title": "Buys",
+            "type": "number"
+          },
+          "cash_after": {
+            "title": "Cash After",
+            "type": "number"
+          },
+          "cash_before": {
+            "title": "Cash Before",
+            "type": "number"
+          },
+          "cash_weight_after": {
+            "title": "Cash Weight After",
+            "type": "number"
+          },
+          "equity": {
+            "title": "Equity",
+            "type": "number"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/PlanLineView"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "max_drift_after": {
+            "title": "Max Drift After",
+            "type": "number"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "sells": {
+            "title": "Sells",
+            "type": "number"
+          },
+          "source": {
+            "enum": [
+              "strategy",
+              "targets"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
+          "tax_total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Total"
+          },
+          "total_cost": {
+            "title": "Total Cost",
+            "type": "number"
+          },
+          "turnover": {
+            "description": "Traded value over the book's value.",
+            "title": "Turnover",
+            "type": "number"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "source",
+          "strategy_id",
+          "as_of",
+          "equity",
+          "cash_before",
+          "cash_after",
+          "turnover",
+          "total_cost",
+          "buys",
+          "sells",
+          "cash_weight_after",
+          "max_drift_after",
+          "tax_total",
+          "algo",
+          "lines",
+          "notes"
+        ],
+        "title": "RebalancePlanView",
         "type": "object"
       },
       "ReconcileReportView": {
@@ -21228,6 +22031,74 @@
         "title": "SignalICView",
         "type": "object"
       },
+      "SliceView": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "filled": {
+            "title": "Filled",
+            "type": "number"
+          },
+          "order_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Order State"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "send_after": {
+            "format": "date-time",
+            "title": "Send After",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "planned",
+              "sent",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          }
+        },
+        "required": [
+          "seq",
+          "client_id",
+          "quantity",
+          "send_after",
+          "status",
+          "status_reason",
+          "order_state",
+          "filled"
+        ],
+        "title": "SliceView",
+        "type": "object"
+      },
       "SmokeCheck": {
         "properties": {
           "data": {
@@ -23451,6 +24322,49 @@
         "title": "SystemChecklistView",
         "type": "object"
       },
+      "TaxPreviewView": {
+        "properties": {
+          "estimated_tax": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Tax"
+          },
+          "gain": {
+            "title": "Gain",
+            "type": "number"
+          },
+          "long_term_gain": {
+            "title": "Long Term Gain",
+            "type": "number"
+          },
+          "lots": {
+            "items": {
+              "$ref": "#/components/schemas/LotSaleView"
+            },
+            "title": "Lots",
+            "type": "array"
+          },
+          "short_term_gain": {
+            "title": "Short Term Gain",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lots",
+          "gain",
+          "short_term_gain",
+          "long_term_gain",
+          "estimated_tax"
+        ],
+        "title": "TaxPreviewView",
+        "type": "object"
+      },
       "TaxSettingsUpdate": {
         "additionalProperties": false,
         "properties": {
@@ -23774,6 +24688,7 @@
               "strategy",
               "ticker",
               "portfolio",
+              "algo",
               "day",
               "week",
               "month"
@@ -32791,6 +33706,83 @@
         "x-permission": "portfolio.manage"
       }
     },
+    "/api/execution/algos": {
+      "get": {
+        "description": "Every execution algo: its parameters, defaults and the costs the\nbacktest assumes for it.",
+        "operationId": "listExecutionAlgos",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlgoList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Execution Algos",
+        "tags": [
+          "execution"
+        ]
+      }
+    },
     "/api/exports/fills": {
       "get": {
         "description": "Every fill of one of your portfolios, newest first.",
@@ -41466,6 +42458,182 @@
         "x-permission": "portfolio.trade"
       }
     },
+    "/api/planner/confirm": {
+      "post": {
+        "description": "One order ticket per trade of the plan. Each waits for your approval\n(a fresh second factor) before it is sent in the submit window.",
+        "operationId": "confirmRebalance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanConfirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanConfirmResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Confirm Rebalance",
+        "tags": [
+          "execution"
+        ],
+        "x-permission": "portfolio.trade"
+      }
+    },
+    "/api/planner/plan": {
+      "post": {
+        "description": "The trades that move a portfolio to a strategy's model weights or to\nyour own list: whole shares, costs, turnover and a tax preview. Nothing\nis written or sent.",
+        "operationId": "planRebalance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RebalancePlanView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Plan Rebalance",
+        "tags": [
+          "execution"
+        ],
+        "x-permission": "data.read"
+      }
+    },
     "/api/pnl": {
       "get": {
         "description": "Daily P&L of one of your portfolios (last snapshot per UTC day).\nReturns and drawdown are measured from inception even when ``since``\ntrims it.",
@@ -42290,6 +43458,95 @@
         "x-permission": "portfolio.manage"
       }
     },
+    "/api/portfolios/{portfolio_id}/algo-parents": {
+      "get": {
+        "description": "Parent orders Stonks works as child slices, with each slice.",
+        "operationId": "listAlgoParents",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParentOrderList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Algo Parents",
+        "tags": [
+          "execution"
+        ]
+      }
+    },
     "/api/portfolios/{portfolio_id}/cash-flows": {
       "get": {
         "description": "Every deposit and withdrawal of one of your portfolios, oldest first:\nrecorded ones and those a broker sync brought in.",
@@ -42503,6 +43760,291 @@
         "summary": "Record Cash Flow",
         "tags": [
           "portfolio"
+        ],
+        "x-permission": "portfolio.manage"
+      }
+    },
+    "/api/portfolios/{portfolio_id}/execution-algos": {
+      "delete": {
+        "description": "Back to plain orders, or a strategy back to the portfolio's setting.",
+        "operationId": "clearExecutionAlgo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Strategy Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Clear Execution Algo",
+        "tags": [
+          "execution"
+        ],
+        "x-permission": "portfolio.manage"
+      },
+      "get": {
+        "description": "The portfolio's algo setting and each strategy's override. Empty:\nplain orders.",
+        "operationId": "listExecutionAlgoSettings",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlgoSettingList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Execution Algo Settings",
+        "tags": [
+          "execution"
+        ]
+      },
+      "put": {
+        "description": "Work the portfolio's orders (or one strategy's, with strategy_id)\nwith an algo. Stops, options and one-cancels-other orders stay plain.",
+        "operationId": "setExecutionAlgo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlgoSettingUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlgoSettingView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Execution Algo",
+        "tags": [
+          "execution"
         ],
         "x-permission": "portfolio.manage"
       }
@@ -52360,18 +53902,19 @@
         "operationId": "getTcaSummary",
         "parameters": [
           {
-            "description": "group by strategy, ticker, portfolio, day, week or month",
+            "description": "group by strategy, ticker, portfolio, algo, day, week or month",
             "in": "query",
             "name": "by",
             "required": false,
             "schema": {
               "default": "all",
-              "description": "group by strategy, ticker, portfolio, day, week or month",
+              "description": "group by strategy, ticker, portfolio, algo, day, week or month",
               "enum": [
                 "all",
                 "strategy",
                 "ticker",
                 "portfolio",
+                "algo",
                 "day",
                 "week",
                 "month"

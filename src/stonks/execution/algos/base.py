@@ -34,7 +34,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -258,7 +258,7 @@ def ib_time(when: datetime) -> str:
 # ---- the registry ------------------------------------------------------------------
 
 _REGISTRY: dict[str, ExecutionAlgo] = {}
-_DISCOVERED = False
+_discovered: set[str] = set()
 
 
 def register_algo(cls: type[ExecutionAlgo]) -> type[ExecutionAlgo]:
@@ -275,14 +275,13 @@ def register_algo(cls: type[ExecutionAlgo]) -> type[ExecutionAlgo]:
 def discover_algos() -> None:
     """Import every public module of this package once, so their
     ``@register_algo`` decorators run."""
-    global _DISCOVERED
-    if _DISCOVERED:
+    if _discovered:
         return
     pkg = importlib.import_module("stonks.execution.algos")
     for info in pkgutil.iter_modules(pkg.__path__):
         if not info.name.startswith("_") and info.name not in _NOT_ALGOS:
             importlib.import_module(f"stonks.execution.algos.{info.name}")
-    _DISCOVERED = True
+    _discovered.add("stonks.execution.algos")
 
 
 #: Modules of the package that hold no algo.
@@ -335,8 +334,10 @@ def with_window(
 
 
 def window_of(spec: Mapping[str, Any]) -> AlgoWindow | None:
-    raw = spec.get("window")
-    return AlgoWindow.from_dict(raw) if isinstance(raw, Mapping) else None
+    raw: object = spec.get("window")
+    if not isinstance(raw, Mapping):
+        return None
+    return AlgoWindow.from_dict(cast("Mapping[str, Any]", raw))
 
 
 def native_of(spec: Mapping[str, Any]) -> NativeAlgo:

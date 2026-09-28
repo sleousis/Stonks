@@ -555,7 +555,7 @@ From a second study of the top GitHub projects for "stocks", "algotrade", "algot
 | 23.13 New data and factor provenance | SEC EDGAR filings point in time, published anomalies with their source and a before and after publication split, a factor bench with FDR, and named chart setups as factors and screener metrics. | planned |
 | 23.14 Fund look-through and breadth | ETF holdings so insights and the sector cap see concentration inside funds, and a market breadth card on Today. | planned |
 | 23.15 Live safety extras | Checks before resuming after the kill switch, a replay of recent days before a book starts or moves up a stage, a per-ticker loss breaker, and a broker event journal with replay. | planned |
-| 23.16 Execution algorithms and planner | IBKR Adaptive, TWAP and VWAP behind one seam, and a rebalancing planner that shows the trades to reach target weights before sending. | planned |
+| 23.16 Execution algorithms and planner | IBKR Adaptive, TWAP and VWAP behind one seam, and a rebalancing planner that shows the trades to reach target weights before sending. Done: the `ExecutionAlgo` seam and registry (`execution/algos/`), native algo orders at IBKR, child slices sent by Stonks at other brokers (`production/algo_slices.py`, the `algo_slices` job), settings per portfolio and strategy, TCA by algo, the algo cost assumption in the backtest, and the planner (`portfolio/planner.py`) with whole shares, costs, turnover and a tax preview, confirmed into tickets in the console, `stonks plan`, `stonks algos` and MCP. SQLite 059. See [execution algos](execution-algos.md). | done |
 | 23.17 Smaller comforts | Privacy mode that hides money, a demo portfolio, scheduled screen alerts, and CSV statement import. | planned |
 
 ## Execution order

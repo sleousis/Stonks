@@ -16,6 +16,11 @@ export default [
         loadComponent: () => import('./manual-ticket.page').then((m) => m.ManualTicketPage),
       },
       {
+        path: 'rebalance',
+        title: 'Rebalance',
+        loadComponent: () => import('./rebalance.page').then((m) => m.RebalancePage),
+      },
+      {
         path: 'drafts',
         title: 'Order drafts',
         loadComponent: () => import('./order-drafts.page').then((m) => m.OrderDraftsPage),

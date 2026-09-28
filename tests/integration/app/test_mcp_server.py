@@ -200,6 +200,10 @@ READ_TOOLS = {
     "get_live_margin",
     "get_options_live",
     "get_broker_gateways",
+    "list_execution_algos",
+    "get_execution_algo_settings",
+    "list_algo_parents",
+    "plan_rebalance",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -262,6 +266,8 @@ GUARDED_TOOLS = {
     "delete_screen",
     "swap_model_version",
     "reject_model_version",
+    "set_execution_algo",
+    "confirm_rebalance",
 }
 
 

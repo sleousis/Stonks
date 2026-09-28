@@ -99,7 +99,12 @@ def list_algo_parents(
     return services.execution.parents(principal, portfolio_id)
 
 
-@router.post("/api/planner/plan", response_model=RebalancePlanView, operation_id="planRebalance")
+@router.post(
+    "/api/planner/plan",
+    response_model=RebalancePlanView,
+    operation_id="planRebalance",
+    dependencies=needs(Permission.READ),
+)
 def plan_rebalance(
     body: PlanRequest, services: ServicesDep, principal: PrincipalDep
 ) -> RebalancePlanView:
