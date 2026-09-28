@@ -231,3 +231,27 @@ def test_live_stops_job_places_a_pending_manual_stop(state, lake, tick, portfoli
     result = sync_live_books(state, lake, [live], lambda _pid: broker, as_of=NOW.date())
     assert result[portfolio_id]["manual_placed"] == 1
     assert f"{out.client_id}:stop" in broker.orders
+
+
+def test_plan_sizes_from_the_book_value(state, lake, tick, portfolio_id, owner):
+    from stonks.production.manual import plan_manual_order
+
+    book = _book(portfolio_id, owner)
+    plan = plan_manual_order(
+        state, lake, book, tick, ticker="UP.US", side="buy", stop_price=98.0,
+        target_price=106.0, risk_percent=1.0, now=NOW,
+    )  # fmt: skip
+    # 1% of 10k = 100; 100 / 2 = 50 shares, 5000 of cash
+    assert plan.entry_is_close and plan.entry_price == pytest.approx(100.0)
+    assert plan.equity == pytest.approx(10_000.0)
+    assert plan.size.quantity == 50 and plan.size.reward_risk == pytest.approx(3.0)
+    cash_cut = plan_manual_order(
+        state, lake, book, tick, ticker="UP.US", side="buy", stop_price=99.5,
+        risk_amount=500.0, now=NOW,
+    )  # fmt: skip
+    assert cash_cut.size.quantity == 100 and cash_cut.size.capped_by == "cash"
+    with pytest.raises(ManualOrderRefused, match="below the entry"):
+        plan_manual_order(
+            state, lake, book, tick, ticker="UP.US", side="buy", stop_price=120.0,
+            risk_percent=1.0, now=NOW,
+        )  # fmt: skip

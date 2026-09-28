@@ -85,7 +85,13 @@ from stonks.production.tick import (
     _record_order,
     _snapshot_portfolio,
 )
-from stonks.production.trade_plan import PlanError, check_plan, reward_risk
+from stonks.production.trade_plan import (
+    PlanError,
+    PlanSize,
+    check_plan,
+    reward_risk,
+    size_from_risk,
+)
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
 
@@ -565,6 +571,90 @@ def _live_context(
             "manual_order.live_context_failed", portfolio_id=book.portfolio_id, error=str(exc)
         )
         return LiveContext(portfolio_id=book.portfolio_id)
+
+
+# ---- sizing from risk (roadmap 23.4) -----------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ManualPlan:
+    """A whole-share size for a manual entry from a chosen risk."""
+
+    ticker: str
+    side: OrderSide
+    entry_price: float
+    #: The entry is the latest close (no entry price was given).
+    entry_is_close: bool
+    stop_price: float
+    target_price: float | None
+    #: The book's value at the latest closes and its cash.
+    equity: float
+    cash: float
+    size: PlanSize
+
+
+def plan_manual_order(
+    state: SqliteState,
+    lake: DuckDBLake,
+    book: ManualBook,
+    tick: TickSettings,
+    *,
+    ticker: str,
+    side: OrderSide,
+    stop_price: float,
+    target_price: float | None = None,
+    entry_price: float | None = None,
+    risk_percent: float | None = None,
+    risk_amount: float | None = None,
+    now: datetime | None = None,
+) -> ManualPlan:
+    """Size a manual entry so its loss at ``stop_price`` fits the chosen
+    risk (a percent of the book's value, or an amount), in whole shares and
+    within the cash. Reads the book and places nothing. Raises
+    :class:`ManualOrderRefused` when the plan does not make sense."""
+    now = now or _utcnow()
+    if book.broker is not None:
+        portfolio = book.broker.fetch_portfolio()
+    else:
+        portfolio = _load_or_seed_portfolio(state, book.initial_cash, book.portfolio_id)
+    held = [t for t, q in portfolio.positions.items() if abs(q) > _QTY_EPS]
+    priced = load_prices(
+        lake, [ticker], held, now.date(), max_staleness_days=tick.max_price_staleness_days
+    )
+    close = priced.prices.get(ticker)
+    if entry_price is None and (close is None or ticker not in priced.fresh or close <= 0):
+        raise ManualOrderRefused(f"no recent close for {ticker} in the lake; give the entry price")
+    unmarked = [t for t in held if t not in priced.prices]
+    if unmarked:
+        raise ManualOrderRefused(
+            f"no close for {', '.join(sorted(unmarked))}, so the book's value is unknown"
+        )
+    entry = float(entry_price if entry_price is not None else close)  # type: ignore[arg-type]
+    equity = portfolio.total_value(dict(priced.prices))
+    try:
+        size = size_from_risk(
+            side=side,
+            entry=entry,
+            stop=stop_price,
+            equity=equity,
+            risk_percent=risk_percent,
+            risk_amount=risk_amount,
+            cash=portfolio.cash,
+            target=target_price,
+        )
+    except PlanError as exc:
+        raise ManualOrderRefused(str(exc)) from None
+    return ManualPlan(
+        ticker=ticker,
+        side=side,
+        entry_price=entry,
+        entry_is_close=entry_price is None,
+        stop_price=stop_price,
+        target_price=target_price,
+        equity=equity,
+        cash=portfolio.cash,
+        size=size,
+    )
 
 
 # ---- cancel and change -----------------------------------------------------------------

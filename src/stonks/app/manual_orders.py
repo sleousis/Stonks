@@ -51,6 +51,7 @@ from stonks.production.manual import (
     cancel_order,
     change_manual_order,
     place_manual_order,
+    plan_manual_order,
 )
 from stonks.production.settings_builder import build_tick_settings
 from stonks.store.state import SqliteState
@@ -96,6 +97,55 @@ class ManualOrderRequest(BaseModel):
         description="Place a smaller order when a risk rule shrinks it. Off: the order is "
         "refused and the answer says what the rules allow.",
     )
+    stop_price: float | None = Field(
+        default=None,
+        gt=0,
+        description="A protective stop for this entry: below a buy, above a short sale. "
+        "A book at a broker gets a stop order once the entry fills.",
+    )
+    target_price: float | None = Field(
+        default=None, gt=0, description="Where you plan to take the profit (recorded)."
+    )
+
+
+class TradePlanRequest(BaseModel):
+    """Size an entry from the risk you choose and the distance to the stop."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    portfolio_id: str | None = Field(default=None, max_length=64)
+    ticker: str = Field(pattern=_TICKER)
+    side: Literal["buy", "sell"]
+    stop_price: float = Field(gt=0)
+    target_price: float | None = Field(default=None, gt=0)
+    entry_price: float | None = Field(
+        default=None, gt=0, description="Your entry, e.g. a limit. Default: the latest close."
+    )
+    risk_percent: float | None = Field(
+        default=None, gt=0, le=100, description="Risk as a percent of the book's value."
+    )
+    risk_amount: float | None = Field(
+        default=None, gt=0, description="Risk as an amount in the book's currency."
+    )
+
+
+class TradePlanView(BaseModel):
+    ticker: str
+    side: Literal["buy", "sell"]
+    entry_price: float
+    entry_is_close: bool = Field(description="The entry is the latest close.")
+    stop_price: float
+    target_price: float | None
+    equity: float = Field(description="The book's value at the latest closes.")
+    cash: float
+    risk_budget: float = Field(description="The risk you chose, as an amount.")
+    risk_per_share: float
+    quantity: int = Field(description="Whole shares whose loss at the stop fits the risk.")
+    risk_amount: float = Field(description="The loss at the stop for that quantity.")
+    notional: float
+    reward_risk: float | None = Field(description="The gain at the target over the risk.")
+    capped_by: Literal["cash"] | None = Field(description="cash: the cash cut the size.")
+    note: str | None = None
 
 
 class ManualOrderChange(BaseModel):
@@ -135,6 +185,14 @@ class ManualOrderResult(BaseModel):
     duplicate: bool = Field(default=False, description="The client id was placed before.")
     halt: str | None = Field(default=None, description="A halt that limits the book.")
     live: bool = Field(description="The book trades real money.")
+    stop_price: float | None = Field(default=None, description="The protective stop planned.")
+    target_price: float | None = None
+    reward_risk: float | None = Field(
+        default=None, description="The gain at the target over the loss at the stop."
+    )
+    protective_stop: str | None = Field(
+        default=None, description="The client id of the stop order placed at the broker."
+    )
 
 
 class OrderCancelResult(BaseModel):
@@ -165,6 +223,53 @@ class ManualOrdersService:
         self, who: Who, body: ManualOrderRequest, *, confirm_live: bool = False
     ) -> ManualOrderResult:
         return self._place(who, body, preview=False, confirm_live=confirm_live)
+
+    def plan(self, who: Who, body: TradePlanRequest) -> TradePlanView:
+        """A whole-share size from the chosen risk and the stop. Reads the
+        book (its broker too) and places nothing."""
+        if (body.risk_percent is None) == (body.risk_amount is None):
+            raise ValidationError("give one of risk_percent or risk_amount")
+        with self._ctx.state() as state:
+            account = self._portfolio(state, who, body.portfolio_id)
+            book = self._book(state, account)
+            tick = build_tick_settings(self._ctx.settings, [])
+            with self._ctx.lake() as lake, _closing(book.broker):
+                try:
+                    plan = plan_manual_order(
+                        state,
+                        lake,
+                        book,
+                        tick,
+                        ticker=body.ticker.upper(),
+                        side=body.side,
+                        stop_price=body.stop_price,
+                        target_price=body.target_price,
+                        entry_price=body.entry_price,
+                        risk_percent=body.risk_percent,
+                        risk_amount=body.risk_amount,
+                        now=self._clock(),
+                    )
+                except ManualOrderRefused as exc:
+                    raise ValidationError(str(exc)) from None
+        size = plan.size
+        return TradePlanView(
+            ticker=plan.ticker,
+            side=plan.side,
+            entry_price=plan.entry_price,
+            entry_is_close=plan.entry_is_close,
+            stop_price=plan.stop_price,
+            target_price=plan.target_price,
+            equity=plan.equity,
+            cash=plan.cash,
+            risk_budget=size.risk_budget,
+            risk_per_share=size.risk_per_share,
+            quantity=size.quantity,
+            risk_amount=size.risk_amount,
+            notional=size.notional,
+            reward_risk=size.reward_risk,
+            capped_by=size.capped_by,
+            note=size.note,
+        )
 
     def preview(self, who: Who, body: ManualOrderRequest) -> ManualOrderResult:
         """Every check, nothing placed. Needs no second factor, even for a
@@ -257,6 +362,8 @@ class ManualOrdersService:
                 limit_price=body.limit_price,
                 client_key=body.client_id,
                 allow_reduce=body.allow_reduce,
+                stop_price=body.stop_price,
+                target_price=body.target_price,
             )
             with self._ctx.lake() as lake, _closing(book.broker):
                 try:
@@ -340,6 +447,7 @@ class ManualOrdersService:
             allow_short=account.allow_short,
             parent_id=row["paper_of"],
             broker=self._broker(account),
+            live=self._live(account),
         )
 
     def _broker(self, account: AccountPortfolio) -> Broker | None:
@@ -388,6 +496,10 @@ class ManualOrdersService:
             duplicate=result.duplicate,
             halt=result.halt,
             live=live,
+            stop_price=result.stop_price,
+            target_price=result.target_price,
+            reward_risk=result.reward_risk,
+            protective_stop=result.protective_stop,
         )
 
 
