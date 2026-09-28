@@ -15,10 +15,11 @@ import { TotalsCard } from './totals-card';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
 
 /**
- * Today, the trader's home: my portfolio (admins see totals across traders
- * instead) with a tape of today's fills, today's signals and runs in time
- * order, and my strategies with their switches. Everything else sits under
- * "Advanced" in the navigation.
+ * Today, the trader's home: my portfolio with a tape of today's fills,
+ * today's signals and runs in time order, and my strategies with their
+ * switches. Admins see their own portfolio first too, with the totals
+ * across traders under it (M3, F23). The left column flows on its own, so
+ * a tall strategies list never leaves a hole beside it.
  */
 @Component({
   selector: 'app-home-page',
@@ -51,10 +52,9 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
     <div class="home">
       <app-fills-tape class="tape" />
       <div class="portfolio">
+        <app-portfolio-card />
         @if (session.isAdmin()) {
           <app-totals-card />
-        } @else {
-          <app-portfolio-card />
         }
       </div>
       <app-signals-card class="signals" />
@@ -73,6 +73,9 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
       @include bp.from-desktop {
         grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
         grid-template-areas: 'tape tape' 'portfolio strategies' 'signals strategies';
+        /* The last row is flexible, so a tall strategies column grows it and
+           never stretches the portfolio row into a gap (M3). */
+        grid-template-rows: auto auto 1fr;
         align-items: start;
       }
     }
@@ -82,6 +85,8 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
     }
     .portfolio {
       grid-area: portfolio;
+      display: grid;
+      gap: var(--space-3);
       min-width: 0;
     }
     .signals {

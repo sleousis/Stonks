@@ -42,28 +42,44 @@ describe('StrategiesCard', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  function radio(el: HTMLElement, value: string) {
-    return el.querySelector<HTMLInputElement>(`input[type="radio"][value="${value}"]`)!;
+  /** The follow-mode control of the first row (M8: one compact select). */
+  function modeSelect(el: HTMLElement) {
+    return el.querySelector<HTMLSelectElement>('app-follow-mode select')!;
+  }
+
+  function option(el: HTMLElement, value: string) {
+    return el.querySelector<HTMLOptionElement>(`app-follow-mode option[value="${value}"]`)!;
+  }
+
+  function pick(el: HTMLElement, value: string) {
+    const select = modeSelect(el);
+    select.value = value;
+    select.dispatchEvent(new Event('change'));
   }
 
   it('shows each strategy with its switch and mode', async () => {
     const el = await render([sub({ paper_days_completed: 12 })]);
     expect(el.textContent).toContain('momentum-v3');
     expect(el.querySelector('[role="switch"]')!.getAttribute('aria-checked')).toBe('true');
-    expect(radio(el, 'paper').checked).toBe(true);
+    expect(modeSelect(el).value).toBe('paper');
   });
 
-  it('keeps auto disabled with the reason until 20 paper days', async () => {
-    const el = await render([sub({ paper_days_completed: 12 })]);
-    expect(radio(el, 'auto').disabled).toBe(true);
-    expect(el.textContent).toContain(
-      'Approve each trade and Auto unlock after 20 paper trading days. 12 of 20 done.',
-    );
+  it('keeps Automatic locked, says the rule once and the count per row (M8, F4)', async () => {
+    const el = await render([
+      sub({ paper_days_completed: 12 }),
+      sub({ id: 'sub_2', strategy_id: 'value_1a2b3c4d', paper_days_completed: 3 }),
+    ]);
+    expect(option(el, 'auto').disabled).toBe(true);
+    const rule = 'Approve each trade and Automatic unlock after 20 paper days.';
+    expect(el.querySelectorAll('.rule').length).toBe(1);
+    expect(el.querySelector('.rule')!.textContent).toContain(rule);
+    expect(el.textContent).toContain('Paper days: 12 of 20.');
+    expect(el.textContent).toContain('Paper days: 3 of 20.');
   });
 
   it('switches notify and paper straight away', async () => {
     const el = await render([sub({ mode: 'notify', paper_days_completed: 0 })]);
-    radio(el, 'paper').click();
+    pick(el, 'paper');
     const req = await nextRequest(controller, '/api/subscriptions/sub_1', 'PATCH');
     expect(req.request.body).toEqual({ mode: 'paper' });
     req.flush(sub({ mode: 'paper', paper_days_completed: 0 }));
@@ -87,7 +103,7 @@ describe('StrategiesCard', () => {
     const stepUp = vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockResolvedValue(true);
     const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(true);
     const el = await render([sub()]);
-    radio(el, 'auto').click();
+    pick(el, 'auto');
     const req = await nextRequest(controller, '/api/subscriptions/sub_1', 'PATCH');
     expect(stepUp).toHaveBeenCalled();
     expect(confirm).toHaveBeenCalledWith(
@@ -101,36 +117,38 @@ describe('StrategiesCard', () => {
   it('sends nothing and restores the mode when the step-up is cancelled', async () => {
     vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockResolvedValue(false);
     const el = await render([sub()]);
-    radio(el, 'auto').click();
+    pick(el, 'auto');
     await tick();
+    fixture.detectChanges();
     controller.expectNone('/api/subscriptions/sub_1');
-    expect(radio(el, 'paper').checked).toBe(true);
+    expect(modeSelect(el).value).toBe('paper');
   });
 
   it('auto confirm passes ticket.live true (UX-14)', async () => {
     vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockResolvedValue(true);
     const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(false);
     const el = await render([sub()]);
-    radio(el, 'auto').click();
+    pick(el, 'auto');
     await tick();
     const options = confirm.mock.calls[0][0];
     expect(options.ticket?.live).toBe(true);
     expect(options.ticket?.lines.map((l) => l.label)).toEqual(['Strategy', 'Portfolio', 'Mode']);
-    expect(options.ticket?.lines[2].value).toBe('Auto');
+    expect(options.ticket?.lines[2].value).toBe('Automatic');
     controller.expectNone('/api/subscriptions/sub_1');
   });
 
   it('keeps approve each trade locked with auto until the gate passes (19.8)', async () => {
     const el = await render([sub({ paper_days_completed: 12 })]);
-    expect(radio(el, 'approve').disabled).toBe(true);
-    expect(radio(el, 'approve').getAttribute('aria-describedby')).toBe('auto-why-sub_1');
+    expect(option(el, 'approve').disabled).toBe(true);
+    expect(modeSelect(el).getAttribute('aria-describedby')).toBe('mode-help-sub_1');
+    expect(el.querySelector('#mode-help-sub_1')!.textContent).toContain('Paper days: 12 of 20.');
   });
 
   it('turns on approve each trade after a step-up and a ticket, no typed name', async () => {
     const stepUp = vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockResolvedValue(true);
     const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(true);
     const el = await render([sub()]);
-    radio(el, 'approve').click();
+    pick(el, 'approve');
     const req = await nextRequest(controller, '/api/subscriptions/sub_1', 'PATCH');
     expect(stepUp).toHaveBeenCalled();
     const options = confirm.mock.calls[0][0];
@@ -141,13 +159,13 @@ describe('StrategiesCard', () => {
     req.flush(sub({ mode: 'approve' }));
     await tick();
     fixture.detectChanges();
-    expect(radio(el, 'approve').checked).toBe(true);
-    expect(el.textContent).toContain('Each waits for your approval');
+    expect(modeSelect(el).value).toBe('approve');
+    expect(el.textContent).toContain('Each trade waits for your approval');
   });
 
   it('from approve, auto is open once the gate passed', async () => {
     const el = await render([sub({ mode: 'approve' })]);
-    expect(radio(el, 'auto').disabled).toBe(false);
+    expect(option(el, 'auto').disabled).toBe(false);
   });
 
   it('re-enabling an auto subscription asks for step-up and confirm, cancel sends no PATCH (UX-02)', async () => {
@@ -222,10 +240,12 @@ describe('StrategiesCard', () => {
   it('names strategies and modes in trader words (UX-27, UX-31)', async () => {
     const el = await render([sub({ strategy_id: 'value_1a2b3c4d', strategy_status: 'shadow' })]);
     expect(el.querySelector('.name a')!.textContent!.trim()).toBe('Value 1a2b');
-    expect(el.textContent).toContain('Paper trading');
     expect(el.textContent).not.toMatch(/shadow/i);
-    const labels = [...el.querySelectorAll('.mode')].map((m) => m.textContent!.trim());
+    const labels = [...el.querySelectorAll('app-follow-mode option')].map((o) =>
+      o.textContent!.replace(' (locked)', '').trim(),
+    );
     expect(labels).toEqual(MODES.map((m) => m.label));
+    expect(labels).toEqual(['Alerts only', 'Paper', 'Approve each trade', 'Automatic']);
   });
 
   it('offers a retry when the list cannot load', async () => {
@@ -255,7 +275,7 @@ describe('StrategiesCard', () => {
     await loading;
     const el = await render([sub()]);
     expect(el.querySelector<HTMLButtonElement>('[role="switch"]')!.disabled).toBe(true);
-    expect(el.querySelector<HTMLFieldSetElement>('fieldset.modes')!.disabled).toBe(true);
+    expect(modeSelect(el).disabled).toBe(true);
     expect(el.textContent).toContain('Traders and admins only.');
   });
 });
