@@ -3,7 +3,9 @@ import { formatNumber, formatPercent } from '../../core/format/format';
 /** An R multiple ("+2.0R"), or "n/a" when no stop is known. */
 export function formatR(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return 'n/a';
-  return `${value > 0 ? '+' : ''}${value.toFixed(1)}R`;
+  // Round first, so a tiny loss reads 0.0R, never -0.0R.
+  const r = Math.round(value * 10) / 10 || 0;
+  return `${r > 0 ? '+' : ''}${r.toFixed(1)}R`;
 }
 
 /** An excursion or efficiency as a percent, or "n/a". */
