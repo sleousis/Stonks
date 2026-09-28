@@ -143,6 +143,97 @@
   background: var(--chart-violet);
 }
 
+.analysis {
+  display: grid;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  grid-template-columns: minmax(0, 1fr);
+
+  @include bp.from-desktop {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+.analysis .panel {
+  min-width: 0;
+}
+.compare-body {
+  display: grid;
+  gap: var(--space-3);
+}
+.compare-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.compare-form .input {
+  flex: 1 1 10rem;
+  min-width: 0;
+  text-transform: uppercase;
+}
+.compare-form .input::placeholder {
+  text-transform: none;
+}
+.compared {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.compared .chip {
+  gap: var(--space-1);
+  padding-right: 0;
+}
+.chip-remove {
+  display: inline-grid;
+  place-items: center;
+  min-width: 32px;
+  min-height: 32px;
+  border: 0;
+  background: none;
+  color: var(--color-ink-2);
+  font-size: var(--text-lg);
+  cursor: pointer;
+}
+.chip-remove:hover {
+  color: var(--color-ink);
+}
+.hint {
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+}
+.figures-scroll {
+  overflow-x: auto;
+}
+.figures-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+.figures-table th,
+.figures-table td {
+  padding: var(--space-1) var(--space-2);
+  border-bottom: var(--border-rule);
+  text-align: right;
+  white-space: nowrap;
+}
+.figures-table th[scope='row'],
+.figures-table thead th:first-child {
+  text-align: left;
+}
+.figures-table thead th {
+  color: var(--color-ink-3);
+  font-weight: var(--weight-medium);
+}
+.figures-table td[data-tone='gain'] {
+  color: var(--color-gain);
+}
+.figures-table td[data-tone='loss'] {
+  color: var(--color-loss);
+}
+
 .lists {
   display: grid;
   gap: var(--space-4);
@@ -158,15 +249,23 @@
 @include bp.coarse {
   .seg,
   .toggle,
-  .chip {
+  .chip,
+  .chip-remove {
     min-height: var(--touch-min);
+  }
+  .chip-remove {
+    min-width: var(--touch-min);
   }
 }
 @include bp.phone {
   .seg,
   .toggle,
-  .chip {
+  .chip,
+  .chip-remove {
     min-height: var(--touch-min);
+  }
+  .chip-remove {
+    min-width: var(--touch-min);
   }
   .segmented {
     width: 100%;

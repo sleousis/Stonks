@@ -2,7 +2,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import type { ChartView } from '../../api/models';
+import type { ChartView, CompareView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { TRADER } from '../../../testing/auth-fixtures';
@@ -48,6 +48,36 @@ function view(days: number): ChartView {
   };
 }
 
+function comparison(tickers: string[], days = 40, window = 63): CompareView {
+  const start = '2025-01-01';
+  return {
+    start,
+    end: '2025-02-09',
+    window,
+    missing: [],
+    series: tickers.map((ticker, k) => {
+      const points = Array.from({ length: days }, (_, i) => ({
+        time: new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10),
+        value: 100 + (k === 0 ? i : -i / 2),
+      }));
+      return {
+        ticker,
+        points,
+        drawdown: points.map((pt) => ({ time: pt.time, value: k === 0 ? 0 : pt.value / 100 - 1 })),
+        rolling_sharpe: points.map((pt) => ({ time: pt.time, value: k === 0 ? 1.5 : -0.5 })),
+        total_return: points.at(-1)!.value / 100 - 1,
+        max_drawdown: k === 0 ? 0 : points.at(-1)!.value / 100 - 1,
+        sharpe: k === 0 ? 1.5 : -0.5,
+        periods_per_year: 252,
+      };
+    }),
+  };
+}
+
+function param(url: string, name: string): string | null {
+  return new URL(url, 'http://test').searchParams.get(name);
+}
+
 function limitOf(url: string): string | null {
   return new URL(url, 'http://test').searchParams.get('limit');
 }
@@ -75,9 +105,14 @@ describe('ChartPage', () => {
 
   afterEach(() => http.verify());
 
-  async function render(ticker?: string, books = [book({ id: 'pf_1', name: 'Main' })]) {
+  async function render(
+    ticker?: string,
+    books = [book({ id: 'pf_1', name: 'Main' })],
+    vs?: string,
+  ) {
     const fixture = TestBed.createComponent(ChartPage);
     if (ticker) fixture.componentRef.setInput('ticker', ticker);
+    if (vs) fixture.componentRef.setInput('vs', vs);
     fixture.detectChanges();
     (await nextRequest(http, '/api/portfolios')).flush(page(books));
     (await nextRequest(http, '/api/watchlists')).flush(page([]));
@@ -89,6 +124,10 @@ describe('ChartPage', () => {
     const req = await nextRequest(http, '/api/charts/UP.US');
     expect(limitOf(req.request.urlWithParams)).toBe(String(252 + 199));
     req.flush(view(300));
+    const cmp = await nextRequest(http, '/api/charts/compare');
+    expect(param(cmp.request.urlWithParams, 'tickers')).toBe('UP.US');
+    expect(param(cmp.request.urlWithParams, 'limit')).toBe('252');
+    cmp.flush(comparison(['UP.US']));
     await tick(5);
     fixture.detectChanges();
     await tick(5);
@@ -124,12 +163,16 @@ describe('ChartPage', () => {
     const wider = await nextRequest(http, '/api/charts/UP.US');
     expect(limitOf(wider.request.urlWithParams)).toBe(String(756 + 199));
     wider.flush(view(300));
+    const wideCmp = await nextRequest(http, '/api/charts/compare');
+    expect(param(wideCmp.request.urlWithParams, 'limit')).toBe('756');
+    wideCmp.flush(comparison(['UP.US']));
     await tick(5);
   });
 
   it('offers to open a paper portfolio where your fills would be, with no portfolio (UX-13)', async () => {
     const fixture = await render('UP.US', []);
     (await nextRequest(http, '/api/charts/UP.US')).flush(view(300));
+    (await nextRequest(http, '/api/charts/compare')).flush(comparison(['UP.US']));
     for (let i = 0; i < 3; i++) {
       await tick(5);
       fixture.detectChanges();
@@ -138,6 +181,61 @@ describe('ChartPage', () => {
     const link = el.querySelector<HTMLAnchorElement>('app-no-book a');
     expect(link?.textContent?.trim()).toBe('Open a paper portfolio');
     expect(link?.getAttribute('href')).toBe('/welcome?step=portfolio');
+  });
+
+  it('compares tickers on one scale and draws rolling Sharpe and drawdown (13.5)', async () => {
+    const fixture = await render('UP.US', undefined, 'msft.us,UP.US');
+    (await nextRequest(http, '/api/charts/UP.US')).flush(view(300));
+    const cmp = await nextRequest(http, '/api/charts/compare');
+    // the chart's own ticker first, itself dropped from ?vs=
+    expect(param(cmp.request.urlWithParams, 'tickers')).toBe('UP.US,MSFT.US');
+    expect(param(cmp.request.urlWithParams, 'window')).toBe('63');
+    cmp.flush(comparison(['UP.US', 'MSFT.US']));
+    for (let i = 0; i < 3; i++) {
+      await tick(5);
+      fixture.detectChanges();
+    }
+    const el: HTMLElement = fixture.nativeElement;
+    const drawn = engine.series.map((s) => s.map((x) => x.id));
+    expect(drawn).toContainEqual(['cmp-UP.US', 'cmp-MSFT.US']);
+    expect(drawn).toContainEqual(['sharpe', 'drawdown']);
+    const rows = [...el.querySelectorAll('.figures-table tbody tr')].map((r) =>
+      [...r.children].map((c) => c.textContent?.trim()),
+    );
+    expect(rows[0]).toEqual(['UP.US', '+39.0%', '0.0%', '1.5']);
+    expect(rows[1][0]).toBe('MSFT.US');
+    expect(el.querySelector('[aria-label="Stop comparing MSFT.US"]')).not.toBeNull();
+
+    // add a ticker from the box
+    const box = el.querySelector<HTMLInputElement>('#compare-ticker')!;
+    box.value = 'spy.us';
+    box.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    el.querySelector<HTMLFormElement>('.compare-form')!.dispatchEvent(new Event('submit'));
+    fixture.detectChanges();
+    const more = await nextRequest(http, '/api/charts/compare');
+    expect(param(more.request.urlWithParams, 'tickers')).toBe('UP.US,MSFT.US,SPY.US');
+    more.flush(comparison(['UP.US', 'MSFT.US', 'SPY.US']));
+    await tick(5);
+    fixture.detectChanges();
+
+    // remove one, and a longer Sharpe window asks again
+    el.querySelector<HTMLButtonElement>('[aria-label="Stop comparing MSFT.US"]')!.click();
+    fixture.detectChanges();
+    const fewer = await nextRequest(http, '/api/charts/compare');
+    expect(param(fewer.request.urlWithParams, 'tickers')).toBe('UP.US,SPY.US');
+    fewer.flush(comparison(['UP.US', 'SPY.US']));
+    await tick(5);
+    fixture.detectChanges();
+    const sixMonths = [
+      ...el.querySelectorAll<HTMLButtonElement>('[aria-label="Sharpe window"] .seg'),
+    ].find((b) => b.textContent?.trim() === '6M')!;
+    sixMonths.click();
+    fixture.detectChanges();
+    const longer = await nextRequest(http, '/api/charts/compare');
+    expect(param(longer.request.urlWithParams, 'window')).toBe('126');
+    longer.flush(comparison(['UP.US', 'SPY.US'], 40, 126));
+    await tick(5);
   });
 
   it('asks for a ticker when none is open', async () => {
@@ -157,6 +255,13 @@ describe('ChartPage', () => {
       fills: [],
       signals: [],
       portfolio_id: null,
+    });
+    (await nextRequest(http, '/api/charts/compare')).flush({
+      start: null,
+      end: null,
+      window: 63,
+      series: [],
+      missing: ['NEW.US'],
     });
     await tick(5);
     fixture.detectChanges();
