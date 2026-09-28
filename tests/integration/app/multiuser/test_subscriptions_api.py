@@ -72,6 +72,27 @@ def test_the_default_book_follows_the_alpaca_endpoint(client, settings, paper, a
     assert (mode["trading"], mode["broker"]) == (trading, "alpaca")
 
 
+@pytest.mark.parametrize(
+    ("gateway", "allow_live", "trading"),
+    [("live", True, "live"), ("paper", True, "paper"), ("live", False, "paper")],
+)
+def test_the_default_book_follows_its_ib_gateway(client, settings, gateway, allow_live, trading):
+    from stonks.execution.brokers.ibkr.settings import IbkrGatewayConfig
+
+    settings.brokers.kind = "ibkr"
+    settings.brokers.ibkr.allow_live = allow_live
+    settings.brokers.ibkr.gateways = {
+        "main": IbkrGatewayConfig(
+            host="127.0.0.1", port=4001, mode=gateway, portfolios=[DEFAULT_PORTFOLIO_ID]
+        )
+    }
+    [mode] = client.get("/api/portfolios/trading-modes", headers=AUTH).json()["items"]
+    assert (mode["trading"], mode["broker"]) == (trading, "ibkr")
+    assert gateway in mode["detail"]
+    [book] = client.get("/api/portfolios", headers=AUTH).json()["items"]
+    assert book["trading"] == trading
+
+
 def test_create_and_rename_your_own_portfolio(client, settings, people):
     alice = people["alice"]["headers"]
     made = client.post(
@@ -308,3 +329,50 @@ def test_be41_a_book_whose_weights_sum_to_zero_is_refused(client, settings, peop
         headers=alice["headers"],
     )
     assert zero.status_code == 422, zero.text
+
+
+# ---- 19.8: approve mode --------------------------------------------------------------
+
+
+def test_approve_needs_a_step_up_and_the_auto_checklist(app, client, settings, people):
+    alice = people["alice"]
+    pf = _portfolio(settings, alice, "Live", kind="broker")
+    with SqliteState(settings.state.path) as state:
+        link_connection(state, pf)
+    sub = client.post(
+        "/api/subscriptions",
+        json={"strategy_id": "bah_active", "portfolio_id": pf, "mode": "paper"},
+        headers=alice["headers"],
+    ).json()
+    url = f"/api/subscriptions/{sub['id']}"
+    token = client.patch(url, json={"mode": "approve"}, headers=alice["headers"])
+    assert token.status_code == 403 and token.json()["code"] == "step_up_required"
+
+    allow_step_up(app)
+    blocked = client.patch(url, json={"mode": "approve"}, headers=alice["headers"])
+    assert blocked.status_code == 409 and blocked.json()["code"] == "auto_blocked"
+
+    with SqliteState(settings.state.path) as state:
+        seed_paper_days(state, sub["id"], 20, portfolio_id=pf)
+    ok = client.patch(url, json={"mode": "approve"}, headers=alice["headers"])
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["mode"] == "approve" and ok.json()["auto_blockers"] == []
+
+    # approve to auto takes the person out of each order: a fresh step-up again
+    app.dependency_overrides.clear()
+    again = client.patch(url, json={"mode": "auto"}, headers=alice["headers"])
+    assert again.status_code == 403 and again.json()["code"] == "step_up_required"
+    # back to paper needs no step-up
+    paper = client.patch(url, json={"mode": "paper"}, headers=alice["headers"])
+    assert paper.status_code == 200 and paper.json()["mode"] == "paper"
+
+
+def test_a_subscription_cannot_start_in_approve(client, settings, people):
+    alice = people["alice"]
+    pf = _portfolio(settings, alice, "Live", kind="broker")
+    made = client.post(
+        "/api/subscriptions",
+        json={"strategy_id": "bah_active", "portfolio_id": pf, "mode": "approve"},
+        headers=alice["headers"],
+    )
+    assert made.status_code == 409, made.text

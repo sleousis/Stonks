@@ -155,3 +155,13 @@ def test_realistic_preset_charges_every_asset_class():
     crypto = model.cost(_trade(asset_class="crypto"))
     equity = model.cost(_trade(asset_class="equity"))
     assert crypto.fee > equity.fee
+
+
+def test_one_way_cost_bps_is_half_spread_plus_fee_bps_per_class():
+    s = CostModelSettings.realistic()
+    assert s.one_way_cost_bps("equity") == pytest.approx(2.5)
+    assert s.one_way_cost_bps("crypto") == pytest.approx(15.0)
+    # a flat fee needs a notional to count
+    assert s.one_way_cost_bps("commodity") == pytest.approx(3.0)
+    assert s.one_way_cost_bps("commodity", notional=10_000.0) == pytest.approx(4.0)
+    assert CostModelSettings().one_way_cost_bps("bond") == 0.0

@@ -9,6 +9,7 @@ import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { NotificationPrefs } from './notification-prefs';
+import { provideFakeCalendars } from '../../../testing/fake-calendars';
 
 const VIEW: PreferencesView = {
   channels: ['inapp', 'webpush', 'webhook'],
@@ -17,6 +18,11 @@ const VIEW: PreferencesView = {
   quiet_end: null,
   timezone: 'Europe/London',
   webhook: null,
+  event_alerts: [
+    { topic: 'earnings', label: 'Earnings coming up', enabled: true },
+    { topic: 'dividends', label: 'Ex-dividend dates coming up', enabled: false },
+    { topic: 'economic', label: 'Economic releases coming up', enabled: true },
+  ],
 };
 
 describe('NotificationPrefs', () => {
@@ -27,7 +33,12 @@ describe('NotificationPrefs', () => {
   beforeEach(() => {
     allowed = true;
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+      providers: [
+        provideRouter([]),
+        ...provideApi(),
+        provideHttpClientTesting(),
+        provideFakeCalendars(),
+      ],
     });
     controller = TestBed.inject(HttpTestingController);
     const session = TestBed.inject(SessionService);
@@ -90,6 +101,152 @@ describe('NotificationPrefs', () => {
     await tick();
     fixture.detectChanges();
     expect(box(el, 'Signals by Push').checked).toBe(false);
+  });
+
+  it('gives price alerts and upcoming events their own rows, apart from signals', async () => {
+    const el = await render();
+    const rows = [...el.querySelectorAll('tbody th')].map((th) => th.textContent?.trim());
+    expect(rows).toEqual([
+      'Signals',
+      'Price alerts',
+      'Upcoming events',
+      'Orders and fills',
+      'Risk alerts',
+      'System',
+    ]);
+    box(el, 'Price alerts by Push').click();
+    const req = await nextRequest(controller, '/api/notifications/preferences', 'PUT');
+    expect(req.request.body).toEqual({
+      preferences: [{ category: 'price_alert', channel: 'webpush', enabled: false }],
+    });
+    req.flush(VIEW);
+    await tick();
+  });
+
+  function kind(el: HTMLElement, label: string) {
+    return [...el.querySelectorAll('label.kind')]
+      .find((l) => l.textContent?.includes(label))!
+      .querySelector('input')!;
+  }
+
+  it('shows one switch per kind of upcoming event and saves it', async () => {
+    const el = await render();
+    expect(kind(el, 'Earnings coming up').checked).toBe(true);
+    expect(kind(el, 'Ex-dividend dates coming up').checked).toBe(false);
+    expect(kind(el, 'Economic releases coming up').checked).toBe(true);
+    kind(el, 'Earnings coming up').click();
+    const req = await nextRequest(controller, '/api/notifications/preferences', 'PUT');
+    expect(req.request.body).toEqual({ event_alerts: [{ topic: 'earnings', enabled: false }] });
+    req.flush({
+      ...VIEW,
+      event_alerts: VIEW.event_alerts!.map((e) =>
+        e.topic === 'earnings' ? { ...e, enabled: false } : e,
+      ),
+    });
+    await tick();
+    fixture.detectChanges();
+    expect(kind(el, 'Earnings coming up').checked).toBe(false);
+  });
+
+  const ECON: PreferencesView = {
+    ...VIEW,
+    economic_alerts: {
+      countries: ['US', 'EU'],
+      default_countries: true,
+      min_importance: 'high',
+      country_options: [
+        { value: 'US', label: 'United States' },
+        { value: 'EU', label: 'Euro area' },
+        { value: 'GB', label: 'United Kingdom' },
+      ],
+      importance_options: [
+        { value: 'low', label: 'All releases' },
+        { value: 'medium', label: 'Medium and high importance' },
+        { value: 'high', label: 'High importance only' },
+      ],
+    },
+  };
+
+  it('hides the economic release choices when the server sends none', async () => {
+    const el = await render();
+    expect(el.querySelector('#econ-importance')).toBeNull();
+  });
+
+  it('shows the economic countries and importance, defaults noted', async () => {
+    const el = await render(ECON);
+    expect(el.textContent).toContain('follow the currencies of your portfolios');
+    expect(kind(el, 'United States').checked).toBe(true);
+    expect(kind(el, 'Euro area').checked).toBe(true);
+    expect(kind(el, 'United Kingdom').checked).toBe(false);
+    const select = el.querySelector<HTMLSelectElement>('#econ-importance')!;
+    expect(select.value).toBe('high');
+    expect(button(el, 'Follow my portfolio currencies')).toBeUndefined();
+  });
+
+  it('saves a country added to the economic alerts', async () => {
+    const el = await render(ECON);
+    kind(el, 'United Kingdom').click();
+    const req = await nextRequest(controller, '/api/notifications/preferences', 'PUT');
+    expect(req.request.body).toEqual({ economic_alerts: { countries: ['US', 'EU', 'GB'] } });
+    req.flush({
+      ...ECON,
+      economic_alerts: {
+        ...ECON.economic_alerts!,
+        countries: ['US', 'EU', 'GB'],
+        default_countries: false,
+      },
+    });
+    await tick();
+    fixture.detectChanges();
+    expect(kind(el, 'United Kingdom').checked).toBe(true);
+    expect(button(el, 'Follow my portfolio currencies')).toBeDefined();
+  });
+
+  it('keeps at least one country', async () => {
+    const one: PreferencesView = {
+      ...ECON,
+      economic_alerts: { ...ECON.economic_alerts!, countries: ['US'] },
+    };
+    const el = await render(one);
+    kind(el, 'United States').click();
+    fixture.detectChanges();
+    expect(kind(el, 'United States').checked).toBe(true);
+    expect(el.textContent).toContain('Keep at least one country');
+  });
+
+  it('saves the importance threshold', async () => {
+    const el = await render(ECON);
+    const select = el.querySelector<HTMLSelectElement>('#econ-importance')!;
+    select.value = 'medium';
+    select.dispatchEvent(new Event('change'));
+    const req = await nextRequest(controller, '/api/notifications/preferences', 'PUT');
+    expect(req.request.body).toEqual({ economic_alerts: { min_importance: 'medium' } });
+    req.flush({ ...ECON, economic_alerts: { ...ECON.economic_alerts!, min_importance: 'medium' } });
+    await tick();
+  });
+
+  it('goes back to the portfolio currencies', async () => {
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    const el = await render({
+      ...ECON,
+      economic_alerts: { ...ECON.economic_alerts!, countries: ['GB'], default_countries: false },
+    });
+    button(el, 'Follow my portfolio currencies')!.click();
+    const req = await nextRequest(controller, '/api/notifications/preferences', 'PUT');
+    expect(req.request.body).toEqual({ economic_alerts: { default_countries: true } });
+    req.flush(ECON);
+    await tick();
+    expect(success).toHaveBeenCalledWith(expect.stringContaining('portfolio currencies'));
+  });
+
+  it('notes when economic releases are turned off', async () => {
+    const el = await render({
+      ...ECON,
+      event_alerts: VIEW.event_alerts!.map((e) =>
+        e.topic === 'economic' ? { ...e, enabled: false } : e,
+      ),
+    });
+    expect(el.textContent).toContain('Turn on Economic releases coming up to get them');
   });
 
   it('sets and clears quiet hours', async () => {
@@ -174,6 +331,7 @@ describe('NotificationPrefs', () => {
     const el = await render();
     expect(el.textContent).toContain('Traders and admins only.');
     expect(box(el, 'Signals by Push').disabled).toBe(true);
+    expect(kind(el, 'Earnings coming up').disabled).toBe(true);
     expect(button(el, 'Save quiet hours')!.disabled).toBe(true);
     expect(button(el, 'Save webhook')!.disabled).toBe(true);
     expect(el.querySelector<HTMLInputElement>('#webhook-url')!.disabled).toBe(true);

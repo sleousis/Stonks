@@ -34,18 +34,19 @@ from stonks.mcp.tools.common import ToolContext
 INSTRUCTIONS = """Stonks research + trading system. Tools talk to the local REST API started
 with `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,
 sweeps, signal IC analyses and ingests. Follow up with wait_for_job, and stop
-one with cancel_job. Check get_golive_report before promote_strategy. Status changes,
-draft register/enable/disable, broker syncs and production ticks need
-confirm=true; call them first without it to get a preview and show it to the
-user before confirming.
+one with cancel_job. Check get_golive_report before promote_strategy, and
+check_model_swap before swap_model_version. Status changes, model swaps,
+draft register/enable/disable, broker syncs, manual orders (place_order,
+change_order, cancel_order) and production ticks need confirm=true; call them
+first without it to get a preview and show it to the user before confirming.
 run_tick is a dry run unless dry_run=false, and a real tick is refused unless
 the API reports a paper/simulated broker. No tool can change broker settings
 or enable live trading.
 Every tool acts as the user who owns this server's API token (whoami shows the
 user, role and scopes) and sees only that user's portfolios. Actions that need
 a fresh second factor (switching to auto, connecting a broker, resuming the
-kill switch, restoring a backup) are refused here. The user does them in the
-web app."""
+kill switch, restoring a backup, a manual order on a real-money book) are
+refused here. The user does them in the web app."""
 
 
 def build_server(api: ApiClient, *, max_wait_seconds: float = 600.0) -> MCPServer:

@@ -26,17 +26,23 @@ rules are in :mod:`stonks.strategies.examples._forecast_trend`.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
 from stonks.core.params import ParameterSpec
 from stonks.features.forecast import DEFAULT_VOL_SPAN, TSMOM_SCALED_SCALAR, cap_forecast, tsmom_raw
 from stonks.portfolio.signals import FORECAST_TARGET
+from stonks.strategies._vectorized import forecast_weights
 from stonks.strategies.examples._forecast_trend import (
     MIN_ESTIMATION_BARS,
     ForecastTrendStrategy,
+    closed_period_ends,
     forecast_specs,
     period_end_mask,
+    require_fixed_modes,
     rule_scalar,
     sizing_specs,
 )
@@ -127,3 +133,32 @@ class TimeSeriesMomentum(ForecastTrendStrategy):
         combined = self._combine(self.rule_forecasts(bars["close"].astype(float)))
         value = combined.iloc[-1] if len(combined) else np.nan
         return None if pd.isna(value) else float(value)
+
+    # ---- vectorised fast path (lab/vectorized.py) ---------------------------
+
+    @classmethod
+    def target_positions(cls, closes: pd.DataFrame, params: Mapping[str, Any]) -> pd.DataFrame:
+        """Each ticker's combined forecast (held from month end to month end
+        with ``rebalance="monthly"``) sized the ``vol_target`` way, for a
+        whole table of daily closes. Close to the event engine, not exact:
+        no 10% no-trade buffer and an IDM of 1. Month ends follow the US
+        equity calendar and closed bars only (a row never learns from the
+        next bar that the month ended). Only the fixed scalar and FDM modes are supported."""
+        strategy = cls(dict(params))
+        require_fixed_modes(strategy.params)
+        monthly = strategy.params["rebalance"] == "monthly"
+
+        def forecast(column: pd.Series) -> pd.Series:
+            combined = strategy._combine(strategy.rule_forecasts(column))
+            if not monthly or combined.empty:
+                return combined
+            # closed bars only: a row holds the forecast of the latest month
+            # end known on its close, never one found from the next bar
+            source = closed_period_ends(column.index, "equity", "month")
+            values = combined.to_numpy(dtype=float)
+            held = np.where(source >= 0, values[np.maximum(source, 0)], np.nan)
+            return pd.Series(held, index=combined.index)
+
+        return forecast_weights(
+            closes, forecast, tau=float(strategy.params["tau"]), allow_short=strategy.supports_short
+        )

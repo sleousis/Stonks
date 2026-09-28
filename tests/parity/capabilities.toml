@@ -31,10 +31,10 @@ mcp = "run_ingest"
 [[capability]]
 id = "ingest.bulk"
 domain = "data"
-title = "Ingest macro, DeFi TVL and exchanges, derive intervals"
+title = "Ingest macro, DeFi TVL, exchanges and stock borrow rates, derive intervals"
 routes = []
 console = { limited = "operator bulk jobs, run by the scheduler" }
-cli = ["stonks ingest macro", "stonks ingest tvl", "stonks ingest exchanges", "stonks ingest aggregate", "stonks ingest all-intervals"]
+cli = ["stonks ingest macro", "stonks ingest tvl", "stonks ingest exchanges", "stonks ingest borrow", "stonks ingest aggregate", "stonks ingest all-intervals"]
 mcp = { limited = "operator bulk jobs, run by the scheduler" }
 
 [[capability]]
@@ -148,6 +148,33 @@ cli = "stonks universe create"
 mcp = "create_universe"
 
 [[capability]]
+id = "universes.update"
+domain = "universes"
+title = "Edit a universe's definition"
+routes = ["PUT /api/universes/{universe_id}"]
+console = "updateUniverse"
+cli = "stonks universe update"
+mcp = "update_universe"
+
+[[capability]]
+id = "universes.history"
+domain = "universes"
+title = "Membership history: who joined and left, when"
+routes = ["GET /api/universes/{universe_id}/history"]
+console = "getUniverseHistory"
+cli = "stonks universe history"
+mcp = "get_universe_history"
+
+[[capability]]
+id = "universes.exchanges"
+domain = "universes"
+title = "Exchanges our instruments name, for an exchange universe"
+routes = ["GET /api/universes/exchanges"]
+console = "listUniverseExchanges"
+cli = { limited = "the CLI takes the exchange code, and stonks ingest exchanges lists the source's" }
+mcp = "list_universe_exchanges"
+
+[[capability]]
 id = "universes.delete"
 domain = "universes"
 title = "Delete a universe"
@@ -229,6 +256,51 @@ routes = ["POST /api/lab/signal-ic", "GET /api/lab/signal-ic/{job_id}/result"]
 console = ["startSignalIc", "getSignalIcResult"]
 cli = "stonks lab ic"
 mcp = "run_signal_ic"
+
+[[capability]]
+id = "factors.catalog"
+domain = "lab"
+title = "The factor library: Alpha158, classic price factors and fundamentals scores"
+routes = ["GET /api/factors", "GET /api/factors/{factor_id}"]
+console = ["listFactors", "getFactor"]
+cli = ["stonks factors list", "stonks factors show"]
+mcp = ["list_factors", "get_factor"]
+
+[[capability]]
+id = "factors.check"
+domain = "lab"
+title = "Check a factor formula: parses, point in time, warm-up"
+routes = ["POST /api/factors/check"]
+console = "checkFactorExpression"
+cli = "stonks factors check"
+mcp = "check_factor_expression"
+
+[[capability]]
+id = "factors.values"
+domain = "lab"
+title = "Factor values across a universe at a date, ranked"
+routes = ["POST /api/factors/values"]
+console = "getFactorValues"
+cli = "stonks factors values"
+mcp = "get_factor_values"
+
+[[capability]]
+id = "factors.tearsheet"
+domain = "lab"
+title = "Factor tear sheet: IC by horizon, sector, asset class and size, quantile returns, alpha, monthly IC"
+routes = ["POST /api/factors/tearsheets", "GET /api/factors/tearsheets/{job_id}/result"]
+console = ["startFactorTearsheet", "getFactorTearsheetResult"]
+cli = "stonks factors tearsheet"
+mcp = "run_factor_tearsheet"
+
+[[capability]]
+id = "factors.dataset"
+domain = "lab"
+title = "Export a factor dataset (features and a next-open label) for a model"
+routes = []
+console = { limited = "a file export for model training, run from the shell" }
+cli = "stonks factors dataset"
+mcp = { limited = "a file export for model training, run from the shell" }
 
 [[capability]]
 id = "lab.survival_tests"
@@ -361,6 +433,42 @@ cli = "stonks golive check"
 mcp = "get_golive_report"
 
 [[capability]]
+id = "strategies.versions"
+domain = "strategies"
+title = "Model versions of a strategy, their log, and every candidate"
+routes = ["GET /api/strategies/{strategy_id}/versions", "GET /api/strategies/{strategy_id}/versions/history", "GET /api/model-versions/candidates"]
+console = ["listModelVersions", "getModelVersionHistory", "listModelCandidates"]
+cli = ["stonks registry versions", "stonks registry version-history", "stonks registry candidates"]
+mcp = ["list_model_versions", "get_model_version_history", "list_model_candidates"]
+
+[[capability]]
+id = "strategies.versions.check"
+domain = "strategies"
+title = "Swap check: a candidate model book against the live one"
+routes = ["GET /api/strategies/{strategy_id}/versions/{version}/check"]
+console = "checkModelSwap"
+cli = "stonks registry swap-check"
+mcp = "check_model_swap"
+
+[[capability]]
+id = "strategies.versions.swap"
+domain = "strategies"
+title = "Swap a candidate model in through the check or an override, or reject it"
+routes = ["POST /api/strategies/{strategy_id}/versions/{version}/swap", "POST /api/strategies/{strategy_id}/versions/{version}/reject"]
+console = ["swapModelVersion", "rejectModelVersion"]
+cli = ["stonks registry swap", "stonks registry reject"]
+mcp = ["swap_model_version", "reject_model_version"]
+
+[[capability]]
+id = "strategies.versions.retrain"
+domain = "strategies"
+title = "Retrain strategies that learn from data into candidate versions"
+routes = ["POST /api/model-versions/retrain", "GET /api/model-versions/jobs/{job_id}/result"]
+console = ["startModelRetrain", "getModelRetrainResult"]
+cli = "stonks registry retrain"
+mcp = "retrain_models"
+
+[[capability]]
 id = "shadow.decisions"
 domain = "strategies"
 title = "Paper trading decisions"
@@ -489,6 +597,15 @@ routes = ["GET /api/brokers/alpaca/status"]
 console = "getAlpacaStatus"
 cli = { limited = "admin diagnostic, Alpaca is not in use" }
 mcp = { limited = "admin diagnostic, Alpaca is not in use" }
+
+[[capability]]
+id = "brokers.gateways"
+domain = "trading"
+title = "IB Gateway health and the auto books it paused"
+routes = ["GET /api/brokers/gateways"]
+console = "getBrokerGateways"
+cli = { limited = "the scheduler's broker health job logs each check" }
+mcp = "get_broker_gateways"
 
 # ---- portfolio and P&L ------------------------------------------------------------
 
@@ -631,6 +748,24 @@ console = { limited = "operator or scheduled job" }
 cli = "stonks tca refresh"
 mcp = { limited = "operator or scheduled job" }
 
+[[capability]]
+id = "tca.intraday"
+domain = "tca"
+title = "Intraday shortfall with quoted spreads"
+routes = []
+console = { limited = "operator reads recorded quotes on the host" }
+cli = "stonks tca intraday"
+mcp = { limited = "operator reads recorded quotes on the host" }
+
+[[capability]]
+id = "tca.calibrate"
+domain = "tca"
+title = "Propose minute cost model parameters"
+routes = []
+console = { limited = "operator tool, a proposal a person reviews" }
+cli = "stonks tca calibrate"
+mcp = { limited = "operator tool, a proposal a person reviews" }
+
 # ---- risk and halts ------------------------------------------------------------------
 
 [[capability]]
@@ -670,6 +805,51 @@ cli = "stonks halts clear"
 mcp = { limited = "turning a safety stop off stays with a person" }
 
 [[capability]]
+id = "reconcile.reports"
+domain = "risk"
+title = "Reconciliation reports: each check of a live portfolio against its broker"
+routes = ["GET /api/reconcile/reports", "GET /api/reconcile/reports/{report_id}"]
+console = "listReconcileReports"
+cli = ["stonks reconcile list", "stonks reconcile show"]
+mcp = ["list_reconcile_reports", "get_reconcile_report"]
+
+[[capability]]
+id = "reconcile.run"
+domain = "risk"
+title = "Run a reconciliation check by hand"
+routes = []
+console = { limited = "operator check through the gateway, run by the scheduler" }
+cli = "stonks reconcile run"
+mcp = { limited = "operator check through the gateway, run by the scheduler" }
+
+[[capability]]
+id = "halts.drill"
+domain = "risk"
+title = "Kill switch drill, dry run on a scratch state"
+routes = []
+console = { limited = "operator drill run from the server shell" }
+cli = "stonks halts drill"
+mcp = { limited = "operator drill run from the server shell" }
+
+[[capability]]
+id = "live.soak_report"
+domain = "risk"
+title = "Paper soak report of a broker portfolio"
+routes = []
+console = { limited = "operator report for the go-live gate, read from the server shell" }
+cli = "stonks live soak-report"
+mcp = { limited = "operator report for the go-live gate, read from the server shell" }
+
+[[capability]]
+id = "live.reconcile"
+domain = "risk"
+title = "Reconcile a portfolio's open orders with its broker now"
+routes = []
+console = { limited = "runbook step run from the server shell" }
+cli = "stonks live reconcile"
+mcp = { limited = "runbook step run from the server shell" }
+
+[[capability]]
 id = "risk.policy"
 domain = "risk"
 title = "Risk policy"
@@ -695,6 +875,15 @@ routes = ["GET /api/risk/snapshots"]
 console = "listRiskSnapshots"
 cli = { limited = "trader reads live in the console and MCP" }
 mcp = "list_risk_snapshots"
+
+[[capability]]
+id = "risk.intraday"
+domain = "risk"
+title = "Intraday P&L and risk snapshots of a portfolio for one day"
+routes = ["GET /api/risk/intraday"]
+console = { limited = "the live console panel of roadmap 21.3.4 reads it" }
+cli = { limited = "trader reads intraday P&L in the console and MCP" }
+mcp = "list_intraday_snapshots"
 
 # ---- schedule and ops -------------------------------------------------------------------
 
@@ -802,11 +991,20 @@ cli = { limited = "the CLI prints its own errors" }
 mcp = "list_alerts"
 
 [[capability]]
+id = "notifications.preferences"
+domain = "notifications"
+title = "Channel switches per category and event alert switches"
+routes = ["GET /api/notifications/preferences", "PUT /api/notifications/preferences"]
+console = ["getNotificationPreferences", "updateNotificationPreferences"]
+cli = { limited = "personal settings stay in the console" }
+mcp = ["get_notification_preferences", "set_event_alerts"]
+
+[[capability]]
 id = "notifications.settings"
 domain = "notifications"
-title = "Preferences, quiet hours, personal webhook"
-routes = ["GET /api/notifications/preferences", "PUT /api/notifications/preferences", "PUT /api/notifications/quiet-hours", "PUT /api/notifications/webhook"]
-console = ["getNotificationPreferences", "updateNotificationPreferences", "setQuietHours", "setNotificationWebhook"]
+title = "Quiet hours, personal webhook"
+routes = ["PUT /api/notifications/quiet-hours", "PUT /api/notifications/webhook"]
+console = ["setQuietHours", "setNotificationWebhook"]
 cli = { limited = "personal settings stay in the console" }
 mcp = { limited = "an agent must never redirect or silence alerts" }
 
@@ -1033,6 +1231,15 @@ cli = "stonks health"
 mcp = { limited = "changing a safety stop stays with a person" }
 
 [[capability]]
+id = "health.stream"
+domain = "health"
+title = "Live engine status: stream health, latency and the engine dead-man"
+routes = ["GET /api/stream/status"]
+console = "getStreamStatus"
+cli = { limited = "the engine process logs its state, Prometheus scrapes /metrics" }
+mcp = "get_stream_status"
+
+[[capability]]
 id = "health.api"
 domain = "health"
 title = "API up and version"
@@ -1109,6 +1316,15 @@ cli = { limited = "a chart is visual, research reads live in the console and MCP
 mcp = "get_chart"
 
 [[capability]]
+id = "charts.compare"
+domain = "data"
+title = "Compare tickers on one scale, with drawdown and rolling Sharpe"
+routes = ["GET /api/charts/compare"]
+console = "compareCharts"
+cli = { limited = "a chart is visual, research reads live in the console and MCP" }
+mcp = "compare_tickers"
+
+[[capability]]
 id = "strategies.leaderboard"
 domain = "strategies"
 title = "Strategy leaderboard ranked by risk-adjusted paper results"
@@ -1167,15 +1383,432 @@ id = "options.ingest"
 domain = "options"
 title = "Fetch end-of-day option chains into the lake"
 routes = []
-console = { limited = "options are research only until live options follow 17.5" }
+console = { limited = "an operator job that needs the vendor's options subscription, run from the CLI" }
 cli = "stonks options ingest"
-mcp = { limited = "options are research only until live options follow 17.5" }
+mcp = { limited = "an operator job that needs the vendor's options subscription, run from the CLI" }
 
 [[capability]]
-id = "options.research"
+id = "options.chains"
 domain = "options"
-title = "Read a chain with Greeks, list options strategies, backtest and validate one"
+title = "Underlyings with stored chains, and one chain with implied vol and Greeks"
+routes = ["GET /api/options/underlyings", "GET /api/options/chains/{underlying}"]
+console = ["listOptionUnderlyings", "getOptionChain"]
+cli = "stonks options chain"
+mcp = ["list_option_underlyings", "get_option_chain"]
+
+[[capability]]
+id = "options.strategies"
+domain = "options"
+title = "The options strategy catalog with each hypothesis"
+routes = ["GET /api/options/strategies"]
+console = "listOptionStrategies"
+cli = "stonks options strategies"
+mcp = "list_option_strategies"
+
+[[capability]]
+id = "options.payoff"
+domain = "options"
+title = "A structure's legs from a stored chain and its payoff at expiry"
+routes = ["GET /api/options/structures", "POST /api/options/payoff"]
+console = ["listOptionStructures", "getOptionPayoff"]
+cli = { limited = "a picture, shown in the console" }
+mcp = ["list_option_structures", "get_option_payoff"]
+
+[[capability]]
+id = "options.backtest"
+domain = "options"
+title = "Backtest an options strategy on stored chains and validate it"
+routes = ["POST /api/options/backtests", "GET /api/options/backtests/{job_id}/result"]
+console = ["startOptionsBacktest", "getOptionsBacktestResult"]
+cli = "stonks options backtest"
+mcp = "run_options_backtest"
+
+# ---- Phase 20: complete product -------------------------------------------------
+
+[[capability]]
+id = "orders.manual"
+domain = "trading"
+title = "Place, preview and change your own manual orders"
+routes = ["POST /api/orders/manual", "POST /api/orders/manual/preview", "POST /api/orders/{client_id}/change"]
+console = ["placeManualOrder", "previewManualOrder", "changeManualOrder"]
+cli = ["stonks orders place", "stonks orders preview", "stonks orders change", "stonks orders list"]
+mcp = ["place_order", "change_order"]
+
+[[capability]]
+id = "orders.cancel"
+domain = "trading"
+title = "Cancel a working order of your portfolio"
+routes = ["POST /api/orders/{client_id}/cancel"]
+console = "cancelOrder"
+cli = "stonks orders cancel"
+mcp = "cancel_order"
+
+[[capability]]
+id = "price_alerts.rules"
+domain = "notifications"
+title = "Your price alerts: list, create, read, change and delete"
+routes = [
+  "GET /api/price-alerts",
+  "POST /api/price-alerts",
+  "GET /api/price-alerts/{alert_id}",
+  "PATCH /api/price-alerts/{alert_id}",
+  "DELETE /api/price-alerts/{alert_id}",
+]
+console = ["listPriceAlerts", "createPriceAlert", "getPriceAlert", "updatePriceAlert", "deletePriceAlert"]
+cli = ["stonks price-alerts list", "stonks price-alerts create", "stonks price-alerts delete"]
+mcp = ["list_price_alerts", "create_price_alert", "update_price_alert", "delete_price_alert"]
+
+[[capability]]
+id = "price_alerts.events"
+domain = "notifications"
+title = "When your price alerts fired"
+routes = ["GET /api/price-alerts/events"]
+console = "listPriceAlertEvents"
+cli = "stonks price-alerts events"
+mcp = "list_price_alert_events"
+
+[[capability]]
+id = "price_alerts.run"
+domain = "operations"
+title = "Check every price alert now (the scheduler's price_alerts job)"
+routes = ["POST /api/price-alerts/evaluate"]
+console = { limited = "an operator job the scheduler runs after each price ingest" }
+cli = "stonks price-alerts run"
+mcp = { limited = "an operator job the scheduler runs after each price ingest" }
+
+[[capability]]
+id = "telegram.link"
+domain = "notifications"
+title = "Link a Telegram chat with a one-time code, see or remove the link"
+routes = ["GET /api/telegram/link", "POST /api/telegram/link-code", "DELETE /api/telegram/link"]
+console = ["getTelegramLink", "createTelegramLinkCode", "deleteTelegramLink"]
+cli = ["stonks telegram link-code", "stonks telegram status", "stonks telegram unlink"]
+mcp = { limited = "linking a chat is done in the console or the CLI, where the code is shown once" }
+
+[[capability]]
+id = "telegram.bot"
+domain = "notifications"
+title = "Run the Telegram bot (long polling)"
 routes = []
-console = { limited = "options are research only until live options follow 17.5" }
-cli = ["stonks options chain", "stonks options strategies", "stonks options backtest"]
-mcp = { limited = "options are research only until live options follow 17.5" }
+console = { limited = "the bot runs inside stonks serve or from the operator shell" }
+cli = "stonks telegram poll"
+mcp = { limited = "the bot runs inside stonks serve or from the operator shell" }
+
+[[capability]]
+id = "assistant.chat"
+domain = "assistant"
+title = "Chat with the AI assistant: status, conversations, messages, approve or reject its write actions"
+routes = [
+  "GET /api/assistant/status",
+  "GET /api/assistant/conversations",
+  "POST /api/assistant/conversations",
+  "GET /api/assistant/conversations/{conversation_id}",
+  "DELETE /api/assistant/conversations/{conversation_id}",
+  "POST /api/assistant/conversations/{conversation_id}/messages",
+  "POST /api/assistant/conversations/{conversation_id}/actions/{action_id}",
+]
+console = [
+  "getAssistantStatus",
+  "listAssistantConversations",
+  "createAssistantConversation",
+  "getAssistantConversation",
+  "deleteAssistantConversation",
+  "sendAssistantMessage",
+  "decideAssistantAction",
+]
+cli = { limited = "the assistant is an in-app chat, the CLI is already a direct tool" }
+mcp = { limited = "the assistant runs the MCP tools itself, an MCP client is already an assistant" }
+
+[[capability]]
+id = "tax.settings"
+domain = "portfolio"
+title = "A portfolio's base currency and tax settings"
+routes = ["GET /api/tax/settings", "PUT /api/tax/settings"]
+console = ["getTaxSettings", "updateTaxSettings"]
+cli = "stonks tax settings"
+mcp = "get_tax_settings"
+
+[[capability]]
+id = "tax.lot_picks"
+domain = "portfolio"
+title = "Specific-lot picks: which buys a sell closes"
+routes = ["GET /api/tax/lots/picks", "PUT /api/tax/lots/picks"]
+console = ["listTaxLotPicks", "setTaxLotPicks"]
+cli = { limited = "lot picks are chosen per sell in the console" }
+mcp = "list_tax_lot_picks"
+
+[[capability]]
+id = "tax.exports"
+domain = "portfolio"
+title = "Tax exports as CSV: realized gains per lot, dividends and withholding, open lots"
+routes = ["GET /api/tax/exports/gains", "GET /api/tax/exports/dividends", "GET /api/tax/exports/lots"]
+console = ["exportTaxGains", "exportTaxDividends", "exportTaxLots"]
+cli = ["stonks tax gains", "stonks tax dividends", "stonks tax lots"]
+mcp = { limited = "CSV files are downloads for the console and the CLI" }
+
+[[capability]]
+id = "fx.rate"
+domain = "data"
+title = "FX rates: ingest them, read the rate the system converts with"
+routes = ["GET /api/fx/rate"]
+console = "getFxRate"
+cli = "stonks ingest fx"
+mcp = "get_fx_rate"
+
+[[capability]]
+id = "portfolio.cash_flows.list"
+domain = "portfolio"
+title = "Deposits and withdrawals of a portfolio (behind the time- and money-weighted returns)"
+routes = ["GET /api/portfolios/{portfolio_id}/cash-flows"]
+console = "listCashFlows"
+cli = "stonks cash-flows list"
+mcp = "list_cash_flows"
+
+[[capability]]
+id = "portfolio.cash_flows.record"
+domain = "portfolio"
+title = "Record a deposit or a withdrawal on a simulated portfolio"
+routes = ["POST /api/portfolios/{portfolio_id}/cash-flows"]
+console = "recordCashFlow"
+cli = "stonks cash-flows record"
+mcp = { limited = "moving money in a book stays in the console and the CLI" }
+
+[[capability]]
+id = "orders.drafts"
+domain = "trading"
+title = "Order drafts: propose an order, list, reject, and approve it with a fresh second factor"
+routes = [
+  "GET /api/orders/drafts",
+  "POST /api/orders/drafts",
+  "POST /api/orders/drafts/{draft_id}/approve",
+  "POST /api/orders/drafts/{draft_id}/reject",
+]
+console = ["listOrderDrafts", "createOrderDraft", "approveOrderDraft", "rejectOrderDraft"]
+cli = { limited = "drafts come from the assistant and MCP, the shell places orders directly" }
+mcp = ["draft_order", "list_order_drafts"]
+
+[[capability]]
+id = "orders.tickets"
+domain = "trading"
+title = "Order tickets: what live books decided after the close, approve with a fresh second factor, reject with a reason"
+routes = [
+  "GET /api/tickets",
+  "GET /api/tickets/summary",
+  "GET /api/tickets/{ticket_id}",
+  "POST /api/tickets/approve",
+  "POST /api/tickets/{ticket_id}/reject",
+]
+console = ["listTickets", "getTicketSummary", "approveTickets", "rejectTicket"]
+cli = ["stonks tickets list", "stonks tickets show", "stonks tickets approve", "stonks tickets reject"]
+mcp = ["list_tickets", "get_ticket"]
+
+[[capability]]
+id = "orders.tickets.submit"
+domain = "trading"
+title = "Send the approved order tickets inside their window now"
+routes = ["POST /api/tickets/submit"]
+console = { limited = "the live_submit job sends them before each open" }
+cli = { limited = "the live_submit job runs it, stonks schedule run-now live_submit by hand" }
+mcp = { limited = "sending real orders stays with the scheduler and operators" }
+
+[[capability]]
+id = "assistant.safety"
+domain = "assistant"
+title = "The assistant's trace and freeze: recorded turns, and unfreezing after a burst"
+routes = ["GET /api/assistant/conversations/{conversation_id}/turns", "DELETE /api/assistant/freeze"]
+console = ["listAssistantTurns", "clearAssistantFreeze"]
+cli = { limited = "the trace and the freeze belong to the in-app chat" }
+mcp = { limited = "the assistant runs the MCP tools itself, an MCP client is already an assistant" }
+
+[[capability]]
+id = "assistant.eval"
+domain = "assistant"
+title = "Run the assistant's fixed eval set against the fake model or a real endpoint"
+routes = []
+console = { limited = "an operator check before switching models" }
+cli = "stonks assistant eval"
+mcp = { limited = "an operator check before switching models" }
+
+[[capability]]
+id = "assistant.research"
+domain = "assistant"
+title = "AI research sessions: the model proposes and runs lab trials under a budget, never registering"
+routes = [
+  "POST /api/assistant/research",
+  "GET /api/assistant/research",
+  "GET /api/assistant/research/{session_id}",
+]
+console = ["startAssistantResearch", "listAssistantResearch", "getAssistantResearch"]
+cli = { limited = "a research session runs as an API job, and the eval set checks the loop from the shell" }
+mcp = ["start_research", "list_research_sessions", "get_research_session"]
+
+
+# ---- live trading (roadmap 19.6, 19.7) --------------------------------------------
+
+[[capability]]
+id = "live.settings.read"
+domain = "trading"
+title = "Read a live portfolio's allocation, account profile and live rules"
+routes = ["GET /api/portfolios/{portfolio_id}/live/allocation", "GET /api/portfolios/{portfolio_id}/live/account-profile", "GET /api/portfolios/{portfolio_id}/live/rules"]
+console = ["getLiveAllocation", "getAccountProfile", "getLiveRules"]
+cli = { limited = "owner settings live in the console, the API has them now" }
+mcp = ["get_live_allocation", "get_live_rules"]
+
+[[capability]]
+id = "live.settings.write"
+domain = "trading"
+title = "Set a live portfolio's allocation and account profile (step-up)"
+routes = ["PUT /api/portfolios/{portfolio_id}/live/allocation", "PUT /api/portfolios/{portfolio_id}/live/account-profile"]
+console = ["setLiveAllocation", "setAccountProfile"]
+cli = { limited = "needs a fresh second factor, done in the web app" }
+mcp = { limited = "needs a fresh second factor, done in the web app" }
+
+# ---- live stages, gates and the preview (roadmap 19.9) ----------------------------
+
+[[capability]]
+id = "live.stage.read"
+domain = "trading"
+title = "A live portfolio's stage, stage changes, gate metrics and gate report"
+routes = ["GET /api/portfolios/{portfolio_id}/live/stage", "GET /api/portfolios/{portfolio_id}/live/gate-report"]
+console = ["getLiveStage", "getLiveGateReport"]
+cli = ["stonks live stage show", "stonks live stage report"]
+mcp = ["get_live_stage", "get_live_gate_report"]
+
+[[capability]]
+id = "live.stage.promote"
+domain = "trading"
+title = "Promote a live portfolio one stage up (gate report, step-up, typed confirmation)"
+routes = ["POST /api/portfolios/{portfolio_id}/live/stage/promote"]
+console = "promoteLiveStage"
+cli = "stonks live stage promote"
+mcp = { limited = "needs a fresh second factor, done in the web app" }
+
+[[capability]]
+id = "live.stage.demote"
+domain = "trading"
+title = "Demote a live portfolio to a lower stage"
+routes = ["POST /api/portfolios/{portfolio_id}/live/stage/demote"]
+console = "demoteLiveStage"
+cli = "stonks live stage demote"
+mcp = { limited = "a stage change stays with a person in the console or the shell" }
+
+[[capability]]
+id = "live.preview"
+domain = "trading"
+title = "Preview the live book's orders through the broker's what-if (never sent)"
+routes = ["POST /api/portfolios/{portfolio_id}/live/preview"]
+console = "previewLiveOrders"
+cli = "stonks live preview"
+mcp = { limited = "runs a dry-run tick through the broker, in the console and the CLI" }
+
+# ---- calendars and news (roadmap 20.7) ----------------------------------------------
+
+[[capability]]
+id = "calendars.read"
+domain = "data"
+title = "Earnings, ex-dividend dates and economic releases for your holdings, a watchlist, tickers or all"
+routes = ["GET /api/calendars"]
+console = "getCalendar"
+cli = "stonks calendars show"
+mcp = "get_calendar"
+
+[[capability]]
+id = "calendars.news"
+domain = "data"
+title = "News and daily sentiment of your holdings, a watchlist or tickers"
+routes = ["GET /api/calendars/news"]
+console = "getNews"
+cli = "stonks calendars news"
+mcp = "get_news"
+
+[[capability]]
+id = "calendars.earnings_warnings"
+domain = "trading"
+title = "Earnings before the next open, the order ticket's warning"
+routes = ["GET /api/calendars/earnings-warnings"]
+console = "getEarningsWarnings"
+cli = "stonks calendars earnings-check"
+mcp = "get_earnings_warnings"
+
+[[capability]]
+id = "calendars.alert_kinds"
+domain = "notifications"
+title = "Upcoming-event alert kinds and how far ahead each looks"
+routes = ["GET /api/calendars/alert-kinds"]
+console = "listEventAlertKinds"
+cli = { limited = "the kinds are fixed modules, docs/calendars.md lists them" }
+mcp = "list_event_alert_kinds"
+
+[[capability]]
+id = "calendars.refresh"
+domain = "ops"
+title = "Refresh the event calendars and send upcoming-event alerts (the scheduler's calendars_refresh job)"
+routes = ["POST /api/calendars/refresh", "GET /api/calendars/refresh/{job_id}/result"]
+console = { limited = "an operator job the scheduler runs every morning" }
+cli = "stonks calendars refresh"
+mcp = { limited = "an operator job the scheduler runs every morning" }
+
+# ---- screener (roadmap 20.8) --------------------------------------------------------
+
+[[capability]]
+id = "screener.metrics"
+domain = "universes"
+title = "Metrics a screen may filter or sort on"
+routes = ["GET /api/screener/metrics"]
+console = "listScreenMetrics"
+cli = "stonks screener metrics"
+mcp = "list_screen_metrics"
+
+[[capability]]
+id = "screener.run"
+domain = "universes"
+title = "Run a screen on price and fundamental metrics, point in time"
+routes = ["POST /api/screener/run"]
+console = "runScreen"
+cli = "stonks screener run"
+mcp = "run_screen"
+
+[[capability]]
+id = "screener.jobs"
+domain = "universes"
+title = "Size a screen and run a large one as a background job with progress"
+routes = [
+  "POST /api/screener/size",
+  "POST /api/screener/jobs",
+  "GET /api/screener/jobs/{job_id}/result",
+]
+console = ["sizeScreen", "submitScreenJob", "getScreenJobResult"]
+cli = { limited = "the CLI runs a screen directly, with the same candidate cap" }
+mcp = { limited = "run_screen runs directly, with the same candidate cap" }
+
+[[capability]]
+id = "screener.screens"
+domain = "universes"
+title = "Your saved screens: list, save, read and change"
+routes = [
+  "GET /api/screener/screens",
+  "POST /api/screener/screens",
+  "GET /api/screener/screens/{screen_id}",
+  "PATCH /api/screener/screens/{screen_id}",
+]
+console = ["listScreens", "createScreen", "getScreen", "updateScreen"]
+cli = ["stonks screener list", "stonks screener save"]
+mcp = ["list_screens", "create_screen", "get_screen", "update_screen"]
+
+[[capability]]
+id = "screener.delete"
+domain = "universes"
+title = "Delete a saved screen"
+routes = ["DELETE /api/screener/screens/{screen_id}"]
+console = "deleteScreen"
+cli = "stonks screener delete"
+mcp = "delete_screen"
+
+[[capability]]
+id = "screener.universe"
+domain = "universes"
+title = "Store a screen as a universe for the lab (rule or snapshot)"
+routes = ["POST /api/screener/universes"]
+console = "saveScreenAsUniverse"
+cli = "stonks screener universe"
+mcp = "save_screen_as_universe"

@@ -1,0 +1,224 @@
+<app-page-header
+  title="Options research"
+  description="Read stored option chains with implied vol and Greeks, draw the payoff of a structure, and test the options strategies on past chains."
+/>
+
+<p class="research-note" role="note">
+  <strong>Research only, nothing trades options.</strong>
+  No orders, no paper books and no live books use anything on this page.
+</p>
+
+@if (underlyings.error(); as err) {
+  <app-error-state
+    title="Could not load the stored chains"
+    [error]="err"
+    (retry)="underlyings.reload()"
+  />
+} @else if (!underlyings.hasValue()) {
+  <app-loading-state label="Loading the stored chains" [rows]="4" />
+} @else if (underlyings.value().length === 0) {
+  <app-empty-state
+    title="No option chains stored yet"
+    message="An admin loads end-of-day option chains with the options data update. They show up here once stored."
+  />
+} @else {
+  <div class="page-grid">
+    <section class="panel span-12" aria-labelledby="chain-title">
+      <div class="panel-head">
+        <h2 id="chain-title">Chain</h2>
+        @if (chain.hasValue() && chain.value().synthetic) {
+          <span class="tag">Generated chains, not market quotes</span>
+        }
+      </div>
+      <div class="panel-body stack">
+        <div class="pickers">
+          <div class="field">
+            <label for="op-underlying">Underlying</label>
+            <select
+              id="op-underlying"
+              class="input"
+              (change)="pickUnderlying($any($event.target).value)"
+            >
+              @for (u of underlyings.value(); track u.underlying) {
+                <option [value]="u.underlying" [selected]="u.underlying === underlying()">
+                  {{ u.underlying }}
+                </option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="op-day">On date</label>
+            <input
+              id="op-day"
+              class="input"
+              type="date"
+              aria-describedby="op-day-hint"
+              [value]="asOf()"
+              (change)="pickDay($any($event.target).value)"
+            />
+            <span id="op-day-hint" class="hint">Empty means the latest stored day.</span>
+          </div>
+          <div class="field">
+            <label for="op-expiry">Expiry</label>
+            <select
+              id="op-expiry"
+              class="input"
+              [disabled]="!chain.hasValue()"
+              (change)="expiry.set($any($event.target).value)"
+            >
+              @if (chain.hasValue()) {
+                @for (e of chain.value().expiries; track e) {
+                  <option [value]="e" [selected]="e === chain.value().expiry">{{ e }}</option>
+                }
+              }
+            </select>
+          </div>
+          <div class="field side">
+            <span class="label" aria-hidden="true">Show</span>
+            <app-segmented label="Show calls, puts or both" [options]="sides" [(value)]="side" />
+          </div>
+        </div>
+
+        @if (chain.error(); as err) {
+          <app-error-state
+            title="Could not load the chain"
+            [error]="err"
+            (retry)="chain.reload()"
+          />
+        } @else if (!chain.hasValue()) {
+          <app-loading-state label="Loading the chain" [rows]="8" />
+        } @else if (chain.value().rows.length === 0) {
+          <app-empty-state
+            title="No quotes for this expiry"
+            message="Pick another expiry or date."
+          />
+        } @else {
+          @let c = chain.value();
+          <p class="summary">
+            {{ chainTitle(c.as_of, c.spot) }}. Expiry {{ c.expiry }}, {{ c.days_to_expiry }} days
+            out.
+          </p>
+          <app-data-table
+            caption="Option chain by strike"
+            [rows]="c.rows"
+            [columns]="columns()"
+            [rowKey]="strikeKey"
+            [pageSize]="0"
+          />
+          <p class="hint">
+            IV is our implied vol. Theta is money per share per day and vega money per share per vol
+            point, from the {{ c.models.join(', ') }} pricing model.
+          </p>
+        }
+      </div>
+    </section>
+
+    <section class="panel span-7" aria-labelledby="payoff-title">
+      <div class="panel-head">
+        <h2 id="payoff-title">Payoff at expiry</h2>
+      </div>
+      <div class="panel-body stack">
+        @if (structures.error(); as err) {
+          <app-error-state
+            title="Could not load the structures"
+            [error]="err"
+            (retry)="structures.reload()"
+          />
+        } @else if (!structures.hasValue()) {
+          <app-loading-state label="Loading the structures" [rows]="3" />
+        } @else {
+          <form class="stack" novalidate (submit)="$event.preventDefault(); drawPayoff()">
+            <div class="pickers">
+              <div class="field">
+                <label for="op-structure">Structure</label>
+                <select
+                  id="op-structure"
+                  class="input"
+                  (change)="pickStructure($any($event.target).value)"
+                >
+                  @for (s of structures.value(); track s.name) {
+                    <option [value]="s.name" [selected]="s.name === payoffForm().structure">
+                      {{ structureLabel(s.name) }}
+                    </option>
+                  }
+                </select>
+              </div>
+              @for (p of structure()?.params ?? []; track p) {
+                <div class="field">
+                  <label [for]="'op-param-' + p">{{ paramLabel(p) }}</label>
+                  <input
+                    class="input num"
+                    type="number"
+                    [id]="'op-param-' + p"
+                    [attr.inputmode]="isDte(p) ? 'numeric' : 'decimal'"
+                    [attr.min]="isDte(p) ? 1 : 0.01"
+                    [attr.max]="isDte(p) ? 400 : 0.99"
+                    [attr.step]="isDte(p) ? 1 : 0.01"
+                    [value]="payoffForm().values[p] ?? ''"
+                    (input)="setParam(p, $any($event.target).value)"
+                  />
+                </div>
+              }
+            </div>
+            @if (structure()?.holds_shares) {
+              <p class="hint">Includes one contract's worth of shares held.</p>
+            }
+            <div class="actions">
+              <button class="btn btn-primary" type="submit" [disabled]="drawing()">
+                {{ drawing() ? 'Drawing' : 'Draw payoff' }}
+              </button>
+            </div>
+          </form>
+          @if (payoffError(); as err) {
+            <app-error-state
+              title="Could not draw this payoff"
+              [error]="err"
+              (retry)="drawPayoff()"
+            />
+          } @else if (payoff(); as p) {
+            <app-payoff-diagram [payoff]="p" />
+          }
+        }
+      </div>
+    </section>
+
+    <section class="panel span-5" aria-labelledby="strategies-title">
+      <div class="panel-head">
+        <h2 id="strategies-title">Options strategies</h2>
+      </div>
+      <div class="panel-body">
+        @if (strategies.error(); as err) {
+          <app-error-state
+            title="Could not load the strategies"
+            [error]="err"
+            (retry)="strategies.reload()"
+          />
+        } @else if (!strategies.hasValue()) {
+          <app-loading-state label="Loading the strategies" [rows]="4" />
+        } @else {
+          <ul class="strategies">
+            @for (s of strategies.value(); track s.id) {
+              <li>
+                <h3>{{ s.id }}</h3>
+                <p class="structures">{{ structureList(s.structures) }}</p>
+                <p class="hypothesis">{{ s.hypothesis }}</p>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    </section>
+
+    <section class="panel span-12" aria-labelledby="backtest-title">
+      <div class="panel-head">
+        <h2 id="backtest-title">Backtest</h2>
+      </div>
+      <div class="panel-body">
+        <app-options-backtest
+          [strategies]="strategies.hasValue() ? strategies.value() : []"
+          [underlyings]="underlyings.value()"
+        />
+      </div>
+    </section>
+  </div>
+}

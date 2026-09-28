@@ -113,7 +113,7 @@ class DeflatedSharpeTest:
         ctx = self._ctx
         if ctx is None:
             return self._fail(metrics, "no trial data (bind_run was not called)")
-        n_trials = ctx.n_trials_class if self.include_prior_runs else ctx.n_trials_run
+        n_trials = self.trial_count(ctx)
         metrics["n_trials"] = float(n_trials)
         metrics["n_trials_run"] = float(ctx.n_trials_run)
         if n_trials < 1:
@@ -142,6 +142,14 @@ class DeflatedSharpeTest:
         passed = dsr >= self.min_dsr
         notes = "" if passed else f"DSR {dsr:.3f} < {self.min_dsr}"
         return SurvivalReport(test_id=self.id, passed=passed, metrics=metrics, notes=notes)
+
+    def trial_count(self, ctx: LabRunContext) -> int:
+        """The trials this run is judged against: with prior runs, every
+        trial of the class or the research family, each once (roadmap 22.9,
+        P2), else only this run's."""
+        if not self.include_prior_runs:
+            return ctx.n_trials_run
+        return max(ctx.n_trials_class, ctx.n_trials_family, ctx.n_trials_searched)
 
     def _fail(self, metrics: dict[str, float], reason: str) -> SurvivalReport:
         return SurvivalReport(

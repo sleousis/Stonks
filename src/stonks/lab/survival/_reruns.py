@@ -38,7 +38,7 @@ from stonks.lab.parallel import (
     planned_workers,
     run_tasks,
 )
-from stonks.lab.tuning.base import evaluate_trial
+from stonks.lab.tuning.base import evaluate_trial, fitted_strategy
 from stonks.logging import get_logger
 from stonks.strategies.base import strategy_data_tickers
 
@@ -182,9 +182,11 @@ def _run_one(state: _State, rerun: Rerun) -> RerunResult:
 def _strategy_for(state: _State, rerun: Rerun, dataset: Any) -> Strategy:
     cls = state.saved[0]
     if rerun.params is not None:
-        strategy = cls(dict(rerun.params))
-        strategy.fit(dataset)
-        return strategy
+        # the strategy believes the run's costs, even when the rerun's
+        # broker charges stressed ones (22.10)
+        return fitted_strategy(
+            cls, rerun.params, dataset, costs=getattr(state.dataset, "costs", None)
+        )
     handle = PortableStrategy.__new__(PortableStrategy)
     handle.__setstate__({"portable": state.saved})
     return handle.strategy

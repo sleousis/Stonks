@@ -19,6 +19,7 @@ from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.ingest import SourceId
 from stonks.app.jobs import Job, JobContext, JobRunner
+from stonks.app.pagination import Page
 from stonks.core.interval import Interval
 from stonks.ingest.ensure import DataEnsurer, EnsureReport, EnsureSettings
 from stonks.ingest.wiring import build_ingest_pipeline
@@ -29,7 +30,7 @@ from stonks.universes import (
     UniverseStore,
     refresh_universe,
 )
-from stonks.universes.base import UNIVERSE_ID_PATTERN
+from stonks.universes.base import EARLIEST, UNIVERSE_ID_PATTERN
 from stonks.universes.index_import import parse_index_history
 from stonks.universes.providers.static_list import parse_list_csv
 
@@ -53,8 +54,10 @@ class UniverseView(BaseModel):
     member_count: int | None = None
 
 
-class UniverseCreate(BaseModel):
-    id: str = Field(pattern=UNIVERSE_ID_PATTERN)
+class UniverseUpdate(BaseModel):
+    """A universe's new definition. The members stay as they are until the
+    next refresh."""
+
     kind: UniverseKind
     name: str | None = Field(default=None, max_length=200)
     description: str | None = Field(default=None, max_length=2000)
@@ -69,6 +72,30 @@ class UniverseCreate(BaseModel):
         if self.csv is not None and self.kind != "list":
             raise ValueError("csv is only for list universes")
         return self
+
+
+class UniverseCreate(UniverseUpdate):
+    id: str = Field(pattern=UNIVERSE_ID_PATTERN)
+
+
+class MembershipSpanView(BaseModel):
+    """One stretch of membership: a member from ``start_date`` up to the
+    day before ``end_date``."""
+
+    ticker: str
+    #: ``None``: a member from the start.
+    start_date: date | None = None
+    #: ``None``: still a member.
+    end_date: date | None = None
+
+
+class ExchangeView(BaseModel):
+    """An exchange our instruments name, for the exchange picker."""
+
+    exchange: str
+    instruments: int
+    #: Instruments not marked delisted.
+    listed: int
 
 
 class UniverseMembers(BaseModel):
@@ -126,6 +153,25 @@ def _view(d: UniverseDefinition) -> UniverseView:
     return UniverseView(**d.model_dump())
 
 
+def _definition_of(universe_id: str, request: UniverseUpdate) -> UniverseDefinition:
+    """The validated definition a create or update asks for (422 when not)."""
+    spec = request.spec
+    try:
+        if request.csv is not None:
+            spec = parse_list_csv(request.csv)
+        definition = UniverseDefinition(
+            id=universe_id,
+            kind=request.kind,
+            name=request.name,
+            description=request.description,
+            spec=spec,
+        )
+        definition.validated()
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from None
+    return definition
+
+
 #: Lake writers share one lane so DuckDB never sees two writers on the same
 #: rows (see :mod:`stonks.app.jobs`). Short request writes join it too.
 LAKE_WRITE_LANE = "lake_write"
@@ -153,20 +199,7 @@ class UniverseService:
             return _view(self._definition(UniverseStore(lake), universe_id))
 
     def create(self, request: UniverseCreate) -> UniverseView:
-        spec = request.spec
-        try:
-            if request.csv is not None:
-                spec = parse_list_csv(request.csv)
-            definition = UniverseDefinition(
-                id=request.id,
-                kind=request.kind,
-                name=request.name,
-                description=request.description,
-                spec=spec,
-            )
-            definition.validated()
-        except ValueError as exc:
-            raise ValidationError(str(exc)) from None
+        definition = _definition_of(request.id, request)
 
         def write() -> UniverseDefinition:
             with self._ctx.lake() as lake:
@@ -178,6 +211,47 @@ class UniverseService:
         saved = self._runner.run_in_lane(LAKE_WRITE_LANE, write)
         _log.info("universe.created", universe_id=saved.id, kind=saved.kind)
         return _view(saved)
+
+    def update(self, universe_id: str, request: UniverseUpdate) -> UniverseView:
+        """Replace the definition. The refresh fields stay, so the members
+        read as before until the next refresh."""
+        definition = _definition_of(universe_id, request)
+
+        def write() -> UniverseDefinition:
+            with self._ctx.lake() as lake:
+                store = UniverseStore(lake)
+                self._definition(store, universe_id)
+                return store.save(definition)
+
+        saved = self._runner.run_in_lane(LAKE_WRITE_LANE, write)
+        _log.info("universe.updated", universe_id=saved.id, kind=saved.kind)
+        return _view(saved)
+
+    def history(
+        self, universe_id: str, *, ticker: str | None, limit: int, offset: int
+    ) -> Page[MembershipSpanView]:
+        """The universe's membership spans, latest change first."""
+        with self._ctx.lake() as lake:
+            store = UniverseStore(lake)
+            self._definition(store, universe_id)
+            spans, total = store.membership_history(
+                universe_id, ticker=ticker, limit=limit, offset=offset
+            )
+        items = [
+            MembershipSpanView(
+                ticker=s.ticker,
+                start_date=None if s.start_date <= EARLIEST else s.start_date,
+                end_date=s.end_date,
+            )
+            for s in spans
+        ]
+        return Page[MembershipSpanView](items=items, total=total, limit=limit, offset=offset)
+
+    def exchanges(self) -> list[ExchangeView]:
+        """Every exchange the lake's instruments name, with counts."""
+        with self._ctx.lake() as lake:
+            rows = UniverseStore(lake).exchanges()
+        return [ExchangeView(exchange=e, instruments=n, listed=listed) for e, n, listed in rows]
 
     def delete(self, universe_id: str) -> UniverseView:
         """Delete the definition and its members. 409 while a refresh or

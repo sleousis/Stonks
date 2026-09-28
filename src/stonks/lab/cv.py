@@ -252,9 +252,10 @@ def refit(strategy: Strategy, dataset: Any) -> Strategy:
 
     if not has_nontrivial_fit(strategy):
         return strategy
-    fresh = type(strategy)(dict(getattr(strategy, "params", {}) or {}))
-    fresh.fit(dataset)
-    return fresh
+    from stonks.lab.tuning.base import fitted_strategy
+
+    params = dict(getattr(strategy, "params", {}) or {})
+    return fitted_strategy(type(strategy), params, dataset)
 
 
 class CVObjective:

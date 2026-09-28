@@ -26,4 +26,25 @@ export default [
     title: 'Lab run in the ledger',
     loadComponent: () => import('./ledger-run.page').then((m) => m.LedgerRunPage),
   },
+  {
+    path: 'factors',
+    title: 'Lab factors',
+    loadComponent: () => import('./factors/factors.page').then((m) => m.FactorsPage),
+  },
+  {
+    path: 'factors/:factorId',
+    title: 'Lab factor',
+    loadComponent: () => import('./factors/factor-detail.page').then((m) => m.FactorDetailPage),
+  },
+  {
+    path: 'research',
+    title: 'Lab research sessions',
+    loadComponent: () => import('./research/research.page').then((m) => m.ResearchPage),
+  },
+  {
+    path: 'research/:sessionId',
+    title: 'Lab research session',
+    loadComponent: () =>
+      import('./research/research-session.page').then((m) => m.ResearchSessionPage),
+  },
 ] satisfies Routes;

@@ -111,6 +111,8 @@ class MarketView:
     asset_classes: Mapping[str, str] = field(default_factory=dict)
     vols_annual: Mapping[str, float] = field(default_factory=dict)
     returns_history: pd.DataFrame | None = None
+    #: Raw style exposures known at ``as_of``, rows tickers (roadmap 22.4).
+    factor_exposures: pd.DataFrame | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -379,6 +381,7 @@ def _construction_input(
         asset_classes=market.asset_classes,  # type: ignore[arg-type]
         returns_history=market.returns_history,
         volumes=market.volumes or {},
+        factor_exposures=market.factor_exposures,
     )
 
 

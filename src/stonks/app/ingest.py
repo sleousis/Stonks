@@ -25,7 +25,10 @@ from stonks.ingest.wiring import build_ingest_pipeline
 
 INGEST_JOB = "ingest"
 
-IngestKind = Literal["prices", "intraday", "fundamentals", "metadata"]
+#: ``borrow``: IBKR's public short stock files into ``borrow_rates`` (the
+#: ``ingest_borrow`` job, roadmap 19.14). It reads ``markets``, never
+#: ``source`` or ``tickers``.
+IngestKind = Literal["prices", "intraday", "fundamentals", "metadata", "borrow"]
 #: Mirrors ``stonks.ingest.sources.registry.SOURCE_IDS`` (a test pins it).
 SourceId = Literal["eodhd", "yahoo", "defillama"]
 
@@ -41,9 +44,20 @@ class IngestRequest(BaseModel):
     until: date | None = None
     #: Native intraday interval (``intraday`` only), e.g. ``5m``.
     interval: str | None = None
+    #: IBKR short stock markets (``borrow`` only), e.g. ``usa``. Empty:
+    #: ``[sources.ibkr_borrow] markets``.
+    markets: list[str] = []
 
     @model_validator(mode="after")
     def _check(self) -> Self:
+        if self.kind == "borrow":
+            from stonks.ingest.sources.ibkr_borrow import resolve_markets
+
+            if self.markets:
+                self.markets = resolve_markets(self.markets, ())
+            return self
+        if self.markets:
+            raise ValueError("markets is only supported for kind='borrow'")
         if not self.tickers and not self.exchange:
             raise ValueError("provide tickers or exchange")
         if self.exchange and self.kind != "prices":
@@ -120,11 +134,14 @@ class IngestService:
 
     def submit(self, request: IngestRequest, *, owner_id: str | None = None) -> Job:
         self._validate(request)
-        self._ctx.build_source(request.source)  # fail fast when it isn't configured
+        if request.kind != "borrow":
+            self._ctx.build_source(request.source)  # fail fast when it isn't configured
         return self._runner.submit(INGEST_JOB, request.model_dump(mode="json"), owner_id=owner_id)
 
     def run(self, request: IngestRequest, progress: JobContext | None = None) -> IngestResultView:
         self._validate(request)
+        if request.kind == "borrow":
+            return self._run_borrow(request)
         source = self._ctx.build_source(request.source)
         with self._ctx.lake() as lake:
             pipeline = build_ingest_pipeline(self._ctx.settings, source, lake)
@@ -134,6 +151,24 @@ class IngestService:
                 if progress is not None:
                     progress.progress(0.1, f"{len(tickers)} tickers on {request.exchange}")
             result = self._dispatch(pipeline, request, tickers)
+        return IngestResultView(
+            run_id=result.run_id,
+            kind=result.kind,
+            status=result.status,
+            tickers_ok=result.tickers_ok,
+            tickers_failed=result.tickers_failed,
+        )
+
+    def _run_borrow(self, request: IngestRequest) -> IngestResultView:
+        from stonks.ingest.sources.ibkr_borrow import IbkrBorrowDataSource, resolve_markets
+
+        cfg = self._ctx.settings.sources.ibkr_borrow
+        markets = resolve_markets(request.markets, cfg.markets)
+        source = IbkrBorrowDataSource.from_config(cfg)
+        with self._ctx.lake() as lake:
+            result = build_ingest_pipeline(self._ctx.settings, source, lake).run_borrow_rates(
+                markets
+            )
         return IngestResultView(
             run_id=result.run_id,
             kind=result.kind,

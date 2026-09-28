@@ -1699,6 +1699,17 @@ class DuckDBLake:
         "contract_unit",
     )
     _DEFI_TVL_COLS = ("chain", "observation_date", "tvl_usd", "source")
+    _FX_RATE_COLS = ("base_currency", "quote_currency", "observation_date", "rate", "source")
+    _BORROW_RATE_COLS = (
+        "ticker",
+        "as_of",
+        "source",
+        "currency",
+        "isin",
+        "available_shares",
+        "fee_rate_annual",
+        "rebate_rate_annual",
+    )
     _MACRO_INDICATOR_COLS = (
         "country_iso",
         "indicator",
@@ -1725,26 +1736,30 @@ class DuckDBLake:
     def get_corporate_actions(self, tickers: list[str]) -> pd.DataFrame:
         """Splits and cash dividends for ``tickers`` in one query.
 
-        Columns ``ticker, ex_date, kind, value``: ``kind`` is ``split``
-        (``value`` = new shares per old share) or ``dividend`` (``value`` =
-        cash per share on the ex-date). Ordered by ticker, ex-date, then
-        splits before dividends on the same ex-date."""
+        Columns ``ticker, ex_date, kind, value, declaration_date``: ``kind``
+        is ``split`` (``value`` = new shares per old share) or ``dividend``
+        (``value`` = cash per share on the ex-date). ``declaration_date`` is
+        the dividend's announcement day, NULL when unknown and for splits.
+        Ordered by ticker, ex-date, then splits before dividends on the same
+        ex-date."""
         if not tickers:
-            return pd.DataFrame(columns=["ticker", "ex_date", "kind", "value"])
+            return pd.DataFrame(columns=["ticker", "ex_date", "kind", "value", "declaration_date"])
         df = self.con.execute(
             """
-            SELECT ticker, ex_date, kind, value FROM (
-                SELECT ticker, date AS ex_date, 'split' AS kind, ratio AS value, 0 AS ord
+            SELECT ticker, ex_date, kind, value, declaration_date FROM (
+                SELECT ticker, date AS ex_date, 'split' AS kind, ratio AS value,
+                       CAST(NULL AS DATE) AS declaration_date, 0 AS ord
                   FROM stock_splits WHERE ticker = ANY(?)
                 UNION ALL
-                SELECT ticker, ex_date, 'dividend' AS kind, amount AS value, 1 AS ord
+                SELECT ticker, ex_date, 'dividend' AS kind, amount AS value,
+                       declaration_date, 1 AS ord
                   FROM dividends WHERE ticker = ANY(?)
             )
             ORDER BY ticker, ex_date, ord
             """,
             [list(tickers), list(tickers)],
         ).fetchdf()
-        return _dates_to_python(df, ("ex_date",))
+        return _dates_to_python(df, ("ex_date", "declaration_date"))
 
     def upsert_insider_transactions(self, df: pd.DataFrame) -> int:
         # Deduplicates on the NULL-safe ``natural_key`` column (migration
@@ -1826,18 +1841,52 @@ class DuckDBLake:
             pk=("ticker", "date"),
         )
 
-    def upsert_instrument_profile(self, df: pd.DataFrame) -> int:
+    def upsert_instrument_profile(
+        self, df: pd.DataFrame, *, known_at: datetime | None = None
+    ) -> int:
         """Profiles arrive from several sources of differing richness (EODHD
         carries ISIN/CIK/IPO date, Yahoo doesn't), so a NULL or absent field
         from a later source keeps the earlier source's value instead of
-        clearing it. Real values still overwrite."""
+        clearing it. Real values still overwrite.
+
+        A sector that changes is also kept in ``instrument_sector_versions``
+        (migration 022), stamped ``known_at`` (now, in naive UTC, by
+        default)."""
         if df.empty:
             return 0
-        return self._upsert_preserve_nulls(
+        count = self._upsert_preserve_nulls(
             df.reindex(columns=list(self._INSTRUMENT_PROFILE_COLS)),
             table="instruments",
             cols=self._INSTRUMENT_PROFILE_COLS,
             pk=("id",),
+        )
+        stamp = known_at if known_at is not None else datetime.now(UTC).replace(tzinfo=None)
+        self._record_sector_versions([str(t) for t in df["id"].dropna().unique()], stamp)
+        return count
+
+    def _record_sector_versions(self, tickers: list[str], known_at: datetime) -> None:
+        """Append the current sector of each of ``tickers`` whose label
+        differs from its latest version (or has none yet)."""
+        if not tickers:
+            return
+        self.con.execute(
+            """
+            INSERT OR REPLACE INTO instrument_sector_versions (ticker, sector, gic_sector, known_at)
+            SELECT i.id, i.sector, i.gic_sector, ?
+              FROM instruments i
+              LEFT JOIN (
+                    SELECT ticker, sector, gic_sector,
+                           ROW_NUMBER() OVER (PARTITION BY ticker ORDER BY known_at DESC) AS rn
+                      FROM instrument_sector_versions
+                     WHERE ticker = ANY(?)
+                   ) v ON v.ticker = i.id AND v.rn = 1
+             WHERE i.id = ANY(?)
+               AND (i.sector IS NOT NULL OR i.gic_sector IS NOT NULL)
+               AND (v.ticker IS NULL
+                    OR v.sector IS DISTINCT FROM i.sector
+                    OR v.gic_sector IS DISTINCT FROM i.gic_sector)
+            """,
+            [known_at, tickers, tickers],
         )
 
     def upsert_crypto_profile(self, df: pd.DataFrame) -> int:
@@ -1929,6 +1978,118 @@ class DuckDBLake:
             params,
         ).fetchdf()
         return _dates_to_python(df, ("observation_date",))
+
+    def upsert_fx_rates(self, df: pd.DataFrame) -> int:
+        """Upsert daily FX rates keyed by ``(base_currency, quote_currency,
+        observation_date)``. Last write wins, so a re-run is a no-op."""
+        return self._upsert(
+            df,
+            table="fx_rates",
+            cols=self._FX_RATE_COLS,
+            pk=("base_currency", "quote_currency", "observation_date"),
+        )
+
+    def get_fx_rates(
+        self,
+        currencies: Any = None,
+        *,
+        end: Any = None,
+    ) -> pd.DataFrame:
+        """Stored FX rates (``base_currency, quote_currency,
+        observation_date, rate``), oldest first. ``currencies`` keeps pairs
+        whose both legs are in it; ``end`` keeps days on or before it."""
+        clauses: list[str] = []
+        params: list[Any] = []
+        if currencies is not None:
+            codes = sorted({str(c).upper() for c in currencies})
+            clauses.append("base_currency = ANY(?) AND quote_currency = ANY(?)")
+            params += [codes, codes]
+        if end is not None:
+            clauses.append("observation_date <= ?")
+            params.append(_as_calendar_date(end))
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        df = self.con.execute(
+            "SELECT base_currency, quote_currency, observation_date, rate FROM fx_rates"
+            f"{where} ORDER BY observation_date",
+            params,
+        ).fetchdf()
+        return _dates_to_python(df, ("observation_date",))
+
+    def upsert_borrow_rates(self, df: pd.DataFrame) -> int:
+        """Upsert daily borrow rates keyed by ``(ticker, as_of, source)``
+        (roadmap 19.3). Last write wins, so a re-run is a no-op."""
+        if df.empty:
+            return 0
+        frame = df.copy()
+        for col in self._BORROW_RATE_COLS:
+            if col not in frame.columns:
+                frame[col] = None
+        return self._upsert(
+            frame,
+            table="borrow_rates",
+            cols=self._BORROW_RATE_COLS,
+            pk=("ticker", "as_of", "source"),
+        )
+
+    def get_borrow_rates(
+        self,
+        *,
+        as_of: Any = None,
+        tickers: Any = None,
+        source: str | None = None,
+    ) -> pd.DataFrame:
+        """Stored borrow rates, oldest first. ``as_of`` keeps one day,
+        ``tickers`` and ``source`` narrow the rows."""
+        clauses: list[str] = []
+        params: list[Any] = []
+        if as_of is not None:
+            clauses.append("as_of = ?")
+            params.append(_as_calendar_date(as_of))
+        if tickers is not None:
+            clauses.append("ticker = ANY(?)")
+            params.append(sorted({str(t) for t in tickers}))
+        if source is not None:
+            clauses.append("source = ?")
+            params.append(source)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        df = self.con.execute(
+            f"SELECT {', '.join(self._BORROW_RATE_COLS)} FROM borrow_rates{where}"
+            " ORDER BY as_of, ticker, source",
+            params,
+        ).fetchdf()
+        return _dates_to_python(df, ("as_of",))
+
+    def borrow_rate(
+        self,
+        ticker: str,
+        day: Any,
+        *,
+        source: str | None = None,
+        max_age_days: int | None = None,
+    ) -> dict[str, Any] | None:
+        """The latest borrow rate of ``ticker`` on or before ``day`` (of
+        ``source`` when given), or ``None``. With ``max_age_days``, a row
+        older than that many days before ``day`` counts as missing."""
+        when = _as_calendar_date(day)
+        clauses = ["ticker = ?", "as_of <= ?"]
+        params: list[Any] = [ticker, when]
+        if source is not None:
+            clauses.append("source = ?")
+            params.append(source)
+        if max_age_days is not None:
+            clauses.append("as_of >= ?")
+            params.append(when - timedelta(days=max_age_days))
+        cur = self.con.execute(
+            f"SELECT {', '.join(self._BORROW_RATE_COLS)} FROM borrow_rates"
+            f" WHERE {' AND '.join(clauses)} ORDER BY as_of DESC, source LIMIT 1",
+            params,
+        )
+        row = cur.fetchone()
+        if row is None:
+            return None
+        out: dict[str, Any] = dict(zip(self._BORROW_RATE_COLS, row, strict=True))
+        out["as_of"] = _as_calendar_date(out["as_of"])
+        return out
 
     def upsert_institutional_holders(self, df: pd.DataFrame) -> int:
         return self._upsert_on_change(
@@ -2217,6 +2378,16 @@ class DuckDBLake:
         ``tickers`` (static profile data, no time stamp)."""
         return self.sql(
             "SELECT id, sector, gic_sector FROM instruments WHERE id = ANY(?)", [list(tickers)]
+        )
+
+    def instrument_sector_versions(self, tickers: list[str]) -> pd.DataFrame:
+        """``id, sector, gic_sector, known_at``: every sector label of
+        ``tickers`` with the time Stonks first saw it, oldest first
+        (migration 022)."""
+        return self.sql(
+            "SELECT ticker AS id, sector, gic_sector, known_at FROM instrument_sector_versions "
+            "WHERE ticker = ANY(?) ORDER BY ticker, known_at",
+            [list(tickers)],
         )
 
     # ---- escape hatch -------------------------------------------------------

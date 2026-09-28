@@ -189,6 +189,93 @@ def test_preferences_round_trip(client):
     assert bad.status_code == 422
 
 
+def test_event_alert_switches_round_trip(client):
+    body = client.get("/api/notifications/preferences", headers=AUTH).json()
+    assert [(e["topic"], e["enabled"]) for e in body["event_alerts"]] == [
+        ("earnings", True),
+        ("dividends", True),
+        ("economic", True),
+    ]
+    assert all(e["label"] for e in body["event_alerts"])
+
+    updated = client.put(
+        "/api/notifications/preferences",
+        json={
+            "event_alerts": [{"topic": "earnings", "enabled": False}],
+            "preferences": [{"category": "price_alert", "channel": "webpush", "enabled": False}],
+        },
+        headers=AUTH,
+    )
+    assert updated.status_code == 200, updated.text
+    got = updated.json()
+    assert {e["topic"]: e["enabled"] for e in got["event_alerts"]}["earnings"] is False
+    assert {
+        "category": "price_alert",
+        "channel": "webpush",
+        "enabled": False,
+        "strategy_id": None,
+    } in (got["preferences"])
+    only_switch = client.put(
+        "/api/notifications/preferences",
+        json={"event_alerts": [{"topic": "earnings", "enabled": True}]},
+        headers=AUTH,
+    )
+    assert only_switch.status_code == 200, only_switch.text
+    assert all(e["enabled"] for e in only_switch.json()["event_alerts"])
+    bad = client.put(
+        "/api/notifications/preferences",
+        json={"event_alerts": [{"topic": "gossip", "enabled": False}]},
+        headers=AUTH,
+    )
+    assert bad.status_code == 422
+
+
+def test_economic_alert_choices_round_trip(client):
+    body = client.get("/api/notifications/preferences", headers=AUTH).json()
+    econ = body["economic_alerts"]
+    # the owner's pf_default is in USD: the United States, high importance only
+    assert (econ["countries"], econ["default_countries"], econ["min_importance"]) == (
+        ["US"],
+        True,
+        "high",
+    )
+    assert {"value": "EU", "label": "Euro area"} in econ["country_options"]
+    assert [o["value"] for o in econ["importance_options"]] == ["low", "medium", "high"]
+
+    updated = client.put(
+        "/api/notifications/preferences",
+        json={"economic_alerts": {"countries": ["us", "DE"], "min_importance": "medium"}},
+        headers=AUTH,
+    )
+    assert updated.status_code == 200, updated.text
+    econ = updated.json()["economic_alerts"]
+    assert (econ["countries"], econ["default_countries"], econ["min_importance"]) == (
+        ["US", "DE"],
+        False,
+        "medium",
+    )
+    back = client.put(
+        "/api/notifications/preferences",
+        json={"economic_alerts": {"default_countries": True}},
+        headers=AUTH,
+    ).json()["economic_alerts"]
+    assert (back["countries"], back["default_countries"], back["min_importance"]) == (
+        ["US"],
+        True,
+        "medium",
+    )
+    for bad in (
+        {"countries": []},
+        {"countries": ["NOT-A-CODE"]},
+        {"min_importance": "urgent"},
+        {"countries": ["US"], "default_countries": True},
+    ):
+        resp = client.put(
+            "/api/notifications/preferences", json={"economic_alerts": bad}, headers=AUTH
+        )
+        assert resp.status_code == 422, bad
+
+
 def test_quiet_hours(client):
     resp = client.put(
         "/api/notifications/quiet-hours", json={"start": "22:00", "end": "07:00"}, headers=AUTH

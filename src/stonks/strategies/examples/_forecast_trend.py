@@ -30,6 +30,7 @@ does the rest the same way for all three:
 
 from __future__ import annotations
 
+import functools
 import math
 import weakref
 from collections.abc import Mapping, Sequence
@@ -71,7 +72,9 @@ _HISTORY_START = pd.Timestamp("1900-01-01").to_pydatetime()
 _EPOCH_ORDINAL = date(1970, 1, 1).toordinal()
 
 
-def forecast_specs(*, fdm_default: float = 1.1) -> list[ParameterSpec]:
+def forecast_specs(
+    *, fdm_default: float = 1.1, fdm_mode_default: str = "fixed"
+) -> list[ParameterSpec]:
     """How rule forecasts are scaled and combined."""
     return [
         ParameterSpec(
@@ -87,7 +90,7 @@ def forecast_specs(*, fdm_default: float = 1.1) -> list[ParameterSpec]:
         ParameterSpec(
             name="fdm_mode",
             kind="categorical",
-            default="fixed",
+            default=fdm_mode_default,
             bounds=["fixed", "estimate"],
             tunable=False,
             description="'fixed': use fdm; 'estimate': 1/sqrt(w'Hw) from the "
@@ -141,6 +144,14 @@ def forecast_diversification_multiplier(rules: pd.DataFrame, fallback: float) ->
     return diversification_multiplier(overlap, weights, min_observations=MIN_ESTIMATION_BARS)
 
 
+def require_fixed_modes(params: Mapping[str, Any]) -> None:
+    """Raise ``ValueError`` unless the forecast scalar and the FDM are fixed:
+    the estimated ones read a history window the vectorised fast path does
+    not replay."""
+    if params.get("scalar_mode", "fixed") != "fixed" or params.get("fdm_mode", "fixed") != "fixed":
+        raise ValueError("the fast path supports scalar_mode and fdm_mode 'fixed' only")
+
+
 def rule_scalar(raw: pd.Series, fixed: float, mode: str) -> float:
     """``fixed``, or in ``"estimate"`` mode ``10 / mean|raw|`` over ``raw``
     (the ticker's history up to as_of) once it has a year of values."""
@@ -189,6 +200,31 @@ def period_end_mask(days: Any, asset_class: str, period: str) -> np.ndarray:
     mask[:-1] = keys[1:] != keys[:-1]
     mask[-1] = _last_bar_of_open_period(index[-1].date(), asset_class, period)
     return mask
+
+
+@functools.lru_cache(maxsize=65536)
+def _calendar_end(day: date, asset_class: str, period: str) -> bool:
+    return _last_bar_of_open_period(day, asset_class, period)
+
+
+def closed_period_ends(days: Any, asset_class: str, period: str) -> np.ndarray:
+    """For each bar, the position of the latest period-end bar as seen on
+    that bar's close, or -1: what :func:`period_end_mask` gives for the
+    table cut at that bar. A past bar ends its period when a later bar sits
+    in a later period (both closed). The bar itself only from the calendar,
+    never from the bar after it."""
+    index = pd.DatetimeIndex(days)
+    n = len(index)
+    if n == 0:
+        return np.zeros(0, dtype=np.int64)
+    whole = period_end_mask(index, asset_class, period)
+    # whole[j] for j < n - 1 compares bar j with bar j + 1: known on bar j + 1
+    known_after = np.where(whole[:-1], np.arange(n - 1), -1)
+    latest_past = np.full(n, -1, dtype=np.int64)
+    if n > 1:
+        latest_past[1:] = np.maximum.accumulate(known_after)
+    today = np.array([_calendar_end(d.date(), asset_class, period) for d in index], dtype=bool)
+    return np.where(today, np.arange(n), latest_past)
 
 
 @dataclass(frozen=True)
@@ -240,6 +276,11 @@ class ForecastTrendStrategy(BaseStrategy):
         """The capped forecast at the last of ``bars`` (adjusted daily bars
         dated on or before as_of, oldest first); ``None`` when undefined."""
         raise NotImplementedError
+
+    def _ticker_forecast(self, ticker: str, bars: pd.DataFrame, asset_class: str) -> float | None:
+        """:meth:`_signed_forecast` for ``ticker``; override when the
+        forecast keeps per-instrument state (fitted forecast weights)."""
+        return self._signed_forecast(bars, asset_class)
 
     # ---- shared helpers for subclasses ---------------------------------------------
 
@@ -317,7 +358,7 @@ class ForecastTrendStrategy(BaseStrategy):
         if len(bars) < self._min_bars():
             return None
         asset_class = self._asset_class(ticker, lake)
-        forecast = self._signed_forecast(bars.reset_index(drop=True), asset_class)
+        forecast = self._ticker_forecast(ticker, bars.reset_index(drop=True), asset_class)
         if forecast is None or not math.isfinite(forecast):
             return None
         closes = bars["close"].astype(float)

@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 17. When it was written Stonks had no derivatives: positions were keyed by ticker, valued at `qty × price`, and every instrument lived in `instruments`.
 
-**Status:** stages 1 to 4 are built as research, off by default (roadmap 17.1 to 17.5). Nothing in the tick, the console or MCP trades options. Stage 5 (live) waits for Phase 19. Section 9 lists what changed from this design.
+**Status:** stages 1 to 4 are built as research, off by default (roadmap 17.1 to 17.5), and the console and MCP can read chains, draw payoffs and run options backtests (17.6, section 10). Nothing in the tick, the console or MCP trades options. Stage 5 (live) waits for Phase 19. Section 9 lists what changed from this design.
 
 Staging is the main decision: **read-only analytics first** (chains, implied volatility, Greeks, "what would a covered call on my holdings pay"), then backtests, then paper, and live trading last behind its own go-live.
 
@@ -173,11 +173,16 @@ The build follows the sections above, with these differences.
 **Pricing.**
 - The seam is `PricingModel` over plain `PricingInputs` (right, spot, strike, time, rate, dividend yield, vol). `inputs_for` builds them from a contract.
 - QuantLib alone covers every model (question 3): Black-Scholes with a dividend yield, Black-76, Barone-Adesi-Whaley, Bjerksund-Stensland and a binomial tree, plus implied vol. py_vollib is not used.
-- Rates are a flat configured rate and dividends are not yet in the pricing inputs. Treasury curves and dividend schedules are still to come.
+- Rates and dividends come from a `PricingMarket` (`options/market.py`, roadmap 17.7). It pairs a `RateCurve` with a `DividendForecast` and builds the `PricingInputs` of a contract on a pricing day. Chains (`analyze`, `analyze_chain`), Greeks, implied vol, the leg selector, the risk view and the options backtest all take one. `PricingMarket.flat(rate)` is the old flat behaviour.
+- `TreasuryRateCurve` (`options/rates.py`) reads constant maturity Treasury yields from `bond_yield_history` (`US1M.GBOND` to `US30Y.GBOND`, set in `RateCurveSettings`). For each tenor it takes the latest yield dated on or before the pricing day, drops a yield older than `max_age_days` (10), turns the bond equivalent percent into a continuous rate and interpolates linearly in time to each expiry, flat beyond the ends. With no usable yield it uses `fallback_rate` and logs `options.rate_curve.flat_fallback` with the reason, once per day.
+- `KnownDividendForecast` (`options/dividends.py`) reads `dividends`. A future ex-date counts only when its `declaration_date` is on or before the pricing day. A row with no declaration date is not known before its ex-date. After the last known ex-date, or over the whole tenor when none is declared, the trailing year's cash over the spot fills in as a yield.
+- The models still take one continuous dividend yield. Known cash dividends become the yield with `S exp(-qT) = S - PV(dividends)`, so a European price equals the escrowed dividend model (QuantLib's `AnalyticDividendEuropeanEngine`, checked in the tests). For American options this is an approximation: the early exercise just before an ex-date is not modelled exactly.
+- Point in time (P12): a test shocks every yield dated after the pricing day and every dividend declared after it, and checks that prices, Greeks and implied vols do not move. The backtest has the same test end to end.
 
 **Backtest.**
 - A separate engine, `backtest/options_engine.py`, so the stock backtest and its golden results are untouched.
 - Combos fill against the next day's quotes, not the decision day's (P12).
+- The next dividend, used for early assignment and `ctx.next_dividends`, is the next ex-date among dividends declared on or before the day (`declaration_date` in `dividends`, roadmap 17.9). A dividend with no declaration date is not known before its ex-date (P12).
 - Position groups live in the backtest ledger. There is no SQLite table yet, because nothing trades options on paper or live.
 
 **Risk.**
@@ -187,4 +192,33 @@ The build follows the sections above, with these differences.
 **Strategies and validation.**
 - The volatility strategy sells iron condors when at-the-money implied vol is rich against realized vol. IV rank needs an IV history we do not store yet.
 - Options strategies have their own catalog and are not tuned in the lab. `stonks options backtest --validate` runs the tests that apply to any equity curve: out of sample PSR, deflated Sharpe, wider fills, missing quote days and doubled fees.
-- There are no console pages or MCP tools yet. The CLI is `stonks options ingest|chain|strategies|backtest`.
+- The CLI is `stonks options ingest|chain|strategies|backtest`. The console and MCP came with 17.6 (section 10). Loading chains stays a CLI job for operators.
+
+## 10. Console and MCP (17.6)
+
+Research only: nothing here places an order or writes to the lake.
+
+```mermaid
+flowchart LR
+  L[(option_quotes)] --> S[OptionsService<br/>app/options.py]
+  S --> A["/api/options/*"]
+  A --> C[Console: Options page]
+  A --> M[MCP tools]
+```
+
+| Route | Permission | What it returns |
+|---|---|---|
+| `GET /api/options/underlyings` | `data.read` | Underlyings with stored chains: first and last day, days, contracts, sources |
+| `GET /api/options/chains/{underlying}` | `data.read` | One expiry of a chain with our IV and Greeks, calls and puts by strike |
+| `GET /api/options/strategies` | `data.read` | The options strategy catalog with hypotheses and parameters |
+| `GET /api/options/structures` | `data.read` | Structures a payoff can be drawn for, with the parameters each reads |
+| `POST /api/options/payoff` | `data.read` | One unit of a structure picked from a chain, its legs and its payoff at expiry |
+| `POST /api/options/backtests` | `lab.run` | Queues an `options_backtest` job |
+| `GET /api/options/backtests/{job_id}/result` | `data.read` | The equity curve, figures, validation checks and a verdict |
+
+- **Chains.** `as_of` picks the last stored day on or before it, so a weekend shows Friday. The expiry defaults to the one nearest 30 days out. Greeks come from the `PricingModel` seam through `options/analytics.py`: theta per share per day, vega per share per vol point.
+- **Payoff.** `options/payoff.py` builds one unit of the structure with the structure builders the backtest uses (over expiries up to 400 days out), then values the legs at expiry. The payoff is piecewise linear with kinks at the strikes, so max loss, max gain and breakevens are exact. Covered calls and protective puts include one contract's worth of shares. `null` means no bound.
+- **Backtest.** The job runs `OptionsBacktester` and, unless `validation` is false, the checks in `options/validation.py`. The verdict is `passed` only when every check passes. A request is checked before it queues: a known strategy, valid parameters, and stored chains in the window.
+- **Synthetic chains.** Every view says `synthetic: true` when all quotes came from the synthetic source. The console then warns that the result is never evidence.
+- **MCP.** `list_option_underlyings`, `get_option_chain`, `list_option_strategies`, `list_option_structures`, `get_option_payoff` and `run_options_backtest`. The job tool follows the other research jobs: no confirm, and `wait_for_job` returns the typed result.
+- **Console.** The Options page under Research (`/options`). See `docs/ui.md`.

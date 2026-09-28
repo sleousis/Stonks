@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
@@ -53,6 +54,16 @@ def _day(value: Any) -> date:
     if isinstance(value, date):
         return value if type(value) is date else date(value.year, value.month, value.day)
     return date.fromisoformat(str(value)[:10])
+
+
+@dataclass(frozen=True)
+class UnderlyingSummary:
+    underlying: str
+    first_day: date
+    last_day: date
+    days: int
+    contracts: int
+    sources: tuple[str, ...]
 
 
 class OptionStore:
@@ -241,6 +252,50 @@ class OptionStore:
         quotes = self.quotes(underlying, as_of, as_of, source=source)
         spots = [q.underlying_price for q in quotes if q.underlying_price]
         return ChainSnapshot(underlying, as_of, tuple(quotes), spot=spots[0] if spots else None)
+
+    def underlyings(self) -> list[UnderlyingSummary]:
+        """Every underlying with stored quotes: its first and last quote
+        day, the number of days and contracts, and the sources."""
+        rows = self._lake.con.execute(
+            """
+            SELECT underlying, MIN(as_of), MAX(as_of), COUNT(DISTINCT as_of),
+                   COUNT(DISTINCT contract_id), LIST(DISTINCT source ORDER BY source)
+            FROM option_quotes GROUP BY underlying ORDER BY underlying
+            """
+        ).fetchall()
+        return [
+            UnderlyingSummary(
+                underlying=u,
+                first_day=_day(first),
+                last_day=_day(last),
+                days=int(days),
+                contracts=int(contracts),
+                sources=tuple(sources),
+            )
+            for u, first, last, days, contracts, sources in rows
+        ]
+
+    def latest_day(self, underlying: str, on_or_before: date | None = None) -> date | None:
+        """The last quote day of ``underlying`` on or before the given day
+        (the last one at all without it), or ``None``."""
+        sql = "SELECT MAX(as_of) FROM option_quotes WHERE underlying = ?"
+        params: list[Any] = [underlying]
+        if on_or_before is not None:
+            sql += " AND as_of <= ?"
+            params.append(on_or_before)
+        row = self._lake.con.execute(sql, params).fetchone()
+        return None if row is None or row[0] is None else _day(row[0])
+
+    def sources(self, underlyings: Sequence[str], start: date, end: date) -> list[str]:
+        """The sources of the quotes of ``underlyings`` in ``[start, end]``."""
+        if not underlyings:
+            return []
+        rows = self._lake.con.execute(
+            "SELECT DISTINCT source FROM option_quotes "
+            "WHERE underlying IN (SELECT UNNEST(?)) AND as_of BETWEEN ? AND ? ORDER BY source",
+            [list(underlyings), start, end],
+        ).fetchall()
+        return [r[0] for r in rows]
 
     def quote_days(self, underlying: str) -> list[date]:
         rows = self._lake.con.execute(

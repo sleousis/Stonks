@@ -17,6 +17,8 @@ export const OVERRIDE_MIN_REASON = 20;
  * while the broker is unknown (`live: null`).
  */
 export interface StatusChangeTicket {
+  /** The ticket's heading, "Go-live ticket" by default ("Model swap"). */
+  kind?: string;
   lines: readonly TicketLine[];
   live: boolean | null;
 }
@@ -83,11 +85,11 @@ let nextId = 0;
             <div
               class="ticket"
               [class.live]="t.live === true"
-              aria-label="Go-live ticket"
+              [attr.aria-label]="t.kind ?? 'Go-live ticket'"
               role="group"
             >
               <p class="ticket-head">
-                <span class="ticket-kind">Go-live ticket</span>
+                <span class="ticket-kind">{{ t.kind ?? 'Go-live ticket' }}</span>
                 @if (t.live !== null) {
                   <app-mode-stamp [live]="t.live" />
                 }

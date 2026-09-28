@@ -6,4 +6,9 @@ export default [
     title: 'Notifications',
     loadComponent: () => import('./notifications.page').then((m) => m.NotificationsPage),
   },
+  {
+    path: 'price-alerts',
+    title: 'Price alerts',
+    loadComponent: () => import('./price-alerts.page').then((m) => m.PriceAlertsPage),
+  },
 ] satisfies Routes;

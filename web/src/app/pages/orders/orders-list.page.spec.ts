@@ -73,11 +73,36 @@ describe('OrdersListPage', () => {
     expect(el.querySelector('th button.sort')).toBeNull();
   });
 
-  it('keeps the time on the phone card and hides the limit instead (UX-57)', async () => {
+  it('keeps the time on the phone card and hides the price instead (UX-57)', async () => {
     const { el } = await render([order(0)]);
     const cell = (label: string) => el.querySelector(`td[data-label="${label}"]`)!;
     expect(cell('Created').classList).not.toContain('hide-phone');
-    expect(cell('Limit').classList).toContain('hide-phone');
+    expect(cell('Price').classList).toContain('hide-phone');
+    expect(cell('Price').textContent).toContain('Market');
+  });
+
+  it('says what a protective stop does, in plain words', async () => {
+    const stop: OrderView = {
+      ...order(1),
+      client_id: '2026-09-25:momentum-v3:T1.US:buy:stop',
+      side: 'sell',
+      order_type: 'stop',
+      stop_price: 90.5,
+      time_in_force: 'gtc',
+      protective: true,
+      status: 'pending',
+      state: 'accepted',
+    };
+    const { el } = await render([stop, order(0)]);
+    const tags = [...el.querySelectorAll('.stop-tag')].map((t) => t.textContent ?? '');
+    expect(tags.length).toBe(1);
+    expect(tags[0]).toContain('Protective stop:');
+    expect(tags[0]).toContain('Sells if the price falls to');
+    expect(tags[0]).toContain('90.50');
+    expect(tags[0]).toContain('until the position closes');
+    const price = el.querySelector('td[data-label="Price"]')!;
+    expect(price.textContent).toContain('Stop');
+    expect(el.textContent).toContain('Working');
   });
 
   it('says where orders come from, in trader words', async () => {

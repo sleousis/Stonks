@@ -181,3 +181,88 @@ def test_viewers_cannot_change_universes(settings, seeded, listing_source):
         assert c.get("/api/universes", headers=viewer).status_code == 200
         assert c.post("/api/universes/mine/refresh", headers=viewer).status_code == 403
         assert c.delete("/api/universes/mine", headers=viewer).status_code == 403
+        change = {"kind": "list", "spec": {"tickers": ["DOWN.US"]}}
+        assert c.put("/api/universes/mine", json=change, headers=viewer).status_code == 403
+        assert c.get("/api/universes/mine/history", headers=viewer).status_code == 200
+        assert c.get("/api/universes/exchanges", headers=viewer).status_code == 200
+
+
+# ---- 20.10: edit, membership history and the exchange picker ------------------------
+
+
+def test_update_replaces_the_definition_and_keeps_the_refresh(client):
+    body = {"id": "edit", "kind": "list", "name": "Old", "spec": {"tickers": ["UP.US"]}}
+    assert client.post("/api/universes", json=body, headers=AUTH).status_code == 201
+    done = _wait(client, client.post("/api/universes/edit/refresh", headers=AUTH).json()["id"])
+    assert done["status"] == "succeeded", done["error"]
+
+    change = {"kind": "list", "name": "New", "spec": {"tickers": ["UP.US", "DOWN.US"]}}
+    resp = client.put("/api/universes/edit", json=change, headers=AUTH)
+    assert resp.status_code == 200, resp.text
+    view = resp.json()
+    assert view["name"] == "New" and view["spec"]["tickers"] == ["UP.US", "DOWN.US"]
+    # The members stay as refreshed until the next refresh.
+    assert view["member_count"] == 1 and view["refreshed_at"] is not None
+    assert view["updated_at"] >= view["refreshed_at"]
+
+    csv = {"kind": "list", "csv": "ticker\nFLAT.US\n"}
+    updated = client.put("/api/universes/edit", json=csv, headers=AUTH).json()
+    assert updated["spec"] == {"tickers": ["FLAT.US"]}
+
+
+def test_update_errors(client):
+    change = {"kind": "list", "spec": {"tickers": ["UP.US"]}}
+    assert client.put("/api/universes/nope", json=change, headers=AUTH).status_code == 404
+    body = {"id": "r2", "kind": "list", "spec": {"tickers": ["UP.US"]}}
+    client.post("/api/universes", json=body, headers=AUTH)
+    bad = {"kind": "rule", "spec": {"min_adv": 1}}  # no start
+    assert client.put("/api/universes/r2", json=bad, headers=AUTH).status_code == 422
+    csv_rule = {"kind": "rule", "csv": "ticker\nUP.US\n"}
+    assert client.put("/api/universes/r2", json=csv_rule, headers=AUTH).status_code == 422
+    assert client.put("/api/universes/r2", json=change).status_code == 401
+
+
+def test_membership_history_lists_spans_latest_change_first(client):
+    spec = {
+        "spans": [
+            {"ticker": "UP.US", "start_date": "2025-01-02"},
+            {"ticker": "DOWN.US", "start_date": "2025-01-02", "end_date": "2025-06-02"},
+            {"ticker": "DOWN.US", "start_date": "2025-09-01"},
+        ],
+        "tickers": ["FLAT.US"],
+    }
+    body = {"id": "spans", "kind": "list", "spec": spec}
+    assert client.post("/api/universes", json=body, headers=AUTH).status_code == 201
+    done = _wait(client, client.post("/api/universes/spans/refresh", headers=AUTH).json()["id"])
+    assert done["status"] == "succeeded", done["error"]
+
+    page = client.get("/api/universes/spans/history").json()
+    assert page["total"] == 4
+    assert page["items"] == [
+        {"ticker": "DOWN.US", "start_date": "2025-09-01", "end_date": None},
+        {"ticker": "DOWN.US", "start_date": "2025-01-02", "end_date": "2025-06-02"},
+        {"ticker": "UP.US", "start_date": "2025-01-02", "end_date": None},
+        # A plain ticker is a member from the start: no start date.
+        {"ticker": "FLAT.US", "start_date": None, "end_date": None},
+    ]
+    found = client.get("/api/universes/spans/history", params={"ticker": "down", "limit": 1})
+    assert found.json()["total"] == 2 and len(found.json()["items"]) == 1
+    assert client.get("/api/universes/nope/history").status_code == 404
+
+
+def test_exchanges_come_from_the_instruments_we_hold(client, listing_source):
+    listing_source._listings = [
+        SymbolListing(ticker="AAA.US", exchange="NYSE", security_type="common_stock"),
+        SymbolListing(ticker="BBB.US", exchange="NYSE", security_type="common_stock"),
+        SymbolListing(ticker="DEAD.US", exchange="NASDAQ", is_delisted=True),
+    ]
+    body = {"id": "us_all", "kind": "exchange", "spec": {"exchange": "US"}}
+    assert client.post("/api/universes", json=body, headers=AUTH).status_code == 201
+    done = _wait(client, client.post("/api/universes/us_all/refresh", headers=AUTH).json()["id"])
+    assert done["status"] == "succeeded", done["error"]
+
+    rows = client.get("/api/universes/exchanges").json()["items"]
+    assert rows == [
+        {"exchange": "NASDAQ", "instruments": 1, "listed": 0},
+        {"exchange": "NYSE", "instruments": 2, "listed": 2},
+    ]

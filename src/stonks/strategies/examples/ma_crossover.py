@@ -17,12 +17,15 @@ Deliberate deviations from the original:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 from stonks.core.params import ParameterSpec
 from stonks.strategies._common import BarCache
+from stonks.strategies._vectorized import single_ticker_weights
 from stonks.strategies.examples._nt888_base import SingleTickerLongFlat, common_specs
 
 
@@ -86,3 +89,20 @@ class MACrossoverStrategy(SingleTickerLongFlat):
             "signal": 1.0 if long else 0.0,
             "score": fast_ma / slow_ma - 1.0 if slow_ma > 0 else 0.0,
         }
+
+    # ---- vectorised fast path (lab/vectorized.py) ---------------------------
+
+    @classmethod
+    def target_positions(cls, closes: pd.DataFrame, params: Mapping[str, Any]) -> pd.DataFrame:
+        """Long ``allocation`` in the ticker while the fast SMA is above the
+        slow one, for a whole table of daily closes. Exact against the event
+        engine at ``allocation = 1``."""
+        p = cls(dict(params)).params
+        fast, slow = int(p["fast"]), int(p["slow"])
+
+        def signal(column: pd.Series) -> np.ndarray:
+            fast_ma = column.rolling(fast).mean()
+            slow_ma = column.rolling(slow).mean()
+            return np.asarray((slow_ma > 0) & (fast_ma > slow_ma), dtype=float)
+
+        return single_ticker_weights(closes, p, signal)

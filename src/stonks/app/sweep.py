@@ -299,6 +299,8 @@ class SweepRequest(LabRunOptions):
             raise ValueError("give universe (tickers) or universe_id")
         if self.registers:
             raise ValueError("a sweep never registers strategies")
+        if self.heatmap is not None:
+            raise ValueError("a sweep draws no heatmap: run the lab on one strategy")
         plan_sweep(["X"], self.strategies, self.exclude)  # unknown names fail here
         return self
 

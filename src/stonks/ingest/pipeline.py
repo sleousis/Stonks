@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from functools import partial
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import pandas as pd
 import pydantic
@@ -60,6 +60,10 @@ _SOFT_FAIL_EXCEPTIONS = (
 DateRanges = Mapping[str, Sequence[tuple[date, date]]]
 
 _PRICE_COLUMNS = ("open", "high", "low", "close")
+
+#: The calendars :meth:`IngestPipeline.run_calendars` can pull.
+CalendarKind = Literal["earnings", "dividends", "economic"]
+CALENDAR_KINDS: tuple[CalendarKind, ...] = ("earnings", "dividends", "economic")
 
 
 @dataclass(frozen=True)
@@ -264,6 +268,83 @@ class IngestPipeline:
             kind="defi_tvl",
             event="chain",
             units=[({"chain": c}, partial(ingest, c)) for c in chains],
+        )
+
+    def run_fx_rates(
+        self,
+        pairs: Sequence[tuple[str, str]],
+        since: date | None = None,
+        until: date | None = None,
+    ) -> IngestRunResult:
+        """Pull daily FX rates per ``(base, quote)`` pair into ``fx_rates``
+        (roadmap 20.5). One pair is one unit of soft-fail accounting."""
+
+        def ingest(base: str, quote: str) -> dict[str, Any]:
+            rows = list(self._source.fetch_fx_rates(base, quote, since=since, until=until))
+            self._lake.upsert_fx_rates(_rows_to_df(rows))
+            return {"rows": len(rows)}
+
+        return self._run_units(
+            kind="fx",
+            event="pair",
+            units=[({"pair": f"{b}{q}"}, partial(ingest, b, q)) for b, q in pairs],
+        )
+
+    def run_borrow_rates(self, markets: Sequence[str]) -> IngestRunResult:
+        """Pull today's stock borrow rates of each market into
+        ``borrow_rates`` (roadmap 19.3). One market is one unit of
+        soft-fail accounting."""
+
+        def ingest(market: str) -> dict[str, Any]:
+            rows = list(self._source.fetch_borrow_rates(market))
+            self._lake.upsert_borrow_rates(_rows_to_df(rows))
+            return {"rows": len(rows)}
+
+        return self._run_units(
+            kind="borrow",
+            event="market",
+            units=[({"ticker": m, "market": m}, partial(ingest, m)) for m in markets],
+        )
+
+    def run_calendars(
+        self,
+        start: date,
+        end: date,
+        *,
+        tickers: Sequence[str] | None = None,
+        countries: Sequence[str] | None = None,
+        kinds: Sequence[CalendarKind] = CALENDAR_KINDS,
+    ) -> IngestRunResult:
+        """Pull the event calendars dated ``start`` to ``end`` into the lake
+        (roadmap 20.7): earnings and dividends for ``tickers`` (``None``:
+        the whole market) and economic events for ``countries`` (``None``:
+        every country). Each calendar is one unit of soft-fail accounting,
+        so a vendor outage on one never blocks the others; a source without
+        a calendar counts that unit as failed."""
+        from stonks.calendars.store import CalendarStore
+
+        store = CalendarStore(self._lake)
+        sid = self._source.source_id
+        picked = list(tickers) if tickers is not None else None
+
+        def earnings() -> dict[str, Any]:
+            rows = list(self._source.fetch_earnings_calendar(start, end, picked))
+            return {"rows": store.upsert_earnings(rows, source=sid)}
+
+        def dividends() -> dict[str, Any]:
+            rows = list(self._source.fetch_dividend_calendar(start, end, picked))
+            return {"rows": store.upsert_dividends(rows, source=sid)}
+
+        def economic() -> dict[str, Any]:
+            chosen = list(countries) if countries is not None else None
+            rows = list(self._source.fetch_economic_events(start, end, chosen))
+            return {"rows": store.upsert_economic(rows, source=sid)}
+
+        work = {"earnings": earnings, "dividends": dividends, "economic": economic}
+        return self._run_units(
+            kind="calendars",
+            event="calendar",
+            units=[({"ticker": k, "calendar": k}, work[k]) for k in kinds],
         )
 
     def run_metadata(self, tickers: Sequence[str]) -> IngestRunResult:

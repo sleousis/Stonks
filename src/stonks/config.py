@@ -17,23 +17,33 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from stonks.assistant.settings import AssistantConfig
 from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
+from stonks.engine.settings import EngineSettings
+from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
+from stonks.factors.settings import FactorSettings
 from stonks.ingest.ensure_settings import EnsureSettings
 from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.offload.settings import LabOffloadSettings
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
+from stonks.lifecycle.settings import ModelLifecycleSettings
 from stonks.ops.config import BackupConfig
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.decay import DecaySettings
+from stonks.production.intraday_pnl_settings import IntradayPnlSettings
+from stonks.production.live.settings import LiveSettings
 from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.rules.settings import RuleSettings
 from stonks.scheduling.config import SchedulerConfig
+from stonks.screener.settings import ScreenerSettings
 from stonks.store.audit import AuditTolerances
 from stonks.store.bars import BarBackend
+from stonks.streaming.settings import StreamingSettings
+from stonks.telegram.settings import TelegramConfig
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
 
@@ -70,10 +80,24 @@ class DefiLlamaSourceConfig(BaseModel):
     retry_backoff_seconds: float = 1.0
 
 
+class IbkrBorrowSourceConfig(BaseModel):
+    """IBKR's public short stock files (``stonks ingest borrow``, roadmap
+    19.3). The FTP login is IBKR's shared public one, not an account."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    host: str = "ftp2.interactivebrokers.com"
+    user: str = "shortstock"
+    timeout_seconds: float = 30.0
+    #: The markets ``stonks ingest borrow`` pulls when none are named.
+    markets: tuple[str, ...] = ("usa",)
+
+
 class SourcesConfig(BaseModel):
     eodhd: EodhdSourceConfig = EodhdSourceConfig()
     yahoo: YahooSourceConfig = YahooSourceConfig()
     defillama: DefiLlamaSourceConfig = DefiLlamaSourceConfig()
+    ibkr_borrow: IbkrBorrowSourceConfig = IbkrBorrowSourceConfig()
 
 
 def _env_secret(name: str) -> SecretStr | None:
@@ -124,8 +148,11 @@ class BrokersConfig(BaseModel):
 
     # Which broker the production tick trades through. "simulated" (default)
     # needs no keys; "alpaca" is opt-in and needs ALPACA_API_KEY/SECRET_KEY.
-    kind: Literal["simulated", "alpaca"] = "simulated"
+    # "ibkr" is the Interactive Brokers adapter (roadmap 19.2, not built yet).
+    kind: Literal["simulated", "alpaca", "ibkr"] = "simulated"
     alpaca: AlpacaBrokerConfig = Field(default_factory=AlpacaBrokerConfig)
+    # ``[brokers.ibkr]``: the IB Gateways Stonks can reach (roadmap 19.4).
+    ibkr: IbkrBrokerConfig = Field(default_factory=IbkrBrokerConfig)
 
 
 class LakeBarsConfig(BaseModel):
@@ -259,6 +286,11 @@ class ProductionConfig(BaseModel):
     risk_monitor: RiskMonitorSettings = RiskMonitorSettings()
     # ``[production.decay]``: the alpha-decay check per strategy sleeve.
     decay: DecaySettings = DecaySettings()
+    # ``[production.live]``: live trading at a real broker (roadmap 19).
+    live: LiveSettings = LiveSettings()
+    # ``[production.intraday_pnl]``: live marks and intraday P&L snapshots
+    # of the engine's books (roadmap 21.3.3). Off by default.
+    intraday_pnl: IntradayPnlSettings = IntradayPnlSettings()
 
 
 class GoLivePolicy(BaseModel):
@@ -514,12 +546,26 @@ class Settings(BaseSettings):
     lab: LabSettings = LabSettings()
     audit: AuditConfig = AuditConfig()
     golive: GoLivePolicy = GoLivePolicy()
+    # ``[lifecycle]``: scheduled retraining and the model swap gate (roadmap 22.6).
+    lifecycle: ModelLifecycleSettings = Field(default_factory=ModelLifecycleSettings)
     mcp: McpConfig = McpConfig()
     ingest: IngestConfig = IngestConfig()
     # ``[ensure]``: how on-demand bar fetches run (docs/universes.md).
     ensure: EnsureSettings = Field(default_factory=EnsureSettings)
     backup: BackupConfig = BackupConfig()
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
+    # ``[assistant]``: the in-app AI assistant (roadmap 20.4). The key is env only.
+    assistant: AssistantConfig = Field(default_factory=AssistantConfig)
+    # ``[telegram]``: the Telegram bot (roadmap 20.3). The token is env only.
+    telegram: TelegramConfig = Field(default_factory=TelegramConfig)
+    # ``[factors]``: the factor panel cache (roadmap 22.2).
+    factors: FactorSettings = FactorSettings()
+    # ``[streaming]``: live price streams (roadmap 21.1). Off by default.
+    streaming: StreamingSettings = Field(default_factory=StreamingSettings)
+    # ``[screener]``: candidate cap, job threshold and result cache (roadmap 20.11).
+    screener: ScreenerSettings = Field(default_factory=ScreenerSettings)
+    # ``[engine]``: the intraday engine process (roadmap 21.2.5). Off by default.
+    engine: EngineSettings = Field(default_factory=EngineSettings)
 
 
 #: Secrets read straight from the environment by blocks that keep their own
@@ -530,10 +576,13 @@ ENV_ONLY_SECRETS: tuple[str, ...] = (
     "STONKS_SMTP_PASSWORD",
     "STONKS_VAPID_PRIVATE_KEY",
     "STONKS_SNAPTRADE_CONSUMER_KEY",
+    "STONKS_ASSISTANT_API_KEY",
+    "STONKS_TELEGRAM_BOT_TOKEN",
     "STONKS_API_TOKEN",
     "EODHD_API_KEY",
     "ALPACA_API_KEY",
     "ALPACA_SECRET_KEY",
+    "STONKS_IBKR_FLEX_TOKEN",
 )
 
 

@@ -1,0 +1,247 @@
+<section class="panel stage-card" aria-labelledby="stage-title">
+  <div class="panel-head">
+    <h2 id="stage-title">Stage</h2>
+    @if (current(); as s) {
+      <app-status-pill
+        [status]="s"
+        [label]="words(s).label"
+        [tone]="words(s).live ? 'warn' : 'info'"
+        form="lamp"
+      />
+    }
+  </div>
+  <div class="panel-body stack">
+    @if (stage.error(); as err) {
+      <app-error-state title="Could not load the stage" [error]="err" (retry)="stage.reload()" />
+    } @else if (!stage.hasValue()) {
+      <app-loading-state label="Loading the stage" [rows]="3" />
+    } @else {
+      <ol class="ladder" aria-label="Stages on the way to real money">
+        @for (s of stages; track s; let i = $index) {
+          <li
+            class="step"
+            [class.done]="i < currentIndex()"
+            [class.here]="i === currentIndex()"
+            [class.live]="words(s).live"
+            [attr.aria-current]="i === currentIndex() ? 'step' : null"
+          >
+            <span class="step-name">{{ words(s).label }}</span>
+            <span class="step-means">{{ words(s).means }}</span>
+          </li>
+        }
+      </ol>
+      <p class="stage-note" role="note">
+        A week that is not clean sends you an alert. It never moves the stage or the amount. Only
+        you do.
+      </p>
+
+      <!-- What moving up needs ------------------------------------------------>
+      <div class="gate" aria-labelledby="gate-title">
+        @if (report.error(); as err) {
+          <app-error-state
+            title="Could not check what moving up needs"
+            [error]="err"
+            (retry)="report.reload()"
+          />
+        } @else if (!report.hasValue()) {
+          <app-loading-state label="Checking what moving up needs" [rows]="3" />
+        } @else {
+          @let r = report.value();
+          @if (r.target) {
+            <h3 id="gate-title">To move up to {{ words(r.target).label }}</h3>
+          } @else {
+            <h3 id="gate-title">This is the top stage</h3>
+            <p class="muted">Raise the allocation by hand when you are ready.</p>
+          }
+          <dl class="figures">
+            @for (f of figures(); track f.label) {
+              <div>
+                <dt>{{ f.label }}</dt>
+                <dd class="num">{{ f.value }}</dd>
+              </div>
+            }
+          </dl>
+          @if (r.target) {
+            <ul class="checks" aria-label="Checks">
+              @for (c of r.checks; track c.name) {
+                <li [attr.data-state]="checkState(c)">
+                  <span class="check-name">{{ checkLabel(c.name) }}</span>
+                  <app-status-pill
+                    [status]="checkState(c)"
+                    [label]="checkWords[checkState(c)]"
+                    [tone]="
+                      checkState(c) === 'pass'
+                        ? 'positive'
+                        : checkState(c) === 'fail'
+                          ? 'negative'
+                          : 'neutral'
+                    "
+                  />
+                  <span class="check-detail">{{ c.detail }}</span>
+                </li>
+              }
+            </ul>
+            <p class="muted">
+              Checked just now, at <span class="num">{{ dateTime(r.computed_at) }}</span
+              >. A check with no data yet does not hold you back.
+            </p>
+            <form
+              class="form-grid"
+              aria-labelledby="move-up-title"
+              (submit)="$event.preventDefault(); moveUp()"
+              novalidate
+            >
+              <h4 id="move-up-title" class="visually-hidden">Move up</h4>
+              <div class="field">
+                <label for="stage-up-reason">Why now</label>
+                <textarea
+                  id="stage-up-reason"
+                  class="input"
+                  rows="2"
+                  [attr.maxlength]="reasonMax"
+                  [disabled]="!canManage() || !r.passed"
+                  [attr.aria-invalid]="upTried() && upError() ? true : null"
+                  [attr.aria-describedby]="
+                    upTried() && upError() ? 'stage-up-reason-error' : 'stage-up-reason-hint'
+                  "
+                  [value]="upReason()"
+                  (input)="upReason.set($any($event.target).value)"
+                ></textarea>
+                @if (upTried() && upError(); as e) {
+                  <span id="stage-up-reason-error" class="error">{{ e }}</span>
+                } @else {
+                  <span id="stage-up-reason-hint" class="hint"
+                    >You type the stage name and confirm with a code from your authenticator
+                    app.</span
+                  >
+                }
+              </div>
+              <div class="actions">
+                <button
+                  type="submit"
+                  class="btn"
+                  [class.btn-danger]="words(r.target).live"
+                  [class.btn-primary]="!words(r.target).live"
+                  [disabled]="!canMoveUp()"
+                  [attr.aria-busy]="movingUp()"
+                >
+                  {{ movingUp() ? 'Moving…' : 'Move up to ' + words(r.target).label }}
+                </button>
+                @if (!r.passed) {
+                  <span class="muted">Every check must be met first.</span>
+                }
+                <app-permission-note permission="live.manage" />
+              </div>
+            </form>
+          }
+        }
+      </div>
+
+      <!-- Last sessions ------------------------------------------------------->
+      <h3>Last sessions</h3>
+      @if (days().length === 0) {
+        <p class="muted">
+          No sessions yet. Stonks records them each evening once the portfolio is past simulated
+          paper.
+        </p>
+      } @else {
+        <ul class="days" aria-label="Last sessions, newest first">
+          @for (d of days(); track d.session_date) {
+            <li [attr.data-clean]="d.clean">
+              <span class="day-date num">{{ date(d.session_date) }}</span>
+              <app-status-pill
+                [status]="d.clean ? 'clean' : 'not clean'"
+                [label]="d.clean ? 'Clean' : 'Not clean'"
+                [tone]="d.clean ? 'positive' : 'warn'"
+              />
+              <span class="day-facts num"
+                >{{ d.orders_sent }} sent, {{ d.orders_filled }} filled,
+                {{ d.orders_rejected }} rejected</span
+              >
+              @if (!d.clean) {
+                <span class="day-why">{{ dirty(d).join(', ') }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+
+      <!-- Moving down --------------------------------------------------------->
+      @if (lower().length) {
+        <details class="move-down">
+          <summary>Move down a stage</summary>
+          <form
+            class="form-grid"
+            aria-label="Move down a stage"
+            (submit)="$event.preventDefault(); moveDown()"
+            novalidate
+          >
+            <p class="muted">
+              Moving down lowers risk, so it needs no code. Sales that close positions still go out.
+            </p>
+            <div class="field">
+              <label for="stage-down-to">Move down to</label>
+              <select
+                id="stage-down-to"
+                class="input"
+                [disabled]="!canTrade()"
+                [value]="downTo()"
+                (change)="onDownTo($any($event.target).value)"
+              >
+                @for (s of lower(); track s) {
+                  <option [value]="s" [selected]="s === downTo()">{{ words(s).label }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="stage-down-reason">Why move down</label>
+              <textarea
+                id="stage-down-reason"
+                class="input"
+                rows="2"
+                [attr.maxlength]="reasonMax"
+                [disabled]="!canTrade()"
+                [attr.aria-invalid]="downTried() && downError() ? true : null"
+                [attr.aria-describedby]="
+                  downTried() && downError() ? 'stage-down-reason-error' : null
+                "
+                [value]="downReason()"
+                (input)="downReason.set($any($event.target).value)"
+              ></textarea>
+              @if (downTried() && downError(); as e) {
+                <span id="stage-down-reason-error" class="error">{{ e }}</span>
+              }
+            </div>
+            <div class="actions">
+              <button
+                type="submit"
+                class="btn"
+                [disabled]="!canTrade() || movingDown()"
+                [attr.aria-busy]="movingDown()"
+              >
+                {{ movingDown() ? 'Moving…' : 'Move down' }}
+              </button>
+              <app-permission-note permission="portfolio.trade" />
+            </div>
+          </form>
+        </details>
+      }
+
+      <!-- Stage changes ------------------------------------------------------->
+      @if (stage.value().history.length) {
+        <details class="history">
+          <summary>Stage changes ({{ stage.value().history.length }})</summary>
+          <ul>
+            @for (c of stage.value().history; track c.id) {
+              <li>
+                <span class="num">{{ dateTime(c.created_at) }}</span>
+                {{ words(c.from_stage).label }} to {{ words(c.to_stage).label }} by {{ c.actor }}:
+                {{ c.reason }}
+              </li>
+            }
+          </ul>
+        </details>
+      }
+    }
+  </div>
+</section>

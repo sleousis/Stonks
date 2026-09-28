@@ -59,7 +59,7 @@ from __future__ import annotations
 import json
 import threading
 import time
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime
 from typing import Any, Literal
@@ -69,6 +69,7 @@ from pydantic import ValidationError
 
 from stonks.core.interval import Interval
 from stonks.core.types import AssetClass
+from stonks.ingest.calendar_schemas import DividendEventRow, EarningsEventRow, EconomicEventRow
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.option_schemas import OptionQuoteRow
 from stonks.ingest.redact import format_exception, redact_exception, redact_secrets
@@ -92,6 +93,7 @@ from stonks.ingest.schemas import (
     EsgSnapshotRow,
     ExchangeInfo,
     FinancialStatementsBundle,
+    FxRateRow,
     IncomeStatementRow,
     InsiderTransactionRow,
     InstitutionalHolderRow,
@@ -484,6 +486,39 @@ def parse_prices_response(ticker: str, payload: Any) -> Iterator[RawPriceBar]:
             adj_close=_adjusted(row),
             volume=row.get("volume"),
         )
+
+
+def parse_fx_response(base: str, quote: str, payload: Any) -> list[FxRateRow]:
+    """Parse ``/api/eod/{BASE}{QUOTE}.FOREX`` into :class:`FxRateRow` rows:
+    the close is the rate (quote units per one base). Rows without a date
+    or a positive close are dropped."""
+    _check_free_tier(payload)
+    if not isinstance(payload, list):
+        return []
+    out: list[FxRateRow] = []
+    for row in payload:
+        if not isinstance(row, dict) or "date" not in row:
+            continue
+        close = row.get("close")
+        try:
+            rate = float(close) if close is not None else 0.0
+        except (TypeError, ValueError):
+            continue
+        if rate <= 0:
+            continue
+        try:
+            out.append(
+                FxRateRow(
+                    base_currency=base,
+                    quote_currency=quote,
+                    observation_date=row["date"],
+                    rate=rate,
+                    source="eodhd",
+                )
+            )
+        except ValueError:
+            continue
+    return out
 
 
 def _adjusted(row: dict) -> Any:
@@ -1950,6 +1985,23 @@ class EodhdDataSource(DataSource):
         (a separate subscription; see ``eodhd_options``)."""
         return list(fetch_option_quotes(self._get, self._base_url, underlying, since, until))
 
+    def fetch_fx_rates(
+        self,
+        base: str,
+        quote: str,
+        since: date | None = None,
+        until: date | None = None,
+    ) -> Iterable[FxRateRow]:
+        """Daily closes of the ``{BASE}{QUOTE}.FOREX`` pair as FX rates."""
+        base, quote = base.upper(), quote.upper()
+        url = f"{self._base_url}/eod/{base}{quote}.FOREX"
+        params: dict[str, str] = {"fmt": "json"}
+        if since is not None:
+            params["from"] = since.isoformat()
+        if until is not None:
+            params["to"] = until.isoformat()
+        return parse_fx_response(base, quote, self._get(url, params=params))
+
     def fetch_fundamentals(self, ticker: str) -> FinancialStatementsBundle:
         # Income/balance/cashflow statements are equity-only. Crypto/bond/
         # commodity tickers don't have an issuer with financial statements,
@@ -2044,6 +2096,29 @@ class EodhdDataSource(DataSource):
                 payload=data,
             )
         )
+
+    # ---- event calendars (roadmap 20.7; parsers in eodhd_calendar.py) -------
+
+    def fetch_earnings_calendar(
+        self, start: date, end: date, tickers: Sequence[str] | None = None
+    ) -> list[EarningsEventRow]:
+        from stonks.ingest.sources import eodhd_calendar
+
+        return eodhd_calendar.fetch_earnings(self._get_json, start, end, tickers)
+
+    def fetch_dividend_calendar(
+        self, start: date, end: date, tickers: Sequence[str] | None = None
+    ) -> list[DividendEventRow]:
+        from stonks.ingest.sources import eodhd_calendar
+
+        return eodhd_calendar.fetch_dividends(self._get_json, start, end, tickers)
+
+    def fetch_economic_events(
+        self, start: date, end: date, countries: Sequence[str] | None = None
+    ) -> list[EconomicEventRow]:
+        from stonks.ingest.sources import eodhd_calendar
+
+        return eodhd_calendar.fetch_economic(self._get_json, start, end, countries)
 
     def fetch_metadata(self, ticker: str) -> MetadataBundle:
         """Assemble the full metadata bundle by hitting seven EODHD endpoints

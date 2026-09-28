@@ -21,14 +21,14 @@ flowchart LR
 |---|---|---|
 | `list` | Fixed tickers, or dated spans | `tickers`, `spans`, `start_date`. Also CSV import. |
 | `exchange` | Every symbol a source lists on an exchange, delisted ones too | `exchange`, `source`, `security_types`, `include_delisted`, `start_date` |
-| `rule` | Filters checked on the lake at each rebalance date | `start`, `end`, `rebalance`, `min_adv`, `min_price`, `asset_classes`, `sectors`, `exclude_sectors`, `exchanges` |
+| `rule` | A screen checked on the lake at each rebalance date | `start`, `end`, `rebalance`, `min_adv`, `min_price`, `asset_classes`, `sectors`, `exclude_sectors`, `exchanges`, and the screen keys `universe_id`, `filters`, `sort_by`, `descending`, `limit` (see [Screener](#screener)) |
 | `index` | Index members rebuilt from a change history | `index_id`, `source`, `start_date` |
 
 A plain `list` has survivorship bias unless its spans say when names joined and left. The lab preflight warns about it.
 
 ## Refresh
 
-A refresh turns a definition into rows of `universe_membership` (migration 015). A ticker is a member from `start_date` up to the day before `end_date`. The refresh replaces the universe's rows each time, so running it twice changes nothing.
+A refresh turns a definition into rows of `universe_membership` (migration 015). A ticker is a member from `start_date` up to the day before `end_date`. The refresh replaces the universe's rows each time, so running it twice changes nothing. An edit changes only the definition. The members stay as they were until the next refresh, and the console marks the universe as changed since.
 
 - **exchange**: a span starts at the listing date, else the first bar, else `start_date`. A delisted name ends at its delisting date, else the day after its last bar. A delisted name with no dates and no bars stays a member up to the refresh date, with a warning. Ensure its data and refresh again to tighten it. The listings also fill the `instruments` table.
 - **rule**: the filters run on each rebalance date (weekly, monthly or quarterly). A name joins on the date it passes and leaves on the date it fails. Rules read only the lake, so ensure the candidates' data first.
@@ -103,6 +103,8 @@ uv run stonks universe create us_all --kind exchange --spec '{"exchange": "US"}'
 uv run stonks universe refresh mine [--as-of 2026-01-02]
 uv run stonks universe show mine
 uv run stonks universe members mine --as-of 2026-01-02
+uv run stonks universe update mine --tickers AAPL.US,MSFT.US,NVDA.US [--name ... --spec JSON]
+uv run stonks universe history mine [--ticker AAPL]
 uv run stonks universe ensure mine --start 2025-01-01 --end 2025-12-31 [--interval 1d --source eodhd]
 uv run stonks universe import-index sp500 history.csv
 uv run stonks universe delete mine --yes
@@ -117,8 +119,106 @@ These commands open the lake. While `stonks serve` runs, use the API or the cons
 - **Tick**: with a universe id in `[production].universe`, the tick trades the members on its date. Explicit tickers (`--tickers`, the request's `tickers`) still win. A universe with no members stops the tick with a clear error.
 - **Sweeps**: `POST /api/lab/sweeps` takes `universe` or `universe_id`.
 - **Scheduler**: the default `universes_refresh` job runs 20 minutes after the NYSE close, before the ingest and the tick. It refreshes every stored universe, then fetches missing bars over the last `ensure_days` (default 10). It skips when no universe is stored. Params: `ensure_days`, `interval`, `source`, `ensure = false` to only refresh.
-- **API**: `/api/universes` lists, shows, creates and deletes. `/members?as_of=` gives members on a day. `POST /{id}/refresh` and `POST /{id}/ensure` run as background jobs, because DuckDB has one writer. `POST /index-history` imports a history.
-- **MCP**: `list_universes`, `get_universe`, `get_universe_members`, and the guarded `create_universe`, `refresh_universe`, `ensure_universe_data`, `import_index_history` and `delete_universe`, which need `confirm=true`. `wait_for_job` returns the typed refresh and ensure results.
+- **API**: `/api/universes` lists, shows, creates, edits (`PUT /{id}`) and deletes. `/members?as_of=` gives members on a day. `/history` gives the membership spans, latest change first, and `?ticker=` narrows them. `/exchanges` lists the exchanges our instruments name, for an exchange universe. `POST /{id}/refresh` and `POST /{id}/ensure` run as background jobs, because DuckDB has one writer. `POST /index-history` imports a history.
+- **MCP**: `list_universes`, `get_universe`, `get_universe_members`, `get_universe_history`, `list_universe_exchanges`, and the guarded `create_universe`, `update_universe`, `refresh_universe`, `ensure_universe_data`, `import_index_history` and `delete_universe`, which need `confirm=true`.
+- **Console**: the Universes page (`/universes`, linked from Data, the screener and the lab forms) lists, creates and edits each kind, shows members on a date and the membership history, runs Refresh and Fetch missing data as jobs, and deletes with the id typed. A rule is built with the screener's filter builder. See `docs/ui.md`. `wait_for_job` returns the typed refresh and ensure results.
+
+## Screener
+
+A screen filters instruments on price and fundamental metrics, on the lake as it was on a date. It is built on the `rule` universe, so a screen you like becomes a universe for the lab.
+
+```mermaid
+flowchart LR
+  R[Rule filters: listed, class, sector, exchange, price, volume] --> C[Candidates]
+  U[Optional stored universe] --> C
+  C --> M[Metrics on the date]
+  M --> F[Metric filters, sort, top N]
+  F --> O[Rows]
+  F -->|save as universe| RU[rule universe: the screen at each rebalance]
+```
+
+A spec has the rule filters (`asset_classes`, `sectors`, `exclude_sectors`, `exchanges`, `min_price`, `min_adv`), an optional `universe_id` to start from its members, `filters` such as `{"metric": "pe_ratio", "min": 0, "max": 15}`, then `sort_by`, `descending`, `limit` and extra `columns` to show.
+
+```json
+{
+  "universe_id": "sp500",
+  "filters": [
+    {"metric": "pe_ratio", "max": 15},
+    {"metric": "return_12m", "min": 0}
+  ],
+  "sort_by": "dividend_yield",
+  "limit": 20
+}
+```
+
+### Metrics
+
+| Group | Metrics |
+|---|---|
+| price | `price`, `dollar_volume_20d`, `return_1m`, `return_3m`, `return_6m`, `return_12m`, `volatility_3m`, `from_high_52w` |
+| fundamental | `market_cap`, `pe_ratio`, `pb_ratio`, `ps_ratio`, `dividend_yield`, `net_margin`, `roe`, `debt_to_equity`, `revenue_growth` |
+
+`GET /api/screener/metrics` lists them with units. A new metric is one `ScreenMetric` class in `screener/metrics/`.
+
+Every value is point in time (P12). Returns use adjusted closes up to the date. A last bar more than 10 days old means no price. Flows (revenue, net income) sum the last four quarters filed before the date, else the last annual statement. A statement counts from the day after its filing date, and one with no filing date counts as known 90 days after its period end. Each period uses the version Stonks knew on the date, so a later restatement never leaks back. The balance sheet is the latest one filed. The market cap is the stored one near the date, else price times shares.
+
+A ticker with no value for a metric fails that metric's filter and sorts last. A loss has no P/E. Negative equity has no P/B or ROE.
+
+### Large screens
+
+A screen over a whole exchange can have thousands of candidates. Three things keep it fast and safe.
+
+```mermaid
+flowchart LR
+  S[POST /size] -->|over the cap| X[Stop: narrow the screen]
+  S -->|above the job threshold| J[POST /jobs: background job with progress]
+  S -->|small| R[POST /run]
+  J --> Res[GET /jobs/ID/result]
+  R --> C[(Result cache: spec and date)]
+  J --> C
+```
+
+- **A candidate cap.** When the rule keeps more than `max_candidates` names, the screen stops before it reads any metric. The API answers 422 with the count, the cap and how to narrow it: a universe, asset classes, sectors, exchanges, `min_price` or `min_adv`.
+- **A background job.** `POST /api/screener/size` counts the candidates and says `use_job` above `job_threshold`. `POST /api/screener/jobs` queues the `screen_run` job. Follow it at `/api/jobs/{id}` or its event stream, with one progress step per metric, and cancel it there. Read the rows at `GET /api/screener/jobs/{id}/result`. The console does this by itself above the threshold.
+- **A short cache.** The same spec on the same date returns the stored result for `cache_seconds`, marked `cached: true`. A new ingest shows up once that time has passed.
+
+Metrics come from a few set-based DuckDB queries over all candidates at once, never a loop per ticker. The point-in-time rules above do not change, and a test checks the batched values against the old per-ticker ones and against data that arrives after the date.
+
+On a synthetic lake of 5,000 tickers with 300 days of bars, every metric took 5.3 seconds before and 0.6 seconds after. Rerun it with `uv run python -m tools.screener_bench`.
+
+```toml
+[screener]
+max_candidates = 10000
+job_threshold = 1000
+cache_seconds = 300   # 0 turns the cache off
+cache_entries = 32
+```
+
+### Saved screens and universes
+
+Saved screens belong to one person, like watchlists. Another person's screen is a 404.
+
+Save a screen as a universe in one of two modes:
+
+- **rule** (default): a `rule` universe that runs the screen at each rebalance date from `start` (default a year ago). The lab sees who passed on each day, dead names too (P14).
+- **snapshot**: today's matches as a fixed `list`. It carries survivorship bias, and the result warns about it.
+
+Both queue the universe refresh, so members appear when the job ends. The saved universe links to its page on the Universes page, where you can edit it later.
+
+### Commands, API and MCP
+
+```bash
+uv run stonks screener metrics
+uv run stonks screener run --spec '{"sectors": ["Technology"], "sort_by": "return_12m", "limit": 20}' [--as-of YYYY-MM-DD]
+uv run stonks screener save NAME --spec JSON | list | delete ID
+uv run stonks screener run --screen ID
+uv run stonks screener universe ID (--spec JSON | --screen ID) [--mode rule|snapshot] [--start ... --end ...] [--rebalance monthly]
+```
+
+- API: `GET /api/screener/metrics`, `POST /api/screener/run`, `POST /api/screener/size`, `POST /api/screener/jobs` with `GET /api/screener/jobs/{id}/result`, `/api/screener/screens` (list, create, get, update, delete) and `POST /api/screener/universes`.
+- MCP: `list_screen_metrics`, `run_screen`, `list_screens`, `get_screen`, `create_screen`, `update_screen`, and the guarded `save_screen_as_universe` and `delete_screen`, which need `confirm=true`.
+
+Running a screen, as a job too, needs `data.read`. Saving one needs `portfolio.manage`. Saving it as a universe needs `lab.run`.
 
 ## Adding a kind or an index source
 

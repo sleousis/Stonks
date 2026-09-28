@@ -180,3 +180,59 @@ def test_the_risk_monitor_hook_reads_the_tick_settings():
     assert hook_settings(tick, "risk_monitor", RiskMonitorSettings).enabled is False
     assert hook_settings(tick, "decay", DecaySettings).negative_days == 5
     assert TickSettings(universe=[]).risk_monitor == RiskMonitorSettings()
+
+
+def _gateway(mode: str) -> dict:
+    return {"g": {"host": "h", "port": 4003, "mode": mode, "portfolios": ["pf_default"]}}
+
+
+@pytest.mark.parametrize(
+    ("brokers", "mode"),
+    [
+        ({}, "simulated"),
+        ({"kind": "alpaca"}, "paper"),
+        ({"kind": "alpaca", "alpaca": {"paper": False}}, "paper"),  # live is refused
+        ({"kind": "alpaca", "alpaca": {"paper": False, "allow_live": True}}, "live"),
+        ({"kind": "ibkr"}, "paper"),
+        ({"kind": "ibkr", "ibkr": {"gateways": _gateway("live")}}, "paper"),
+        ({"kind": "ibkr", "ibkr": {"allow_live": True, "gateways": _gateway("paper")}}, "paper"),
+        ({"kind": "ibkr", "ibkr": {"allow_live": True, "gateways": _gateway("live")}}, "live"),
+    ],
+)
+def test_broker_mode_follows_the_broker_settings(brokers, mode):
+    settings = Settings(brokers=brokers)
+    assert build_tick_settings(settings, ["A.US"]).broker_mode == mode
+
+
+def test_the_live_settings_reach_the_tick_settings():
+    from stonks.production.live.settings import LiveSettings, SubmitSettings
+
+    settings = _settings()
+    settings.production.live = LiveSettings(
+        submit_in_window=True, submit=SubmitSettings(window_minutes=30)
+    )
+    built = build_tick_settings(settings, ["A.US"])
+    assert built.live.submit_in_window is True and built.live.submit.window_minutes == 30
+
+
+def test_the_submit_window_must_end_before_it_starts_is_refused():
+    from pydantic import ValidationError
+
+    from stonks.production.live.settings import SubmitSettings
+
+    with pytest.raises(ValidationError):
+        SubmitSettings(window_minutes=5, deadline_minutes=5)
+
+
+def test_the_submit_opener_refuses_a_simulated_portfolio(tmp_path):
+    from stonks.production.settings_builder import submit_broker_opener
+    from stonks.store.state import SqliteState
+
+    settings = _settings()
+    with SqliteState(tmp_path / "state.sqlite") as state:
+        state.migrate()
+        opener = submit_broker_opener(settings, state)
+        with pytest.raises(ValueError, match="does not trade at a broker"):
+            opener("pf_default")
+        with pytest.raises(ValueError, match="not found"):
+            opener("pf_nope")

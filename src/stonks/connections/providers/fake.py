@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import copy
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from typing import ClassVar, Self
 from urllib.parse import quote
@@ -74,6 +74,13 @@ class FakeBook:
     fail_orders: Exception | None = None
     #: ``fake_trading``: every order the trader accepted, by client id.
     orders: dict[str, BrokerOrderState] = field(default_factory=dict)
+    #: ``fake_trading``: stop orders waiting at the broker, by client id.
+    resting: dict[str, tuple[str, Order]] = field(default_factory=dict)
+
+    def trigger_stop(self, client_id: str, price: float) -> None:
+        """The market reached a resting stop: it fills in full at ``price``."""
+        account_id, order = self.resting.pop(client_id)
+        _fill(self, account_id, order, price)
 
 
 def demo_book() -> FakeBook:
@@ -225,7 +232,9 @@ class FakeTrader:
     """The ``Broker`` of a ``fake_trading`` account: market orders fill at
     once at the book's quote (no quote: rejected), cash and positions change
     in the book, and every accepted order can be looked up by client id
-    (``OrderStateSource``), like a real broker's order book."""
+    (``OrderStateSource``), like a real broker's order book. A stop order
+    rests until ``FakeBook.trigger_stop`` fills it or ``cancel_order``
+    cancels it (``OrderCanceller``)."""
 
     def __init__(self, connection: FakeTradingConnection, account_id: str) -> None:
         self._conn = connection
@@ -250,37 +259,32 @@ class FakeTrader:
         price = self._book.quotes.get(order.ticker)
         if price is None:
             raise OrderRejectedError(f"no quote for {order.ticker}")
-        sign = 1.0 if order.side == "buy" else -1.0
-        balance = self._book.balances[self._account_id]
-        self._book.balances[self._account_id] = AccountBalances(
-            currency=balance.currency,
-            cash=balance.cash - sign * order.quantity * price,
-            buying_power=balance.buying_power,
-        )
-        held = {p.ticker: p for p in self._book.positions.get(self._account_id, [])}
-        before = held[order.ticker].quantity if order.ticker in held else 0.0
-        quantity = before + sign * order.quantity
-        held[order.ticker] = ExternalPosition(
-            raw_symbol=order.ticker.split(".")[0],
-            ticker=order.ticker,
-            quantity=quantity,
-            price=price,
-            market_value=quantity * price,
-            currency=balance.currency,
-        )
-        self._book.positions[self._account_id] = [p for p in held.values() if p.quantity]
-        client_id = order.client_id or f"fake-{len(self._book.orders) + 1}"
-        self._book.orders[client_id] = BrokerOrderState(
-            client_id=client_id,
-            broker_order_id=f"fake-order-{len(self._book.orders) + 1}",
-            ticker=order.ticker,
-            side=order.side,
-            status="filled",
-            quantity=order.quantity,
-            filled_quantity=order.quantity,
-            avg_fill_price=price,
-        )
+        if order.order_type in ("stop", "stop_limit"):
+            # a stop waits at the broker until the market reaches it
+            self._book.resting[order.client_id] = (self._account_id, order)
+            self._book.orders[order.client_id] = BrokerOrderState(
+                client_id=order.client_id,
+                broker_order_id=f"fake-order-{len(self._book.orders) + 1}",
+                ticker=order.ticker,
+                side=order.side,
+                status="pending",
+                quantity=order.quantity,
+                filled_quantity=0.0,
+                avg_fill_price=None,
+                state="accepted",
+            )
+            return None
+        _fill(self._book, self._account_id, order, price)
         return None
+
+    def cancel_order(self, client_id: str) -> bool:
+        """Cancel a resting stop (``OrderCanceller``)."""
+        self._conn.call("cancel_order")
+        if self._book.resting.pop(client_id, None) is None:
+            return False
+        before = self._book.orders[client_id]
+        self._book.orders[client_id] = replace(before, status="cancelled", state="cancelled")
+        return True
 
     def get_order_state(self, client_id: str) -> BrokerOrderState | None:
         self._conn.call("get_order_state")
@@ -288,6 +292,42 @@ class FakeTrader:
 
     def reconcile(self) -> list[Fill]:
         return []
+
+
+def _fill(book: FakeBook, account_id: str, order: Order, price: float) -> None:
+    """Fill ``order`` in full at ``price``: cash, the position and the
+    order's state change in the book."""
+    sign = 1.0 if order.side == "buy" else -1.0
+    balance = book.balances[account_id]
+    book.balances[account_id] = AccountBalances(
+        currency=balance.currency,
+        cash=balance.cash - sign * order.quantity * price,
+        buying_power=balance.buying_power,
+    )
+    held = {p.ticker: p for p in book.positions.get(account_id, [])}
+    before = held[order.ticker].quantity if order.ticker in held else 0.0
+    quantity = before + sign * order.quantity
+    held[order.ticker] = ExternalPosition(
+        raw_symbol=order.ticker.split(".")[0],
+        ticker=order.ticker,
+        quantity=quantity,
+        price=price,
+        market_value=quantity * price,
+        currency=balance.currency,
+    )
+    book.positions[account_id] = [p for p in held.values() if p.quantity]
+    client_id = order.client_id or f"fake-{len(book.orders) + 1}"
+    known = book.orders.get(client_id)
+    book.orders[client_id] = BrokerOrderState(
+        client_id=client_id,
+        broker_order_id=known.broker_order_id if known else f"fake-order-{len(book.orders) + 1}",
+        ticker=order.ticker,
+        side=order.side,
+        status="filled",
+        quantity=order.quantity,
+        filled_quantity=order.quantity,
+        avg_fill_price=price,
+    )
 
 
 class FakeTradingConnection(_FakeBase):

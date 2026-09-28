@@ -37,6 +37,20 @@ def short_account(policy: RiskPolicy) -> tuple[MarginModel, BorrowSource | None]
     return margin, (settings.build() if settings is not None else None)
 
 
+def broker_borrow_source(broker: Any, lake: Any) -> BorrowSource | None:
+    """The borrow source a short book at a real broker trades with (roadmap
+    19.14): the broker's own locate (``BorrowLocator``, IBKR's shortable
+    ticks), with the lake's ``borrow_rates`` for the fee. ``None`` when the
+    broker has no locate: the book keeps the settings' source."""
+    from stonks.execution.borrow import LakeBorrowSource
+    from stonks.execution.brokers.base import BorrowLocator
+
+    if broker is None or not isinstance(broker, BorrowLocator):
+        return None
+    fees = LakeBorrowSource(lake) if callable(getattr(lake, "borrow_rate", None)) else None
+    return broker.borrow_source(fees)
+
+
 def last_accrual(state: SqliteState, portfolio_id: str) -> date | None:
     """The stored accrual date of ``portfolio_id``, or ``None``."""
     rows = state.sql(

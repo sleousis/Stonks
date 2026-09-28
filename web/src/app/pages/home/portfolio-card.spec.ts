@@ -58,13 +58,17 @@ describe('PortfolioCard', () => {
 
   afterEach(() => http.verify());
 
-  async function render(books: PortfolioRef[], day = new Date().toISOString().slice(0, 10)) {
+  async function render(
+    books: PortfolioRef[],
+    day = new Date().toISOString().slice(0, 10),
+    extra: { portfolio?: Partial<PortfolioView>; pnl?: Partial<PnlSeries> } = {},
+  ) {
     const fixture = TestBed.createComponent(PortfolioCard);
     fixture.detectChanges();
     (await nextRequest(http, '/api/portfolios')).flush(page(books));
     if (books.length) {
-      (await nextRequest(http, '/api/portfolio')).flush(PORTFOLIO);
-      (await nextRequest(http, '/api/pnl')).flush(pnl(day));
+      (await nextRequest(http, '/api/portfolio')).flush({ ...PORTFOLIO, ...extra.portfolio });
+      (await nextRequest(http, '/api/pnl')).flush({ ...pnl(day), ...extra.pnl });
     }
     for (let i = 0; i < 3; i++) {
       await tick(2);
@@ -72,6 +76,27 @@ describe('PortfolioCard', () => {
     }
     return fixture.nativeElement as HTMLElement;
   }
+
+  it('shows the value in the base currency and the returns without deposits', async () => {
+    const el = await render(
+      [book({ id: 'pf_1', name: 'Main', is_default: true, base_currency: 'EUR' })],
+      undefined,
+      {
+        portfolio: { currency: 'USD', base_currency: 'EUR', total_value_base: 920 },
+        pnl: { twr: 0.051, mwr: 0.12 },
+      },
+    );
+    expect(el.textContent).toContain('Value in EUR: €920.00');
+    expect(el.querySelector('.returns')?.textContent).toContain(
+      'Since the start: return +5.1%, +12.0% a year on your money.',
+    );
+  });
+
+  it('shows no base line when the base currency is the one shown', async () => {
+    const el = await render([book({ id: 'pf_1', name: 'Main', is_default: true })]);
+    expect(el.textContent).not.toContain('Value in');
+    expect(el.querySelector('.returns')).toBeNull();
+  });
 
   it('wears the brass frame and LIVE stamp only for a live portfolio', async () => {
     const el = await render([

@@ -1,6 +1,6 @@
 # Strategies
 
-Every strategy the lab can name, grouped by family. The list comes from `stonks.lab.catalog`: each public class in `strategies/examples/` plus the wrappers, 33 in all. All are long-only by default, so short signals mean "flat".
+Every strategy the lab can name, grouped by family. The list comes from `stonks.lab.catalog`: each public class in `strategies/examples/` plus the wrappers, 38 in all. All are long-only by default, so short signals mean "flat".
 
 Four strategies can short: `ewmac_trend`, `tsmom` and the two long/short strategies below. Set `"short_mode": "short"` in their params. A short then opens only in a book that allows shorts (a portfolio with `allow_short`, or a lab dataset with `shorting`). Anywhere else the short legs are dropped. See [short selling](../design/shorting.md).
 
@@ -28,6 +28,12 @@ uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --prese
 |----|--------------|
 | `quality_value` | Point-in-time value (earnings and FCF yield) plus quality (ROE, margin, leverage); holds the top K. |
 
+## Factors ([details](../factors.md))
+
+| Id | What it does |
+|----|--------------|
+| `factor` | Holds the top slice of a universe by any library factor or formula, equal weight, month-end rebalance. |
+
 ## Book strategies ([details](book-strategies.md))
 
 | Id | What it does |
@@ -43,6 +49,17 @@ uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --prese
 | `ewmac_trend` | Carver's EWMAC forecasts at several speeds, per instrument. Equity, crypto, commodity. |
 | `tsmom` | Time-series momentum: each instrument against its own past return. Equity, crypto, commodity. |
 | `ath_trend` | Buys weekly closes at all-time highs, exits on a wide ATR trailing stop. Equity and crypto. |
+| `forecast_blend` | EWMAC and TSMOM rules combined with weights fitted after costs, and rules too costly for an instrument dropped ([details](forecast-weights.md)). Equity, crypto, commodity. |
+
+## Intraday ([details](intraday.md))
+
+They decide on minute bars inside the regular session of the ticker's exchange, read closed bars only, and are flat before every close. The lab splits their windows by whole sessions.
+
+| Id | What it does |
+|----|--------------|
+| `intraday_orb` | Opening range breakout: buys the first close above the high of the first 30 minutes, stops at the range low, one trade a session. Equity and commodity. |
+| `intraday_vwap_reversion` | Buys a stretch below the session VWAP, sells back at VWAP, with a stop further below. Equity. |
+| `intraday_momentum` | Gao, Han, Li and Zhou: holds the last half hour when the first half hour's return from the previous close is positive. Equity and commodity. |
 
 ## Long/short
 

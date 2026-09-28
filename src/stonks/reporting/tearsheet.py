@@ -5,7 +5,9 @@ Reads a ``BacktestReport`` and, when present, its ``benchmark``
 ``stonks.backtest.benchmark.BenchmarkResult``). Shows the equity curve
 against the benchmark, both drawdowns, a rolling Sharpe, the top drawdowns,
 a monthly returns grid, the trade statistics from the ledger and the
-benchmark statistics. A long/short backtest (``report.short_book``, roadmap
+benchmark statistics. A strategy registered from a lab run with a
+heatmap (22.5) also shows its parameter heatmap with the plateau verdict
+(``TearSheet.heatmap``). A long/short backtest (``report.short_book``, roadmap
 16.4) adds its long, short and net exposure over time, the financing it
 paid, the orders the engine forced and the P&L of each leg.
 
@@ -27,6 +29,7 @@ import numpy as np
 
 from stonks.backtest import metrics
 from stonks.reporting.charts import line_chart
+from stonks.reporting.heatmap import heatmap_html
 from stonks.reporting.html import CSS, e, money, num, pct, table, tile
 
 __all__ = [
@@ -51,6 +54,11 @@ class TearSheet:
 
     title: str
     report: Any
+    #: The lab run's parameter heatmap (``lab.heatmap.ParameterHeatmap``).
+    heatmap: Any = None
+    #: Extra HTML sections shown after the tear sheet, already escaped
+    #: (e.g. :func:`stonks.reporting.forecast_weights.strategy_report_sections`).
+    sections: tuple[str, ...] = ()
 
 
 # ---- data --------------------------------------------------------------------------
@@ -348,6 +356,7 @@ def render_tear_sheet(sheet: TearSheet) -> str:
     )
     book = getattr(report, "short_book", None)
     short_html = _short_book_html(book, sheet.title) if book is not None else ""
+    heatmap_section = heatmap_html(sheet.heatmap) if sheet.heatmap is not None else ""
     return (
         '<section class="tearsheet">'
         f"<h2>{e(sheet.title)}</h2>"
@@ -361,7 +370,9 @@ def render_tear_sheet(sheet: TearSheet) -> str:
         f"<h3>Trade statistics</h3>{_trade_table(report)}"
         f"<h3>Benchmark statistics</h3>{bench_html}"
         f"{short_html}"
+        f"{heatmap_section}"
         "</section>"
+        f"{''.join(sheet.sections)}"
     )
 
 

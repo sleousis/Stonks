@@ -39,9 +39,10 @@ interface Row {
 
 /**
  * My strategies: an on/off switch and a mode switch (Signals only, Paper
- * trading, Auto) for each strategy the trader follows. Auto stays disabled
- * with its reason until the auto gate passes. Turning auto on, or switching
- * an auto strategy back on, asks for a fresh code and an order ticket.
+ * trading, Approve each trade, Auto) for each strategy the trader follows.
+ * The two live modes stay disabled with their reason until the auto gate
+ * passes. Turning one on, or switching an auto strategy back on, asks for a
+ * fresh code and an order ticket.
  */
 @Component({
   selector: 'app-strategies-card',
@@ -99,7 +100,7 @@ interface Row {
                   <label
                     class="mode"
                     [class.on]="row.sub.mode === m.value"
-                    [class.locked]="m.value === 'auto' && row.autoReason && row.sub.mode !== 'auto'"
+                    [class.locked]="locked(row, m.value)"
                   >
                     <input
                       type="radio"
@@ -108,11 +109,11 @@ interface Row {
                       [checked]="row.sub.mode === m.value"
                       [disabled]="
                         busy().has(row.sub.id) ||
-                        (m.value === 'auto' && !canAuto()) ||
-                        (m.value === 'auto' && !!row.autoReason && row.sub.mode !== 'auto')
+                        (isLive(m.value) && !canAuto()) ||
+                        locked(row, m.value)
                       "
                       [attr.aria-describedby]="
-                        m.value === 'auto' && row.autoReason ? 'auto-why-' + row.sub.id : null
+                        isLive(m.value) && row.autoReason ? 'auto-why-' + row.sub.id : null
                       "
                       (change)="setMode(row.sub, m.value)"
                     />
@@ -228,13 +229,18 @@ interface Row {
     .state {
       min-width: 2em;
     }
+    /* Four modes: two by two on phones and in narrow cards, one row when
+       there is room. The 1px gap on a border-coloured ground draws the
+       dividers, so they stay right however the modes wrap. */
     .modes {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(max(7.5rem, 45%), 1fr));
+      gap: 1px;
       margin: 0;
       padding: 0;
       border: 1px solid var(--color-border-strong);
       border-radius: var(--radius-sm);
+      background: var(--color-border-strong);
       overflow: hidden;
     }
     .modes:disabled {
@@ -249,11 +255,9 @@ interface Row {
       padding: 0 var(--space-2);
       font-size: var(--text-sm);
       font-weight: var(--weight-medium);
+      text-align: center;
       cursor: pointer;
-      border-left: 1px solid var(--color-border-strong);
-    }
-    .mode:first-of-type {
-      border-left: 0;
+      background: var(--color-surface);
     }
     .mode input {
       position: absolute;
@@ -335,9 +339,25 @@ export class StrategiesCard {
     await this.change(sub, { enabled: on }, `${name} is ${on ? 'on' : 'off'}.`);
   }
 
+  /** Approve each trade and Auto send real orders: both pass the auto gate. */
+  protected isLive(mode: string): boolean {
+    return mode === 'approve' || mode === 'auto';
+  }
+
+  /** A live mode the gate still keeps closed for this row. */
+  protected locked(row: Row, mode: string): boolean {
+    return this.isLive(mode) && !!row.autoReason && !this.isLive(row.sub.mode);
+  }
+
   protected async setMode(sub: SubscriptionView, mode: SubscriptionMode): Promise<void> {
     if (mode === sub.mode) return;
-    if (mode === 'auto' && !(await this.confirmAuto(sub, false))) {
+    const confirmed =
+      mode === 'auto'
+        ? await this.confirmAuto(sub, false)
+        : mode === 'approve'
+          ? await this.confirmApprove(sub)
+          : true;
+    if (!confirmed) {
       this.revert(sub);
       return;
     }
@@ -368,6 +388,33 @@ export class StrategiesCard {
           { label: 'Strategy', value: name },
           { label: 'Portfolio', value: book?.name ?? 'Your portfolio' },
           { label: 'Mode', value: modeLabel('auto') },
+        ],
+      },
+    });
+  }
+
+  /**
+   * A fresh code, then an order ticket (no typed name: every order still
+   * waits for the trader's own approval). Brass unless the portfolio is
+   * known to trade paper money.
+   */
+  private async confirmApprove(sub: SubscriptionView): Promise<boolean> {
+    const name = strategyDisplayName(sub.strategy_id);
+    if (!(await this.stepUp.ensure(`Approve each trade for ${name}.`))) return false;
+    const book = this.portfolios.options().find((p) => p.id === sub.portfolio_id) ?? null;
+    return this.confirm.confirm({
+      title: `Approve each trade for ${name}?`,
+      message:
+        'After each trading run, the orders this strategy wants wait for you under Approvals. ' +
+        'Nothing goes to your broker until you approve it with a code. Unapproved orders expire ' +
+        'before the next open.',
+      confirmLabel: 'Approve each trade',
+      ticket: {
+        live: book ? book.trading === 'live' : true,
+        lines: [
+          { label: 'Strategy', value: name },
+          { label: 'Portfolio', value: book?.name ?? 'Your portfolio' },
+          { label: 'Mode', value: modeLabel('approve') },
         ],
       },
     });

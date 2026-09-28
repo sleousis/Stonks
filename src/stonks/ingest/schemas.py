@@ -936,6 +936,39 @@ class DefiTvlRow(FrozenRow):
     source: str = Field(min_length=1)
 
 
+# ---- foreign exchange rates --------------------------------------------------
+
+
+class FxRateRow(FrozenRow):
+    """One daily FX rate: ``rate`` units of ``quote_currency`` per one unit
+    of ``base_currency`` (the day's close). Currencies are ISO 4217
+    upper-case codes; adapters map their vendor pair format (EODHD
+    ``EURUSD.FOREX``) at parse time. ``source`` is provenance only."""
+
+    base_currency: str = Field(pattern=r"^[A-Z]{3}$")
+    quote_currency: str = Field(pattern=r"^[A-Z]{3}$")
+    observation_date: date
+    rate: float = Field(gt=0.0)
+    source: str = Field(min_length=1)
+
+
+class BorrowRateRow(FrozenRow):
+    """One stock's borrow terms on one day (roadmap 19.3). Rates are yearly
+    fractions (0.0025 = 0.25 %). ``available_shares`` is what the lender
+    can supply (0: no locate, ``None``: not stated). Adapters map their
+    vendor symbols and percent columns at parse time. ``source`` is the
+    ``DataSource.source_id`` and part of the key."""
+
+    ticker: str = Field(min_length=1)
+    as_of: date
+    fee_rate_annual: float = Field(ge=0.0)
+    rebate_rate_annual: float | None = None
+    available_shares: float | None = Field(default=None, ge=0.0)
+    currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
+    isin: str | None = None
+    source: str = Field(min_length=1)
+
+
 # ---- source discovery (not a lake-row type) --------------------------------
 
 

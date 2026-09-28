@@ -4,11 +4,12 @@ import {
   computed,
   inject,
   input,
+  linkedSignal,
   resource,
   signal,
   viewChild,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 import type {
   OrderView,
@@ -39,13 +40,19 @@ import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { humanize } from '../../shared/ui/param-form/param-spec';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
+import { Segmented } from '../../shared/ui/segmented';
 import { SideTag } from '../../shared/ui/side-tag';
 import { ErrorState, EmptyState, LoadingState } from '../../shared/ui/states';
 import { StatusChangeDialog } from '../../shared/ui/status-change-dialog';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { OrderStatus } from '../orders/order-status';
 import { FollowPanel } from './follow-panel';
+import { ModelVersionsPanel } from './model-versions-panel';
 import { StageBar } from './stage-bar';
 import { formatParam, strategyDisplayName, strategyKindName } from './strategy-format';
+
+/** The page's tabs: the strategy itself, or its model versions (roadmap 22.6). */
+export type DetailTab = 'overview' | 'versions';
 
 /** A header action: the lifecycle steps, plus the admin's override (UX-23). */
 export type DetailAction = LifecycleAction | 'override';
@@ -184,11 +191,14 @@ function metricList(report: SurvivalReportView): { key: string; label: string; v
     StatusChangeDialog,
     StageBar,
     FollowPanel,
+    ModelVersionsPanel,
     PermissionNote,
+    Segmented,
     TimeSeriesChart,
     DataTable,
     TableCell,
     SideTag,
+    OrderStatus,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -207,8 +217,31 @@ export class StrategyDetailPage {
   protected readonly session = inject(SessionService);
   private readonly dialog = viewChild.required(StatusChangeDialog);
 
+  private readonly router = inject(Router);
+
   /** Route param `:id`. */
   readonly id = input.required<string>();
+  /** Query param `?tab=versions` opens the Model versions tab. */
+  readonly tab = input<string | undefined>(undefined);
+
+  protected readonly tabs = [
+    { value: 'overview', label: 'Overview' },
+    { value: 'versions', label: 'Model versions' },
+  ];
+  protected readonly shownTab = linkedSignal<DetailTab>(() =>
+    this.tab() === 'versions' ? 'versions' : 'overview',
+  );
+
+  /** Switch tabs and keep the choice in the address, so a link opens it. */
+  protected setTab(value: string): void {
+    const tab: DetailTab = value === 'versions' ? 'versions' : 'overview';
+    this.shownTab.set(tab);
+    void this.router.navigate([], {
+      queryParams: { tab: tab === 'versions' ? 'versions' : null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
 
   protected readonly strategy = resource({
     params: () => ({ id: this.id() }),

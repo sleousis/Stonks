@@ -10,29 +10,41 @@ from typing import Any
 from pydantic import BaseModel
 
 from stonks.app.alerts import AlertService
+from stonks.app.assistant import AssistantService
+from stonks.app.assistant_research import ResearchService
 from stonks.app.backups import BackupService
 from stonks.app.brokers import BrokerConnector, BrokerService
+from stonks.app.calendars import CalendarService
 from stonks.app.catalog import CatalogService, LabCatalogSource, StrategySource
 from stonks.app.connections import ConnectionsAppService
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError
+from stonks.app.factors import FactorService
 from stonks.app.ingest import IngestService
 from stonks.app.insights import InsightsService
 from stonks.app.jobs import Job, JobRunner, JobStore
 from stonks.app.lab import LabService
+from stonks.app.manual_orders import ManualOrdersService
 from stonks.app.market import MarketDataService
+from stonks.app.model_versions import ModelVersionService
 from stonks.app.notifications import NotificationsAppService
 from stonks.app.operations import OperationsService
+from stonks.app.options import OptionsService
+from stonks.app.order_drafts import OrderDraftService
 from stonks.app.orders import OrdersService
 from stonks.app.ownership import check_owner, owner_filter, owner_of
 from stonks.app.pagination import Page
 from stonks.app.portfolio import PortfolioService
+from stonks.app.price_alerts import PriceAlertService
 from stonks.app.schedule import ScheduleService
+from stonks.app.screener import ScreenerService
 from stonks.app.signals import SignalService
 from stonks.app.strategies import StrategyService
 from stonks.app.stream_tokens import IssuedStreamToken, StreamTokenSigner
 from stonks.app.studio import RuleStrategySource, StudioService, user_strategies_dir
 from stonks.app.subscriptions import SubscriptionService
+from stonks.app.telegram import TelegramService
+from stonks.app.tickets import TicketService
 from stonks.app.ticks import TickService
 from stonks.app.trial_ledger import TrialLedgerService
 from stonks.app.universes import UniverseService
@@ -172,8 +184,13 @@ class Services:
     catalog: CatalogService
     portfolio: PortfolioService
     strategies: StrategyService
+    model_versions: ModelVersionService
     market: MarketDataService
     orders: OrdersService
+    manual_orders: ManualOrdersService
+    order_drafts: OrderDraftService
+    tickets: TicketService
+    price_alerts: PriceAlertService
     ingest: IngestService
     ticks: TickService
     lab: LabService
@@ -191,6 +208,13 @@ class Services:
     subscriptions: SubscriptionService
     insights: InsightsService
     ledger: TrialLedgerService
+    assistant: AssistantService
+    research: ResearchService
+    telegram: TelegramService
+    factors: FactorService
+    options: OptionsService
+    calendars: CalendarService
+    screener: ScreenerService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
 
     @classmethod
@@ -221,8 +245,11 @@ class Services:
         )
         strategies = StrategyService(context, catalog)
         orders = OrdersService(context)
+        manual_orders = ManualOrdersService(context)
         lab = LabService(context, strategies, runner)
         portfolio = PortfolioService(context)
+        assistant = AssistantService(context)
+        universes = UniverseService(context, runner)
         services = cls(
             context=context,
             runner=runner,
@@ -232,8 +259,13 @@ class Services:
             catalog=catalog,
             portfolio=portfolio,
             strategies=strategies,
+            model_versions=ModelVersionService(context, runner),
             market=MarketDataService(context),
             orders=orders,
+            manual_orders=manual_orders,
+            order_drafts=OrderDraftService(context, manual_orders),
+            tickets=TicketService(context),
+            price_alerts=PriceAlertService(context),
             ingest=IngestService(context, runner),
             ticks=TickService(context, orders, runner),
             lab=lab,
@@ -250,11 +282,27 @@ class Services:
             notifications=NotificationsAppService(context),
             schedule=ScheduleService(context),
             signals=SignalService(context, strategies, runner),
-            universes=UniverseService(context, runner),
+            universes=universes,
             auth=_auth_service(context),
             subscriptions=SubscriptionService(context),
             insights=InsightsService(context, portfolio),
             ledger=TrialLedgerService(context),
+            assistant=assistant,
+            # Roadmap 22.9: the research loop runs as a job, so it is wired
+            # here with the other job kinds. It uses the assistant's model.
+            research=ResearchService(
+                context,
+                lab,
+                strategies,
+                catalog,
+                runner,
+                model_factory=lambda: assistant.model_factory,
+            ),
+            telegram=TelegramService(context),
+            factors=FactorService(context, runner),
+            options=OptionsService(context, runner),
+            calendars=CalendarService(context, runner),
+            screener=ScreenerService(context, universes, runner),
         )
         services.schedule.bind(services)
         return services

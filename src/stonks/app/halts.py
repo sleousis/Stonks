@@ -45,6 +45,7 @@ from stonks.logging import get_logger
 from stonks.production.halts import (
     Halt,
     HaltError,
+    HaltKind,
     clear_halt,
     escalate_halt,
     get_halt,
@@ -106,7 +107,7 @@ class ClearHaltRequest(BaseModel):
 
 class HaltView(BaseModel):
     id: int
-    kind: Literal["month_loss", "week_loss", "drawdown", "operational", "kill"]
+    kind: HaltKind
     scope: KillScope
     user_id: str | None
     portfolio_id: str | None
@@ -167,7 +168,8 @@ BrokerLookup = Callable[[str], object | None]
 
 def settings_brokers(context: AppContext) -> BrokerLookup:
     """Today only the default portfolio trades at an external broker
-    (``[brokers].kind``), built the way the tick builds it."""
+    (``[brokers].kind``). At IBKR it uses the API's own client id, so it
+    connects while a tick holds the tick's (roadmap 19.17)."""
 
     def lookup(portfolio_id: str) -> object | None:
         from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
@@ -177,7 +179,7 @@ def settings_brokers(context: AppContext) -> BrokerLookup:
         settings = context.settings
         if portfolio_id != DEFAULT_PORTFOLIO_ID or settings.brokers.kind == "simulated":
             return None
-        return make_broker(settings, Portfolio(cash=0.0))
+        return make_broker(settings, Portfolio(cash=0.0), ibkr_role="api")
 
     return lookup
 
@@ -296,6 +298,7 @@ class HaltService:
                 actor=scope.actor,
             )
             self._cancel_working(state, scope, halt, ip)
+            _cancel_drafts(state, halt)
             return HaltView.of(halt, _today())
 
     def resume_kill(
@@ -337,20 +340,29 @@ class HaltService:
         covers (only opening orders for a reduce-only ``buys`` halt: buys and
         short sales, never covers, BE-12). Runs on every engage, so pressing
         again retries a cancel that failed. Never raises."""
+        from stonks.execution.brokers.base import close_broker
         from stonks.execution.cancel import cancel_working_orders
 
         reduce_only = halt.halt == "buys"
-        for portfolio_id in _covered_portfolios(state, halt):
+        covered = _covered_portfolios(state, halt)
+        for portfolio_id in covered:
+            broker: object | None = None
             try:
                 broker = self._brokers(portfolio_id)
                 if broker is None:
                     continue
                 summary = cancel_working_orders(
-                    broker, state, portfolio_id=portfolio_id, openings_only=reduce_only
+                    broker,
+                    state,
+                    portfolio_id=portfolio_id,
+                    openings_only=reduce_only,
+                    global_fallback=_may_cancel_all(halt, covered, broker),
                 )
             except Exception as exc:
                 _log.error("kill_switch.cancel_failed", portfolio_id=portfolio_id, error=str(exc))
                 continue
+            finally:
+                close_broker(broker)
             if summary.cancelled or summary.failed:
                 AuditLog(state).record(
                     scope.actor,
@@ -424,6 +436,20 @@ class HaltService:
         return halt
 
 
+def _may_cancel_all(halt: Halt, covered: list[str], broker: object) -> bool:
+    """Whether the kill switch may fall back to cancelling every order at
+    the broker (IBKR's ``reqGlobalCancel``) when single cancels fail, say
+    because the running tick owns the orders (roadmap 19.17). Only a
+    stop-all halt, and only when it covers every portfolio the broker's
+    gateway serves: a global halt, or one naming all of them."""
+    if halt.halt != "all":
+        return False
+    if halt.scope == "global":
+        return True
+    served = tuple(getattr(broker, "portfolios", ()) or ())
+    return bool(served) and set(served) <= set(covered)
+
+
 def _covered_portfolios(state: SqliteState, halt: Halt) -> list[str]:
     """The ids of the open portfolios a halt stops."""
     if halt.scope == "portfolio":
@@ -436,3 +462,20 @@ def _covered_portfolios(state: SqliteState, halt: Halt) -> list[str]:
     else:
         rows = state.sql("SELECT id FROM portfolios WHERE status != 'archived' ORDER BY id")
     return [r["id"] for r in rows]
+
+
+def _cancel_drafts(state: SqliteState, halt: Halt) -> None:
+    """The kill switch cancels the pending order drafts it covers (the
+    assistant's proposals, roadmap 20.4). Never raises."""
+    from stonks.production.order_drafts import cancel_drafts
+
+    reason = f"cancelled by the kill switch (halt {halt.id})"
+    try:
+        if halt.scope == "global":
+            cancel_drafts(state, reason=reason, everyone=True)
+        elif halt.scope == "user":
+            cancel_drafts(state, reason=reason, user_id=halt.user_id)
+        elif halt.portfolio_id is not None:
+            cancel_drafts(state, reason=reason, portfolio_ids=[halt.portfolio_id])
+    except Exception as exc:  # the halt stands whatever happens here
+        _log.error("kill_switch.cancel_drafts_failed", halt_id=halt.id, error=str(exc))

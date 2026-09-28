@@ -183,6 +183,50 @@ def test_unknown_channel_or_strategy_is_refused(state, alice_scope):
         )
 
 
+def test_event_alert_kinds_are_on_until_turned_off(state, alice_scope, bob_scope):
+    prefs = service.get_preferences(state, alice_scope)
+    assert [(e.topic, e.enabled) for e in prefs.event_alerts] == [
+        ("earnings", True),
+        ("dividends", True),
+        ("economic", True),
+    ]
+    assert all(e.label for e in prefs.event_alerts)
+    after = service.update_preferences(state, alice_scope, [], event_alerts={"earnings": False})
+    assert {e.topic: e.enabled for e in after.event_alerts} == {
+        "earnings": False,
+        "dividends": True,
+        "economic": True,
+    }
+    again = service.update_preferences(state, alice_scope, [], event_alerts={"earnings": True})
+    assert all(e.enabled for e in again.event_alerts)
+    service.update_preferences(state, alice_scope, [], event_alerts={"dividends": False})
+    assert all(e.enabled for e in service.get_preferences(state, bob_scope).event_alerts)
+    audit = state.sql(
+        "SELECT details_json FROM audit_log WHERE actor = ? AND action = 'notify.prefs.update'"
+        " ORDER BY rowid",
+        [alice_scope.actor],
+    )
+    assert "dividends" in audit[-1]["details_json"]
+
+
+def test_unknown_event_alert_kind_is_refused(state, alice_scope):
+    with pytest.raises(AccountsError):
+        service.update_preferences(state, alice_scope, [], event_alerts={"gossip": False})
+
+
+def test_price_and_event_alert_channels_are_separate_from_signals(state, alice_scope):
+    service.update_preferences(
+        state,
+        alice_scope,
+        [Preference("event_alert", "webpush", False), Preference("price_alert", "email", False)],
+    )
+    prefs = service.get_preferences(state, alice_scope)
+    assert {(p.category, p.channel, p.enabled) for p in prefs.preferences} == {
+        ("event_alert", "webpush", False),
+        ("price_alert", "email", False),
+    }
+
+
 def test_quiet_hours_validation_and_clearing(state, alice_scope):
     with pytest.raises(AccountsError):
         service.set_quiet_hours(state, alice_scope, "25:00", "07:00")

@@ -202,6 +202,11 @@ def _seed_own_rows(app, path, user_id: str, role: Role, tag: str) -> dict[str, s
             " VALUES (?, ?, ?, '[\"UP.US\"]', ?, ?)",
             [f"wl_{tag.lower()}", user_id, f"{tag}LIST", now, now],
         )
+        state.execute(
+            "INSERT INTO screens (id, owner_id, name, spec_json, created_at, updated_at)"
+            " VALUES (?, ?, ?, '{}', ?, ?)",
+            [f"scr_{tag.lower()}", user_id, f"{tag}SCREEN", now, now],
+        )
     job = services.runner.store.create("backtest", {"marker": f"{tag}JOB"}, owner_id=user_id)
     conn = services.connections.connect_with_keys(
         session_principal(user_id, role).scope,
@@ -214,6 +219,7 @@ def _seed_own_rows(app, path, user_id: str, role: Role, tag: str) -> dict[str, s
         "job": job.id,
         "connection": conn.id,
         "watchlist": f"wl_{tag.lower()}",
+        "screen": f"scr_{tag.lower()}",
     }
 
 
@@ -306,15 +312,28 @@ CASES: dict[str, Case] = {
     "list_risk_snapshots": _c(
         "GET", "/api/risk/snapshots", lambda i: {"portfolio_id": i["portfolio"]}
     ),
+    "list_intraday_snapshots": _c(
+        "GET", "/api/risk/intraday", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
     "get_golive_report": _c(
         "GET", "/api/strategies/{strategy_id}/golive", lambda i: {"strategy_id": "bah_active"}
     ),
     "get_schedule": _c("GET", "/api/schedule"),
     "list_ledger_runs": _c("GET", "/api/lab/ledger"),
     "get_ledger_run": _c("GET", "/api/lab/ledger/{run_id}", lambda i: {"run_id": "lab_missing"}),
+    "list_research_sessions": _c("GET", "/api/assistant/research"),
+    "get_research_session": _c(
+        "GET", "/api/assistant/research/{session_id}", lambda i: {"session_id": "rs_missing"}
+    ),
     "list_alerts": _c("GET", "/api/alerts"),
     "list_notifications": _c("GET", "/api/notifications"),
     "mark_notifications_read": _c("POST", "/api/notifications/read"),
+    "get_notification_preferences": _c("GET", "/api/notifications/preferences"),
+    "set_event_alerts": _c(
+        "PUT",
+        "/api/notifications/preferences",
+        lambda i: {"dividends": False, "confirm": True},
+    ),
     "list_survival_tests": _c("GET", "/api/lab/survival-tests"),
     "list_survival_presets": _c("GET", "/api/lab/survival-presets"),
     "get_studio_capabilities": _c("GET", "/api/studio/capabilities"),
@@ -324,6 +343,7 @@ CASES: dict[str, Case] = {
         "GET", "/api/shadow/strategies/{strategy_id}/pnl", lambda i: {"strategy_id": "bah_shadow"}
     ),
     "get_health_report": _c("GET", "/api/health/report"),
+    "get_stream_status": _c("GET", "/api/stream/status"),
     "get_broker": _c("GET", "/api/brokers"),
     "list_sources": _c("GET", "/api/sources"),
     "list_cost_models": _c("GET", "/api/lab/cost-models"),
@@ -339,6 +359,10 @@ CASES: dict[str, Case] = {
         lambda i: {"connection_id": i["connection"]},
     ),
     "list_halts": _c("GET", "/api/halts"),
+    "list_reconcile_reports": _c("GET", "/api/reconcile/reports"),
+    "get_reconcile_report": _c(
+        "GET", "/api/reconcile/reports/{report_id}", lambda i: {"report_id": "rec_nope"}
+    ),
     "tca_summary": _c("GET", "/api/tca/summary", lambda i: {"portfolio_id": i["portfolio"]}),
     "trade_journal": _c("GET", "/api/tca/journal", lambda i: {"portfolio_id": i["portfolio"]}),
     "order_tca": _c("GET", "/api/tca/orders/{client_id}", lambda i: {"client_id": "nope"}),
@@ -358,6 +382,15 @@ CASES: dict[str, Case] = {
     "list_subscriptions": _c("GET", "/api/subscriptions"),
     "list_universes": _c("GET", "/api/universes"),
     "get_universe": _c("GET", "/api/universes/{universe_id}", lambda i: {"universe_id": "u_perm"}),
+    "get_universe_history": _c(
+        "GET", "/api/universes/{universe_id}/history", lambda i: {"universe_id": "u_perm"}
+    ),
+    "list_universe_exchanges": _c("GET", "/api/universes/exchanges"),
+    "update_universe": _c(
+        "PUT",
+        "/api/universes/{universe_id}",
+        lambda i: {"universe_id": "u_perm", "kind": "list", "spec": {}, "confirm": True},
+    ),
     "get_universe_members": _c(
         "GET", "/api/universes/{universe_id}/members", lambda i: {"universe_id": "u_perm"}
     ),
@@ -371,6 +404,9 @@ CASES: dict[str, Case] = {
         "/api/charts/{ticker}",
         lambda i: {"ticker": "UP.US", "portfolio_id": i["portfolio"]},
     ),
+    "compare_tickers": _c(
+        "GET", "/api/charts/compare", lambda i: {"tickers": ["UP.US", "DOWN.US"]}
+    ),
     "get_leaderboard": _c("GET", "/api/strategies/leaderboard"),
     "get_tear_sheet": _c(
         "GET", "/api/strategies/{strategy_id}/tearsheet", lambda i: {"strategy_id": "bah_active"}
@@ -380,6 +416,36 @@ CASES: dict[str, Case] = {
         "GET", "/api/watchlists/{watchlist_id}", lambda i: {"watchlist_id": i["watchlist"]}
     ),
     "get_my_risk_limits": _c("GET", "/api/risk/limits"),
+    "get_calendar": _c("GET", "/api/calendars", lambda i: {"portfolio_id": i["portfolio"]}),
+    "get_news": _c("GET", "/api/calendars/news", lambda i: {"portfolio_id": i["portfolio"]}),
+    "get_earnings_warnings": _c(
+        "GET", "/api/calendars/earnings-warnings", lambda i: {"tickers": ["UP.US"]}
+    ),
+    "list_event_alert_kinds": _c("GET", "/api/calendars/alert-kinds"),
+    "list_screen_metrics": _c("GET", "/api/screener/metrics"),
+    "run_screen": _c("POST", "/api/screener/run", lambda i: {"screen_id": i["screen"]}),
+    "list_screens": _c("GET", "/api/screener/screens"),
+    "get_screen": _c(
+        "GET", "/api/screener/screens/{screen_id}", lambda i: {"screen_id": i["screen"]}
+    ),
+    "create_screen": _c(
+        "POST", "/api/screener/screens", lambda i: {"name": "x", "spec": {"limit": 0}}
+    ),
+    "update_screen": _c(
+        "PATCH",
+        "/api/screener/screens/{screen_id}",
+        lambda i: {"screen_id": i["screen"], "spec": {"limit": 3}},
+    ),
+    "delete_screen": _c(
+        "DELETE",
+        "/api/screener/screens/{screen_id}",
+        lambda i: {"screen_id": i["screen"], "confirm": True},
+    ),
+    "save_screen_as_universe": _c(
+        "POST",
+        "/api/screener/universes",
+        lambda i: {"universe_id": "BAD ID", "spec": {}, "confirm": True},
+    ),
     "create_watchlist": _c("POST", "/api/watchlists", lambda i: {"name": "x", "tickers": ["=bad"]}),
     "update_watchlist": _c(
         "PATCH",
@@ -401,6 +467,37 @@ CASES: dict[str, Case] = {
         "POST",
         "/api/lab/signal-ic",
         lambda i: {"universe": ["UP.US"], "strategy_id": "bah_active"} | _WINDOW,
+    ),
+    "run_factor_tearsheet": _c(
+        "POST",
+        "/api/factors/tearsheets",
+        lambda i: {"factor": "KMID", "universe": ["UP.US"]} | _WINDOW,
+    ),
+    "run_options_backtest": _c(
+        "POST",
+        "/api/options/backtests",
+        lambda i: {"strategy": "covered_call", "underlyings": ["UP.US"]} | _WINDOW,
+    ),
+    "list_option_underlyings": _c("GET", "/api/options/underlyings"),
+    "get_option_chain": _c(
+        "GET", "/api/options/chains/{underlying}", lambda i: {"underlying": "UP.US"}
+    ),
+    "list_option_strategies": _c("GET", "/api/options/strategies"),
+    "list_option_structures": _c("GET", "/api/options/structures"),
+    "get_option_payoff": _c(
+        "POST",
+        "/api/options/payoff",
+        lambda i: {"underlying": "UP.US", "structure": "long_call"},
+    ),
+    "list_factors": _c("GET", "/api/factors"),
+    "get_factor": _c("GET", "/api/factors/{factor_id}", lambda i: {"factor_id": "KMID"}),
+    "check_factor_expression": _c(
+        "POST", "/api/factors/check", lambda i: {"expression": "$close/$open"}
+    ),
+    "get_factor_values": _c(
+        "POST",
+        "/api/factors/values",
+        lambda i: {"factor": "KMID", "universe": ["UP.US"], "as_of": "2026-04-01"},
     ),
     "run_ingest": _c(
         "POST",
@@ -437,9 +534,45 @@ CASES: dict[str, Case] = {
         lambda i: {"draft_id": i["draft"], "universe": ["UP.US"]} | _WINDOW,
     ),
     "run_sweep": _c("POST", "/api/lab/sweeps", lambda i: {"universe": ["UP.US"]} | _WINDOW),
+    # the research loop is off here: 503 once the permission passed
+    "start_research": _c(
+        "POST",
+        "/api/assistant/research",
+        lambda i: {"goal": "find an edge in these names", "universe": ["UP.US"]},
+    ),
     "cancel_job": _c("POST", "/api/jobs/{job_id}/cancel", lambda i: {"job_id": i["job"]}),
     "update_draft": _c(
         "PATCH", "/api/studio/drafts/{draft_id}", lambda i: {"draft_id": i["draft"], "name": "y"}
+    ),
+    # model versions (roadmap 22.6)
+    "list_model_versions": _c(
+        "GET", "/api/strategies/{strategy_id}/versions", lambda i: {"strategy_id": "bah_active"}
+    ),
+    "get_model_version_history": _c(
+        "GET",
+        "/api/strategies/{strategy_id}/versions/history",
+        lambda i: {"strategy_id": "bah_active"},
+    ),
+    "list_model_candidates": _c("GET", "/api/model-versions/candidates"),
+    "check_model_swap": _c(
+        "GET",
+        "/api/strategies/{strategy_id}/versions/{version}/check",
+        lambda i: {"strategy_id": "bah_active", "version": 1},
+    ),
+    "retrain_models": _c(
+        "POST",
+        "/api/model-versions/retrain",
+        lambda i: {"strategy_ids": ["bah_active"], "confirm": True},
+    ),
+    "swap_model_version": _c(
+        "POST",
+        "/api/strategies/{strategy_id}/versions/{version}/swap",
+        lambda i: {"strategy_id": "bah_active", "version": 1, "confirm": True},
+    ),
+    "reject_model_version": _c(
+        "POST",
+        "/api/strategies/{strategy_id}/versions/{version}/reject",
+        lambda i: {"strategy_id": "bah_active", "version": 1, "reason": "x", "confirm": True},
     ),
     # guarded writes, confirmed
     "promote_strategy": _c(
@@ -527,6 +660,105 @@ CASES: dict[str, Case] = {
         "DELETE",
         "/api/studio/drafts/{draft_id}",
         lambda i: {"draft_id": i["draft"], "confirm": True},
+    ),
+    # price alerts (roadmap 20.2) and currency and tax reads (20.5)
+    "list_price_alerts": _c("GET", "/api/price-alerts"),
+    "list_price_alert_events": _c("GET", "/api/price-alerts/events"),
+    "create_price_alert": _c(
+        "POST",
+        "/api/price-alerts",
+        lambda i: {"condition": "crosses_above", "ticker": "UP.US", "level": 100.0},
+    ),
+    "update_price_alert": _c(
+        "PATCH", "/api/price-alerts/{alert_id}", lambda i: {"alert_id": "pal_none", "level": 5.0}
+    ),
+    "delete_price_alert": _c(
+        "DELETE",
+        "/api/price-alerts/{alert_id}",
+        lambda i: {"alert_id": "pal_none", "confirm": True},
+    ),
+    "get_tax_settings": _c("GET", "/api/tax/settings", lambda i: {"portfolio_id": i["portfolio"]}),
+    "list_tax_lot_picks": _c(
+        "GET", "/api/tax/lots/picks", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
+    "get_fx_rate": _c("GET", "/api/fx/rate", lambda i: {"base": "EUR", "quote": "USD"}),
+    "list_cash_flows": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/cash-flows",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    # order drafts (roadmap 20.4): a stale price answers 409 once permitted
+    "list_order_drafts": _c("GET", "/api/orders/drafts"),
+    # order tickets (roadmap 19.8): read-only over MCP
+    "list_tickets": _c("GET", "/api/tickets"),
+    "get_ticket": _c("GET", "/api/tickets/{ticket_id}", lambda i: {"ticket_id": "tkt_none"}),
+    # live stages and settings (roadmap 19.9): read-only over MCP
+    "get_live_stage": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/live/stage",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    "get_live_gate_report": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/live/gate-report",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    "get_live_allocation": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/live/allocation",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    "get_live_rules": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/live/rules",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    "get_broker_gateways": _c("GET", "/api/brokers/gateways"),
+    "draft_order": _c(
+        "POST",
+        "/api/orders/drafts",
+        lambda i: {
+            "portfolio_id": i["portfolio"],
+            "ticker": "UP.US",
+            "side": "buy",
+            "quantity": 1,
+            "reason": "by hand",
+            "retry_key": "perm-1",
+        },
+    ),
+    # manual orders (roadmap 20.1): a stale price answers 409 once permitted
+    "place_order": _c(
+        "POST",
+        "/api/orders/manual",
+        lambda i: {
+            "portfolio_id": i["portfolio"],
+            "ticker": "UP.US",
+            "side": "buy",
+            "quantity": 1,
+            "reason": "by hand",
+            "confirm": True,
+        },
+    ),
+    "change_order": _c(
+        "POST",
+        "/api/orders/{client_id}/change",
+        lambda i: {
+            "client_id": "manual:none:x",
+            "portfolio_id": i["portfolio"],
+            "quantity": 2,
+            "reason": "by hand",
+            "confirm": True,
+        },
+    ),
+    "cancel_order": _c(
+        "POST",
+        "/api/orders/{client_id}/cancel",
+        lambda i: {
+            "client_id": "manual:none:x",
+            "portfolio_id": i["portfolio"],
+            "reason": "by hand",
+            "confirm": True,
+        },
     ),
 }
 

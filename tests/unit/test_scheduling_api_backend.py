@@ -260,6 +260,22 @@ def test_ingest_metadata_posts_a_metadata_run():
     assert api.requests[0][2] == {"kind": "metadata", "source": "yahoo", "tickers": ["AAPL.US"]}
 
 
+def test_ingest_borrow_posts_a_borrow_run_when_a_gateway_is_set():
+    api = FakeApi(
+        job_statuses=("succeeded",),
+        result={"run_id": 9, "status": "ok", "tickers_ok": 1, "tickers_failed": 0},
+    )
+    ex, _ = _executor(api)
+    ctx, _ = _ctx(ex, "ingest_borrow", FRIDAY, markets=["usa"])
+    gateways = {"paper": {"host": "127.0.0.1", "port": 4002, "mode": "paper"}}
+    settings = Settings(brokers={"ibkr": {"gateways": gateways}})
+    ctx = RunContext(**{**ctx.__dict__, "settings": settings})
+    out = ex.execute(ctx)
+    assert out.status == "succeeded" and out.detail["ingest_run_id"] == 9
+    assert api.requests[0][:2] == ("POST", "/api/ingest/runs")
+    assert api.requests[0][2] == {"kind": "borrow", "markets": ["usa"]}
+
+
 def test_closed_day_makes_no_request():
     api = FakeApi()
     ex, _ = _executor(api)

@@ -16,6 +16,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { SettingsPage } from './settings.page';
+import { provideFakeCalendars } from '../../../testing/fake-calendars';
 
 const SECRET = 'sk-test-7f3a9c2e1d';
 
@@ -78,6 +79,11 @@ describe('SettingsPage', () => {
       timezone: 'UTC',
       webhook: null,
     });
+    (await nextRequest(http, '/api/telegram/link')).flush({
+      bot_configured: false,
+      bot_enabled: false,
+      linked: false,
+    });
     (await nextRequest(http, '/api/risk/limits')).flush(limitsView({}));
     await tick();
     fixture.detectChanges();
@@ -108,7 +114,12 @@ describe('SettingsPage', () => {
   beforeEach(() => {
     sessionStorage.clear();
     TestBed.configureTestingModule({
-      providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
+      providers: [
+        ...provideApi(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        provideFakeCalendars(),
+      ],
     });
     http = TestBed.inject(HttpTestingController);
   });
@@ -128,6 +139,7 @@ describe('SettingsPage', () => {
     expect(h).toContain('Your account');
     expect(h).toContain('API token');
     expect(h).toContain('Theme');
+    expect(h).toContain('Telegram');
     expect(h).not.toContain('System');
     expect(h).not.toContain('Broker');
     expect(h).not.toContain('Risk policy');

@@ -1,9 +1,9 @@
 # Trader console (web UI)
 
 The Angular app in `web/` is the trader console: sign-in, a simple home,
-profile, the first-run guide, watchlists, charts, strategies, orders and
+profile, the first-run guide, watchlists, charts, the calendar, strategies, orders and
 trade costs, insights, notifications, the research pages (paper trading,
-leaderboard and tear sheets, studio, lab, go live) and the admin pages
+leaderboard and tear sheets, screener, options, studio, lab, go live) and the admin pages
 (overview, health, schedule and backups, data, data quality, universes,
 halts, users). It talks only to the
 REST API (`src/stonks/api/`) through a client generated from the checked-in
@@ -341,7 +341,9 @@ the verdict", which sends `register_strategy`) sits in one closed
 **Advanced** fold that opens itself when one of its fields is wrong. The
 `promotion` preset is called the **Go-live suite** everywhere. `/lab?preset=`
 picks a suite, with `?strategy=` and `?tickers=`, so a failing go-live check
-links straight to a prefilled run. A backtest or plain lab run starts with
+links straight to a prefilled run. `/lab?universe=` opens the lab run form
+with that stored universe picked. A universe's page (Test in the lab) and a
+screen saved as a universe link there. A backtest or plain lab run starts with
 no confirm; a run that may start paper trading asks once, plainly. A
 finished run shows a next step: Start paper trading (a prefilled re-run),
 what failed and "Change and run again", or Open strategy and Follow. Costs
@@ -355,9 +357,21 @@ options schema gives labels, defaults, bounds and choices
 change. Field errors show next to the field, and the advanced panel opens
 when one of its fields is wrong.
 
-The Lab has four screens, linked at the top of each: Backtest and lab run
-(`/lab`), Sweep (`/lab/sweeps`), Signal IC (`/lab/signal-ic`) and Trial
-ledger (`/lab/ledger`). A sweep
+The search settings in the Advanced fold include the Optuna tuner. Pick it
+and the form shows its sampler (TPE, NSGA-II or random) and "Stop weak
+trials early" (`prune`). Objectives include Sortino, Calmar, Sharpe less
+twice the drawdown, and a combined score. "Draw a parameter heatmap" sends
+`heatmap: {x, y, grid_size, fast}`: pick two parameters or leave them on
+Auto. The result then shows `<app-param-heatmap>`
+(`shared/lab-results/param-heatmap.ts`): a real table of scores, green for
+high and red for low. The tuned cell is outlined and the plateau
+neighbourhood is bordered, with the plateau verdict above. On phones the
+table scrolls inside its own labelled box.
+
+The Lab has six screens, linked at the top of each: Backtest and lab run
+(`/lab`), Sweep (`/lab/sweeps`), Signal IC (`/lab/signal-ic`), Trial
+ledger (`/lab/ledger`), Factors (`/lab/factors`) and Research sessions
+(`/lab/research`). A sweep
 runs every strategy, or the ones picked, on typed tickers or a saved
 universe, and `<app-sweep-result>` ranks the rows best first. Signal IC
 shows how well a strategy's scores ranked the moves that followed, per
@@ -372,6 +386,42 @@ and failed, best score and verdict. `/lab/ledger/:runId` shows one run from
 every trial, and the strategy's trial count across all runs, with one line
 on why it matters (more trials make a good result more likely to be luck).
 A lab run's result links to it.
+
+Factors (`pages/lab/factors/`, `api/factors.service.ts`):
+
+- `/lab/factors` lists the library from `GET /api/factors`. Set, family
+  and kind go to the server as `?set=`, `?family=` and `?kind=`. The search
+  box filters the loaded list on the page.
+- `/lab/factors/:id` shows one factor: what it measures, why it should
+  work, direction, warm-up and its formula, with "Edit as a formula".
+- `/lab/factors/formula?expression=` is the formula workbench.
+  `<app-formula-editor>` checks the formula with `POST /api/factors/check`
+  as you type (a short pause first, and only the last edit counts). It
+  shows the canonical form and the warm-up, or why the formula is refused.
+- Below either one sit three tools. Each picks its names with
+  `<app-basket-picker>`: a stored universe, a watchlist or typed tickers.
+  - Values on a date: `POST /api/factors/values`, best first.
+  - Tear sheet: a job followed over SSE, then
+    `<app-factor-tearsheet-result>`. It shows tiles, IC per horizon, a bar
+    per bucket, cumulative returns per bucket and top minus bottom, IC by
+    group, a monthly IC heatmap, and alpha and beta.
+  - Test as a strategy: a lab run of the `factor` strategy with
+    `strategy.params.factor` set. The API keeps a class ref's params fixed
+    for the whole search, so the tuner only moves the slice held. A
+    library factor starts from its own hypothesis. A formula starts blank,
+    and a hypothesis is required (P1).
+
+Research sessions (`pages/lab/research/`, `api/research.service.ts`):
+
+- `/lab/research` lists your sessions from `GET /api/assistant/research`.
+  A start form sends a goal, a universe or tickers, and budgets only when
+  you lower them. The page follows the job and links the new session.
+  When research is off (no model endpoint or no model cutoff), it says so.
+- `/lab/research/:id` shows the goal, model and cutoff, meters for trials,
+  proposals and compute, and one card per proposal. A card shows its
+  status, hypothesis and premortem, validation start, trials, best score,
+  verdict, why it was rejected, and a link to its run in the trial ledger.
+  It reloads every minute while the session runs.
 
 ### Formatting and copy
 
@@ -428,7 +478,7 @@ Tickers open `/data?instrument=<id>`.
 | Halts | `/ops/halts` | Active and past halts, the kill switch (global or one portfolio, reason, buys only), Resume and Clear |
 | Schedule and backups | `/ops/schedule` | Jobs with next and last run, recent runs and Run now. Every backup on disk with its size, Back up now, Verify and a staged Restore (admins) |
 | Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
-| Universes | `/universes`, `/universes/:id` | List, create (JSON spec or CSV), index history import, members on a date, Refresh and Ensure data |
+| Universes | `/universes`, `/universes/:id` | List, create and edit each kind, index history import, members on a date, membership history, Refresh, Fetch missing data and Delete (see Universes below) |
 
 - `<app-session-strip>` sits above every page: the next trading run with
   a live countdown (`GET /api/schedule`), Stop trading, and the halt state. It turns red
@@ -496,6 +546,34 @@ Tickers open `/data?instrument=<id>`.
 | Sweep, Signal IC | `/lab/sweeps`, `/lab/signal-ic` | See Lab form above |
 | Glossary | `/help/glossary` | Every term the help tips explain |
 
+## Approvals (19.8)
+
+| Page | Route | What it does |
+|---|---|---|
+| Approvals | `/tickets` | Orders your live books decided after the close that wait for you, one order ticket each, grouped by portfolio and run, with Approve, Reject and Approve all. History lists every ticket and what became of it |
+
+- **Approve each trade** is the optional mode between Paper trading and
+  Auto on Today's mode switch. Turning it on asks for a fresh code, then a
+  ticket (no typed name, since each order still waits for you). The two live
+  modes stay locked, with the reason, until the auto checklist passes.
+- **A ticket** shows the side, ticker, quantity, the price (a limit, or at
+  the open), the price the book decided at, the notional, the strategy and
+  its signal score, the broker's commission estimate when it gave one, why
+  it waits (approve mode, or a runaway run) and the rules that touched it.
+  Brass and LIVE for a portfolio that trades real money.
+- **Approving** calls `StepUpService.ensure()` first, so one code covers a
+  single ticket or a whole run. Approve all shows one ticket for the run
+  (orders, notional, send by) before the code. Reject opens a sheet that
+  asks for a reason, kept in the audit log.
+- The push that tickets wait is high urgency and names only the count and
+  the portfolio. It opens `/tickets`. Approvals sits in the main menu for
+  traders. It has no `g` shortcut because every letter is taken.
+- The Approvals item shows a badge with the tickets that wait
+  (`TicketCountService` in `core/tickets/`, read quietly from
+  `/api/tickets/summary` every minute while the tab is visible). The page
+  updates it after each decision. The number is hidden from screen readers
+  and the link's label says it, for example "Approvals, 3 tickets waiting".
+
 - **Notifications.** `NotificationFeedService` (`core/notify/`) keeps the
   unread count, read quietly every minute while the tab is visible and after
   any mark-read. `<app-notification-bell>` sits in the top bar and sidebar.
@@ -528,15 +606,53 @@ Tickers open `/data?instrument=<id>`.
   **Send a test notification** (`POST /api/notifications/test`): it goes to
   every channel you turned on, skips quiet hours, and the toast says how
   many deliveries went out and on which channels.
+- **Alert settings.** The table has a row per kind of alert and a column
+  per channel: Signals, Price alerts, Upcoming events, Orders and fills,
+  Risk alerts and System. Price alerts and upcoming events have their own
+  rows, so turning them off keeps strategy signals. Below it, "Upcoming
+  events" has one switch per kind: Earnings coming up, Ex-dividend dates
+  coming up and Economic releases coming up. All are on until you turn one
+  off. Off means none of that kind, not even in the app. The feed labels
+  them "Price alert" and "Upcoming event".
+- **Economic releases.** Below the switches, "Economic releases" picks the
+  importance (High importance only by default, Medium and high, or All
+  releases) and the countries, one checkbox each. Until you pick, the
+  countries follow the base currencies of your portfolios (US when you have
+  none), and the hint says so. Each change saves at once. The last country
+  cannot be unticked: turn the kind off instead. "Follow my portfolio
+  currencies" goes back to the default. The alert links to
+  `/calendar?country=&date=`, which opens the Economic tab for that country.
 - **Toasts.** Success and info leave after a few seconds and pause while
   hovered or focused. Errors stay until dismissed. The toast layer is a
   manual popover in the top layer, so toasts over a modal stay usable.
+
+## Model versions (22.6)
+
+| Page | Route | What it does |
+|---|---|---|
+| Model versions tab | `/strategies/:id?tab=versions` | Every fit of the strategy's model, the candidate's model book against the live model, the swap check, Swap in and Reject, a retrain of this strategy, and the version log |
+| Model versions | `/ops/models` | Admins: every candidate across strategies, each linking to its tab, and Retrain all |
+
+- **The tab** is a segmented switch on the strategy page (Overview or
+  Model versions). The choice goes into the address, so a link opens it.
+- **The candidate** shows its training window, the two model books over
+  the same days as bars (return, the difference, the candidate's
+  drawdown), and each swap check with its value and limit.
+- **Swap in** opens a Model swap ticket that asks for a reason, then a
+  fresh code (`StepUpService.ensure()`). A failing check turns the button
+  into Override and swap in, which needs a reason of at least 20
+  characters. Reject asks for a reason only. Both need `strategy.promote`.
+  A trader sees the check with the buttons off and a note.
+- **Retrain** (`<app-retrain-job>`, `lab.run`) starts the job, follows it
+  with `<app-job-progress>` and lists what each strategy got: a new
+  candidate, skipped, or a failed fit. "Refit even when fitted in the last
+  few days" sends `force`.
 
 ## Insights and risk
 
 | Page | Route | What it does |
 |---|---|---|
-| Insights | `/insights` | The picked portfolio's value, beta, exposure and largest holding, where the money sits (asset class, sector, currency or holding), returns over periods, risk, which strategies agree with each holding, and the snapshot history |
+| Insights | `/insights` | The picked portfolio's value, beta, exposure and largest holding, where the money sits (asset class, sector, currency or holding), returns over periods, a monthly returns heatmap, risk, which strategies agree with each holding, and the snapshot history |
 | Risk | `/insights/risk` | Each measure against its limit, today's VaR and ES with how often the model missed, each strategy sleeve with its alpha-decay check, and the daily history as a chart and a table |
 
 ```mermaid
@@ -549,7 +665,7 @@ flowchart LR
 
 - Both screens read the portfolio picked in the session strip (a synced
   broker account too) through `api/insights.service.ts` and
-  `api/risk.service.ts`. `<app-insights-nav>` links them.
+  `api/risk.service.ts`. `<app-insights-nav>` links them and the Cash flows and Tax screens.
 - **Insights** reads `GET /api/insights`, `GET /api/insights/agreement` and
   `GET /api/portfolio/snapshots` (server paged). Each stance is a word and a
   mark (agrees, disagrees, has no view), never colour alone. Admins
@@ -569,15 +685,161 @@ flowchart LR
   server paged.
 - New glossary terms: violation ratio, alpha decay and concentration.
 
+## Live trading screens (Phase 19 wave 1)
+
+| Page | Route | What it does |
+|---|---|---|
+| Live settings | `/profile/live/:id` | A live portfolio's allocation and account profile, and which live safeguards and account rules act on it |
+| Broker gateways | `/health` (a panel) | Each IB Gateway: connected or down, the last good check, the fault, and the auto strategies it paused |
+
+```mermaid
+flowchart LR
+  P[Profile: your portfolios] -->|LIVE only| L[Live settings]
+  L --> A[Allocation: set by hand, reason, fresh code]
+  L --> C[Account profile: US, EU or UK, cash or margin, retail or professional]
+  L --> R[Live safeguards and account rules, read only]
+```
+
+- **Getting there.** Profile lists "Live settings" next to each LIVE
+  portfolio. A paper portfolio has none, and the page says so.
+- **Allocation.** The one brass figure on the page, in a `.live-frame`
+  panel. Unset reads "Not set" and "Nothing opens". A note says there are no
+  automatic steps: Stonks never raises or lowers the amount, and a bad week
+  only alerts. Set allocation needs an amount, a currency and a reason, then
+  the order ticket (LIVE) and a fresh code (`StepUpService.ensure()`, and
+  the interceptor on 403 `step_up_required`). `PUT
+  /api/portfolios/{id}/live/allocation`, permission `live.manage`.
+- **Account profile.** Three `<app-segmented>` choices, with one line each
+  on what the choice means (settlement days, day trades, fund documents).
+  Save profile keeps the stored currency, currency policy and wash sale
+  mode, and turns shorts off on a cash account. A missing profile is a 404
+  from the API, which the page reads as "Not set".
+- **Live rules, read only.** `GET /api/portfolios/{id}/live/rules` lists
+  each live safeguard with On or Off from the policy the book follows, and
+  each account rule with whether it applies to the profile. Words for every
+  rule live in `shared/live-rules.ts`.
+- **Trading run detail.** A risk adjustment tagged `account_rules.<rule>`
+  reads "Account rule: Settled cash only", a live safeguard its own name
+  (`liveAdjustmentLabel()`).
+- **Fine order state.** `<app-order-status>` takes `state` besides
+  `status`, and the state wins when the order has one: Pending, Sent,
+  Working, Partially filled, Filled, Cancelling, Cancelled, Expired,
+  Rejected and Outcome unknown. Sent, Working, Cancelling, Expired and
+  Outcome unknown carry a line on what they mean. The orders list, the
+  trading run detail and the strategy page show it. The status filter keeps
+  the coarse statuses.
+- **Broker gateways.** `<app-gateway-panel>` on Health reads `GET
+  /api/brokers/gateways` every minute. Each gateway is a card with its
+  PAPER or LIVE stamp and Connected, Down or Not checked yet. A down
+  gateway shows the fault and detail. Paused auto strategies link to their
+  page, where auto is turned on again with a fresh code. Other people's
+  paused books show as a count only. The `broker:<gateway>` health checks
+  still count toward the overall state, but leave the Runs list.
+
+## Live engine (Phase 21.3.4)
+
+| Page | Route | What it does |
+|---|---|---|
+| Live engine | `/live` | Each intraday engine: running or not, its market, the silent-engine alarm, the price stream, speed from bar close to decision and from decision to order, and steps that failed |
+
+- **Getting there.** System group, admins. The page reads `GET
+  /api/stream/status` (`data.read`) every 15 seconds and on Refresh.
+- **Engine card.** One card per engine, headed by its id, with a status
+  pill in words: Running, Market closed, Reconnecting, Silent, Not
+  reporting or Stopped. A line under it says what that means for trading.
+  A silent engine shows how long it has been silent, and a banner counts
+  the engines that need a look.
+- **Price stream.** Connected or not, the source, the age of the last
+  price, bars built, late prices dropped, connection drops, gaps, and the
+  last problem (scrubbed of keys by the API).
+- **Speed.** Median and 95% upper estimates from the histograms, the
+  slowest order and how many orders were measured. Nothing measured yet
+  reads so.
+- **Intraday P&L.** A panel for P&L per portfolio. Until live marks exist
+  (21.3.3) it shows the API's note.
+- **No engine.** An empty state says intraday trading is off, or that live
+  prices are on and the engine has not reported yet.
+- Words avoid system names: "late prices", not ticks. `live-state.ts`
+  holds them, with tests.
+
+## Assistant, cash flows and tax (Phase 20)
+
+| Page | Route | What it does |
+|---|---|---|
+| Assistant | `/assistant`, `/assistant?c=<id>` | Chat with the AI assistant: streamed answers, each tool it uses as a step, a yes or no step for anything that changes something, the trace, and your conversations |
+| Cash flows | `/insights/cash-flows` | Returns with deposits and withdrawals left out, the list of flows, and a form to record one |
+| Tax | `/insights/tax` | Base currency, where you file, the lot method, US wash sales, specific lot picks, the yearly gains and dividends CSVs, and the open lots on a day as CSV |
+
+```mermaid
+flowchart LR
+  M[Message] --> S[POST .../messages, event stream]
+  S --> T[text: the answer grows]
+  S --> C[tool_call and tool_result: a step]
+  S --> Y[confirm_required: a ticket with Approve and run, Reject]
+  Y --> D[POST .../actions/id, event stream]
+  D --> T
+```
+
+- **The chat.** `AssistantService.send()` and `decide()` stream the turn's
+  events. They go through `fetch`, so the service adds the credential
+  itself: the tab's API token, else the CSRF header for the session cookie.
+  A refused stream becomes an `ApiError` with the API's message, and a
+  stream is never retried. `pages/assistant/chat-model.ts` folds the events
+  into the transcript (`applyEvent`) and rebuilds a stored conversation
+  (`fromHistory`), pending actions included.
+- **Steps.** `<app-chat-step>` names the tool in words (`tool-labels.ts`),
+  writes its state as a word and a mark (Working, Waiting for you, Done,
+  Failed, Not run), and folds the inputs and what it saw under Details.
+- **The yes or no step.** `<app-confirm-step>` is a ticket: what it will do,
+  its inputs and the tool's own preview. Nothing runs until Approve and run.
+  Stopping trading or deleting is a danger button. A new message skips the
+  step, and the hint under the box says so.
+- **Research only** is picked when a conversation starts. It reads and
+  researches but changes nothing. The conversation and the list show a
+  Research only tag.
+- **Trace** opens a sheet with each turn: model, prompt version, steps,
+  order drafts, and every tool call with its inputs and result.
+- **Frozen.** After a burst of changes the assistant freezes itself. A
+  warning banner says until when, and Unfreeze now asks first and then for a
+  fresh code (`killswitch.resume`).
+- **Off.** Without a model server the page says the assistant is off and
+  what an admin does about it. No chat is shown.
+- **Phones.** The list and the open conversation are one screen each, with
+  "All conversations" to go back. Stop ends the answer early.
+- **Cash flows.** Recording a deposit or withdrawal moves the paper book's
+  cash, so it confirms as a ticket (`portfolio.manage`). A broker book gets
+  its flows from the sync, so the form is replaced by a note.
+- **Returns.** Insights shows each period's change (deposits count) and its
+  time-weighted return (they do not), the money-weighted return per year
+  and net deposits. Today's portfolio card adds a one-line summary. Both
+  show the value in the base currency when it differs, or which exchange
+  rate is missing (`shared/base-currency.ts`). Glossary terms: time-weighted
+  return and money-weighted return.
+- **Monthly returns.** `InsightsView.monthly_returns` is the time-weighted
+  return of each month from the daily values, so a deposit is never a
+  gain. `<app-monthly-returns>` (`shared/ui/monthly-returns.ts`) draws it:
+  a row per year, a cell per month shaded by sign and size (three steps),
+  the signed percent in every cell and the year compounded at the end. It
+  scrolls sideways on a phone and can take keyboard focus. The tear sheet
+  uses the same component.
+- **Tax.** Save stays off until something changed. Specific lots
+  (`<app-lot-picks>`) lists your sales, then the earlier buys of that ticker
+  with a number field each. Picks may not add up to more than the sale.
+  "Use oldest first" clears them. The yearly CSVs download through
+  `TaxService.download()` and `saveFile()`. "Open lots on" (a day, today by
+  default) downloads every lot still held with its cost basis, days held,
+  short or long term, the day it turns long term and the gain at the latest
+  close (`TaxService.openLots()`, `GET /api/tax/exports/lots`).
+
 ## Trader workspace (Phase 13)
 
 | Page | Route | What it does |
 |---|---|---|
 | Get set up | `/welcome` | The first-run guide: five steps, each can be skipped, kept per user on the server. Admins also see the install checklist |
 | Watchlists | `/watchlists` | Your own ticker lists: create, edit, delete, open in the lab, chart a ticker |
-| Charts | `/charts`, `/charts/:ticker` | Daily candles, volume, moving averages, your fills (B and S) and strategy signals, with the fills and signals listed below |
+| Charts | `/charts`, `/charts/:ticker?vs=` | Daily candles, volume, moving averages, your fills (B and S) and strategy signals, other tickers compared on one scale, the rolling Sharpe and drawdown, with the fills and signals listed below |
 | Leaderboard | `/leaderboard` | Strategies ranked by risk-adjusted paper result, each linking to its tear sheet |
-| Tear sheet | `/strategies/:id/tearsheet` | Paper figures and curve, monthly returns, recent trades, survival verdicts, go-live check, status history |
+| Tear sheet | `/strategies/:id/tearsheet` | Paper figures and curve, monthly returns, recent trades, survival verdicts, go-live check, status history, Download PDF |
 
 ```mermaid
 flowchart LR
@@ -611,10 +873,33 @@ flowchart LR
   Moving averages are computed in the page (`pages/charts/chart-data.ts`)
   over 199 extra bars so the 200-day line starts at the left edge. The wheel
   scrolls the page; zoom with the range buttons, a pinch or the price axis.
+- **Compare, rolling Sharpe and drawdown.** Under the candles,
+  `GET /api/charts/compare?tickers=&limit=&window=` returns each ticker's
+  adjusted close rebased to 100 on the first day they all have a price, its
+  drawdown from the running peak and its rolling Sharpe (the window's bars
+  before the range feed the first points; 365 days a year for crypto).
+  Compare adds up to five tickers next to the chart's own, kept in `?vs=`
+  so a link reopens the same view, each a categorical line
+  (`pages/charts/compare-data.ts`), with a table of change, worst drawdown
+  and Sharpe. The second panel draws the ticker's rolling Sharpe (3M, 6M or
+  1Y window) with its drawdown below. Both go through
+  `<app-time-series-chart>`, so the `ChartEngine` seam stays the only door
+  to the charting library.
 - **Leaderboard and tear sheets.** `GET /api/strategies/leaderboard?sort=`
   (`sharpe`, `return`, `drawdown`, `trades`) and
   `GET /api/strategies/{id}/tearsheet`. Paper value is a `primary` line,
   never brass. The stage words come from `shared/governance-labels.ts`.
+- **Download PDF.** The tear sheet's Download PDF opens the browser's print
+  dialog, where you pick Save as PDF (`PrintService`, `shared/print.service.ts`).
+  No PDF library runs on the server: WeasyPrint needs GTK libraries that do
+  not install cleanly on Windows, and a headless browser would grow the
+  Docker image a lot. The print stylesheet at the end of `styles.scss` keeps
+  only the content, on white, without navigation, the session strip, toasts
+  or buttons, and keeps panels and table rows whole. A dark theme switches
+  to light for the print and back, so charts print in ink colours. Add
+  `.print-only` or `.print-hide` to show or hide a block on paper. The
+  backtest tear sheet file (`stonks report --backtest`) carries its own
+  print rules, so it saves to an A4 PDF the same way.
 - **Risk limits.** `<app-risk-limits-panel>` in Settings reads
   `GET /api/risk/limits` (system, yours, what you follow, ignored) and saves
   with `PUT /api/risk/limits` (`portfolio.manage`). Percents are typed 0 to
@@ -626,6 +911,138 @@ flowchart LR
   temporary link. Orders and fills (Orders page), the journal (Trade costs),
   P&L and snapshots (Insights) and lab trials (trial ledger, and one run).
   A failure toasts the API's reason.
+
+## Trader screens added in Phase 20
+
+| Page | Route | What it does |
+|---|---|---|
+| New order | `/orders/new` | The order ticket: check an order, place it, and change or cancel your working orders by hand |
+| Drafts | `/orders/drafts` | Orders the assistant proposed, each a ticket to approve (fresh code) or reject |
+| Price alerts | `/notifications/price-alerts` | Make, switch off, change and delete price alerts, and see when they fired |
+| Telegram | Settings, Your account | Link status, a one-time link code, and Unlink |
+
+```mermaid
+flowchart LR
+  F[Fill the ticket] --> C[Check order: preview]
+  C -->|409 order_refused| R[Each rule's cut, accept a smaller order]
+  R --> C
+  C --> L{Real money?}
+  L -->|yes| S[Fresh code] --> T
+  L -->|no| T[Ticket: side, PAPER or LIVE]
+  T --> P[Place order] --> W[Your orders by hand: Change, Cancel]
+```
+
+- **Order ticket.** `pages/orders/manual-ticket.page.ts`. Ticker, side, quantity, market or limit, and a reason (kept with the order). **Check order** calls `POST /api/orders/manual/preview`: every halt and risk rule runs and nothing is placed. The ticket then shows the last close, the value and any cut. **Place order** checks again, asks with the order ticket (`ConfirmService`, `ticket`), then places it. A real-money book asks for a fresh code first (`StepUpService.ensure()`) and the ticker typed on the ticket. `?ticker=&side=` prefill it.
+- **Refusals.** A 409 `order_refused` carries `risk_adjustments`. `refusalOf()` (`pages/orders/order-refusal.ts`) reads them from `ApiError.problem`, the whole problem body. `<app-order-refusal>` lists each rule with what it did ("Cuts 100 to 40", "Drops the order") and, when the rules allow a smaller order, offers **Accept a smaller order**, which sends `allow_reduce` and checks again. Preview, place and change are silent: the ticket shows the failure, so no toast repeats it.
+- **Idempotency.** The ticket sends its own `client_id`. A new key is made when the order changes and after it is placed, so a retry of the same order never places it twice.
+- **Change and cancel.** "Your orders by hand" lists `GET /api/orders?origin=manual`. A working order (pending, submitted, partly filled) has **Change** (`<app-order-change-sheet>`: new quantity or limit and a reason, the same refusal panel) and **Cancel** (a reason, `<app-status-change-dialog>`).
+- **Drafts.** `pages/orders/order-drafts.page.ts` reads `GET /api/orders/drafts?status=` (Waiting, Placed, Rejected, Expired, All). **Approve and place** asks for a fresh code, shows the order ticket (the ticker typed for real money), then calls `.../approve`. A refused approval shows its reason on the draft, and the draft turns rejected. **Reject** takes an optional note.
+- **Price alerts.** `<app-notifications-tabs>` links the feed and Price alerts. The editor watches one ticker or a watchlist and fires when the price rises above or falls below a level, or moves by a percent either way over some days (`pct` is in percent, 8 means 8%). Changing an alert keeps its target and condition and starts it fresh. Firings are a server-paged table filtered by alert, with the ticker linking to its chart.
+- **Telegram.** `<app-telegram-link>` (`pages/settings/telegram-link.ts`) reads `GET /api/telegram/link`. **Get a link code** shows `/link CODE` once in `<app-one-time-secret>`, with the bot's `t.me` link and the time it runs out. **Check the link** reads the status again. **Unlink** asks first. Without a bot on the server the panel says so and offers nothing.
+- The alert settings table scrolls inside its own box on phones, now that Telegram adds a channel.
+
+## Calendar, news and the screener (20.7, 20.8)
+
+| Page | Route | What it does |
+|---|---|---|
+| Calendar | `/calendar` | Earnings, ex-dividend dates, economic releases and news for your holdings, a watchlist, some tickers or everything |
+| Screener | `/screener` | Filter instruments on price and fundamentals, keep screens, and save one as a universe for the lab |
+
+```mermaid
+flowchart LR
+  S[Whose events: holdings, watchlist, tickers, everything] --> C[GET /api/calendars]
+  S --> N[GET /api/calendars/news]
+  C --> T[Tabs: Earnings, Ex-dividend, Economic]
+  N --> P[News tab: mood per ticker, newest articles]
+  F[Screener form] --> R[POST /api/screener/run] --> M[Matches table]
+  F --> V[Save screen] & U[Save as a universe: rule or snapshot]
+```
+
+- **Calendar.** `pages/calendar/calendar.page.ts`. "Whose events" picks the scope. Watchlists offers one list or all of them, and Tickers waits until you name some. From and To span at most 120 days, checked before any call. The tabs count each calendar. Countries shows on the Economic tab only. A cut read says so. `?ticker=&date=` opens one ticker from that day, which is where the event alerts link. `?country=&date=` opens the Economic tab for one country, where the economic release alerts link. The Economic tab shows each release's importance. Pure helpers live in `calendar-view.ts`.
+- **News.** `<app-news-panel>` (`pages/calendar/news-panel.ts`) takes the scope as `query`. Everything has no news, so the panel asks for a narrower scope and calls nothing. Each ticker gets a mood card (the 30-day score weighted by articles, in words, a shape and a signed number). Articles link out only over http or https, in a new tab.
+- **Ticket warning.** `<app-earnings-warning>` (`pages/orders/earnings-warning.ts`) sits under the ticker on the order ticket. For a full ticker it calls `GET /api/calendars/earnings-warnings` silently and shows one warning line when the report falls before the next open, with a link to the calendar. A failed check shows nothing and never blocks the ticket.
+- **Event alerts.** `<app-event-alert-kinds>` in the alert settings lists each upcoming-event alert and how far ahead it looks. They are sent as Signals, so the Signals row decides where they reach you. There is no switch per kind yet: the server has no preference for it.
+- **Screener.** `pages/screener/`. Where to look (a universe, a date, asset classes, sectors, exchanges, lowest price and dollar volume), metric filters from `GET /api/screener/metrics` grouped by price and fundamentals, then sort, rows and extra columns. Percent metrics are typed in percent (8 means 8%) and sent as fractions. `screen-form.ts` turns the form into a spec and back, and says what is wrong in words before anything is sent. Results link each ticker to its chart and format each column by the metric's unit.
+- **Saved screens.** Your screens list sits beside the form. Open reads the screen by id and fills the form. Save changes stays off until something changed. Delete asks first.
+- **Save as a universe.** `<app-save-universe-sheet>` asks for a name and a short name (the universe id), then the members: Re-run the screen (rule mode, from a start date, weekly, monthly or quarterly) or Today's matches (snapshot mode, with the survivorship warning). An unchanged saved screen goes by its id, so the universe follows it. The call is silent and a refusal shows in the sheet. The page then shows the saved universe and the server's warnings.
+- `TableColumn.display` gives a column its own text (a unit per column) while sorting still uses `value`.
+- `provideFakeCalendars()` (`src/testing/fake-calendars.ts`) keeps specs of pages that embed a calendar piece free of calendar calls.
+
+## Options research (17.6)
+
+| Page | Route | What it does |
+|---|---|---|
+| Options | `/options` | Read a stored chain with IV and Greeks, draw a structure's payoff, list the options strategies and backtest one. Research only |
+
+```mermaid
+flowchart LR
+  U[GET /api/options/underlyings] --> P[Underlying and date]
+  P --> C["GET /api/options/chains/{underlying}"] --> T[Chain table]
+  P --> Y[POST /api/options/payoff] --> D[Payoff diagram]
+  B[Backtest form] --> J[POST /api/options/backtests] --> R[Equity, figures, checks]
+```
+
+- **Research note.** The page opens with "Research only, nothing trades options." No order, paper book or live book uses anything on it.
+- **Chain.** `pages/options/options.page.ts`. Underlying, date (empty means the latest stored day), expiry and a Show switch for both sides, calls or puts. The table is `<app-data-table>` with the strike as the card title on phones. With both sides, phone cards keep bid, ask and delta of each. A hint names the units: theta per share per day, vega per share per vol point. Generated chains carry a tag, "Generated chains, not market quotes".
+- **Payoff.** Pick a structure from `GET /api/options/structures`. Its fields follow the parameters it reads (days to expiry, delta, long leg, short leg or wing delta). `<app-payoff-diagram>` (`payoff-diagram.ts`) draws the profit at expiry in SVG: the line, gain and loss shaded on either side of zero, today's price dashed. The cost, max loss, max gain ("Unlimited" when there is no bound) and breakevens sit above it and the legs below. The SVG has `role="img"` and a one sentence summary. A payoff the chain cannot supply shows inline with Retry.
+- **Strategies.** Each options strategy with its structures and hypothesis.
+- **Backtest.** `<app-options-backtest>` (`options-backtest.ts`) fills the underlying and window from the first stored underlying. Strategy parameters use `<app-param-form>`. It needs `lab.run` (a permission note otherwise), runs as a job followed with `JobFollower`, and shows return, Sharpe, drawdown, fills, the equity chart and each validation check with the verdict. On generated chains it says the result is never evidence.
+- Pure helpers (chain columns, payoff scaling, leg text, the backtest form) live in `options-view.ts`.
+
+## Universes (20.10)
+
+The Universes page sits under Data: the Data page links to it, and so do
+the screener and the lab forms. Anyone signed in can read it. Creating,
+editing, refreshing and fetching data need `lab.run`. Delete is for
+admins.
+
+```mermaid
+flowchart LR
+  L[List: kind, members, last refresh] --> N[New universe]
+  L --> D[Universe page]
+  N --> E[app-universe-editor]
+  D --> E
+  E -->|POST or PUT /api/universes| D
+  D --> M[Members on a date]
+  D --> H[Membership history]
+  D --> R[Refresh job] --> M
+  D --> F[Fetch missing data job]
+  D --> X[Delete: type the id]
+```
+
+- **List.** `pages/universes/universes.page.ts`. Each row has its kind,
+  member count and last refresh. "Changed since" marks a universe whose
+  definition changed after its last refresh, so its members are behind.
+- **The form.** `<app-universe-editor>` (`universe-editor.ts`) serves both
+  New universe and Edit. Each kind has its own fields:
+  - list: tickers, or a CSV with optional dated spans,
+  - exchange: a code with suggestions from `GET /api/universes/exchanges`
+    (the exchanges our instruments name, with counts), a source and
+    "Include delisted names",
+  - rule: the window, how often the screen runs, a universe to start
+    from, where to look, the screener's filter builder
+    (`<app-screen-filters>`, shared with the screener) and an optional
+    top N,
+  - index: the index id, where its history comes from, and an optional
+    history file that is imported before the save.
+  "Edit as JSON" shows every setting. An edit opens in JSON when the
+  fields cannot hold the stored definition (dated spans, security types),
+  so a save never drops a setting. The id cannot change on an edit.
+  `universe-form.ts` turns the form into a spec and back.
+- **Universe page.** `universe-detail.page.ts`. Facts, a notice when the
+  definition changed after the last refresh, members on a date (a paged
+  table with a finder), and the membership history from
+  `GET /api/universes/{id}/history`: one row per stretch of membership,
+  latest change first, "From the start" and "Still a member" for open
+  ends, a ticker search on Enter and Show more for the next page.
+- **Jobs.** Refresh and Fetch missing data queue jobs and follow them with
+  `<app-job-progress>` to their typed results. Refresh reloads the facts,
+  members and history.
+- **Delete** asks for the universe id typed (`typedConfirmation`), then
+  goes back to the list.
+- **Links.** The screener's saved universe panel has Open the universe and
+  a link to the list beside Start from. The lab run form links a picked
+  universe to its page, and offers Make a universe when none is stored.
 
 ## Shared pieces from the usability pass (18.6)
 
@@ -727,7 +1144,9 @@ about the same thing.
 | Stop trading (kill switch), "Stop new buys only" | `POST /api/halts/kill`, `buys_only` | `halts kill --buys-only` | `engage_kill_switch` (`buys_only`) |
 | Update data, Data updates | `/api/ingest/*`, `ingest_runs` | `stonks ingest` | `run_ingest` |
 | Go-live suite | preset `promotion` | `--preset promotion` | `run_lab` (`preset`) |
-| Signals only, Paper trading, Auto (modes) | `notify`, `paper`, `auto` | none | `subscribe` (`mode`) |
+| Signals only, Paper trading, Approve each trade, Auto (modes) | `notify`, `paper`, `approve`, `auto` | none | `subscribe` (`mode`) |
+| Approvals, order tickets | `/api/tickets` | `stonks tickets` | `list_tickets`, `get_ticket` |
+| Model versions, candidate, Swap in, Retrain | `/api/strategies/{id}/versions`, `/api/model-versions` | `registry versions`, `swap`, `reject`, `retrain` | `list_model_versions`, `swap_model_version`, `retrain_models` |
 | Signal IC | `/api/lab/signal-ic` | `stonks lab ic` | `run_signal_ic` |
 | Trial ledger | `/api/lab/ledger` | none | `list_ledger_runs`, `get_ledger_run` |
 | Notifications (feed) | `/api/notifications` | `python -m stonks.notify` | `list_notifications` |
@@ -735,9 +1154,23 @@ about the same thing.
 | Get set up (first-run guide) | `/api/onboarding` | none | none |
 | Watchlists | `/api/watchlists` | none | `list_watchlists`, `get_watchlist`, `create_watchlist`, `update_watchlist` |
 | Charts | `/api/charts/{ticker}` | none | `get_chart` |
+| Compare tickers, rolling Sharpe and drawdown | `/api/charts/compare` | none | `compare_tickers` |
 | Leaderboard, tear sheet | `/api/strategies/leaderboard`, `.../tearsheet` | none | `get_leaderboard`, `get_tear_sheet` |
 | Your risk limits | `/api/risk/limits` | none | `get_my_risk_limits` |
+| Live settings (allocation, account profile, live safeguards, account rules) | `/api/portfolios/{id}/live/*` | none | none |
+| Broker gateways (Health) | `/api/brokers/gateways` | none | none |
+| Live engine | `/api/stream/status` | none | `get_stream_status` |
 | Download CSV | `/api/exports/*` | none | none |
+| Tax files: gains, dividends, open lots | `/api/tax/exports/*` | `stonks tax gains`, `dividends`, `lots` | none |
+| Download PDF (tear sheet) | browser print, no route | `stonks report --backtest` (HTML) | none |
+| New order, orders by hand | `/api/orders/manual`, `origin=manual` | `stonks orders` | `place_order`, `change_order`, `cancel_order` |
+| Drafts (to approve) | `/api/orders/drafts` | none | `draft_order`, `list_order_drafts` |
+| Price alerts | `/api/price-alerts` | `stonks price-alerts` | `list_price_alerts`, `create_price_alert`, `update_price_alert`, `delete_price_alert`, `list_price_alert_events` |
+| Telegram link | `/api/telegram/link` | `stonks telegram` | none |
+| Calendar, News | `/api/calendars`, `/api/calendars/news` | `stonks calendars` | `get_calendar`, `get_news`, `get_earnings_warnings`, `list_event_alert_kinds` |
+| Screener, Your screens, Save as a universe | `/api/screener/*` | `stonks screener` | `run_screen`, `list_screens`, `create_screen`, `save_screen_as_universe`, ... |
+| Options (chain, payoff, strategies, backtest) | `/api/options/*` | `stonks options` | `get_option_chain`, `get_option_payoff`, `list_option_strategies`, `run_options_backtest`, ... |
+| Universes (create, edit, history, refresh, fetch data) | `/api/universes/*` | `stonks universe` | `list_universes`, `update_universe`, `get_universe_history`, `list_universe_exchanges`, ... |
 
 "Buys only" was called `flatten` before 1.0. It never closed a position,
 so the old name was misleading. The API, the CLI (`--flatten`) and MCP
@@ -959,8 +1392,8 @@ automate it.
   returns focus); `?` lists every shortcut; `g` then a key jumps between
   pages (`g m` Today, `g s` strategies, `g o` orders, `g t` trade costs,
   `g z` charts, `g x` watchlists, `g e` insights, `g n` notifications,
-  `g w` paper trading, `g b` leaderboard, `g u` studio, `g l` lab, `g g`
-  go live, `g p` profile, `g ,` settings, `g c` broker connections, `g i`
+  `g w` paper trading, `g b` leaderboard, `g f` screener, `g u` studio, `g l` lab, `g g`
+  go live, `g y` assistant, `g p` profile, `g ,` settings, `g c` broker connections, `g i`
   glossary, and for admins
   `g d` overview, `g h` health, `g j` schedule, `g a` data, `g q` data
   quality, `g v` universes, `g k` halts, `g r` users); `n b` new
@@ -1053,8 +1486,8 @@ flowchart LR
   | Group | Pages | Who |
   |---|---|---|
   | (top) | Today, Strategies, Orders (tabs: Orders, Fills, Trading runs, Trade costs), Charts, Watchlists, Insights, Notifications | everyone signed in |
-  | Research | Paper trading, Leaderboard, Studio, Lab, Go live | Studio and Lab need `lab.run`, the rest are for all |
-  | System | Overview (`/dashboard`), Health, Schedule, Data, Data quality, Universes, Halts, Users | admins |
+  | Research | Paper trading, Leaderboard, Studio, Lab, Go live, Assistant | Studio and Lab need `lab.run`, the rest are for all |
+  | System | Overview (`/dashboard`), Health, Live engine, Schedule, Data, Data quality, Universes, Halts, Users | admins |
   | Account menu (by your name) | Profile, Settings, Broker connections, Get set up, Glossary, Sign out | everyone signed in |
 
   With open reads and nobody signed in (dev) everything shows.
@@ -1113,6 +1546,9 @@ flowchart LR
   `GET /api/portfolios` lists your portfolios, each with `trading` (paper
   or live). The console reads the PAPER or LIVE stamp from there, not from
   `GET /api/portfolios/trading-modes` (MCP uses that one).
+  The default portfolio at Alpaca or an IB Gateway is LIVE only when its
+  orders really go to a live account (`broker` is `alpaca` or `ibkr`), the
+  same answer the order paths use.
 - **Profile** (`pages/profile/`): password, new recovery codes, your
   portfolios and API tokens (a new token is shown once). "Your portfolios"
   lists each with its PAPER or LIVE stamp, renames one
@@ -1122,6 +1558,9 @@ flowchart LR
   type and channel and quiet hours next to the push opt-in.
   `GET /api/notifications/preferences` has `channel_defaults`: whether each
   channel is on when you never set it, and whether it stands in for push.
+  It also has `event_alerts`, one switch per upcoming-event kind (`earnings`,
+  `dividends`, `economic`) with plain words. `PUT` takes `event_alerts` and
+  `preferences`, and changes only what it is given.
 - **Owners.** Jobs and Studio drafts record `owner_id`. A trader sees only
   their own jobs and drafts (others are 404). Admins see all of them.
   `GET /api/alerts` shows only your alerts (admins also see the admin

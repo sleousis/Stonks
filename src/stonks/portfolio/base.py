@@ -103,6 +103,10 @@ class ConstructionInput:
       else taken as 1.0.
     - ``volumes``: the decision bar's share volume per ticker, for the
       square-root impact term of ``mean_variance_costs``.
+    - ``factor_exposures``: optional raw style exposures known at the
+      decision, rows tickers (``momentum``, ``size``, ``value``,
+      ``volatility``, ``sector``), for the ``style`` covariance estimator
+      (roadmap 22.4, :func:`stonks.factors.style.style_exposures`).
     """
 
     signals: Mapping[StrategyId, Mapping[Ticker, float]]
@@ -116,6 +120,7 @@ class ConstructionInput:
     returns_history: pd.DataFrame | None = None
     betas: Mapping[Ticker, float] = field(default_factory=dict)
     volumes: Mapping[Ticker, float] = field(default_factory=dict)
+    factor_exposures: pd.DataFrame | None = None
 
     def betas_for(self, tickers: Iterable[Ticker]) -> dict[Ticker, float]:
         """Beta per ticker: given, else estimated, else 1.0."""

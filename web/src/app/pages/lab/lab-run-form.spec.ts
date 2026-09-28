@@ -1,5 +1,6 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 
 import { TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
@@ -20,7 +21,7 @@ describe('LabRunFormView', () => {
     emitted = [];
     TestBed.configureTestingModule({
       imports: [LabRunFormView],
-      providers: [...provideApi(), provideHttpClientTesting()],
+      providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
     });
     controller = TestBed.inject(HttpTestingController);
   });
@@ -137,6 +138,10 @@ describe('LabRunFormView', () => {
     fixture.detectChanges();
     // The typed tickers step aside for the universe.
     expect(el.querySelector('#lr-tickers')).toBeNull();
+    // The picked universe links to its page.
+    expect(el.querySelector('a[href="/universes/sp500"]')?.textContent).toContain(
+      'See its members',
+    );
     el.querySelector<HTMLInputElement>('input[aria-describedby="lr-ensure-hint"]')!.click();
     fixture.detectChanges();
     el.querySelector<HTMLInputElement>(`input[value="${MOMENTUM.class_path}"]`)!.click();
@@ -147,6 +152,12 @@ describe('LabRunFormView', () => {
     expect(emitted[0]).not.toHaveProperty('universe');
   });
 
+  it('points to the Universes page when none is stored', async () => {
+    await create();
+    expect(el.querySelector('#lr-universe')).toBeNull();
+    expect(el.querySelector('a[href="/universes"]')?.textContent).toContain('Make a universe');
+  });
+
   it('uses plain labels for the search settings', async () => {
     await create();
     const text = el.textContent!;
@@ -154,6 +165,51 @@ describe('LabRunFormView', () => {
       expect(text).toContain(label);
     for (const jargon of ['Embargo bars', 'Train share', 'Budget'])
       expect(text).not.toContain(jargon);
+  });
+
+  it('offers Optuna with its sampler and early stopping, and a heatmap', async () => {
+    await create();
+    fillBasics();
+    expect(el.querySelector('#lr-sampler')).toBeNull();
+    const tuner = el.querySelector<HTMLSelectElement>('#lr-tuner')!;
+    tuner.value = 'optuna';
+    tuner.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(el.querySelector('#lr-sampler')).not.toBeNull();
+    el.querySelector<HTMLInputElement>('input[aria-describedby="lr-prune-hint"]')!.click();
+    const objective = el.querySelector<HTMLSelectElement>('#lr-objective')!;
+    expect([...objective.options].map((o) => o.value)).toContain('sharpe_dd');
+    objective.value = 'calmar';
+    objective.dispatchEvent(new Event('change'));
+    el.querySelector<HTMLInputElement>('input[aria-describedby="lr-heatmap-hint"]')!.click();
+    fixture.detectChanges();
+    const x = el.querySelector<HTMLSelectElement>('#lr-heat-x')!;
+    // Tunable parameters only: long_only and ticker are fixed.
+    expect([...x.options].map((o) => o.value)).toEqual(['', 'lookback_days', 'threshold', 'mode']);
+    x.value = 'lookback_days';
+    x.dispatchEvent(new Event('change'));
+    type('#lr-heat-grid', '5');
+    submit();
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({
+      tuner: 'optuna',
+      sampler: 'tpe',
+      prune: true,
+      objective: 'calmar',
+      heatmap: { x: 'lookback_days', y: null, grid_size: 5, fast: true },
+    });
+  });
+
+  it('opens Advanced for a bad heatmap grid', async () => {
+    await create();
+    fillBasics();
+    el.querySelector<HTMLInputElement>('input[aria-describedby="lr-heatmap-hint"]')!.click();
+    fixture.detectChanges();
+    type('#lr-heat-grid', '30');
+    submit();
+    expect(emitted).toHaveLength(0);
+    expect(el.querySelector<HTMLDetailsElement>('details.advanced')!.open).toBe(true);
+    expect(el.querySelector('#lr-heat-grid-hint')?.textContent).toContain('Between 2 and 15');
   });
 
   describe('the Advanced fold (UX-30)', () => {

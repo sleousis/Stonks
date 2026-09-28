@@ -114,7 +114,7 @@ def test_immediate_fill_is_booked_once_through_reconcile(env, monkeypatch):
 def test_reconcile_runs_before_deciding(env, monkeypatch):
     _, state, _, _, client, _, _ = env
     calls: list[str] = []
-    real_reconcile = tick_mod.reconcile_orders
+    real_reconcile = tick_mod.startup_reconcile
     real_fetch = AlpacaBroker.fetch_portfolio
 
     def spy_reconcile(broker, st, **kw):
@@ -125,7 +125,7 @@ def test_reconcile_runs_before_deciding(env, monkeypatch):
         calls.append("fetch_portfolio")
         return real_fetch(self)
 
-    monkeypatch.setattr(tick_mod, "reconcile_orders", spy_reconcile)
+    monkeypatch.setattr(tick_mod, "startup_reconcile", spy_reconcile)
     monkeypatch.setattr(AlpacaBroker, "fetch_portfolio", spy_fetch)
     _tick(env)
     assert calls[:2] == ["reconcile", "fetch_portfolio"]
@@ -183,7 +183,7 @@ def test_pre_trade_rejection_is_recorded_rejected(env):
 def test_dry_run_with_alpaca_writes_and_submits_nothing(env, monkeypatch):
     _, state, _, _, client, _, _ = env
     monkeypatch.setattr(
-        tick_mod, "reconcile_orders", lambda *a, **k: pytest.fail("dry-run must not reconcile")
+        tick_mod, "startup_reconcile", lambda *a, **k: pytest.fail("dry-run must not reconcile")
     )
     result = _tick(env, dry_run=True)
     assert result.orders_placed == 1
@@ -201,7 +201,7 @@ def test_alpaca_kind_without_a_broker_factory_fails_loudly(env):
 def test_simulated_tick_never_reconciles(env, monkeypatch):
     lake, state, registry, *_ = env
     monkeypatch.setattr(
-        tick_mod, "reconcile_orders", lambda *a, **k: pytest.fail("simulated must not reconcile")
+        tick_mod, "startup_reconcile", lambda *a, **k: pytest.fail("simulated must not reconcile")
     )
     result = run_tick(state, lake, registry, TickSettings(universe=["UP.US"]), as_of=AS_OF)
     assert result.fills == 1

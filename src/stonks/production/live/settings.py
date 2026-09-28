@@ -1,0 +1,122 @@
+"""``[production.live]``: settings of live trading that are not risk rules
+(roadmap Phase 19).
+
+The live safeguards' limits are risk rules and sit under
+``[production.risk.rules.<rule>]`` (``capital_ramp``,
+``live_notional_caps``, ``price_band``, ``max_orders_per_run``,
+``account_rules``), so portfolio overrides can only tighten them. The
+amount Stonks may trade per live portfolio is not a setting: the owner
+sets it by hand (``production.live.allocation``).
+"""
+
+from __future__ import annotations
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class SubmitSettings(BaseModel):
+    """``[production.live.submit]``: when the ``live_submit`` job sends the
+    tickets a live book decided after the close (roadmap 19.8)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The exchange calendar whose next open the window leads up to.
+    calendar: str = "XNYS"
+    #: The window opens this many minutes before the next session's open.
+    #: The ``live_submit`` job fires at the same moment.
+    window_minutes: int = Field(default=20, ge=1, le=600)
+    #: Tickets expire this many minutes before the open: the last moment an
+    #: opening-auction order is still taken. A ticket not sent by then is
+    #: never sent late, and the next tick decides afresh.
+    deadline_minutes: int = Field(default=2, ge=0, le=120)
+
+    @model_validator(mode="after")
+    def _window_before_deadline(self) -> SubmitSettings:
+        if self.deadline_minutes >= self.window_minutes:
+            raise ValueError("deadline_minutes must be less than window_minutes")
+        return self
+
+
+class StageGateSettings(BaseModel):
+    """``[production.live.stages]``: what each stage gate asks for (roadmap
+    19.9, design section 1). A promotion needs every check to pass. A dirty
+    week raises an alert but never changes the stage or the allocation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Gate 1 (sim_paper to broker_paper): paper days every live
+    #: subscription must have finished (the auto gate's 20).
+    min_paper_days: int = Field(default=20, ge=0)
+    #: Gate 2 (broker_paper to live_small): sessions recorded in broker_paper.
+    min_broker_paper_sessions: int = Field(default=20, ge=0)
+    #: ... and the last this many sessions all clean (4 weeks).
+    broker_paper_clean_sessions: int = Field(default=20, ge=0)
+    #: Gate 3 (live_small to live_scale): sessions recorded in live_small (8 weeks).
+    min_live_small_sessions: int = Field(default=40, ge=0)
+    #: ... the last this many sessions all clean (6 weeks).
+    live_small_clean_sessions: int = Field(default=30, ge=0)
+    #: ... at least this many filled live orders.
+    min_live_fills: int = Field(default=30, ge=0)
+    #: A clean session rejects fewer than this share of the orders sent.
+    max_reject_rate: float = Field(default=0.02, ge=0, le=1)
+    #: A tracking error vs the model book (annualised) above this fails a
+    #: gate. ``None``: reported only.
+    max_tracking_error: float | None = Field(default=None, gt=0)
+    #: Sessions in a week, for the bad-week alert.
+    week_sessions: int = Field(default=5, ge=1, le=10)
+
+
+class ReconcileSettings(BaseModel):
+    """``[production.live.reconcile]``: the cash and broker statement
+    comparisons of the end-of-day check (roadmap 19.15)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Compare the broker's change in cash and settled cash since the last
+    #: end-of-day check with the change Stonks can explain.
+    compare_cash: bool = True
+    #: A cash difference up to the larger of this many currency units and
+    #: ``cash_tolerance_fraction`` of net liquidation is noise.
+    cash_tolerance: float = Field(default=1.0, ge=0.0)
+    cash_tolerance_fraction: float = Field(default=0.0001, ge=0.0, le=0.1)
+    #: A cash difference only warns: the owner's own trades, deposits and
+    #: interest move the same cash. ``true`` makes it drift (halt and pause).
+    cash_is_drift: bool = False
+    #: Compare the broker's statement (IBKR Flex, when configured) with
+    #: Stonks' fills for its own orders.
+    compare_statement: bool = True
+    #: A commission difference up to this much is noise.
+    commission_tolerance: float = Field(default=0.01, ge=0.0)
+
+
+class LiveSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    #: The broker account is shared with the owner's own trading. Stonks
+    #: only trades the positions it opened (ownership by attribution), and
+    #: reconciliation does not count the owner's positions or orders as
+    #: drift. ``false`` treats any position or order Stonks did not make as
+    #: drift (roadmap 19.5).
+    allow_manual_trades: bool = True
+    #: Live books decide after the close and write order tickets, which the
+    #: ``live_submit`` job sends in the submit window (roadmap 19.8). Off:
+    #: an auto book sends its orders at once, as before. Books with an
+    #: ``approve`` subscription, and every close of a runaway run, always
+    #: use tickets.
+    submit_in_window: bool = False
+    submit: SubmitSettings = Field(default_factory=SubmitSettings)
+    #: Reconciliation checks in a row that could not reach the broker, on
+    #: this many distinct sessions, before the portfolio's auto
+    #: subscriptions pause. A shorter outage only skips the day (19.5).
+    outage_pause_after_sessions: int = Field(default=2, ge=1)
+    #: A short opening order for a name the borrow source marks hard to
+    #: borrow, or whose yearly borrow fee is at or above this fraction,
+    #: waits for a person as a ticket held ``hard_to_borrow``, even in an
+    #: auto book (roadmap 19.16).
+    hard_to_borrow_fee_rate: float = Field(default=0.03, ge=0.0)
+    #: The start-of-day check cancels day and opening-auction orders still
+    #: working from an earlier session, so yesterday's decision never
+    #: fills late.
+    cancel_stale_orders: bool = True
+    stages: StageGateSettings = Field(default_factory=StageGateSettings)
+    reconcile: ReconcileSettings = Field(default_factory=ReconcileSettings)

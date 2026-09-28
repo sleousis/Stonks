@@ -7,6 +7,7 @@ import { provideApi } from '../../api/provide-api';
 import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
 import { nextRequest, tick } from '../../../testing/http';
 import { STRATEGY_METADATA, paper } from '../../../testing/strategy-fixtures';
+import { PrintService } from '../../shared/print.service';
 import { curveSeries, yearRows } from './tearsheet-data';
 import { TearsheetPage } from './tearsheet.page';
 
@@ -147,5 +148,24 @@ describe('TearsheetPage', () => {
     expect(engine.last?.map((s) => s.id)).toEqual(['value', 'drawdown']);
     const backtest = [...el.querySelectorAll('a')].find((a) => a.textContent?.includes('Backtest'));
     expect(backtest?.getAttribute('href')).toBe('/lab?strategy=mom_v2');
+  });
+
+  it('prints the tear sheet through the browser for a PDF', async () => {
+    const print = vi.spyOn(TestBed.inject(PrintService), 'print').mockResolvedValue(undefined);
+    const fixture = TestBed.createComponent(TearsheetPage);
+    fixture.componentRef.setInput('id', 'mom_v2');
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const button = [...el.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+      b.textContent?.includes('Download PDF'),
+    )!;
+    expect(button.disabled).toBe(true); // nothing to print before it loads
+    (await nextRequest(http, '/api/strategies/mom_v2/tearsheet')).flush(SHEET);
+    await tick(5);
+    fixture.detectChanges();
+    expect(button.disabled).toBe(false);
+    button.click();
+    expect(print).toHaveBeenCalledTimes(1);
+    expect(el.querySelector('.print-only')?.textContent).toContain('Paper results, not');
   });
 });

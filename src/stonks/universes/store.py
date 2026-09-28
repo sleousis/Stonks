@@ -9,7 +9,13 @@ from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
-from stonks.universes.base import IndexChange, IndexHistory, MembershipSpan, UniverseDefinition
+from stonks.universes.base import (
+    EARLIEST,
+    IndexChange,
+    IndexHistory,
+    MembershipSpan,
+    UniverseDefinition,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.store.lake import DuckDBLake
@@ -162,6 +168,45 @@ class UniverseStore:
                     )
                 )
         return len(merged)
+
+    def membership_history(
+        self, universe_id: str, *, ticker: str | None = None, limit: int, offset: int = 0
+    ) -> tuple[list[MembershipSpan], int]:
+        """One page of the universe's spans, latest change first (the end
+        of a closed span, else its start), plus the total. ``ticker``
+        keeps tickers that contain it, ignoring case."""
+        where, params = ["universe_id = ?"], [universe_id]
+        if ticker:
+            where.append("upper(ticker) LIKE ?")
+            params.append(f"%{ticker.upper()}%")
+        clause = " AND ".join(where)
+        con = self._lake.con
+        counted = con.execute(
+            f"SELECT count(*) FROM universe_membership WHERE {clause}", params
+        ).fetchone()
+        total = counted[0] if counted else 0
+        rows = con.execute(
+            f"""
+            SELECT ticker, start_date, end_date FROM universe_membership WHERE {clause}
+             ORDER BY COALESCE(end_date, start_date) DESC, ticker, start_date DESC
+             LIMIT ? OFFSET ?
+            """,
+            [*params, limit, offset],
+        ).fetchall()
+        spans = [MembershipSpan(r[0], _to_date(r[1]) or EARLIEST, _to_date(r[2])) for r in rows]
+        return spans, int(total)
+
+    def exchanges(self) -> list[tuple[str, int, int]]:
+        """``(exchange, instruments, listed)`` for every exchange the lake's
+        instruments name, by code. ``listed`` leaves out delisted names."""
+        rows = self._lake.con.execute(
+            """
+            SELECT exchange, count(*), count(*) FILTER (WHERE NOT coalesce(is_delisted, false))
+              FROM instruments WHERE exchange IS NOT NULL AND exchange <> ''
+             GROUP BY exchange ORDER BY exchange
+            """
+        ).fetchall()
+        return [(r[0], int(r[1]), int(r[2])) for r in rows]
 
     # ---- index histories -------------------------------------------------------
 

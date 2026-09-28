@@ -73,7 +73,8 @@ class JobConfig(BaseModel):
 
     name: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_.-]+$")
     #: A registered job action (``ingest_prices``, ``tick``, ``health``,
-    #: ``report``, ``universes_refresh``, ``backup``, ``connections_sync``).
+    #: ``report``, ``universes_refresh``, ``backup``, ``connections_sync``,
+    #: ``price_alerts``, ``calendars_refresh``, ``model_retrain``).
     action: str
     trigger: TriggerConfig
     params: dict[str, Any] = Field(default_factory=dict)
@@ -92,9 +93,25 @@ class JobConfig(BaseModel):
 def default_jobs() -> list[JobConfig]:
     """The daily loop on the NYSE calendar: refresh stored universes and
     fill their recent bars, ingest metadata (splits, dividends) and prices,
-    tick, report after the close; health
+    check price alerts, tick, report after the close; health
     every four hours; a backup every night; due broker syncs every hour.
-    ``universes_refresh`` skips while no universe is stored."""
+    ``universes_refresh`` skips while no universe is stored. The IB Gateway
+    jobs (``broker_health`` every 5 minutes, ``ibkr_reauth_reminder`` on
+    Sunday at 18:00 New York time, and the reconciliation checks
+    ``live_sod_check`` an hour before the open and ``live_eod_check`` 15
+    minutes after the close, and ``ingest_borrow`` 35 minutes after the
+    close) skip while no gateway is configured.
+    ``model_retrain`` refits the strategies that learn from data every
+    Saturday into candidate versions, and skips when there are none.
+    ``live_submit`` (open minus 20 minutes) sends approved order tickets and
+    skips while none is open. ``live_stops`` (open plus 30 minutes) places
+    the protective stops of the entries that just filled, and skips while no
+    live book turns stops on.
+    ``live_gate_days`` (close plus 75 minutes)
+    records the live stages' gate metrics and skips while no portfolio is
+    past ``sim_paper``. ``engine_start`` (open minus 15 minutes) and
+    ``engine_stop`` (close plus 10 minutes) run the intraday engine process
+    and skip while ``[engine] enabled = false``."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -115,6 +132,19 @@ def default_jobs() -> list[JobConfig]:
             action="ingest_prices",
             trigger=SessionTriggerConfig(offset_minutes=30),
             deadline_minutes=60,
+        ),
+        # IBKR's short stock files into borrow_rates, the fee a short book
+        # at IBKR pays (roadmap 19.14). Skips while no gateway is set.
+        JobConfig(
+            name="ingest_borrow",
+            action="ingest_borrow",
+            trigger=SessionTriggerConfig(offset_minutes=35),
+        ),
+        # Price alerts on the closes the ingest just stored (roadmap 20.2).
+        JobConfig(
+            name="price_alerts",
+            action="price_alerts",
+            trigger=SessionTriggerConfig(offset_minutes=40),
         ),
         JobConfig(
             name="tick",
@@ -142,6 +172,87 @@ def default_jobs() -> list[JobConfig]:
             name="connections_sync",
             action="connections_sync",
             trigger=IntervalTriggerConfig(every_minutes=60),
+        ),
+        JobConfig(
+            name="broker_health",
+            action="broker_health",
+            trigger=IntervalTriggerConfig(every_minutes=5),
+            catch_up="none",
+        ),
+        # Roadmap 22.6: candidates only, a swap stays a governed human action.
+        JobConfig(
+            name="model_retrain",
+            action="model_retrain",
+            trigger=DailyTriggerConfig(at=time(6, 0), weekdays=[5]),
+        ),
+        JobConfig(
+            name="ibkr_reauth_reminder",
+            action="ibkr_reauth_reminder",
+            trigger=DailyTriggerConfig(at=time(18, 0), timezone="America/New_York", weekdays=[6]),
+            catch_up="none",
+        ),
+        # Reconciliation of every live portfolio against its broker (roadmap
+        # 19.5): start of day before the submit window, end of day before
+        # the tick decides.
+        JobConfig(
+            name="live_sod_check",
+            action="live_reconcile",
+            trigger=SessionTriggerConfig(anchor="open", offset_minutes=-60),
+            params={"kind": "sod"},
+            catch_up="none",
+        ),
+        JobConfig(
+            name="live_eod_check",
+            action="live_reconcile",
+            trigger=SessionTriggerConfig(offset_minutes=15),
+            params={"kind": "eod"},
+            catch_up="none",
+        ),
+        # Earnings, dividend and economic calendars, then the upcoming-event
+        # notifications (roadmap 20.7). Needs a paid EODHD plan.
+        JobConfig(
+            name="calendars_refresh",
+            action="calendars_refresh",
+            trigger=DailyTriggerConfig(at=time(6, 0)),
+        ),
+        # Approved order tickets go out in the window before the open
+        # (roadmap 19.8). A missed window is never caught up: unsent
+        # tickets expire and the next tick decides afresh.
+        JobConfig(
+            name="live_submit",
+            action="live_submit",
+            trigger=SessionTriggerConfig(anchor="open", offset_minutes=-20),
+            catch_up="none",
+        ),
+        # Protective stops for the entries the opening auction filled
+        # (roadmap 19.10). Skips while no live book turns stops on. A
+        # missed run waits for the evening tick, which syncs stops too.
+        JobConfig(
+            name="live_stops",
+            action="live_stops",
+            trigger=SessionTriggerConfig(anchor="open", offset_minutes=30),
+            catch_up="none",
+        ),
+        # The live stages' gate metrics for the session, after the tick
+        # wrote its snapshots (roadmap 19.9). A dirty week only alerts.
+        JobConfig(
+            name="live_gate_days",
+            action="live_gate_days",
+            trigger=SessionTriggerConfig(offset_minutes=75),
+        ),
+        # The intraday engine process (roadmap 21.2.5). Both skip while
+        # [engine] is off. A missed start is not caught up: a late start
+        # would join a session already under way.
+        JobConfig(
+            name="engine_start",
+            action="engine_start",
+            trigger=SessionTriggerConfig(anchor="open", offset_minutes=-15),
+            catch_up="none",
+        ),
+        JobConfig(
+            name="engine_stop",
+            action="engine_stop",
+            trigger=SessionTriggerConfig(offset_minutes=10),
         ),
     ]
 

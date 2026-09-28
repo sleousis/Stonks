@@ -191,6 +191,17 @@ class CostModelSettings(BaseModel):
     def for_asset_class(self, asset_class: AssetClass) -> AssetClassCosts:
         return self.asset_classes.get(asset_class, self.default)
 
+    def one_way_cost_bps(self, asset_class: AssetClass, notional: float | None = None) -> float:
+        """Cost of one small trade in bps of its notional: the class's
+        half-spread plus ``fee_bps``, plus the flat fee over ``notional``
+        when one is given. Impact is left out (it depends on size). Used for
+        a rule's cost in Sharpe units (roadmap 22.7)."""
+        costs = self.for_asset_class(asset_class)
+        bps = costs.half_spread_bps + costs.fee_bps
+        if notional is not None and notional > 0:
+            bps += costs.fee_flat / notional * _BPS
+        return bps
+
     def market_stats_spec(self) -> MarketStatsSpec | None:
         """The lagged statistics these settings read; ``None`` for the
         legacy ``sqrt`` + ``class`` combination, which reads none."""

@@ -158,6 +158,16 @@ def test_standalone_page_has_no_scripts_or_external_assets():
     assert "&lt;script&gt;" in page
 
 
+def test_standalone_page_prints_to_a4_in_light_colours():
+    """Saving the page as PDF from the browser (13.12): A4 margins, light
+    colours even in dark mode, and charts and rows kept whole."""
+    page = render_tear_sheet_page(TearSheet(title="x", report=_report()))
+    assert "@page{size:A4" in page
+    printed = page[page.index("@media print") :]
+    assert "--bg:#fff" in printed
+    assert "break-inside:avoid" in printed
+
+
 def test_main_report_includes_attached_tear_sheets():
     from stonks.reporting import ReportData, render_html
 

@@ -112,6 +112,28 @@ def test_exchange_refresh_and_ensure(runner, env, source):
     assert {c[0] for c in source.price_calls} == {"AAA.US", "DEAD.US"}
 
 
+def test_update_and_history(runner, env):
+    assert _run(runner, "universe", "create", "mine", "--tickers", "UP.US").exit_code == 0
+    r = _run(runner, "universe", "update", "mine", "--tickers", "UP.US,FLAT.US", "--name", "Mine")
+    assert r.exit_code == 0, r.output
+    shown = _run(runner, "universe", "show", "mine").output
+    assert "FLAT.US" in shown and '"Mine"' in shown
+    assert _run(runner, "universe", "update", "nope", "--tickers", "A.US").exit_code == 1
+    bad = _run(runner, "universe", "update", "mine", "--kind", "rule", "--spec", '{"min_adv": 1}')
+    assert bad.exit_code != 0
+
+    spans = json.dumps(
+        {"spans": [{"ticker": "OLD.US", "start_date": "2020-01-02", "end_date": "2021-01-04"}]}
+    )
+    assert _run(runner, "universe", "update", "mine", "--spec", spans).exit_code == 0
+    assert _run(runner, "universe", "refresh", "mine", "--as-of", "2026-01-02").exit_code == 0
+    history = _run(runner, "universe", "history", "mine")
+    assert history.exit_code == 0, history.output
+    assert "OLD.US" in history.output and "2020-01-02" in history.output
+    assert "2021-01-04" in history.output
+    assert _run(runner, "universe", "history", "nope").exit_code == 1
+
+
 def test_import_index_history(runner, env):
     csv = env / "idx.csv"
     csv.write_text("date,ticker,action\n2024-01-02,AAPL.US,member\n2023-06-01,NEWCO.US,add\n")

@@ -17,6 +17,7 @@ state DB opens and is fully migrated, the lake file exists) and
 
 from __future__ import annotations
 
+import json
 import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -30,7 +31,7 @@ from stonks.store.state import MIGRATIONS_DIR, SqliteState
 
 CONTENT_TYPE = "text/plain; version=0.0.4; charset=utf-8"
 
-MetricType = Literal["gauge", "counter"]
+MetricType = Literal["gauge", "counter", "histogram"]
 
 #: Data-age buckets (inclusive upper bound in days, label).
 AGE_BUCKETS: tuple[tuple[int, str], ...] = ((1, "0-1d"), (3, "2-3d"), (7, "4-7d"))
@@ -42,6 +43,8 @@ AGE_MISSING = "missing"
 class Sample:
     value: float
     labels: Mapping[str, str] = field(default_factory=dict)
+    #: Appended to the family name: ``_bucket``, ``_sum`` or ``_count`` in a histogram.
+    suffix: str = ""
 
 
 @dataclass(frozen=True)
@@ -79,17 +82,74 @@ def render_prometheus(families: Iterable[MetricFamily]) -> str:
         lines.append(f"# HELP {fam.name} {_escape_help(fam.help)}")
         lines.append(f"# TYPE {fam.name} {fam.type}")
         for s in fam.samples:
+            name = fam.name + s.suffix
             if s.labels:
                 labels = ",".join(
                     f'{k}="{_escape_label(str(v))}"' for k, v in sorted(s.labels.items())
                 )
-                lines.append(f"{fam.name}{{{labels}}} {_format_value(s.value)}")
+                lines.append(f"{name}{{{labels}}} {_format_value(s.value)}")
             else:
-                lines.append(f"{fam.name} {_format_value(s.value)}")
+                lines.append(f"{name} {_format_value(s.value)}")
     return "\n".join(lines) + "\n"
 
 
+def histogram_family(
+    name: str,
+    help_: str,
+    *,
+    bounds: Sequence[float],
+    counts: Sequence[int],
+    total: float,
+    labels: Mapping[str, str] | None = None,
+) -> MetricFamily:
+    """A Prometheus histogram. ``counts`` holds one count per bucket (not
+    cumulative), with the ``+Inf`` bucket last, so it is one longer than
+    ``bounds``. ``total`` is the sum of every observation."""
+    if len(counts) != len(bounds) + 1:
+        raise ValueError("counts needs one entry per bound plus the +Inf bucket")
+    base = dict(labels or {})
+    samples: list[Sample] = []
+    running = 0
+    for bound, n in zip([*bounds, math.inf], counts, strict=True):
+        running += int(n)
+        le = "+Inf" if math.isinf(bound) else _format_value(bound)
+        samples.append(Sample(running, {**base, "le": le}, "_bucket"))
+    samples.append(Sample(total, base, "_sum"))
+    samples.append(Sample(running, base, "_count"))
+    return MetricFamily(name, help_, "histogram", samples)
+
+
+def merge_families(groups: Iterable[Iterable[MetricFamily]]) -> list[MetricFamily]:
+    """Join families of the same name (one per engine, say) under one
+    header, keeping the order names first appear in. The text format
+    allows each name once."""
+    merged: dict[str, MetricFamily] = {}
+    for group in groups:
+        for fam in group:
+            seen = merged.get(fam.name)
+            if seen is None:
+                merged[fam.name] = MetricFamily(fam.name, fam.help, fam.type, list(fam.samples))
+            else:
+                merged[fam.name] = MetricFamily(
+                    seen.name, seen.help, seen.type, [*seen.samples, *fam.samples]
+                )
+    return list(merged.values())
+
+
 # ---- snapshot -> families (pure) -----------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ReconcileSample:
+    """A portfolio's latest reconciliation check (roadmap 19.15)."""
+
+    portfolio_id: str
+    status: str
+    #: Unexplained items that count toward the ``broker_drift`` halt.
+    material: int
+    #: Unexplained items that only alert.
+    warnings: int
+    taken_at: datetime | None
 
 
 @dataclass(frozen=True)
@@ -107,6 +167,11 @@ class MetricsSnapshot:
     scheduled: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     next_runs: Mapping[str, datetime | None] = field(default_factory=dict)
     scheduler_heartbeat: datetime | None = None
+    #: IB Gateway health (roadmap 19.4): ``(gateway, mode, connected,
+    #: last ok)`` per gateway the ``broker_health`` job has seen.
+    brokers: Sequence[tuple[str, str, bool, datetime | None]] = ()
+    #: The latest reconciliation check of each live portfolio (19.15).
+    reconcile: Sequence[ReconcileSample] = ()
 
 
 def age_bucket(latest: date | None, today: date) -> str:
@@ -231,6 +296,52 @@ def build_metrics(snap: MetricsSnapshot) -> list[MetricFamily]:
             "gauge",
             [Sample(_ts(snap.scheduler_heartbeat))],
         )
+    if snap.brokers:
+        # labelled by gateway name and mode, never by account number
+        add(
+            "stonks_broker_connected",
+            "1 when the broker gateway answered its latest health check.",
+            "gauge",
+            [Sample(int(ok), {"gateway": gw, "mode": mode}) for gw, mode, ok, _ in snap.brokers],
+        )
+        add(
+            "stonks_broker_last_ok_timestamp_seconds",
+            "Unix time the broker gateway last answered a health check.",
+            "gauge",
+            [
+                Sample(_ts(last), {"gateway": gw, "mode": mode})
+                for gw, mode, _, last in snap.brokers
+                if last is not None
+            ],
+        )
+    if snap.reconcile:
+        # labelled by portfolio id, never by account number
+        add(
+            "stonks_reconcile_drift_items",
+            "Unexplained items in each live portfolio's latest reconciliation check.",
+            "gauge",
+            [
+                Sample(n, {"portfolio": r.portfolio_id, "severity": severity})
+                for r in snap.reconcile
+                for severity, n in (("material", r.material), ("warning", r.warnings))
+            ],
+        )
+        add(
+            "stonks_reconcile_last_status",
+            "1 for the status of each live portfolio's latest reconciliation check.",
+            "gauge",
+            [Sample(1, {"portfolio": r.portfolio_id, "status": r.status}) for r in snap.reconcile],
+        )
+        add(
+            "stonks_reconcile_last_check_timestamp_seconds",
+            "Unix time of each live portfolio's latest reconciliation check.",
+            "gauge",
+            [
+                Sample(_ts(r.taken_at), {"portfolio": r.portfolio_id})
+                for r in snap.reconcile
+                if r.taken_at is not None
+            ],
+        )
     return fams
 
 
@@ -263,6 +374,18 @@ def collect_snapshot(
     now = now or datetime.now(UTC)
     with SqliteState(state_path) as state:
         tables = set(state.tables())
+        brokers = (
+            [
+                (r["gateway"], r["mode"], bool(r["connected"]), _parse(r["last_ok_at"]))
+                for r in state.sql(
+                    "SELECT gateway, mode, connected, last_ok_at FROM broker_gateway_status"
+                    " ORDER BY gateway"
+                )
+            ]
+            if "broker_gateway_status" in tables
+            else []
+        )
+        reconcile = _reconcile_samples(state) if "reconcile_reports" in tables else []
         tick_counts = _counts(state, "tick_runs")
         order_counts = _counts(state, "orders")
         job_counts = _counts(state, "jobs")
@@ -302,7 +425,33 @@ def collect_snapshot(
         scheduled=scheduled,
         next_runs=next_runs,
         scheduler_heartbeat=heartbeat,
+        brokers=brokers,
+        reconcile=reconcile,
     )
+
+
+def _reconcile_samples(state: SqliteState) -> list[ReconcileSample]:
+    """The latest ``reconcile_reports`` row of each portfolio."""
+    rows = state.sql(
+        "SELECT r.portfolio_id, r.status, r.items_json, r.taken_at FROM reconcile_reports r"
+        " WHERE r.rowid = (SELECT x.rowid FROM reconcile_reports x"
+        " WHERE x.portfolio_id = r.portfolio_id ORDER BY x.taken_at DESC, x.rowid DESC LIMIT 1)"
+        " ORDER BY r.portfolio_id"
+    )
+    out: list[ReconcileSample] = []
+    for r in rows:
+        items = [i for i in json.loads(r["items_json"] or "[]") if not i.get("explained")]
+        material = sum(1 for i in items if i.get("material"))
+        out.append(
+            ReconcileSample(
+                portfolio_id=r["portfolio_id"],
+                status=r["status"],
+                material=material,
+                warnings=len(items) - material,
+                taken_at=_parse(r["taken_at"]),
+            )
+        )
+    return out
 
 
 def latest_daily_bars(lake: Any, universe: Sequence[str]) -> dict[str, date | None]:

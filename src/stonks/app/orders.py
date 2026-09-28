@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel
 
@@ -21,12 +21,35 @@ class OrderView(BaseModel):
     order_type: str
     limit_price: float | None
     status: str
+    #: The fine order state (``pending``, ``submitted``, ``accepted``,
+    #: ``partially_filled``, ``filled``, ``pending_cancel``, ``cancelled``,
+    #: ``expired``, ``rejected`` or ``unknown``). ``None`` on older rows,
+    #: which only have ``status``.
+    state: str | None = None
     #: Why the order ended in its status (e.g. the broker's rejection
     #: message); None when there is nothing to explain.
     status_reason: str | None = None
     broker_order_id: str | None
     created_at: str
     updated_at: str
+    #: Who decided the order: ``strategy`` (the tick) or ``manual`` (a person).
+    origin: Literal["strategy", "manual"] = "strategy"
+    #: Why a person placed a manual order.
+    manual_reason: str | None = None
+    #: Who placed a manual order (``user:<id>``).
+    placed_by: str | None = None
+    #: The order a changed manual order replaced.
+    replaces_client_id: str | None = None
+    #: The trigger price of a stop order (a protective stop, roadmap 19.10).
+    stop_price: float | None = None
+    #: How long the order works at the broker: ``day``, ``gtc`` (until
+    #: cancelled), ``opg`` (the opening auction) or ``ioc``. ``None``: the
+    #: broker's default.
+    time_in_force: str | None = None
+    #: A protective stop Stonks placed after an entry filled. It works until
+    #: the position closes, follows the position's size, and its fill is a
+    #: stop-out of the strategy that held the position.
+    protective: bool = False
 
 
 class FillView(BaseModel):
@@ -53,6 +76,7 @@ class OrdersService:
         strategy_id: str | None = None,
         ticker: str | None = None,
         status: str | None = None,
+        origin: str | None = None,
         limit: int,
         offset: int,
         portfolio_id: str,
@@ -60,7 +84,13 @@ class OrdersService:
         """One portfolio's orders. The caller names the portfolio (the
         route resolves one the caller owns), never a default (BE-46)."""
         clause, params = _where(
-            {"tick_id": tick_id, "strategy_id": strategy_id, "ticker": ticker, "status": status}
+            {
+                "tick_id": tick_id,
+                "strategy_id": strategy_id,
+                "ticker": ticker,
+                "status": status,
+                "origin": origin,
+            }
         )
         with self._ctx.state() as state:
             clause, params = _scoped(state, "orders", portfolio_id, None, clause, params)

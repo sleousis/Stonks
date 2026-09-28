@@ -20,6 +20,7 @@ from stonks.app.pagination import Page
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.core.types import AssetClass
+from stonks.execution.brokers.base import BrokerMode
 from stonks.production.settings_builder import build_tick_runtime
 from stonks.production.tick import BackdatedTickError, TickResult, run_tick
 from stonks.production.universe import EmptyUniverseError, production_tickers
@@ -96,6 +97,13 @@ class TickResultView(BaseModel):
     orders_placed: int
     fills: int
     dry_run: bool
+    broker_mode: BrokerMode = Field(
+        default="simulated",
+        description=(
+            "Whose money the default book traded: simulated fills, a broker's"
+            " paper account, or a live (real money) account."
+        ),
+    )
 
 
 class TickService:
@@ -185,7 +193,8 @@ class TickService:
             winner_strategy_id=result.winner_strategy_id,
             orders_placed=result.orders_placed,
             fills=result.fills,
-            dry_run=request.dry_run,
+            dry_run=result.dry_run,
+            broker_mode=result.broker_mode,
         )
 
     def _universe(self, lake: Any, request: TickRequest) -> list[str]:
@@ -295,7 +304,8 @@ def _order_books(state: Any, tick_id: str) -> list[str]:
 
 
 #: Summary keys about the whole tick, which every reader sees (AS-02):
-#: status and counts, the winner, the shadow outcomes and the quit rule.
+#: status and counts, the winner, the shadow outcomes, the quit rule, and
+#: how the tick ran (a dry run or not, and whose money it traded).
 GLOBAL_SUMMARY_KEYS = frozenset(
     {
         "reason",
@@ -309,6 +319,8 @@ GLOBAL_SUMMARY_KEYS = frozenset(
         "shadow",
         "shadow_error",
         "quit_rule",
+        "dry_run",
+        "broker_mode",
     }
 )
 

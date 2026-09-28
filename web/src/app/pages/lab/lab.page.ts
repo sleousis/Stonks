@@ -174,13 +174,20 @@ export class LabPage {
     const p = this.preset();
     return p && SUITE_PARAMS.has(p) ? (p as LabRunForm['suite']) : null;
   });
+  /**
+   * `?universe=<id>`: open the lab-run form with that stored universe picked,
+   * e.g. from a universe's page or a screen saved as a universe.
+   */
+  readonly universe = input<string | undefined>();
   protected readonly mode = linkedSignal<FormKind>(() =>
-    this.suiteParam() ? 'lab_run' : 'backtest',
+    this.suiteParam() || this.universe() ? 'lab_run' : 'backtest',
   );
-  /** Fields the lab-run form starts from: the query's suite, or a re-run. */
+  /** Fields the lab-run form starts from: the query's suite and universe, or a re-run. */
   protected readonly prefill = linkedSignal<Partial<LabRunForm> | null>(() => {
     const suite = this.suiteParam();
-    return suite ? { suite } : null;
+    const universeId = this.universe();
+    if (!suite && !universeId) return null;
+    return { ...(suite ? { suite } : {}), ...(universeId ? { universeId } : {}) };
   });
   /** `?tickers=AAPL.US,MSFT.US`: a watchlist opened in the lab. */
   readonly tickers = input<string | undefined>();

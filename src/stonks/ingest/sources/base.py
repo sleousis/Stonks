@@ -11,16 +11,19 @@ Normalization and persistence are the pipeline's job; sources don't touch the la
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import date
 
 from stonks.core.interval import Interval
+from stonks.ingest.calendar_schemas import DividendEventRow, EarningsEventRow, EconomicEventRow
 from stonks.ingest.metadata_bundle import MetadataBundle
 from stonks.ingest.option_schemas import OptionQuoteRow
 from stonks.ingest.schemas import (
+    BorrowRateRow,
     DefiTvlRow,
     ExchangeInfo,
     FinancialStatementsBundle,
+    FxRateRow,
     IntradayBar,
     MacroIndicatorRow,
     RawPriceBar,
@@ -149,3 +152,60 @@ class DataSource(ABC):
         """
         del since
         raise UnsupportedCapabilityError(f"{self.source_id} does not serve DeFi TVL ({chain!r})")
+
+    def fetch_fx_rates(
+        self,
+        base: str,
+        quote: str,
+        since: date | None = None,
+        until: date | None = None,
+    ) -> Iterable[FxRateRow]:
+        """Daily FX rates for one pair: units of ``quote`` per one ``base``
+        (ISO 4217 codes), optionally only ``since <= day <= until``.
+
+        Optional capability: the default raises
+        :class:`UnsupportedCapabilityError`, so a source without forex
+        data shows up as a failed pair instead of a silent empty run."""
+        del since, until
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve FX rates ({base}{quote})"
+        )
+
+    def fetch_borrow_rates(self, market: str) -> Iterable[BorrowRateRow]:
+        """Today's stock borrow terms for every stock of one ``market`` (a
+        source-defined name, e.g. ``usa``), roadmap 19.3.
+
+        Optional capability: the default raises
+        :class:`UnsupportedCapabilityError`, so a source without borrow
+        data shows up as a failed market instead of a silent empty run."""
+        raise UnsupportedCapabilityError(
+            f"{self.source_id} does not serve borrow rates ({market!r})"
+        )
+
+    # ---- event calendars (roadmap 20.7) ----------------------------------------
+    # Optional capabilities: the defaults raise UnsupportedCapabilityError so a
+    # source without calendars shows up as a failed unit, not an empty run.
+
+    def fetch_earnings_calendar(
+        self, start: date, end: date, tickers: Sequence[str] | None = None
+    ) -> Iterable[EarningsEventRow]:
+        """Earnings reports dated ``start`` to ``end``, for ``tickers`` or
+        the whole market (``None``)."""
+        del start, end, tickers
+        raise UnsupportedCapabilityError(f"{self.source_id} does not serve an earnings calendar")
+
+    def fetch_dividend_calendar(
+        self, start: date, end: date, tickers: Sequence[str] | None = None
+    ) -> Iterable[DividendEventRow]:
+        """Ex-dividend dates ``start`` to ``end``, for ``tickers`` or the
+        whole market (``None``)."""
+        del start, end, tickers
+        raise UnsupportedCapabilityError(f"{self.source_id} does not serve a dividend calendar")
+
+    def fetch_economic_events(
+        self, start: date, end: date, countries: Sequence[str] | None = None
+    ) -> Iterable[EconomicEventRow]:
+        """Scheduled macro releases ``start`` to ``end`` (UTC days), for
+        ``countries`` (ISO alpha-2) or every country (``None``)."""
+        del start, end, countries
+        raise UnsupportedCapabilityError(f"{self.source_id} does not serve economic events")

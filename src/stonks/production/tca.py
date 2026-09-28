@@ -64,7 +64,7 @@ _BPS = 10_000.0
 #: book); ``exit_no_pick``: the owner of the holdings exited with no pick;
 #: ``risk_rule``: a risk rule created it (e.g. a maximum holding time);
 #: ``manual``: a person placed it.
-DecisionTrigger = Literal["signal", "exit_no_pick", "risk_rule", "manual"]
+DecisionTrigger = Literal["signal", "exit_no_pick", "risk_rule", "manual", "stop"]
 
 #: How :func:`summarize` groups orders.
 GroupBy = Literal["all", "strategy", "ticker", "portfolio", "day", "week", "month"]
@@ -714,7 +714,10 @@ def refresh_benchmarks(
 def _next_session(
     lake: DuckDBLake, tickers: Sequence[str], day: date
 ) -> dict[str, tuple[float | None, float | None]]:
-    """``(open, close)`` of each ticker's first daily bar after ``day``."""
+    """``(open, close)`` of each ticker's first daily bar after ``day``, in
+    the major currency unit like the decision price and the fills."""
+    from stonks.fx.units import price_scales
+
     df = lake.sql(
         """
         SELECT ticker, arg_min(open, date) AS open, arg_min(close, date) AS close
@@ -725,10 +728,15 @@ def _next_session(
         [list(tickers), day],
     )
     out: dict[str, tuple[float | None, float | None]] = {}
-    for row in df.itertuples(index=False):
-        open_, close = _positive(row.open), _positive(row.close)
+    scales = price_scales(lake, tickers)
+    for rec in df.to_dict("records"):
+        ticker = str(rec["ticker"])
+        scale = scales.get(ticker, 1.0)
+        open_, close = _positive(rec["open"]), _positive(rec["close"])
+        open_ = None if open_ is None else open_ * scale
+        close = None if close is None else close * scale
         if open_ is not None or close is not None:
-            out[str(row.ticker)] = (open_, close)
+            out[ticker] = (open_, close)
     return out
 
 

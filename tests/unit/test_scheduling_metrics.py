@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
+import pytest
+
 from stonks.scheduling.jobs import JobSpec
 from stonks.scheduling.metrics import (
     CONTENT_TYPE,
@@ -13,7 +15,9 @@ from stonks.scheduling.metrics import (
     age_bucket,
     build_metrics,
     collect_snapshot,
+    histogram_family,
     liveness,
+    merge_families,
     metrics_text,
     readiness,
     render_prometheus,
@@ -129,6 +133,69 @@ def test_collect_from_state(tmp_path):
     assert "stonks_scheduler_heartbeat_timestamp_seconds" in metrics_text(path, now=NOW)
 
 
+def test_broker_gateway_metrics(tmp_path):
+    """Roadmap 19.4: labelled by gateway and mode, never by account."""
+    path = tmp_path / "state.sqlite"
+    with SqliteState(path) as s:
+        s.migrate()
+        s.execute(
+            "INSERT INTO broker_gateway_status (gateway, mode, connected, last_check_at,"
+            " last_ok_at) VALUES ('paper', 'paper', 1, '2026-09-25T21:55:00+00:00',"
+            " '2026-09-25T21:55:00+00:00'), ('live', 'live', 0, '2026-09-25T21:55:00+00:00',"
+            " NULL)"
+        )
+    snap = collect_snapshot(path, now=NOW)
+    assert snap.brokers == [
+        ("live", "live", False, None),
+        ("paper", "paper", True, datetime(2026, 9, 25, 21, 55, tzinfo=UTC)),
+    ]
+    text = metrics_text(path, now=NOW)
+    assert 'stonks_broker_connected{gateway="live",mode="live"} 0' in text
+    assert 'stonks_broker_connected{gateway="paper",mode="paper"} 1' in text
+    assert 'stonks_broker_last_ok_timestamp_seconds{gateway="paper",mode="paper"}' in text
+    assert "stonks_broker_connected" not in render_prometheus(
+        build_metrics(MetricsSnapshot(now=NOW))
+    )
+
+
+def _report(s, rid, portfolio, taken_at, status, items):
+    import json
+
+    s.execute(
+        "INSERT INTO reconcile_reports (id, portfolio_id, kind, as_of, taken_at, status,"
+        " items_json, explained_json, external_json, summary_json, paused_json)"
+        " VALUES (?, ?, 'eod', ?, ?, ?, ?, '[]', '{}', '{}', '[]')",
+        [rid, portfolio, taken_at[:10], taken_at, status, json.dumps(items)],
+    )
+
+
+def test_reconcile_drift_metrics(tmp_path):
+    """Roadmap 19.15: the latest check per portfolio, never an account."""
+    path = tmp_path / "state.sqlite"
+    material = {"kind": "position_qty", "key": "AAPL.US", "material": True}
+    minor = {"kind": "cash", "key": "USD", "material": False}
+    with SqliteState(path) as s:
+        s.migrate()
+        _report(s, "r1", "pf_a", "2026-09-24T20:15:00+00:00", "drift", [material])
+        _report(s, "r2", "pf_a", "2026-09-25T20:15:00+00:00", "warn", [minor, minor])
+        _report(s, "r3", "pf_b", "2026-09-25T20:15:00+00:00", "drift", [material, minor])
+    snap = collect_snapshot(path, now=NOW)
+    assert [(r.portfolio_id, r.status, r.material, r.warnings) for r in snap.reconcile] == [
+        ("pf_a", "warn", 0, 2),
+        ("pf_b", "drift", 1, 1),
+    ]
+    text = metrics_text(path, now=NOW)
+    assert 'stonks_reconcile_drift_items{portfolio="pf_a",severity="material"} 0' in text
+    assert 'stonks_reconcile_drift_items{portfolio="pf_a",severity="warning"} 2' in text
+    assert 'stonks_reconcile_drift_items{portfolio="pf_b",severity="material"} 1' in text
+    assert 'stonks_reconcile_last_status{portfolio="pf_b",status="drift"} 1' in text
+    ts = datetime(2026, 9, 25, 20, 15, tzinfo=UTC).timestamp()
+    assert f'stonks_reconcile_last_check_timestamp_seconds{{portfolio="pf_a"}} {int(ts)}' in text
+    assert "stonks_reconcile_drift_items" not in render_prometheus(
+        build_metrics(MetricsSnapshot(now=NOW))
+    )
+
+
 def test_collect_tolerates_unmigrated_db(tmp_path):
     snap = collect_snapshot(tmp_path / "empty.sqlite", now=NOW)
     assert snap.tick_counts == {} and snap.scheduled == {}
@@ -160,3 +227,43 @@ def test_scheduler_liveness(tmp_path):
     assert not scheduler_liveness(store, now=NOW + timedelta(minutes=10)).ok
     store.mark_stopped("i", now=NOW)
     assert "stopped" in scheduler_liveness(store, now=NOW).checks["scheduler"]
+
+
+# ---- histograms and merging (roadmap 21.3.4) ------------------------------------
+
+
+def test_histogram_family_renders_cumulative_buckets():
+    fam = histogram_family(
+        "stonks_x_seconds",
+        "A latency.",
+        bounds=(0.1, 1.0),
+        counts=(2, 1, 1),  # per bucket, the last one is +Inf
+        total=3.5,
+        labels={"engine": "e1"},
+    )
+    text = render_prometheus([fam])
+    assert "# TYPE stonks_x_seconds histogram" in text
+    assert 'stonks_x_seconds_bucket{engine="e1",le="0.1"} 2' in text
+    assert 'stonks_x_seconds_bucket{engine="e1",le="1"} 3' in text
+    assert 'stonks_x_seconds_bucket{engine="e1",le="+Inf"} 4' in text
+    assert 'stonks_x_seconds_sum{engine="e1"} 3.5' in text
+    assert 'stonks_x_seconds_count{engine="e1"} 4' in text
+
+
+def test_histogram_family_needs_one_count_per_bucket_plus_inf():
+    with pytest.raises(ValueError):
+        histogram_family("h", "h", bounds=(1.0,), counts=(1,), total=0.0)
+
+
+def test_merge_families_joins_samples_under_one_header():
+    a = [MetricFamily("m", "help", "gauge", [Sample(1, {"engine": "a"})])]
+    b = [
+        MetricFamily("m", "help", "gauge", [Sample(2, {"engine": "b"})]),
+        MetricFamily("n", "other", "counter", [Sample(3)]),
+    ]
+    merged = merge_families([a, b])
+    assert [f.name for f in merged] == ["m", "n"]
+    text = render_prometheus(merged)
+    assert text.count("# TYPE m gauge") == 1
+    assert 'm{engine="a"} 1' in text
+    assert 'm{engine="b"} 2' in text

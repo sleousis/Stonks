@@ -753,6 +753,7 @@ class Backtester:
         self, as_of: datetime, prices: dict[str, float], tradable: Sequence[str]
     ) -> list[Order]:
         """The production pipeline over this bar's signals; see the module doc."""
+        from stonks.factors.style import safe_style_exposures, uses_style_model
         from stonks.portfolio import returns as portfolio_returns
         from stonks.portfolio.pipeline import (
             PORTFOLIO_STRATEGY,
@@ -763,6 +764,7 @@ class Backtester:
         )
         from stonks.production.risk import entry_dates_from_fills
         from stonks.production.rules import RiskContext
+        from stonks.production.rules.style_exposure import wants_exposures
 
         construction = self._config.construction_settings
         assert construction is not None
@@ -792,6 +794,10 @@ class Backtester:
             names = {t for scores in signals.values() for t in scores} | set(portfolio.positions)
             past = portfolio_returns.market_history(self._view, names, lookback=lookback)
             market = replace(market, returns_history=past.returns, volumes=past.volumes)
+            if uses_style_model(construction):
+                # 22.4: style exposures through the point-in-time view
+                exposures = safe_style_exposures(self._view, sorted(names), as_of)
+                market = replace(market, factor_exposures=exposures)
         weights = self._config.strategy_weights
         policy = self._config.risk
         context = None
@@ -810,6 +816,13 @@ class Backtester:
                 allow_short=self._config.allow_short,
                 margin=getattr(self._broker, "margin", None),
                 borrow=getattr(self._broker, "borrow", None),
+                factor_exposures=(
+                    safe_style_exposures(
+                        self._view, sorted({*history, *portfolio.positions}), as_of
+                    )
+                    if wants_exposures(policy)
+                    else None
+                ),
             )
         book = BookInput(
             portfolio=portfolio,
@@ -860,6 +873,7 @@ class Backtester:
             list(self._config.universe),
             end,
             bars=self._config.history_bars + days,
+            major_units=False,  # the backtest prices and fills in the lake's units
         )
         self._raw_closes = self._load_raw_closes(end)
         return history

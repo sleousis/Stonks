@@ -31,7 +31,12 @@ describe('HaltStateService', () => {
   const me = signal<MeView | null>(TRADER);
   const options = signal([book({ id: 'pf_default', name: 'Main book', is_default: true })]);
 
+  const halts = (x: { url: string }) => x.url.split('?')[0] === '/api/halts';
+  /** Fire the poll interval once; only setInterval is faked, so requests still flow. */
+  const poll = () => vi.advanceTimersByTime(5);
+
   beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     canRead.set(true);
     TestBed.configureTestingModule({
       providers: [
@@ -49,7 +54,10 @@ describe('HaltStateService', () => {
     state.watch({ onDestroy: (c: () => void) => callbacks.push(c) } as unknown as DestroyRef);
   });
 
-  afterEach(() => destroy());
+  afterEach(() => {
+    destroy();
+    vi.useRealTimers();
+  });
 
   it('keeps the active kill switches and polls again', async () => {
     const req = await nextRequest(http, '/api/halts');
@@ -61,8 +69,8 @@ describe('HaltStateService', () => {
     expect(state.killOn()).toBe(true);
 
     // The next poll clears it.
-    await tick(10);
-    for (const r of http.match((x) => x.url.split('?')[0] === '/api/halts')) r.flush(page([]));
+    poll();
+    (await nextRequest(http, '/api/halts')).flush(page([]));
     await tick();
     expect(state.kills()).toEqual([]);
     expect(state.killOn()).toBe(false);
@@ -71,28 +79,40 @@ describe('HaltStateService', () => {
   it('keeps the last state when a read fails', async () => {
     (await nextRequest(http, '/api/halts')).flush(page([KILL]));
     await tick();
-    await tick(10);
-    for (const r of http.match((x) => x.url.split('?')[0] === '/api/halts')) {
-      r.flush({ title: 'x', status: 500 }, { status: 500, statusText: 'err' });
-    }
+    poll();
+    (await nextRequest(http, '/api/halts')).flush(
+      { title: 'x', status: 500 },
+      { status: 500, statusText: 'err' },
+    );
+    await tick();
+    expect(state.kills().length).toBe(1);
+  });
+
+  it('skips a poll while a read is still in flight', async () => {
+    const first = await nextRequest(http, '/api/halts');
+    poll();
+    poll();
+    await tick(5);
+    expect(http.match(halts)).toEqual([]);
+    first.flush(page([]));
+    await tick();
+    poll();
+    (await nextRequest(http, '/api/halts')).flush(page([KILL]));
     await tick();
     expect(state.kills().length).toBe(1);
   });
 
   it('reads nothing while signed out, then reads once signed in (BUG-1)', async () => {
-    const halts = (x: { url: string }) => x.url.split('?')[0] === '/api/halts';
     (await nextRequest(http, '/api/halts')).flush(page([]));
     canRead.set(false);
+    TestBed.tick();
+    poll();
+    poll();
     await tick(5);
-    for (const r of http.match(halts)) r.flush(page([]));
-    await tick(20);
     expect(http.match(halts)).toEqual([]);
     canRead.set(true);
     TestBed.tick();
-    await tick(10);
-    const pending = http.match(halts);
-    expect(pending.length).toBeGreaterThan(0);
-    for (const r of pending) r.flush(page([KILL]));
+    (await nextRequest(http, '/api/halts')).flush(page([KILL]));
     await tick();
     expect(state.kills().length).toBe(1);
   });

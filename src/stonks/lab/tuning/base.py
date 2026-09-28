@@ -21,11 +21,30 @@ from stonks.lab.parallel import (
 )
 from stonks.logging import get_logger
 from stonks.strategies.base import strategy_data_tickers
+from stonks.strategies.costs import bind_costs
 
 if TYPE_CHECKING:  # pragma: no cover
     from stonks.lab.survival.base import TuningSetup
 
 _log = get_logger("stonks.lab.tuning")
+
+_FROM_DATASET: Any = object()
+
+
+def fitted_strategy(
+    strategy_cls: type[Strategy],
+    params: Params,
+    dataset: Any,
+    *,
+    costs: Any = _FROM_DATASET,
+) -> Strategy:
+    """``strategy_cls(params)`` with a cost model bound
+    (:mod:`stonks.strategies.costs`: ``costs``, else the dataset's), then
+    fitted on ``dataset``. How the lab builds every strategy it runs."""
+    strategy = strategy_cls(dict(params))
+    bind_costs(strategy, getattr(dataset, "costs", None) if costs is _FROM_DATASET else costs)
+    strategy.fit(dataset)
+    return strategy
 
 
 def tune_and_fit(
@@ -54,8 +73,7 @@ def tune_and_fit(
     best = {**tuned.best_params, **fixed}
     if best != dict(tuned.best_params):
         tuned = dataclasses.replace(tuned, best_params=best)
-    strategy = strategy_cls(best)
-    strategy.fit(dataset)  # no-op for rule-based
+    strategy = fitted_strategy(strategy_cls, best, dataset)  # fit: no-op for rule-based
     return strategy, tuned
 
 
@@ -251,8 +269,7 @@ def _open_trial_state(state: _TrialState) -> _TrialState:
 def _run_trial(state: _TrialState, task: tuple[int, Params]) -> TrialOutcome:
     index, params = task
     try:
-        strategy = state.strategy_cls(params)
-        strategy.fit(state.dataset)  # same call LabRunner makes after tuning
+        strategy = fitted_strategy(state.strategy_cls, params, state.dataset)  # as LabRunner
         outcome = evaluate_trial(state.objective, strategy, state.dataset)
     except Exception as exc:
         _log.warning(f"{state.log_prefix}.trial.failed", trial=index, params=params, error=str(exc))

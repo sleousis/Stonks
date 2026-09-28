@@ -18,8 +18,10 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, WithJsonSchema, model_validator
 
+from stonks.app.catalog import class_path_of
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
+from stonks.app.heatmap import HeatmapView, check_heatmap_axes
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.serialize import FiniteFloat, finite, to_jsonable
 from stonks.app.strategies import StrategyRef, StrategyService, SurvivalReportView
@@ -38,7 +40,13 @@ from stonks.ingest.wiring import build_ingest_pipeline
 from stonks.lab.backtesting import run_backtest
 from stonks.lab.cv import CVObjective
 from stonks.lab.dataset import LabDataset, scoring_window
-from stonks.lab.objectives import CAGRObjective, FinalReturnObjective, SharpeObjective
+from stonks.lab.heatmap import HeatmapOptions
+from stonks.lab.objectives import (
+    OBJECTIVES,
+    CAGRObjective,
+    FinalReturnObjective,
+    SharpeObjective,
+)
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.preflight import PreflightError, PreflightReport
 from stonks.lab.runner import LabRunner, LabRunResult, costs_are_zero
@@ -53,11 +61,13 @@ from stonks.lab.survival.registry import (
 from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.lab.trials import TrialLedger
 from stonks.lab.tuning.grid import GridTuner
+from stonks.lab.tuning.optuna import OptunaTuner, SamplerName
 from stonks.lab.tuning.random import RandomTuner
 from stonks.lab.universe_data import prepare_dataset
 from stonks.logging import get_logger
 from stonks.registry.artifact import update_meta
 from stonks.registry.store import StrategyRegistry
+from stonks.strategies.costs import bind_costs
 from stonks.universes.base import UNIVERSE_ID_PATTERN
 from stonks.universes.store import UniverseStore
 
@@ -68,10 +78,24 @@ LAB_ENSURE_JOB = "lab_ensure"
 #: Many catalogued strategies through the lab on one basket.
 LAB_SWEEP_JOB = "lab_sweep"
 
-TunerName = Literal["grid", "random"]
+#: ``optuna`` is Bayesian search (``lab.tuning.optuna``, 22.1).
+TunerName = Literal["grid", "random", "optuna"]
 #: ``cv_*`` score each trial on purged folds of the train window
 #: (``lab.cv.CVObjective``), so the tuner stops picking on in-sample fit.
-ObjectiveName = Literal["sharpe", "cagr", "final_return", "cv_sharpe", "cv_cagr", "cv_final_return"]
+#: ``sortino``, ``calmar``, ``sharpe_dd`` and ``multi`` weigh the downside
+#: (``lab.objectives``, 22.1).
+ObjectiveName = Literal[
+    "sharpe",
+    "cagr",
+    "final_return",
+    "sortino",
+    "calmar",
+    "sharpe_dd",
+    "multi",
+    "cv_sharpe",
+    "cv_cagr",
+    "cv_final_return",
+]
 CostModelName = Literal["zero", "realistic"]
 
 #: API names kept from before the survival-test registry (BL-10).
@@ -127,9 +151,7 @@ BenchmarkSpec = Annotated[
 SurvivalTestOptions = dict[SurvivalTestName, dict[str, Any]]
 
 _OBJECTIVES: dict[str, Callable[[], Objective]] = {
-    "sharpe": SharpeObjective,
-    "cagr": CAGRObjective,
-    "final_return": FinalReturnObjective,
+    **OBJECTIVES,
     "cv_sharpe": lambda: CVObjective(SharpeObjective()),
     "cv_cagr": lambda: CVObjective(CAGRObjective()),
     "cv_final_return": lambda: CVObjective(FinalReturnObjective()),
@@ -357,6 +379,15 @@ class LabRunOptions(BaseModel):
     objective: ObjectiveName = "sharpe"
     #: Points per numeric axis for the ``grid`` tuner.
     grid_size: int = Field(default=5, ge=1, le=50)
+    #: The ``optuna`` tuner's sampler: ``tpe`` (default), ``nsga2`` (a
+    #: Pareto search over the ``multi`` objective's parts) or ``random``.
+    sampler: SamplerName = "tpe"
+    #: Let the ``optuna`` tuner stop trials whose fast vectorised score
+    #: trails, before their full backtest. Pruned trials still count (P2).
+    prune: bool = False
+    #: Sweep two parameters around the tuned set into a heatmap with the
+    #: plateau verdict on it (22.5). Every cell is a counted trial.
+    heatmap: HeatmapOptions | None = None
     #: Survival test ids to run, in order. When omitted, ``preset`` decides.
     survival_tests: list[SurvivalTestName] | None = Field(default=None, min_length=1)
     #: A named suite used when ``survival_tests`` is omitted. Without either,
@@ -464,8 +495,9 @@ class LabRunOptions(BaseModel):
 
 
 class LabRunRequest(_WindowRequest, LabRunOptions):
-    """Tunes the class the ``strategy`` ref points at (its ``params`` are
-    ignored: the tuner searches the class's parameter space).
+    """Tunes the class the ``strategy`` ref points at over its parameter
+    space. The ref's ``params`` stay fixed for the whole search, such as
+    the ``factor`` of the ``factor`` strategy.
 
     Give ``universe`` (tickers), ``universe_id`` (a stored universe: every
     member on any day of the window, delisted names included), or both
@@ -605,6 +637,8 @@ class LabRunView(BaseModel):
     n_trials_run: int = 0
     #: Trials of this strategy class across every ledgered run (P2).
     n_trials_class: int = 0
+    #: Trials across the run's research session (roadmap 22.9), 0 outside one.
+    n_trials_family: int = 0
     #: The fitted strategy against its benchmark over the validation
     #: window; ``None`` when off or unpriced.
     benchmark: BenchmarkStatsView | None = None
@@ -613,6 +647,8 @@ class LabRunView(BaseModel):
     #: The chained ``lab_ensure`` job that fetched missing bars first
     #: (``ensure_data``); its report is at ``/api/lab/ensure/{id}/result``.
     ensure_job_id: str | None = None
+    #: The parameter heatmap around the tuned set (``heatmap`` option).
+    heatmap: HeatmapView | None = None
 
 
 @dataclass(frozen=True)
@@ -645,8 +681,10 @@ class LabExecution:
             run_id=result.run_id,
             n_trials_run=result.n_trials_run,
             n_trials_class=result.n_trials_class,
+            n_trials_family=result.n_trials_family,
             benchmark=BenchmarkStatsView.of(self.benchmark) if self.benchmark else None,
             preflight=PreflightView.of(result.preflight) if result.preflight else None,
+            heatmap=HeatmapView.of(result.heatmap) if result.heatmap is not None else None,
         )
 
 
@@ -654,7 +692,27 @@ def build_tuner(options: LabRunOptions, parallel: ParallelSettings | None = None
     """The request's tuner, spreading trials over ``parallel`` workers."""
     if options.tuner == "grid":
         return GridTuner(grid_size=options.grid_size, seed=options.seed, parallel=parallel)
+    if options.tuner == "optuna":
+        return OptunaTuner(
+            seed=options.seed, parallel=parallel, sampler=options.sampler, prune=options.prune
+        )
     return RandomTuner(seed=options.seed, parallel=parallel)
+
+
+def pinned_params(cls: type[Strategy], ref: StrategyRef) -> dict[str, Any] | None:
+    """The params a class ref pins for the whole search (``--params`` on the
+    CLI), or ``None``. A name the class does not declare is a
+    ``ValidationError``. A registered strategy ref pins nothing."""
+    if ref.class_path is None or not ref.params:
+        return None
+    known = {spec.name for spec in cls.parameter_spec()}
+    unknown = sorted(set(ref.params) - known)
+    if unknown:
+        raise ValidationError(
+            f"{class_path_of(cls)} has no parameter {', '.join(unknown)} "
+            f"(it has {', '.join(sorted(known)) or 'none'})"
+        )
+    return dict(ref.params)
 
 
 def lab_costs(settings: Any, option: CostModelOption | None) -> CostModelSettings:
@@ -674,9 +732,14 @@ def execute_lab_run(
     fixed_params: Mapping[str, Any] | None = None,
     parallel: ParallelSettings | None = None,
     data_ensurer: Any = None,
+    family: str | None = None,
 ) -> LabExecution:
     """Tune ``cls`` on ``lake`` and run the survival suite; the one lab-run
     code path (see the module doc).
+
+    ``family`` names the research session the run belongs to (roadmap 22.9,
+    the assistant's research loop): trial-counting tests see the family's
+    trials too. Only in-process callers set it, never a request.
 
     ``state`` (an open ``SqliteState``) enables the trial ledger and is
     required to register. ``register`` replaces the plain registry
@@ -688,7 +751,9 @@ def execute_lab_run(
     ``data_ensurer`` (a :class:`~stonks.ingest.ensure.DataEnsurer`) fetches
     missing bars before the preflight (``stonks lab run --ensure-data``)."""
     interval = _parse_interval(request.interval)
-    tuner = build_tuner(request, parallel or settings.lab.parallel)
+    check_heatmap_axes(cls, request.heatmap, set(fixed_params or {}))
+    workers = parallel or settings.lab.parallel
+    tuner = build_tuner(request, workers)
     objective: Objective = _OBJECTIVES[request.objective]()
     tests: list[SurvivalTest] = [
         build_survival_test(name, _test_options(name, request, settings.lab.walk_forward))
@@ -712,6 +777,8 @@ def execute_lab_run(
             else request.strict_preflight
         ),
         data_ensurer=data_ensurer,
+        heatmap=request.heatmap,
+        parallel=workers,
     )
     if progress is not None:
         progress.progress(0.05, "tuning")
@@ -723,6 +790,7 @@ def execute_lab_run(
             fixed_params=fixed_params,
             hypothesis=request.hypothesis,
             premortem=request.premortem,
+            family=family,
         )
     except PreflightError as exc:  # the data can't support the run
         raise ValidationError(str(exc)) from None
@@ -818,6 +886,8 @@ def backtest_report(
     """Backtest ``strategy`` for a request carrying a window and
     :class:`BacktestOptions`; the report has its trade ledger attached."""
     interval = _parse_interval(request.interval)
+    # 22.10: a cost-aware strategy decides with the costs this backtest charges
+    bind_costs(strategy, lab_costs(settings, request.cost_model))
     cost_model = _backtest_cost_model(settings, request)
     if _backtest_costs_zero(settings, request):
         _log.warning(
@@ -982,7 +1052,9 @@ class LabService:
 
     def submit_lab_run(self, request: LabRunRequest, *, owner_id: str | None = None) -> Job:
         _parse_interval(request.interval)
-        self._strategies.strategy_class(request.strategy)
+        cls = self._strategies.strategy_class(request.strategy)
+        pinned = pinned_params(cls, request.strategy)
+        check_heatmap_axes(cls, request.heatmap, set(pinned or {}))
         if request.universe_id is not None:
             self._require_universe(request.universe_id)
         if request.ensure_data:
@@ -991,7 +1063,9 @@ class LabService:
 
     def run_lab(self, request: LabRunRequest, progress: JobContext | None = None) -> LabRunView:
         cls = self._strategies.strategy_class(request.strategy)
-        return self.run_lab_class(cls, request, progress=progress)
+        return self.run_lab_class(
+            cls, request, progress=progress, fixed_params=pinned_params(cls, request.strategy)
+        )
 
     def ensure_lab_data(self, request: LabRunRequest) -> EnsureReport:
         """Fetch the bars a lab run will read that the lake lacks: the
@@ -1045,9 +1119,12 @@ class LabService:
         *,
         progress: JobContext | None = None,
         register: RegisterFn | None = None,
+        family: str | None = None,
+        fixed_params: Mapping[str, Any] | None = None,
     ) -> LabRunView:
         """Run :func:`execute_lab_run` for ``cls`` (``request.strategy`` is
-        not resolved here) on this context's lake and state."""
+        not resolved here) on this context's lake and state. ``family`` and
+        ``fixed_params``: see :func:`execute_lab_run`."""
         with self._ctx.lake() as lake, self._ctx.state() as state:
             execution = execute_lab_run(
                 self._ctx.settings,
@@ -1057,6 +1134,8 @@ class LabService:
                 state=state,
                 progress=progress,
                 register=register,
+                fixed_params=fixed_params,
+                family=family,
             )
         return execution.view()
 
@@ -1115,6 +1194,10 @@ class _CancellableObjective:
         self._ctx = ctx
         self.name = inner.name
         self.direction = inner.direction
+        # a Pareto search reads the parts of a multi-metric objective
+        for attr in ("metric_names", "directions", "weights"):
+            if hasattr(inner, attr):
+                setattr(self, attr, getattr(inner, attr))
         if callable(getattr(inner, "evaluate", None)):
             self.evaluate = self._evaluate
 

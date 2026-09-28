@@ -106,6 +106,47 @@ describe('TickDetailPage', () => {
     expect(shadow?.textContent).toContain('KeyError: close');
   });
 
+  it('names live account rule adjustments and shows the fine order state', async () => {
+    (await nextRequest(controller, '/api/ticks/t1')).flush({
+      ...TICK,
+      orders: [{ ...ORDER, status: 'pending', state: 'unknown' }],
+      summary: {
+        ...TICK.summary,
+        risk_adjustments: [
+          {
+            ticker: 'AAPL.US',
+            side: 'buy',
+            rule: 'account_rules.settled_cash',
+            original_quantity: 40,
+            adjusted_quantity: 12,
+            reason: 'only 1,200 USD of settled cash',
+          },
+          {
+            ticker: 'MSFT.US',
+            side: 'buy',
+            rule: 'price_band',
+            original_quantity: 5,
+            adjusted_quantity: 0,
+            reason: 'price moved 4% since the decision',
+          },
+        ],
+      },
+    });
+    (await nextRequest(controller, '/api/orders/fills')).flush({
+      items: [],
+      total: 0,
+      limit: 200,
+      offset: 0,
+    });
+    await settle();
+
+    const risk = el.querySelector('section[aria-labelledby="risk-title"]');
+    expect(risk?.textContent).toContain('Account rule: Settled cash only');
+    expect(risk?.textContent).toContain('Price band');
+    const orders = el.querySelector('section[aria-labelledby="tick-orders-title"]');
+    expect(orders?.textContent).toContain('Outcome unknown');
+  });
+
   it('marks a dry run in the header, and never says shadow', async () => {
     (await nextRequest(controller, '/api/ticks/t1')).flush({
       ...TICK,

@@ -43,6 +43,8 @@ from stonks.accounts.users import UserRepository
 from stonks.auth.passwords import PasswordHasher
 from stonks.core.protocols import SurvivalReport
 from stonks.ingest.pipeline import IngestPipeline
+from stonks.options.ingest import ingest_option_quotes
+from stonks.options.synthetic import SyntheticChainSpec, SyntheticOptionSource
 from stonks.registry.store import StrategyRegistry
 from stonks.security.crypto import SecretBox, generate_key
 from stonks.store.lake import DuckDBLake
@@ -203,6 +205,11 @@ max_concurrent_jobs = 2
 
 [scheduler]
 catch_up = "none"
+
+# On, but served by tests.e2e.fake_assistant: nothing listens at this address.
+[assistant]
+base_url = "http://assistant.invalid/v1"
+model = "e2e-keyword"
 """.lstrip()
 
 
@@ -215,8 +222,29 @@ def _seed_market(data_dir: Path, market_end: date) -> None:
         pipeline = IngestPipeline(source, lake)
         pipeline.run_metadata(list(TICKERS))
         pipeline.run_prices(list(TICKERS), until=market_end)
+        _seed_options(lake, market)
     finally:
         lake.close()
+
+
+#: The underlying with stored option chains (roadmap 17.6), and for how long.
+OPTIONS_UNDERLYING = "AAA.US"
+OPTION_DAYS = 60
+
+
+def _seed_options(lake: DuckDBLake, market) -> None:
+    """Generated end-of-day chains for the last ``OPTION_DAYS`` of AAA.US,
+    on a fixed strike grid so contracts stay listed from day to day."""
+    bars = market.bars[OPTIONS_UNDERLYING][-OPTION_DAYS:]
+    closes = {b.date: float(b.close) for b in bars}
+    lo, hi = min(closes.values()) * 0.7, max(closes.values()) * 1.3
+    strikes = [float(k) for k in range(int(lo // 5) * 5, int(hi) + 5, 5)]
+    source = SyntheticOptionSource(
+        {OPTIONS_UNDERLYING: closes},
+        SyntheticChainSpec(horizon_days=70),
+        fixed_strikes={OPTIONS_UNDERLYING: strikes},
+    )
+    ingest_option_quotes(source, lake, [OPTIONS_UNDERLYING])
 
 
 def _seal_totp(box: SecretBox, user_id: str, secret: str) -> str:

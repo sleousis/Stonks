@@ -107,6 +107,16 @@ class InnerStrategyWrapper(BaseStrategy):
     def inner(self) -> Strategy:
         return self._inner
 
+    #: The wrapper fits a model of its own (a latent regime), besides
+    #: whatever its inner strategy fits.
+    fits_itself: ClassVar[bool] = False
+
+    @property
+    def retrainable(self) -> bool:
+        """The wrapper retrains when it fits a model of its own or its
+        inner strategy does (roadmap 22.6)."""
+        return self.fits_itself or bool(getattr(self._inner, "retrainable", False))
+
     def _remember_lake(self, lake: Any) -> None:
         """``decide`` gets no lake; remember the last one seen (weakly)."""
         try:

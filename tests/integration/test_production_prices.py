@@ -73,3 +73,42 @@ def test_drop_stale_buys_keeps_sells_and_fresh_buys():
 
 def test_held_tickers_ignores_zero_positions():
     assert held_tickers({"A": 1.0, "B": 0.0, "C": -2.0}) == ["A", "C"]
+
+
+def _london(lake) -> None:
+    """VOD.LSE: FLAT.US's bars times 30, quoted in pence (GBX) like EODHD."""
+    lake.con.execute(
+        "INSERT INTO bars SELECT 'VOD.LSE', timestamp, interval, open * 30, high * 30,"
+        " low * 30, close * 30, adj_close * 30, volume FROM bars WHERE ticker = 'FLAT.US'"
+    )
+    lake.con.execute(
+        "INSERT INTO instruments (id, asset_class, currency) VALUES ('VOD.LSE', 'equity', 'GBX')"
+    )
+
+
+def test_pence_quoted_prices_come_out_in_pounds(lake_trending):
+    _london(lake_trending)
+    book = load_prices(
+        lake_trending, ["VOD.LSE", "FLAT.US"], [], date(2026, 4, 8), max_staleness_days=7
+    )
+    assert book.prices == {"VOD.LSE": 15.0, "FLAT.US": 50.0}
+    assert book.volumes["VOD.LSE"] == 1_000_000.0  # shares, not money
+
+
+def test_history_comes_out_in_pounds_for_production_only(lake_trending):
+    from stonks.production.prices import load_history
+
+    _london(lake_trending)
+    prod = load_history(lake_trending, ["VOD.LSE"], date(2026, 4, 1), bars=5)
+    assert prod["VOD.LSE"]["close"].iloc[-1] == 15.0
+    raw = load_history(lake_trending, ["VOD.LSE"], date(2026, 4, 1), bars=5, major_units=False)
+    assert raw["VOD.LSE"]["close"].iloc[-1] == 1500.0
+
+
+def test_protective_stop_atr_comes_out_in_pounds(lake_trending):
+    from stonks.production.live.stops import load_atr
+
+    _london(lake_trending)
+    atr, closes = load_atr(lake_trending, ["VOD.LSE"], date(2026, 4, 1), 5)
+    assert closes == {"VOD.LSE": 15.0}
+    assert 0 < atr["VOD.LSE"] < 1.0  # (50.5 - 49.5) * 30 pence = 0.3 pounds

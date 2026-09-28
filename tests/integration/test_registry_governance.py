@@ -44,11 +44,11 @@ class _Report:
 
 
 def _passing(sid: str) -> _Report:
-    return _Report(sid, [_Check("min_days", True, "30 paper days")])
+    return _Report(sid, [_Check("min_days", True, "30 days of paper trading")])
 
 
 def _failing(sid: str) -> _Report:
-    return _Report(sid, [_Check("min_days", False, "3 paper days, need >= 20")])
+    return _Report(sid, [_Check("min_days", False, "3 days of paper trading, needs at least 20")])
 
 
 @pytest.fixture

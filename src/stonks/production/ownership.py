@@ -22,6 +22,7 @@ from datetime import date
 
 from stonks.core.corporate_actions import CorporateActions, Split
 from stonks.core.types import Order, Portfolio
+from stonks.production.ledger import ledger_columns
 from stonks.store.state import SqliteState
 
 _EPS = 1e-9
@@ -31,11 +32,32 @@ def owned_positions(
     state: SqliteState, portfolio_id: str, actions: CorporateActions | None = None
 ) -> dict[str, float]:
     """Net filled quantity per ticker of ``portfolio_id`` (signed: shorts
-    are negative), each fill carried through the splits after its date."""
+    are negative), each fill carried through the splits after its date.
+    Manual orders (roadmap 20.1) are the person's own, never the book's."""
+    return _net_fills(state, portfolio_id, actions, manual=False)
+
+
+def manual_positions(
+    state: SqliteState, portfolio_id: str, actions: CorporateActions | None = None
+) -> dict[str, float]:
+    """Net filled quantity per ticker of ``portfolio_id``'s manual orders
+    (roadmap 20.1): holdings a person bought by hand, which the tick never
+    trades."""
+    if "origin" not in ledger_columns(state, "orders"):
+        return {}
+    return _net_fills(state, portfolio_id, actions, manual=True)
+
+
+def _net_fills(
+    state: SqliteState, portfolio_id: str, actions: CorporateActions | None, *, manual: bool
+) -> dict[str, float]:
+    origin = ""
+    if "origin" in ledger_columns(state, "orders"):
+        origin = " AND o.origin = 'manual'" if manual else " AND o.origin <> 'manual'"
     rows = state.sql(
         "SELECT f.ticker, f.quantity, f.filled_at, o.side FROM fills f"
         " JOIN orders o ON o.client_id = f.order_client_id"
-        " WHERE f.portfolio_id = ? ORDER BY f.filled_at",
+        f" WHERE f.portfolio_id = ?{origin} ORDER BY f.filled_at",
         [portfolio_id],
     )
     out: dict[str, float] = {}
@@ -75,6 +97,41 @@ def managed_view(
         if abs(rest) > _EPS:
             external[ticker] = rest
     return Portfolio(cash=account.cash, positions=managed), external
+
+
+def strip_holdings(
+    account: Portfolio, holdings: Mapping[str, float]
+) -> tuple[Portfolio, dict[str, float]]:
+    """``(account without holdings, the part taken out)``: the book's view
+    of a simulated account that also holds manual positions (roadmap 20.1).
+    Per ticker the part taken out is at most what the account holds, and
+    nothing when the signs disagree."""
+    managed: dict[str, float] = {}
+    taken: dict[str, float] = {}
+    for ticker, qty in account.positions.items():
+        if abs(qty) <= _EPS:
+            continue
+        theirs = float(holdings.get(ticker, 0.0))
+        part = min(abs(theirs), abs(qty)) if theirs * qty > 0 else 0.0
+        signed = part if qty > 0 else -part
+        if part > _EPS:
+            taken[ticker] = signed
+        rest = qty - signed
+        if abs(rest) > _EPS:
+            managed[ticker] = rest
+    return Portfolio(cash=account.cash, positions=managed), taken
+
+
+def merge_holdings(managed: Portfolio, holdings: Mapping[str, float]) -> Portfolio:
+    """``managed`` with ``holdings`` added back (the whole account again)."""
+    positions = dict(managed.positions)
+    for ticker, qty in holdings.items():
+        total = positions.get(ticker, 0.0) + qty
+        if abs(total) > _EPS:
+            positions[ticker] = total
+        else:
+            positions.pop(ticker, None)
+    return Portfolio(cash=managed.cash, positions=positions)
 
 
 def drop_unowned_crossings(

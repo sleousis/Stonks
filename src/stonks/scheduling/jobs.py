@@ -198,6 +198,24 @@ def ensure_window(ctx: RunContext) -> tuple[date, date]:
     return ctx.fire.as_of - timedelta(days=days), ctx.fire.as_of
 
 
+def no_gateways() -> JobOutcome:
+    """The outcome of a job that needs an IB Gateway while none is set."""
+    return JobOutcome("skipped", {"reason": "no_gateways"})
+
+
+def borrow_markets(ctx: RunContext) -> list[str] | None:
+    """The markets the ``ingest_borrow`` job pulls (``params.markets``, else
+    ``[sources.ibkr_borrow] markets``), or ``None`` while no IB Gateway is
+    configured: only a book at IBKR reads borrow rates (roadmap 19.14)."""
+    from stonks.ingest.sources.ibkr_borrow import resolve_markets
+
+    if not ctx.settings.brokers.ibkr.gateways:
+        return None
+    raw = ctx.params.get("markets")
+    wanted = [raw] if isinstance(raw, str) else list(raw or [])
+    return resolve_markets(wanted, ctx.settings.sources.ibkr_borrow.markets)
+
+
 def universes_outcome(results: Mapping[str, Mapping[str, Any]]) -> JobOutcome:
     """The ``universes_refresh`` outcome from each universe's step results
     (``refresh`` / ``ensure`` statuses): failed when any step failed."""
@@ -212,6 +230,31 @@ def universes_outcome(results: Mapping[str, Mapping[str, Any]]) -> JobOutcome:
     return JobOutcome("failed" if failed else "succeeded", detail)
 
 
+def retrain_body(ctx: RunContext) -> dict[str, Any]:
+    """The ``model_retrain`` request (``app.model_versions.RetrainRequest``):
+    the fire's date, plus ``params.strategy_ids``, ``force`` and ``tickers``."""
+    body: dict[str, Any] = {"as_of": ctx.fire.as_of.isoformat()}
+    for key in ("strategy_ids", "tickers"):
+        if ctx.params.get(key):
+            body[key] = [str(v) for v in ctx.params[key]]
+    if ctx.params.get("force"):
+        body["force"] = True
+    return body
+
+
+def retrain_outcome(result: Mapping[str, Any], job_id: str | None = None) -> JobOutcome:
+    """A retrain result (``RetrainResultView`` as JSON): failed when a fit
+    failed, skipped when nothing needed a refit."""
+    detail = {k: result.get(k) for k in ("as_of", "candidates", "failed", "skipped") if k in result}
+    if job_id is not None:
+        detail["job_id"] = job_id
+    if result.get("failed"):
+        return JobOutcome("failed", detail)
+    if not result.get("candidates"):
+        return JobOutcome("skipped", {**detail, "reason": "nothing_to_retrain"})
+    return JobOutcome("succeeded", detail)
+
+
 def closed_day_outcome(
     ctx: RunContext, universe: list[str], asset_classes: Mapping[str, str]
 ) -> JobOutcome | None:
@@ -223,6 +266,62 @@ def closed_day_outcome(
     if universe_trades_on(universe, ctx.fire.as_of, asset_classes):
         return None
     return JobOutcome("skipped", {"reason": "market_closed", "as_of": ctx.fire.as_of.isoformat()})
+
+
+# ---- the intraday engine (roadmap 21.2.5) ------------------------------------------
+
+
+def engine_launcher() -> Any:
+    """The launcher ``engine_start`` uses (tests swap it for a fake)."""
+    from stonks.engine.control import SubprocessLauncher
+
+    return SubprocessLauncher()
+
+
+def _engine_control(ctx: RunContext) -> Any:
+    from stonks.engine.control import EngineControl
+    from stonks.engine.settings import control_dir_for
+
+    return EngineControl(control_dir_for(ctx.settings.engine, ctx.settings.state.path))
+
+
+def engine_start_job(ctx: RunContext) -> JobOutcome:
+    """Start the engine process for the fire's session, before the open.
+    Skips while ``[engine]`` is off or has no books, on a closed day, and
+    when an engine already runs. The engine talks to no API, so every
+    backend starts it the same way (a detached ``python -m stonks.engine
+    run``)."""
+    from stonks.engine.process import session_window
+
+    cfg = ctx.settings.engine
+    session = ctx.fire.as_of
+    if not cfg.enabled:
+        return JobOutcome("skipped", {"reason": "engine_off"})
+    if not cfg.books:
+        return JobOutcome("skipped", {"reason": "no_books"})
+    if session_window(cfg.calendar, session) is None:
+        return JobOutcome("skipped", {"reason": "market_closed", "as_of": session.isoformat()})
+    control = _engine_control(ctx)
+    if control.running():
+        return JobOutcome("skipped", {"reason": "already_running"})
+    result = engine_launcher().launch(control, session)
+    return JobOutcome("succeeded", {"pid": result.pid, "session": session.isoformat()})
+
+
+def engine_stop_job(ctx: RunContext) -> JobOutcome:
+    """Ask the running engine to stop after the close and wait for it
+    (``[engine] stop_timeout_seconds``). The engine stops itself at the same
+    time, so this is the backstop. It runs even with ``[engine]`` off, so an
+    engine left running is still stopped."""
+    control = _engine_control(ctx)
+    if not control.running():
+        reason = "not_running" if ctx.settings.engine.enabled else "engine_off"
+        return JobOutcome("skipped", {"reason": reason})
+    control.request_stop(f"scheduler job {ctx.spec.name}")
+    timeout = ctx.settings.engine.stop_timeout_seconds
+    if control.wait_stopped(timeout):
+        return JobOutcome("succeeded", {"stopped": True})
+    return JobOutcome("failed", {"stopped": False, "waited_seconds": timeout})
 
 
 # ---- building specs from config ----------------------------------------------------

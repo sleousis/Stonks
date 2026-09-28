@@ -15,6 +15,8 @@ from stonks.app.errors import NotFoundError
 from stonks.app.pagination import Page
 from stonks.app.serialize import finite
 from stonks.config import HealthConfig, RiskPolicy
+from stonks.insights.flows import flows_or_missing, lake_fx_loader
+from stonks.insights.returns import mwr, net_flows, twr
 from stonks.production.halts import HEALTH_ACTOR, read_health, run_health
 from stonks.production.pnl import PnlRow, load_pnl
 from stonks.production.universe import EmptyUniverseError, production_tickers
@@ -39,6 +41,21 @@ class PnlSeries(BaseModel):
 
     strategy_id: str | None
     rows: list[PnlRowView]
+    #: The portfolio's base currency (real portfolios only, roadmap 20.5).
+    base_currency: str | None = None
+    #: ``rows`` revalued in the base currency: cash as is, each holding at
+    #: that day's close and FX rate. ``None`` for shadow books, or when a
+    #: held currency has no FX rate on some day (see ``fx_missing``).
+    base_rows: list[PnlRowView] | None = None
+    fx_missing: list[str] = []
+    #: Deposits less withdrawals inside the range of the rows (real portfolios).
+    net_flows: float = 0.0
+    #: Time-weighted return over the rows: deposits and withdrawals taken
+    #: out, so a deposit is never profit (``cumulative_return`` is the plain
+    #: change in value).
+    twr: float | None = None
+    #: Money-weighted return over the rows, annualized (XIRR).
+    mwr: float | None = None
 
 
 class ShadowPnlSummary(BaseModel):
@@ -134,7 +151,64 @@ class OperationsService:
         through ``PortfolioService.resolve`` first."""
         with self._ctx.state() as state:
             rows = load_pnl(state, since=since, portfolio_id=portfolio_id)
-        return PnlSeries(strategy_id=None, rows=[_pnl_view(r) for r in rows])
+            snapshots, base = _snapshot_points(state, portfolio_id)
+            found, flow_missing = flows_or_missing(
+                state, portfolio_id, fx_loader=lake_fx_loader(self._ctx.lake)
+            )
+        flows = found or []
+        base_rows, missing = self._base_rows(snapshots, base, since)
+        if flow_missing:
+            missing = sorted({*missing, flow_missing})
+        points = [(r.day, r.total_value) for r in rows]
+        return PnlSeries(
+            strategy_id=None,
+            rows=[_pnl_view(r) for r in rows],
+            base_currency=base,
+            base_rows=base_rows,
+            fx_missing=missing,
+            net_flows=net_flows(points, flows),
+            twr=None if flow_missing else twr(points, flows),
+            mwr=None if flow_missing else mwr(points, flows),
+        )
+
+    def _base_rows(
+        self, snapshots: list[Any], base: str, since: date | None
+    ) -> tuple[list[PnlRowView] | None, list[str]]:
+        """The daily P&L in ``base`` (see :mod:`stonks.fx.valuation`)."""
+        from stonks.fx import FxRates, load_fx_rates
+        from stonks.fx.valuation import CloseSeries, values_in_base
+        from stonks.production.pnl import daily_pnl
+
+        tickers = sorted({t for s in snapshots for t in s.positions})
+        closes: dict[str, list[tuple[date, float]]] = {}
+        currencies: dict[str, str] = {}
+        fx = FxRates([])
+        if tickers:
+            with self._ctx.lake() as lake:
+                cur = lake.sql(
+                    "SELECT id, currency FROM instruments WHERE id = ANY(?)"
+                    " AND currency IS NOT NULL",
+                    [tickers],
+                )
+                currencies = {
+                    str(i): str(c) for i, c in zip(cur["id"], cur["currency"], strict=True)
+                }
+                if any(c != base for c in currencies.values()):
+                    df = lake.sql(
+                        "SELECT ticker, date, close FROM prices WHERE ticker = ANY(?)"
+                        " AND close IS NOT NULL",
+                        [tickers],
+                    )
+                    for ticker, when, close in zip(
+                        df["ticker"], df["date"], df["close"], strict=True
+                    ):
+                        day = when.date() if isinstance(when, datetime) else when
+                        closes.setdefault(str(ticker), []).append((day, float(close)))
+                    fx = load_fx_rates(lake, {*currencies.values(), base})
+        points, missing = values_in_base(snapshots, CloseSeries(closes), currencies, base, fx)
+        if points is None:
+            return None, missing
+        return [_pnl_view(r) for r in daily_pnl(points, since=since)], missing
 
     def shadow_pnl(self, strategy_id: str, since: date | None = None) -> PnlSeries:
         with self._ctx.state() as state:
@@ -228,6 +302,35 @@ def _health_view(report: Any, thresholds: HealthConfig) -> HealthReportView:
         checks=[HealthCheckView(name=c.name, ok=c.ok, detail=c.detail) for c in report.checks],
         thresholds=thresholds.model_copy(),
     )
+
+
+def _snapshot_points(state: Any, portfolio_id: str) -> tuple[list[Any], str]:
+    """The portfolio's last snapshot per day (as ``load_pnl`` reads them)
+    with cash and holdings, and its base currency."""
+    import json
+
+    from stonks.fx.valuation import SnapshotPoint
+    from stonks.production.ledger import ledger_filter
+    from stonks.production.pnl import _snapshot_day
+
+    where, params = ledger_filter(state, "portfolio_snapshots", portfolio_id)
+    rows = state.sql(
+        "SELECT as_of, taken_at, cash, positions_json, total_value FROM portfolio_snapshots"
+        f" WHERE {where} ORDER BY id",
+        params,
+    )
+    by_day: dict[date, Any] = {}
+    for r in rows:
+        day = _snapshot_day(r["as_of"], r["taken_at"])
+        by_day[day] = SnapshotPoint(
+            day=day,
+            cash=float(r["cash"]),
+            positions=json.loads(r["positions_json"] or "{}"),
+            total_value=float(r["total_value"]),
+        )
+    found = state.sql("SELECT base_currency FROM portfolios WHERE id = ?", [portfolio_id])
+    base = str(found[0]["base_currency"]).upper() if found else "USD"
+    return [by_day[d] for d in sorted(by_day)], base
 
 
 def _pnl_view(row: PnlRow) -> PnlRowView:

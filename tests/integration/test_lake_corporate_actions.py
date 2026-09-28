@@ -44,7 +44,7 @@ def lake(tmp_path):
 
 def test_get_corporate_actions_returns_both_kinds_for_requested_tickers(lake):
     df = lake.get_corporate_actions(["A.US", "B.US"])
-    assert list(df.columns) == ["ticker", "ex_date", "kind", "value"]
+    assert list(df.columns) == ["ticker", "ex_date", "kind", "value", "declaration_date"]
     rows = [(r.ticker, r.ex_date, r.kind, r.value) for r in df.itertuples(index=False)]
     assert rows == [
         ("A.US", date(2024, 2, 9), "dividend", 2.0),
@@ -86,3 +86,27 @@ def test_provider_tolerates_lake_without_corporate_action_reader():
             return pd.DataFrame()
 
     assert not LakeCorporateActions(BarsOnly()).load(["A.US"])
+
+
+def test_dividends_carry_their_declaration_date(tmp_path):
+    lake = DuckDBLake(tmp_path / "lake.duckdb")
+    lake.migrate()
+    lake.upsert_dividends(
+        _dividends(
+            [
+                {
+                    "ticker": "A.US",
+                    "ex_date": date(2024, 6, 10),
+                    "amount": 0.25,
+                    "declaration_date": date(2024, 5, 1),
+                },
+                {"ticker": "A.US", "ex_date": date(2024, 9, 10), "amount": 0.25},
+            ]
+        )
+    )
+    try:
+        first, second = LakeCorporateActions(lake).load(["A.US"]).for_ticker("A.US")
+    finally:
+        lake.close()
+    assert isinstance(first, Dividend) and first.declared_on == date(2024, 5, 1)
+    assert isinstance(second, Dividend) and second.declared_on is None

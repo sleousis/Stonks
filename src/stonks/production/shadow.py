@@ -100,21 +100,56 @@ def evaluate_shadow_strategies(
     registry statuses that keep a model book. ``risk_context`` (history and
     sectors, from ``build_risk_context``) lets the rules that need history
     run; each model book gets its own equity curve and entry dates."""
+    books = [shadow_book(h.id) for status in statuses for h in registry.list_all(status=status)]
+    return evaluate_books(
+        state,
+        books,
+        ranked,
+        prices,
+        asset_classes,
+        as_of,
+        tick_id,
+        settings,
+        buyable=buyable,
+        volumes=volumes,
+        corporate_actions=corporate_actions,
+        strategies=strategies or registry.load,
+        risk_context=risk_context,
+    )
+
+
+def evaluate_books(
+    state: SqliteState,
+    books: Sequence[BookStore],
+    ranked: Sequence[tuple[float, str, str]],
+    prices: Mapping[str, float],
+    asset_classes: Mapping[str, str],
+    as_of: date,
+    tick_id: str,
+    settings: TickSettings,
+    *,
+    strategies: Callable[[str], Strategy],
+    buyable: Collection[str] | None = None,
+    volumes: Mapping[str, float] | None = None,
+    corporate_actions: CorporateActions | None = None,
+    risk_context: RiskContext | None = None,
+) -> list[ShadowOutcome]:
+    """Advance each model book in ``books`` (see the module doc).
+    ``ranked`` and ``strategies`` are keyed by book id, and an outcome's
+    ``strategy_id`` is the book id too."""
     fresh = set(prices) if buyable is None else set(buyable)
-    picks_by_strategy: dict[str, list[tuple[float, str]]] = {}
-    for r, sid, ticker in ranked:
-        picks_by_strategy.setdefault(sid, []).append((r, ticker))
+    picks_by_book: dict[str, list[tuple[float, str]]] = {}
+    for r, bid, ticker in ranked:
+        picks_by_book.setdefault(bid, []).append((r, ticker))
 
     outcomes: list[ShadowOutcome] = []
-    handles = [h for status in statuses for h in registry.list_all(status=status)]
-    for handle in handles:
-        log = _log.bind(tick_id=tick_id, strategy_id=handle.id, as_of=as_of.isoformat())
+    for book in books:
+        log = _log.bind(tick_id=tick_id, strategy_id=book.book_id, as_of=as_of.isoformat())
         try:
             outcome = _evaluate_one(
                 state,
-                registry,
-                handle.id,
-                picks_by_strategy.get(handle.id, []),
+                book,
+                picks_by_book.get(book.book_id, []),
                 prices,
                 asset_classes,
                 as_of,
@@ -123,13 +158,13 @@ def evaluate_shadow_strategies(
                 fresh,
                 volumes or {},
                 corporate_actions or CorporateActions(),
-                strategies or registry.load,
+                strategies,
                 risk_context,
             )
         except Exception as exc:
             log.warning("shadow.failed", error=str(exc), error_type=type(exc).__name__)
             outcome = ShadowOutcome(
-                strategy_id=handle.id, status="failed", error=f"{type(exc).__name__}: {exc}"
+                strategy_id=book.book_id, status="failed", error=f"{type(exc).__name__}: {exc}"
             )
         else:
             log.info("shadow.outcome", **outcome.as_dict())
@@ -139,8 +174,7 @@ def evaluate_shadow_strategies(
 
 def _evaluate_one(
     state: SqliteState,
-    registry: StrategyRegistry,
-    strategy_id: str,
+    book: BookStore,
     picks: list[tuple[float, str]],
     prices: Mapping[str, float],
     asset_classes: Mapping[str, str],
@@ -153,18 +187,15 @@ def _evaluate_one(
     strategies: Callable[[str], Strategy],
     risk_context: RiskContext | None = None,
 ) -> ShadowOutcome:
-    latest = state.sql(
-        "SELECT as_of FROM shadow_portfolio_snapshots WHERE strategy_id = ? AND as_of >= ? "
-        "ORDER BY as_of DESC LIMIT 1",
-        [strategy_id, as_of.isoformat()],
-    )
-    if latest:
+    strategy_id = book.book_id
+    latest = book.latest_from(state, as_of)
+    if latest is not None:
         status: ShadowStatus = (
-            "already_evaluated" if latest[0]["as_of"] == as_of.isoformat() else "out_of_order"
+            "already_evaluated" if latest == as_of.isoformat() else "out_of_order"
         )
         return ShadowOutcome(strategy_id=strategy_id, status=status)
 
-    portfolio, since = _load_virtual_portfolio(state, strategy_id, settings.initial_cash)
+    portfolio, since = book.load(state, settings.initial_cash)
     apply_corporate_actions(
         portfolio,
         corporate_actions,
@@ -192,7 +223,9 @@ def _evaluate_one(
             cost_model=settings.costs,
             volumes=volumes,
             context=(
-                model_book_risk_context(risk_context, state, strategy_id, portfolio, as_of)
+                model_book_risk_context(
+                    risk_context, state, strategy_id, portfolio, as_of, book=book
+                )
                 if risk_context is not None
                 else None
             ),
@@ -218,44 +251,7 @@ def _evaluate_one(
 
     total_value = portfolio.total_value(prices)
     now = _iso_now()
-    with state.transaction():
-        for order, fill in results:
-            state.execute(
-                """
-                INSERT INTO shadow_decisions
-                    (tick_id, strategy_id, as_of, ticker, side, quantity, price, status,
-                     created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (strategy_id, as_of, ticker, side) DO NOTHING
-                """,
-                [
-                    tick_id,
-                    strategy_id,
-                    as_of.isoformat(),
-                    order.ticker,
-                    order.side,
-                    fill.quantity if fill else order.quantity,
-                    fill.price if fill else prices.get(order.ticker),
-                    "filled" if fill else "rejected",
-                    now,
-                ],
-            )
-        state.execute(
-            """
-            INSERT INTO shadow_portfolio_snapshots
-                (tick_id, strategy_id, as_of, taken_at, cash, positions_json, total_value)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                tick_id,
-                strategy_id,
-                as_of.isoformat(),
-                now,
-                portfolio.cash,
-                json.dumps(portfolio.positions, sort_keys=True),
-                total_value,
-            ],
-        )
+    book.write(state, tick_id, as_of, results, portfolio, total_value, prices, now)
 
     return ShadowOutcome(
         strategy_id=strategy_id,
@@ -279,30 +275,152 @@ def _one_per_side(orders: Sequence[Order]) -> list[Order]:
     return list(merged.values())
 
 
-def _load_virtual_portfolio(
-    state: SqliteState, strategy_id: str, initial_cash: float
-) -> tuple[Portfolio, date | None]:
-    """The latest virtual portfolio and its snapshot's ``as_of`` (``None``
-    when freshly seeded)."""
-    rows = state.sql(
-        "SELECT as_of, cash, positions_json FROM shadow_portfolio_snapshots"
-        " WHERE strategy_id = ? ORDER BY as_of DESC, id DESC LIMIT 1",
-        [strategy_id],
+@dataclass(frozen=True)
+class BookStore:
+    """Where one model book lives: a decisions table, a snapshots table and
+    the key columns that pick the book's rows. :func:`shadow_book` is a
+    registered strategy's book. ``production.version_books`` keeps one per
+    model version."""
+
+    book_id: str
+    decisions: str
+    snapshots: str
+    key: tuple[tuple[str, Any], ...]
+
+    @property
+    def _where(self) -> str:
+        return " AND ".join(f"{col} = ?" for col, _ in self.key)
+
+    @property
+    def _args(self) -> list[Any]:
+        return [value for _, value in self.key]
+
+    def latest_from(self, state: SqliteState, as_of: date) -> str | None:
+        """The latest snapshot date on or after ``as_of``, if any."""
+        rows = state.sql(
+            f"SELECT as_of FROM {self.snapshots} WHERE {self._where} AND as_of >= ?"
+            " ORDER BY as_of DESC LIMIT 1",
+            [*self._args, as_of.isoformat()],
+        )
+        return rows[0]["as_of"] if rows else None
+
+    def load(self, state: SqliteState, initial_cash: float) -> tuple[Portfolio, date | None]:
+        """The latest virtual portfolio and its snapshot's ``as_of`` (``None``
+        when freshly seeded)."""
+        rows = state.sql(
+            f"SELECT as_of, cash, positions_json FROM {self.snapshots} WHERE {self._where}"
+            " ORDER BY as_of DESC, id DESC LIMIT 1",
+            self._args,
+        )
+        if not rows:
+            return Portfolio(cash=initial_cash, positions={}), None
+        row = rows[0]
+        portfolio = Portfolio(cash=float(row["cash"]), positions=json.loads(row["positions_json"]))
+        return portfolio, date.fromisoformat(row["as_of"]) if row["as_of"] else None
+
+    def filled(
+        self, state: SqliteState, tickers: Sequence[str], as_of: date
+    ) -> list[tuple[str, str, float, date]]:
+        """``(ticker, side, quantity, as_of)`` of the book's filled
+        decisions in ``tickers`` up to ``as_of``, oldest first."""
+        if not tickers:
+            return []
+        marks = ",".join("?" for _ in tickers)
+        rows = state.sql(
+            f"SELECT ticker, side, quantity, as_of FROM {self.decisions}"
+            f" WHERE {self._where} AND status = 'filled' AND ticker IN ({marks})"
+            " AND as_of <= ? ORDER BY as_of, id",
+            [*self._args, *tickers, as_of.isoformat()],
+        )
+        return [
+            (r["ticker"], r["side"], float(r["quantity"]), date.fromisoformat(r["as_of"]))
+            for r in rows
+        ]
+
+    def curve(self, state: SqliteState) -> list[tuple[date, float]]:
+        """``(as_of, total_value)`` of every snapshot, oldest first."""
+        rows = state.sql(
+            f"SELECT as_of, total_value FROM {self.snapshots} WHERE {self._where} ORDER BY as_of",
+            self._args,
+        )
+        return [(date.fromisoformat(r["as_of"]), float(r["total_value"])) for r in rows]
+
+    def write(
+        self,
+        state: SqliteState,
+        tick_id: str,
+        as_of: date,
+        results: Sequence[tuple[Order, Fill | None]],
+        portfolio: Portfolio,
+        total_value: float,
+        prices: Mapping[str, float],
+        now: str,
+    ) -> None:
+        """The day's decisions and snapshot, in one transaction."""
+        cols = [col for col, _ in self.key]
+        key_cols = ", ".join(cols)
+        key_marks = ", ".join("?" for _ in cols)
+        with state.transaction():
+            for order, fill in results:
+                state.execute(
+                    f"""
+                    INSERT INTO {self.decisions}
+                        (tick_id, {key_cols}, as_of, ticker, side, quantity, price, status,
+                         created_at)
+                    VALUES (?, {key_marks}, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT ({key_cols}, as_of, ticker, side) DO NOTHING
+                    """,
+                    [
+                        tick_id,
+                        *self._args,
+                        as_of.isoformat(),
+                        order.ticker,
+                        order.side,
+                        fill.quantity if fill else order.quantity,
+                        fill.price if fill else prices.get(order.ticker),
+                        "filled" if fill else "rejected",
+                        now,
+                    ],
+                )
+            state.execute(
+                f"""
+                INSERT INTO {self.snapshots}
+                    (tick_id, {key_cols}, as_of, taken_at, cash, positions_json, total_value)
+                VALUES (?, {key_marks}, ?, ?, ?, ?, ?)
+                """,
+                [
+                    tick_id,
+                    *self._args,
+                    as_of.isoformat(),
+                    now,
+                    portfolio.cash,
+                    json.dumps(portfolio.positions, sort_keys=True),
+                    total_value,
+                ],
+            )
+
+
+def shadow_book(strategy_id: str) -> BookStore:
+    """A registered strategy's model book."""
+    return BookStore(
+        book_id=strategy_id,
+        decisions="shadow_decisions",
+        snapshots="shadow_portfolio_snapshots",
+        key=(("strategy_id", strategy_id),),
     )
-    if not rows:
-        return Portfolio(cash=initial_cash, positions={}), None
-    row = rows[0]
-    portfolio = Portfolio(cash=float(row["cash"]), positions=json.loads(row["positions_json"]))
-    return portfolio, date.fromisoformat(row["as_of"]) if row["as_of"] else None
 
 
 def shadow_held_tickers(state: SqliteState) -> list[str]:
     """Every ticker held in any strategy's latest virtual portfolio."""
-    latest: dict[str, str] = {}
-    for row in state.sql(
-        "SELECT strategy_id, positions_json FROM shadow_portfolio_snapshots ORDER BY as_of, id"
-    ):
-        latest[row["strategy_id"]] = row["positions_json"]
+    return held_in_latest(state, "shadow_portfolio_snapshots", ("strategy_id",))
+
+
+def held_in_latest(state: SqliteState, table: str, key: Sequence[str]) -> list[str]:
+    """Every ticker held in the latest snapshot of each book in ``table``."""
+    cols = ", ".join(key)
+    latest: dict[tuple[Any, ...], str] = {}
+    for row in state.sql(f"SELECT {cols}, positions_json FROM {table} ORDER BY as_of, id"):
+        latest[tuple(row[c] for c in key)] = row["positions_json"]
     held: set[str] = set()
     for positions_json in latest.values():
         held.update(held_tickers(json.loads(positions_json)))

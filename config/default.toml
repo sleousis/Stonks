@@ -77,6 +77,9 @@ min_order_notional = 0.0
 # max_risk = 0.01                  # k * ATR risk per position, fraction of equity
 # [production.risk.rules.drawdown_scaling]
 # schedule = [[0.10, 0.5], [0.20, 0.0]]   # size by drawdown from peak
+# [production.risk.rules.style_exposure]
+# max_abs_exposure = 0.5           # net style lean in z-score units (roadmap 22.4)
+# styles = ["momentum", "size", "value", "volatility"]
 
 # Short-book rules (roadmap 16.2), all off by default. They matter only for
 # a portfolio with allow_short. Examples:
@@ -140,6 +143,53 @@ short_window = 60
 long_window = 120
 negative_days = 20
 min_fraction = 0.5
+
+[production.intraday_pnl]
+# Live marks and intraday P&L of the engine's books (roadmap 21.3.3): one
+# intraday_snapshots row per portfolio and strategy sleeve every
+# snapshot_minutes, read by GET /api/risk/intraday and the Live page.
+enabled = false
+snapshot_minutes = 5
+stale_mark_seconds = 120          # a held name with an older mark counts as stale
+
+[production.live]
+# Live trading at a real broker (roadmap 19). Stonks trades only the
+# positions it opened in a shared account.
+allow_manual_trades = true
+# Decide after the close, submit in the window before the next open
+# (order tickets, roadmap 19.8). Off: auto books send at once. Books with
+# an approve subscription, and runaway runs, always use tickets.
+submit_in_window = false
+# A short sale of a name the borrow source marks hard to borrow, or whose
+# yearly borrow fee is at or above this fraction, waits for a person as a
+# ticket, even in auto (roadmap 19.16).
+hard_to_borrow_fee_rate = 0.03
+
+[production.live.submit]
+calendar = "XNYS"
+window_minutes = 20                # the live_submit job fires at open minus this
+deadline_minutes = 2               # unsent tickets expire at open minus this
+
+[production.live.stages]
+# Stage gates (roadmap 19.9). A promotion needs every check to pass, a
+# fresh second factor and a typed confirmation. A dirty week only alerts.
+min_paper_days = 20                # gate 1: paper days of every live subscription
+min_broker_paper_sessions = 20     # gate 2: sessions in broker_paper
+broker_paper_clean_sessions = 20   # gate 2: the last 4 weeks clean
+min_live_small_sessions = 40       # gate 3: 8 weeks in live_small
+live_small_clean_sessions = 30     # gate 3: the last 6 weeks clean
+min_live_fills = 30                # gate 3: filled live orders
+max_reject_rate = 0.02             # a clean session rejects under 2%
+week_sessions = 5
+
+[production.live.reconcile]
+# The end-of-day check's cash and statement comparisons (roadmap 19.15).
+compare_cash = true
+cash_tolerance = 1.0               # currency units
+cash_tolerance_fraction = 0.0001   # of net liquidation, the larger wins
+cash_is_drift = false              # true: a cash difference halts buys
+compare_statement = true           # IBKR Flex, when configured
+commission_tolerance = 0.01
 
 [production.health]
 # `stonks health` thresholds.
@@ -249,6 +299,57 @@ poll_seconds = 2
 heartbeat_seconds = 10
 lease_seconds = 120
 
+[factors]
+# Factor panel cache (roadmap 22.2, docs/factors.md). "parquet" keeps one file
+# per panel across restarts, "memory" keeps panels in this process only, "off"
+# computes every time. A panel is dropped as soon as the data it read changes.
+cache = "parquet"
+# cache_dir = "data/factor_panels"  # omit: factor_panels next to the lake file
+
+[screener]
+# Screens at scale (roadmap 20.11, docs/universes.md#screener). A screen whose
+# rule keeps more than max_candidates fails with a message on how to narrow it.
+# Above job_threshold candidates the console runs it as a background job.
+# A result is reused for cache_seconds for the same spec and date (0: off).
+max_candidates = 10000
+job_threshold = 1000
+cache_seconds = 300
+cache_entries = 32
+
+[streaming]
+# Live price streams into 1m bars (roadmap 21.1, docs/design/intraday.md).
+# Off by default. Run with `python -m stonks.streaming run`. The EODHD key
+# comes from EODHD_API_KEY, never from here.
+enabled = false
+source = "eodhd"          # eodhd | ibkr | replay
+tickers = []
+calendar = "XNYS"         # when a silent stream counts as stale
+bar_mode = "auto"         # auto | trades | quotes
+stale_after_seconds = 60
+backfill = true           # fill gaps from the REST intraday ingest
+backfill_source = "eodhd"
+
+[engine]
+# The intraday engine process (roadmap 21.2.5, docs/design/intraday.md).
+# Off by default: the engine_start and engine_stop jobs skip. Run it by hand
+# with `python -m stonks.engine run` or replay a recording with `replay`.
+# Books are listed as [[engine.books]] (id, portfolio_id, strategies,
+# broker = "simulated" | "ibkr", initial_cash, sessions).
+enabled = false
+interval = "1m"
+calendar = "XNYS"
+universe = []                      # [] = [streaming].tickers
+start_before_open_minutes = 15     # engine_start fires at open minus this
+stop_after_close_minutes = 10      # engine_stop fires, and the process stops, at close plus this
+stale_after_seconds = 180          # no new entries on a ticker with no bar for this long
+stop_timeout_seconds = 60
+[streaming.monitor]
+# Engine monitoring (roadmap 21.3.4): stream and engine metrics on /metrics,
+# the live panel, and the engine dead-man in the scheduler's watchdog.
+deadman_minutes = 5          # alert when no bar close for this long in market hours
+stale_after_seconds = 120    # an engine silent this long counts as down
+publish_seconds = 15         # how often the engine writes its status
+
 [audit]
 # Statement audit tolerances (BL-36): relative gaps above which
 # `stonks audit statements` (also run after `stonks ingest fundamentals`)
@@ -296,6 +397,17 @@ min_level = "warning"
 # Set the URL via STONKS_NOTIFY_WEBHOOK_URL in .env; it usually embeds a token.
 timeout_seconds = 5.0
 
+[telegram]
+# The Telegram bot (docs/operations.md). The token is env only
+# (STONKS_TELEGRAM_BOT_TOKEN). With the token set, linked chats get
+# notifications. enabled = true also answers commands (long polling inside
+# `stonks serve`, no public webhook).
+enabled = false
+poll_timeout_seconds = 25
+link_code_minutes = 10.0
+kill_confirm_minutes = 2.0
+# bot_username = "my_stonks_bot"   # shown next to a link code
+
 [sources.eodhd]
 base_url = "https://eodhd.com/api"
 timeout_seconds = 30
@@ -315,6 +427,14 @@ base_url = "https://api.llama.fi"
 timeout_seconds = 30
 max_retries = 3
 retry_backoff_seconds = 1.0
+
+[sources.ibkr_borrow]
+# IBKR's public short stock files for `stonks ingest borrow` (roadmap 19.3).
+# The login is IBKR's shared public one, not your account.
+host = "ftp2.interactivebrokers.com"
+user = "shortstock"
+timeout_seconds = 30
+markets = ["usa"]
 
 [brokers]
 # Broker `stonks tick` (CLI and API) trades through. "simulated" (default)
@@ -386,9 +506,66 @@ promotion_preset = "promotion"    # every test of this preset needs a stored rep
 min_backtest_trades = 30
 min_hypothesis_chars = 20
 
+[lifecycle]
+# Model lifecycle (roadmap 22.6, docs/model-lifecycle.md). The model_retrain
+# job refits strategies that learn from data into candidate versions. A
+# candidate runs as a model book beside the live version and swaps in only
+# through `stonks registry swap`, after the swap check below passes.
+lookback_days = 730               # each fit trains on this many calendar days
+statuses = ["active", "shadow"]
+min_days_between_fits = 5         # a newer fit is kept, not redone (unless forced)
+
+[lifecycle.swap]
+min_days = 20                     # candidate model book days before a swap
+max_drawdown = 0.25
+max_underperformance = 0.02       # the candidate may trail the live version by this much
+
 [mcp]
 # `stonks mcp` talks to the running REST API (`stonks serve`); it never opens
 # the lake. Write and job tools send STONKS_API_TOKEN (env only).
 api_url = "http://127.0.0.1:8000"
 timeout_seconds = 30.0
 max_wait_seconds = 600.0
+
+[assistant]
+# The in-app AI assistant (roadmap 20.4). Off until base_url names an
+# OpenAI-compatible chat endpoint: Ollama "http://127.0.0.1:11434/v1", vLLM
+# "http://127.0.0.1:8001/v1" or a llama.cpp server "http://127.0.0.1:8080/v1".
+# An optional key comes from STONKS_ASSISTANT_API_KEY (env only).
+# base_url = "http://127.0.0.1:11434/v1"
+model = "llama3.1"
+max_steps = 8                     # model calls per turn
+max_tokens = 1024                 # tokens per model call
+timeout_seconds = 120.0           # one turn, tool calls included
+max_conversation_messages = 40    # recent messages sent to the model
+max_tool_result_chars = 8000      # characters of each tool result fed back
+temperature = 0.2
+
+[assistant.envelope]
+# Research only by default: no order tool at all. With order_tools = true the
+# assistant may only draft orders, which you approve in the web app with a
+# fresh second factor.
+order_tools = false
+# allowed_tickers = ["AAPL.US", "MSFT.US"]
+max_order_notional = 5000.0
+max_day_notional = 20000.0
+price_band = 0.05                 # a limit within 5% of the latest close
+draft_ttl_minutes = 1440.0
+max_writes_per_minute = 5         # a burst freezes the assistant
+max_writes_per_hour = 40
+freeze_minutes = 60.0
+
+[assistant.research]
+# The AI research loop (roadmap 22.9): the assistant proposes hypotheses and
+# runs lab trials under these budgets, each counted in the trial ledger. It
+# never registers or promotes a strategy. Models remember prices from before
+# their training cutoff, so a proposal's validation window must start after
+# model_cutoff. Off until you set it for your model.
+# model_cutoff = "2023-12-31"
+max_trials = 200                  # tuning trials per session
+max_proposals = 10                # proposals per session, rejected ones too
+max_cpu_seconds = 3600.0          # lab wall time x lab workers per session
+max_budget_per_proposal = 50      # tuning trials per proposal
+survival_tests = ["oos", "deflated_sharpe", "pbo"]
+min_hypothesis_chars = 40
+min_premortem_chars = 20

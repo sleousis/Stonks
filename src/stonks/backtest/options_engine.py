@@ -24,6 +24,11 @@ Each day, in order:
    registry; when ``rules`` is set every enabled option risk rule filters
    them (whole combos only) and the survivors queue for tomorrow.
 
+Model prices, Greeks and implied vols use a ``PricingMarket`` (roadmap
+17.7): the Treasury curve known each day, interpolated to each expiry, and
+the dividends declared by that day, when the market data carries them;
+else a flat ``rate`` and no dividends.
+
 The result carries a standard :class:`~stonks.backtest.report.
 BacktestReport` of the equity curve, so the metrics and the statistical
 survival tests read it like any other backtest, plus the fills, rejected
@@ -33,7 +38,7 @@ combos, ledger events and risk adjustments.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
@@ -50,7 +55,10 @@ from stonks.logging import get_logger
 from stonks.options.analytics import analyze, model_mark, risk_view
 from stonks.options.assignment import AssignmentModel, ExtrinsicAssignmentModel
 from stonks.options.chain import ChainSnapshot, OptionQuote
+from stonks.options.dividends import DividendForecast, KnownDividendForecast, NoDividends
+from stonks.options.market import PricingMarket
 from stonks.options.orders import ComboOrder
+from stonks.options.rates import FlatRateCurve, RateCurve, RateCurveSettings, TreasuryRateCurve
 from stonks.options.selector import LegSelector
 from stonks.options.strategy import OptionDecisionContext, OptionIntent, OptionStrategy
 from stonks.options.structures import BuildRequest, build
@@ -68,7 +76,9 @@ class OptionMarketData:
     """What an options backtest reads: raw closes per underlying (fills,
     marks, exercise), the closes strategies see (split and dividend
     adjusted when the source has them, P13), chain snapshots by
-    ``(underlying, day)``, and corporate actions."""
+    ``(underlying, day)``, corporate actions, and optionally the rate curve
+    and dividend forecast model prices use (each filters to what was known
+    on the pricing day)."""
 
     closes: Mapping[str, Mapping[date, float]]
     chains: Mapping[tuple[str, date], ChainSnapshot] = field(
@@ -76,6 +86,8 @@ class OptionMarketData:
     )
     actions: CorporateActions = field(default_factory=CorporateActions)
     adjusted: Mapping[str, Mapping[date, float]] | None = None
+    rates: RateCurve | None = None
+    dividends: DividendForecast | None = None
 
     @classmethod
     def from_lake(
@@ -87,6 +99,7 @@ class OptionMarketData:
         *,
         source: str | None = None,
         warmup_days: int = 400,
+        rate_settings: RateCurveSettings | None = None,
     ) -> OptionMarketData:
         from datetime import timedelta
 
@@ -112,6 +125,8 @@ class OptionMarketData:
             chains=snapshots(quotes),
             actions=LakeCorporateActions(lake).load(list(underlyings)),
             adjusted=adjusted,
+            rates=TreasuryRateCurve.from_lake(lake, rate_settings),
+            dividends=KnownDividendForecast.from_lake(lake, list(underlyings)),
         )
 
 
@@ -123,7 +138,8 @@ class OptionsBacktestConfig:
     initial_cash: float = 100_000.0
     fills: OptionFillSettings = field(default_factory=OptionFillSettings)
     selector: LegSelector = field(default_factory=LegSelector)
-    #: Risk-free rate for model marks and Greeks (continuous, annual).
+    #: Risk-free rate for model marks and Greeks (continuous, annual) when
+    #: the market data has no rate curve.
     rate: float = 0.0
     #: Option risk rules; ``None`` runs none.
     rules: RuleSettings | None = None
@@ -174,6 +190,14 @@ class OptionsBacktester:
         self._data = data
         self._config = config
         self._assignment = assignment or ExtrinsicAssignmentModel()
+        self._market = PricingMarket(
+            data.rates if data.rates is not None else FlatRateCurve(config.rate),
+            data.dividends if data.dividends is not None else NoDividends(),
+        )
+        selector = config.selector
+        self._selector = (
+            selector if selector.market is not None else replace(selector, market=self._market)
+        )
 
     # ---- data access -------------------------------------------------------------
 
@@ -208,10 +232,18 @@ class OptionsBacktester:
         }
 
     def _next_dividends(self, day: date) -> dict[str, tuple[date, float]]:
+        """The next ex-date and amount per underlying among the dividends
+        declared on or before ``day``. A realised ex-date that was not yet
+        announced, or has no declaration date, stays unknown (P12)."""
         out: dict[str, tuple[date, float]] = {}
         for underlying in self._config.underlyings:
             for event in self._data.actions.for_ticker(underlying):
-                if isinstance(event, Dividend) and event.ex_date > day:
+                if (
+                    isinstance(event, Dividend)
+                    and event.ex_date > day
+                    and event.declared_on is not None
+                    and event.declared_on <= day
+                ):
                     out[underlying] = (event.ex_date, event.amount)
                     break
         return out
@@ -314,7 +346,7 @@ class OptionsBacktester:
             spot = spots.get(contract.underlying)
             quote = quotes.get(cid)
             if quote is not None:
-                a = analyze(quote, spot, rate=self._config.rate)
+                a = analyze(quote, spot, market=self._market)
                 if a.iv is not None:
                     last_iv[cid] = a.iv
                 if a.mark is not None:
@@ -322,9 +354,7 @@ class OptionsBacktester:
                     last_mark[cid] = a.mark
                     continue
             if spot is not None:
-                marks[cid] = model_mark(
-                    contract, day, spot, last_iv.get(cid), rate=self._config.rate
-                )
+                marks[cid] = model_mark(contract, day, spot, last_iv.get(cid), market=self._market)
             elif cid in last_mark:
                 marks[cid] = last_mark[cid]
         return marks
@@ -376,6 +406,7 @@ class OptionsBacktester:
             equity=equity,
             next_dividends=self._next_dividends(day),
             rate=self._config.rate,
+            market=self._market,
         )
 
     def _decide(self, ledger: OptionLedger, day: date, equity: float) -> list[Any]:
@@ -394,9 +425,7 @@ class OptionsBacktester:
             client_id = (
                 f"{self._strategy.id}:{day.isoformat()}:{intent.underlying}:{intent.structure}:{n}"
             )
-            combo = build(
-                BuildRequest(intent, ctx, self._config.selector, client_id, self._strategy.id)
-            )
+            combo = build(BuildRequest(intent, ctx, self._selector, client_id, self._strategy.id))
             if combo is not None:
                 combos.append(combo)
         return combos
@@ -425,6 +454,7 @@ class OptionsBacktester:
             ivs=last_iv,
             groups=[g.legs for g in ledger.groups.values()],
             rate=self._config.rate,
+            market=self._market,
             only=set(ledger.options)
             | {leg.instrument for combo in combos for leg in combo.option_legs},
         )

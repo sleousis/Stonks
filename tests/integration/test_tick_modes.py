@@ -194,6 +194,25 @@ def test_a_broker_error_pauses_auto_and_the_other_books_go_on(world):
     assert world.book.calls == []
 
 
+def test_a_short_broker_outage_skips_the_day_without_pausing(world):
+    """Roadmap 19.5: an unreachable broker is a short outage. The book skips
+    and the next day decides afresh. Only a long outage or a fault pauses."""
+    from stonks.execution.brokers.base import BrokerUnavailableError
+
+    world.book.fail = BrokerUnavailableError("gateway down")
+    result = world.tick(DAY1)
+
+    [live] = [r for r in result.portfolios if r.portfolio_id == world.live]
+    assert live.status == "error" and "auto_paused" not in live.summary
+    assert live.summary["broker_outage"] is True
+    assert world.subs.get(world.bob, world.bob_auto).paused_reason is None
+
+    world.book.fail = None
+    result = world.tick(DAY2)
+    [live] = [r for r in result.portfolios if r.portfolio_id == world.live]
+    assert live.status == "ok"
+
+
 def test_an_order_error_at_the_broker_pauses_auto(world):
     world.book.fail_orders = ProviderError("order endpoint failed", status=500)
     result = world.tick(DAY1)
@@ -439,3 +458,35 @@ def test_be27_a_future_tick_is_refused_unless_it_is_a_dry_run(world):
     world.tick(future, dry_run=True)  # a dry run may look ahead
     world.tick(DAY1)  # and real ticks still run
     assert world.orders(world.sim)
+
+
+# ---- review 2026-09-27: approve mode trades live, so every pause covers it --------------
+
+
+def _approve(world) -> None:
+    world.state.execute("UPDATE subscriptions SET mode = 'approve' WHERE id = ?", [world.bob_auto])
+
+
+def test_a_demotion_pauses_an_approve_subscription(world):
+    _approve(world)
+    world.registry.set_status("bh_up", "shadow", actor="service:system", reason="quit rule")
+    sub = world.subs.get(world.bob, world.bob_auto)
+    assert sub.mode is Mode.APPROVE and sub.paused_reason == "strategy_not_active: shadow"
+    assert sub.auto_paused
+
+
+def test_a_broker_error_pauses_an_approve_subscription(world):
+    _approve(world)
+    world.book.fail = ProviderError("fake broker is down", status=503)
+    world.tick(DAY1)
+    sub = world.subs.get(world.bob, world.bob_auto)
+    assert sub.paused_reason is not None and sub.paused_reason.startswith("broker_error: ")
+
+
+def test_disabling_a_user_pauses_their_approve_subscriptions(world):
+    _approve(world)
+    world.users.set_status(world.bob.user_id, "disabled", actor="t")
+    [row] = world.state.sql(
+        "SELECT paused_reason FROM subscriptions WHERE id = ?", [world.bob_auto]
+    )
+    assert row["paused_reason"] == "user_disabled"

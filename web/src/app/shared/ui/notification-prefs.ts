@@ -21,6 +21,8 @@ type Category = PreferenceItem['category'];
 
 const CATEGORIES: readonly { value: Category; label: string }[] = [
   { value: 'signal', label: 'Signals' },
+  { value: 'price_alert', label: 'Price alerts' },
+  { value: 'event_alert', label: 'Upcoming events' },
   { value: 'order', label: 'Orders and fills' },
   { value: 'risk', label: 'Risk alerts' },
   { value: 'system', label: 'System' },
@@ -30,6 +32,7 @@ const CHANNEL_LABELS: Record<string, string> = {
   webpush: 'Push',
   email: 'Email',
   webhook: 'Webhook',
+  telegram: 'Telegram',
 };
 
 /** The in-app feed always gets everything; it is not a switch. */
@@ -76,48 +79,134 @@ const ALWAYS_ON = 'inapp';
           @if (channels().length === 0) {
             <p class="note">This server has no push, email or webhook delivery set up yet.</p>
           } @else {
-            <table class="grid">
-              <caption class="visually-hidden">
-                Alert types by channel
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Alert</th>
-                  @for (c of channels(); track c) {
-                    <th scope="col">{{ channelLabel(c) }}</th>
-                  }
-                </tr>
-              </thead>
-              <tbody>
-                @for (cat of categories; track cat.value) {
+            <div class="grid-scroll">
+              <table class="grid">
+                <caption class="visually-hidden">
+                  Alert types by channel
+                </caption>
+                <thead>
                   <tr>
-                    <th scope="row">{{ cat.label }}</th>
+                    <th scope="col">Alert</th>
                     @for (c of channels(); track c) {
-                      <td>
-                        <label class="cell">
-                          <input
-                            type="checkbox"
-                            [checked]="isOn(cat.value, c)"
-                            [disabled]="locked()"
-                            (change)="setPref(cat.value, c, $event)"
-                          />
-                          <span class="visually-hidden"
-                            >{{ cat.label }} by {{ channelLabel(c) }}</span
-                          >
-                        </label>
-                      </td>
+                      <th scope="col">{{ channelLabel(c) }}</th>
                     }
                   </tr>
+                </thead>
+                <tbody>
+                  @for (cat of categories; track cat.value) {
+                    <tr>
+                      <th scope="row">{{ cat.label }}</th>
+                      @for (c of channels(); track c) {
+                        <td>
+                          <label class="cell">
+                            <input
+                              type="checkbox"
+                              [checked]="isOn(cat.value, c)"
+                              [disabled]="locked()"
+                              (change)="setPref(cat.value, c, $event)"
+                            />
+                            <span class="visually-hidden"
+                              >{{ cat.label }} by {{ channelLabel(c) }}</span
+                            >
+                          </label>
+                        </td>
+                      }
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+
+          @if (eventAlerts().length) {
+            <fieldset class="quiet">
+              <legend>Upcoming events</legend>
+              <p class="hint">
+                Alerts before events on what you hold or watch. Turn a kind off and you get none of
+                it, not even in the app.
+              </p>
+              <div class="kinds">
+                @for (e of eventAlerts(); track e.topic) {
+                  <label class="kind">
+                    <input
+                      type="checkbox"
+                      [checked]="e.enabled"
+                      [disabled]="locked()"
+                      (change)="setEventAlert(e.topic, $event)"
+                    />
+                    <span>{{ e.label }}</span>
+                  </label>
                 }
-              </tbody>
-            </table>
+              </div>
+            </fieldset>
+          }
+
+          @if (economic(); as econ) {
+            <fieldset class="quiet" aria-describedby="econ-hint">
+              <legend>Economic releases</legend>
+              <p id="econ-hint" class="hint">
+                An alert the day before each release, such as inflation, jobs or a rate decision.
+                @if (econ.default_countries) {
+                  The countries follow the currencies of your portfolios until you pick your own.
+                }
+                @if (!economicOn()) {
+                  Turn on Economic releases coming up to get them.
+                }
+              </p>
+              <div class="field">
+                <label for="econ-importance">Importance</label>
+                <select
+                  id="econ-importance"
+                  class="input"
+                  [disabled]="locked()"
+                  (change)="setImportance($event)"
+                >
+                  @for (o of econ.importance_options ?? []; track o.value) {
+                    <option [value]="o.value" [selected]="o.value === econ.min_importance">
+                      {{ o.label }}
+                    </option>
+                  }
+                </select>
+              </div>
+              <fieldset class="quiet">
+                <legend class="sub">Countries</legend>
+                <div class="countries">
+                  @for (c of countryChoices(); track c.value) {
+                    <label class="kind">
+                      <input
+                        type="checkbox"
+                        [checked]="c.chosen"
+                        [disabled]="locked()"
+                        (change)="setCountry(c.value, $event)"
+                      />
+                      <span>{{ c.label }}</span>
+                    </label>
+                  }
+                </div>
+              </fieldset>
+              @if (countryError(); as err) {
+                <p class="error" role="alert">{{ err }}</p>
+              }
+              @if (!econ.default_countries) {
+                <div class="actions">
+                  <button
+                    type="button"
+                    class="btn btn-ghost"
+                    [disabled]="locked()"
+                    (click)="followPortfolios()"
+                  >
+                    Follow my portfolio currencies
+                  </button>
+                </div>
+              }
+            </fieldset>
           }
 
           <fieldset class="quiet">
             <legend>Quiet hours</legend>
             <p class="hint">
-              Signals and fills wait for a morning summary. Risk alerts always come through. Times
-              are in {{ view()?.timezone }}.
+              Signals, fills, price alerts and upcoming events wait for a morning summary. Risk
+              alerts always come through. Times are in {{ view()?.timezone }}.
             </p>
             <div class="times">
               <div class="field">
@@ -219,9 +308,11 @@ const ALWAYS_ON = 'inapp';
   styles: `
     :host {
       display: block;
+      min-width: 0;
     }
     .body {
       display: grid;
+      grid-template-columns: minmax(0, 1fr);
       gap: var(--space-4);
     }
     .test-row {
@@ -239,6 +330,12 @@ const ALWAYS_ON = 'inapp';
       border-radius: var(--radius-sm);
       background: var(--color-info-soft);
       font-size: var(--text-sm);
+    }
+    /* Four or more channels are wider than a phone: the table scrolls in its own box. */
+    .grid-scroll {
+      position: relative; /* keeps the hidden cell labels inside the scroll box */
+      max-width: 100%;
+      overflow-x: auto;
     }
     .grid {
       width: 100%;
@@ -288,6 +385,35 @@ const ALWAYS_ON = 'inapp';
       font-size: var(--text-xs);
       color: var(--color-ink-3);
     }
+    .kinds {
+      display: grid;
+      gap: var(--space-1);
+    }
+    .quiet legend.sub {
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
+    }
+    .countries {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr));
+      gap: 0 var(--space-3);
+    }
+    .field select {
+      max-width: 20rem;
+    }
+    .kind {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-height: var(--touch-min);
+      font-size: var(--text-sm);
+      cursor: pointer;
+    }
+    .kind input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--color-primary);
+    }
     .times {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -324,6 +450,30 @@ export class NotificationPrefs {
   protected readonly channels = computed(
     () => this.view()?.channels.filter((c) => c !== ALWAYS_ON) ?? [],
   );
+  /** One switch per kind of upcoming-event alert (earnings, dividends, economic). */
+  protected readonly eventAlerts = computed(() => this.view()?.event_alerts ?? []);
+  /** Countries and importance threshold of economic release alerts. */
+  protected readonly economic = computed(() => this.view()?.economic_alerts ?? null);
+  protected readonly economicOn = computed(
+    () => this.eventAlerts().find((e) => e.topic === 'economic')?.enabled ?? true,
+  );
+  /** The offered countries, plus any chosen code the list does not name. */
+  protected readonly countryChoices = computed(() => {
+    const econ = this.economic();
+    if (!econ) return [];
+    const chosen = new Set(econ.countries);
+    const offered = (econ.country_options ?? []).map((o) => ({
+      value: o.value,
+      label: o.label,
+      chosen: chosen.has(o.value),
+    }));
+    const known = new Set(offered.map((o) => o.value));
+    const extra = econ.countries
+      .filter((c) => !known.has(c))
+      .map((c) => ({ value: c, label: c, chosen: true }));
+    return [...offered, ...extra];
+  });
+  protected readonly countryError = signal<string | null>(null);
   protected readonly quietStart = linkedSignal(() => this.view()?.quiet_start ?? '');
   protected readonly quietEnd = linkedSignal(() => this.view()?.quiet_end ?? '');
   protected readonly quietError = signal<string | null>(null);
@@ -356,6 +506,49 @@ export class NotificationPrefs {
       this.api.updatePreferences({ preferences: [{ category, channel, enabled }] }),
     );
     if (!saved) box.checked = !enabled;
+  }
+
+  protected async setEventAlert(topic: string, event: Event): Promise<void> {
+    const box = event.target as HTMLInputElement;
+    const enabled = box.checked;
+    const saved = await this.save(() =>
+      this.api.updatePreferences({ event_alerts: [{ topic, enabled }] }),
+    );
+    if (!saved) box.checked = !enabled;
+  }
+
+  protected async setImportance(event: Event): Promise<void> {
+    const select = event.target as HTMLSelectElement;
+    const before = this.economic()?.min_importance ?? 'high';
+    const value = select.value as typeof before;
+    const saved = await this.save(() =>
+      this.api.updatePreferences({ economic_alerts: { min_importance: value } }),
+    );
+    if (!saved) select.value = before;
+  }
+
+  protected async setCountry(code: string, event: Event): Promise<void> {
+    const box = event.target as HTMLInputElement;
+    const current = this.economic()?.countries ?? [];
+    const next = box.checked ? [...current, code] : current.filter((c) => c !== code);
+    if (next.length === 0) {
+      box.checked = true;
+      this.countryError.set('Keep at least one country, or turn off Economic releases coming up.');
+      return;
+    }
+    this.countryError.set(null);
+    const saved = await this.save(() =>
+      this.api.updatePreferences({ economic_alerts: { countries: next } }),
+    );
+    if (!saved) box.checked = !box.checked;
+  }
+
+  protected async followPortfolios(): Promise<void> {
+    this.countryError.set(null);
+    const saved = await this.save(() =>
+      this.api.updatePreferences({ economic_alerts: { default_countries: true } }),
+    );
+    if (saved) this.toasts.success('Economic alerts follow your portfolio currencies again.');
   }
 
   protected async saveQuiet(): Promise<void> {

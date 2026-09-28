@@ -65,6 +65,8 @@ def create_app(
         # Hosts the scheduler loop when [scheduler].backend resolves to
         # in_process; a no-op otherwise.
         svc.schedule.start_hosted()
+        # The Telegram bot polls when [telegram].enabled and the token is set.
+        svc.telegram.start_hosted()
         _log.info("api.started", host=cfg.host, port=cfg.port)
         try:
             yield
@@ -72,6 +74,7 @@ def create_app(
             # Stop the loop first (it waits for a running job), so no new
             # job is submitted to a runner that is shutting down.
             svc.schedule.stop_hosted()
+            svc.telegram.stop_hosted()
             # Queued jobs are cancelled and running lab runs asked to stop at
             # their next trial. wait=False only returns early: the
             # interpreter still joins running workers (ticks, ingests) at
@@ -146,7 +149,10 @@ def _install_openapi_postprocessing(app: FastAPI) -> None:
                     if code.isdigit() and int(code) >= 400 and content:
                         resp["content"] = {PROBLEM_MEDIA_TYPE: {"schema": problem_ref}}
                     stream = content.get("text/event-stream")
-                    if stream and "itemSchema" in stream:
+                    # Streams typed by their route (the assistant's events)
+                    # keep their own schema. The job stream is typed here.
+                    data = (stream or {}).get("itemSchema", {}).get("properties", {}).get("data")
+                    if stream and "itemSchema" in stream and "contentSchema" not in (data or {}):
                         stream["itemSchema"]["properties"]["data"] = {
                             "contentMediaType": "application/json",
                             "contentSchema": {"$ref": "#/components/schemas/JobEvent"},

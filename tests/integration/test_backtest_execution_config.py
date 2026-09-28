@@ -96,3 +96,28 @@ def test_lab_backtests_take_the_dataset_construction(lake_trending):
         ).construction
         is None
     )
+
+
+def test_api_backtests_bind_their_cost_model_to_the_strategy(lake_trending):
+    """22.10: a cost-aware strategy fits with the request's cost model, else
+    the configured ``[backtest.costs]``."""
+    from datetime import date
+
+    from stonks.app import lab as app_lab
+    from stonks.app.lab import BacktestRequest
+    from stonks.backtest.costs import CostModelSettings
+    from stonks.strategies.examples.forecast_blend import ForecastBlend
+
+    configured = CostModelSettings(default={"half_spread_bps": 7.0})
+    settings = Settings(backtest={"costs": configured.model_dump()})
+    window = {"start": date(2026, 1, 5), "end": date(2026, 2, 27), "benchmark": "none"}
+    plain = BacktestRequest(strategy={"strategy_id": "x"}, universe=["UP.US"], **window)
+    strategy = ForecastBlend({})
+    app_lab.backtest_report(settings, strategy, plain, lake_trending)
+    assert strategy.costs == configured
+    custom = CostModelSettings(default={"half_spread_bps": 20.0})
+    dear = BacktestRequest(
+        strategy={"strategy_id": "x"}, universe=["UP.US"], cost_model=custom, **window
+    )
+    app_lab.backtest_report(settings, strategy, dear, lake_trending)
+    assert strategy.costs == custom

@@ -141,11 +141,20 @@ def adjust_working_orders(
     touched = 0
     for split in splits:
         _rescale_fills(state, client_ids, split, status_ph)
+        stop, stop_arg = _stop_rescale(state, split.ratio)
         cursor = state.execute(
             "UPDATE orders SET quantity = quantity * ?,"
-            " limit_price = limit_price / ?, updated_at = ?"
+            f" limit_price = limit_price / ?{stop}, updated_at = ?"
             f" WHERE ticker = ? AND status IN ({status_ph}) AND client_id IN ({ids_ph})",
-            [split.ratio, split.ratio, now, split.ticker, *NON_TERMINAL_STATUSES, *client_ids],
+            [
+                split.ratio,
+                split.ratio,
+                *stop_arg,
+                now,
+                split.ticker,
+                *NON_TERMINAL_STATUSES,
+                *client_ids,
+            ],
         )
         touched += cursor.rowcount
     return touched
@@ -337,14 +346,33 @@ def adjust_orders_for_splits(
             continue
         ids_ph = ",".join("?" for _ in earlier)
         _rescale_fills(state, earlier, split, status_ph)
+        stop, stop_arg = _stop_rescale(state, split.ratio)
         cursor = state.execute(
             "UPDATE orders SET quantity = quantity * ?,"
-            " limit_price = limit_price / ?, updated_at = ?"
+            f" limit_price = limit_price / ?{stop}, updated_at = ?"
             f" WHERE ticker = ? AND status IN ({status_ph}) AND client_id IN ({ids_ph})",
-            [split.ratio, split.ratio, now, split.ticker, *NON_TERMINAL_STATUSES, *earlier],
+            [
+                split.ratio,
+                split.ratio,
+                *stop_arg,
+                now,
+                split.ticker,
+                *NON_TERMINAL_STATUSES,
+                *earlier,
+            ],
         )
         touched += cursor.rowcount
     return touched
+
+
+def _stop_rescale(state: SqliteState, ratio: float) -> tuple[str, list[float]]:
+    """The ``stop_price`` part of a split's order update (migration 028): a
+    working stop (a protective stop, roadmap 19.10) moves with the shares."""
+    if not any(
+        r["name"] == "stop_price" for r in state.sql("SELECT name FROM pragma_table_info('orders')")
+    ):
+        return "", []
+    return ", stop_price = stop_price / ?", [ratio]
 
 
 def _rescale_fills(

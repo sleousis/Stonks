@@ -1,6 +1,20 @@
 @let u = universe.hasValue() ? universe.value() : null;
 <app-page-header [title]="u?.name || id()" [description]="u?.description ?? null">
   <a actions class="btn btn-ghost" routerLink="/universes">All universes</a>
+  <a actions class="btn btn-ghost" routerLink="/lab" [queryParams]="{ universe: id() }"
+    >Test in the lab</a
+  >
+  <button
+    actions
+    type="button"
+    class="btn"
+    aria-controls="edit-panel"
+    [attr.aria-expanded]="editing()"
+    [disabled]="!u || !canRefresh()"
+    (click)="editing.set(!editing())"
+  >
+    {{ editing() ? 'Close form' : 'Edit' }}
+  </button>
   <button
     actions
     type="button"
@@ -43,9 +57,34 @@
       <dd class="num">{{ u.refreshed_at ? (u.refreshed_at | dateTime) : 'Never' }}</dd>
     </div>
   </dl>
+  @if (stale()) {
+    <p class="notice" role="status">
+      The definition changed after the last refresh. Refresh to rebuild the members from it.
+    </p>
+  }
+  <p class="muted lab-hint">
+    To test a strategy on it, open the <a routerLink="/lab">lab</a> and pick it under Run on.
+  </p>
 }
 
 <div class="page-grid">
+  @if (editing() && u) {
+    <section id="edit-panel" class="panel span-12" aria-labelledby="edit-title">
+      <div class="panel-head">
+        <h2 id="edit-title">Edit {{ u.name || u.id }}</h2>
+      </div>
+      <div class="panel-body">
+        <app-universe-editor
+          mode="edit"
+          [universe]="u"
+          [universes]="allUniverses.hasValue() ? allUniverses.value() : []"
+          (saved)="edited($event)"
+          (cancelled)="editing.set(false)"
+        />
+      </div>
+    </section>
+  }
+
   <!-- Members on a date --------------------------------------------------->
   <section class="panel span-6" aria-labelledby="members-title">
     <div class="panel-head">
@@ -153,6 +192,75 @@
         </p>
       }
     </div>
+  </section>
+
+  <!-- Membership history ------------------------------------------------->
+  <section class="panel span-12" aria-labelledby="history-title">
+    <div class="panel-head">
+      <h2 id="history-title">Membership history</h2>
+      @if (history.hasValue()) {
+        <span class="muted num">{{ history.value().total | num: { digits: 0 } }} spans</span>
+      }
+    </div>
+    <div class="panel-body date-row">
+      <div class="field">
+        <label for="h-find">Find a ticker</label>
+        <input
+          id="h-find"
+          class="input"
+          type="search"
+          placeholder="e.g. AAPL"
+          autocapitalize="characters"
+          spellcheck="false"
+          aria-describedby="h-find-hint"
+          [value]="historyFind()"
+          (change)="findInHistory($any($event.target).value)"
+        />
+        <span id="h-find-hint" class="hint">Press Enter to search.</span>
+      </div>
+    </div>
+    @if (history.error(); as err) {
+      <app-error-state
+        title="Could not load the history"
+        [error]="err"
+        (retry)="history.reload()"
+      />
+    } @else if (!history.hasValue()) {
+      <app-loading-state label="Loading the history" [rows]="3" />
+    } @else if (history.value().items.length === 0) {
+      <app-empty-state
+        title="No history yet"
+        [message]="
+          historyFind() ? 'No ticker matches.' : 'Refresh the universe to build its membership.'
+        "
+      />
+    } @else {
+      @let h = history.value();
+      <p class="muted intro history-intro">
+        Latest change first. Each row is a stretch of membership: joined on the first day, gone from
+        the day it left.
+      </p>
+      <app-data-table
+        caption="Membership history"
+        [rows]="h.items"
+        [columns]="historyColumns"
+        [rowKey]="historyKey"
+      />
+      @if (h.items.length < h.total) {
+        <div class="panel-body more">
+          <button
+            type="button"
+            class="btn"
+            [disabled]="history.isLoading()"
+            [attr.aria-busy]="history.isLoading()"
+            (click)="moreHistory()"
+          >
+            Show more ({{ h.items.length | num: { digits: 0 } }} of
+            {{ h.total | num: { digits: 0 } }})
+          </button>
+        </div>
+      }
+    }
   </section>
 
   <!-- Ensure data ---------------------------------------------------------->

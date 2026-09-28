@@ -5,6 +5,7 @@ import { provideRouter } from '@angular/router';
 import type { MeView } from '../api/models';
 import { type Permission, allowed } from '../core/auth/permissions';
 import { SessionService } from '../core/auth/session.service';
+import { TicketCountService } from '../core/tickets/ticket-count.service';
 import { ADMIN, TRADER } from '../../testing/auth-fixtures';
 import { Nav } from './nav';
 
@@ -20,9 +21,18 @@ describe('Nav', () => {
     can: (p: Permission) => allowed(me(), p),
   };
 
+  const waiting = signal(0);
+  let watch: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
+    waiting.set(0);
+    watch = vi.fn();
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), { provide: SessionService, useValue: session }],
+      providers: [
+        provideRouter([]),
+        { provide: SessionService, useValue: session },
+        { provide: TicketCountService, useValue: { waiting, watch } },
+      ],
     });
   });
 
@@ -50,17 +60,22 @@ describe('Nav', () => {
       'Today',
       'Strategies',
       'Orders',
+      'Approvals',
       'Charts',
       'Watchlists',
+      'Calendar',
       'Insights',
       'Notifications',
     ]);
     expect(group(el, 'Research')).toEqual([
       'Paper trading',
       'Leaderboard',
+      'Screener',
+      'Options',
       'Studio',
       'Lab',
       'Go live',
+      'Assistant',
     ]);
     expect(group(el, 'System')).toEqual([]);
     expect(el.textContent).not.toContain('Advanced');
@@ -76,7 +91,14 @@ describe('Nav', () => {
     expect(all).not.toContain('Lab');
     // Viewers may still read strategies, paper trading and the leaderboard.
     expect(all).toContain('Strategies');
-    expect(group(el, 'Research')).toEqual(['Paper trading', 'Leaderboard', 'Go live']);
+    expect(group(el, 'Research')).toEqual([
+      'Paper trading',
+      'Leaderboard',
+      'Screener',
+      'Options',
+      'Go live',
+      'Assistant',
+    ]);
   });
 
   it('gives admins the System group, with Overview, Halts and Users', () => {
@@ -84,10 +106,12 @@ describe('Nav', () => {
     expect(group(el, 'System')).toEqual([
       'Overview',
       'Health',
+      'Live engine',
       'Schedule',
       'Data',
       'Data quality',
       'Universes',
+      'Model versions',
       'Halts',
       'Users',
     ]);
@@ -103,6 +127,32 @@ describe('Nav', () => {
   it('shows everything under open reads (dev, nobody signed in)', () => {
     const el = render(null);
     expect(group(el, 'System')).toContain('Schedule');
+  });
+
+  it('badges Approvals with the tickets that wait, with a spoken label (22.10)', () => {
+    waiting.set(3);
+    const el = render(TRADER);
+    const link = el.querySelector<HTMLAnchorElement>('a[href="/tickets"]')!;
+    expect(link.querySelector('.count')?.textContent?.trim()).toBe('3');
+    expect(link.querySelector('.count')?.getAttribute('aria-hidden')).toBe('true');
+    expect(link.getAttribute('aria-label')).toBe('Approvals, 3 tickets waiting');
+    expect(watch).toHaveBeenCalled();
+  });
+
+  it('shows no badge when nothing waits, and one ticket in the singular', () => {
+    waiting.set(0);
+    const el = render(TRADER);
+    const link = el.querySelector<HTMLAnchorElement>('a[href="/tickets"]')!;
+    expect(link.querySelector('.count')).toBeNull();
+    expect(link.getAttribute('aria-label')).toBeNull();
+    waiting.set(1);
+    const again = render(TRADER).querySelector<HTMLAnchorElement>('a[href="/tickets"]')!;
+    expect(again.getAttribute('aria-label')).toBe('Approvals, 1 ticket waiting');
+  });
+
+  it('does not poll tickets for a viewer, who has no Approvals item', () => {
+    render(VIEWER);
+    expect(watch).not.toHaveBeenCalled();
   });
 
   it('points Paper trading at /paper', () => {

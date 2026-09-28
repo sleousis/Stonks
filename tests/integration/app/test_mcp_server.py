@@ -83,6 +83,8 @@ READ_TOOLS = {
     "list_universes",
     "get_universe",
     "get_universe_members",
+    "get_universe_history",
+    "list_universe_exchanges",
     "get_api_health",
     "health",
     "get_portfolio",
@@ -109,6 +111,7 @@ READ_TOOLS = {
     "list_shadow_pnl",
     "get_shadow_pnl",
     "get_health_report",
+    "get_stream_status",
     "get_broker",
     "list_sources",
     "list_cost_models",
@@ -120,6 +123,8 @@ READ_TOOLS = {
     "list_connections",
     "get_connection_accounts",
     "list_halts",
+    "list_reconcile_reports",
+    "get_reconcile_report",
     "list_statement_flags",
     "tca_summary",
     "trade_journal",
@@ -135,6 +140,7 @@ READ_TOOLS = {
     "live_risk",
     "list_risk_snapshots",
     "risk_snapshots",
+    "list_intraday_snapshots",
     "get_tca_summary",
     "list_trade_journal",
     "get_order_tca",
@@ -144,15 +150,54 @@ READ_TOOLS = {
     "get_schedule",
     "list_alerts",
     "list_notifications",
+    "get_notification_preferences",
     "list_survival_tests",
     "list_survival_presets",
     "get_studio_capabilities",
     "get_chart",
+    "compare_tickers",
     "get_leaderboard",
     "get_tear_sheet",
     "list_watchlists",
     "get_watchlist",
     "get_my_risk_limits",
+    "list_price_alerts",
+    "list_price_alert_events",
+    "get_tax_settings",
+    "list_tax_lot_picks",
+    "get_fx_rate",
+    "list_order_drafts",
+    "list_cash_flows",
+    "list_research_sessions",
+    "get_research_session",
+    "list_factors",
+    "get_factor",
+    "check_factor_expression",
+    "get_factor_values",
+    "list_option_underlyings",
+    "get_option_chain",
+    "list_option_strategies",
+    "list_option_structures",
+    "get_option_payoff",
+    "get_calendar",
+    "get_news",
+    "get_earnings_warnings",
+    "list_event_alert_kinds",
+    "list_screen_metrics",
+    "run_screen",
+    "list_screens",
+    "get_screen",
+    "list_model_versions",
+    "get_model_version_history",
+    "list_model_candidates",
+    "check_model_swap",
+    "list_tickets",
+    "get_ticket",
+    "get_live_stage",
+    "get_live_gate_report",
+    "get_live_allocation",
+    "get_live_rules",
+    "get_broker_gateways",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -160,6 +205,8 @@ JOB_TOOLS = {
     "run_lab",
     "run_ingest",
     "run_signal_ic",
+    "run_factor_tearsheet",
+    "run_options_backtest",
     "create_draft",
     "validate_draft",
     "backtest_draft",
@@ -170,11 +217,24 @@ JOB_TOOLS = {
     "add_journal_note",
     "mark_notifications_read",
     "create_watchlist",
+    "create_price_alert",
+    "draft_order",
+    "start_research",
+    "create_screen",
+    "retrain_models",
 }
 # Overwrite a draft's fields; no confirm (a draft is never traded).
-EDIT_TOOLS = {"update_draft", "edit_journal_note", "cancel_job", "update_watchlist"}
+EDIT_TOOLS = {
+    "update_draft",
+    "edit_journal_note",
+    "cancel_job",
+    "update_watchlist",
+    "update_price_alert",
+    "update_screen",
+}
 GUARDED_TOOLS = {
     "create_universe",
+    "update_universe",
     "refresh_universe",
     "ensure_universe_data",
     "delete_universe",
@@ -191,6 +251,15 @@ GUARDED_TOOLS = {
     "subscribe",
     "update_subscription",
     "delete_draft",
+    "place_order",
+    "change_order",
+    "cancel_order",
+    "delete_price_alert",
+    "set_event_alerts",
+    "save_screen_as_universe",
+    "delete_screen",
+    "swap_model_version",
+    "reject_model_version",
 }
 
 
@@ -338,6 +407,8 @@ async def test_pnl_and_health_report(mcp):
     report = await call(mcp, "get_health_report", {"tickers": ["UP.US", "DOWN.US"]})
     assert isinstance(report["healthy"], bool)
     assert report["checks"]
+    stream = await call(mcp, "get_stream_status", {})
+    assert stream["engines"] == []
 
 
 @pytest.mark.anyio
@@ -517,7 +588,9 @@ async def test_lab_options_need_their_test(mcp):
 
 @pytest.mark.anyio
 async def test_ingest_job(mcp):
-    job = await call(mcp, "run_ingest", {"kind": "prices", "tickers": ["NEW.US"]})
+    job = await call(
+        mcp, "run_ingest", {"kind": "prices", "source": "eodhd", "tickers": ["NEW.US"]}
+    )
     done = await call(mcp, "wait_for_job", {"job_id": job["id"], "poll_seconds": 0.05})
     assert done["job"]["status"] == "succeeded", done["job"]["error"]
     assert done["result"]["kind"] == "prices" and done["result"]["tickers_ok"] == 1

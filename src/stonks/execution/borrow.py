@@ -10,8 +10,10 @@ answers both for one ticker on one day:
 
 ``FlatBorrow`` is the static default for backtests and the simulated
 broker: a fee per asset class, plus per-ticker ``hard`` and ``none`` lists
-from settings (``BorrowSettings``) or explicit quotes. A lake-backed source
-(``borrow_rates``) and a broker-reported one plug in behind the same ABC.
+from settings (``BorrowSettings``) or explicit quotes. ``LakeBorrowSource``
+reads the daily rates in the lake's ``borrow_rates`` table (roadmap 19.3),
+and ``IbkrBorrowSource`` (``execution/brokers/ibkr/borrow.py``) asks the
+broker for today's locate, behind the same ABC.
 
 Fees accrue daily on the short's market value: ``|qty| x price x
 fee_rate_annual / 360`` per calendar day (the US money-market convention).
@@ -23,7 +25,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
-from typing import ClassVar, Literal
+from typing import Any, ClassVar, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -46,6 +48,16 @@ class BorrowQuote:
     @property
     def shortable(self) -> bool:
         return self.status != "none"
+
+
+def is_hard_to_borrow(quote: BorrowQuote | None, *, fee_rate: float) -> bool:
+    """Whether a short sale on ``quote`` is hard to borrow: the source marks
+    it ``hard`` (IBKR's shortable level between 1.5 and 2.5, say) or its fee
+    is at or above ``fee_rate`` (a yearly fraction). No quote, or no
+    locate, is not hard to borrow: that short is refused outright."""
+    if quote is None or not quote.shortable:
+        return False
+    return quote.status == "hard" or quote.fee_rate_annual >= fee_rate
 
 
 def daily_fee(quantity: float, price: float, quote: BorrowQuote, days: float = 1.0) -> float:
@@ -107,3 +119,58 @@ class FlatBorrow(BorrowSource):
         if ticker in self.settings.hard:
             return BorrowQuote("hard", self.settings.hard_fee_rate_annual)
         return BorrowQuote("easy", self.settings.fee_rate_annual.get(asset_class, 0.0))
+
+
+class BorrowRateReader(Protocol):
+    """The lake read ``LakeBorrowSource`` needs (``DuckDBLake.borrow_rate``)."""
+
+    def borrow_rate(
+        self,
+        ticker: str,
+        day: Any,
+        *,
+        source: str | None = None,
+        max_age_days: int | None = None,
+    ) -> dict[str, Any] | None: ...
+
+
+class LakeBorrowSource(BorrowSource):
+    """Quotes from the lake's ``borrow_rates`` table (roadmap 19.3): the
+    latest row on or before the day, no older than ``max_age_days``.
+
+    - no row (or too old): ``None``, which callers treat as no short;
+    - ``available_shares == 0``: ``none``;
+    - a fee at or above ``hard_fee_rate``: ``hard``;
+    - else ``easy``.
+    """
+
+    has_history: ClassVar[bool] = True
+
+    def __init__(
+        self,
+        lake: BorrowRateReader,
+        *,
+        source: str | None = None,
+        hard_fee_rate: float = 0.03,
+        max_age_days: int = 5,
+    ) -> None:
+        self._lake = lake
+        self._source = source
+        self.hard_fee_rate = hard_fee_rate
+        self.max_age_days = max_age_days
+
+    def quote(
+        self, ticker: str, day: date, asset_class: AssetClass = "equity"
+    ) -> BorrowQuote | None:
+        row = self._lake.borrow_rate(
+            ticker, day, source=self._source, max_age_days=self.max_age_days
+        )
+        if row is None:
+            return None
+        fee = float(row["fee_rate_annual"])
+        raw = row.get("available_shares")
+        available = None if raw is None or raw != raw else float(raw)
+        if available is not None and available <= 0:
+            return BorrowQuote("none", fee, 0.0)
+        status: BorrowStatus = "hard" if fee >= self.hard_fee_rate else "easy"
+        return BorrowQuote(status, fee, available)

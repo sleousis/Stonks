@@ -48,7 +48,9 @@ Every route that changes something names one permission. A test walks the route 
 |---|---|---|---|
 | `data.read` | all | read | stream tokens, mark your feed read, reads of your own data (portfolios, subscriptions) |
 | `portfolio.manage` | trader, admin | trade | link and sync a broker account |
-| `portfolio.trade` | trader, admin | trade | subscribe to a strategy, turn a subscription on or off, notify or paper |
+| `portfolio.trade` | trader, admin | trade | subscribe to a strategy, turn a subscription on or off, notify or paper, place, change or cancel your own orders |
+| `orders.approve` | trader, admin | trade, step-up | approve an order draft, so it is placed as a manual order |
+| `orders.live` | trader, admin | trade, step-up | a manual order on a book that trades real money (checked by the service on top of `portfolio.trade`) |
 | `subscription.auto_enable` | trader, admin | trade, step-up | switch a subscription to auto |
 | `connection.manage` | trader, admin | trade, step-up | connect or delete a broker |
 | `killswitch.user` | trader, admin | trade | turn the kill switch on for your books |
@@ -56,7 +58,7 @@ Every route that changes something names one permission. A test walks the route 
 | `killswitch.resume` | trader, admin | trade, step-up | turn the kill switch off |
 | `risk.reset` | trader, admin | trade | clear a circuit breaker or other halt |
 | `risk.global` | admin | admin | clear a global halt |
-| `notifications.manage` | trader, admin | trade | push devices, preferences, quiet hours, webhook |
+| `notifications.manage` | trader, admin | trade | push devices, preferences, quiet hours, webhook, price alerts, the Telegram link |
 | `lab.run` | trader, admin | lab | backtests, lab runs, signal IC, Studio rule drafts, cancel lab jobs |
 | `strategy.promote` | admin | admin | promote, retire, shadow, Studio register, enable, disable, lab runs that register |
 | `strategy.code` | admin | admin | Studio code drafts |
@@ -67,6 +69,7 @@ Every route that changes something names one permission. A test walks the route 
 | `tokens.manage` | all | browser session only | create tokens |
 | `tokens.revoke` | all | any | revoke your own token |
 | `password.change`, `mfa.recovery_codes` | all | step-up | your password and recovery codes |
+| `live.manage` | trader, admin | trade, step-up | a live portfolio's allocation and account profile |
 
 The audit actor is always the caller (`user:<id>`). A request body cannot choose it. The old `actor` field on status changes is accepted and ignored.
 
@@ -85,7 +88,7 @@ Portfolio, orders, fills, P&L and insights reads take an optional `portfolio_id`
 
 ## Step-up
 
-Some actions need a second factor checked in the last 10 minutes: user admin, a password change, new recovery codes, a token with `trade` or `admin`, connecting or deleting a broker, and turning the kill switch off. Confirm with `POST /api/auth/mfa/verify` in the browser first. API tokens can never do these actions. They get `403 step_up_required`. The CLI on the server may still resume, because shell access already implies admin.
+Some actions need a second factor checked in the last 10 minutes: user admin, a password change, new recovery codes, a token with `trade` or `admin`, connecting or deleting a broker, turning the kill switch off, changing a live portfolio's allocation or account profile, and a manual order on a book that trades real money (a preview of it needs none). Confirm with `POST /api/auth/mfa/verify` in the browser first. API tokens can never do these actions. They get `403 step_up_required`. The CLI on the server may still resume, because shell access already implies admin.
 
 ## API tokens
 
@@ -157,13 +160,47 @@ Every error is a problem-details body with `detail` for people and a stable `cod
 
 A trader's own webhook URL points at a host they chose. So it must be `https`, its host must not be a local name, and a numeric host must be public in every form (`127.1`, `2130706433` and `0x7f000001` are all loopback and are refused). On every send the host is resolved again, the request is refused unless every address is public, and the connection goes to that checked address (no DNS rebinding). Redirects are never followed.
 
+## Manual orders
+
+- A manual order is placed as the caller, on a portfolio they own (404 otherwise, admins included). It runs through the kill switch, every halt and every risk rule of the book.
+- On a book that trades real money the service also asks for `orders.live`, so it needs a fresh second factor. API tokens, MCP, the assistant and the Telegram bot can never place one. The CLI on the server asks for the typed phrase `PLACE LIVE ORDER`.
+- Each order records who placed it and why, and writes an `audit_log` row. The same client id never places twice.
+
+## Telegram bot
+
+- The bot token is read from `STONKS_TELEGRAM_BOT_TOKEN` only. It is never in TOML, never logged, and scrubbed from errors.
+- A chat is linked to exactly one person, and a person to at most one chat. Linking needs a one-time code made while signed in (or by the operator on the server). Only its SHA-256 is stored. It works once and expires after 10 minutes. A new code retires the old ones.
+- Every command acts as the linked person with their role's permissions and sees only their portfolios. A viewer cannot use the kill switch.
+- The bot never has a fresh second factor, so step-up actions are refused. Resuming the kill switch is done in the web app.
+- `/kill` needs the typed confirmation `KILL ALL` as the next message, within 2 minutes.
+- Only private chats are answered. If a person blocks the bot, their link is removed.
+- An admin or shell reset of a person's password or second factor removes their link and any unused link code. They link again after they sign in.
+- Linking, unlinking and making a code write an `audit_log` row.
+
+## Model endpoint (AI assistant)
+
+- The assistant acts as the signed-in person. Its tools are the MCP tools, run inside the API process against the same routes, so every call checks the same permission and ownership as the web app. A viewer's assistant can only read.
+- It never has a fresh second factor. Step-up actions are refused with a pointer to the web app.
+- The model proposes, deterministic code decides. The assistant never places an order. With `[assistant.envelope] order_tools` on it may only draft one (`draft_order`). The server resolves the instrument, sets the reference price and the notional, checks the price band, the ticker allowlist and the per-order and per-day caps, and keeps the draft for a limited time. Approving a draft needs `orders.approve`: a signed-in browser with a fresh second factor. Nothing is approved through the assistant, Telegram, MCP or a token. Off (the default) is research only: no order tool at all.
+- A draft may only name an instrument that `search_instruments` returned in the same conversation, never a ticker from the model's own text. Each draft gets a retry key from the loop, so a retried call never makes two.
+- Tool results reach the model inside `<tool_result trust="untrusted">` tags, and the system prompt says never to follow instructions in them. The eval set (`stonks assistant eval`) plants an instruction in an instrument description and checks nothing is drafted.
+- Only the tools in `assistant/catalog.py` are offered: a default set of about twenty and the categories the conversation turns on. Direct orders, ticks, strategy status changes and broker actions are in none.
+- A tool that changes something else (the kill switch, deleting an alert) never runs on the model's word. The person approves or rejects it in the chat first. The model cannot set `confirm` itself. Research writes (strategy drafts, lab jobs, price alerts) run at once and stay research only: registering a strategy still needs the person.
+- Every write is counted before it runs, and the count and the check are one locked write, so two turns at once cannot both pass the limit. More than `max_writes_per_minute` or `max_writes_per_hour` freezes the person's assistant for `freeze_minutes`: it runs research only until then, or until they unfreeze it in the web app with a fresh second factor. While a kill switch covers them it is research only too, and the kill switch cancels their pending drafts. A failed check means research only: it fails closed.
+- Every turn is recorded (`assistant_turns`): the model, the prompt version, each tool call and result, and the drafts it made.
+- The research loop (`start_research`) only runs lab trials. Its model sees two tools, propose and finish. Every proposal is recorded before it runs, budgets are checked in code, validation windows must start after the model's training cutoff, and no proposal can register or promote a strategy. Lab results reach it as untrusted data too.
+- Only code in the API process can make a request act for the assistant. No header, cookie or token turns it on.
+- The model endpoint sees the system prompt, the conversation and the tool results, which can include your holdings and orders. Run it on your own server or a host you trust, over a private network or https.
+- The key, if any, is read from `STONKS_ASSISTANT_API_KEY` only, never from TOML, and is scrubbed from errors and logs.
+- Conversations are yours. Another person's conversation reads as not found, admins included.
+
 ## Secrets in logs
 
-Job errors, API errors and log lines are scrubbed of every configured secret: each `SecretStr` in the settings, the EODHD key, the global webhook URL, and the env-only secrets (`STONKS_SECRET_KEYS` and each of its keys, `STONKS_METRICS_TOKEN`, `STONKS_SMTP_PASSWORD`, `STONKS_VAPID_PRIVATE_KEY`, `STONKS_SNAPTRADE_CONSUMER_KEY`).
+Job errors, API errors and log lines are scrubbed of every configured secret: each `SecretStr` in the settings, the EODHD key, the global webhook URL, and the env-only secrets (`STONKS_SECRET_KEYS` and each of its keys, `STONKS_METRICS_TOKEN`, `STONKS_SMTP_PASSWORD`, `STONKS_VAPID_PRIVATE_KEY`, `STONKS_SNAPTRADE_CONSUMER_KEY`, `STONKS_TELEGRAM_BOT_TOKEN`, `STONKS_ASSISTANT_API_KEY`).
 
 ## Audit
 
-Logins, failed logins of known accounts, second-factor set-up and checks, logouts, password changes, token creation and revocation, kill switch changes, strategy status changes and every admin change write a row to `audit_log` or `status_changes`, with the caller as actor.
+Logins, failed logins of known accounts, second-factor set-up and checks, logouts, password changes, token creation and revocation, kill switch changes, manual orders, Telegram links, tax settings, strategy status changes and every admin change write a row to `audit_log` or `status_changes`, with the caller as actor.
 
 ## Settings
 

@@ -19,10 +19,11 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from stonks.accounts import AccountsError, NotFound, Scope
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError, RateLimitedError, ValidationError
+from stonks.calendars.importance import Importance
 from stonks.notify import service as notify
 from stonks.notify.channels import build_channels
 from stonks.notify.events import Audience, Category, Event
-from stonks.notify.prefs import Preference
+from stonks.notify.prefs import EconomicAlertPrefs, Preference
 from stonks.notify.router import NotificationRouter
 from stonks.notify.service import ENDPOINT_MAX, FEED_LIMIT_MAX, USER_AGENT_MAX, WEBHOOK_MAX
 from stonks.notify.settings import NotifySettings
@@ -64,8 +65,31 @@ class PreferenceItem(BaseModel):
     strategy_id: str | None = Field(default=None, max_length=200)
 
 
+class EventAlertSwitchItem(BaseModel):
+    #: earnings, dividends or economic.
+    topic: str = Field(min_length=1, max_length=32)
+    enabled: bool
+
+
+class EconomicAlertsUpdate(BaseModel):
+    """Economic release alerts. Only what is given changes."""
+
+    #: Country codes such as US, EU or DE. At least one.
+    countries: list[str] | None = Field(default=None, max_length=30)
+    #: true: follow the countries of your portfolios' base currencies again.
+    default_countries: bool = False
+    #: The lowest importance that alerts you.
+    min_importance: Importance | None = None
+
+
 class PreferencesUpdate(BaseModel):
-    preferences: list[PreferenceItem] = Field(max_length=200)
+    """Only what is given changes."""
+
+    preferences: list[PreferenceItem] = Field(default_factory=list, max_length=200)
+    #: Turn a kind of upcoming-event alert on or off.
+    event_alerts: list[EventAlertSwitchItem] = Field(default_factory=list, max_length=20)
+    #: Countries and importance threshold of economic release alerts.
+    economic_alerts: EconomicAlertsUpdate | None = None
 
 
 class QuietHoursUpdate(BaseModel):
@@ -115,6 +139,34 @@ class ChannelDefaultView(BaseModel):
     fallback: bool
 
 
+class EventAlertSwitchView(BaseModel):
+    topic: str
+    #: Plain words for the switch.
+    label: str
+    enabled: bool
+
+
+class ChoiceOption(BaseModel):
+    value: str
+    label: str
+
+
+class EconomicAlertsView(BaseModel):
+    """Which economic releases alert you. Turned on or off by the
+    ``economic`` switch in ``event_alerts``."""
+
+    #: The countries you hear about.
+    countries: list[str]
+    #: true while they follow your portfolios' base currencies (else US).
+    default_countries: bool
+    #: The lowest importance that alerts you.
+    min_importance: Importance
+    #: Countries the console offers. Any two or three letter code works.
+    country_options: list[ChoiceOption] = Field(default_factory=list)
+    #: The importance thresholds, lowest first.
+    importance_options: list[ChoiceOption] = Field(default_factory=list)
+
+
 class PreferencesView(BaseModel):
     preferences: list[PreferenceItem]
     quiet_start: str | None
@@ -126,6 +178,11 @@ class PreferencesView(BaseModel):
     channels: list[str]
     #: What each channel does when you have not set it.
     channel_defaults: list[ChannelDefaultView] = Field(default_factory=list)
+    #: One switch per kind of upcoming-event alert (earnings, dividends,
+    #: economic releases). Off: none of that kind, not even in the app.
+    event_alerts: list[EventAlertSwitchView] = Field(default_factory=list)
+    #: Countries and importance threshold of economic release alerts.
+    economic_alerts: EconomicAlertsView | None = None
 
 
 class FeedItemView(BaseModel):
@@ -200,6 +257,27 @@ def _prefs(p: notify.NotificationPreferences) -> PreferencesView:
             ChannelDefaultView(channel=name, default_enabled=enabled, fallback=fallback)
             for name, enabled, fallback in p.channel_defaults
         ],
+        event_alerts=[
+            EventAlertSwitchView(topic=e.topic, label=e.label, enabled=e.enabled)
+            for e in p.event_alerts
+        ],
+        economic_alerts=_economic(p.economic_alerts),
+    )
+
+
+def _economic(e: EconomicAlertPrefs | None) -> EconomicAlertsView | None:
+    if e is None:
+        return None
+    return EconomicAlertsView(
+        countries=list(e.countries),
+        default_countries=e.countries_default,
+        min_importance=e.min_importance,
+        country_options=[
+            ChoiceOption(value=v, label=label) for v, label in notify.ECONOMIC_COUNTRY_OPTIONS
+        ],
+        importance_options=[
+            ChoiceOption(value=v, label=label) for v, label in notify.IMPORTANCE_OPTIONS
+        ],
     )
 
 
@@ -273,7 +351,22 @@ class NotificationsAppService:
                 )
                 for p in request.preferences
             ]
-            return _prefs(notify.update_preferences(state, scope, prefs))
+            switches = {e.topic: e.enabled for e in request.event_alerts}
+            econ = request.economic_alerts
+            change = (
+                notify.EconomicAlertChange(
+                    countries=tuple(econ.countries) if econ.countries is not None else None,
+                    default_countries=econ.default_countries,
+                    min_importance=econ.min_importance,
+                )
+                if econ is not None
+                else None
+            )
+            return _prefs(
+                notify.update_preferences(
+                    state, scope, prefs, event_alerts=switches, economic=change
+                )
+            )
 
     def set_quiet_hours(self, scope: Scope, request: QuietHoursUpdate) -> PreferencesView:
         with self._state() as state:

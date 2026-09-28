@@ -65,6 +65,26 @@ select.input {
   }
 }
 
+// A stop order, in words under its ticker (roadmap 19.10).
+.stop-tag {
+  display: block;
+  max-width: 36ch;
+  font-size: var(--text-xs);
+  line-height: var(--leading-tight);
+  color: var(--color-ink-2);
+  white-space: normal;
+  overflow-wrap: anywhere;
+
+  strong {
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+}
+
+.stop-lasts {
+  display: block;
+}
+
 .side {
   font-size: var(--text-xs);
   font-weight: var(--weight-semibold);

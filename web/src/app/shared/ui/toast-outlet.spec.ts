@@ -99,4 +99,14 @@ describe('ToastOutlet', () => {
     fixture.detectChanges();
     expect(items()).toHaveLength(0);
   });
+
+  it('keeps the text at full opacity while a toast rises', () => {
+    // A fade-in paints the message pale for its first frames: a screen
+    // reader or an axe scan landing then reads failing contrast.
+    const styles = (ToastOutlet as unknown as { ɵcmp: { styles: string[] } }).ɵcmp.styles.join('');
+    const rise = /@keyframes\s+\S*rise\s*\{([^{}]*\{[^{}]*\})+\s*\}/.exec(styles);
+    expect(rise).not.toBeNull();
+    expect(rise![0]).toContain('transform');
+    expect(rise![0]).not.toContain('opacity');
+  });
 });

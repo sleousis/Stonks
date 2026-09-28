@@ -320,9 +320,8 @@ def _previous(state: SqliteState, book: BookState) -> Any:
 
 
 def _scored_history(state: SqliteState, book: BookState, limit: int) -> list[Any]:
-    """The last ``limit`` scored days before ``book.as_of``, oldest first."""
-    if limit <= 0:
-        return []
+    """The last ``limit`` scored days before ``book.as_of``, oldest first
+    (``limit`` is the window or one less, at least 19)."""
     rows = state.sql(
         "SELECT violation_95, violation_99 FROM risk_snapshots"
         " WHERE portfolio_id = ? AND strategy_id = ? AND as_of < ?"
@@ -530,7 +529,10 @@ class RiskAlert:
 
 
 def _marks(lake: Any, tickers: Sequence[str], as_of: date) -> dict[str, float]:
-    """The latest raw daily close at or before ``as_of`` per ticker."""
+    """The latest raw daily close at or before ``as_of`` per ticker, in the
+    major currency unit (pounds, not pence), as the book's cash is."""
+    from stonks.fx.units import price_scales
+
     if not tickers:
         return {}
     df = lake.sql(
@@ -539,7 +541,12 @@ def _marks(lake: Any, tickers: Sequence[str], as_of: date) -> dict[str, float]:
         " FROM prices WHERE ticker = ANY(?) AND date <= ?) WHERE rn = 1",
         [sorted(set(tickers)), as_of],
     )
-    return {str(r.ticker): float(r.close) for r in df.itertuples(index=False) if r.close}
+    scales = price_scales(lake, tickers)
+    return {
+        str(r.ticker): float(r.close) * scales.get(str(r.ticker), 1.0)
+        for r in df.itertuples(index=False)
+        if r.close
+    }
 
 
 def _portfolio_positions(state: SqliteState, portfolio_id: str, as_of: date) -> Any:

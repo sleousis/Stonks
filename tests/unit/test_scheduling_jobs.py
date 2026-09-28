@@ -29,6 +29,8 @@ BUILTIN = {
     "health",
     "report",
     "universes_refresh",
+    "price_alerts",
+    "calendars_refresh",
 }
 
 
@@ -44,9 +46,37 @@ def test_default_jobs_build():
         "connections_sync",
         "universes_refresh",
         "ingest_metadata",
+        "price_alerts",
+        "broker_health",
+        "ibkr_reauth_reminder",
+        "live_sod_check",
+        "live_eod_check",
+        "calendars_refresh",
+        "model_retrain",
+        "live_submit",
+        "live_stops",
+        "live_gate_days",
+        "ingest_borrow",
+        "engine_start",
+        "engine_stop",
     }
     tick = by_name["tick"]
+    # 21.2.5: the engine runs from before the open to after the close
+    start, stop = by_name["engine_start"], by_name["engine_stop"]
+    assert start.trigger == SessionTrigger("XNYS", "open", timedelta(minutes=-15))
+    assert start.catch_up == "none"
+    assert stop.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=10))
+    # 19.8: approved tickets go out before the open, never caught up late
+    submit = by_name["live_submit"]
+    assert submit.trigger == SessionTrigger("XNYS", "open", timedelta(minutes=-20))
+    assert submit.catch_up == "none"
+    # 19.10: protective stops follow the entries the opening auction filled
+    stops = by_name["live_stops"]
+    assert stops.trigger == SessionTrigger("XNYS", "open", timedelta(minutes=30))
+    assert stops.catch_up == "none"
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))
+    # 19.9: gate metrics read the snapshots the tick wrote
+    assert by_name["live_gate_days"].trigger.offset > tick.trigger.offset
     assert tick.deadline == timedelta(minutes=60)
     assert tick.catch_up == "latest"
     assert isinstance(by_name["health"].trigger, IntervalTrigger)
@@ -57,6 +87,13 @@ def test_default_jobs_build():
     assert by_name["universes_refresh"].trigger.offset < tick.trigger.offset
     # splits and dividends reach the lake before the tick applies them (TO-05)
     assert by_name["ingest_metadata"].trigger.offset < tick.trigger.offset
+    # price alerts check the closes the ingest just stored (roadmap 20.2)
+    assert ingest_at < by_name["price_alerts"].trigger.offset
+    # reconciliation (roadmap 19.5): before the open, and after the close
+    # but before the tick decides
+    sod = by_name["live_sod_check"].trigger
+    assert sod.anchor == "open" and sod.offset == timedelta(minutes=-60)
+    assert by_name["live_eod_check"].trigger.offset < tick.trigger.offset
 
 
 @pytest.mark.parametrize("registry", [LOCAL_ACTIONS, API_ACTIONS, IN_PROCESS_ACTIONS])

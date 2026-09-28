@@ -84,7 +84,11 @@ def test_a_trader_reads_insights_on_their_own_book(browse, stack, viewport):
     page.get_by_role("radio", name="Holding", exact=True).click()
     expect(alloc).to_contain_text("AAA.US")
 
-    expect(page.get_by_role("heading", name="Returns")).to_be_visible()
+    expect(page.get_by_role("heading", name="Returns", exact=True)).to_be_visible()
+    # The monthly returns heatmap, time weighted (13.7).
+    months = page.locator("section", has=page.get_by_role("heading", name="Monthly returns"))
+    expect(months.locator("table")).to_be_visible()
+    expect(months.locator("caption")).to_contain_text("deposits and withdrawals left out")
     agreement = page.locator(".holdings")
     expect(agreement).to_contain_text("AAA.US")
     expect(agreement).to_contain_text("bah_aaa")

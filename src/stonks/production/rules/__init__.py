@@ -32,7 +32,8 @@ Order of application (``order``; lower first):
 1. ``max_holding`` (1): forced sells of positions held too long;
 2. ``drawdown_scaling`` (2): every opening buy times the drawdown size;
 3. ``portfolio_vol`` (3): opening buys scaled to the volatility caps,
-   measured on the buys drawdown scaling left;
+   measured on the buys drawdown scaling left; ``style_exposure`` (3):
+   opening orders scaled to the style exposure cap (roadmap 22.4);
 4. ``circuit_breaker`` (4) and ``operational_halt`` (5): every opening buy
    dropped after a loss halt or when the data feed is stale (BL-28);
 4b. ``gross_exposure`` (6), ``net_exposure`` (7), ``short_caps`` (8) and
@@ -40,12 +41,21 @@ Order of application (``order``; lower first):
 4c. ``option_greek_limits``, ``option_margin``, ``option_max_loss`` and
    ``short_option_guard`` (9): the option rules (roadmap 17.4). They see
    a combo as one unit and only drop opening option units;
+4c'. the intraday rules, which act only when ``ctx.intraday`` is set
+   (roadmap 21.3.2): ``intraday_drawdown`` (4), ``intraday_loss_limit``
+   (4) and ``intraday_stale_data`` (5); ``intraday_order_rate`` (79) runs
+   just before ``max_orders_per_run``;
+4d. the live safeguards, which act only when ``ctx.live`` is set
+   (roadmap 19.6): ``capital_ramp`` (4, the owner's allocation cap),
+   ``live_notional_caps`` (9) and ``price_band`` (9);
 5. one order-rule pass: ``sell_within_position`` (10), ``require_price``
    (20), ``max_open_positions`` (30), ``max_weight_per_ticker`` (40),
    ``max_weight_per_asset_class`` (50), ``risk_per_position`` (52),
    ``sector_cap`` (54), ``liquidity`` (56), ``cash_buffer`` (60) and
    ``min_order_notional`` (70), so cash and the minimum notional see the
-   final size.
+   final size. ``account_rules`` (65) joins it for live books;
+6. ``max_orders_per_run`` (80): the last word on how many orders a live
+   run may send.
 
 Every step only shrinks buys, so the result is at most what any single
 rule allows. A rule may declare ``enabled(policy)``; disabled rules are
@@ -73,6 +83,8 @@ if TYPE_CHECKING:
     import pandas as pd
 
     from stonks.config import RiskPolicy
+    from stonks.production.live.context import LiveContext
+    from stonks.production.rules._intraday import IntradayContext
 
 __all__ = [
     "EPS",
@@ -158,6 +170,19 @@ class RiskContext:
     #: The day's option market (``stonks.options.risk.OptionRiskView``) for
     #: the option rules (roadmap 17.4); ``None`` for a book without options.
     options: Any = None
+    #: The live state of a book at a real broker (roadmap 19.6): the
+    #: owner's allocation, the account, quotes, the notional sent today and
+    #: the account rules' inputs. ``None`` in backtests and paper books, so
+    #: the live safeguards do nothing there.
+    live: LiveContext | None = None
+    #: Raw style exposures known at ``as_of``, rows tickers (``momentum``,
+    #: ``size``, ``value``, ``volatility``, ``sector``; roadmap 22.4). The
+    #: style exposure rule reads the bars instead when ``None``.
+    factor_exposures: pd.DataFrame | None = None
+    #: The state of an intraday book at one event (roadmap 21.3.2): the
+    #: event time, the session's equity marks, bar times and orders sent.
+    #: ``None`` for a daily book, so the intraday rules do nothing there.
+    intraday: IntradayContext | None = None
 
     def __post_init__(self) -> None:
         if self.cost_model is not None and (self.slippage_bps or self.fee_per_trade):

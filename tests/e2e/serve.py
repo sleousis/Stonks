@@ -1,5 +1,6 @@
 """``stonks serve`` for the e2e stack, with every data source swapped for the
-canned one (:mod:`tests.e2e.fake_market`), so no request can reach a vendor.
+canned one (:mod:`tests.e2e.fake_market`), so no request can reach a vendor,
+and the assistant's model swapped for :mod:`tests.e2e.fake_assistant`.
 
 Started by :func:`tests.e2e.stack.start_server` with the stack root as the
 working directory (``config/default.toml`` is read from there) and
@@ -30,8 +31,18 @@ def _install_canned_source() -> None:
     context.AppContext.build_source = lambda self, source_id=None: CannedDataSource(market)
 
 
+def _install_fake_assistant() -> None:
+    """The assistant talks to :class:`KeywordChatModel`, never a model server
+    (``[assistant] base_url`` in the stack config only switches it on)."""
+    import stonks.app.assistant as assistant
+    from tests.e2e.fake_assistant import KeywordChatModel
+
+    assistant.default_model = lambda _config: KeywordChatModel()
+
+
 def main(argv: list[str] | None = None) -> None:
     _install_canned_source()
+    _install_fake_assistant()
     from stonks.cli import app
 
     app(["serve", *(argv if argv is not None else sys.argv[1:])])

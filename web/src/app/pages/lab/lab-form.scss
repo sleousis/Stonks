@@ -351,3 +351,14 @@
 .summary {
   font-size: var(--text-sm);
 }
+
+// Links inside field hints: a full touch target on touch screens.
+.hint-link {
+  margin-left: var(--space-1);
+
+  @include bp.coarse {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--touch-min);
+  }
+}

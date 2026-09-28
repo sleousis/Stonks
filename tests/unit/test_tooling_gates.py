@@ -219,6 +219,7 @@ def test_the_targets_cover_the_money_paths():
         "src/stonks/production/rules",  # risk rules
         "src/stonks/execution/reconcile.py",  # ledger
         "src/stonks/production/pnl.py",  # P&L
+        "src/stonks/execution/drift.py",  # broker versus ledger drift (19.15)
     ):
         assert money_path in modules
 

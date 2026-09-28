@@ -42,11 +42,15 @@ export const routes: Routes = [
   { path: 'lab', loadChildren: () => import('./pages/lab/lab.routes') },
   { path: 'data', loadChildren: () => import('./pages/data/data.routes') },
   { path: 'orders', loadChildren: () => import('./pages/orders/orders.routes') },
+  // 19.8: order tickets that wait for approval
+  { path: 'tickets', loadChildren: () => import('./pages/tickets/tickets.routes') },
   // The Paper trading page (UX-09). Old /shadow links land on it.
   { path: 'paper', loadChildren: () => import('./pages/shadow/shadow.routes') },
   { path: 'shadow', redirectTo: 'paper' },
   { path: 'go-live', loadChildren: () => import('./pages/go-live/go-live.routes') },
   { path: 'health', loadChildren: () => import('./pages/health/health.routes') },
+  // 21.3.4: the live intraday engine, its stream and speed
+  { path: 'live', loadChildren: () => import('./pages/live/live.routes') },
   { path: 'settings', loadChildren: () => import('./pages/settings/settings.routes') },
   // ops: halts, schedule and backups, data quality, universes
   { path: 'ops', loadChildren: () => import('./pages/ops/ops.routes') },
@@ -59,6 +63,13 @@ export const routes: Routes = [
     loadChildren: () => import('./pages/notifications/notifications.routes'),
   },
   { path: 'trades', loadChildren: () => import('./pages/trades/trades.routes') },
+  // 20: the AI assistant
+  { path: 'assistant', loadChildren: () => import('./pages/assistant/assistant.routes') },
+  // 20.7 and 20.8: event calendars and news, the screener
+  { path: 'calendar', loadChildren: () => import('./pages/calendar/calendar.routes') },
+  { path: 'screener', loadChildren: () => import('./pages/screener/screener.routes') },
+  // 17.6: options research (nothing trades options)
+  { path: 'options', loadChildren: () => import('./pages/options/options.routes') },
   {
     path: '**',
     title: 'Not found',

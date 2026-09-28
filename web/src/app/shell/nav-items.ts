@@ -31,8 +31,21 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/', label: 'Today', key: 'm', group: 'Main', keywords: ['home'] },
   { path: '/strategies', label: 'Strategies', key: 's', group: 'Main', keywords: ['follow'] },
   { path: '/orders', label: 'Orders', key: 'o', group: 'Main', keywords: ['trades', 'fills'] },
+  {
+    path: '/tickets',
+    label: 'Approvals',
+    group: 'Main',
+    permission: 'portfolio.trade',
+    keywords: ['tickets', 'approve', 'order tickets'],
+  },
   { path: '/charts', label: 'Charts', key: 'z', group: 'Main', keywords: ['price'] },
   { path: '/watchlists', label: 'Watchlists', key: 'x', group: 'Main', keywords: ['tickers'] },
+  {
+    path: '/calendar',
+    label: 'Calendar',
+    group: 'Main',
+    keywords: ['earnings', 'dividends', 'economic', 'news', 'sentiment'],
+  },
   {
     path: '/insights',
     label: 'Insights',
@@ -44,6 +57,19 @@ export const NAV_ITEMS: readonly NavItem[] = [
 
   { path: '/paper', label: 'Paper trading', key: 'w', group: 'Research', keywords: ['shadow'] },
   { path: '/leaderboard', label: 'Leaderboard', key: 'b', group: 'Research', keywords: ['rank'] },
+  {
+    path: '/screener',
+    label: 'Screener',
+    key: 'f',
+    group: 'Research',
+    keywords: ['screen', 'filter', 'fundamentals', 'universe'],
+  },
+  {
+    path: '/options',
+    label: 'Options',
+    group: 'Research',
+    keywords: ['chain', 'greeks', 'payoff', 'calls', 'puts', 'implied vol'],
+  },
   {
     path: '/studio',
     label: 'Studio',
@@ -61,6 +87,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     keywords: ['backtest', 'test'],
   },
   { path: '/go-live', label: 'Go live', key: 'g', group: 'Research', keywords: ['checks'] },
+  {
+    path: '/assistant',
+    label: 'Assistant',
+    key: 'y',
+    group: 'Research',
+    keywords: ['chat', 'ask', 'ai'],
+  },
 
   {
     path: '/dashboard',
@@ -77,6 +110,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     group: 'System',
     adminOnly: true,
     keywords: ['alerts', 'status'],
+  },
+  {
+    path: '/live',
+    label: 'Live engine',
+    group: 'System',
+    adminOnly: true,
+    keywords: ['intraday', 'stream', 'latency', 'engine'],
   },
   {
     path: '/ops/schedule',
@@ -96,6 +136,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
   { path: '/ops/data-quality', label: 'Data quality', key: 'q', group: 'System', adminOnly: true },
   { path: '/universes', label: 'Universes', key: 'v', group: 'System', adminOnly: true },
+  {
+    path: '/ops/models',
+    label: 'Model versions',
+    group: 'System',
+    adminOnly: true,
+    keywords: ['retrain', 'candidates', 'swap'],
+  },
   {
     path: '/ops/halts',
     label: 'Halts',

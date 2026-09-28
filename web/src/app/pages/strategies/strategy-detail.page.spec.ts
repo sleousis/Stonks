@@ -416,7 +416,7 @@ describe('StrategyDetailPage', () => {
 
     button(LIFECYCLE.live.label)!.click();
     await ticketReads(false);
-    expect(dialogForm(el)!.textContent).toContain('3 paper day(s), need >= 20');
+    expect(dialogForm(el)!.textContent).toContain('3 days of paper trading, needs at least 20');
     answerDialog(fixture, { reason: 'Try it' });
 
     (await nextRequest(controller, '/api/strategies/momentum-v3/promote', 'POST')).flush(
@@ -525,7 +525,7 @@ describe('StrategyDetailPage', () => {
     it('folds the failing checks under the bar', async () => {
       await load();
       expect(el.querySelector('app-stage-bar details.checks')!.textContent).toContain(
-        '3 paper day(s), need >= 20',
+        '3 days of paper trading, needs at least 20',
       );
     });
 
@@ -586,5 +586,29 @@ describe('StrategyDetailPage', () => {
         days: 21,
       });
     });
+  });
+  it('opens the Model versions tab and keeps it in the address', async () => {
+    await load();
+    const tab = Array.from(el.querySelectorAll<HTMLButtonElement>('app-segmented button')).find(
+      (b) => b.textContent?.trim() === 'Model versions',
+    )!;
+    tab.click();
+    await settle();
+    (await nextRequest(controller, '/api/strategies/momentum-v3/versions')).flush(page([]));
+    (await nextRequest(controller, '/api/strategies/momentum-v3/versions/history')).flush(page([]));
+    await settle();
+    expect(el.querySelector('app-model-versions-panel')).toBeTruthy();
+    expect(el.querySelector('#perf-title')).toBeNull();
+    expect(el.textContent).toContain('No model versions');
+  });
+
+  it('opens on the versions tab from ?tab=versions', async () => {
+    fixture.componentRef.setInput('tab', 'versions');
+    fixture.detectChanges();
+    await load();
+    (await nextRequest(controller, '/api/strategies/momentum-v3/versions')).flush(page([]));
+    (await nextRequest(controller, '/api/strategies/momentum-v3/versions/history')).flush(page([]));
+    await settle();
+    expect(el.querySelector('app-model-versions-panel')).toBeTruthy();
   });
 });

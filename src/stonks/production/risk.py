@@ -28,6 +28,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date
+from typing import Any
 
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.backtest.costs import CostModel, CostModelSettings
@@ -38,6 +39,7 @@ from stonks.production import rules as _rules
 from stonks.production.ledger import ledger_filter
 from stonks.production.prices import load_history
 from stonks.production.rules import OrderRule, RiskAdjustment, RiskContext, RiskRule
+from stonks.production.rules.style_exposure import wants_exposures
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
 
@@ -171,16 +173,26 @@ def build_risk_context(
     volumes: Mapping[str, float] | None = None,
     history_bars: int = HISTORY_BARS,
     portfolio_id: str = DEFAULT_PORTFOLIO_ID,
+    overrides: Sequence[RiskPolicy | None] = (),
 ) -> RiskContext:
     """A full ``RiskContext`` for held, priced and ``universe`` tickers: the
     last ``history_bars`` adjusted bars (one query), asset classes and
     sectors, ``portfolio_id``'s equity curve and each holding's entry date
-    (from that portfolio's fills only)."""
+    (from that portfolio's fills only).
+
+    ``overrides`` are the per-strategy policies the context also serves:
+    style exposures are read when ``policy`` or any of them turns the style
+    exposure rule on (22.10)."""
     from stonks.production.pnl import load_pnl
 
     held = [t for t, q in portfolio.positions.items() if abs(q) > 1e-12]
     tickers = sorted({*held, *prices, *universe})
     profiles = _profiles(lake, tickers)
+    exposures = None
+    if any(p is not None and wants_exposures(p) for p in (policy, *overrides)):
+        from stonks.factors.style import safe_style_exposures
+
+        exposures = safe_style_exposures(lake, tickers, as_of)
     return RiskContext(
         portfolio=portfolio,
         prices=dict(prices),
@@ -200,6 +212,7 @@ def build_risk_context(
         ),
         volumes=dict(volumes or {}),
         as_of=as_of,
+        factor_exposures=exposures,
     )
 
 
@@ -269,29 +282,22 @@ def model_book_risk_context(
     strategy_id: str,
     portfolio: Portfolio,
     as_of: date,
+    *,
+    book: Any = None,
 ) -> RiskContext:
     """``base`` (history and sectors, from :func:`build_risk_context`) for a
-    strategy's model book: its virtual portfolio, its equity curve and the
-    entry dates of its filled shadow decisions."""
-    from stonks.production.pnl import load_pnl
+    model book: its virtual portfolio, its equity curve and the entry dates
+    of its filled decisions. ``book`` (a ``production.shadow.BookStore``)
+    names the book, by default the strategy's own model book."""
+    from stonks.production.pnl import daily_pnl
+    from stonks.production.shadow import shadow_book
 
+    store = book if book is not None else shadow_book(strategy_id)
     held = [t for t, q in portfolio.positions.items() if abs(q) > 1e-12]
     entry: dict[str, date] = {}
     if held:
-        marks = ",".join("?" for _ in held)
-        rows = state.sql(
-            "SELECT ticker, side, quantity, as_of FROM shadow_decisions"
-            f" WHERE strategy_id = ? AND status = 'filled' AND ticker IN ({marks})"
-            " AND as_of <= ? ORDER BY as_of, id",
-            [strategy_id, *held, as_of.isoformat()],
-        )
-        entry = entry_dates_from_fills(
-            (r["ticker"], r["side"], float(r["quantity"]), date.fromisoformat(r["as_of"]))
-            for r in rows
-        )
-    curve = [
-        (r.day, r.total_value) for r in load_pnl(state, strategy_id=strategy_id) if r.day <= as_of
-    ]
+        entry = entry_dates_from_fills(store.filled(state, held, as_of))
+    curve = [(r.day, r.total_value) for r in daily_pnl(store.curve(state)) if r.day <= as_of]
     return replace(
         base,
         portfolio=portfolio,

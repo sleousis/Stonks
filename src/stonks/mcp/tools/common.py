@@ -74,8 +74,21 @@ Confirm = Annotated[
 StrategyStatus = Literal["active", "shadow", "retired"]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 AssetClass = Literal["equity", "crypto", "commodity", "bond"]
-TunerName = Literal["grid", "random"]
-ObjectiveName = Literal["sharpe", "cagr", "final_return", "cv_sharpe", "cv_cagr", "cv_final_return"]
+TunerName = Literal["grid", "random", "optuna"]
+#: The ``optuna`` tuner's sampler (``nsga2``: Pareto over ``multi``'s parts).
+SamplerName = Literal["tpe", "nsga2", "random"]
+ObjectiveName = Literal[
+    "sharpe",
+    "cagr",
+    "final_return",
+    "sortino",
+    "calmar",
+    "sharpe_dd",
+    "multi",
+    "cv_sharpe",
+    "cv_cagr",
+    "cv_final_return",
+]
 #: A survival test id. Not a fixed list, so the schema cannot drift from the
 #: API's registry: ``list_survival_tests`` names them and the API checks them.
 SurvivalTestName = Annotated[

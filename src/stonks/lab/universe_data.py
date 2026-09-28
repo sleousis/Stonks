@@ -9,6 +9,9 @@ With a :class:`~stonks.ingest.ensure.DataEnsurer` (opt in), the missing
 bars of those tickers (and of the reference and benchmark tickers) are fetched for the
 window plus the strategy's warm-up. The preflight then judges the data
 the run will really read.
+
+An intraday dataset is then split by whole sessions (roadmap 21.3.1, see
+``lab.dataset``): its ``sessions`` are the days the universe has bars.
 """
 
 from __future__ import annotations
@@ -42,7 +45,7 @@ def prepare_dataset(
             dataset = dataclasses.replace(dataset, universe=members)
             _log.info("lab.universe.resolved", universe_id=universe_id, members=len(members))
     if ensurer is None or not dataset.universe:
-        return dataset, None
+        return by_session(dataset), None
     # reference tickers are read but never traded: they need data too
     tickers = [*dataset.universe, *dataset.reference_tickers, *strategy_data_tickers(strategy)]
     spec = normalize_spec(getattr(dataset, "benchmark", None))
@@ -51,4 +54,28 @@ def prepare_dataset(
     warmup = int(getattr(strategy, "required_history_bars", 0) or 0)
     start = dataset.start - timedelta(days=embargo_calendar_days(warmup, dataset.interval))
     report = ensurer.ensure(list(dict.fromkeys(tickers)), start, dataset.end, dataset.interval)
-    return dataset, report
+    return by_session(dataset), report
+
+
+def by_session(dataset: LabDataset) -> LabDataset:
+    """An intraday ``dataset`` split by the sessions its universe has bars
+    on (see the module doc); any other dataset as it is. When the lake
+    holds too few sessions the calendar split stays and a warning is
+    logged (the preflight reports the missing data)."""
+    interval = getattr(dataset, "interval", None)
+    if (
+        interval is None
+        or not interval.is_intraday
+        or getattr(dataset, "sessions", ())
+        or getattr(dataset, "lake", None) is None
+        or not dataset.universe
+    ):
+        return dataset
+    try:
+        out = dataset.with_sessions()
+    except ValueError as exc:
+        _log.warning("lab.sessions.unusable", error=str(exc))
+        return dataset
+    if out is not dataset:
+        _log.info("lab.sessions.split", sessions=len(out.window_sessions))
+    return out

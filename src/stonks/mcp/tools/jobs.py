@@ -26,6 +26,7 @@ from stonks.mcp.tools.common import (
     RegisterConfirm,
     RegisterIfPasses,
     RegisterStrategy,
+    SamplerName,
     SurvivalPreset,
     SurvivalTestName,
     TestOptions,
@@ -53,10 +54,13 @@ RESULT_ROUTES: dict[str, str] = {
     "ingest": "/api/ingest/jobs/{id}/result",
     "tick": "/api/ticks/jobs/{id}/result",
     "signal_ic": "/api/lab/signal-ic/{id}/result",
+    "factor_tearsheet": "/api/factors/tearsheets/{id}/result",
     "lab_ensure": "/api/lab/ensure/{id}/result",
     "lab_sweep": "/api/lab/sweeps/{id}/result",
     "universe_refresh": "/api/universes/refresh/{id}/result",
     "universe_ensure": "/api/universes/ensure/{id}/result",
+    "model_retrain": "/api/model-versions/jobs/{id}/result",
+    "options_backtest": "/api/options/backtests/{id}/result",
 }
 
 
@@ -143,6 +147,18 @@ class McptOptions(_Options):
     seed: int | None = None
 
 
+class HeatmapOptions(_Options):
+    """A 2D sweep of two parameters around the tuned set, with the plateau
+    verdict on it. Every cell counts as a trial."""
+
+    x: str | None = Field(default=None, description="param across (default: first numeric)")
+    y: str | None = Field(default=None, description="param down (default: next numeric)")
+    grid_size: int | None = Field(default=None, description="points per axis, 2..15 (default 7)")
+    fast: bool | None = Field(
+        default=None, description="score cells on the vectorised fast path (default true)"
+    )
+
+
 def strategy_ref(
     strategy_id: str | None, class_path: str | None, params: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -224,6 +240,12 @@ def register(t: ToolContext) -> None:
             Field(description="survival suite; server default when omitted"),
         ] = None,
         tuner: TunerName = "random",
+        sampler: Annotated[
+            SamplerName, Field(description="optuna tuner: tpe, nsga2 (Pareto over multi) or random")
+        ] = "tpe",
+        prune: Annotated[
+            bool, Field(description="optuna tuner: stop trials whose fast score trails")
+        ] = False,
         objective: ObjectiveName = "sharpe",
         budget: Annotated[int, Field(ge=1, le=1000, description="tuner trials")] = 20,
         train_ratio: Annotated[float, Field(gt=0, lt=1)] = 0.7,
@@ -247,6 +269,10 @@ def register(t: ToolContext) -> None:
         test_options: TestOptions = None,
         benchmark: Benchmark = None,
         embargo_bars: EmbargoBars = None,
+        heatmap: Annotated[
+            HeatmapOptions | None,
+            Field(description="parameter heatmap around the tuned set (22.5)"),
+        ] = None,
     ) -> dict[str, Any]:
         """Queue a lab run: tune a strategy class, fit, run the survival suite and
         give a pass/fail verdict. Returns the job; use wait_for_job for the result.
@@ -268,6 +294,8 @@ def register(t: ToolContext) -> None:
                 "end": iso(end),
                 "survival_tests": survival_tests,
                 "tuner": tuner,
+                "sampler": sampler if tuner == "optuna" else None,
+                "prune": prune or None,
                 "objective": objective,
                 "budget": budget,
                 "train_ratio": train_ratio,
@@ -284,6 +312,7 @@ def register(t: ToolContext) -> None:
                 "test_options": test_options,
                 "benchmark": benchmark,
                 "embargo_bars": embargo_bars,
+                "heatmap": heatmap.body() if heatmap else None,
             }
         )
         return await queue_lab_run(t, "/api/lab/runs", body, confirm)
@@ -409,7 +438,11 @@ def register(t: ToolContext) -> None:
 
     @server.tool(annotations=JOB_OPEN_WORLD)
     async def run_ingest(
-        kind: Literal["prices", "intraday", "fundamentals", "metadata"],
+        kind: Literal["prices", "intraday", "fundamentals", "metadata", "borrow"],
+        source: Annotated[
+            Literal["eodhd", "yahoo", "defillama"] | None,
+            Field(description="data source; the default one when left out (see list_sources)"),
+        ] = None,
         tickers: Annotated[
             list[str] | None, Field(description="instrument ids; or use exchange")
         ] = None,
@@ -417,17 +450,24 @@ def register(t: ToolContext) -> None:
         since: IsoDate | None = None,
         until: IsoDate | None = None,
         interval: Annotated[str | None, Field(description="for intraday, e.g. 5m")] = None,
+        markets: Annotated[
+            list[str] | None,
+            Field(description="for borrow: IBKR short stock markets, e.g. usa"),
+        ] = None,
     ) -> dict[str, Any]:
-        """Queue a market-data ingest into the lake from the configured vendor.
-        Returns the job; use wait_for_job for the outcome."""
+        """Queue a market-data ingest into the lake from the configured vendor,
+        or from ``source``. ``borrow`` pulls daily stock borrow rates. Returns
+        the job; use wait_for_job for the outcome."""
         body = drop_none(
             {
                 "kind": kind,
+                "source": source,
                 "tickers": tickers,
                 "exchange": exchange,
                 "since": iso(since),
                 "until": iso(until),
                 "interval": interval,
+                "markets": markets,
             }
         )
         return await t.post("/api/ingest/runs", body)

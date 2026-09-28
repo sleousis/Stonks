@@ -90,6 +90,9 @@ export const METRIC_KEYS = [
   'violation_ratio',
   'alpha_decay',
   'concentration',
+  // Returns with deposits and withdrawals taken out
+  'twr',
+  'mwr',
 ] as const;
 
 export type MetricKey = (typeof METRIC_KEYS)[number];
@@ -104,6 +107,7 @@ export const TRADING_KEYS = [
   'live',
   'signals_only',
   'auto',
+  'approve',
   'kill_switch',
   'buys_only',
   'circuit_breaker',
@@ -160,6 +164,12 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     short:
       'Orders go to your broker by themselves at each trading run. It opens after enough paper trading days.',
     aliases: ['Auto mode', 'Automatic'],
+  },
+  approve: {
+    term: 'Approve each trade',
+    short:
+      'Real orders wait for you as tickets after each trading run. You approve each one with a code before the open.',
+    aliases: ['Approve mode', 'Approve', 'Approvals', 'Order ticket', 'Order tickets'],
   },
   kill_switch: {
     term: 'Kill switch',
@@ -551,6 +561,18 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     short:
       'How much of the book sits in a few names. Effective holdings is how many equal positions it acts like.',
     aliases: ['Effective holdings', 'Largest holding', 'Top 5 weight'],
+  },
+  twr: {
+    term: 'Time-weighted return',
+    short:
+      'How the investments did, with deposits and withdrawals taken out, so adding money is never profit.',
+    aliases: ['TWR', 'Return (time-weighted)'],
+  },
+  mwr: {
+    term: 'Money-weighted return',
+    short:
+      'The yearly rate your money earned, counting when you added or took it out. Also called XIRR.',
+    aliases: ['MWR', 'XIRR', 'Money-weighted, per year'],
   },
 };
 

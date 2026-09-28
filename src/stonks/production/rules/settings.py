@@ -14,44 +14,74 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from stonks.production.rules._account_settings import AccountRulesSettings, longer_cycles
+from stonks.production.rules._stop_settings import ProtectiveStopSettings
 from stonks.production.rules.borrow_check import BorrowCheckSettings
+from stonks.production.rules.capital_ramp import CapitalRampSettings
 from stonks.production.rules.circuit_breaker import CircuitBreakerSettings, Cooldown
 from stonks.production.rules.drawdown_scaling import DrawdownScalingSettings, Schedule
 from stonks.production.rules.exposure import GrossExposureSettings, NetExposureSettings
+from stonks.production.rules.intraday_drawdown import IntradayDrawdownSettings
+from stonks.production.rules.intraday_loss import IntradayLossLimitSettings
+from stonks.production.rules.intraday_orders import IntradayOrderRateSettings
+from stonks.production.rules.intraday_stale import IntradayStaleDataSettings
 from stonks.production.rules.liquidity import LiquiditySettings
+from stonks.production.rules.live_caps import LiveNotionalCapsSettings
 from stonks.production.rules.margin_call import MarginCallSettings
 from stonks.production.rules.max_holding import MaxHoldingSettings
+from stonks.production.rules.max_orders import MaxOrdersPerRunSettings
 from stonks.production.rules.operational_halt import OperationalHaltSettings
 from stonks.production.rules.option_greek_limits import OptionGreekLimitsSettings
 from stonks.production.rules.option_margin import OptionMarginSettings
 from stonks.production.rules.option_max_loss import OptionMaxLossSettings
 from stonks.production.rules.portfolio_vol import PortfolioVolSettings
+from stonks.production.rules.price_band import PriceBandSettings
+from stonks.production.rules.protections import (
+    LosingLockSettings,
+    StopCooldownSettings,
+    StopGuardSettings,
+)
 from stonks.production.rules.risk_per_position import RiskPerPositionSettings
 from stonks.production.rules.sector_cap import SectorCapSettings
 from stonks.production.rules.short_caps import ShortCapsSettings
 from stonks.production.rules.short_option_guard import ShortOptionGuardSettings
 from stonks.production.rules.squeeze_guard import SqueezeGuardSettings
+from stonks.production.rules.style_exposure import StyleExposureSettings, union_styles
 
 __all__ = [
+    "AccountRulesSettings",
     "BorrowCheckSettings",
+    "CapitalRampSettings",
     "CircuitBreakerSettings",
     "DrawdownScalingSettings",
     "GrossExposureSettings",
+    "IntradayDrawdownSettings",
+    "IntradayLossLimitSettings",
+    "IntradayOrderRateSettings",
+    "IntradayStaleDataSettings",
     "LiquiditySettings",
+    "LiveNotionalCapsSettings",
+    "LosingLockSettings",
     "MarginCallSettings",
     "MaxHoldingSettings",
+    "MaxOrdersPerRunSettings",
     "NetExposureSettings",
     "OperationalHaltSettings",
     "OptionGreekLimitsSettings",
     "OptionMarginSettings",
     "OptionMaxLossSettings",
     "PortfolioVolSettings",
+    "PriceBandSettings",
+    "ProtectiveStopSettings",
     "RiskPerPositionSettings",
     "RuleSettings",
     "SectorCapSettings",
     "ShortCapsSettings",
     "ShortOptionGuardSettings",
     "SqueezeGuardSettings",
+    "StopCooldownSettings",
+    "StopGuardSettings",
+    "StyleExposureSettings",
     "merge_schedules",
     "tighter_rule_settings",
 ]
@@ -80,6 +110,29 @@ class RuleSettings(BaseModel):
     option_max_loss: OptionMaxLossSettings = OptionMaxLossSettings()
     option_margin: OptionMarginSettings = OptionMarginSettings()
     short_option_guard: ShortOptionGuardSettings = ShortOptionGuardSettings()
+    # Live safeguards (roadmap 19.6): act only on books at a real broker,
+    # every one off by default.
+    capital_ramp: CapitalRampSettings = CapitalRampSettings()
+    live_notional_caps: LiveNotionalCapsSettings = LiveNotionalCapsSettings()
+    price_band: PriceBandSettings = PriceBandSettings()
+    max_orders_per_run: MaxOrdersPerRunSettings = MaxOrdersPerRunSettings()
+    # The account rules engine (roadmap 19.7), off by default.
+    account_rules: AccountRulesSettings = AccountRulesSettings()
+    # Per-strategy protections for live books (roadmap 19.6), off by default.
+    stop_cooldown: StopCooldownSettings = StopCooldownSettings()
+    stop_guard: StopGuardSettings = StopGuardSettings()
+    losing_lock: LosingLockSettings = LosingLockSettings()
+    # Style factor exposure cap (roadmap 22.4), off by default.
+    style_exposure: StyleExposureSettings = StyleExposureSettings()
+    # Broker-side protective stops (roadmap 19.10), off by default. Not a
+    # risk rule: ``production.live.stops`` places them.
+    protective_stops: ProtectiveStopSettings = ProtectiveStopSettings()
+    # Intraday books (roadmap 21.3.2): act only on an event of the intraday
+    # engine, every one off by default.
+    intraday_loss_limit: IntradayLossLimitSettings = IntradayLossLimitSettings()
+    intraday_drawdown: IntradayDrawdownSettings = IntradayDrawdownSettings()
+    intraday_order_rate: IntradayOrderRateSettings = IntradayOrderRateSettings()
+    intraday_stale_data: IntradayStaleDataSettings = IntradayStaleDataSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -103,6 +156,13 @@ def _max_optional(a: float | None, b: float | None) -> float | None:
 def _either(a: bool, b: bool) -> bool:
     """Switching a guard on is tighter."""
     return a or b
+
+
+def _more_counting(a: bool | None, b: bool | None) -> bool | None:
+    """``count_losses``: always counting losses (``True``) is the tightest,
+    then the automatic choice (``None``), then never (``False``)."""
+    rank = {True: 2, None: 1, False: 0}
+    return a if rank[a] >= rank[b] else b
 
 
 def _keep_base(a: Any, b: Any) -> Any:
@@ -183,6 +243,55 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "min_dte": max,
         "max_short_contracts": _min_optional,
     },
+    "capital_ramp": {"enabled": _either},
+    "live_notional_caps": {
+        "max_order_notional": _min_optional,
+        "max_day_notional": _min_optional,
+        "max_user_day_notional": _min_optional,
+        "max_global_day_notional": _min_optional,
+    },
+    "price_band": {
+        "band_pct": _min_optional,
+        "nbbo_band_pct": min,
+        "delayed_band_pct": min,
+        "max_gap_pct": _min_optional,
+    },
+    "max_orders_per_run": {
+        "max_opening_orders": _min_optional,
+        "max_closing_orders": _min_optional,
+    },
+    "account_rules": {
+        "enabled": _either,
+        "settlement_days": longer_cycles,
+        "pdt_equity_threshold": max,
+        "pdt_max_day_trades": min,
+        "pdt_window_days": max,
+        "wash_sale_window_days": max,
+        "short_disclosure_threshold": min,
+    },
+    "stop_cooldown": {"cooldown_days": _max_optional, "count_losses": _more_counting},
+    "stop_guard": {"max_stops": _min_optional, "window_days": max, "count_losses": _more_counting},
+    "losing_lock": {"max_consecutive_losses": _min_optional, "lock_days": max},
+    "style_exposure": {"max_abs_exposure": _min_optional, "styles": union_styles},
+    "protective_stops": {
+        "enabled": _either,
+        "atr_multiple": min,
+        "atr_window": _keep_base,
+        "fallback_pct": min,
+    },
+    # A longer window sees a higher peak, so it catches more losses.
+    "intraday_loss_limit": {
+        "max_loss": _min_optional,
+        "hard_loss": _min_optional,
+        "window_minutes": max,
+        "flatten": _either,
+    },
+    "intraday_drawdown": {"schedule": merge_schedules},
+    "intraday_order_rate": {
+        "max_orders_per_minute": _min_optional,
+        "max_orders_per_day": _min_optional,
+    },
+    "intraday_stale_data": {"max_bar_age_seconds": _min_optional},
 }
 
 

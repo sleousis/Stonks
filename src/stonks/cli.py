@@ -598,6 +598,71 @@ def ingest_tvl(
     _print_result(result)
 
 
+@ingest_app.command("fx")
+def ingest_fx(
+    pairs: str = typer.Option(
+        ..., "--pairs", help="comma-separated currency pairs, e.g. EURUSD,GBPUSD (base then quote)"
+    ),
+    since: str | None = typer.Option(
+        None, "--since", help="earliest day (YYYY-MM-DD)", callback=_validate_iso_date
+    ),
+    source_id: str = typer.Option(
+        DEFAULT_SOURCE_ID,
+        "--source",
+        help=f"data source ({'|'.join(SOURCE_IDS)}); FX rates are served by eodhd",
+        callback=_validate_source,
+    ),
+) -> None:
+    """Pull daily FX rates into ``fx_rates``. Each pair is
+    one unit of the ``ingest_runs`` row, so a bad pair never blocks the rest."""
+    from stonks.ingest.fx import parse_pairs
+
+    try:
+        pair_list = parse_pairs(pairs)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc), param_hint="--pairs") from None
+    if not pair_list:
+        raise typer.BadParameter("--pairs requires at least one pair", param_hint="--pairs")
+    settings = _settings()
+    source = _build_source(settings, source_id)
+    since_d = date.fromisoformat(since) if since else None
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        pipeline = build_ingest_pipeline(settings, source, lake)
+        result = pipeline.run_fx_rates(pair_list, since=since_d)
+    _print_result(result)
+
+
+@ingest_app.command("borrow")
+def ingest_borrow(
+    markets: str | None = typer.Option(
+        None,
+        "--markets",
+        help="comma-separated IBKR short stock markets, e.g. usa,uk "
+        "(default: \\[sources.ibkr_borrow] markets)",
+    ),
+) -> None:
+    """Pull today's stock borrow rates from IBKR's public short stock files
+    into ``borrow_rates``. Each market is one unit of the
+    ``ingest_runs`` row. Re-running the same day is idempotent."""
+    from stonks.ingest.sources.ibkr_borrow import SHORT_STOCK_MARKETS, IbkrBorrowDataSource
+
+    settings = _settings()
+    cfg = settings.sources.ibkr_borrow
+    chosen = [m.lower() for m in _parse_tickers(markets)] if markets else list(cfg.markets)
+    unknown = [m for m in chosen if m not in SHORT_STOCK_MARKETS]
+    if unknown or not chosen:
+        raise typer.BadParameter(
+            f"--markets must be some of {sorted(SHORT_STOCK_MARKETS)}", param_hint="--markets"
+        )
+    source = IbkrBorrowDataSource.from_config(cfg)
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        pipeline = build_ingest_pipeline(settings, source, lake)
+        result = pipeline.run_borrow_rates(chosen)
+    _print_result(result)
+
+
 @ingest_app.command("aggregate")
 def ingest_aggregate(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
@@ -1002,8 +1067,8 @@ def tick(
     console.print(
         f"[{color}]{result.tick_id}[/{color}]  status={result.status}  "
         f"winner={result.winner_strategy_id or '-'}  "
-        f"orders={result.orders_placed}  fills={result.fills}"
-        + ("  [dim](dry-run)[/dim]" if dry_run else "")
+        f"orders={result.orders_placed}  fills={result.fills}  "
+        f"broker={result.broker_mode}" + ("  [dim](dry-run)[/dim]" if result.dry_run else "")
     )
 
 
@@ -1070,6 +1135,8 @@ def pnl(
     """Daily P&L from portfolio snapshots, one row per tick as_of: value,
     change since the previous row (blank when more than 4 days apart, see
     ``days``), cumulative return and drawdown from the running peak."""
+    from stonks.insights.flows import flows_or_missing, lake_fx_loader
+    from stonks.insights.returns import mwr, net_flows, twr
     from stonks.production.pnl import load_pnl
 
     settings = _settings()
@@ -1077,6 +1144,12 @@ def pnl(
     state = SqliteState(settings.state.path)
     try:
         rows = load_pnl(state, since=since_d, strategy_id=strategy, portfolio_id=portfolio)
+        flow_missing = None
+        flows = []
+        if not strategy:
+            loader = lake_fx_loader(lambda: _open_lake(settings.lake.path))
+            found, flow_missing = flows_or_missing(state, portfolio, fx_loader=loader)
+            flows = found or []
     finally:
         state.close()
 
@@ -1102,6 +1175,17 @@ def pnl(
             pct(r.drawdown),
         )
     console.print(table)
+    points = [(r.day, r.total_value) for r in rows]
+    if flow_missing:
+        console.print(
+            f"[yellow]no FX rate for a {flow_missing} deposit or withdrawal:"
+            " TWR and MWR are left out[/yellow]"
+        )
+        return
+    console.print(
+        f"time-weighted {pct(twr(points, flows))}, money-weighted (annual)"
+        f" {pct(mwr(points, flows))}, net deposits {net_flows(points, flows):+,.2f}"
+    )
 
 
 # Re-export bound logger so tests / users can discover it easily
@@ -1361,9 +1445,35 @@ def lab_ic(ctx: typer.Context) -> None:
     raise typer.Exit(code=signal_eval.main(list(ctx.args), prog="stonks lab ic"))
 
 
-_LAB_TUNERS = ("grid", "random")
-_LAB_OBJECTIVES = ("sharpe", "cagr", "final_return", "cv_sharpe", "cv_cagr", "cv_final_return")
+_LAB_TUNERS = ("grid", "random", "optuna")
+_LAB_SAMPLERS = ("tpe", "nsga2", "random")
+_LAB_OBJECTIVES = (
+    "sharpe",
+    "cagr",
+    "final_return",
+    "sortino",
+    "calmar",
+    "sharpe_dd",
+    "multi",
+    "cv_sharpe",
+    "cv_cagr",
+    "cv_final_return",
+)
 _LAB_COST_MODELS = ("config", "zero", "realistic")
+
+
+def _heatmap_option(spec: str | None, grid: int, full: bool) -> Any:
+    """``--heatmap auto`` or ``--heatmap x,y`` as ``HeatmapOptions``."""
+    if spec is None:
+        return None
+    from stonks.lab.heatmap import HeatmapOptions
+
+    if spec.strip().lower() == "auto":
+        return HeatmapOptions(grid_size=grid, fast=not full)
+    names = [n.strip() for n in spec.split(",") if n.strip()]
+    if len(names) != 2:
+        raise typer.BadParameter("give 'auto' or two names: x,y", param_hint="--heatmap")
+    return HeatmapOptions(x=names[0], y=names[1], grid_size=grid, fast=not full)
 
 
 def _preset_choices() -> tuple[str, ...]:
@@ -1504,16 +1614,35 @@ def lab_run(
     interval: str = typer.Option("1d", "--interval", help="bar interval (1d, 1h, 5m, ...)"),
     train_ratio: float = typer.Option(0.7, "--train-ratio", min=0.05, max=0.95),
     tuner: str = typer.Option(
-        "grid", "--tuner", callback=_choice("--tuner", _LAB_TUNERS), help="grid|random"
+        "grid", "--tuner", callback=_choice("--tuner", _LAB_TUNERS), help="grid|random|optuna"
     ),
     grid_size: int = typer.Option(5, "--grid-size", min=1, help="points per numeric axis"),
     budget: int = typer.Option(20, "--budget", min=1, help="tuning trials"),
     seed: int = typer.Option(0, "--seed", help="tuner seed"),
+    sampler: str = typer.Option(
+        "tpe",
+        "--sampler",
+        callback=_choice("--sampler", _LAB_SAMPLERS),
+        help="optuna sampler: tpe|nsga2 (Pareto over the multi objective)|random",
+    ),
+    prune: bool = typer.Option(
+        False, "--prune", help="optuna: stop trials whose fast score trails (they still count)"
+    ),
+    heatmap: str | None = typer.Option(
+        None,
+        "--heatmap",
+        help="sweep two params around the tuned set: 'auto' or 'x,y' (every cell is a trial)",
+    ),
+    heatmap_grid: int = typer.Option(7, "--heatmap-grid", min=2, max=15, help="points per axis"),
+    heatmap_full: bool = typer.Option(
+        False, "--heatmap-full", help="score heatmap cells with full backtests, not the fast path"
+    ),
     objective: str = typer.Option(
         "sharpe",
         "--objective",
         callback=_choice("--objective", _LAB_OBJECTIVES),
-        help="sharpe|cagr|final_return, or cv_ plus one of them to score on purged folds",
+        help="sharpe|cagr|final_return|sortino|calmar|sharpe_dd|multi, or cv_ plus "
+        "sharpe, cagr or final_return to score on purged folds",
     ),
     tests: str | None = typer.Option(
         None,
@@ -1687,6 +1816,9 @@ def lab_run(
             grid_size=grid_size,
             budget=budget,
             seed=seed,
+            sampler=sampler,  # type: ignore[arg-type]
+            prune=prune,
+            heatmap=_heatmap_option(heatmap, heatmap_grid, heatmap_full),
             objective=objective,  # type: ignore[arg-type]
             survival_tests=suite,
             walk_forward=(
@@ -1769,6 +1901,10 @@ def lab_run(
             f"excess CAGR {s.excess_cagr:+.2%}, IR {s.information_ratio:.2f}, "
             f"beta {s.beta:.2f}, alpha t {s.alpha_tstat:.2f}"
         )
+    if result.heatmap is not None:
+        from stonks.reporting.heatmap import heatmap_text
+
+        console.print(heatmap_text(result.heatmap), markup=False, highlight=False)
     colour = "green" if result.verdict == "pass" else "red"
     console.print(f"[{colour}]verdict: {result.verdict}[/{colour}]")
     if register_if_passes:
@@ -1803,6 +1939,7 @@ def lab_run(
             "registered_id": registered_id,
             "benchmark": execution.view().benchmark,
             "preflight": preflight,
+            "heatmap": result.heatmap.to_dict() if result.heatmap is not None else None,
         }
         Path(json_out).write_text(json.dumps(to_jsonable(doc), indent=2, sort_keys=True))
 
@@ -1823,7 +1960,7 @@ def lab_sweep(
     interval: str = typer.Option("1d", "--interval", help="bar interval (1d, 1h, 5m, ...)"),
     train_ratio: float = typer.Option(0.7, "--train-ratio", min=0.05, max=0.95),
     tuner: str = typer.Option(
-        "random", "--tuner", callback=_choice("--tuner", _LAB_TUNERS), help="grid|random"
+        "random", "--tuner", callback=_choice("--tuner", _LAB_TUNERS), help="grid|random|optuna"
     ),
     grid_size: int = typer.Option(5, "--grid-size", min=1, help="points per numeric axis"),
     budget: int = typer.Option(10, "--budget", min=1, help="tuning trials per run"),
@@ -2122,6 +2259,12 @@ def halts_clear(
     console.print(f"[green]cleared[/green]: halt #{view.id} ({view.kind})")
 
 
+# ---- reconciliation and drift (roadmap 19.5) ---------------------------------
+
+from stonks.cli_reconcile import app as reconcile_app  # noqa: E402
+
+app.add_typer(reconcile_app, name="reconcile")
+
 # ---- transaction cost analysis and the journal (BL-32) ----------------------
 
 from stonks.cli_tca import app as tca_app  # noqa: E402
@@ -2133,6 +2276,24 @@ app.add_typer(tca_app, name="tca")
 from stonks.cli_options import app as options_app  # noqa: E402
 
 app.add_typer(options_app, name="options")
+
+# ---- factors (roadmap 22.2, 22.3, 22.8) --------------------------------------
+
+from stonks.cli_factors import app as factors_app  # noqa: E402
+
+app.add_typer(factors_app, name="factors")
+
+# ---- event calendars and news (roadmap 20.7) --------------------------------
+
+from stonks.cli_calendars import app as calendars_app  # noqa: E402
+
+app.add_typer(calendars_app, name="calendars")
+
+# ---- the screener (roadmap 20.8) ---------------------------------------------
+
+from stonks.cli_screener import app as screener_app  # noqa: E402
+
+app.add_typer(screener_app, name="screener")
 
 golive_app = typer.Typer(help="Go-live gate for paper-traded strategies")
 app.add_typer(golive_app, name="golive")
@@ -2321,6 +2482,62 @@ def mcp_server() -> None:
         typer.echo(f"stonks mcp: {exc}", err=True)
         raise typer.Exit(code=2) from None
 
+
+# ---- manual orders ------------------------------------------------------------
+
+from stonks.cli_orders import app as orders_app  # noqa: E402
+
+app.add_typer(orders_app, name="orders")
+
+# ---- order tickets (roadmap 19.8) ----------------------------------------------
+
+from stonks.cli_tickets import app as tickets_app  # noqa: E402
+
+app.add_typer(tickets_app, name="tickets")
+
+# ---- price alerts -------------------------------------------------------------
+
+from stonks.cli_price_alerts import app as price_alerts_app  # noqa: E402
+
+app.add_typer(price_alerts_app, name="price-alerts")
+
+# ---- Telegram bot (roadmap 20.3) --------------------------------------------
+
+from stonks.cli_telegram import app as telegram_app  # noqa: E402
+
+app.add_typer(telegram_app, name="telegram")
+
+# ---- tax exports (roadmap 20.5) ---------------------------------------------
+
+from stonks.cli_tax import app as tax_app  # noqa: E402
+
+app.add_typer(tax_app, name="tax")
+
+# ---- cash flows ---------------------------------------------------------------
+
+from stonks.cli_cash_flows import app as cash_flows_app  # noqa: E402
+
+app.add_typer(cash_flows_app, name="cash-flows")
+
+# ---- model versions (roadmap 22.6) ---------------------------------------------
+
+from stonks.cli_model_versions import register as _register_model_versions  # noqa: E402
+
+_register_model_versions(registry_app)
+
+# ---- going live: stages, preview, soak report and kill switch drill ----------
+
+from stonks.cli_live import app as live_app  # noqa: E402
+from stonks.cli_live import register as _register_drill  # noqa: E402
+
+app.add_typer(live_app, name="live")
+_register_drill(halts_app)
+
+# ---- the assistant ------------------------------------------------------------
+
+from stonks.cli_assistant import app as assistant_app  # noqa: E402
+
+app.add_typer(assistant_app, name="assistant")
 
 if __name__ == "__main__":
     app()

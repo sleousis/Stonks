@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from fastapi import APIRouter
 
 from stonks.api.deps import PageDep, PortfolioIdDep, ServicesDep
@@ -19,12 +21,14 @@ def list_orders(
     strategy_id: str | None = None,
     ticker: str | None = None,
     status: str | None = None,
+    origin: Literal["strategy", "manual"] | None = None,
 ) -> Page[OrderView]:
     return services.orders.orders(
         tick_id=tick_id,
         strategy_id=strategy_id,
         ticker=ticker,
         status=status,
+        origin=origin,
         limit=page.limit,
         offset=page.offset,
         portfolio_id=portfolio_id,

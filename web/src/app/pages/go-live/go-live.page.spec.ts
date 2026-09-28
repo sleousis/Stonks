@@ -58,14 +58,16 @@ function report(id: string, passed: boolean): GoLiveReport {
         passed: true,
         value: null,
         limit: null,
-        detail: 'shadow: paper period from shadow P&L',
+        detail: 'Paper trading, measured on its paper trading results',
       },
       {
         name: 'min_days',
         passed,
         value: passed ? 25 : 3,
         limit: 20,
-        detail: passed ? '25 paper day(s), need >= 20' : '3 paper day(s), need >= 20',
+        detail: passed
+          ? '25 days of paper trading, needs at least 20'
+          : '3 days of paper trading, needs at least 20',
       },
       {
         name: 'max_drawdown',
@@ -81,7 +83,13 @@ function report(id: string, passed: boolean): GoLiveReport {
         limit: 0.1,
         detail: 'paper +1.00% vs backtest +2.30% (gap -1.30%, limit ±10.00%)',
       },
-      { name: 'min_trades', passed: true, value: 7, limit: 5, detail: '7 filled trade(s)' },
+      {
+        name: 'min_trades',
+        passed: true,
+        value: 7,
+        limit: 5,
+        detail: '7 paper trades filled, needs at least 5',
+      },
       { name: 'survival', passed: true, value: 4, limit: 4, detail: '4/4 passed' },
       {
         name: 'within_mc_band',
@@ -96,7 +104,7 @@ function report(id: string, passed: boolean): GoLiveReport {
         passed: presetPassed,
         value: 10,
         limit: 10,
-        detail: "10/10 'promotion' preset tests on record",
+        detail: '10 of 10 tests of the full test suite on record',
       },
       { name: 'nonzero_costs', passed: true, value: 2, limit: 1, detail: 'fee, spread' },
       {
@@ -104,7 +112,7 @@ function report(id: string, passed: boolean): GoLiveReport {
         passed: true,
         value: 64,
         limit: 40,
-        detail: 'hypothesis of 64 character(s), need >= 40',
+        detail: 'Hypothesis of 64 characters, needs at least 40',
       },
       { name: 'backtest_min_trades', passed: true, value: 48, limit: 30, detail: '48 trades' },
     ],

@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import { RouterLink } from '@angular/router';
 
 import type { OrderView } from '../../api/models';
+import { formatMoney } from '../../core/format/format';
 import {
   DataTable,
   type PageRequest,
@@ -9,13 +10,15 @@ import {
   type TableColumn,
 } from '../../shared/ui/data-table/data-table';
 import { SideTag } from '../../shared/ui/side-tag';
-import { OrderStatus, orderReason } from './order-status';
+import { OrderStatus, orderReason, stopWords } from './order-status';
 
 /**
  * Orders as a table (cards on phones): used by the orders list and by the
  * trading run drill-down. The ticker opens the order's detail (costs and
  * fills); the run column links to the run; status shows the rejection reason
- * when the ledger has one. Client ids stay on the detail page.
+ * when the ledger has one. A stop order says so under its ticker in plain
+ * words ("Protective stop: sells if the price falls to $90.50"), and its
+ * price column shows the stop. Client ids stay on the detail page.
  */
 @Component({
   selector: 'app-orders-table',
@@ -41,12 +44,29 @@ import { OrderStatus, orderReason } from './order-status';
           [attr.aria-label]="'Order details: ' + o.side + ' ' + o.quantity + ' ' + o.ticker"
           >{{ o.ticker }}</a
         >
+        @if (stop(o); as w) {
+          <span class="stop-tag" [attr.data-protective]="o.protective ? '' : null">
+            <strong>{{ w.label }}:</strong> {{ w.trigger }}
+            @if (w.lasts) {
+              <span class="stop-lasts">{{ w.lasts }}</span>
+            }
+          </span>
+        }
+      </ng-template>
+      <ng-template appCell="limit_price" [appCellOf]="rows()" let-o>
+        @if (o.stop_price !== null && o.stop_price !== undefined) {
+          <span class="num">Stop {{ money(o.stop_price) }}</span>
+        } @else if (o.limit_price !== null && o.limit_price !== undefined) {
+          <span class="num">{{ money(o.limit_price) }}</span>
+        } @else {
+          <span class="muted">Market</span>
+        }
       </ng-template>
       <ng-template appCell="side" [appCellOf]="rows()" let-o>
         <app-side-tag [side]="o.side" />
       </ng-template>
       <ng-template appCell="status" [appCellOf]="rows()" let-o>
-        <app-order-status [status]="o.status" [reason]="reason(o)" />
+        <app-order-status [status]="o.status" [state]="o.state" [reason]="reason(o)" />
       </ng-template>
       <ng-template appCell="tick_id" [appCellOf]="rows()" let-o>
         @if (o.tick_id) {
@@ -76,11 +96,11 @@ export class OrdersTable {
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
     { key: 'side', label: 'Side' },
     { key: 'quantity', label: 'Qty', format: 'number' },
-    { key: 'limit_price', label: 'Limit', format: 'money', mobile: 'hide' },
+    { key: 'limit_price', label: 'Price', mobile: 'hide' },
     { key: 'status', label: 'Status' },
     { key: 'strategy_id', label: 'Strategy' },
     { key: 'tick_id', label: 'Run', sortable: false, mobile: 'hide' },
-    // Phones keep the time an order was placed (UX-57); Limit goes instead.
+    // Phones keep the time an order was placed (UX-57); Price goes instead.
     { key: 'created_at', label: 'Created', format: 'datetime' },
   ];
   /** Inside a run's own drill-down the run column would point to itself. */
@@ -89,4 +109,6 @@ export class OrdersTable {
   );
   protected readonly key = (o: OrderView) => o.client_id;
   protected readonly reason = orderReason;
+  protected readonly money = (value: number) => formatMoney(value);
+  protected readonly stop = (o: OrderView) => stopWords(o, this.money);
 }

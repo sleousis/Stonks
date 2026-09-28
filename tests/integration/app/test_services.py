@@ -336,6 +336,28 @@ def test_ingest_requires_tickers_or_exchange():
         IngestRequest(kind="prices")
 
 
+def test_ingest_borrow_writes_borrow_rates(services, monkeypatch):
+    # roadmap 19.14: the ingest_borrow job's request on the api and
+    # in_process backends. The FTP transport is replaced by a canned file.
+    from stonks.ingest.sources import ibkr_borrow
+
+    usa = (
+        "#BOF|2026.09.28|09:45:03\n#SYM|CUR|NAME|CON|ISIN|REBATERATE|FEERATE|AVAILABLE|\n"
+        "AAPL|USD|APPLE INC|265598|US0378331005|4.57|0.25|>10000000|\n#EOF|1\n"
+    )
+    monkeypatch.setattr(ibkr_borrow, "ftp_fetcher", lambda *a, **k: lambda name: usa)
+    job = services.ingest.submit(IngestRequest(kind="borrow", markets=["usa"]))
+    done = services.jobs.wait(job.id, timeout=30)
+    assert done.status == "succeeded", done.error
+    assert done.result["kind"] == "borrow" and done.result["tickers_ok"] == 1
+
+
+def test_ingest_borrow_needs_no_tickers_but_a_known_market():
+    assert IngestRequest(kind="borrow").markets == []
+    with pytest.raises(ValueError, match="short stock market"):
+        IngestRequest(kind="borrow", markets=["mars"])
+
+
 def test_ingest_without_configured_source_fails_fast(settings, seeded):
     from stonks.app.context import AppContext
     from stonks.app.services import Services

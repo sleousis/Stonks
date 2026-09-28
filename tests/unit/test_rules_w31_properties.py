@@ -182,7 +182,16 @@ def test_rules_run_in_the_documented_order():
     names = [r.name for r in registered_rules() if r.name not in SHORT_RULES]
     assert names[:3] == W31
     caps_then_ours = names[names.index("max_weight_per_asset_class") + 1 :]
-    assert caps_then_ours == [*W31_ORDER, "cash_buffer", "min_order_notional"]
+    # account_rules and max_orders_per_run are live safeguards (roadmap 19.6, 19.7),
+    # intraday_order_rate the intraday order cap (roadmap 21.3.2)
+    assert caps_then_ours == [
+        *W31_ORDER,
+        "cash_buffer",
+        "account_rules",
+        "min_order_notional",
+        "intraday_order_rate",
+        "max_orders_per_run",
+    ]
 
 
 # ---- settings ------------------------------------------------------------------------

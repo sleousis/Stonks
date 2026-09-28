@@ -216,7 +216,10 @@ def _factory(cls):
     if "ticker" in names:
         params["ticker"] = "A.US"
     if "interval" in names:
-        params["interval"] = "1d"
+        # an intraday-only strategy keeps its own minute interval
+        spec = next(s for s in cls.parameter_spec() if s.name == "interval")
+        daily = spec.bounds is None or "1d" in spec.bounds
+        params["interval"] = "1d" if daily else spec.default
     if "universe" in names:
         params["universe"] = "A.US,B.US,C.US"
     return lambda: cls(params)

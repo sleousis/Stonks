@@ -22,23 +22,30 @@ from stonks.scheduling.api_backend import (
     TERMINAL_JOB_STATUSES,
     JobWaitTimeoutError,
     backup_job_outcome,
+    calendar_job_outcome,
+    calendar_refresh_body,
     ensure_body,
     ensure_step,
     health_view_outcome,
     ingest_job_outcome,
     ingest_window,
+    retrain_job_outcome,
     tick_job_outcome,
 )
 from stonks.scheduling.config import SchedulerConfig, scheduler_config_from
 from stonks.scheduling.jobs import (
+    SCHEDULER_ACTOR,
     ActionRegistry,
     JobExecutor,
     JobOutcome,
     RunContext,
+    borrow_markets,
     build_job_specs,
     closed_day_outcome,
     job_is_scoped,
     job_universe,
+    no_gateways,
+    retrain_body,
     universes_outcome,
 )
 
@@ -136,6 +143,19 @@ def in_process_ingest_metadata(ctx: RunContext) -> JobOutcome:
     return ingest_job_outcome(*ex.run_job(job, INGEST_JOB, IngestResultView))
 
 
+@IN_PROCESS_ACTIONS.register("ingest_borrow")
+def in_process_ingest_borrow(ctx: RunContext) -> JobOutcome:
+    """Like the ``api`` action, on the server's ``lake_write`` lane."""
+    from stonks.app.ingest import INGEST_JOB, IngestRequest, IngestResultView
+
+    markets = borrow_markets(ctx)
+    if markets is None:
+        return no_gateways()
+    ex = _executor(ctx)
+    job = ex.services.ingest.submit(IngestRequest(kind="borrow", markets=markets))
+    return ingest_job_outcome(*ex.run_job(job, INGEST_JOB, IngestResultView))
+
+
 @IN_PROCESS_ACTIONS.register("tick")
 def in_process_tick(ctx: RunContext) -> JobOutcome:
     from stonks.app.ticks import TICK_JOB, TickRequest, TickResultView
@@ -208,6 +228,7 @@ def start_in_process_scheduler(
     another scheduler already holds the lock (e.g. a separate worker), so
     the API starts either way.
     """
+    from stonks.engine.deadman import engine_deadman_from_settings
     from stonks.notify import notifier_from_settings
     from stonks.scheduling.deadman import DeadlineWatchdog, HttpPinger
     from stonks.scheduling.runs import RunStore
@@ -243,7 +264,14 @@ def start_in_process_scheduler(
     )
     thread = threading.Thread(
         target=scheduler.run_forever,
-        kwargs={"watchdog": DeadlineWatchdog(specs, store, notifier)},
+        kwargs={
+            "watchdog": DeadlineWatchdog(
+                specs,
+                store,
+                notifier,
+                extra_checks=[engine_deadman_from_settings(settings, store, notifier)],
+            )
+        },
         name="stonks-scheduler",
         daemon=True,
     )
@@ -261,6 +289,25 @@ def in_process_backup(ctx: RunContext) -> JobOutcome:
     ex = _executor(ctx)
     job = ex.services.backups.submit()
     return backup_job_outcome(*ex.run_job(job, BACKUP_JOB, BackupResultView))
+
+
+@IN_PROCESS_ACTIONS.register("price_alerts")
+def in_process_price_alerts(ctx: RunContext) -> JobOutcome:
+    """Every person's price alert rules against the latest closes."""
+    out = _executor(ctx).services.price_alerts.evaluate(as_of=ctx.fire.as_of)
+    return JobOutcome("succeeded", out.as_dict())
+
+
+@IN_PROCESS_ACTIONS.register("model_retrain")
+def in_process_model_retrain(ctx: RunContext) -> JobOutcome:
+    """Refit on the server's JobRunner; each fit becomes a candidate version."""
+    from stonks.app.model_versions import RETRAIN_JOB, RetrainRequest, RetrainResultView
+
+    ex = _executor(ctx)
+    job = ex.services.model_versions.submit_retrain(
+        RetrainRequest.model_validate(retrain_body(ctx)), actor=SCHEDULER_ACTOR
+    )
+    return retrain_job_outcome(*ex.run_job(job, RETRAIN_JOB, RetrainResultView))
 
 
 @IN_PROCESS_ACTIONS.register("connections_sync")
@@ -299,3 +346,86 @@ def in_process_universes_refresh(ctx: RunContext) -> JobOutcome:
             step |= ensure_step(e_status, e_error, e_result)
         results[universe.id] = step
     return universes_outcome(results)
+
+
+@IN_PROCESS_ACTIONS.register("broker_health")
+def in_process_broker_health(ctx: RunContext) -> JobOutcome:
+    from stonks.scheduling.local import broker_health_action
+
+    return broker_health_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("live_reconcile")
+def in_process_live_reconcile(ctx: RunContext) -> JobOutcome:
+    """State DB and the gateway only: runs in this process."""
+    from stonks.scheduling.local import live_reconcile_action
+
+    return live_reconcile_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("ibkr_reauth_reminder")
+def in_process_ibkr_reauth_reminder(ctx: RunContext) -> JobOutcome:
+    from stonks.scheduling.local import ibkr_reauth_reminder_action
+
+    return ibkr_reauth_reminder_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("calendars_refresh")
+def in_process_calendars_refresh(ctx: RunContext) -> JobOutcome:
+    """Like the ``api`` action, on the server's ``lake_write`` lane."""
+    from stonks.app.calendars import (
+        CALENDAR_REFRESH_JOB,
+        CalendarRefreshRequest,
+        CalendarRefreshView,
+    )
+
+    ex = _executor(ctx)
+    job = ex.services.calendars.submit_refresh(
+        CalendarRefreshRequest.model_validate(calendar_refresh_body(ctx))
+    )
+    status, error, result, job_id = ex.run_job(job, CALENDAR_REFRESH_JOB, CalendarRefreshView)
+    return calendar_job_outcome(status, error, result, job_id)
+
+
+@IN_PROCESS_ACTIONS.register("live_submit")
+def in_process_live_submit(ctx: RunContext) -> JobOutcome:
+    """Order tickets live in the state DB only, so every backend sends them
+    the same way (the lake is not needed)."""
+    from stonks.scheduling.local import live_submit_action
+
+    return live_submit_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("live_stops")
+def in_process_live_stops(ctx: RunContext) -> JobOutcome:
+    """Protective stops live in the state DB and at the broker, so every
+    backend syncs them the same way (the lake only for the ATR, read only)."""
+    from stonks.scheduling.local import live_stops_action
+
+    return live_stops_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("live_gate_days")
+def in_process_live_gate_days(ctx: RunContext) -> JobOutcome:
+    """Gate metrics read and write the state DB only, so every backend
+    records them the same way (the lake is not needed)."""
+    from stonks.scheduling.local import live_gate_days_action
+
+    return live_gate_days_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("engine_start")
+def in_process_engine_start_action(ctx: RunContext) -> JobOutcome:
+    """The engine is its own process, controlled through files next to the
+    state DB, so every backend starts it the same way (roadmap 21.2.5)."""
+    from stonks.scheduling.jobs import engine_start_job
+
+    return engine_start_job(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("engine_stop")
+def in_process_engine_stop_action(ctx: RunContext) -> JobOutcome:
+    """Every backend stops the engine the same way (roadmap 21.2.5)."""
+    from stonks.scheduling.jobs import engine_stop_job
+
+    return engine_stop_job(ctx)

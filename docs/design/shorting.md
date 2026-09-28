@@ -196,7 +196,7 @@ The registry-wide property test changes from "buy notional never increases, sell
 - A new `margin_call` rule does the forced cover on a margin breach in the tick and blocks new opens. The design only blocked opens and raised a notification. The notification is not built yet.
 - `margin_check` is part of `margin_call`: in good standing it clips opens to the margin room.
 - The tick's margin call closes the largest requirement first, because the risk context has no cost basis. The backtest closes the most losing position first.
-- `LakeBorrow`, the `borrow_rates` lake table and the broker capability source are not built. They need a lake migration. The seam is ready for them.
+- The `borrow_rates` lake table (DuckDB migration 021), `LakeBorrowSource` and the broker source `IbkrBorrowSource` landed with roadmap 19.3. See `docs/design/live-trading.md` section 13.
 - Rules and the engine read `allow_short` from the book. The backtest raises an error when the config and the broker disagree, instead of dropping orders quietly.
 - The tick does not call `accrue` yet. The tick keeps no state between runs, so it needs the last accrual date. `accrue(since=)` is ready for that.
 - Only the default book runs in the tick today and it is long-only, so tick shorts wait for per-portfolio plans. The tick ranker still drops negative scores (16.3).
