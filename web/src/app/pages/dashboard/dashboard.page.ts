@@ -6,16 +6,21 @@ import type { PositionView, TickRun } from '../../api/models';
 import { PortfolioService } from '../../api/portfolio.service';
 import { StrategiesService } from '../../api/strategies.service';
 import { TicksService } from '../../api/ticks.service';
-import { formatDateTime, formatMoney, formatPercent, toneClass } from '../../core/format/format';
+import {
+  formatDate,
+  formatDateTime,
+  formatMoney,
+  formatPercent,
+  toneClass,
+} from '../../core/format/format';
 import { dayChangeLine } from '../../core/format/day-change';
 import type { ChartSeries } from '../../shared/chart/chart-engine';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
-import { CHECK_TITLES } from '../health/health-state';
+import { checkPill, checkTitle, plainDetail, splitChecks } from '../health/health-state';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
-import { DateTimePipe } from '../../shared/format.pipes';
+import { DateTimePipe, DayPipe } from '../../shared/format.pipes';
 import { PageHeader } from '../../shared/ui/page-header';
-import { humanize } from '../../shared/ui/param-form/param-spec';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { NoBook, bookState } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -24,15 +29,6 @@ import { runWords } from '../../shared/status-words';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const RECENT_TICKS = 8;
-const FRESHNESS_PREFIX = 'freshness:';
-
-/** A health check's name for people: "Stuck ticks", "Freshness of AAPL.US". */
-export function checkTitle(name: string): string {
-  if (CHECK_TITLES[name]) return CHECK_TITLES[name];
-  if (name.startsWith(FRESHNESS_PREFIX))
-    return `Freshness of ${name.slice(FRESHNESS_PREFIX.length)}`;
-  return humanize(name.replace(/:+/g, ' '));
-}
 
 /**
  * The admin's Dashboard (the menu and the title both say Dashboard): the
@@ -57,6 +53,7 @@ export function checkTitle(name: string): string {
     TimeSeriesChart,
     UpdatedAgo,
     DateTimePipe,
+    DayPipe,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -194,9 +191,13 @@ export class DashboardPage {
   });
 
   // Tables ------------------------------------------------------------------
+  /**
+   * A summary: the columns that fit a half-width panel at desktop width
+   * (M10). Cost, price and dates are on Insights.
+   */
   protected readonly positionColumns: TableColumn<PositionView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
-    { key: 'quantity', label: 'Quantity', format: 'number' },
+    { key: 'quantity', label: 'Quantity', format: 'number', mobile: 'hide' },
     { key: 'market_value', label: 'Value', format: 'money', currency: (p) => p.currency },
     {
       key: 'unrealized_pnl',
@@ -209,9 +210,15 @@ export class DashboardPage {
   ];
   protected readonly positionKey = (p: PositionView) => p.ticker;
 
+  /** The trading day each run was for, its outcome and counts; the rest is on its page. */
   protected readonly tickColumns: TableColumn<TickRun>[] = [
-    { key: 'started_at', label: 'Started', format: 'datetime', mobile: 'title' },
-    { key: 'status', label: 'Status' },
+    {
+      key: 'as_of',
+      label: 'For',
+      mobile: 'title',
+      value: (t) => t.as_of ?? t.started_at,
+    },
+    { key: 'status', label: 'Status', value: (t) => runWords(t.status).label },
     {
       key: 'orders',
       label: 'Orders',
@@ -224,9 +231,32 @@ export class DashboardPage {
   protected readonly runWords = runWords;
   protected readonly tickKey = (t: TickRun) => t.id;
   protected readonly checkTitle = checkTitle;
+  protected readonly checkPill = checkPill;
+  protected readonly plainDetail = plainDetail;
 
   // Health ------------------------------------------------------------------
   protected readonly failingChecks = computed(() =>
     this.health.hasValue() ? this.health.value().checks.filter((c) => !c.ok).length : 0,
   );
+  protected readonly checkCount = computed(() =>
+    this.health.hasValue() ? this.health.value().checks.length : 0,
+  );
+  /** Per-ticker freshness folds into one line; the Health page lists each ticker. */
+  private readonly split = computed(() =>
+    this.health.hasValue() ? splitChecks(this.health.value().checks) : null,
+  );
+  protected readonly systemChecks = computed(() => this.split()?.other ?? []);
+  protected readonly freshness = computed(() => {
+    const rows = this.split()?.freshness ?? [];
+    if (!rows.length) return null;
+    const fresh = rows.filter((r) => r.level === 'good').length;
+    return {
+      ok: fresh === rows.length,
+      detail: `${fresh} of ${rows.length} tickers have a recent price.`,
+    };
+  });
+
+  protected refresh(): void {
+    this.auto.refresh();
+  }
 }

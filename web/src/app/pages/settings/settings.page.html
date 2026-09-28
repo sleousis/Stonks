@@ -109,7 +109,12 @@
       [attr.aria-labelledby]="tabs.tabId('system')"
     >
       <h2 class="visually-hidden">System</h2>
-      <p class="group-note full">Only admins see this. Changes are made on the server.</p>
+      <p class="group-note full">
+        Only admins see this. The broker, data keys and the data plan are set on the server.
+      </p>
+
+      <!-- Editable operational settings: shows only when the server offers them. -->
+      <app-system-settings class="full" />
 
       <!-- The assistant is off: it is hidden from the menu, so say here how to turn it on. -->
       @if (assistantOff()) {

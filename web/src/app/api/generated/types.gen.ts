@@ -10864,6 +10864,10 @@ export type ScheduleView = {
      * Recent
      */
     recent: Array<ScheduledRunView>;
+    /**
+     * Running
+     */
+    running?: boolean;
 };
 
 /**
@@ -10886,6 +10890,10 @@ export type ScheduledJobView = {
      * Next Run At
      */
     next_run_at: string | null;
+    /**
+     * Off Reason
+     */
+    off_reason?: 'engine_off' | 'options_off' | 'no_gateway' | null;
     /**
      * Trigger
      */
@@ -10934,6 +10942,10 @@ export type ScheduledRunView = {
      * Job Name
      */
     job_name: string;
+    /**
+     * Origin
+     */
+    origin?: 'schedule' | 'run_now' | 'outside';
     /**
      * Run Key
      */

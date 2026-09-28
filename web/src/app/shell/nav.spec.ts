@@ -136,7 +136,7 @@ describe('Nav', () => {
     expect(group(el, 'System')).toEqual([
       'Dashboard',
       'Health',
-      'Live engine',
+      'Intraday engine',
       'Schedule',
       'Data',
       'Data quality',

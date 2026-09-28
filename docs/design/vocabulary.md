@@ -63,6 +63,8 @@ Whether a trade uses real money depends only on the **portfolio stage**. The fol
 | Live safeguards | Safeguards |
 | Kill switch (in what people read) | Stop trading |
 | The path to real money for one portfolio | Going live (the checklist page) |
+| Live engine (the intraday engine page) | Intraday engine |
+| ok, succeeded, Good (run and check states) | The status words below |
 
 ## Status words
 

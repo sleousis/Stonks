@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, resource } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import type { EngineView } from '../../api/models';
 import type { PortfolioRef } from '../../api/portfolios.service';
@@ -31,7 +32,7 @@ import {
 export const LIVE_REFRESH_MS = 15_000;
 
 /**
- * Live engine: is the intraday engine running, is its price stream
+ * Intraday engine: is the intraday engine running, is its price stream
  * connected, how fast does it decide, and did the silent-engine alarm go
  * off. Below it, each of your portfolios' intraday P&L from the engine's
  * live marks (`GET /api/risk/intraday`), when those rows are kept.
@@ -39,7 +40,7 @@ export const LIVE_REFRESH_MS = 15_000;
 @Component({
   selector: 'app-live-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PageHeader, StatusPill, EmptyState, ErrorState, LoadingState, UpdatedAgo],
+  imports: [RouterLink, PageHeader, StatusPill, EmptyState, ErrorState, LoadingState, UpdatedAgo],
   templateUrl: './live.page.html',
   styleUrl: './live.page.scss',
 })

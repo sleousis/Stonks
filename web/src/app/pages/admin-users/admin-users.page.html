@@ -152,7 +152,7 @@
             <app-status-pill
               [status]="u.mfa_enrolled ? 'ok' : 'warn'"
               [tone]="u.mfa_enrolled ? 'positive' : 'warn'"
-              [label]="u.mfa_enrolled ? 'App set up' : 'App not set up'"
+              [label]="u.mfa_enrolled ? 'Sign-in app set up' : 'Sign-in app not set up'"
             />
           </div>
           <div class="controls">
@@ -185,7 +185,7 @@
               [attr.aria-label]="'Reset authenticator for ' + u.display_name"
               (click)="resetMfa(u)"
             >
-              Reset app
+              Reset sign-in app
             </button>
             <button
               type="button"
@@ -200,6 +200,16 @@
         </li>
       }
     </ul>
+    @if (sorted().length === 1) {
+      <div class="first-run" role="note">
+        <p><strong>Only you so far.</strong></p>
+        <p>
+          Use Add person to invite a trader: choose their role and a first password, then give them
+          the password yourself. They set up the sign-in app the first time they sign in. Viewers
+          can look but not trade, traders follow strategies and place orders, admins run the system.
+        </p>
+      </div>
+    }
   }
 </section>
 

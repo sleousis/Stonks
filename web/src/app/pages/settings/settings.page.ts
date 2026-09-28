@@ -24,6 +24,7 @@ import { formatDateTime, formatMoney, formatNumber, formatPercent } from '../../
 import { ToastService } from '../../core/notify/toast.service';
 import { type ThemeMode, ThemeService } from '../../core/theme/theme.service';
 import { DisplayPrefs } from '../../shared/ui/display-prefs';
+import { SystemSettings } from './system-settings';
 import { RiskLimitsPanel } from '../../shared/ui/risk-limits-panel';
 import { PageHeader } from '../../shared/ui/page-header';
 import { type PageTab, PageTabs } from '../../shared/ui/page-tabs';
@@ -64,6 +65,7 @@ const SECTION_WORDS: Record<SettingsSection, string> = {
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    SystemSettings,
     DisplayPrefs,
     RiskLimitsPanel,
     PageHeader,

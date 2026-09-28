@@ -73,6 +73,8 @@ describe('SettingsPage', () => {
       (await nextRequest(http, '/api/risk/policy')).flush(RISK);
       (await nextRequest(http, '/api/sources')).flush(SOURCES);
       (await nextRequest(http, '/api/lab/cost-models')).flush(COSTS);
+      // Editable settings are not in the API contract yet: nothing is asked.
+      http.expectNone('/api/admin/settings');
     }
     await tick();
     fixture.detectChanges();

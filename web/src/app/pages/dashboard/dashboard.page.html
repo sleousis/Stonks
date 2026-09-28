@@ -109,8 +109,8 @@
           [status]="health.value().healthy ? 'healthy' : 'unhealthy'"
           [label]="
             health.value().healthy
-              ? 'All checks pass'
-              : failingChecks() + (failingChecks() === 1 ? ' check failing' : ' checks failing')
+              ? 'All ' + checkCount() + ' checks passed'
+              : failingChecks() + ' of ' + checkCount() + ' checks failed'
           "
         />
         @if (version.hasValue()) {
@@ -118,16 +118,31 @@
         }
       </div>
       <ul class="checks">
-        @for (check of health.value().checks; track check.name) {
+        @if (freshness(); as f) {
           <li>
-            <app-status-pill [status]="check.ok ? 'pass' : 'fail'" />
+            <div class="check-text">
+              <p class="check-name">{{ checkTitle('freshness') }}</p>
+              <p class="check-detail">{{ f.detail }}</p>
+            </div>
+            <app-status-pill
+              [status]="f.ok ? 'pass' : 'fail'"
+              [label]="f.ok ? 'Passed' : 'Failed'"
+            />
+          </li>
+        }
+        @for (check of systemChecks(); track check.name) {
+          @let pill = checkPill(check);
+          <li>
             <div class="check-text">
               <p class="check-name">{{ checkTitle(check.name) }}</p>
-              <p class="check-detail">{{ check.detail }}</p>
+              <p class="check-detail">{{ plainDetail(check) }}</p>
             </div>
+            <app-status-pill [status]="check.level" [tone]="pill.tone" [label]="pill.label" />
           </li>
         } @empty {
-          <li class="muted">No checks configured.</li>
+          @if (!freshness()) {
+            <li class="muted">The server sent no checks. Run them from the Health page.</li>
+          }
         }
       </ul>
     }
@@ -138,6 +153,7 @@
     <section class="panel span-7" aria-labelledby="positions-title">
       <div class="panel-head">
         <h2 id="positions-title">Positions</h2>
+        <a routerLink="/insights" class="panel-link">All holdings</a>
       </div>
       @if (portfolio.error()) {
         <p class="panel-body muted">Positions are unavailable until the portfolio loads.</p>
@@ -167,9 +183,13 @@
   <section class="panel span-5" aria-labelledby="ticks-title">
     <div class="panel-head">
       <h2 id="ticks-title">Recent trading runs</h2>
-      @if (ticks.hasValue()) {
-        <span class="muted num">{{ ticks.value().total }} total</span>
-      }
+      <a routerLink="/orders/ticks" class="panel-link">
+        @if (ticks.hasValue()) {
+          All {{ ticks.value().total }}
+        } @else {
+          All trading runs
+        }
+      </a>
     </div>
     @if (ticks.error(); as err) {
       <app-error-state title="Could not load trading runs" [error]="err" (retry)="ticks.reload()" />
@@ -190,10 +210,13 @@
         [rowKey]="tickKey"
         [pageSize]="0"
       >
-        <ng-template appCell="started_at" [appCellOf]="ticks.value().items" let-tick>
-          <a class="cell-link" [routerLink]="['/orders/ticks', tick.id]">{{
-            tick.started_at | dateTime
-          }}</a>
+        <ng-template appCell="as_of" [appCellOf]="ticks.value().items" let-tick>
+          <a
+            class="cell-link num"
+            [routerLink]="['/orders/ticks', tick.id]"
+            [attr.title]="'Ran ' + (tick.started_at | dateTime)"
+            >{{ tick.as_of ? (tick.as_of | day) : (tick.started_at | dateTime) }}</a
+          >
         </ng-template>
         <ng-template appCell="status" [appCellOf]="ticks.value().items" let-tick>
           <app-status-pill

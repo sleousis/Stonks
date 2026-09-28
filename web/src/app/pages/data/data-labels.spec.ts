@@ -1,4 +1,10 @@
-import { kindLabel, runStatusLabel, sourceLabel, updateOutcome } from './data-labels';
+import {
+  assetClassLabel,
+  kindLabel,
+  runStatusLabel,
+  sourceLabel,
+  updateOutcome,
+} from './data-labels';
 
 describe('data labels', () => {
   it('names providers, kinds and outcomes in trader words', () => {
@@ -10,6 +16,14 @@ describe('data labels', () => {
     expect(runStatusLabel('ok')).toBe('Done');
     expect(runStatusLabel('partial')).toBe('Partly done');
     expect(runStatusLabel('error')).toBe('Failed');
+  });
+
+  it('names asset classes in words, never the lower-case id', () => {
+    expect(assetClassLabel('equity')).toBe('Stocks');
+    expect(assetClassLabel('crypto')).toBe('Crypto');
+    expect(assetClassLabel('commodity')).toBe('Commodities');
+    expect(assetClassLabel('bond')).toBe('Bonds');
+    expect(assetClassLabel(null)).toBe('');
   });
 
   it('says what an update did, plainly', () => {

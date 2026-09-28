@@ -73,6 +73,7 @@ const TICKS: Page<TickRun> = {
       id: 't2',
       started_at: '2026-09-25T21:00:00Z',
       finished_at: '2026-09-25T21:00:04Z',
+      as_of: '2026-09-25',
       status: 'ok',
       summary: {
         orders_placed: 2,
@@ -98,8 +99,10 @@ const HEALTH: HealthReportView = {
   checked_at: '2026-09-26T08:00:00Z',
   thresholds: {},
   checks: [
-    { name: 'price_freshness', ok: false, detail: 'AAPL.US last bar 3 days old' },
-    { name: 'last_tick', ok: true, detail: 'succeeded 11h ago' },
+    { name: 'freshness:AAPL.US', ok: false, detail: 'latest bar 2026-09-19 (7d old, max 4d)' },
+    { name: 'freshness:MSFT.US', ok: true, detail: 'latest bar 2026-09-25 (1d old, max 4d)' },
+    { name: 'lab_queue', ok: true, detail: '0 queued, 0 running, 0 worker(s) alive' },
+    { name: 'var_violations', ok: true, detail: 'not enough days yet' },
   ],
 };
 
@@ -211,18 +214,20 @@ describe('DashboardPage', () => {
     expect(positionRows[0].textContent).toContain('$28,700.00');
 
     const tickSection = el.querySelector('section[aria-labelledby="ticks-title"]');
-    // One word per state (M5), and only the columns that fit the panel (M10).
+    // One status vocabulary: Done and Failed, never ok or error; no raw ids.
     expect(tickSection?.textContent).toContain('Done');
     expect(tickSection?.textContent).toContain('Failed');
+    expect(tickSection?.textContent).not.toMatch(/\bok\b|\berror\b/);
     expect(tickSection?.textContent).not.toContain('momentum-v3');
-    const headers = [...(tickSection?.querySelectorAll('thead th') ?? [])].map((h) =>
-      h.textContent?.trim(),
-    );
-    expect(headers.join(' ')).not.toMatch(/Winner|Took/);
+    expect(tickSection?.textContent).toContain('2026-09-25');
 
     const health = el.querySelector('section[aria-labelledby="health-title"]');
-    expect(health?.textContent).toContain('1 check failing');
-    expect(health?.textContent).toContain('AAPL.US last bar 3 days old');
+    expect(health?.textContent).toContain('1 of 4 checks failed');
+    expect(health?.textContent).toContain('Price data is up to date');
+    expect(health?.textContent).toContain('1 of 2 tickers have a recent price.');
+    expect(health?.textContent).toContain('Lab workers');
+    expect(health?.textContent).toContain('Not enough data yet');
+    expect(health?.textContent).not.toMatch(/lab_queue|var_violations|freshness:/);
     expect(health?.textContent).toContain('API 0.1.0');
   });
 
@@ -313,7 +318,8 @@ describe('DashboardPage', () => {
     });
     await flushAll();
     const names = [...el.querySelectorAll('.check-name')].map((p) => p.textContent?.trim());
-    expect(names).toEqual(['Stuck trading runs', 'Freshness of AAPL.US']);
+    // Per-ticker freshness folds into one line.
+    expect(names).toEqual(['Price data is up to date', 'Stuck trading runs']);
   });
 
   it('shows when it last updated and reloads when a trading run ends', async () => {
@@ -351,8 +357,9 @@ describe('DashboardPage', () => {
     const pnl = row.querySelector('td[data-label="Unrealized P&L"]')!;
     expect(pnl.textContent?.trim()).toBe('+$700.00');
     expect(pnl.classList).toContain('gain');
-    // Avg cost, priced date and P&L % live on Insights: the panel keeps what fits (M10).
+    // A summary that fits the panel: cost and P&L % are on Insights.
     expect(row.querySelector('td[data-label="Avg cost"]')).toBeNull();
+    expect(row.querySelectorAll('td').length).toBe(5);
     const text = el.textContent ?? '';
     expect(text).toContain('€76,750.00');
     expect(text).toContain('2 positions, +€700.00 unrealized');

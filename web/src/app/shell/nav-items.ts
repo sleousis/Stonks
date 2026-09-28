@@ -157,7 +157,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
   {
     path: '/live',
-    label: 'Live engine',
+    label: 'Intraday engine',
     group: 'System',
     adminOnly: true,
     keywords: ['intraday', 'stream', 'latency', 'engine'],

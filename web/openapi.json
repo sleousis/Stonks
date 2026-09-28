@@ -20071,6 +20071,11 @@
             },
             "title": "Recent",
             "type": "array"
+          },
+          "running": {
+            "default": false,
+            "title": "Running",
+            "type": "boolean"
           }
         },
         "required": [
@@ -20115,6 +20120,22 @@
               }
             ],
             "title": "Next Run At"
+          },
+          "off_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "engine_off",
+                  "options_off",
+                  "no_gateway"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Reason"
           },
           "trigger": {
             "title": "Trigger",
@@ -20198,6 +20219,16 @@
           },
           "job_name": {
             "title": "Job Name",
+            "type": "string"
+          },
+          "origin": {
+            "default": "schedule",
+            "enum": [
+              "schedule",
+              "run_now",
+              "outside"
+            ],
+            "title": "Origin",
             "type": "string"
           },
           "run_key": {
