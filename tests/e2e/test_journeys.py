@@ -198,15 +198,19 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     sid = SHADOW_IDS[viewport]
     promote_url = rf"/api/strategies/{sid}/promote$"
 
-    # A strategy that has not passed the go-live check offers no Go live
-    # (UX-23). A trader sees why they cannot act, and the server refuses the
-    # call anyway.
+    # A strategy that has not passed the go-live check offers no Approve
+    # (UX-23). It opens on a plain verdict (F33). On the Review tab a trader
+    # sees why they cannot change its status, and the server refuses the call
+    # anyway.
     trader = browse(stack.trader)
     trader.guard.expect_refusal(403, promote_url, "traders cannot promote")
     page = trader.go(f"/strategies/{sid}")
     expect(page.get_by_role("heading", level=1)).to_contain_text(sid)
-    expect(page.get_by_role("button", name="Go live")).to_have_count(0)
+    expect(page.locator("app-strategy-verdict")).to_be_visible()
+    expect(page.get_by_role("button", name="Approve", exact=True)).to_have_count(0)
     expect(page.get_by_role("button", name="Override…")).to_have_count(0)
+    page.locator("app-segmented").get_by_role("radio", name="Review", exact=True).click()
+    expect(page.get_by_role("button", name="Retire", exact=True)).to_be_disabled()
     expect(page.locator("app-permission-note").first).to_be_visible()
     refused = trader.api("POST", f"/api/strategies/{sid}/promote", data={"reason": "trader tries"})
     assert refused.status == 403
@@ -217,19 +221,23 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     page = admin.go(f"/strategies/{sid}")
     admin.check_page("strategy-detail")
     # An admin gets "Override…", which asks for the override straight away,
-    # on the go-live ticket with the failed check.
-    expect(page.get_by_role("button", name="Go live")).to_have_count(0)
+    # on the approval ticket with the failed check. On paper money its words
+    # say so and its button is not red (B2).
+    expect(page.get_by_role("button", name="Approve", exact=True)).to_have_count(0)
     page.get_by_role("button", name="Override…").click()
     dialog = page.locator("dialog[open]")
     expect(dialog).to_contain_text("without passing the check")
     expect(dialog.locator("app-mode-stamp")).to_contain_text("PAPER")
+    expect(dialog).to_contain_text("No real money moves")
+    expect(dialog).not_to_contain_text("real orders")
 
-    override = page.get_by_role("button", name="Override and go live")
+    override = page.get_by_role("button", name="Override and approve")
     expect(override).to_be_visible()
+    expect(override).not_to_have_class(re.compile(r"\bbtn-danger\b"))
     admin.check_page("strategy-promote-override")
     dialog = page.locator("dialog[open]")
     fill_status_dialog(dialog, "override", "Seeded e2e strategy, override recorded on purpose.")
-    # The page always shows the lifecycle ladder, "Live" step included, so
+    # The page always shows the status ladder, "Approved" step included, so
     # wait for the promote call itself before reading the audit trail.
     with page.expect_response(
         lambda r: r.request.method == "POST" and re.search(promote_url, r.url) is not None

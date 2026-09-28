@@ -120,7 +120,7 @@ describe('promoteThroughGate', () => {
     await settle();
 
     const form = dialogForm(el)!;
-    expect(form.textContent).toContain('The go-live gate refused mom');
+    expect(form.textContent).toContain('The go-live check refused mom');
     expect(form.textContent).toContain('Go-live gate failed.');
     expect(isHoldDialog(el)).toBe(false);
     expect(form.textContent).toContain('Type override to confirm');
@@ -224,7 +224,8 @@ describe('promoteThroughGate ticket (UX-03)', () => {
     const paperTicket = paper.form.querySelector('.ticket')!;
     expect(paperTicket.classList).not.toContain('live');
     expect(paperTicket.querySelector('app-mode-stamp')!.textContent).toContain('PAPER');
-    expect(paper.form.textContent).toContain('no real money moves');
+    expect(paper.form.textContent).toContain('No real money moves');
+    expect(paper.form.textContent).not.toMatch(/real orders/i);
     expect(paper.form.textContent).not.toContain('Real money');
     expect(isHoldDialog(el)).toBe(true);
     await expect(live.result).resolves.toBeNull();
@@ -234,6 +235,11 @@ describe('promoteThroughGate ticket (UX-03)', () => {
     const promote = vi.fn().mockResolvedValue('forced');
     const { result, form } = await open(alpaca(true), { overrideFirst: true, promote });
     expect(form.textContent).toContain('without passing the check');
+    // B2: the words follow the PAPER stamp, and a paper override is never red.
+    expect(form.textContent).toContain('Approval ticket');
+    expect(form.textContent).toContain('No real money moves');
+    expect(form.textContent).not.toMatch(/real orders/i);
+    expect(form.querySelector('button[type="submit"]')!.classList).not.toContain('btn-danger');
     answerDialog(fixture, { reason: 'Board approved the early start', typed: 'override' });
     await expect(result).resolves.toBe('forced');
     expect(promote).toHaveBeenCalledWith({
@@ -246,12 +252,14 @@ describe('promoteThroughGate ticket (UX-03)', () => {
 describe('demoteOptions (UX-24)', () => {
   it('uses one title, message and tone for each step back', () => {
     const pause = demoteOptions('pause', 'Momentum 3fa9');
-    expect(pause.title).toBe('Move Momentum 3fa9 back to paper trading?');
-    expect(pause.confirmLabel).toBe('Back to paper trading');
+    expect(pause.title).toBe('Put Momentum 3fa9 back on trial?');
+    expect(pause.confirmLabel).toBe('Back on trial');
+    expect(pause.tone).toBeUndefined();
     expect(pause.message).toContain(HELD_POSITIONS_LINE);
     const stop = demoteOptions('stop', 'Momentum 3fa9');
-    expect(stop.title).toBe('Stop Momentum 3fa9?');
-    expect(stop.tone).toBe('danger');
+    expect(stop.title).toBe('Retire Momentum 3fa9?');
+    expect(stop.tone).toBeUndefined();
+    expect(stop.confirmLabel).toBe('Retire');
     expect(stop.message).toContain(HELD_POSITIONS_LINE);
   });
 });

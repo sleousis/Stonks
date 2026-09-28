@@ -122,7 +122,9 @@ export type TradingKey = (typeof TRADING_KEYS)[number];
 
 /**
  * The product itself (F5): what a strategy, a follow and a portfolio are,
- * and the three ladders of docs/design/vocabulary.md, one set of words each.
+ * the three ladders of docs/design/vocabulary.md (a strategy's status, how
+ * you follow it, your portfolio's stage), one set of words each, and the
+ * pages and things a trader meets around them.
  */
 export const PRODUCT_KEYS = [
   'strategy',
@@ -133,13 +135,17 @@ export const PRODUCT_KEYS = [
   'approved',
   'retired',
   'test_book',
+  'go_live_check',
   'strategy_review',
+  'trial_results',
   'robustness_tests',
+  'verdict',
   'portfolio_stage',
   'simulated',
   'broker_paper',
   'real_money_small',
   'real_money_full',
+  'strategy_part',
   'signal',
   'watchlist',
   'screener',
@@ -178,13 +184,13 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     term: 'Paper',
     short:
       'A way to follow a strategy: it trades your paper portfolio with pretend money on real prices. No real money moves.',
-    aliases: ['Paper trading', 'Paper mode', 'Paper portfolio', 'Paper days'],
+    aliases: ['Paper trading', 'Paper mode', 'Paper portfolio', 'Paper days', 'Practice'],
   },
   live: {
     term: 'Real money',
     short:
       'Orders go to your broker and fill for real. Only a portfolio at a real-money stage trades real money. Also called live.',
-    aliases: ['Live', 'Go live'],
+    aliases: ['Live', 'Go live', 'Live trading'],
   },
   signals_only: {
     term: 'Alerts only',
@@ -202,7 +208,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     term: 'Approve each trade',
     short:
       'A way to follow a strategy: each trade waits for you as a ticket after the trading run. You approve it with a code before the open.',
-    aliases: ['Approve mode', 'Approve', 'Approvals', 'Order ticket', 'Order tickets'],
+    aliases: ['Approve mode', 'Approvals', 'Order ticket', 'Order tickets'],
   },
   kill_switch: {
     term: 'Kill switch',
@@ -260,7 +266,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     term: 'Follow',
     short:
       'Linking a strategy to one of your portfolios: Alerts only, Paper, Approve each trade or Automatic. Also called a subscription.',
-    aliases: ['Following', 'Follows', 'Subscription', 'Follow mode'],
+    aliases: ['Following', 'Follows', 'Subscription', 'Subscriptions', 'Follow mode'],
   },
   portfolio: {
     term: 'Portfolio',
@@ -271,42 +277,59 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   draft: {
     term: 'Draft',
     short: 'A strategy being built in the Studio. The system has not tested it yet.',
-    aliases: ['Drafts'],
+    aliases: ['Drafts', 'Strategy draft'],
   },
   on_trial: {
     term: 'On trial',
     short:
-      'A strategy status: the system trades it on its own test book every run, with no real orders. Also called shadow.',
-    aliases: ['Shadow', 'Trial', 'Trial results'],
+      'A strategy status: the system trades it on its own test book every run, with no real orders. Nobody can follow it for trades yet. Also called shadow.',
+    aliases: ['Shadow', 'Trial', 'Put on trial', 'Back on trial'],
   },
   approved: {
     term: 'Approved',
     short:
-      'A strategy status: it passed the go-live check, so people can follow it. Also called active.',
-    aliases: ['Active', 'Approve a strategy'],
+      'A strategy status: it passed the go-live check, so people can follow it. It does not mean real money. Also called active.',
+    aliases: ['Active', 'Approve a strategy', 'Approved strategy'],
   },
   retired: {
     term: 'Retired',
-    short: 'A strategy status: it no longer decides anything. Its history stays.',
+    short:
+      'A strategy status: it no longer decides anything. Its history stays, and positions it holds are not closed.',
     aliases: ['Retire'],
   },
   test_book: {
     term: 'Test book',
     short:
-      "A strategy's own practice portfolio, run by the system while it is on trial. Also called a model book or shadow book.",
-    aliases: ['Model book', 'Shadow book', 'Test books'],
+      "A strategy's own practice portfolio, run by the system while it is on trial, so its record never depends on anyone following it. Also called a model book or shadow book.",
+    aliases: ['Model book', 'Shadow book', 'Paper book', 'Test books'],
+  },
+  go_live_check: {
+    term: 'Go-live check',
+    short:
+      'The checks a strategy on trial must pass before it can be approved: enough days and trades, small drops, robustness tests.',
+    aliases: ['Go-live', 'Go-live gate', 'Go-live checks'],
   },
   strategy_review: {
     term: 'Strategy review',
     short:
-      'The go-live check an admin reads before approving a strategy: enough trial days, results that hold up, costs it can bear.',
-    aliases: ['Go-live check', 'Go-live review'],
+      'The admin page listing strategies on trial and whether each passes the go-live check and is ready to approve.',
+    aliases: ['Go-live review'],
+  },
+  trial_results: {
+    term: 'Trial results',
+    short: 'How strategies do on their own test books, next to your portfolio over the same days.',
   },
   robustness_tests: {
     term: 'Robustness tests',
     short:
       'Checks that a backtest was not luck: other periods, other tickers, higher costs and shuffled data. Also called survival tests.',
-    aliases: ['Robustness', 'Survival tests'],
+    aliases: ['Robustness', 'Robustness test', 'Survival tests', 'Full robustness tests'],
+  },
+  verdict: {
+    term: 'Verdict',
+    short:
+      'One plain answer per strategy: Worth following, Promising, needs more data, or Not good enough yet.',
+    aliases: ['Worth following', 'Promising, needs more data', 'Not good enough yet'],
   },
   portfolio_stage: {
     term: 'Portfolio stage',
@@ -316,7 +339,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   },
   simulated: {
     term: 'Simulated',
-    short: 'A portfolio stage: fills are simulated by Stonks. No real money.',
+    short: 'A portfolio stage: Stonks fills orders itself. Nothing reaches a broker. No real money.',
     aliases: ['Simulated paper'],
   },
   broker_paper: {
@@ -327,12 +350,18 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     term: 'Real money, small',
     short:
       'A portfolio stage: real money, with the allocation you set and tight caps on each order.',
-    aliases: ['Live small'],
+    aliases: ['Live small', 'Live, small'],
   },
   real_money_full: {
     term: 'Real money, full',
     short: 'A portfolio stage: real money at your full allocation.',
-    aliases: ['Live scaled', 'Live scale'],
+    aliases: ['Live scaled', 'Live scale', 'Live, scaled'],
+  },
+  strategy_part: {
+    term: "The strategy's part of your portfolio",
+    short:
+      'The share of a portfolio one followed strategy trades. Its results are counted apart. Also called a sleeve.',
+    aliases: ['Sleeve', 'Strategy sleeve', 'Strategy sleeves'],
   },
   signal: {
     term: 'Signal',

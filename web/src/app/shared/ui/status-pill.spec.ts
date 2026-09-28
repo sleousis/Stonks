@@ -11,10 +11,10 @@ describe('StatusPill', () => {
     return (fixture.nativeElement as HTMLElement).textContent!.trim();
   }
 
-  it('says Paper trading, Live and Stopped for strategy statuses (UX-09)', () => {
-    expect(render('shadow')).toBe('Paper trading');
-    expect(render('active')).toBe('Live');
-    expect(render('retired')).toBe('Stopped');
+  it('says On trial, Approved and Retired for strategy statuses, never Live (B1)', () => {
+    expect(render('shadow')).toBe('On trial');
+    expect(render('active')).toBe('Approved');
+    expect(render('retired')).toBe('Retired');
   });
 
   it('writes out outcomes as Passed and Failed', () => {

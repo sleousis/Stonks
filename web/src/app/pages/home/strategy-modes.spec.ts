@@ -35,9 +35,9 @@ describe('autoBlockedReason', () => {
     );
   });
 
-  it('says live instead of the status key (UX-09)', () => {
+  it('says approved instead of the status key (UX-09)', () => {
     expect(autoBlockedReason(sub({ auto_blockers: ['the strategy is not active'] }))).toBe(
-      'The strategy is not live yet.',
+      'The strategy is not approved yet.',
     );
   });
 });

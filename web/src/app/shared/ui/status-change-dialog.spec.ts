@@ -111,6 +111,20 @@ describe('StatusChangeDialog', () => {
     expect(failing.querySelectorAll('li')).toHaveLength(1);
   });
 
+  it('lists three failed checks and folds the rest under Show all (m13)', async () => {
+    const names = ['min_days', 'min_trades', 'survival', 'max_drift', 'quit_rule'] as const;
+    const report = {
+      ...goLiveReport('mom', false),
+      checks: names.map((name) => ({ name, passed: false, value: 1, limit: 2, detail: name })),
+    };
+    await open({ golive: report });
+    const first = form().querySelector('[aria-label="Failing go-live checks"]')!;
+    expect(first.querySelectorAll('li')).toHaveLength(3);
+    const more = form().querySelector('details.more-checks')!;
+    expect(more.querySelector('summary')!.textContent).toContain('Show all 5 failed checks');
+    expect(more.querySelectorAll('li')).toHaveLength(2);
+  });
+
   it('shows a note when the go-live report is missing', async () => {
     await open({ goliveNote: 'Could not run the go-live check first.' });
     expect(form().textContent).toContain('Could not run the go-live check first.');

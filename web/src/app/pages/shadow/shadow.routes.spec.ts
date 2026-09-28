@@ -3,7 +3,7 @@ import { Router, provideRouter } from '@angular/router';
 
 import { routes } from '../../app.routes';
 
-describe('Paper trading route (UX-09)', () => {
+describe('Trial results route (UX-09)', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({ providers: [provideRouter(routes)] });
   });

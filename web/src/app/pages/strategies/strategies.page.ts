@@ -22,7 +22,7 @@ import { STATUS_FILTERS, asStatus, strategyDisplayName, strategyKindName } from 
 /** Enough for any realistic registry; search and paging then run in the browser. */
 const FETCH_LIMIT = 500;
 
-/** A registry row with its paper performance, when it has a paper book. */
+/** A registry row with its trial result, when it has a test book. */
 export interface StrategyRow extends StrategySummary {
   /** The name to show (UX-27). */
   name: string;
@@ -128,9 +128,9 @@ export class StrategiesPage {
   protected readonly columns: TableColumn<StrategyRow>[] = [
     { key: 'id', label: 'Strategy', mobile: 'title', value: (s) => s.name },
     { key: 'status', label: 'Status' },
-    { key: 'paper_return', label: 'Paper return', format: 'signedPercent', tone: true },
+    { key: 'paper_return', label: 'Trial return', format: 'signedPercent', tone: true },
     { key: 'max_drawdown', label: 'Max drawdown', format: 'percent' },
-    { key: 'paper_days', label: 'Days on paper', format: 'number' },
+    { key: 'paper_days', label: 'Days on trial', format: 'number' },
     { key: 'kind', label: 'Kind', mobile: 'hide' },
     {
       key: 'assets',
@@ -142,7 +142,7 @@ export class StrategiesPage {
   ];
   protected readonly strategyKey = (s: StrategyRow) => s.id;
 
-  /** "live", "paper trading" or "stopped", for the empty filter message. */
+  /** "approved", "on trial" or "retired", for the empty filter message. */
   protected readonly filterWord = computed(() => {
     const status = this.statusFilter();
     return status ? STATUS_WORDS[status].toLowerCase() : '';

@@ -1,9 +1,9 @@
 // Fails when trader-facing copy sends people to a terminal or a config file
 // (finding UI-09), or uses the system's names instead of trader words
-// (UX-09, UX-49): "tick", "ingest", "shadow", "promote", "register",
-// "retire", class paths. Scans templates (.html) and string literals in .ts
-// files under src/app, skipping comments, specs, styles and the generated
-// client. Run by `npm run lint`.
+// (UX-09, UX-49, docs/design/vocabulary.md): "tick", "ingest", "shadow",
+// "promote", "register", class paths. "Retire" is a trader word now. Scans
+// templates (.html) and string literals in .ts files under src/app, skipping
+// comments, specs, styles and the generated client. Run by `npm run lint`.
 //
 //   node scripts/check-copy.mjs                 every file
 //   node scripts/check-copy.mjs src/app/pages/lab   only files under these paths
@@ -37,10 +37,9 @@ export const RULES = [
 export const WORD_RULES = [
   { id: 'tick', re: /\bticks?\b/i, say: 'Trading run' },
   { id: 'ingest', re: /\bingest(s|ed|ing|ion)?\b/i, say: 'Update data' },
-  { id: 'shadow', re: /\bshadow\b/i, say: 'Paper trading' },
-  { id: 'promote', re: /\bpromot(e|es|ed|ing|ion)\b/i, say: 'Go live' },
-  { id: 'register', re: /\bregist(er|ers|ered|ering|ration)\b/i, say: 'Start paper trading' },
-  { id: 'retire', re: /\bretir(e|es|ed|ing)\b/i, say: 'Stop' },
+  { id: 'shadow', re: /\bshadow\b/i, say: 'On trial, or Test book' },
+  { id: 'promote', re: /\bpromot(e|es|ed|ing|ion)\b/i, say: 'Approve' },
+  { id: 'register', re: /\bregist(er|ers|ered|ering|ration)\b/i, say: 'Put on trial' },
   { id: 'code', re: /\bclass_path\b|\bpython -m\b/i, say: 'a plain name' },
 ];
 

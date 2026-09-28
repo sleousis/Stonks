@@ -195,6 +195,40 @@ describe('glossary', () => {
     expect(findGlossary('Paper trading')!.key).toBe('paper_trading');
     expect(findGlossary('Model book')!.key).toBe('test_book');
     expect(findGlossary('Live')!.entry.term).toBe('Real money');
+    // docs/design/vocabulary.md: shadow is now On trial and its test book.
+    expect(findGlossary('Shadow')!.key).toBe('on_trial');
+    expect(findGlossary('Model book')!.key).toBe('test_book');
+    expect(findGlossary('Signals only')!.entry.term).toBe('Alerts only');
+    expect(findGlossary('Live')!.entry.term).toBe('Real money');
+  });
+
+  it('explains every word of the three ladders and the renamed words (F5)', () => {
+    for (const word of [
+      'Draft',
+      'On trial',
+      'Approved',
+      'Retired',
+      'Alerts only',
+      'Paper',
+      'Approve each trade',
+      'Automatic',
+      'Simulated',
+      'Broker paper',
+      'Real money, small',
+      'Real money, full',
+      'Test book',
+      'Go-live check',
+      'Robustness tests',
+      'Verdict',
+      'Follow',
+      "The strategy's part of your portfolio",
+      'Strategy review',
+      'Trial results',
+    ]) {
+      expect(findGlossary(word), word).not.toBeNull();
+    }
+    // "Approved" never means real money.
+    expect(findGlossary('Approved')!.entry.short).toContain('does not mean real money');
   });
 
   it('links to the in-app glossary, never an outside wiki (UI-13)', () => {

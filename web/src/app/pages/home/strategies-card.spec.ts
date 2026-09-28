@@ -240,6 +240,7 @@ describe('StrategiesCard', () => {
   it('names strategies and modes in trader words (UX-27, UX-31)', async () => {
     const el = await render([sub({ strategy_id: 'value_1a2b3c4d', strategy_status: 'shadow' })]);
     expect(el.querySelector('.name a')!.textContent!.trim()).toBe('Value 1a2b');
+    expect(el.textContent).toContain('On trial');
     expect(el.textContent).not.toMatch(/shadow/i);
     const labels = [...el.querySelectorAll('app-follow-mode option')].map((o) =>
       o.textContent!.replace(' (locked)', '').trim(),

@@ -29,14 +29,16 @@ export function tickConfirmOptions(dryRun: boolean, broker: BrokerInfo | null): 
   }
   if (!broker) throw new Error('Load the broker before a real trading run.');
   const label = brokerLabel(broker);
-  const where = isLiveBroker(broker)
-    ? `Orders go to the ${label} broker and trade real money.`
-    : `Orders go to the ${label} broker and are recorded in the ledger.`;
+  // The words and the button follow the stamp (B2): red only for real money.
+  const live = isLiveBroker(broker);
+  const where = live
+    ? `Real orders go to the ${label} broker and trade real money.`
+    : `Paper orders go to the ${label} broker and are recorded in the ledger, with paper money.`;
   return {
     title: `Start a trading run on the ${label} broker?`,
-    message: `${where} Paper trading strategies are checked afterwards.`,
+    message: `${where} Strategies on trial are tested on their test books afterwards.`,
     confirmLabel: 'Start trading run',
-    tone: 'danger',
+    tone: live ? 'danger' : 'default',
     typedConfirmation: label,
   };
 }
@@ -63,7 +65,7 @@ export function tickTicket(
         { label: 'Broker', value: brokerLabel(broker) },
         { label: 'As of', value: request.as_of ?? 'Today' },
         { label: 'Tickers', value: request.tickers?.join(', ') ?? 'All in the universe' },
-        { label: 'Strategies', value: 'Every live strategy' },
+        { label: 'Strategies', value: 'Every approved strategy' },
       ],
     },
   };

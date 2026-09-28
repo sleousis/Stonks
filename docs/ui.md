@@ -2,8 +2,8 @@
 
 The Angular app in `web/` is the trader console: sign-in, a simple home,
 profile, the first-run guide, watchlists, charts, the calendar, strategies, orders and
-trade costs, insights, notifications, the research pages (paper trading,
-leaderboard and tear sheets, screener, options, studio, lab, go live) and the admin pages
+trade costs, insights, notifications, the research pages (trial results,
+leaderboard and tear sheets, screener, options, studio, lab, strategy review) and the admin pages
 (overview, health, schedule and backups, data, data quality, universes,
 halts, users). It talks only to the
 REST API (`src/stonks/api/`) through a client generated from the checked-in
@@ -593,12 +593,15 @@ Tickers open `/data?instrument=<id>`.
   shows a confirmation as an order ticket: `<app-side-tag>` (solid B, outlined
   S), mono figures and `<app-mode-stamp>` (grey PAPER, brass LIVE). A real
   trading run confirms this way. Brass means real money only.
-- **Strategy lifecycle.** One vocabulary in `shared/governance-labels.ts`:
-  Start paper trading, Go live, Back to paper trading, Stop, and the stages
-  Draft, Paper, Ready, Live. Studio and the strategy page both use it, and
-  the strategy page has a stage bar, a paper value chart and recent orders.
-  A promotion the gate allows needs a reason and a one-second hold
-  (`app-hold-button`); an override still needs the typed word.
+- **Strategy status.** One vocabulary in `shared/governance-labels.ts`
+  (`docs/design/vocabulary.md`): Put on trial, Approve, Back on trial,
+  Retire, and the ladder Draft, On trial, Approved, Retired. A strategy is
+  never "live". Studio and the strategy page both use it. An approval the
+  go-live check allows needs a reason and a one-second hold
+  (`app-hold-button`); an override still needs the typed word. The approval
+  ticket's words follow its PAPER or LIVE stamp, and only real money makes
+  its button red. Retire is a quiet button on the Review tab, never red and
+  never next to the kill switch.
 - **Dialogs** are built on `app-sheet` (`shared/ui/sheet.ts`) with
   `app-typed-confirm`.
 - **Settings** shows one section at a time (M14), picked with
@@ -635,12 +638,12 @@ Tickers open `/data?instrument=<id>`.
 
 | Page | Route | What it does |
 |---|---|---|
-| Model versions tab | `/strategies/:id?tab=versions` | Every fit of the strategy's model, the candidate's model book against the live model, the swap check, Swap in and Reject, a retrain of this strategy, and the version log |
+| Model versions tab | `/strategies/:id?tab=versions` | Every fit of the strategy's model, the candidate's test book against the model in use, the swap check, Swap in and Reject, a retrain of this strategy, and the version log |
 | Model versions | `/ops/models` | Admins: every candidate across strategies, each linking to its tab, and Retrain all |
 
-- **The tab** is a segmented switch on the strategy page (Overview or
-  Model versions). The choice goes into the address, so a link opens it.
-- **The candidate** shows its training window, the two model books over
+- **The tab** is the last tab of the strategy page, shown to people who may
+  run the Lab. The choice goes into the address, so a link opens it.
+- **The candidate** shows its training window, the two test books over
   the same days as bars (return, the difference, the candidate's
   drawdown), and each swap check with its value and limit.
 - **Swap in** opens a Model swap ticket that asks for a reason, then a
@@ -652,6 +655,52 @@ Tickers open `/data?instrument=<id>`.
   with `<app-job-progress>` and lists what each strategy got: a new
   candidate, skipped, or a failed fit. "Refit even when fitted in the last
   few days" sends `force`.
+
+## Judging a strategy (release polish)
+
+One strategy page judges a strategy, and the Leaderboard compares them.
+Every other page links there.
+
+| Page | Route | What it does |
+|---|---|---|
+| Strategy page | `/strategies/:id?tab=` | Tabs: Overview (verdict, follow, trial results, orders in this portfolio), Results (the tear sheet's figures), Review (the go-live check, Change its status, status history), Details (why it should work, parameters, robustness tests, technical details), Model versions |
+| Leaderboard | `/leaderboard` | Every strategy side by side with its verdict, status and trial figures |
+| Trial results | `/paper` (`/shadow` redirects) | Each test book against your portfolio over the same days, with a Review link |
+| Strategy review | `/go-live` | Admins: strategies on trial, the ready ones first, each linking to its Review tab, and the broker an approval sends orders to. `?strategy=<id>` opens that Review tab |
+
+```mermaid
+flowchart LR
+  L[Leaderboard] --> S[Strategy page]
+  T[Trial results] --> S
+  R[Strategy review] --> S
+  S --> O[Overview: verdict, follow]
+  S --> Re[Results]
+  S --> Rv[Review: approve, retire]
+  S --> D[Details]
+  S --> P[Tear sheet to print]
+```
+
+- **One verdict.** `strategyVerdict()` (`shared/strategy-verdict.ts`) turns
+  the go-live check, the trial result and the robustness tests into Worth
+  following, Promising, needs more data, or Not good enough yet, with the
+  reasons in plain sentences. A deep drop, drift from the backtest or a
+  failed robustness test gives Not good enough yet. Too few days or trades
+  give Promising. `<app-strategy-verdict>` shows it, with the figures under
+  a Details fold, and `compact` shows the pill alone in tables.
+- **Never empty.** The page reads the tear sheet
+  (`GET /api/strategies/{id}/tearsheet`) for every status, so an approved
+  strategy shows the record it earned on trial. Without one, it says so and
+  suggests following it on Paper.
+- **One follow control.** `<app-follow-control>` (`shared/follow/`) is the
+  switch and the four follow modes (Alerts only, Paper, Approve each trade,
+  Automatic) in one row, with the current mode's line and why the gated
+  modes are closed. The strategy page's Follow panel uses it once you
+  follow, and Today can use it for each row. Automatic asks you to type the
+  strategy's display name, never its id, and the ticket's words and button
+  follow the portfolio's PAPER or LIVE stamp.
+- **Header actions.** The header offers one forward step: Put on trial,
+  Approve (once the check passed) or the admin's Override. Back on trial and
+  Retire sit on the Review tab as quiet buttons.
 
 ## Insights and risk
 
@@ -850,8 +899,8 @@ flowchart LR
 | Get set up | `/welcome` | The first-run guide: five steps, each can be skipped, kept per user on the server. Admins also see the install checklist |
 | Watchlists | `/watchlists` | Your own ticker lists: create, edit, delete, open in the lab, chart a ticker |
 | Charts | `/charts`, `/charts/:ticker?vs=` | Daily candles, volume, moving averages, your fills (B and S) and strategy signals, other tickers compared on one scale, the rolling Sharpe and drawdown, with the fills and signals listed below |
-| Leaderboard | `/leaderboard` | Strategies ranked by risk-adjusted paper result, each linking to its tear sheet |
-| Tear sheet | `/strategies/:id/tearsheet` | Paper figures and curve, monthly returns, recent trades, survival verdicts, go-live check, status history, Download PDF |
+| Leaderboard | `/leaderboard` | The comparison view: every strategy ranked by its trial result, with its status and verdict, each linking to its strategy page |
+| Tear sheet | `/strategies/:id/tearsheet` | The printable version of the strategy page: verdict, trial figures and curve, monthly returns, test book trades, robustness tests, go-live check, status history, Download PDF |
 
 ```mermaid
 flowchart LR
@@ -859,7 +908,7 @@ flowchart LR
   W --> P[Portfolio] & L[Watchlist] & F[Follow] & A[Alerts]
   L --> C[/charts/:ticker]
   L --> Lab[/lab?tickers=...]
-  B[/leaderboard] --> S[/strategies/:id/tearsheet]
+  B[/leaderboard] --> S[/strategies/:id] --> TS[/strategies/:id/tearsheet]
 ```
 
 - **First-run guide.** `GET /api/onboarding` returns each step as `done`,
@@ -899,8 +948,9 @@ flowchart LR
   to the charting library.
 - **Leaderboard and tear sheets.** `GET /api/strategies/leaderboard?sort=`
   (`sharpe`, `return`, `drawdown`, `trades`) and
-  `GET /api/strategies/{id}/tearsheet`. Paper value is a `primary` line,
-  never brass. The stage words come from `shared/governance-labels.ts`.
+  `GET /api/strategies/{id}/tearsheet`. The test book value is a `primary`
+  line, never brass. The status words come from `shared/governance-labels.ts`
+  and the verdict from `shared/strategy-verdict.ts`.
 - **Download PDF.** The tear sheet's Download PDF opens the browser's print
   dialog, where you pick Save as PDF (`PrintService`, `shared/print.service.ts`).
   No PDF library runs on the server: WeasyPrint needs GTK libraries that do
@@ -1078,7 +1128,7 @@ flowchart LR
 | `<app-tick-mode>` | `pages/orders/tick-mode.ts` | "Dry run" or the PAPER or LIVE stamp for a trading run |
 | `<app-cost-field>` | `pages/lab/cost-field.ts` | Backtest costs in the Lab and Studio |
 | `strategyDisplayName()`, `strategyKindName()` | `shared/strategy-names.ts` | Names, not ids |
-| `goLiveTicket()`, `demoteOptions()`, `checkFix()` | `shared/governance.ts`, `shared/golive-checks.ts` | Go live, Back to paper trading, Stop, and the fix for a failing check |
+| `goLiveTicket()`, `demoteOptions()`, `checkFix()` | `shared/governance.ts`, `shared/golive-checks.ts` | Approve, Back on trial, Retire, and the fix for a failing check |
 | `<app-stage-bar compact>` | `pages/strategies/stage-bar.ts` | The lifecycle steps, framed on the strategy page, bare in Studio |
 | Trading words | `core/help/glossary.ts` (`PRODUCT_KEYS`, `TRADING_KEYS`, `GLOSSARY_GROUPS`) | Help tips for the product words and ladders (On trial, Test book, Portfolio stage, ...), the modes, Kill switch, Dry run, Trading run, ... |
 
@@ -1137,10 +1187,10 @@ checks one folder. The rule's own specs are `scripts/check-copy.test.mjs`.
 Names, not ids: `strategyDisplayName()` (`shared/strategy-names.ts`)
 turns `stocks_on_the_move_3fa9c21b` into "Stocks on the move 3fa9" (a
 draft's own name wins), with the id under "Technical details".
-`<app-status-pill>` writes strategy statuses as Paper trading, Live and
-Stopped and outcomes as Passed and Failed on its own. One `MODES` list
+`<app-status-pill>` writes strategy statuses as On trial, Approved and
+Retired and outcomes as Passed and Failed on its own. One `MODES` list
 (`shared/governance-labels.ts`) names Alerts only, Paper, Approve each trade and
-Automatic (docs/design/vocabulary.md), and `toTraderWords()` rewrites the server's gate details.
+Automatic, and `toTraderWords()` rewrites the server's gate details.
 
 ### Words across surfaces
 
@@ -1151,16 +1201,16 @@ about the same thing.
 | Console word | API | CLI | MCP |
 |---|---|---|---|
 | Trading run | `/api/ticks` | `stonks tick` | `run_tick`, `list_ticks`, `get_tick` |
-| Paper trading (stage "Paper", page `/paper`, `/shadow` redirects) | status `shadow`, `/api/shadow/...` | `registry shadow` | `shadow_strategy`, `list_shadow_pnl` |
-| Go live, Live | status `active`, `.../promote` | `registry promote` | `promote_strategy` |
-| Back to paper trading | `.../shadow` | `registry shadow` | `shadow_strategy` |
-| Stop (a strategy) | status `retired`, `.../retire` | `registry retire` | `retire_strategy` |
+| On trial, test book (page Trial results at `/paper`, `/shadow` redirects) | status `shadow`, `/api/shadow/...` | `registry shadow` | `shadow_strategy`, `list_shadow_pnl` |
+| Approve, Approved | status `active`, `.../promote` | `registry promote` | `promote_strategy` |
+| Back on trial | `.../shadow` | `registry shadow` | `shadow_strategy` |
+| Retire, Retired (a strategy) | status `retired`, `.../retire` | `registry retire` | `retire_strategy` |
 | Strategies | `/api/strategies` | `stonks registry` | `*_strategy`, `list_strategies` |
 | Follow a strategy | `POST /api/subscriptions` | none | `subscribe` |
 | Trade costs | `/api/tca` | `stonks tca` | `get_tca_summary`, `list_trade_journal`, `get_order_tca` |
 | Stop trading (kill switch), "Stop new buys only" | `POST /api/halts/kill`, `buys_only` | `halts kill --buys-only` | `engage_kill_switch` (`buys_only`) |
 | Update data, Data updates | `/api/ingest/*`, `ingest_runs` | `stonks ingest` | `run_ingest` |
-| Go-live suite | preset `promotion` | `--preset promotion` | `run_lab` (`preset`) |
+| Full robustness tests (Go-live suite) | preset `promotion` | `--preset promotion` | `run_lab` (`preset`) |
 | Alerts only, Paper, Approve each trade, Automatic (follow modes) | `notify`, `paper`, `approve`, `auto` | none | `subscribe` (`mode`) |
 | Approvals, order tickets | `/api/tickets` | `stonks tickets` | `list_tickets`, `get_ticket` |
 | Model versions, candidate, Swap in, Retrain | `/api/strategies/{id}/versions`, `/api/model-versions` | `registry versions`, `swap`, `reject`, `retrain` | `list_model_versions`, `swap_model_version`, `retrain_models` |
@@ -1295,10 +1345,10 @@ the halts page (Resume keeps the typed RESUME TRADING and a fresh code).
 The palette's "Stop trading" opens the same sheet (`StopTradingService`).
 Viewers never see it.
 
-**Every real-money moment is a ticket.** Go live (`goLiveTicket()`:
+**Every real-money moment is a ticket.** Approving a strategy (`goLiveTicket()`:
 strategy, following portfolios, broker, PAPER or LIVE, and the name typed
 when real money moves), turning auto on or back on (step-up first, then
-the ticket), a trading run from the runner or Schedule (`tickTicket()`),
+the ticket), a trading run from the runner or Schedule (`tickTicket()`, red only for real money),
 the kill switch and Resume (`killTicket()`, `ConfirmTicket.kind`), and
 disconnecting a broker (each linked portfolio with its mode, the provider
 typed).
@@ -1576,10 +1626,12 @@ flowchart LR
   and a ticket. The left column flows on its own (the last grid row is
   flexible), so a tall strategies list never leaves a gap beside it.
 - **Follow** (`pages/strategies/follow-panel.ts`): the strategy page of a
-  live or paper strategy has a Follow panel. Pick "Alerts only" (notify) or
-  "Paper" in one of your portfolios, then `POST /api/subscriptions`
-  (`portfolio.trade`). Auto is never offered: it is switched on later from
-  Today. Once you follow it, the panel says how and links to Today.
+  strategy on trial or approved has a Follow panel. Pick "Alerts only"
+  (notify) or "Paper" in one of your portfolios, then
+  `POST /api/subscriptions` (`portfolio.trade`). Approve each trade and
+  Automatic are never starting modes. Once you follow it, the panel shows
+  `<app-follow-control>` for each portfolio, the same control Today uses,
+  to switch it on or off and change the mode.
   The server routes exist now: `GET /api/subscriptions` (each row has
   `paper_days_completed`, `paper_days_required`, `auto_blockers` and
   `paused_reason`), `POST /api/subscriptions` and

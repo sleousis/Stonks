@@ -50,6 +50,17 @@ function sameIds(a: readonly string[] | undefined, b: readonly string[] | undefi
   return a.length === b.length && a.every((id, i) => id === b[i]);
 }
 
+/**
+ * How far a test book is ahead of or behind your portfolio, in words that
+ * never call a trailing strategy "leading" (m5).
+ */
+export function aheadOrBehind(excess: number | null): string | null {
+  if (excess == null) return null;
+  if (excess === 0) return 'Level with your portfolio';
+  const gap = formatPercent(Math.abs(excess));
+  return excess > 0 ? `${gap} ahead of your portfolio` : `${gap} behind your portfolio`;
+}
+
 /** A summary row joined with its comparison against your portfolio. */
 export interface ShadowRow extends ShadowPnlSummary {
   /** The name to show (UX-27). */
@@ -58,11 +69,11 @@ export interface ShadowRow extends ShadowPnlSummary {
 }
 
 /**
- * The Paper trading page (`/paper`): strategies that trade on paper next to
- * your portfolio. It puts each one against your portfolio on one chart,
- * lists how far ahead or behind it is, and links each to its go-live check.
- * Your portfolio is named "Your portfolio" with its PAPER or LIVE stamp,
- * never "Real portfolio" on paper money (UX-26).
+ * The Trial results page (`/paper`): each strategy's test book next to your
+ * portfolio. It puts each one against your portfolio on one chart, lists how
+ * far ahead or behind it is, and links each to the Review tab of its
+ * strategy page. Your portfolio is named "Your portfolio" with its PAPER or
+ * LIVE stamp, never "Real portfolio" on paper money (UX-26).
  */
 @Component({
   selector: 'app-shadow-page',
@@ -172,12 +183,12 @@ export class ShadowPage {
   });
   protected readonly leaderDetail = computed(() => {
     const c = this.leader()?.comparison;
-    return c ? `${formatPercent(c.excess, { signed: true })} vs your portfolio` : null;
+    return c ? aheadOrBehind(c.excess) : null;
   });
   protected readonly leaderTone = computed(() => toneClass(this.leader()?.comparison?.excess));
 
   // Chart -------------------------------------------------------------------
-  /** '' shows every paper strategy; an id shows one, with its drawdown below. */
+  /** '' shows every test book; an id shows one, with its drawdown below. */
   protected readonly focus = linkedSignal<string[] | undefined, string>({
     source: () => this.strategyIds(),
     computation: (ids, prev) => (prev && ids?.includes(prev.value) ? prev.value : ALL),
@@ -254,9 +265,10 @@ export class ShadowPage {
     { key: 'strategy_id', label: 'Strategy', mobile: 'title', value: (r) => r.name },
     {
       key: 'days',
-      label: 'Days',
+      label: 'Trial days',
       format: 'number',
-      value: (r) => r.comparison?.daysElapsed ?? r.days,
+      // The count of days on its test book, the same days the chart draws (m5).
+      value: (r) => r.days,
     },
     {
       key: 'return',
@@ -295,7 +307,7 @@ export class ShadowPage {
     },
     { key: 'total_value', label: 'Value', format: 'money', mobile: 'hide' },
     { key: 'status', label: 'Status', mobile: 'hide' },
-    { key: 'go_live', label: 'Go-live check', sortable: false, align: 'end' },
+    { key: 'go_live', label: 'Review', sortable: false, align: 'end' },
   ];
   protected readonly summaryKey = (r: ShadowRow) => r.strategy_id;
 

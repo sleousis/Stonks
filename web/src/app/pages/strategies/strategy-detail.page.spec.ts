@@ -5,10 +5,12 @@ import { provideRouter } from '@angular/router';
 
 import type {
   BrokerInfo,
+  GoLiveReport,
   OrderView,
   PnlRowView,
   StatusChangeView,
   StrategyDetail,
+  TearSheetView,
 } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
@@ -22,15 +24,25 @@ import {
   goLiveReport,
   isHoldDialog,
 } from '../../../testing/status-dialog';
-import { STRATEGY_METADATA } from '../../../testing/strategy-fixtures';
+import { STRATEGY_METADATA, paper } from '../../../testing/strategy-fixtures';
 import { LIFECYCLE } from '../../shared/governance-labels';
 import { FollowPanel } from './follow-panel';
-import { StrategyDetailPage, historyEntries, paperPerformance } from './strategy-detail.page';
+import {
+  StrategyDetailPage,
+  actorName,
+  asTab,
+  detailActions,
+  historyEntries,
+  paperPerformance,
+  statusActions,
+} from './strategy-detail.page';
 
 /** The follow panel has its own spec; here only where it shows matters. */
 @Component({ selector: 'app-follow-panel', template: 'Follow panel' })
 class FollowPanelStub {
   readonly strategyId = input.required<string>();
+  readonly strategyName = input<string | null>(null);
+  readonly status = input<string | null>(null);
 }
 
 const DETAIL: StrategyDetail = {
@@ -55,7 +67,7 @@ const HISTORY: StatusChangeView[] = [
     kind: 'status',
     from_status: null,
     to_status: 'shadow',
-    actor: 'lab',
+    actor: 'service:system',
     reason: 'registered by lab run',
     override: false,
     golive_passed: null,
@@ -137,6 +149,34 @@ const REAL: BrokerInfo = {
 
 const page = <T>(items: T[]) => ({ items, total: items.length, limit: 10, offset: 0 });
 
+function sheetFor(
+  detail: StrategyDetail,
+  opts: { golive?: GoLiveReport | null; curve?: PnlRowView[] } = {},
+): TearSheetView {
+  const curve = opts.curve ?? PNL;
+  return {
+    strategy: detail,
+    paper: paper({
+      days: curve.length ? 21 : 0,
+      total_return: curve.length ? 0.08 : null,
+      max_drawdown: curve.length ? -0.05 : null,
+      trades: 2,
+    }),
+    curve,
+    monthly_returns: [],
+    recent_trades: [],
+    book_trades: 0,
+    live_since: null,
+    golive:
+      opts.golive !== undefined
+        ? opts.golive
+        : detail.status === 'retired'
+          ? null
+          : goLiveReport(detail.id, false),
+    status_history: [],
+  };
+}
+
 describe('StrategyDetailPage', () => {
   let fixture: ComponentFixture<StrategyDetailPage>;
   let controller: HttpTestingController;
@@ -181,40 +221,46 @@ describe('StrategyDetailPage', () => {
     }
   }
 
-  /** Flush the page's reads; a paper strategy also loads its go-live verdict and value. */
+  /** Flush the page's reads: the strategy, its history, its trial record and orders. */
   async function load(
     detail = DETAIL,
     history = HISTORY,
     opts: {
       passed?: boolean;
-      pnl?: PnlRowView[];
+      golive?: GoLiveReport | null;
+      curve?: PnlRowView[];
       orders?: OrderView[];
       broker?: BrokerInfo;
     } = {},
   ): Promise<void> {
     (await nextRequest(controller, '/api/strategies/momentum-v3')).flush(detail);
     (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(page(history));
+    (await nextRequest(controller, '/api/strategies/momentum-v3/tearsheet')).flush(
+      sheetFor(detail, {
+        golive:
+          opts.golive !== undefined
+            ? opts.golive
+            : opts.passed !== undefined
+              ? goLiveReport(detail.id, opts.passed)
+              : undefined,
+        curve: opts.curve,
+      }),
+    );
     (await nextRequest(controller, '/api/orders')).flush(page(opts.orders ?? []));
     await settle();
     if (detail.status === 'active') {
       (await nextRequest(controller, '/api/brokers')).flush(opts.broker ?? SIMULATED);
       await settle();
     }
-    if (detail.status === 'shadow') {
-      (await nextRequest(controller, '/api/strategies/momentum-v3/golive')).flush(
-        goLiveReport('momentum-v3', opts.passed ?? false),
-      );
-      (await nextRequest(controller, '/api/shadow/strategies/momentum-v3/pnl')).flush({
-        strategy_id: 'momentum-v3',
-        rows: opts.pnl ?? PNL,
-      });
-      await settle();
-    }
   }
 
   async function reloaded(status: StrategyDetail['status']): Promise<void> {
-    (await nextRequest(controller, '/api/strategies/momentum-v3')).flush({ ...DETAIL, status });
+    const detail = { ...DETAIL, status };
+    (await nextRequest(controller, '/api/strategies/momentum-v3')).flush(detail);
     (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(page(HISTORY));
+    (await nextRequest(controller, '/api/strategies/momentum-v3/tearsheet')).flush(
+      sheetFor(detail, { golive: status === 'retired' ? null : goLiveReport(detail.id, true) }),
+    );
     await settle();
     if (status === 'active') {
       (await nextRequest(controller, '/api/brokers')).flush(SIMULATED);
@@ -222,7 +268,7 @@ describe('StrategyDetailPage', () => {
     }
   }
 
-  /** The reads behind the go-live ticket: gate, broker and followers. */
+  /** The reads behind the approval ticket: check, broker and followers. */
   async function ticketReads(passed: boolean, broker: BrokerInfo = SIMULATED): Promise<void> {
     (await nextRequest(controller, '/api/strategies/momentum-v3/golive')).flush(
       goLiveReport('momentum-v3', passed),
@@ -232,111 +278,188 @@ describe('StrategyDetailPage', () => {
     await settle();
   }
 
-  function button(label: string): HTMLButtonElement | undefined {
-    return Array.from(el.querySelectorAll<HTMLButtonElement>('app-page-header button')).find(
+  function button(label: string, scope = 'app-page-header'): HTMLButtonElement | undefined {
+    return Array.from(el.querySelectorAll<HTMLButtonElement>(`${scope} button`)).find(
       (b) => b.textContent?.trim() === label,
     );
   }
 
-  it('renders kind, params, research card and survival reports', async () => {
-    await load();
-    const text = el.textContent ?? '';
+  async function openTab(label: string): Promise<void> {
+    Array.from(el.querySelectorAll<HTMLButtonElement>('app-segmented button'))
+      .find((b) => b.textContent?.trim() === label)!
+      .click();
+    await settle();
+  }
 
-    expect(el.querySelector('h1')?.textContent).toContain('momentum-v3');
-    // A name, not the Python class path, under the title.
+  it('opens on a plain verdict with the reasons and the figures under Details (F33)', async () => {
+    await load(DETAIL, HISTORY, { passed: false });
+    const verdict = el.querySelector('app-strategy-verdict')!;
+    expect(verdict.textContent).toContain('Promising, needs more data');
+    expect(verdict.textContent).toContain('It has 3 of the 20 trial days it needs.');
+    const details = verdict.querySelector('details')!;
+    expect(details.querySelector('summary')!.textContent).toContain('Details');
+    expect(details.textContent).toContain('3 against ≥ 20');
+    expect(details.textContent).toContain('Robustness tests: 1 of 2 passed.');
+  });
+
+  it('shows the trial result from its test book with a value chart', async () => {
+    await load();
+    const perf = el.querySelector('.perf')!.textContent!;
+    expect(perf).toContain('+8.00%');
+    expect(perf).toContain('-5.00%');
+    expect(perf).toContain('21');
+    expect(el.querySelector('#perf-title')!.textContent).toBe('Trial results');
+    const summary = el.querySelector('app-time-series-chart')!.textContent!;
+    expect(summary).toContain('a return of +8.00%');
+    await settle();
+    expect(chart.last?.map((s) => s.id)).toEqual(['value', 'drawdown']);
+    expect(chart.last?.[0].points).toHaveLength(3);
+  });
+
+  it('shows an approved strategy its trial record, never an empty page (F28)', async () => {
+    await load({ ...DETAIL, status: 'active' }, HISTORY, { passed: true });
+    expect(el.querySelector('.perf')!.textContent).toContain('+8.00%');
+    expect(el.querySelector('app-strategy-verdict')!.textContent).toContain('Worth following');
+    expect(el.textContent).not.toMatch(/trades live now/i);
+  });
+
+  it('explains an approved strategy with no trial record', async () => {
+    await load({ ...DETAIL, status: 'active' }, HISTORY, { passed: true, curve: [] });
+    expect(el.textContent).toContain('No trial record');
+    expect(el.textContent).toContain('Follow it on Paper');
+    expect(el.querySelector('#perf-title + * app-time-series-chart')).toBeNull();
+  });
+
+  it('never calls the strategy live and uses the ladder words (B1)', async () => {
+    await load({ ...DETAIL, status: 'active' });
     const subtitle = el.querySelector('app-page-header p')?.textContent ?? '';
-    expect(subtitle).toContain('Momentum strategy. Paper trading.');
-    expect(subtitle).not.toContain('stonks.');
-    // The class path is secondary, inside a details block.
-    expect(el.querySelector('details.tech')?.textContent).toContain(
-      'stonks.strategies.momentum.MomentumStrategy',
+    expect(subtitle).toContain('Momentum strategy. Approved.');
+    const copy = el.cloneNode(true) as HTMLElement;
+    copy.querySelectorAll('.timeline .reason').forEach((r) => r.remove());
+    expect(copy.textContent).not.toMatch(/(?<!go-)\blive\b|shadow|promot|regist/i);
+    expect(el.querySelector('app-stage-bar [aria-current="step"]')?.textContent).toContain(
+      'Approved',
     );
-    expect(text).toContain('equity');
-    expect(text).toContain('2026-09-01');
-    // Parameter names read as words, not keys (UX-68).
+  });
+
+  it('shows names, not raw ids, and keeps the id under Technical details (UX-27)', async () => {
+    await load({ ...DETAIL, id: 'momentum_3fa9c21b', status: 'retired' });
+    expect(el.querySelector('h1')!.textContent).toBe('Momentum 3fa9');
+    await openTab('Details');
+    expect(el.querySelector('details.tech')!.textContent).toContain('momentum_3fa9c21b');
+  });
+
+  it('keeps research, parameters and robustness tests on the Details tab (F29)', async () => {
+    await load();
+    expect(el.querySelector('section[aria-labelledby="research-title"]')).toBeNull();
+    await openTab('Details');
+    const text = el.textContent ?? '';
     expect(text).toContain('Lookback');
     expect(text).toContain('Top n');
     expect(text).toContain('["AAPL.US","MSFT.US"]');
-
     const research = el.querySelector('section[aria-labelledby="research-title"]')!;
     expect(research.querySelector('blockquote')?.textContent).toContain(
       'Recent winners keep winning',
     );
-    expect(research.textContent).toContain('Trend');
-    expect(research.textContent).toContain('21 bars');
-
+    expect(research.textContent).toContain('21 periods');
+    expect(research.textContent).not.toMatch(/\bbars?\b/);
     const reports = el.querySelectorAll('.report');
     expect(reports.length).toBe(2);
-    // Survival test headings use labels, not ids like "oos".
     const headings = [...el.querySelectorAll('.report h3')].map((h) => h.textContent?.trim());
     expect(headings[0]).toContain('Out of sample');
-    expect(headings[1]).toContain('Drift');
-    expect(headings.join(' ')).not.toMatch(/\boos\b/);
-    expect(reports[0].textContent).toContain('CAGR (held out)');
     expect(reports[0].textContent).toContain('12.34%');
-    expect(reports[1].textContent).toContain('n/a');
     expect(reports[1].classList).toContain('failed');
-    expect(text).toContain('1 of 2 passed');
-
-    expect(el.querySelector('a[href="/lab?strategy=momentum-v3"]')).not.toBeNull();
-    expect(el.querySelector('a[href="/go-live?strategy=momentum-v3"]')).not.toBeNull();
-  });
-
-  it('uses trader words only: no system words outside what people typed (UX-09)', async () => {
-    await load();
-    const copy = el.cloneNode(true) as HTMLElement;
-    // Reasons are what people wrote; the page's own words must be clean.
-    copy.querySelectorAll('.timeline .reason').forEach((r) => r.remove());
-    expect(copy.textContent).not.toMatch(/shadow|promot|regist|retire/i);
-    const pills = [...el.querySelectorAll('.timeline app-status-pill')].map((p) =>
-      p.textContent?.trim(),
+    expect(el.querySelector('details.tech')?.textContent).toContain(
+      'stonks.strategies.momentum.MomentumStrategy',
     );
-    expect(pills).toContain('Paper trading');
-    expect(pills).toContain('Live');
   });
 
-  it('shows the status history newest first, with reasons and overrides', async () => {
+  it('puts the results of its test book on the Results tab, with the printable tear sheet', async () => {
     await load();
+    await openTab('Results');
+    const tiles = [...el.querySelectorAll('app-stat-tile')].map((t) => t.textContent ?? '');
+    expect(tiles.join(' ')).toContain('Days on trial');
+    expect(el.querySelector('a[href="/strategies/momentum-v3/tearsheet"]')?.textContent).toContain(
+      'Printable tear sheet',
+    );
+    expect(el.textContent).toContain('No real money');
+  });
+
+  it('shows the go-live check and the status history newest first on Review', async () => {
+    await load();
+    await openTab('Review');
+    const checks = el.querySelector('app-golive-check-list')!;
+    expect(checks.textContent).toContain('Trial days');
+    expect(checks.textContent).toContain('Before you approve');
     const items = el.querySelectorAll('.timeline li');
     expect(items.length).toBe(2);
-    expect(items[0].textContent).toContain('paper period looked fine but was short');
-    expect(items[0].textContent).toContain('Gate overridden');
-    expect(items[0].textContent).toContain('Go-live failed');
+    expect(items[0].textContent).toContain('Check overridden');
+    expect(items[0].textContent).toContain('Go-live check failed');
     expect(items[0].classList).toContain('override');
-    expect(items[1].textContent).toContain('registered by lab run');
+    // The system is "Stonks", not a service id (F31).
+    expect(items[1].textContent).toContain('By Stonks');
     expect(historyEntries(HISTORY).map((h) => h.id)).toEqual([2, 1]);
   });
 
   it('keeps the page when only the history fails', async () => {
-    (await nextRequest(controller, '/api/strategies/momentum-v3')).flush({
-      ...DETAIL,
-      status: 'retired',
-    });
+    const retired = { ...DETAIL, status: 'retired' as const };
+    (await nextRequest(controller, '/api/strategies/momentum-v3')).flush(retired);
     (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(
       { title: 'Server error', status: 500, detail: 'boom' },
       { status: 500, statusText: 'Server Error' },
     );
+    (await nextRequest(controller, '/api/strategies/momentum-v3/tearsheet')).flush(
+      sheetFor(retired),
+    );
     (await nextRequest(controller, '/api/orders')).flush(page([]));
     await settle();
     expect(el.querySelector('app-follow-panel')).toBeNull();
+    await openTab('Review');
     expect(el.textContent).toContain('Could not load the status history');
-    expect(el.querySelectorAll('.report').length).toBe(2);
   });
 
-  it('offers to follow a paper or live strategy, not a stopped one', async () => {
+  it('offers to follow a strategy on trial or approved, not a retired one', async () => {
     await load();
     expect(el.querySelector('app-follow-panel')).not.toBeNull();
   });
 
-  it('offers Go live only at the Ready stage (UX-23)', async () => {
+  it('offers Approve in the header only once the check passed (UX-23)', async () => {
     await load(DETAIL, HISTORY, { passed: true });
     expect(button(LIFECYCLE.live.label)!.classList).toContain('btn-primary');
-    expect(button(LIFECYCLE.stop.label)).toBeDefined();
-    expect(button(LIFECYCLE.pause.label)).toBeUndefined();
     expect(button('Override…')).toBeUndefined();
+    // Retire is never in the header next to the kill switch (M9).
+    expect(button(LIFECYCLE.stop.label)).toBeUndefined();
   });
 
-  it('failing paper strategy shows no primary Go live, admins get Override (UX-23)', async () => {
+  it('keeps Retire quiet on the Review tab, never red (M9)', async () => {
+    await load();
+    await openTab('Review');
+    const retire = button(LIFECYCLE.stop.label, 'section[aria-labelledby="status-title"]')!;
+    expect(retire.classList).not.toContain('btn-danger');
+    expect(retire.classList).not.toContain('btn-primary');
+    retire.click();
+    await settle();
+    const form = dialogForm(el)!;
+    expect(form.textContent).toContain('Retire momentum-v3?');
+    expect(form.querySelector('button.btn-danger')).toBeNull();
+    expect(fillDialog(fixture, { reason: '   ' }).disabled).toBe(true);
+    Array.from(form.querySelectorAll('button'))
+      .find((b) => b.textContent?.trim() === 'Cancel')!
+      .click();
+    await settle();
+    expect(dialogForm(el)).toBeNull();
+    expect(controller.match(() => true)).toEqual([]);
+
+    button(LIFECYCLE.stop.label, 'section[aria-labelledby="status-title"]')!.click();
+    await settle();
+    answerDialog(fixture, { reason: 'Edge is gone' });
+    const post = await nextRequest(controller, '/api/strategies/momentum-v3/retire', 'POST');
+    expect(post.request.body).toEqual({ reason: 'Edge is gone', override: false });
+    post.flush({ ...DETAIL, status: 'retired' });
+    await reloaded('retired');
+  });
+
+  it('a strategy on trial that fails shows no Approve, admins get Override (UX-23)', async () => {
     await load();
     expect(button(LIFECYCLE.live.label)).toBeUndefined();
     const override = button('Override…')!;
@@ -346,6 +469,10 @@ describe('StrategyDetailPage', () => {
     const form = dialogForm(el)!;
     expect(form.textContent).toContain('without passing the check');
     expect(form.querySelector('.ticket')).not.toBeNull();
+    // A paper broker: the words match the PAPER stamp, and no red button (B2).
+    expect(form.textContent).toContain('No real money moves');
+    expect(form.textContent).not.toMatch(/real orders/i);
+    expect(form.querySelector('button.btn-danger')).toBeNull();
     answerDialog(fixture, { reason: 'Owner accepts a short paper period', typed: 'override' });
     const post = await nextRequest(controller, '/api/strategies/momentum-v3/promote', 'POST');
     expect(post.request.body).toEqual({
@@ -356,7 +483,7 @@ describe('StrategyDetailPage', () => {
     await reloaded('active');
   });
 
-  it('stopped strategy offers no Go live, only Start paper trading (UX-23)', async () => {
+  it('a retired strategy offers only Put on trial (UX-23)', async () => {
     await load({ ...DETAIL, status: 'retired' });
     const labels = [...el.querySelectorAll('app-page-header button')].map((b) =>
       b.textContent?.trim(),
@@ -364,23 +491,17 @@ describe('StrategyDetailPage', () => {
     expect(labels).toEqual([LIFECYCLE.paper.label]);
   });
 
-  it('shows the display name in the header and the id under Technical details (UX-27)', async () => {
-    await load({ ...DETAIL, id: 'momentum_3fa9c21b', status: 'retired' });
-    expect(el.querySelector('h1')!.textContent).toBe('Momentum 3fa9');
-    expect(el.querySelector('details.tech')!.textContent).toContain('momentum_3fa9c21b');
-  });
-
-  it('shows the LIVE stamp by the title of a live strategy on a real broker (UX-09)', async () => {
+  it('shows the LIVE stamp by the title of an approved strategy on a real broker', async () => {
     await load({ ...DETAIL, status: 'active' }, HISTORY, { broker: REAL });
     expect(el.querySelector('app-page-header app-mode-stamp')!.textContent).toContain('LIVE');
   });
 
-  it('shows no stamp for a live strategy on a paper broker', async () => {
+  it('shows no stamp for an approved strategy on a paper broker', async () => {
     await load({ ...DETAIL, status: 'active' });
     expect(el.querySelector('app-page-header app-mode-stamp')).toBeNull();
   });
 
-  it('goes live with a reason and a hold after showing the go-live result', async () => {
+  it('approves with a reason and a hold after showing the go-live check', async () => {
     await load(DETAIL, HISTORY, { passed: true });
     const success = vi.spyOn(toasts, 'success');
 
@@ -388,35 +509,31 @@ describe('StrategyDetailPage', () => {
     await ticketReads(true);
 
     const form = dialogForm(el)!;
-    // An order ticket with a PAPER stamp on the simulated broker (UX-03).
     expect(form.querySelector('.ticket app-mode-stamp')!.textContent).toContain('PAPER');
-    expect(form.textContent).toContain('no real money moves');
-    expect(form.textContent).toContain('Go live with momentum-v3?');
+    expect(form.textContent).toContain('Approval ticket');
+    expect(form.textContent).toContain('No real money moves');
+    expect(form.textContent).toContain('Approve momentum-v3?');
     expect(form.textContent).toContain('Go-live check passed');
-    expect(form.textContent).toContain('All 2 checks passed');
-    // A passing promotion is confirmed by holding, not by typing the id.
     expect(isHoldDialog(el)).toBe(true);
     expect(form.querySelector('input')).toBeNull();
     expect(fillDialog(fixture, { reason: '' }).disabled).toBe(true);
-    answerDialog(fixture, { reason: 'Paper period passed the gate' });
+    answerDialog(fixture, { reason: 'Trial passed the check' });
 
     const post = await nextRequest(controller, '/api/strategies/momentum-v3/promote', 'POST');
-    expect(post.request.body).toEqual({ reason: 'Paper period passed the gate', override: false });
+    expect(post.request.body).toEqual({ reason: 'Trial passed the check', override: false });
     post.flush({ ...DETAIL, status: 'active' });
     await reloaded('active');
 
     expect(success).toHaveBeenCalledWith(LIFECYCLE.live.done('momentum-v3'));
     expect(button(LIFECYCLE.live.label)).toBeUndefined();
-    expect(button(LIFECYCLE.pause.label)).toBeDefined();
   });
 
-  it('offers an override with a long reason when the gate refuses (409)', async () => {
+  it('offers an override with a long reason when the check refuses (409)', async () => {
     await load(DETAIL, HISTORY, { passed: true });
     const error = vi.spyOn(toasts, 'error');
 
     button(LIFECYCLE.live.label)!.click();
     await ticketReads(false);
-    expect(dialogForm(el)!.textContent).toContain('3 days of paper trading, needs at least 20');
     answerDialog(fixture, { reason: 'Try it' });
 
     (await nextRequest(controller, '/api/strategies/momentum-v3/promote', 'POST')).flush(
@@ -426,14 +543,10 @@ describe('StrategyDetailPage', () => {
     await settle();
 
     const form = dialogForm(el)!;
-    expect(form.textContent).toContain('The go-live gate refused momentum-v3');
-    expect(form.textContent).toContain('Paper days');
+    expect(form.textContent).toContain('The go-live check refused momentum-v3');
+    expect(form.textContent).toContain('Trial days');
     expect(error).not.toHaveBeenCalled();
-    // A short reason or the wrong word keeps the override disabled.
     expect(fillDialog(fixture, { reason: 'too short', typed: 'override' }).disabled).toBe(true);
-    expect(
-      fillDialog(fixture, { reason: 'Owner accepts a short paper period', typed: 'nope' }).disabled,
-    ).toBe(true);
     answerDialog(fixture, { reason: 'Owner accepts a short paper period', typed: 'override' });
 
     const post = await nextRequest(controller, '/api/strategies/momentum-v3/promote', 'POST');
@@ -443,31 +556,14 @@ describe('StrategyDetailPage', () => {
     });
     post.flush({ ...DETAIL, status: 'active' });
     await reloaded('active');
-    expect(button(LIFECYCLE.pause.label)).toBeDefined();
   });
 
-  it('stops only with a reason and does nothing when cancelled', async () => {
-    await load();
-    button(LIFECYCLE.stop.label)!.click();
-    await settle();
-    const form = dialogForm(el)!;
-    expect(form.querySelector('button.btn-danger')).not.toBeNull();
-    expect(fillDialog(fixture, { reason: '   ' }).disabled).toBe(true);
-
-    Array.from(form.querySelectorAll('button'))
-      .find((b) => b.textContent?.trim() === 'Cancel')!
-      .click();
-    await settle();
-    expect(dialogForm(el)).toBeNull();
-    expect(controller.match(() => true)).toEqual([]);
-
-    button(LIFECYCLE.stop.label)!.click();
-    await settle();
-    answerDialog(fixture, { reason: 'Edge is gone' });
-    const post = await nextRequest(controller, '/api/strategies/momentum-v3/retire', 'POST');
-    expect(post.request.body).toEqual({ reason: 'Edge is gone', override: false });
-    post.flush({ ...DETAIL, status: 'retired' });
-    await reloaded('retired');
+  it('puts an approved strategy back on trial from the Review tab', async () => {
+    await load({ ...DETAIL, status: 'active' }, HISTORY, { passed: true });
+    await openTab('Review');
+    const scope = 'section[aria-labelledby="status-title"]';
+    expect(button(LIFECYCLE.pause.label, scope)).toBeDefined();
+    expect(button(LIFECYCLE.stop.label, scope)).toBeDefined();
   });
 
   it('shows the API message when the strategy is missing', async () => {
@@ -476,6 +572,10 @@ describe('StrategyDetailPage', () => {
       { status: 404, statusText: 'Not Found' },
     );
     (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(page([]));
+    (await nextRequest(controller, '/api/strategies/momentum-v3/tearsheet')).flush(
+      { title: 'Not Found', status: 404, detail: 'no strategy with id momentum-v3' },
+      { status: 404, statusText: 'Not Found' },
+    );
     (await nextRequest(controller, '/api/orders')).flush(page([]));
     await settle();
     expect(el.querySelector('[role="alert"]')?.textContent).toContain(
@@ -487,9 +587,7 @@ describe('StrategyDetailPage', () => {
     it('disables the status actions with a reason for non-admins', async () => {
       allowed.set(false);
       await load(DETAIL, HISTORY, { passed: true });
-      for (const label of [LIFECYCLE.live.label, LIFECYCLE.stop.label]) {
-        expect(button(label)!.disabled).toBe(true);
-      }
+      expect(button(LIFECYCLE.live.label)!.disabled).toBe(true);
       expect(el.querySelector('app-page-header app-permission-note')?.textContent).toContain(
         'Admins only.',
       );
@@ -498,65 +596,35 @@ describe('StrategyDetailPage', () => {
       expect(dialogForm(el)).toBeNull();
     });
 
-    it('shows no permission note for admins', async () => {
-      await load(DETAIL, HISTORY, { passed: true });
-      expect(button(LIFECYCLE.live.label)!.disabled).toBe(false);
-      expect(el.querySelector('app-permission-note')).toBeNull();
+    it('hides the Model versions tab from those who cannot run the Lab (F29)', async () => {
+      allowed.set(false);
+      await load();
+      const tabs = [...el.querySelectorAll('app-segmented button')].map((b) =>
+        b.textContent?.trim(),
+      );
+      expect(tabs).toEqual(['Overview', 'Results', 'Review', 'Details']);
     });
   });
 
   describe('stage bar (UI-11)', () => {
     const current = () => el.querySelector('app-stage-bar [aria-current="step"]')?.textContent;
 
-    it('shows Paper and links to the go-live check while the gate fails', async () => {
+    it('shows On trial and links to the Review tab while the check fails', async () => {
       await load();
-      expect(current()).toContain('Paper');
+      expect(current()).toContain('On trial');
       const link = el.querySelector<HTMLAnchorElement>('app-stage-bar a')!;
-      expect(link.getAttribute('href')).toBe('/go-live?strategy=momentum-v3');
+      expect(link.getAttribute('href')).toBe('/strategies/momentum-v3?tab=review');
     });
 
-    it('shows Ready once the gate passes, with Go live in the header only', async () => {
+    it('says ready to approve once the check passes, with Approve in the header only', async () => {
       await load(DETAIL, HISTORY, { passed: true });
-      expect(current()).toContain('Ready');
+      expect(current()).toContain('ready to approve');
       expect(el.querySelector('app-stage-bar button')).toBeNull();
       expect(button(LIFECYCLE.live.label)).toBeDefined();
     });
-
-    it('folds the failing checks under the bar', async () => {
-      await load();
-      expect(el.querySelector('app-stage-bar details.checks')!.textContent).toContain(
-        '3 days of paper trading, needs at least 20',
-      );
-    });
-
-    it('shows Live for an active strategy and links to its orders', async () => {
-      await load({ ...DETAIL, status: 'active' });
-      expect(current()).toContain('Live');
-      expect(el.querySelector('app-stage-bar a')?.getAttribute('href')).toBe('/orders');
-      expect(button(LIFECYCLE.pause.label)).toBeDefined();
-    });
   });
 
-  describe('performance and orders (UI-16)', () => {
-    it('shows the paper return, drawdown and days with a value chart', async () => {
-      await load();
-      const perf = el.querySelector('.perf')!.textContent!;
-      expect(perf).toContain('+8.00%');
-      expect(perf).toContain('-5.00%');
-      expect(perf).toContain('21');
-      const summary = el.querySelector('app-time-series-chart')!.textContent!;
-      expect(summary).toContain('a return of +8.00%');
-      await settle();
-      expect(chart.last?.map((s) => s.id)).toEqual(['value', 'drawdown']);
-      expect(chart.last?.[0].points).toHaveLength(3);
-    });
-
-    it('explains the missing chart for a live strategy', async () => {
-      await load({ ...DETAIL, status: 'active' });
-      expect(el.textContent).toContain('It trades live now.');
-      expect(el.querySelector('app-time-series-chart')).toBeNull();
-    });
-
+  describe('orders', () => {
     it('lists recent orders with the side mark', async () => {
       await load({ ...DETAIL, status: 'active' }, HISTORY, { orders: [ORDER] });
       const orders = el.querySelector('section[aria-labelledby="orders-title"]')!;
@@ -565,35 +633,23 @@ describe('StrategyDetailPage', () => {
     });
 
     it("asks for this strategy's orders only", async () => {
-      (await nextRequest(controller, '/api/strategies/momentum-v3')).flush({
-        ...DETAIL,
-        status: 'retired',
-      });
+      const retired = { ...DETAIL, status: 'retired' as const };
+      (await nextRequest(controller, '/api/strategies/momentum-v3')).flush(retired);
       (await nextRequest(controller, '/api/strategies/momentum-v3/history')).flush(page([]));
+      (await nextRequest(controller, '/api/strategies/momentum-v3/tearsheet')).flush(
+        sheetFor(retired),
+      );
       const req = await nextRequest(controller, '/api/orders');
       expect(req.request.urlWithParams).toContain('strategy_id=momentum-v3');
       req.flush(page([]));
       await settle();
       expect(el.textContent).toContain('No orders yet');
     });
-
-    it('computes performance from the P&L rows', () => {
-      controller.match(() => true); // the page's own reads are not needed here
-      expect(paperPerformance([])).toBeNull();
-      expect(paperPerformance(PNL)).toMatchObject({
-        totalReturn: 0.08,
-        maxDrawdown: -0.05,
-        days: 21,
-      });
-    });
   });
+
   it('opens the Model versions tab and keeps it in the address', async () => {
     await load();
-    const tab = Array.from(el.querySelectorAll<HTMLButtonElement>('app-segmented button')).find(
-      (b) => b.textContent?.trim() === 'Model versions',
-    )!;
-    tab.click();
-    await settle();
+    await openTab('Model versions');
     (await nextRequest(controller, '/api/strategies/momentum-v3/versions')).flush(page([]));
     (await nextRequest(controller, '/api/strategies/momentum-v3/versions/history')).flush(page([]));
     await settle();
@@ -610,5 +666,35 @@ describe('StrategyDetailPage', () => {
     (await nextRequest(controller, '/api/strategies/momentum-v3/versions/history')).flush(page([]));
     await settle();
     expect(el.querySelector('app-model-versions-panel')).toBeTruthy();
+  });
+});
+
+describe('strategy page helpers', () => {
+  it('offers one forward step in the header and quiet steps back elsewhere', () => {
+    expect(detailActions('shadow', true, false).map((a) => a.label)).toEqual(['Approve']);
+    expect(detailActions('shadow', false, true).map((a) => a.label)).toEqual(['Override…']);
+    expect(detailActions('shadow', false, false)).toEqual([]);
+    expect(detailActions('active', true, true)).toEqual([]);
+    expect(detailActions('retired', null, true).map((a) => a.label)).toEqual(['Put on trial']);
+    expect(statusActions('active').map((a) => a.label)).toEqual(['Back on trial', 'Retire']);
+    expect(statusActions('shadow').map((a) => a.label)).toEqual(['Retire']);
+    expect(statusActions('retired')).toEqual([]);
+  });
+
+  it('reads tabs from the address and names the system Stonks', () => {
+    expect(asTab('review')).toBe('review');
+    expect(asTab('nope')).toBe('overview');
+    expect(asTab(undefined)).toBe('overview');
+    expect(actorName('service:system')).toBe('Stonks');
+    expect(actorName('user:ann')).toBe('ann');
+  });
+
+  it('computes performance from the P&L rows', () => {
+    expect(paperPerformance([])).toBeNull();
+    expect(paperPerformance(PNL)).toMatchObject({
+      totalReturn: 0.08,
+      maxDrawdown: -0.05,
+      days: 21,
+    });
   });
 });

@@ -36,7 +36,8 @@ describe('tick confirmation', () => {
     const opts = tickConfirmOptions(false, ALPACA_PAPER);
     expect(opts.title).toContain('alpaca paper');
     expect(opts.typedConfirmation).toBe('alpaca paper');
-    expect(opts.tone).toBe('danger');
+    expect(opts.tone).toBe('default');
+    expect(tickConfirmOptions(false, ALPACA_LIVE).tone).toBe('danger');
     expect(opts.confirmLabel).toBe('Start trading run');
   });
 
@@ -53,14 +54,15 @@ describe('tick confirmation', () => {
     const paper = tickTicket(ALPACA_PAPER, { asOf: '', tickers: '' });
     expect(paper.ticket?.live).toBe(false);
     expect(paper.typedConfirmation).toBe('alpaca paper');
-    expect(paper.tone).toBe('danger');
+    // B2: a paper run is never a red button.
+    expect(paper.tone).toBe('default');
     expect(paper.confirmLabel).toBe('Start trading run');
     expect(paper.cancelLabel).toBe('Keep editing');
     expect(paper.ticket?.lines.map((l) => [l.label, l.value])).toEqual([
       ['Broker', 'alpaca paper'],
       ['As of', 'Today'],
       ['Tickers', 'All in the universe'],
-      ['Strategies', 'Every live strategy'],
+      ['Strategies', 'Every approved strategy'],
     ]);
 
     const live = tickTicket(ALPACA_LIVE, { asOf: '2026-09-25', tickers: 'aapl.us msft.us' });

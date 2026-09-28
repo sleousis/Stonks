@@ -2,7 +2,7 @@
   [title]="displayName()"
   [description]="sheet.hasValue() ? cls() + '. ' + statusWord() + '.' : 'Tear sheet'"
 >
-  <a actions class="btn btn-ghost" routerLink="/leaderboard">Leaderboard</a>
+  <a actions class="btn btn-ghost" routerLink="/leaderboard">Compare</a>
   <a actions class="btn btn-ghost" [routerLink]="['/strategies', id()]">Strategy page</a>
   <a actions class="btn" routerLink="/lab" [queryParams]="{ strategy: id() }">Backtest it</a>
   <button
@@ -16,7 +16,8 @@
   </button>
 </app-page-header>
 <p class="print-only print-meta">
-  Stonks tear sheet of {{ displayName() }}, printed {{ printedOn() }}. Paper results, not advice.
+  Stonks tear sheet of {{ displayName() }}, printed {{ printedOn() }}. Trial results on paper money,
+  not advice.
 </p>
 
 @if (sheet.error(); as err) {
@@ -26,7 +27,13 @@
 } @else {
   @let s = sheet.value();
 
-  <section class="tiles" aria-label="Paper result">
+  @if (verdict(); as v) {
+    <section class="panel verdict-card" aria-label="Verdict">
+      <app-strategy-verdict [verdict]="v" />
+    </section>
+  }
+
+  <section class="tiles" aria-label="Trial result">
     @for (t of tiles(); track t.label) {
       <app-stat-tile [label]="t.label" [value]="t.value" [help]="t.help" />
     }
@@ -35,7 +42,7 @@
   <div class="grid">
     <section class="panel span-wide" aria-labelledby="curve-title">
       <div class="panel-head">
-        <h2 id="curve-title">Paper value</h2>
+        <h2 id="curve-title">Test book value</h2>
         @if (s.paper.latest_day) {
           <span class="muted num">to {{ day(s.paper.latest_day) }}</span>
         }
@@ -43,12 +50,12 @@
       <div class="panel-body">
         @if (s.curve.length < 2) {
           <app-empty-state
-            title="Not enough paper days"
+            title="Not enough trial days"
             message="The daily run adds a point to this curve each trading day."
           />
         } @else {
           <app-time-series-chart
-            ariaLabel="Paper value, with drawdown below"
+            ariaLabel="Test book value, with drawdown below"
             [summary]="summary()"
             [series]="series()"
             [height]="300"
@@ -62,9 +69,9 @@
         <h2 id="months-title">Monthly returns</h2>
       </div>
       @if (s.monthly_returns.length === 0) {
-        <p class="panel-body muted">No full month on paper yet.</p>
+        <p class="panel-body muted">No full month on trial yet.</p>
       } @else {
-        <app-monthly-returns caption="Paper return by month" [months]="s.monthly_returns" />
+        <app-monthly-returns caption="Trial return by month" [months]="s.monthly_returns" />
       }
     </section>
 
@@ -74,7 +81,7 @@
         <span class="verdict" [attr.data-passed]="s.golive?.passed">{{ golive() }}</span>
       </div>
       @if (!s.golive) {
-        <p class="panel-body muted">A stopped strategy is not checked.</p>
+        <p class="panel-body muted">A retired strategy is not checked.</p>
       } @else {
         <ul class="rows">
           @for (c of checks(); track c.name) {
@@ -98,7 +105,7 @@
         }
       </div>
       @if (tests().length === 0) {
-        <p class="panel-body muted">No lab verdicts are stored for this strategy.</p>
+        <p class="panel-body muted">No robustness tests are stored for this strategy.</p>
       } @else {
         <ul class="rows">
           @for (t of tests(); track t.id) {
@@ -122,13 +129,13 @@
 
     <section class="panel span-wide" aria-labelledby="trades-title">
       <div class="panel-head">
-        <h2 id="trades-title">Recent paper trades</h2>
+        <h2 id="trades-title">Recent test book trades</h2>
       </div>
       @if (s.recent_trades.length === 0) {
-        <p class="panel-body muted">No paper trades yet.</p>
+        <p class="panel-body muted">No test book trades yet.</p>
       } @else {
         <app-data-table
-          caption="Recent paper trades of this strategy"
+          caption="Recent test book trades of this strategy"
           [rows]="s.recent_trades"
           [columns]="tradeColumns"
           [rowKey]="tradeKey"
