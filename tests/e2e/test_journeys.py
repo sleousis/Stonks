@@ -413,10 +413,9 @@ def test_trader_cannot_see_the_admins_portfolio(browse, stack, viewport):
     assert v.api("GET", "/api/portfolio").json()["cash"] == pytest.approx(stack_cash())
 
     # The admin's tick bought AAA.US and BBB.US; none of it shows to the trader.
+    # The Dashboard is an admin page: the trader gets the one No access page.
     page = v.go(f"/dashboard?portfolio_id={admin_pf}")
-    main = page.locator("main")
-    expect(main).to_contain_text("$4,321.00")
-    expect(main).to_contain_text("0 positions")
+    expect(page.get_by_role("heading", level=1)).to_have_text("No access")
     v.check_page("dashboard-trader")
     page = v.go("/orders")
     expect(page.locator("main")).to_contain_text("No orders yet")

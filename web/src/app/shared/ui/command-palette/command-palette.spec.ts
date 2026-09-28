@@ -149,6 +149,23 @@ describe('CommandPalette', () => {
     expect(el.querySelector('[role="status"]')!.textContent).toContain('3 results');
   });
 
+  it("opens a ticker on its chart, every trader's page, never the admins' Data page (F68)", async () => {
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    await openAndLoad();
+    await type('momo');
+    (await nextRequest(controller, '/api/market/instruments')).flush({
+      items: [{ id: 'MOMO.US', name: 'Hello Group', exchange: 'US' }],
+      total: 1,
+      limit: 8,
+      offset: 0,
+    });
+    await tick();
+    fixture.detectChanges();
+    const ticker = options().find((o) => o.textContent?.includes('MOMO.US'))!;
+    ticker.click();
+    expect(navigate).toHaveBeenCalledWith(['/charts', 'MOMO.US']);
+  });
+
   it('asks the API for tickers once typing pauses', async () => {
     await openAndLoad();
     input().value = 'a';

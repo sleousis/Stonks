@@ -1,5 +1,5 @@
 import { inject } from '@angular/core';
-import { type CanActivateFn, Router, type Routes } from '@angular/router';
+import { type CanActivateFn, RedirectCommand, Router, type Routes } from '@angular/router';
 
 import { SessionService } from './session.service';
 
@@ -38,12 +38,19 @@ export const authGuard: CanActivateFn = async (_route, state) => {
   }
 };
 
-/** Admin pages (users). Everyone else goes home. */
+/** Where anyone who may not open a page lands (m10): one plain "No access" page. */
+export const NO_ACCESS_PATH = '/no-access';
+
+/**
+ * Admin pages (users, the dashboard). Everyone else sees the one "No
+ * access" page, at the address they asked for, instead of a silent jump.
+ */
 export const adminGuard: CanActivateFn = async () => {
   const session = inject(SessionService);
   const router = inject(Router);
   await session.load();
-  return session.isAdmin() || router.createUrlTree(['/']);
+  if (session.isAdmin()) return true;
+  return new RedirectCommand(router.parseUrl(NO_ACCESS_PATH), { skipLocationChange: true });
 };
 
 /** The sign-in page: someone already signed in goes where they were heading. */

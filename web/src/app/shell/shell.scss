@@ -175,10 +175,12 @@
     flex-direction: column;
     gap: var(--space-2);
     height: 100dvh;
-    overflow-y: auto;
-    padding: var(--space-4) var(--space-3);
+    overflow: hidden;
+    padding: var(--space-4) var(--space-3) var(--space-3);
     padding-left: calc(var(--space-3) + env(safe-area-inset-left));
     @include rail-scope;
+    // A hairline keeps the frame's edge where rail and page are close in tone (dark theme).
+    border-right: 1px solid color-mix(in srgb, var(--color-rail-ink) 14%, transparent);
 
     > .sidebar-head > .brand {
       padding: var(--space-1) var(--space-3) var(--space-2);
@@ -188,6 +190,35 @@
       box-shadow: inset -3px 0 0 var(--color-loss);
     }
   }
+}
+
+// The nav scrolls between the search box and the pinned account menu, so
+// the menu never falls below the fold (M1). Shadows at the top and bottom
+// edges appear only while there is more to scroll to: the covers scroll
+// with the content, the shadows stay put.
+.rail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 calc(-1 * var(--space-1));
+  padding: 0 var(--space-1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  background:
+    linear-gradient(var(--color-rail) 30%, transparent) top / 100% 24px no-repeat local,
+    linear-gradient(transparent, var(--color-rail) 70%) bottom / 100% 24px no-repeat local,
+    radial-gradient(
+        farthest-side at 50% 0,
+        color-mix(in srgb, var(--color-rail-ink) 22%, transparent),
+        transparent
+      )
+      top / 100% 10px no-repeat scroll,
+    radial-gradient(
+        farthest-side at 50% 100%,
+        color-mix(in srgb, var(--color-rail-ink) 22%, transparent),
+        transparent
+      )
+      bottom / 100% 10px no-repeat scroll;
 }
 
 main {
@@ -211,9 +242,11 @@ main.bare {
 
 .sidebar-foot {
   display: grid;
+  flex: none;
   gap: var(--space-1);
   margin-top: auto;
-  padding-top: var(--space-4);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
 }
 
 .theme-toggle {
@@ -246,7 +279,8 @@ main.bare {
 .drawer-body {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  gap: var(--space-2);
+  height: 100%;
   padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-3)
     calc(var(--space-4) + env(safe-area-inset-bottom))
     calc(var(--space-3) + env(safe-area-inset-left));
