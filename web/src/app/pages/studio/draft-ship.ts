@@ -29,10 +29,10 @@ import { StatusPill } from '../../shared/ui/status-pill';
 type Stage = 'draft' | 'shadow' | 'active' | 'retired';
 
 /**
- * Ship a draft: start paper trading it (it is registered in shadow), then
- * go live (active, trades from the next run) or move it back to paper
- * trading. Every step asks first. Same words as the strategy page
- * (`shared/governance-labels.ts`).
+ * Ship a draft: put it on trial (the system paper-tests it on its own test
+ * book), then approve it (people can follow it from the next run) or put it
+ * back on trial. Every step asks first. Same words as the strategy page
+ * (`shared/governance-labels.ts`, docs/design/vocabulary.md).
  */
 @Component({
   selector: 'app-draft-ship',
@@ -59,7 +59,7 @@ export class DraftShip {
 
   protected readonly busy = signal(false);
   protected readonly labels = LIFECYCLE;
-  /** Starting paper trading, going live and back need `strategy.promote`. */
+  /** Putting on trial, approving and stepping back need `strategy.promote`. */
   protected readonly canShip = computed(() => this.session.can('strategy.promote'));
 
   protected readonly stage = computed<Stage>(() => {
@@ -80,10 +80,11 @@ export class DraftShip {
     if (!this.canShip()) return;
     const d = this.draft();
     const ok = await this.confirm.confirm({
-      title: `Start paper trading ${d.name}?`,
+      title: `Put ${d.name} on trial?`,
       message:
-        'The saved rules become a strategy that trades on paper. It decides on every ' +
-        'run but places no real orders until you go live. Later edits to the draft do not change it.',
+        'The saved rules become a strategy on trial: the system paper-tests it on its own ' +
+        'test book every run. No portfolio trades it until someone approves it. Later edits ' +
+        'to the draft do not change it.',
       confirmLabel: LIFECYCLE.paper.label,
     });
     if (!ok) return;
@@ -91,7 +92,8 @@ export class DraftShip {
     try {
       if (!(await this.ensureSaved()())) return;
       const next = await this.studio.register(d.id);
-      this.toasts.success(LIFECYCLE.paper.done(next.registered_strategy_id ?? d.name));
+      // The draft's own name, never the registry id (UX-27).
+      this.toasts.success(LIFECYCLE.paper.done(d.name));
       this.changed.emit(next);
     } catch {
       // The error interceptor already showed the API's message.
@@ -100,7 +102,7 @@ export class DraftShip {
     }
   }
 
-  /** Same go-live gate as promoting in Strategies: report first, override on a 409. */
+  /** Same go-live check as approving in Strategies: report first, override on a 409. */
   async enable(): Promise<void> {
     if (!this.canShip()) return;
     const id = this.strategyId();
@@ -115,8 +117,8 @@ export class DraftShip {
       promote: (body) => this.studio.enable(draftId, body, true),
       broker: () => this.system.broker(),
       followers: () => this.followers(id),
-      title: `Go live with ${name}?`,
-      message: 'It places orders through the broker from the next trading run.',
+      title: `Approve ${name}?`,
+      message: 'People can follow it from the next trading run.',
       confirmLabel: LIFECYCLE.live.label,
       busy: (on) => this.busy.set(on),
     });
@@ -142,7 +144,7 @@ export class DraftShip {
     }
   }
 
-  /** Names of the portfolios that trade it on paper or auto, for the go-live ticket. */
+  /** Names of the portfolios that trade it (not alerts only), for the approval ticket. */
   private async followers(id: string): Promise<string[]> {
     const subs = await this.subscriptions.list();
     const names = this.portfolioCtx.options();

@@ -11,13 +11,16 @@ import { StatusPill } from './status-pill';
 /** A promotion override needs a reason of at least this many characters (API rule). */
 export const OVERRIDE_MIN_REASON = 20;
 
+/** Failed checks listed before the rest fold under "Show all" (m13). */
+export const FAILING_SHOWN = 3;
+
 /**
- * Going live as an order ticket (UX-03): strategy, portfolios and broker,
+ * Approving as an order ticket (UX-03): strategy, portfolios and broker,
  * with a LIVE stamp for real money, PAPER for a paper broker, and no stamp
  * while the broker is unknown (`live: null`).
  */
 export interface StatusChangeTicket {
-  /** The ticket's heading, "Go-live ticket" by default ("Model swap"). */
+  /** The ticket's heading, "Approval ticket" by default ("Model swap"). */
   kind?: string;
   lines: readonly TicketLine[];
   live: boolean | null;
@@ -27,7 +30,7 @@ export interface StatusChangeOptions {
   title: string;
   /** What will happen, in plain words. */
   message: string;
-  /** The action's verb ("Go live", "Stop"). */
+  /** The action's verb ("Approve", "Retire"). */
   confirmLabel: string;
   tone?: 'default' | 'danger';
   /** Characters the reason needs (1 = required, 20 for an override). */
@@ -46,7 +49,7 @@ export interface StatusChangeOptions {
   golive?: GoLiveReport | null;
   /** Why the go-live result is missing, e.g. the check failed to load. */
   goliveNote?: string | null;
-  /** Show the change as an order ticket (going live). */
+  /** Show the change as an order ticket (approving). */
   ticket?: StatusChangeTicket | null;
 }
 
@@ -57,8 +60,8 @@ interface Open extends StatusChangeOptions {
 let nextId = 0;
 
 /**
- * Asks for the reason behind a status change (go live, back to paper
- * trading, stop) and, when going live, shows the ticket and the go-live
+ * Asks for the reason behind a status change (approve, back on trial,
+ * retire) and, when approving, shows the ticket and the go-live
  * result first.
  * Pages host one and call `open()`; it resolves to the request body, or
  * `null` when cancelled. Full-screen sheet on phones.
@@ -85,11 +88,11 @@ let nextId = 0;
             <div
               class="ticket"
               [class.live]="t.live === true"
-              [attr.aria-label]="t.kind ?? 'Go-live ticket'"
+              [attr.aria-label]="t.kind ?? 'Approval ticket'"
               role="group"
             >
               <p class="ticket-head">
-                <span class="ticket-kind">{{ t.kind ?? 'Go-live ticket' }}</span>
+                <span class="ticket-kind">{{ t.kind ?? 'Approval ticket' }}</span>
                 @if (t.live !== null) {
                   <app-mode-stamp [live]="t.live" />
                 }
@@ -122,14 +125,29 @@ let nextId = 0;
                 </span>
               </p>
               @if (failing().length) {
+                <!-- A short list first, so the reason and the confirm button
+                     stay in view (m13); the rest fold under "Show all". -->
                 <ul class="failing" aria-label="Failing go-live checks">
-                  @for (c of failing(); track c.name) {
+                  @for (c of failingFirst(); track c.name) {
                     <li>
                       <span class="check-label">{{ c.label }}</span>
                       <span class="check-detail">{{ c.detail }}</span>
                     </li>
                   }
                 </ul>
+                @if (failingRest().length) {
+                  <details class="more-checks">
+                    <summary>Show all {{ failing().length }} failed checks</summary>
+                    <ul class="failing" aria-label="More failing go-live checks">
+                      @for (c of failingRest(); track c.name) {
+                        <li>
+                          <span class="check-label">{{ c.label }}</span>
+                          <span class="check-detail">{{ c.detail }}</span>
+                        </li>
+                      }
+                    </ul>
+                  </details>
+                }
               }
             </div>
           } @else if (req.goliveNote) {
@@ -232,6 +250,14 @@ let nextId = 0;
     .check-label {
       font-weight: var(--weight-semibold);
     }
+    .more-checks summary {
+      display: flex;
+      align-items: center;
+      min-height: var(--touch-min);
+      cursor: pointer;
+      font-size: var(--text-sm);
+      font-weight: var(--weight-semibold);
+    }
     .check-detail {
       color: var(--color-ink-2);
       overflow-wrap: anywhere;
@@ -258,6 +284,8 @@ export class StatusChangeDialog {
     const g = this.current()?.golive;
     return g ? g.checks.filter((c) => !c.passed).map((c) => checkRow(c, g.strategy_id)) : [];
   });
+  protected readonly failingFirst = computed(() => this.failing().slice(0, FAILING_SHOWN));
+  protected readonly failingRest = computed(() => this.failing().slice(FAILING_SHOWN));
 
   private readonly reasonLength = computed(() => this.reason().trim().length);
   private readonly reasonOk = computed(

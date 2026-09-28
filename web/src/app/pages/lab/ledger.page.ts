@@ -18,8 +18,10 @@ import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { ExportButton } from '../../shared/ui/export-button';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { robustnessWords } from '../../shared/lab-results/robustness';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { LabNav } from './lab-nav';
+import { strategyTitle } from './lab-requests';
 
 const PAGE_SIZE = 25;
 
@@ -57,7 +59,7 @@ export function scoreText(score: number | null | undefined): string {
   template: `
     <app-page-header
       title="Lab"
-      description="Every lab run on record, the idea it tested and how many trials it took."
+      description="Every lab run on record, the idea it tested and how many settings it tried."
     >
       <app-export-button actions kind="lab-trials" label="All trials CSV" [ghost]="true" />
     </app-page-header>
@@ -72,9 +74,10 @@ export function scoreText(score: number | null | undefined): string {
       </div>
       <div class="panel-body">
         <p class="lead">
-          Each lab run is written down before it starts, with its hypothesis, then every trial it
-          tries. The more trials a strategy has had, the more likely a good result is luck, so the
-          lab's checks count them all.
+          Each lab run is written down before it starts, with its hypothesis, then every setting it
+          tries (its trials). The more trials a strategy has had, the more likely a good result is
+          luck, so the robustness tests count them all. The verdict is about those tests, not the
+          trials.
         </p>
         <form
           class="filters"
@@ -88,7 +91,7 @@ export function scoreText(score: number | null | undefined): string {
               <option value="" [selected]="!strategy()">All strategies</option>
               @for (c of classOptions(); track c.class_path) {
                 <option [value]="c.class_path" [selected]="c.class_path === strategy()">
-                  {{ c.name }}
+                  {{ title(c) }}
                 </option>
               }
             </select>
@@ -107,7 +110,7 @@ export function scoreText(score: number | null | undefined): string {
               [title]="strategy() ? 'No runs of this strategy yet' : 'No lab runs yet'"
               message="Every lab run and sweep is recorded here with its trials as soon as it starts."
             >
-              <a class="btn" routerLink="/lab">Start a lab run</a>
+              <a class="btn" routerLink="/lab">Test a strategy</a>
             </app-empty-state>
           } @else {
             @for (k of [strategy()]; track k) {
@@ -127,12 +130,9 @@ export function scoreText(score: number | null | undefined): string {
                     when(r.started_at)
                   }}</a>
                 </ng-template>
-                <ng-template appCell="verdict" [appCellOf]="p.items" let-r>
-                  @if (r.verdict) {
-                    <app-status-pill [status]="r.verdict" />
-                  } @else {
-                    <span class="muted">Running or stopped</span>
-                  }
+                <ng-template appCell="robustness" [appCellOf]="p.items" let-r>
+                  @let w = robustness(r.robustness);
+                  <app-status-pill [status]="w.status" [label]="w.label" />
                 </ng-template>
               </app-data-table>
             }
@@ -156,13 +156,19 @@ export class LedgerPage {
 
   protected readonly pageSize = PAGE_SIZE;
   protected readonly key = (r: LedgerRunView) => r.id;
+  protected readonly robustness = robustnessWords;
   protected readonly when = (iso: string) => formatDateTime(iso);
 
   private readonly classes = resource({ loader: () => this.system.strategyClasses() });
   protected readonly classOptions = computed(() =>
     this.classes.hasValue()
-      ? [...this.classes.value()].sort((a, b) => a.name.localeCompare(b.name))
+      ? [...this.classes.value()].sort((a, b) => strategyTitle(a).localeCompare(strategyTitle(b)))
       : [],
+  );
+  protected readonly title = strategyTitle;
+  /** Class path to the catalog's plain name. */
+  private readonly titles = computed(
+    () => new Map(this.classOptions().map((c) => [c.class_path, strategyTitle(c)])),
   );
 
   protected readonly offset = linkedSignal({ source: () => this.strategy(), computation: () => 0 });
@@ -183,7 +189,7 @@ export class LedgerPage {
       key: 'strategy_class',
       label: 'Strategy',
       sortable: false,
-      value: (r) => className(r.strategy_class),
+      value: (r) => this.titles().get(r.strategy_class ?? '') ?? className(r.strategy_class),
     },
     {
       key: 'hypothesis',
@@ -193,14 +199,20 @@ export class LedgerPage {
       mobile: 'hide',
     },
     { key: 'n_trials', label: 'Trials', format: 'number', sortable: false, help: 'trials' },
-    { key: 'n_failed', label: 'Failed', format: 'number', sortable: false, mobile: 'hide' },
+    { key: 'n_failed', label: 'Errors', format: 'number', sortable: false, mobile: 'hide' },
     {
       key: 'best_score',
       label: 'Best score',
       sortable: false,
       value: (r) => scoreText(r.best_score),
     },
-    { key: 'verdict', label: 'Verdict', sortable: false },
+    {
+      key: 'robustness',
+      label: 'Status',
+      sortable: false,
+      help: 'lab_verdict',
+      value: (r) => robustnessWords(r.robustness).label,
+    },
   ];
 
   protected setClass(value: string): void {

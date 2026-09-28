@@ -18,6 +18,17 @@ export function providerGives(provider: ProviderView): string {
   return `Reads ${joinWords(words)}.`;
 }
 
+/**
+ * Whether Stonks ever places orders through this broker (F53): a provider
+ * that can trade places orders only when you allow it, one that cannot
+ * only reads.
+ */
+export function providerReach(provider: Pick<ProviderView, 'can_trade'>): string {
+  return provider.can_trade
+    ? 'Reads, and places orders when you allow it.'
+    : 'Reads only. It never places an order there.';
+}
+
 /** How the trader connects: typing keys here, or signing in on the provider's site. */
 export function providerFlow(provider: ProviderView): string {
   return provider.auth_flow === 'portal'

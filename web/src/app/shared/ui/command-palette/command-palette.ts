@@ -170,11 +170,15 @@ export class CommandPalette {
         if (!el.open) {
           const focused = this.doc.activeElement;
           this.returnFocus = focused instanceof HTMLElement ? focused : null;
-          this.query.set('');
-          this.debounced.set('');
+          // Keys typed while the palette was loading are not lost (p5).
+          const early = this.shortcuts.takeTypeahead();
+          this.query.set(early);
+          this.debounced.set(early);
           el.showModal?.();
           if (!el.showModal) el.setAttribute('open', '');
-          this.input().nativeElement.focus();
+          const input = this.input().nativeElement;
+          input.value = early;
+          input.focus();
         }
       } else if (el.open) {
         el.close?.();
@@ -293,7 +297,8 @@ export class CommandPalette {
       group: 'Tickers',
       label: i.id,
       detail: [i.name, i.exchange].filter(Boolean).join(' · ') || undefined,
-      run: () => void this.router.navigate(['/data'], { queryParams: { instrument: i.id } }),
+      // Charts is every trader's page for a ticker; Data is the admins' (F68).
+      run: () => void this.router.navigate(['/charts', i.id]),
     }));
   }
 

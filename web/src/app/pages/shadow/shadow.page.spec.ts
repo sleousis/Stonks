@@ -16,7 +16,7 @@ import type {
 import { provideApi } from '../../api/provide-api';
 import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
 import { tick } from '../../../testing/http';
-import { ShadowPage } from './shadow.page';
+import { ShadowPage, aheadOrBehind } from './shadow.page';
 
 function row(day: string, total_value: number, drawdown = 0, days_elapsed?: number): PnlRowView {
   return {
@@ -143,7 +143,7 @@ describe('ShadowPage', () => {
     expect(series?.[0].color).toBe('muted');
   });
 
-  it('lists each paper strategy against your portfolio with a go-live link', async () => {
+  it('lists each test book against your portfolio with a Review link', async () => {
     await flushAll();
     const summary = el.querySelector('section[aria-labelledby="summary-title"]');
     const text = summary?.textContent ?? '';
@@ -152,9 +152,10 @@ describe('ShadowPage', () => {
     // 10% vs 4.76% for the real portfolio over the same days.
     expect(text).toContain('+5.24%');
     const goLive = summary?.querySelector<HTMLAnchorElement>('a.go-live');
-    expect(goLive?.getAttribute('href')).toBe('/go-live?strategy=value-v1');
+    expect(goLive?.getAttribute('href')).toBe('/strategies/value-v1?tab=review');
 
-    expect(el.textContent).toContain('Leading vs your portfolio');
+    expect(el.textContent).toContain('Best against your portfolio');
+    expect(el.textContent).toContain('5.24% ahead of your portfolio');
   });
 
   it('with a paper portfolio the page never says Real, and names it Your portfolio (UX-26)', async () => {
@@ -167,7 +168,7 @@ describe('ShadowPage', () => {
 
   it('uses trader words only (UX-09)', async () => {
     await flushAll();
-    expect(el.querySelector('h1')!.textContent).toBe('Paper trading');
+    expect(el.querySelector('h1')!.textContent).toBe('Trial results');
     expect(el.textContent).not.toMatch(/shadow|promot|regist|retire/i);
   });
 
@@ -260,7 +261,7 @@ describe('ShadowPage', () => {
     expect(el.querySelector('app-updated-ago')?.textContent).toContain('Updated');
   });
 
-  it('explains the empty state when nothing is on paper', async () => {
+  it('explains the empty state when nothing is on trial', async () => {
     for (let i = 0; i < 6; i++) {
       controller
         .match(() => true)
@@ -275,6 +276,15 @@ describe('ShadowPage', () => {
       fixture.detectChanges();
     }
     expect(el.textContent).toContain('Nothing to compare yet');
-    expect(el.textContent).toContain('No strategies on paper');
+    expect(el.textContent).toContain('No strategies on trial');
+  });
+});
+
+describe('aheadOrBehind', () => {
+  it('never calls a trailing strategy leading (m5)', () => {
+    expect(aheadOrBehind(-0.0207)).toBe('2.07% behind your portfolio');
+    expect(aheadOrBehind(0.0524)).toBe('5.24% ahead of your portfolio');
+    expect(aheadOrBehind(0)).toBe('Level with your portfolio');
+    expect(aheadOrBehind(null)).toBeNull();
   });
 });

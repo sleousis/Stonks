@@ -142,6 +142,10 @@ def _parse_asset_classes(value: Any) -> tuple[AssetClass, ...]:
 
 class BaseStrategy:
     id: ClassVar[str] = "base"
+    #: A plain name people read ("Moving average trend"); empty = the id in words.
+    title: ClassVar[str] = ""
+    #: One plain line on what it does, for pickers and lists (no jargon, no code).
+    summary: ClassVar[str] = ""
     # ---- metadata (BL-26); override per strategy ----------------------------
     #: Mechanism, expected sign, who loses money to us, and when it should fail.
     hypothesis: ClassVar[str] = ""

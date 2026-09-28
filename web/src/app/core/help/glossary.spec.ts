@@ -12,6 +12,23 @@ const LABELS_SHOWN = [
   'Largest holding',
   'Time-weighted return',
   'Money-weighted return',
+  'Gross exposure',
+  'Net exposure',
+  'Beta',
+  'Top 5 weight',
+  "Strategy's part",
+  'Strategy sleeves',
+  // Tax, cash flows and alerts
+  'Base currency',
+  'Lots',
+  'FIFO',
+  'Specific lots',
+  'Cost basis',
+  'Wash sale adjustment',
+  'Long term',
+  'Net deposits',
+  'Price alerts',
+  'Quiet hours',
   // Signal research
   'Mean IC',
   // Backtest and lab result tiles
@@ -189,11 +206,59 @@ describe('glossary', () => {
     expect(findGlossary('Kill switch')!.key).toBe('kill_switch');
     // The system's name is given too, so operators and traders meet in the middle.
     expect(findGlossary('Trading run')!.entry.short).toContain('Also called a tick');
-    expect(findGlossary('Paper trading')!.entry.short).toContain('Also called shadow');
+    // Vocabulary: shadow is a strategy on trial, never a way to follow one.
+    expect(findGlossary('Shadow')!.key).toBe('on_trial');
+    expect(findGlossary('Shadow')!.entry.short).toContain('Also called shadow');
+    expect(findGlossary('Paper trading')!.key).toBe('paper_trading');
+    expect(findGlossary('Model book')!.key).toBe('test_book');
+    expect(findGlossary('Live')!.entry.term).toBe('Real money');
+    // docs/design/vocabulary.md: shadow is now On trial and its test book.
+    expect(findGlossary('Shadow')!.key).toBe('on_trial');
+    expect(findGlossary('Model book')!.key).toBe('test_book');
+    expect(findGlossary('Signals only')!.entry.term).toBe('Alerts only');
+    expect(findGlossary('Live')!.entry.term).toBe('Real money');
+  });
+
+  it('explains every word of the three ladders and the renamed words (F5)', () => {
+    for (const word of [
+      'Draft',
+      'On trial',
+      'Approved',
+      'Retired',
+      'Alerts only',
+      'Paper',
+      'Approve each trade',
+      'Automatic',
+      'Simulated',
+      'Broker paper',
+      'Real money, small',
+      'Real money, full',
+      'Test book',
+      'Go-live check',
+      'Robustness tests',
+      'Verdict',
+      'Follow',
+      "The strategy's part of your portfolio",
+      'Strategy review',
+      'Trial results',
+    ]) {
+      expect(findGlossary(word), word).not.toBeNull();
+    }
+    // "Approved" never means real money.
+    expect(findGlossary('Approved')!.entry.short).toContain('does not mean real money');
   });
 
   it('links to the in-app glossary, never an outside wiki (UI-13)', () => {
     expect(glossaryUrl()).toBe('/help/glossary');
     expect(glossaryUrl('sharpe')).toBe('/help/glossary#sharpe');
+  });
+
+  it('explains TWR, MWR and exposure with a worked example (area 5)', () => {
+    for (const key of ['twr', 'mwr', 'gross_exposure', 'net_exposure'] as const) {
+      expect(GLOSSARY[key].example, key).toMatch(/\d/);
+    }
+    expect(findGlossary('Gross exposure')!.key).toBe('gross_exposure');
+    expect(findGlossary('Net exposure')!.key).toBe('net_exposure');
+    expect(findGlossary('Price alerts')!.entry.short).toContain('close');
   });
 });

@@ -12,7 +12,13 @@
   padding: var(--space-4);
 
   @include bp.from-desktop {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  // p1: the featured tile gets the room its larger figure needs, so its
+  // figure is never smaller than its neighbours'.
+  app-stat-tile[featured] {
+    grid-column: span 2;
   }
 }
 

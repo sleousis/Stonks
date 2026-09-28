@@ -52,11 +52,13 @@ from stonks.api.routers import (
     shadow,
     signals,
     sources,
+    starter,
     statement_imports,
     statements,
     strategies,
     stream,
     studio,
+    system_settings,
     tax,
     tca,
     telegram,
@@ -127,7 +129,9 @@ API_ROUTERS: list[APIRouter] = [
     screen_alerts.router,
     demo.router,
     statement_imports.router,
+    starter.router,
     stream.router,
+    system_settings.router,
 ]
 
 #: Routers that always need a principal, even for reads on loopback.

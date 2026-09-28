@@ -165,6 +165,10 @@ class BaseTrade:
 
 class TrendlineMetaLabelStrategy(BaseStrategy):
     id = "trendline_meta_label"
+    title = "Filtered trendline breakout"
+    summary = (
+        "Takes trendline breakouts only when a model trained on past breakouts rates them well."
+    )
     hypothesis = (
         "Trendline breakouts work only in some conditions. A model "
         "trained on past breakouts can tell good ones from bad and skip "

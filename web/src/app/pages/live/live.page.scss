@@ -169,3 +169,8 @@ dd {
   max-width: 70ch;
   font-size: var(--text-sm);
 }
+
+// No engine yet: the empty state sits in a panel like every other one.
+.no-engine {
+  margin-bottom: var(--space-4);
+}

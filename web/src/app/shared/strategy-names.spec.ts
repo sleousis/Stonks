@@ -7,6 +7,16 @@ describe('strategyDisplayName (UX-27)', () => {
     );
   });
 
+  it("shows a starter strategy's own title", () => {
+    const starter = { title: 'Buy and hold the market', summary: 'Holds one ticker.' };
+    expect(strategyDisplayName('starter_buy_and_hold', { starter })).toBe(
+      'Buy and hold the market',
+    );
+    expect(strategyDisplayName('starter_buy_and_hold', { starter: null })).toBe(
+      'starter_buy_and_hold',
+    );
+  });
+
   it('turns a registered id into a name with a short suffix', () => {
     expect(strategyDisplayName('stocks_on_the_move_3fa9c21b')).toBe('Stocks on the move 3fa9');
     expect(strategyDisplayName('momentum_0a1b2c3d')).toBe('Momentum 0a1b');

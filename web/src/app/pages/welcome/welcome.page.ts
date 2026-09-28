@@ -33,6 +33,7 @@ import {
   parseTickerText,
   progressText,
 } from './welcome-steps';
+import { strategyDisplayName } from '../../shared/strategy-names';
 
 /**
  * The first-run guide: five plain steps, each can be skipped, progress kept
@@ -56,6 +57,8 @@ import {
   styleUrl: './welcome.page.scss',
 })
 export class WelcomePage {
+  /** Names, never ids (F18): `stocks_on_the_move_3fa9c21b` reads Stocks on the move 3fa9. */
+  protected readonly displayName = strategyDisplayName;
   private readonly api = inject(OnboardingService);
   private readonly portfoliosApi = inject(PortfoliosService);
   private readonly watchlistsApi = inject(WatchlistsService);
@@ -170,7 +173,7 @@ export class WelcomePage {
     const portfolio = this.followPortfolio() || this.portfolios.current()?.id || '';
     if (!strategy) return this.formError.set('Pick a strategy to follow.');
     if (mode === 'paper' && !portfolio) {
-      return this.formError.set('Paper trading needs a portfolio. Open one in step 2 first.');
+      return this.formError.set('Following on Paper needs a portfolio. Open one in step 2 first.');
     }
     await this.run('follow', async () => {
       await this.subscriptionsApi.subscribe({

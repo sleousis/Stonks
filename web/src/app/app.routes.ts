@@ -38,14 +38,20 @@ export const routes: Routes = [
     loadChildren: () => import('./pages/admin-users/admin-users.routes'),
   },
   // ---------------------------------------------------------------------------
-  { path: 'dashboard', loadChildren: () => import('./pages/dashboard/dashboard.routes') },
+  {
+    path: 'dashboard',
+    canActivate: [adminGuard],
+    loadChildren: () => import('./pages/dashboard/dashboard.routes'),
+  },
   { path: 'strategies', loadChildren: () => import('./pages/strategies/strategies.routes') },
   { path: 'studio', loadChildren: () => import('./pages/studio/studio.routes') },
   { path: 'lab', loadChildren: () => import('./pages/lab/lab.routes') },
   { path: 'data', loadChildren: () => import('./pages/data/data.routes') },
   { path: 'orders', loadChildren: () => import('./pages/orders/orders.routes') },
-  // 19.8: order tickets that wait for approval
+  // 19.8: order tickets and suggested orders that wait for approval (F9)
   { path: 'tickets', loadChildren: () => import('./pages/tickets/tickets.routes') },
+  // F52: the checklist of every step from paper to real money, per portfolio
+  { path: 'going-live', loadChildren: () => import('./pages/going-live/going-live.routes') },
   // The Paper trading page (UX-09). Old /shadow links land on it.
   { path: 'paper', loadChildren: () => import('./pages/shadow/shadow.routes') },
   { path: 'shadow', redirectTo: 'paper' },
@@ -73,6 +79,11 @@ export const routes: Routes = [
   { path: 'screener', loadChildren: () => import('./pages/screener/screener.routes') },
   // 17.6: options research (nothing trades options)
   { path: 'options', loadChildren: () => import('./pages/options/options.routes') },
+  {
+    path: 'no-access',
+    title: 'No access',
+    loadComponent: () => import('./pages/no-access.page').then((m) => m.NoAccessPage),
+  },
   {
     path: '**',
     title: 'Not found',

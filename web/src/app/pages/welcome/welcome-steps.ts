@@ -41,6 +41,11 @@ export const SYSTEM_COPY: Record<
     link: '/data',
   },
   first_ingest: { title: 'First data load', fix: 'Load prices for a few tickers.', link: '/data' },
+  strategies: {
+    title: 'Strategies to follow',
+    fix: 'Install the starter set: three simple strategies go on trial.',
+    link: '/strategies',
+  },
   backup: { title: 'Backups', fix: 'Make the first backup.', link: '/ops/schedule' },
   scheduler: {
     title: 'Scheduler',

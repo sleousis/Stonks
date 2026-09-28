@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from stonks.core.clock import FakeClock
+from stonks.core.clock import FakeClock, FixedClock
 from stonks.core.interval import Interval
 from stonks.core.stream import TradeTick
 from stonks.streaming.recorder import StreamRecorder, read_recording
@@ -63,6 +63,9 @@ def run_in_thread(runner: StreamRunner) -> threading.Thread:
 
 
 def test_reconnects_after_a_drop_backfills_and_writes_bars(lake):
+    # Pin the clock before the fixture trades, as it was when the test was written,
+    # so the wall clock can never close a bar the trades have not closed.
+    clock = FixedClock(datetime(2026, 9, 28, 13, 29, tzinfo=UTC))
     with FakeEodhdServer({"us": TRADES}, drop_first_after=5) as server:
         src = EodhdStreamSource(server.api_key, url=server.url, heartbeat_seconds=0.05)
         box: list[StreamRunner] = []
@@ -73,9 +76,7 @@ def test_reconnects_after_a_drop_backfills_and_writes_bars(lake):
             store=lake.bar_store,
             backfiller=backfill,
             subscribers=[stop_after_trades(box, len(TRADES))],
-            # before the recorded session (2026-09-28 13:30 UTC): only the
-            # trades close bars, whatever the wall clock says
-            clock=FakeClock(datetime(2026, 9, 28, tzinfo=UTC)),
+            clock=clock,
         )
         box.append(runner)
         t = run_in_thread(runner)

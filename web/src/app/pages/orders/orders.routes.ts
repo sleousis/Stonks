@@ -20,11 +20,8 @@ export default [
         title: 'Rebalance',
         loadComponent: () => import('./rebalance.page').then((m) => m.RebalancePage),
       },
-      {
-        path: 'drafts',
-        title: 'Order drafts',
-        loadComponent: () => import('./order-drafts.page').then((m) => m.OrderDraftsPage),
-      },
+      // Suggested orders wait in the one Approvals inbox now (F9).
+      { path: 'drafts', redirectTo: '/tickets' },
       {
         path: 'fills',
         title: 'Fills',

@@ -48,6 +48,11 @@ from stonks.strategies._wrapping import INTERVALS, InnerStrategyWrapper, inner_p
 
 class TrailingStopWrapper(InnerStrategyWrapper):
     id = "trailing_stop"
+    title = "Trailing stop"
+    summary = (
+        "Wraps another strategy and sells a position once it falls a set distance below its "
+        "best close."
+    )
     id_suffix = "trailing_stop"
     hypothesis = (
         "Cutting a position once it falls k ATRs below its best close since "

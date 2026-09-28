@@ -95,7 +95,7 @@ describe('StudioPage', () => {
     expect(cards).toHaveLength(2);
     expect(cards[0].textContent).toContain('RSI dip buyer');
     expect(cards[0].textContent).toContain('3 indicators');
-    expect(cards[1].textContent).toContain('Live');
+    expect(cards[1].textContent).toContain('Approved');
   });
 
   it('shows an empty state that explains drafts', async () => {

@@ -39,6 +39,11 @@ test('checks inline templates in components', () => {
   assert.match(tsProse(src), /Shadow strategies/);
 });
 
+test('lets Retire through: it is the vocabulary word for a strategy (vocabulary.md)', () => {
+  assert.deepEqual(wordProblems('src/app/x.ts', "const label = 'Retire this strategy';"), []);
+  assert.match(wordProblems('src/app/x.html', '<p>Promote it now</p>').join(), /Approve/);
+});
+
 test('honours the allowlist', () => {
   const src = "const d = 'Also called a tick.';";
   assert.deepEqual(wordProblems('src/app/core/help/glossary.ts', src), []);

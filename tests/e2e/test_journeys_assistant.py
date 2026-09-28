@@ -84,7 +84,7 @@ def test_a_trader_asks_the_assistant_and_approves_nothing_by_accident(browse, st
     v.open_nav()
     page.get_by_role("link", name="Assistant", exact=True).first.click()
     expect(page.get_by_role("heading", level=1)).to_have_text("Assistant")
-    expect(page.get_by_text("The assistant is off")).to_have_count(0)
+    expect(page.get_by_text("The assistant is not set up")).to_have_count(0)
 
     # A read runs at once, shown as a step, and the answer streams in.
     _send(v, "How is my portfolio doing?")
@@ -150,7 +150,9 @@ def test_a_trader_records_a_deposit_and_sets_up_tax(browse, stack, viewport):
 
     page.get_by_role("link", name="Tax", exact=True).click()
     expect(page.get_by_role("heading", level=1)).to_have_text("Tax")
-    expect(page.get_by_label("Base currency")).to_have_value("USD")
+    # A paper portfolio: nothing is locked, so no lock note.
+    expect(page.get_by_role("textbox", name="Base currency")).to_have_value("USD")
+    expect(page.locator(".locked")).to_have_count(0)
     page.get_by_role("radio", name="Specific lots").click()
     page.get_by_role("button", name="Save settings").click()
     expect(page.get_by_text("No sales yet")).to_be_visible()

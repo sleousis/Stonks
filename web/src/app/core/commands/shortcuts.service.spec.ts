@@ -78,9 +78,18 @@ describe('ShortcutsService', () => {
   it('opens the palette with / and the cheat sheet with ?', () => {
     svc.handle(key('/'));
     expect(svc.paletteOpen()).toBe(true);
+    svc.paletteOpen.set(false);
     svc.handle(key('?'));
     expect(svc.helpOpen()).toBe(true);
     expect(svc.paletteOpen()).toBe(false);
+  });
+
+  it('keeps keys typed while the palette loads, for its search (p5)', () => {
+    svc.handle(key('/'));
+    expect(svc.handle(key('a'))).toBe(true);
+    svc.handle(key('a'));
+    expect(svc.takeTypeahead()).toBe('aa');
+    expect(svc.takeTypeahead()).toBe('');
   });
 
   it('navigates on g then a key within the time window', () => {

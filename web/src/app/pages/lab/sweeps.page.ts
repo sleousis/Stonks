@@ -22,6 +22,7 @@ import { JobProgress } from '../../shared/ui/job-progress';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { JobFollower } from './job-follower';
+import { strategyTitle } from './lab-requests';
 import { LabNav } from './lab-nav';
 import { SweepFormView } from './sweep-form';
 
@@ -56,8 +57,8 @@ import { SweepFormView } from './sweep-form';
         </div>
         <div class="panel-body">
           <p class="lead">
-            Each strategy is tuned and tested on the same data with the suite you pick. Nothing
-            starts paper trading, and every trial is counted.
+            Tests many strategies on the same data with the robustness tests you pick, and ranks
+            them. Nothing goes on trial, and every setting tried is counted.
           </p>
           @if (classes.error(); as err) {
             <app-error-state
@@ -108,12 +109,12 @@ import { SweepFormView } from './sweep-form';
             } @else if (run.loading()) {
               <app-loading-state label="Loading the sweep result" [rows]="6" />
             } @else if (run.result(); as r) {
-              <app-sweep-result [result]="r" />
+              <app-sweep-result [result]="r" [titles]="titles()" />
             }
           } @else {
             <app-empty-state
               title="No sweep running"
-              message="Start a sweep and its progress shows here. Finished sweeps can be opened from the history on the Backtest and lab run screen."
+              message="Start a sweep and its progress shows here. Finished sweeps can be opened from the list of recent jobs on the Test a strategy screen."
             />
           }
         </div>
@@ -143,6 +144,16 @@ export class SweepsPage {
 
   protected readonly canRun = computed(() => this.session.can('lab.run'));
   protected readonly classes = resource({ loader: () => this.system.strategyClasses() });
+  /** Strategy id to its plain name, for the result rows. */
+  protected readonly titles = computed(
+    () =>
+      new Map(
+        (this.classes.hasValue() ? this.classes.value() : []).map((c) => [
+          c.name,
+          strategyTitle(c),
+        ]),
+      ),
+  );
   private readonly intervals = resource({ loader: () => this.system.intervals() });
   private readonly universes = resource({ loader: () => this.universesApi.list() });
   protected readonly intervalList = computed(() =>

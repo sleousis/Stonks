@@ -85,6 +85,21 @@ describe('ConnectionsPage', () => {
     expect(button('Sign in at SnapTrade')).toBeDefined();
   });
 
+  it('says exactly when Stonks trades, per broker (F53)', async () => {
+    await setUp();
+    const cards = el.querySelectorAll('.provider');
+    expect(cards[0].textContent).toContain('Reads, and places orders when you allow it.');
+    expect(cards[1].textContent).toContain('Reads only. It never places an order there.');
+    const when = el.querySelector('[aria-labelledby="when-title"]')!;
+    expect(when.textContent).toContain('Approve each trade');
+    expect(when.textContent).toContain('Automatic');
+    expect(when.textContent).toContain('Alerts only');
+    expect(when.textContent).toContain('Real money, small');
+    expect(when.textContent).toContain('Broker paper');
+    expect(el.textContent).not.toContain('It never places trades there');
+    expect(el.textContent).not.toContain('Stonks only reads');
+  });
+
   it('explains the empty state and offers to connect', async () => {
     await setUp();
     expect(el.textContent).toContain('No broker connected yet');

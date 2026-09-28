@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { TicksService } from '../api/ticks.service';
 import type { Permission } from '../core/auth/permissions';
 import { SessionService } from '../core/auth/session.service';
+import { FeatureFlagsService } from '../core/features/feature-flags.service';
 import { type PaletteCommand, CommandRegistry } from '../core/commands/command-registry';
 import { type KeySequence, ShortcutsService } from '../core/commands/shortcuts.service';
 import { ConfirmService } from '../core/confirm/confirm.service';
@@ -17,13 +18,11 @@ import { type NavItem, NAV_ITEMS, navItemVisible, navViewer } from './nav-items'
 
 /**
  * Pages below the top level that traders jump to directly, named as their
- * tabs name them (UX-41). Trade costs is a tab under Orders, so it left the
- * nav but keeps its palette entry and `g t`.
+ * tabs name them (UX-41).
  */
 const SUB_PAGES: readonly (Omit<NavItem, 'group'> & { keywords: readonly string[] })[] = [
   { path: '/orders/ticks', label: 'Trading runs', keywords: ['runs', 'history', 'orders'] },
   { path: '/orders/fills', label: 'Fills', keywords: ['executions', 'trades'] },
-  { path: '/trades', label: 'Trade costs', key: 't', keywords: ['costs', 'slippage'] },
   {
     path: '/journal',
     label: 'Journal',
@@ -50,7 +49,7 @@ export function registerShellCommands(): void {
   const toasts = inject(ToastService);
   const theme = inject(ThemeService);
   const privacy = inject(PrivacyService);
-  const viewer = navViewer(inject(SessionService));
+  const viewer = navViewer(inject(SessionService), inject(FeatureFlagsService));
   const stopTrading = inject(StopTradingService);
   const destroyRef = inject(DestroyRef);
 

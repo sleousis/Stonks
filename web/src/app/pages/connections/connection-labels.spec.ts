@@ -1,4 +1,10 @@
-import { fieldLabel, offersPaper, providerGives, providerName } from './connection-labels';
+import {
+  fieldLabel,
+  offersPaper,
+  providerGives,
+  providerName,
+  providerReach,
+} from './connection-labels';
 import { ALPACA, SNAPTRADE } from './connections.fixtures';
 
 describe('connection labels', () => {
@@ -13,6 +19,11 @@ describe('connection labels', () => {
     expect(providerGives(ALPACA)).toBe('Reads positions, cash and activity.');
     expect(providerGives({ ...ALPACA, capabilities: ['read_balances'] })).toBe('Reads cash.');
     expect(providerGives({ ...ALPACA, capabilities: [] })).toBe('Reads your account.');
+  });
+
+  it('says whether a broker only reads or also trades when allowed (F53)', () => {
+    expect(providerReach(ALPACA)).toBe('Reads, and places orders when you allow it.');
+    expect(providerReach(SNAPTRADE)).toBe('Reads only. It never places an order there.');
   });
 
   it('offers a paper switch only for key brokers that can trade', () => {

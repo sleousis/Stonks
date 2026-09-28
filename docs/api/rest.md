@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [demo](#demo-endpoints) · [execution](#execution-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [journal](#journal-endpoints) · [lab](#lab-endpoints) · [lab-worker](#lab-worker-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statement-imports](#statement-imports-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [demo](#demo-endpoints) · [execution](#execution-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [journal](#journal-endpoints) · [lab](#lab-endpoints) · [lab-worker](#lab-worker-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [starter](#starter-endpoints) · [statement-imports](#statement-imports-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [system-settings](#system-settings-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -297,6 +297,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/market/bars` | Get Bars | sign-in |  | [BarSeries](#barseries) |
 | GET | `/api/market/breadth` | Get Breadth | `data.read` |  | [BreadthView](#breadthview) |
 | GET | `/api/market/coverage` | List Coverage | sign-in |  | [Page_CoverageRow_](#page_coveragerow_) |
+| GET | `/api/market/data-coverage` | Get Data Coverage | sign-in |  | [DataCoverage](#datacoverage) |
 | GET | `/api/market/instruments` | List Instruments | sign-in |  | [Page_InstrumentView_](#page_instrumentview_) |
 
 ## model-versions endpoints
@@ -471,6 +472,13 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/sources` | List Sources | sign-in |  | list[[DataSourceInfo](#datasourceinfo)] |
 
+## starter endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/starter` | Get Starter Set | sign-in |  | [StarterView](#starterview) |
+| POST | `/api/starter/install` | Install Starter Set | `operations.run` |  | [StarterInstallView](#starterinstallview) |
+
 ## statement-imports endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
@@ -534,6 +542,15 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/subscriptions` | List Subscriptions | `data.read` |  | [Page_SubscriptionView_](#page_subscriptionview_) |
 | POST | `/api/subscriptions` | Subscribe | `portfolio.trade` | [SubscribeRequest](#subscriberequest) | [SubscriptionView](#subscriptionview) |
 | PATCH | `/api/subscriptions/{subscription_id}` | Update Subscription | `portfolio.trade` | [SubscriptionUpdate](#subscriptionupdate) | [SubscriptionView](#subscriptionview) |
+
+## system-settings endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/settings/system` | List System Settings | `settings.read` |  | [SystemSettingsView](#systemsettingsview) |
+| GET | `/api/settings/system/{key}` | Get System Setting | `settings.read` |  | [SystemSettingView](#systemsettingview) |
+| PUT | `/api/settings/system/{key}` | Change System Setting | `settings.manage` | [SystemSettingChange](#systemsettingchange) | [SystemSettingView](#systemsettingview) |
+| POST | `/api/settings/system/{key}/reset` | Reset System Setting | `settings.manage` | [SystemSettingReset](#systemsettingreset) | [SystemSettingView](#systemsettingview) |
 
 ## tax endpoints
 
@@ -1456,6 +1473,17 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 | `rows` | integer | yes |  |
 | `ticker` | string | yes |  |
 
+### DataCoverage
+
+Which kinds of data the lake holds at all. Calendars, news, fundamentals and option chains need a paid data plan, so an empty page can say "needs a data plan" instead of looking broken (audit F49).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `calendars` | boolean | yes |  |
+| `fundamentals` | boolean | yes |  |
+| `news` | boolean | yes |  |
+| `options` | boolean | yes |  |
+
 ### DataSourceInfo
 
 | Field | Type | Required | Description |
@@ -1464,6 +1492,18 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 | `default` | boolean | yes |  |
 | `detail` | string \| null | no |  |
 | `id` | "eodhd" \| "yahoo" \| "defillama" | yes |  |
+
+### DayChangeView
+
+A book's headline value and change on its latest day. ``/api/pnl`` and ``/api/insights`` both carry it from :func:`stonks.production.pnl.day_change`, so every page shows the same number: format ``change_pct`` with one formatter everywhere.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `change` | number \| null | yes |  |
+| `change_pct` | number \| null | yes | change / the previous value (0.01 = +1%). |
+| `day` | date | yes | The trading day of the latest snapshot. |
+| `previous_day` | date \| null | yes | The day the change is measured from (null with one day of history or across a gap longer than a long weekend). |
+| `value` | number | yes | The book's value at the latest snapshot. |
 
 ### DemoPointView
 
@@ -2483,6 +2523,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers, sect
 | `allocation` | [AllocationView](#allocationview) | yes |  |
 | `cash` | number | yes |  |
 | `currency` | string | yes | Reporting currency. Amounts are not FX-converted. |
+| `day_change` | [DayChangeView](#daychangeview) \| null | no | The headline value and day change, the same one /api/pnl carries. |
 | `exposure` | [Exposure](#exposure) | yes |  |
 | `fx_missing` | list[string] | no | Held currencies with no FX rate to the base currency. |
 | `monthly_returns` | list[[MonthlyReturn](#monthlyreturn)] | no | Time-weighted return of each month from the daily values, oldest first: deposits and withdrawals are left out. Empty when a flow has no FX rate. |
@@ -2788,9 +2829,22 @@ Tunes the class the ``strategy`` ref points at over its parameter space. The ref
 | `n_trials_run` | integer | no |  |
 | `preflight` | [PreflightView](#preflightview) \| null | no |  |
 | `registered_strategy_id` | string \| null | yes |  |
+| `robustness` | "survived" \| "did_not_survive" | no |  |
 | `run_id` | string | no |  |
 | `survival_reports` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
 | `verdict` | "pass" \| "fail" | yes |  |
+
+### LastRunTotalsView
+
+Counts of one trading run over every book, for admins only.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `fills` | integer \| null | yes | Null when the totals are suppressed. |
+| `finished_at` | string \| null | yes |  |
+| `orders_placed` | integer \| null | yes | Null when the totals are suppressed. |
+| `status` | string | yes |  |
+| `tick_id` | string | yes |  |
 
 ### LatencyView
 
@@ -2841,12 +2895,15 @@ Tunes the class the ``strategy`` ref points at over its parameter space. The ref
 | `n_trials_class` | integer | yes | Trials of this strategy class across every recorded run (what P2 counts). |
 | `objective` | string \| null | yes |  |
 | `premortem` | string \| null | yes |  |
+| `robustness` | "running" \| "survived" \| "did_not_survive" \| "error" \| "stopped" | yes | The run's status: did the strategy survive the robustness tests. Independent of the trial counts. |
 | `seed` | integer \| null | yes |  |
 | `start` | string \| null | no |  |
 | `started_at` | date-time | yes |  |
 | `strategy_class` | string | yes |  |
 | `tickers` | integer | no | Tickers in the dataset. |
 | `trials` | list[[LedgerTrialView](#ledgertrialview)] | yes |  |
+| `trials_errored` | integer | yes | Trials that ended with no score (same as n_failed). |
+| `trials_ran` | integer | yes | Trials that ran to a score. |
 | `tuner` | string \| null | yes |  |
 | `universe_id` | string \| null | no |  |
 | `verdict` | "pass" \| "fail" \| "error" \| null | yes |  |
@@ -2868,11 +2925,14 @@ One recorded lab run: what was tested, why, and how it came out.
 | `n_trials` | integer | yes | Trials this run evaluated. |
 | `objective` | string \| null | yes |  |
 | `premortem` | string \| null | yes |  |
+| `robustness` | "running" \| "survived" \| "did_not_survive" \| "error" \| "stopped" | yes | The run's status: did the strategy survive the robustness tests. Independent of the trial counts. |
 | `seed` | integer \| null | yes |  |
 | `start` | string \| null | no |  |
 | `started_at` | date-time | yes |  |
 | `strategy_class` | string | yes |  |
 | `tickers` | integer | no | Tickers in the dataset. |
+| `trials_errored` | integer | yes | Trials that ended with no score (same as n_failed). |
+| `trials_ran` | integer | yes | Trials that ran to a score. |
 | `tuner` | string \| null | yes |  |
 | `universe_id` | string \| null | no |  |
 | `verdict` | "pass" \| "fail" \| "error" \| null | yes |  |
@@ -2882,6 +2942,7 @@ One recorded lab run: what was tested, why, and how it came out.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `n_bars` | integer \| null | yes |  |
+| `outcome` | "ran" \| "error" | yes | How the trial ran (ran or error); not a robustness verdict. |
 | `params` | object | yes |  |
 | `score` | number \| null | yes | Objective score, null for a failed trial. |
 | `status` | "ok" \| "failed" | yes |  |
@@ -4568,6 +4629,7 @@ One row per day. ``strategy_id`` is ``None`` for the real portfolio and a shadow
 |-------|------|----------|-------------|
 | `base_currency` | string \| null | no |  |
 | `base_rows` | list[[PnlRowView](#pnlrowview)] \| null | no |  |
+| `day_change` | [DayChangeView](#daychangeview) \| null | no |  |
 | `fx_missing` | list[string] | no |  |
 | `mwr` | number \| null | no |  |
 | `net_flows` | number | no |  |
@@ -4645,6 +4707,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers and n
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `cash` | number | yes |  |
+| `last_run` | [LastRunTotalsView](#lastruntotalsview) \| null | no | The latest finished trading run's order and fill counts across every book (null before the first run). Traders see only their own books' counts on the runs list; this is the one place with the whole run. |
 | `owners` | integer | yes | People who own those portfolios. |
 | `portfolios` | integer | yes | Active portfolios with at least one snapshot. |
 | `suppressed` | boolean | no | True when too few other people own books for the sums to hide anyone's numbers: cash and value then read 0. |
@@ -5474,6 +5537,7 @@ Rename, replace the spec, or both. Unset fields stay.
 | `jobs` | list[[ScheduledJobView](#scheduledjobview)] | yes |  |
 | `market` | [MarketSessionsView](#marketsessionsview) \| null | no |  |
 | `recent` | list[[ScheduledRunView](#scheduledrunview)] | yes |  |
+| `running` | boolean | no |  |
 
 ### ScheduledJobView
 
@@ -5483,6 +5547,7 @@ Rename, replace the spec, or both. Unset fields stay.
 | `name` | string | yes |  |
 | `next_as_of` | date \| null | yes |  |
 | `next_run_at` | date-time \| null | yes |  |
+| `off_reason` | "engine_off" \| "options_off" \| "no_gateway" \| null | no |  |
 | `trigger` | string | yes |  |
 | `trigger_text` | string | no |  |
 
@@ -5498,6 +5563,7 @@ Rename, replace the spec, or both. Unset fields stay.
 | `finished_at` | date-time \| null | yes |  |
 | `id` | string | yes |  |
 | `job_name` | string | yes |  |
+| `origin` | "schedule" \| "run_now" \| "outside" | no |  |
 | `run_key` | string | yes |  |
 | `scheduled_for` | date-time | yes |  |
 | `started_at` | date-time | yes |  |
@@ -5826,6 +5892,7 @@ A lake snapshot by folder name; fetch it from ``GET /api/lab/worker/snapshots/{n
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `as_of` | date \| null | no | The trading day the snapshot is for (null on old rows). |
 | `cash` | number | yes |  |
 | `id` | integer | yes |  |
 | `positions` | dict[str, number] | yes |  |
@@ -5886,6 +5953,41 @@ A lake snapshot by folder name; fetch it from ``GET /api/lab/worker/snapshots/{n
 | `label` | string \| null | no |  |
 | `provider` | string | yes |  |
 | `redirect_uri` | string | yes |  |
+
+### StarterInstallView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `next_steps` | list[string] | yes |  |
+| `registered` | list[string] | yes | Starters put On trial by this call. |
+| `skipped` | list[string] | yes | Starters that were already registered. |
+| `universe` | list[string] \| null | yes | The trading universe this call set, or null when one was configured. |
+
+### StarterLabelView
+
+Set on a strategy of the starter set (``stonks starter install``): a simple reference shipped with Stonks, On trial like any other.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `summary` | string | yes |  |
+| `title` | string | yes |  |
+
+### StarterStrategyView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | yes |  |
+| `status` | string \| null | yes | Its status when registered (shadow = On trial), null when not installed. |
+| `summary` | string | yes |  |
+| `title` | string | yes |  |
+
+### StarterView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `installed` | boolean | yes | Every starter is registered (in any status). |
+| `strategies` | list[[StarterStrategyView](#starterstrategyview)] | yes |  |
+| `universe` | list[string] | yes | The starter trading universe. |
 
 ### StatementFlagView
 
@@ -6014,12 +6116,15 @@ One audited status change or intervention (BL-24).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `alpha_family` | string | no |  |
 | `applicable_asset_classes` | list[string] | yes |  |
 | `class_path` | string | yes |  |
 | `description` | string | yes |  |
+| `is_wrapper` | boolean | no |  |
 | `name` | string | yes |  |
 | `parameters` | list[[ParameterInfo](#parameterinfo)] | yes |  |
 | `source` | string | yes |  |
+| `title` | string | no |  |
 
 ### StrategyDetail
 
@@ -6031,6 +6136,7 @@ One audited status change or intervention (BL-24).
 | `id` | string | yes |  |
 | `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
 | `params` | object | yes |  |
+| `starter` | [StarterLabelView](#starterlabelview) \| null | no | Set for a starter strategy: its plain title and summary. |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
 | `status_history` | list[[StatusChangeView](#statuschangeview)] | yes |  |
 | `survival_reports` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
@@ -6079,6 +6185,7 @@ How many registered strategies are in each lifecycle status.
 | `id` | string | yes |  |
 | `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
 | `params` | object | yes |  |
+| `starter` | [StarterLabelView](#starterlabelview) \| null | no | Set for a starter strategy: its plain title and summary. |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
 | `updated_at` | string | yes |  |
 
@@ -6307,7 +6414,7 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 |-------|------|----------|-------------|
 | `detail` | string | yes |  |
 | `done` | boolean | yes |  |
-| `id` | "data_source" \| "first_ingest" \| "backup" \| "scheduler" | yes |  |
+| `id` | "data_source" \| "first_ingest" \| "strategies" \| "backup" \| "scheduler" | yes |  |
 
 ### SystemChecklistView
 
@@ -6315,6 +6422,43 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 |-------|------|----------|-------------|
 | `checks` | list[[SystemCheckView](#systemcheckview)] | yes |  |
 | `complete` | boolean | yes |  |
+
+### SystemSettingChange
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reason` | string | yes | Why, kept in the audit log. |
+| `value` | any | yes | The new value; null turns an optional limit off. |
+
+### SystemSettingReset
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `reason` | string | yes |  |
+
+### SystemSettingView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `applies` | "next_run" \| "restart" | yes | next_run: the next trading run or job uses it. restart: the scheduler picks it up when it restarts. |
+| `choices` | list[string] \| null | no | The allowed values for a choice field (null: free input). For production.universe, the ids of the stored universes; a ticker list is also accepted. |
+| `default` | any | yes | The value from the TOML config and environment. |
+| `group` | "risk" \| "trading" \| "notifications" \| "schedule" | yes |  |
+| `help` | string | yes |  |
+| `key` | string | yes | Dotted path in the config, e.g. production.risk.max_weight_per_ticker. |
+| `label` | string | yes |  |
+| `overridden` | boolean | yes |  |
+| `problem` | string \| null | no | Set when the stored override no longer validates and is skipped. |
+| `reason` | string \| null | no |  |
+| `updated_at` | string \| null | no |  |
+| `updated_by` | string \| null | no |  |
+| `value` | any | yes | The value in effect now. |
+
+### SystemSettingsView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[SystemSettingView](#systemsettingview)] | yes |  |
 
 ### TaxPreviewView
 
@@ -6364,6 +6508,7 @@ What a trade would realise now, before it is placed. An estimate at your configu
 |-------|------|----------|-------------|
 | `base_currency` | string | yes | Reporting currency of values, P&L and exports. |
 | `jurisdiction` | "us" \| "eu" \| "uk" | yes | us applies wash sales when switched on. |
+| `locked` | boolean | no | True while the portfolio trades real money: the base currency and jurisdiction are the live account profile's too and cannot change. |
 | `lot_method` | "fifo" \| "specific" | yes | fifo, or specific: your picks first, then FIFO for the rest. |
 | `portfolio_id` | string | yes |  |
 | `updated_at` | date-time \| null | no |  |

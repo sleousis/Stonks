@@ -4,6 +4,7 @@ audited run-now, and the in-process scheduler hosted by the lifespan."""
 
 from __future__ import annotations
 
+import json
 import time
 
 import pytest
@@ -137,7 +138,8 @@ def test_schedule_lists_jobs_and_recent_runs(client):
     assert job["name"] == "health"
     assert job["action"] == "health"
     assert job["next_run_at"] is not None
-    assert body["recent"] == []
+    # The seeded trading run was started outside the scheduler.
+    assert {r["origin"] for r in body["recent"]} == {"outside"}
 
 
 def _sessions_at(settings, fake_source, tmp_path, now):
@@ -171,6 +173,11 @@ def test_schedule_has_no_session_today_on_a_weekend(settings, seeded, fake_sourc
     assert market["next"]["date"] == "2026-09-28"
 
 
+def _scheduled(runs: list[dict]) -> list[dict]:
+    """Runs the scheduler started (not the seeded trading run)."""
+    return [r for r in runs if r["origin"] != "outside"]
+
+
 def test_run_now_is_audited_and_recorded(client, settings):
     resp = client.post("/api/schedule/health/run-now", json={}, headers=AUTH)
     assert resp.status_code == 202, resp.text
@@ -181,7 +188,7 @@ def test_run_now_is_audited_and_recorded(client, settings):
     deadline = time.monotonic() + 30
     runs: list[dict] = []
     while time.monotonic() < deadline:
-        runs = client.get("/api/schedule").json()["recent"]
+        runs = _scheduled(client.get("/api/schedule").json()["recent"])
         if runs and runs[0]["status"] not in ("running",):
             break
         time.sleep(0.05)
@@ -220,3 +227,131 @@ def test_schedule_says_when_each_job_runs_in_plain_words(client):
     [job] = client.get("/api/schedule", headers=AUTH).json()["jobs"]
     assert job["trigger"] == "every 10000 min"
     assert job["trigger_text"] == "Every 10000 minutes"
+
+
+# ---- runs started outside the scheduler ---------------------------------------------
+
+
+def _tick_config(tmp_path) -> SchedulerConfig:
+    config = _config(tmp_path)
+    config.jobs.append(
+        JobConfig(
+            name="nightly_trading_run",
+            action="tick",
+            trigger=IntervalTriggerConfig(every_minutes=10_000),
+        )
+    )
+    return config
+
+
+def _seeded_ticks(settings) -> set[str]:
+    with SqliteState(settings.state.path) as state:
+        return {
+            r["id"] for r in state.sql("SELECT id FROM tick_runs") if not r["id"].endswith("_x")
+        } - {"tick_2026-09-16_a", "tick_2026-09-18_b", "tick_2026-09-22_c", "tick_2026-09-24_d"}
+
+
+def _add_tick_run(state: SqliteState, tick_id: str, started: str, status: str, **summary) -> None:
+    state.execute(
+        "INSERT INTO tick_runs (id, started_at, finished_at, status, summary_json)"
+        " VALUES (?, ?, ?, ?, ?)",
+        [tick_id, started, started, status, json.dumps(summary) if summary else None],
+    )
+
+
+def test_recent_runs_include_trading_runs_started_outside_the_schedule(
+    settings, seeded, fake_source, tmp_path
+):
+    """A trading run started from the Orders page (or the command line) has
+    no scheduled_runs row, but the schedule lists it so Recent runs and the
+    job's Last run never say "No runs yet" after a run."""
+    services = _services(settings, fake_source, _tick_config(tmp_path))
+    with SqliteState(settings.state.path) as state:
+        _add_tick_run(state, "tick_2026-09-16_a", "2026-09-16T21:00:00+00:00", "ok", dry_run=False)
+        _add_tick_run(state, "tick_2026-09-18_b", "2026-09-18T21:00:00+00:00", "partial")
+        _add_tick_run(
+            state, "tick_2026-09-22_c", "2026-09-22T21:00:00+00:00", "error", error="boom"
+        )
+        # A trading run the scheduler started is listed once, as its scheduled run.
+        _add_tick_run(state, "tick_2026-09-24_d", "2026-09-24T21:00:00+00:00", "ok")
+        state.execute(
+            "INSERT INTO scheduled_runs (id, job_name, action, run_key, scheduled_for, as_of,"
+            " status, instance_id, started_at, finished_at, detail_json)"
+            " VALUES ('r1', 'nightly_trading_run', 'tick', 'k1', ?, '2026-09-24', 'succeeded',"
+            " 'i1', ?, ?, ?)",
+            [
+                "2026-09-24T21:00:00+00:00",
+                "2026-09-24T21:00:00+00:00",
+                "2026-09-24T21:01:00+00:00",
+                json.dumps({"tick_id": "tick_2026-09-24_d"}),
+            ],
+        )
+    with TestClient(create_app(settings, services=services), client=LOOPBACK) as c:
+        body = c.get("/api/schedule").json()
+    recent = [r for r in body["recent"] if r["id"] not in _seeded_ticks(settings)]
+    assert [(r["id"], r["origin"], r["status"]) for r in recent] == [
+        ("r1", "schedule", "succeeded"),
+        ("tick_2026-09-22_c", "outside", "failed"),
+        ("tick_2026-09-18_b", "outside", "partial"),
+        ("tick_2026-09-16_a", "outside", "succeeded"),
+    ]
+    outside = recent[1]
+    assert outside["job_name"] == "nightly_trading_run"
+    assert outside["action"] == "tick"
+    assert outside["as_of"] == "2026-09-22"
+    assert outside["error"] == "boom"
+    assert outside["detail"]["tick_id"] == "tick_2026-09-22_c"
+    # No order or fill counts: other people's books are not the reader's.
+    assert "orders_placed" not in (outside["detail"] or {})
+
+
+def test_recent_runs_respect_the_limit_across_both_sources(settings, seeded, fake_source, tmp_path):
+    services = _services(settings, fake_source, _tick_config(tmp_path))
+    with SqliteState(settings.state.path) as state:
+        for day in range(1, 6):
+            _add_tick_run(state, f"tick_2026-09-0{day}_x", f"2026-09-0{day}T21:00:00+00:00", "ok")
+    with TestClient(create_app(settings, services=services), client=LOOPBACK) as c:
+        seeded_ticks = _seeded_ticks(settings)
+        recent = c.get("/api/schedule", params={"limit": 2 + len(seeded_ticks)}).json()["recent"]
+    assert [r["id"] for r in recent if r["id"] not in seeded_ticks] == [
+        "tick_2026-09-05_x",
+        "tick_2026-09-04_x",
+    ]
+
+
+def test_run_now_rows_say_they_were_started_by_hand(client):
+    resp = client.post("/api/schedule/health/run-now", json={}, headers=AUTH)
+    assert resp.status_code == 202, resp.text
+    deadline = time.monotonic() + 30
+    runs: list[dict] = []
+    while time.monotonic() < deadline:
+        runs = _scheduled(client.get("/api/schedule").json()["recent"])
+        if runs:
+            break
+        time.sleep(0.05)
+    assert runs and runs[0]["origin"] == "run_now"
+
+
+def test_schedule_says_whether_the_scheduler_is_running(client):
+    assert client.get("/api/schedule").json()["running"] is False
+
+
+def test_jobs_for_features_that_are_off_say_why(settings, seeded, fake_source, tmp_path):
+    config = _config(tmp_path)
+    for name, action in [
+        ("engine_start", "engine_start"),
+        ("options_live", "options_live"),
+        ("broker_health", "broker_health"),
+    ]:
+        config.jobs.append(
+            JobConfig(name=name, action=action, trigger=IntervalTriggerConfig(every_minutes=60))
+        )
+    services = _services(settings, fake_source, config)
+    with TestClient(create_app(settings, services=services), client=LOOPBACK) as c:
+        jobs = {j["name"]: j["off_reason"] for j in c.get("/api/schedule").json()["jobs"]}
+    assert jobs == {
+        "health": None,
+        "engine_start": "engine_off",
+        "options_live": "options_off",
+        "broker_health": "no_gateway",
+    }

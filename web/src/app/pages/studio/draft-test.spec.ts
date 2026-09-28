@@ -227,13 +227,13 @@ describe('DraftTest', () => {
     const suites = [...el.querySelectorAll<HTMLInputElement>('input[name="t-suite"]')];
     expect(suites.map((r) => r.value)).toEqual(['quick', 'standard', 'promotion', 'custom']);
     const labels = [...el.querySelectorAll('.suite-name')].map((n) => n.textContent?.trim());
-    expect(labels).toContain('Go-live');
+    expect(labels).toContain('Full');
     // The legacy alias of the permutation test is never offered.
     expect(el.textContent).not.toContain('permutation (legacy)');
 
     suites[2].click();
     fixture.detectChanges();
-    expect(el.textContent).toContain('Monte Carlo permutation');
+    expect(el.textContent).toContain('Shuffled prices (MCPT)');
     buttonNamed('Run lab').click();
     const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/lab-runs', 'POST');
     const body = req.request.body as Record<string, unknown>;

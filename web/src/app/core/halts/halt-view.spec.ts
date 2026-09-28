@@ -23,7 +23,7 @@ describe('haltSummary', () => {
   it('describes a kill switch with its scope and what still goes out', () => {
     expect(haltSummary([halt({ halt: 'buys' })])).toEqual({
       tone: 'kill',
-      title: 'Kill switch on.',
+      title: 'Trading stopped.',
       text: 'Every portfolio. New buys are stopped, sells still go out until someone resumes trading.',
     });
   });
@@ -48,7 +48,7 @@ describe('haltSummary', () => {
       ]),
     ).toEqual({
       tone: 'kill',
-      title: 'Kill switch on.',
+      title: 'Trading stopped.',
       text: 'One portfolio. No new orders go out until someone resumes trading.',
     });
   });

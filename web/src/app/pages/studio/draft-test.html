@@ -156,8 +156,8 @@
     </div>
   } @else if (!bt) {
     <p class="panel-body muted">
-      Replays the saved rules over the tickers and window above, one decision per bar, with orders
-      filling at the next bar's open.
+      Replays the saved rules over the tickers and dates above, one decision per day (or bar), with
+      orders filling at the next open. A first look, not proof.
     </p>
   }
 </section>
@@ -181,7 +181,7 @@
   }
   <div class="panel-body lab-options">
     <fieldset class="plain">
-      <legend>Survival tests</legend>
+      <legend>Robustness tests <app-help-tip term="robustness_tests" /></legend>
       <div class="suites" role="radiogroup" aria-label="Test suite">
         @for (s of suites(); track s.id) {
           <label class="check suite" [class.chosen]="suite() === s.id">
@@ -225,7 +225,7 @@
         </p>
       }
       @if (!runTests().length) {
-        <p class="error">Pick at least one survival test.</p>
+        <p class="error">Pick at least one robustness test.</p>
       }
     </fieldset>
     <div class="field objective">
@@ -238,7 +238,7 @@
       >
         <option value="sharpe">Sharpe ratio</option>
         <option value="cagr">CAGR</option>
-        <option value="final_return">Final return</option>
+        <option value="final_return">Total return</option>
       </select>
     </div>
   </div>
@@ -267,5 +267,10 @@
     <div class="panel-body">
       <app-lab-run-result [result]="v" />
     </div>
+  } @else if (!lr) {
+    <p class="panel-body muted">
+      Tries a few settings, then runs the robustness tests on the best one to see whether the result
+      holds up or is luck. You get a plain verdict.
+    </p>
   }
 </section>

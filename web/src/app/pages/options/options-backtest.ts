@@ -39,6 +39,7 @@ import {
   buildBacktestRequest,
   checkLabel,
   defaultBacktestForm,
+  optionsStrategyName,
 } from './options-view';
 
 /**
@@ -72,7 +73,9 @@ import {
           >
             <option value="" [selected]="!f.strategy">Pick a strategy</option>
             @for (s of strategies(); track s.id) {
-              <option [value]="s.id" [selected]="f.strategy === s.id">{{ s.id }}</option>
+              <option [value]="s.id" [selected]="f.strategy === s.id">
+                {{ strategyName(s.id) }}
+              </option>
             }
           </select>
           @if (errors()['strategy']; as e) {
@@ -182,7 +185,9 @@ import {
       } @else if (run.result(); as r) {
         <section class="result" aria-labelledby="obt-result-title">
           <div class="result-head">
-            <h3 id="obt-result-title">{{ r.strategy }} on {{ r.underlyings.join(', ') }}</h3>
+            <h3 id="obt-result-title">
+              {{ strategyName(r.strategy) }} on {{ r.underlyings.join(', ') }}
+            </h3>
             @if (r.verdict !== 'not_run') {
               <app-status-pill
                 [status]="r.verdict"
@@ -348,6 +353,7 @@ export class OptionsBacktest {
   readonly underlyings = input<readonly OptionUnderlyingView[]>([]);
 
   protected readonly canRun = computed(() => this.session.can('lab.run'));
+  protected readonly strategyName = optionsStrategyName;
   protected readonly form = signal<BacktestForm>(defaultBacktestForm());
   protected readonly params = signal<ParamValues>({});
   protected readonly tried = signal(false);
@@ -430,7 +436,7 @@ export class OptionsBacktest {
   }
 
   protected chartSummary(r: OptionsBacktestView): string {
-    return `Equity of ${r.strategy} over ${r.days} days, ending at a return of ${this.pct(r.final_return)}.`;
+    return `Equity of ${optionsStrategyName(r.strategy)} over ${r.days} days, ending at a return of ${this.pct(r.final_return)}.`;
   }
 
   async start(): Promise<void> {
@@ -451,7 +457,7 @@ export class OptionsBacktest {
     } finally {
       this.starting.set(false);
     }
-    this.toasts.success(`Started the options backtest of ${body.strategy}.`);
+    this.toasts.success(`Started the options backtest of ${optionsStrategyName(body.strategy)}.`);
     await this.run.follow(jobId);
   }
 }

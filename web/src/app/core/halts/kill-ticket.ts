@@ -15,13 +15,13 @@ export interface KillTicketInput {
 }
 
 /**
- * The kill switch as an order ticket (UX-01, UX-51): who it covers, what
- * stops, what still goes out and why, with the PAPER or LIVE stamp. The
- * Stop trading sheet and the halts page both confirm with it.
+ * The kill switch as an order ticket (UX-01, UX-51), named "Stop trading"
+ * as the vocabulary says: who it covers, what stops, what still goes out and
+ * why, with the PAPER or LIVE stamp. The one Stop trading sheet shows it.
  */
 export function killTicket(k: KillTicketInput): ConfirmTicket {
   return {
-    kind: 'Kill switch',
+    kind: 'Stop trading',
     live: k.live,
     lines: [
       { label: 'Scope', value: k.scopeText },

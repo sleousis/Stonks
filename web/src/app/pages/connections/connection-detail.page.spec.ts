@@ -84,6 +84,13 @@ describe('ConnectionDetailPage', () => {
     expect(accounts[1].querySelector('app-mode-stamp')?.textContent).toContain('LIVE');
   });
 
+  it('says when this broker places orders, never that it only reads (F53)', async () => {
+    await setUp();
+    const lead = el.querySelector('app-page-header')!.textContent!;
+    expect(lead).toContain('places orders there only for Approve each trade and Automatic');
+    expect(lead).not.toContain('It never trades there');
+  });
+
   it('links an account to the chosen portfolio', async () => {
     await setUp();
     const success = vi.spyOn(TestBed.inject(ToastService), 'success');

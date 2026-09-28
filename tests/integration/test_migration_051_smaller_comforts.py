@@ -1,4 +1,4 @@
-"""Migration 050 (roadmap 23.17): the ``screen_alert`` notification
+"""Migration 051 (roadmap 23.17): the ``screen_alert`` notification
 category, screen alert tables, the demo portfolio seed and CSV statement
 imports. The notification tables are rebuilt to widen their category
 checks, and their rows, ids and indexes survive."""

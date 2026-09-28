@@ -58,6 +58,13 @@ Whether a trade uses real money depends only on the **portfolio stage**. The fol
 | Subscription, follow | Follow (the noun and the verb) |
 | Sleeve | The strategy's part of your portfolio |
 | Overview (the admin page) | Dashboard, in both the menu and the page title |
+| Order drafts, Drafts (orders the assistant proposed) | Suggested orders, in Approvals |
+| Live settings (a broker portfolio's settings page) | Real-money settings |
+| Live safeguards | Safeguards |
+| Kill switch (in what people read) | Stop trading |
+| The path to real money for one portfolio | Going live (the checklist page) |
+| Live engine (the intraday engine page) | Intraday engine |
+| ok, succeeded, Good (run and check states) | The status words below |
 
 ## Status words
 
@@ -72,6 +79,24 @@ One word per state, on every page.
 | A check that failed | Failed |
 | A check with too little data | Not enough data yet |
 
+## Money and alert words
+
+The money pages and alerts use these words. Each has a glossary entry.
+
+| Words people see | Meaning |
+|---|---|
+| Gross exposure | Long plus short positions as a share of value. |
+| Net exposure | Long minus short positions as a share of value. |
+| The strategy's part | The part of a portfolio one strategy holds (was "sleeve"). |
+| Your limit | A risk limit you set that is stricter than the system's. |
+| Year total | A year's months compounded, in the monthly returns (never a second "Year"). |
+| Base currency | The currency a portfolio is valued in. |
+| Lot, Oldest first (FIFO), Specific lots, Cost basis, Wash sale, Long term | Tax lot words. |
+| Cash flow, Deposit, Withdrawal, Net deposits | Money put in or taken out. Never profit. |
+| Price alert | A rule on a ticker's daily close. |
+| Alert settings | The one page for what reaches you, where and when. |
+| Quiet hours | Hours when alerts wait for a morning summary. |
+
 ## Stop buttons
 
 - **Kill switch:** "Stop trading". One pattern everywhere: a sheet that defaults to the portfolio on screen, shows a ticket and needs a reason.
@@ -80,3 +105,15 @@ One word per state, on every page.
 ## Where to add a word
 
 Add a new term here first, then in the console glossary (`web/src/app/core/help/`), then in the page. A term that is not here does not ship.
+
+## Research words
+
+| Old words | New words |
+|---|---|
+| Survival tests | Robustness tests (22, each named in plain words with what it guards against) |
+| Go-live suite (the `promotion` preset) | Full suite |
+| Verdict (of a lab run) | Robustness verdict: Passed or Failed |
+| A trial that ran, a trial that broke | Done, Error (a trial is one setting the search tried, never a test) |
+| Start paper trading if it passes | Put it on trial if it passes |
+| Strategy class, parameters | Strategy, settings |
+| Waiting for a worker | Queued |

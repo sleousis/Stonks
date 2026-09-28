@@ -85,6 +85,8 @@ def select_quant_momentum(
 
 class QuantMomentum(BaseStrategy):
     id = "quant_momentum"
+    title = "Steady momentum"
+    summary = "Holds stocks with the strongest year of gains built from many small, steady moves."
     hypothesis = (
         "Investors underreact to information that arrives gradually, so stocks "
         "with the strongest 12-2 month returns built from many small moves keep "

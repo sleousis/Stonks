@@ -107,6 +107,7 @@ _ALL_CLASSES: tuple[AssetClass, ...] = ("equity", "crypto", "commodity", "bond")
 
 class LearningRanker(BaseStrategy):
     id = "learning_ranker"
+    summary = "A model trained on many factors ranks the universe and buys the top names."
     hypothesis = (
         "Many weak factors, each known before the decision, together rank next "
         "month's returns across a universe better than any one of them, and a "

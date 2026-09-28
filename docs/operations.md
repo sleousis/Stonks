@@ -20,6 +20,20 @@ flowchart LR
 
 Run `uv run stonks db init` after every upgrade, before the first tick. It applies new migrations to both stores.
 
+### First run: the starter set
+
+A fresh install has no strategy, so invited traders would have nothing to follow. `stonks users bootstrap` also installs the starter set (skip it with `--no-starter`). `stonks starter install` does the same later, and so does `POST /api/starter/install` (admins). It is safe to run again.
+
+| Starter | What it does |
+|---------|--------------|
+| `starter_buy_and_hold` | Buys SPY once and holds it: the yardstick. |
+| `starter_trend` | Carver's EWMAC trend following over the universe. |
+| `starter_momentum` | Holds the fund that rose most over six months, skipping the last month. |
+
+Each starter is registered **On trial**, like any lab result. It runs its own test book every trading run and needs the go-live check (or an audited override) before it is approved. Traders can follow a starter in Alerts only or Paper mode right away. The strategy list marks each one with a `starter` title and summary.
+
+When no trading universe is set, the install also sets `production.universe` to ten liquid ETFs (SPY, QQQ, IWM, EFA, EEM, TLT, IEF, GLD, VNQ, XLE) as a console override. Load about two years of their prices once, for example `uv run stonks ingest prices --tickers SPY.US,QQQ.US,... --since 2024-10-01`. The daily ingest keeps them fresh.
+
 Every step is safe to rerun: ingest upserts, the tick reuses client ids for the same `as_of` and skips orders already placed (and model books already evaluated), and health only opens or clears the operational halt. Times are UTC. `tick` defaults `--as-of` to today's UTC date and refuses a date older than its latest snapshot.
 
 - `stonks tick --tickers ...` (or `--asset-class`) runs a scoped tick. It trades only those tickers and leaves every other holding alone, not even selling it. A tick over `[production].universe` still sells a holding that left the universe. Add `--full` to trade the whole book over those tickers. The CLI and the API tick job run the same code.
@@ -161,15 +175,17 @@ A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_r
 
 `stonks health` exits 0 when healthy and 1 otherwise. Thresholds are under `[production.health]`:
 
-| Check | Fails when | Setting (default) |
+| Check (console name) | Fails when | Setting (default) |
 |-------|------------|---------|
-| `freshness:<ticker>` | The latest daily bar is older than N calendar days, or missing. | `max_bar_age_days` (4) |
-| `stuck_ticks` | A tick has been `running` for more than N minutes. | `stuck_tick_minutes` (60) |
-| `stuck_ingest_runs` | An ingest has been `running` for more than N minutes. | `stuck_ingest_minutes` (180) |
-| `ingest_failures` | An ingest failed in the last N hours. | `ingest_failure_lookback_hours` (24) |
-| `var_violations` | A portfolio's rolling 95% VaR violation ratio is outside 0.5 to 1.5, after at least 60 scored days. It never opens a halt. | see Live risk below |
-| `lab_queue` | Lab worker jobs waited more than N minutes with no live worker, or a running one lost its worker. It never opens a halt. | `stuck_lab_queue_minutes` (30) |
-| `broker:<gateway>` | The IB Gateway did not answer the latest `broker_health` check. It never opens the operational halt. | `[brokers.ibkr.health]` |
+| `freshness:<ticker>` (Price data is up to date) | The latest daily bar is older than N calendar days, or missing. | `max_bar_age_days` (4) |
+| `stuck_ticks` (Stuck trading runs) | A tick has been `running` for more than N minutes. | `stuck_tick_minutes` (60) |
+| `stuck_ingest_runs` (Stuck data updates) | An ingest has been `running` for more than N minutes. | `stuck_ingest_minutes` (180) |
+| `ingest_failures` (Recent data update failures) | An ingest failed in the last N hours. | `ingest_failure_lookback_hours` (24) |
+| `var_violations` (Risk estimate accuracy) | A portfolio's rolling 95% VaR violation ratio is outside 0.5 to 1.5, after at least 60 scored days. It never opens a halt. | see Live risk below |
+| `lab_queue` (Lab workers) | Lab worker jobs waited more than N minutes with no live worker, or a running one lost its worker. It never opens a halt. | `stuck_lab_queue_minutes` (30) |
+| `broker:<gateway>` (Broker gateway) | The IB Gateway did not answer the latest `broker_health` check. It never opens the operational halt. | `[brokers.ibkr.health]` |
+
+`risk_halts` (Trading stops) lists the halts in force and fails while one is. Passing `var_violations` says `not enough days yet` until a portfolio has enough scored days, and `within band` after; the console shows the first as "Not enough data yet". The console's Health page gives every check its name, a one-line meaning and the detail in plain words (`health-state.ts`), and admins get a link to act on a failing one.
 
 Freshness covers the tickers you pass, else `[production].universe`. A universe id there is resolved to its members on today's date, the same way the tick does. When nothing resolves (the universe was never refreshed), no freshness check runs, so it never opens the operational halt.
 
@@ -183,7 +199,7 @@ The API serves `GET /api/health` (liveness, used by Docker and Caddy) and `GET /
 
 A useful alert: `time() - stonks_scheduled_job_last_success_timestamp_seconds{job="tick"} > 26 * 3600` on weekdays.
 
-### Live engine monitoring
+### Intraday engine monitoring
 
 The intraday engine runs in its own process. Its monitor writes one `engine_status` row (SQLite migration 044) every `publish_seconds` (15) and when it stops. `GET /metrics` renders it, labelled by `engine` and `source`, never by key or account:
 
@@ -200,7 +216,7 @@ The intraday engine runs in its own process. Its monitor writes one `engine_stat
 | `stonks_engine_dispatch_lag_seconds` (histogram) | Clock time from a bar's settle time to its dispatch |
 | `stonks_engine_event_to_order_seconds` (histogram) | Time from a bar close dispatch to the order it caused |
 
-`GET /api/stream/status` (`data.read`) and the MCP tool `get_stream_status` show the same with the dead-man state. The console shows it on Live engine (`/live`). Useful alerts:
+`GET /api/stream/status` (`data.read`) and the MCP tool `get_stream_status` show the same with the dead-man state. The console shows it on Intraday engine (`/live`). Useful alerts:
 
 - `stonks_engine_up == 0` during market hours.
 - `histogram_quantile(0.95, rate(stonks_engine_event_to_order_seconds_bucket[15m])) > 2`.
@@ -211,6 +227,12 @@ Settings live under `[streaming.monitor]`: `deadman_minutes`, `stale_after_secon
 Over HTTP, `GET /api/health/live` (the process, plus the scheduler when `stonks serve` hosts it) and `GET /api/health/ready` (state migrated, lake present) are open to everyone, like `GET /api/health`. They answer 200 with each check's name and `ok`, or 503 naming the failing checks; details go to the log, not the response.
 
 With `[scheduler] backend = "in_process"`, `stonks serve` starts the scheduler with the app and stops it (after the running job) on shutdown. `GET /api/schedule` lists the jobs, their next fire and recent runs; `POST /api/schedule/{job}/run-now` (token, audited as `schedule.run_now`) starts a `manual:` run in the background.
+
+`GET /api/schedule` also says:
+
+- `running`: a scheduler heartbeated in the last few minutes (hosted or on its own), or a scheduled run is in progress. The console's Schedule page warns when none runs, since jobs then only start by hand.
+- `origin` on each recent run: `schedule`, `run_now`, or `outside` for a trading run started from the console's Orders page, the API or the CLI. Those come from `tick_runs` without a scheduled run and are named after the trading run job, so its Last run counts them. They carry the status (`succeeded`, `partial`, `failed`), the day and the tick id, never order counts.
+- `off_reason` on each job whose feature is off: `engine_off` (`[engine] enabled = false`), `options_off` (`[production.options] live = false`) or `no_gateway` (no `[brokers.ibkr.gateways]`). The job still fires and skips; the console folds it away from Run now.
 
 ## Lab worker
 
@@ -405,7 +427,7 @@ The Telegram bot sends your notifications to a chat and answers a few commands. 
 2. Put the token in `.env` as `STONKS_TELEGRAM_BOT_TOKEN`. Never in TOML.
 3. With the token set, linked chats get notifications (the `telegram` channel, on by default, and a fallback for urgent ones like email).
 4. To answer commands too, set `[telegram] enabled = true` and restart `stonks serve`. The bot then polls inside the API process.
-5. Each person links their own chat: make a one-time code in the console (Settings, Telegram) or with the CLI, then send `/link CODE` to the bot. The code works once, for 10 minutes.
+5. Each person links their own chat: make a one-time code in the console (Notifications, Alert settings, Telegram) or with the CLI, then send `/link CODE` to the bot. The code works once, for 10 minutes.
 
 ```bash
 uv run stonks telegram link-code --user you@example.com
@@ -518,7 +540,7 @@ Before switching models, run the eval set: `uv run stonks assistant eval` checks
 
 ## Broker connections
 
-Connections sync a user's broker accounts: positions, cash and activities, into a linked `broker` portfolio. A provider that can trade (`ibkr`) also places the orders of that portfolio's auto and approve books. Providers are `alpaca`, `snaptrade`, `ibkr` (an IB Gateway named in `[brokers.ibkr.gateways]`, see [Live trading](#live-trading)) and the fakes for tests. No provider works until an admin enables it.
+Connections sync a user's broker accounts: positions, cash and activities, into a linked `broker` portfolio. A provider that can trade (`ibkr`) also places the orders of that portfolio's auto and approve books, the manual orders placed there and the suggested orders its owner approves, at the portfolio's stage. Alerts only and Paper follows never place an order at a broker, and a provider that only reads (`snaptrade`, `alpaca` here) never places one. The console's Broker connections page says this on every provider card and under "When Stonks trades". Providers are `alpaca`, `snaptrade`, `ibkr` (an IB Gateway named in `[brokers.ibkr.gateways]`, see [Live trading](#live-trading)) and the fakes for tests. No provider works until an admin enables it.
 
 ```bash
 export STONKS_SECRET_KEYS="$(uv run python -m stonks.security keygen 2>/dev/null)"   # once; keep it secret
@@ -633,7 +655,7 @@ PUT /api/portfolios/{id}/live/allocation        {"amount": 2500, "currency": "US
 PUT /api/portfolios/{id}/live/account-profile   {"jurisdiction": "us", "account_type": "cash"}
 ```
 
-- In the console: Profile, then Live settings next to the LIVE portfolio. The page also lists which live safeguards and account rules act on it (`GET /api/portfolios/{id}/live/rules`). Gateway health and the reconcile reports show on Health (`GET /api/brokers/gateways`, `GET /api/reconcile/reports`).
+- In the console: Profile, then Real-money settings next to the broker portfolio. The page also lists which safeguards and account rules act on it (`GET /api/portfolios/{id}/live/rules`). Gateway health and the reconcile reports show on Health (`GET /api/brokers/gateways`, `GET /api/reconcile/reports`).
 - The allocation is the most Stonks may hold in the book. There are no automatic steps. A bad week alerts but never changes it.
 - The profile picks the account rules: `us`, `eu` or `uk`, `cash` (default) or `margin`, `retail` (default) or `professional`. Shorts need a margin account.
 - The jurisdiction and base currency are stored once, in the tax settings and the portfolio (see [tax.md](tax.md)). Saving the profile updates them, and the tax settings page shows the same values.
@@ -645,12 +667,12 @@ PUT /api/portfolios/{id}/live/account-profile   {"jurisdiction": "us", "account_
 Off by default. The first live account is a cash account, long only. Margin (longs and shorts at IBKR, roadmap 19.13) comes after the cash account runs well.
 
 - **Turn it on.** Set `[production.risk.rules.account_rules] margin_accounts = true`, with `enabled = true` there and `[production.risk.rules.margin_call] enabled = true`. Set the gateway's `account_type = "margin"` under `[brokers.ibkr.gateways.<name>]`. A portfolio override can turn margin off, never on.
-- **Choose it.** In Live settings, pick Margin, read the risks and tick "I understand these risks", then save with a fresh code. Stonks asks IBKR first and saves only when IBKR reports a margin account. The audit row records its answer. While margin accounts are off, a margin book opens nothing new.
+- **Choose it.** In Real-money settings, pick Margin, read the risks and tick "I understand these risks", then save with a fresh code. Stonks asks IBKR first and saves only when IBKR reports a margin account. The audit row records its answer. While margin accounts are off, a margin book opens nothing new.
 - **Buying power.** Every new order (a buy or a short sale) goes through IBKR's what-if first. Its initial and maintenance margin after the order, with the run's other orders, must stay within `1 - margin_buffer` of equity (`margin_buffer = 0.10` by default). The order is cut to fit, or dropped. A what-if that fails or warns drops it.
 - **Short sales** need IBKR's locate for today. A name IBKR cannot lend is dropped, a short is cut to the shares on offer, and a hard to borrow name waits for a person as a ticket, even in auto.
 - **Pattern day trader.** A US margin account under 25,000 USD may make at most 3 day trades in 5 trading days (the stricter of our count and IBKR's).
 - **Margin monitoring.** The cushion is excess liquidity over equity, from IBKR. Below `warn_cushion` (15%) the owner gets an alert. Below `reduce_cushion` (10%) the alert is urgent and the next run of the book drops new positions and sells its own positions until the cushion is back at `restore_cushion` (20%), before IBKR liquidates. At 0 IBKR may already be selling. These sit under `[production.risk.rules.margin_call]`. The tick and the `live_margin` job (every 30 minutes, on the reconcile client id) each write a `margin_checks` row. Alerts go out once per level and day.
-- **See it.** Live settings shows buying power, margin use, the cushion and its level, the new margin still allowed, and the day trade state (`GET /api/portfolios/{id}/live/margin`, MCP `get_live_margin`).
+- **See it.** Real-money settings shows buying power, margin use, the cushion and its level, the new margin still allowed, and the day trade state (`GET /api/portfolios/{id}/live/margin`, MCP `get_live_margin`).
 
 ### Stages, gates and the preview
 
@@ -658,8 +680,10 @@ Every portfolio has a live stage (roadmap 19.9):
 
 ```mermaid
 flowchart LR
-  A[sim_paper] --> B[broker_paper] --> C[live_small] --> D[live_scale]
+  A["Simulated (sim_paper)"] --> B["Broker paper (broker_paper)"] --> C["Real money, small (live_small)"] --> D["Real money, full (live_scale)"]
 ```
+
+The console shows the words, the API and the CLI the ids in brackets. Only the two Real money stages move real money, and only there does the console use brass and the LIVE stamp.
 
 - Moving up goes one stage at a time. It needs a gate report that passes, computed at that moment, a reason, the target stage typed again, and a fresh second factor (`live.manage`). Moving down goes to any lower stage with a reason and needs no code. Both write a `live_stage_changes` row and an audit row.
 - The IBKR adapter only sends an opening order to a live gateway when the portfolio is at `live_small` or up. Closes and cancels still go out, so a book moved down can wind down.
@@ -676,7 +700,22 @@ uv run stonks live stage demote PORTFOLIO --to sim_paper --reason "..."
 uv run stonks live preview PORTFOLIO
 ```
 
-In the console: Live settings of the portfolio, the Stage card and Order preview. Over the API: `GET /api/portfolios/{id}/live/stage`, `GET .../live/gate-report`, `POST .../live/stage/promote`, `POST .../live/stage/demote`, `POST .../live/preview`. MCP reads the stage and the gate report only.
+In the console: Real-money settings of the portfolio, the Stage card and Order preview. Moving up asks you to type the next stage's name ("Broker paper"). Over the API: `GET /api/portfolios/{id}/live/stage`, `GET .../live/gate-report`, `POST .../live/stage/promote`, `POST .../live/stage/demote`, `POST .../live/preview`. MCP reads the stage and the gate report only.
+
+### Going live in the console
+
+The Going live page (`/going-live`, linked from Real-money settings and Broker connections) walks one portfolio through every step to real money, in order, and says for each whether it is done and who acts:
+
+1. **Server gateway set up** (admin): an IB Gateway under `[brokers.ibkr.gateways]` lists the portfolio and is connected.
+2. **Broker connected**: the portfolio is linked to a connection that can trade.
+3. **Portfolio stage**: done at Real money, small or full. Otherwise it lists the checks the next stage still needs.
+4. **Allocation**: set on Real-money settings with a fresh code.
+5. **Account profile**: saved on the same page, with a fresh code.
+6. **Safeguards** (admin): every safeguard on.
+7. **Preview**: a dry run through the broker's what-if ran on this device.
+8. **Mode switch**: a follow in this portfolio set to Approve each trade or Automatic (on Today).
+
+The page only reads; each change happens on the linked page with its own ticket and code.
 
 ### Live safeguards
 
@@ -789,6 +828,29 @@ Risk rules run between construction and the broker, configured under `[productio
 
 Weights use portfolio value before the tick's orders. Sells are never blocked, only clipped to the held quantity, and go before buys. Portfolio and subscription overrides can only tighten the policy. The rules are a registry (`production/rules/`); the newer ones (`risk_per_position`, `portfolio_vol`, `drawdown_scaling`, `liquidity`, `sector_cap`, `max_holding`, `circuit_breaker`, `operational_halt`, `style_exposure`, and the [intraday rules](#intraday-risk)) are set under `[production.risk.rules.<name>]` and stay off until a limit is set there (see `config/default.toml`). The sector cap's `look_through = true` also counts the sectors inside held funds (see [look-through](look-through.md)).
 
+### Safe defaults
+
+The shipped `config/default.toml` turns on three protections for a new install. The pydantic defaults stay permissive, so backtests and the library behave as before.
+
+| Setting | Shipped value | What it does |
+|---------|---------------|--------------|
+| `[production.risk] max_weight_per_ticker` | `0.25` | One ticker holds at most 25% of a portfolio. A single-winner strategy leaves the rest in cash. |
+| `[production.risk.rules.circuit_breaker]` | `max_month_loss = 0.06`, `max_week_loss = 0.04`, `max_drawdown_halt = 0.20` | Halts new buys after a 6% month loss, a 4% loss over five runs, or a 20% drop from the peak (held until cleared). Sells always pass. |
+| `[production.risk.rules.drawdown_scaling]` | `schedule = [[0.10, 0.5], [0.20, 0.0]]` | Half-size new buys from 10% down, none from 20% down. |
+
+There is no one-day loss limit: the shortest breaker is the week loss over `week_sessions` runs (set it to 1 for a day). An existing install that keeps its own config file keeps its own values. To loosen a protection, change it in the file or in the console (below); a portfolio or follow can only tighten it.
+
+### System settings in the console
+
+Admins change the common operational settings in Settings, System, without editing TOML or restarting. The API is `GET /api/settings/system`, `PUT /api/settings/system/{key}` and `POST /api/settings/system/{key}/reset`; the shell has `stonks settings list|set|reset`.
+
+- **What:** risk limits (the per-ticker cap, open positions, cash buffer, smallest order, the circuit breaker, the drawdown scaler, sector cap, longest hold, stale data halt), the trading universe, test books, starting cash, the oldest usable price, the alert level and backends, and per scheduler job its on switch and time.
+- **Never:** secrets, store paths, the API, sign-in and broker settings. They stay in the environment and TOML.
+- **How it is stored:** each change is one row in `settings_overrides` (state DB) laid over the TOML values, plus an `audit_log` row with the old value, the new value and the reason. Reset drops the row, so the TOML value applies again.
+- **Checks:** a value is validated like the config file (422 when it would not load). A stored value a newer release no longer accepts is skipped and shown with a `problem`.
+- **When it applies:** `next_run` settings (risk, universe, test books, alerts) apply from the next trading run or job, without a restart: the server re-reads the overrides at most every two seconds. `restart` settings (the schedule) apply when the scheduler restarts.
+- **Who:** reading needs `settings.read`, changing needs `settings.manage` with a fresh second factor (admins).
+
 ## Halts and the kill switch
 
 A halt stops new orders before they reach the broker. Every halt is a row in `risk_halts`, and the tick checks global, user and portfolio halts for each book.
@@ -827,6 +889,7 @@ flowchart LR
 - A trip sends a `risk` notification to the portfolio owner, or to the admins for a global halt.
 - A halt on a broker portfolio also stops its paper account.
 - MCP can list halts and turn the kill switch on (with `confirm=true`). It cannot resume.
+- In the console the kill switch is called Stop trading. The session strip, the command palette and the Halts page open the same sheet: it starts on the portfolio on screen, shows the ticket and needs a reason. Resuming stays on the Halts page, behind the typed words and a fresh code.
 
 ### Quit rule
 
@@ -920,7 +983,7 @@ IBKR debits the real borrow fee itself. So the book's P&L sees it the day it is 
 
 ## Model books (shadow mode)
 
-`shadow` strategies are scored each tick and never traded. Each runs alone against a virtual portfolio seeded with `initial_cash`, with the same risk policy, always on a simulated broker:
+`shadow` strategies are scored each tick and never traded. With `[production] model_books = "all"` (the default) approved (`active`) strategies keep their test book too, so an approved strategy's own record stays visible on its page. It reuses the run's signal scores, so each approved strategy adds one decision and simulated fills per run. Set `"shadow"` to keep test books for strategies on trial only. Each runs alone against a virtual portfolio seeded with `initial_cash`, with the same risk policy, always on a simulated broker:
 
 - `shadow_decisions`: one row per hypothetical order.
 - `shadow_portfolio_snapshots`: one row per strategy per `as_of`.
@@ -942,6 +1005,8 @@ uv run stonks registry history <id>
 With `[golive] incubation = true` the gate needs at least 63 days (or MinTRL, capped at 252), 20 trades, live results inside the Monte Carlo band, no quit-rule breach, stored reports for every `promotion` preset test, non-zero costs, a recorded hypothesis, and at least 30 backtest trades. The gate never changes status; `registry promote` does, and refuses without a pass or an override.
 
 ## Reading P&L
+
+Every page shows one headline for a portfolio's value and day change: `day_change` on `GET /api/pnl` and `GET /api/insights` (`day`, `previous_day`, `value`, `change`, `change_pct`), both from `production.pnl.day_change`. It compares the latest daily snapshot with the one before, and is empty across a gap longer than a long weekend. The Insights `1d` row carries the same numbers. Format `change_pct` with one formatter everywhere.
 
 ```bash
 uv run stonks pnl                      # the default portfolio, from inception
@@ -1043,7 +1108,7 @@ Live options at IBKR (roadmap 17.8) are built and off. Turn them on only after l
 
 1. `[production.options] live = true` (the admin's switch).
 2. the portfolio is at stage `live_small` or higher.
-3. its owner set an options approval level above `none` on the Live settings page, with a reason and a fresh code.
+3. its owner set an options approval level above `none` on the Real-money settings page, with a reason and a fresh code.
 
 | Level | May open |
 |-------|----------|
@@ -1077,6 +1142,10 @@ watch_band = 0.01
 - `options_expiry_watch` runs an hour before the close. A short option that expires today, still held and in or near the money, sends a high urgency alert. It never sends an order. Close it by hand from the ticket, or in TWS.
 - A quote with no bid and ask, or one too wide, makes no order. The job reports it, and the watch still alerts on expiry day.
 - Shares an assignment or exercise delivers are booked at the strike and belong to no strategy. Keep them or sell them with a manual order.
+
+## Settings in the console
+
+Settings, System shows admins the broker, risk policy, data sources and cost presets, read only. The same column shows the System settings form (see System settings in the console above): each setting grouped as the server groups it, with its default, one change per setting after a fresh second factor, a required reason for the audit log, and the server's error under the field it names. Keys, tokens and passwords are never editable there; they stay in `.env`.
 
 ## Without the scheduler
 

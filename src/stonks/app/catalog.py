@@ -19,6 +19,7 @@ from __future__ import annotations
 import importlib
 import inspect
 import pkgutil
+import re
 import threading
 from collections.abc import Sequence
 from typing import Any, Protocol, get_args, runtime_checkable
@@ -135,11 +136,20 @@ class ParameterInfo(BaseModel):
 
 class StrategyClassInfo(BaseModel):
     class_path: str
+    #: The strategy's id (``momentum``), what the CLI and stored runs name.
     name: str
     source: str
+    #: One plain line on what it does (the class ``summary``, else the first
+    #: sentence of its hypothesis). Never a code docstring.
     description: str
     applicable_asset_classes: list[str]
     parameters: list[ParameterInfo]
+    #: A plain name people read ("Moving average trend").
+    title: str = ""
+    #: Its alpha family (trend, value, ...), for grouping in pickers.
+    alpha_family: str = "other"
+    #: A wrapper runs another strategy and only filters or exits its trades.
+    is_wrapper: bool = False
 
 
 class IntervalInfo(BaseModel):
@@ -196,8 +206,41 @@ class CatalogService:
         return list(get_args(AssetClass))
 
 
+_ROLE_MARKUP = re.compile(r":[a-z]+:`~?([^`]+)`")
+
+
+def plain_summary(cls: type) -> str:
+    """One plain line on what ``cls`` does, for people: its ``summary``, else
+    the first sentence of its ``hypothesis``, else the first paragraph of its
+    own docstring (never an inherited one) with code markup removed."""
+    summary = getattr(cls, "summary", "")
+    if isinstance(summary, str) and summary.strip():
+        return " ".join(summary.split())
+    hypothesis = getattr(cls, "hypothesis", "")
+    if isinstance(hypothesis, str) and hypothesis.strip():
+        text = " ".join(hypothesis.split())
+        return re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0]
+    own = cls.__dict__.get("__doc__")
+    if not isinstance(own, str) or not own.strip():
+        return ""
+    first = inspect.cleandoc(own).split("\n\n", 1)[0]
+    first = _ROLE_MARKUP.sub(lambda m: m.group(1).rsplit(".", 1)[-1], first)
+    return " ".join(first.replace("``", "").split())
+
+
+def plain_title(cls: type) -> str:
+    """A plain name for ``cls``: its ``title``, else its id in words."""
+    title = getattr(cls, "title", "")
+    if isinstance(title, str) and title.strip():
+        return title.strip()
+    words = str(getattr(cls, "id", cls.__name__)).replace("_", " ").strip()
+    return words[:1].upper() + words[1:]
+
+
 def _describe(cls: type, source: str) -> StrategyClassInfo:
-    doc = inspect.getdoc(cls) or ""
+    from stonks.lab.catalog import is_wrapper
+    from stonks.strategies._wrapping import InnerStrategyWrapper
+
     params = [
         ParameterInfo(
             name=spec.name,
@@ -213,7 +256,10 @@ def _describe(cls: type, source: str) -> StrategyClassInfo:
         class_path=class_path_of(cls),
         name=str(getattr(cls, "id", cls.__name__)),
         source=source,
-        description=doc.split("\n\n", 1)[0].replace("\n", " "),
+        description=plain_summary(cls),
         applicable_asset_classes=list(getattr(cls, "applicable_asset_classes", ("equity",))),
         parameters=params,
+        title=plain_title(cls),
+        alpha_family=str(getattr(cls, "alpha_family", "other")),
+        is_wrapper=is_wrapper(cls) or issubclass(cls, InnerStrategyWrapper),
     )

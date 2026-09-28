@@ -84,12 +84,18 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
         />
         <app-stat-tile
           label="Net deposits"
-          [help]="false"
+          help="cash_flow"
           [loading]="insights.isLoading() && !insights.hasValue()"
           [value]="netFlows()"
           detail="Deposits less withdrawals"
         />
       </section>
+      <p class="explain">
+        Why two returns? Say you start with 10,000, it rises 10%, you add 10,000, then it falls 10%.
+        The time-weighted return is about -1%: it judges the investments and ignores when you added
+        money. The money-weighted return is worse, because more of your money was in for the fall:
+        it judges your own timing. Neither counts the deposit as profit.
+      </p>
 
       <div class="page-grid">
         <section class="panel span-5" aria-labelledby="record-title">
@@ -122,6 +128,8 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
                   />
                   @if (amountError(); as e) {
                     <span id="flow-amount-error" class="error">{{ e }}</span>
+                  } @else if (kind() === 'withdrawal' && cashText()) {
+                    <span class="hint">At most {{ cashText() }}, the cash in this portfolio.</span>
                   }
                 </div>
                 <div class="field">
@@ -137,7 +145,8 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
                     (input)="day.set($any($event.target).value)"
                   />
                   <span id="flow-date-hint" class="hint"
-                    >Not before the last trading run, and not in the future.</span
+                    >Not before the last trading run, and not in the future. Nothing can be recorded
+                    while a trading run is running.</span
                   >
                 </div>
                 <div class="field">
@@ -216,6 +225,12 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
       align-items: center;
       gap: var(--space-2);
     }
+    .explain {
+      max-width: 75ch;
+      margin: 0 0 var(--space-4);
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
+    }
   `,
 })
 export class CashFlowsPage {
@@ -269,6 +284,16 @@ export class CashFlowsPage {
       : '–',
   );
 
+  /** The cash a withdrawal may take, from the latest insights. */
+  private readonly cash = computed(() => {
+    if (!this.insights.hasValue()) return null;
+    return this.insights.value().allocation.asset_class.find((c) => c.key === 'cash')?.value ?? 0;
+  });
+  protected readonly cashText = computed(() => {
+    const cash = this.cash();
+    return cash == null ? null : formatMoney(cash, { currency: this.currency() });
+  });
+
   protected readonly kinds = FLOW_KINDS;
   protected readonly kind = signal<FlowKind>('deposit');
   protected readonly amount = signal('');
@@ -316,8 +341,13 @@ export class CashFlowsPage {
       this.amountError.set('Enter an amount above 0.');
       return;
     }
-    this.amountError.set(null);
     const kind = this.kind();
+    const cash = this.cash();
+    if (kind === 'withdrawal' && cash != null && amount > cash + 1e-9) {
+      this.amountError.set(`You can withdraw at most ${this.cashText()}, the cash in it.`);
+      return;
+    }
+    this.amountError.set(null);
     const words = kind === 'deposit' ? 'deposit' : 'withdrawal';
     const money = formatMoney(amount, { currency: this.currency() });
     const day = this.day() || this.today;

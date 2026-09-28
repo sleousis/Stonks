@@ -114,8 +114,8 @@ describe('HealthPage', () => {
     await flushAll();
     const overall = el.querySelector('.overall')!;
     expect(overall.getAttribute('data-level')).toBe('warning');
-    expect(overall.textContent).toContain('Warning');
-    expect(overall.textContent).toContain('2 warnings');
+    expect(overall.textContent).toContain('2 of 5 checks failed');
+    expect(overall.textContent).toContain('Needs a look soon');
     expect(overall.textContent).toContain('API 1.2.3');
   });
 
@@ -123,7 +123,34 @@ describe('HealthPage', () => {
     await flushAll();
     const text = el.querySelector('[aria-labelledby="fresh-title"]')!.textContent!;
     expect(text.indexOf('MSFT.US')).toBeLessThan(text.indexOf('AAPL.US'));
-    expect(text).toContain('7d old');
+    expect(text).toContain('Latest price 2026-09-19, 7 days old.');
+    expect(text).not.toContain('Good');
+  });
+
+  it('names every system check in words with what it watches', async () => {
+    await flushAll({
+      ...REPORT,
+      checks: [
+        ...REPORT.checks,
+        { name: 'lab_queue', ok: true, detail: '0 queued, 0 running, 0 worker(s) alive' },
+        { name: 'risk_halts', ok: true, detail: 'no halt in force' },
+        { name: 'var_violations', ok: true, detail: 'not enough days yet' },
+      ],
+    });
+    const text = el.querySelector('[aria-labelledby="runs-title"]')!.textContent!;
+    expect(text).toContain('System checks');
+    expect(text).toContain('Lab workers');
+    expect(text).toContain('Trading stops');
+    expect(text).toContain('Risk estimate accuracy');
+    expect(text).toContain('Not enough data yet');
+    expect(text).toContain('0 waiting, 0 running, 0 workers up.');
+    expect(text).toContain('Lab jobs sent to separate workers');
+    expect(text).not.toMatch(/lab_queue|risk_halts|var_violations|worker\(s\)/);
+    expect(text).not.toContain('Good');
+    // Failing checks come first.
+    expect(text.indexOf('Recent data update failures')).toBeLessThan(text.indexOf('Lab workers'));
+    // Actions are for admins; this reader is not one.
+    expect(el.querySelector('.check-action')).toBeNull();
   });
 
   it('shows recent data update failures with their error text in trader words', async () => {
@@ -162,7 +189,8 @@ describe('HealthPage', () => {
       checks: [{ name: 'stuck_ticks', ok: false, detail: 'running > 30m: t9' }],
     });
     expect(el.querySelector('.overall')!.getAttribute('data-level')).toBe('critical');
-    expect(el.textContent).toContain('running > 30m: t9');
+    expect(el.textContent).toContain('1 trading run running over 30 minutes.');
+    expect(el.textContent).toContain('Act now');
     expect(el.querySelector('.check-limit')?.textContent).toContain(
       'Stuck when running over 30 min',
     );
@@ -175,7 +203,7 @@ describe('HealthPage', () => {
       checks: [{ name: 'stuck_ticks', ok: true, detail: 'none' }],
     });
     expect(el.querySelector('.overall')!.getAttribute('data-level')).toBe('good');
-    expect(el.textContent).toContain('The check passes');
+    expect(el.textContent).toContain('The check passed');
   });
 
   it('shows the recent system alerts panel (UI-07)', async () => {
@@ -224,7 +252,8 @@ describe('HealthPage', () => {
       checks: REPORT.checks.filter((c) => !c.name.startsWith('freshness:')),
     });
     const text = el.querySelector('[aria-labelledby="fresh-title"]')!.textContent!;
-    expect(text).toContain('No universe is set for trading yet. Ask your admin');
+    expect(text).toContain('No universe is set for trading yet. An admin chooses');
+    expect(text).not.toContain('Ask your admin');
     expect(el.textContent).not.toMatch(/\[[a-z_.]+\]/);
     expect(el.textContent).not.toContain('ingest');
   });
@@ -283,5 +312,40 @@ describe('HealthPage run checks now (admin)', () => {
     await tick();
     expect(refresh).toHaveBeenCalled();
     expect(success).toHaveBeenCalledWith('Ran the health checks: all pass.');
+  });
+
+  it('gives an admin the actual fix, never "ask your admin"', async () => {
+    TestBed.configureTestingModule({
+      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const signingIn = TestBed.inject(SessionService).load();
+    (await nextRequest(http, '/api/auth/me')).flush(ADMIN);
+    await signingIn;
+    const fixture = TestBed.createComponent(HealthPage);
+    const el: HTMLElement = fixture.nativeElement;
+    fixture.detectChanges();
+    (await nextRequest(http, '/api/health/report')).flush({
+      ...REPORT,
+      checks: [
+        { name: 'stuck_ticks', ok: false, detail: 'running > 30m: t1' },
+        { name: 'risk_halts', ok: false, detail: '#3 kill_switch (global, all)' },
+      ],
+    });
+    await tick();
+    fixture.detectChanges();
+    const fresh = el.querySelector('[aria-labelledby="fresh-title"]')!;
+    expect(fresh.textContent).toContain('choose it as the trading universe in Settings');
+    expect(el.textContent).not.toContain('Ask your admin');
+    const links = [...el.querySelectorAll<HTMLAnchorElement>('.check-action')].map((a) => [
+      a.textContent?.trim(),
+      a.getAttribute('href'),
+    ]);
+    expect(links).toEqual([
+      ['Open trading runs', '/orders/ticks'],
+      ['Open halts', '/ops/halts'],
+    ]);
+    expect(el.textContent).toContain('1 trading run running over 30 minutes.');
+    expect(el.textContent).toContain('1 stop in force.');
   });
 });

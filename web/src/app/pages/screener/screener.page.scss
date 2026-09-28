@@ -54,6 +54,11 @@
 .grid-2 {
   display: grid;
   gap: var(--space-3);
+  align-items: start;
+
+  > .field {
+    align-content: start;
+  }
 
   @include bp.from-tablet {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -90,9 +95,34 @@
 .columns summary {
   display: flex;
   align-items: center;
+  gap: var(--space-2);
   min-height: var(--touch-min);
   cursor: pointer;
   font-weight: var(--weight-medium);
+  list-style: none;
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  // A chevron, so the fold reads as one.
+  &::before {
+    content: '';
+    width: 0.45em;
+    height: 0.45em;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(-45deg);
+    transition: transform var(--dur-fast) var(--ease);
+  }
+}
+
+.columns[open] summary::before {
+  transform: rotate(45deg);
+}
+
+.columns .hint {
+  margin-bottom: var(--space-2);
 }
 
 .errors {

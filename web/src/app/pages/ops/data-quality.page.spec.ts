@@ -125,5 +125,10 @@ describe('DataQualityPage', () => {
     expect(el.textContent).toContain('No statement flags');
     expect(el.textContent).toContain('checked each time their figures are updated');
     expect(el.textContent).not.toContain('stonks');
+    // The next step: update company reports on the Data page.
+    const open = [...el.querySelectorAll<HTMLAnchorElement>('a')].find(
+      (a) => a.textContent?.trim() === 'Open data',
+    )!;
+    expect(open.getAttribute('href')).toBe('/data');
   });
 });

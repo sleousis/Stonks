@@ -28,25 +28,55 @@
     />
     <app-stat-tile
       label="Beta"
+      help="beta"
       [loading]="insights.isLoading() && !insights.hasValue()"
       [value]="insights.hasValue() ? num(insights.value().exposure.beta) : '–'"
       [detail]="betaDetail()"
     />
     <app-stat-tile
       label="Gross exposure"
-      help="exposure"
+      help="gross_exposure"
       [loading]="insights.isLoading() && !insights.hasValue()"
       [value]="insights.hasValue() ? pct(insights.value().exposure.gross) : '–'"
-      [detail]="insights.hasValue() ? 'Net ' + pct(insights.value().exposure.net) : null"
+      [detail]="netDetail()"
     />
     <app-stat-tile
       label="Largest holding"
+      help="concentration"
       [loading]="insights.isLoading() && !insights.hasValue()"
       [value]="insights.hasValue() ? pct(insights.value().risk.concentration.top_weight) : '–'"
       [detail]="insights.hasValue() ? insights.value().risk.concentration.largest : null"
     />
   </section>
   <p class="as-of">{{ asOf() }}</p>
+  <details class="explain">
+    <summary>What these figures mean</summary>
+    <dl class="explain-list">
+      <div>
+        <dt>Beta <app-help-tip term="beta" /></dt>
+        <dd>
+          How much your portfolio tends to move with the benchmark. 1 moves in step, 0.5 moves half
+          as much, 0 ignores it. "Covered" is the share of holdings with enough history to measure
+          it.
+        </dd>
+      </div>
+      <div>
+        <dt>Gross exposure <app-help-tip term="gross_exposure" /></dt>
+        <dd>
+          Long plus short positions as a share of value: how much is invested. 10,000 with 6,000
+          long and 2,000 short is 80%.
+        </dd>
+      </div>
+      <div>
+        <dt>Net exposure <app-help-tip term="net_exposure" /></dt>
+        <dd>Long minus short: which way it leans. The same example is 40%.</dd>
+      </div>
+      <div>
+        <dt>Largest holding <app-help-tip term="concentration" /></dt>
+        <dd>The weight of your biggest position, and which one it is.</dd>
+      </div>
+    </dl>
+  </details>
 
   @if (insights.hasValue()) {
     @let i = insights.value();
@@ -88,7 +118,7 @@
         } @else if (slices().length === 0) {
           <app-empty-state
             title="Nothing to group"
-            message="The book holds no positions yet. Holdings appear after a trading run or a broker sync."
+            message="The portfolio holds no positions yet. Holdings appear after a trading run or a broker sync."
           />
         } @else {
           <ul class="slices" aria-label="Allocation">
@@ -155,6 +185,11 @@
             <app-help-tip term="twr" />, so they are left out.
             <a routerLink="/insights/cash-flows">Record a deposit or withdrawal</a>
           </p>
+          <p class="hint example">
+            For example: you start with 10,000, it rises 10%, you add 10,000, then it falls 10%.
+            Change says +9,000 (your deposit counts). The time-weighted return is about -1%. The
+            money-weighted return is worse, because more of your money was in for the fall.
+          </p>
         }
       </div>
     </section>
@@ -173,8 +208,8 @@
         </div>
       } @else if (!hasMonths()) {
         <p class="panel-body muted">
-          Each month gets a return once the book has daily values in it. Deposits and withdrawals
-          never count as return.
+          Each month gets a return once the portfolio has daily values in it. Deposits and
+          withdrawals never count as return.
         </p>
       } @else {
         <app-monthly-returns
@@ -188,7 +223,7 @@
     <section class="panel span-5" aria-labelledby="risk-title">
       <div class="panel-head">
         <h2 id="risk-title">Risk</h2>
-        <a routerLink="/insights/risk" class="panel-link">Against the limits</a>
+        <a routerLink="/insights/risk" class="panel-link">Against your limits</a>
       </div>
       <div class="panel-body">
         @if (insights.error()) {
@@ -230,13 +265,17 @@
               <dd class="num">{{ num(r.concentration.effective_holdings) }}</dd>
             </div>
             <div>
-              <dt>Top 5 weight</dt>
+              <dt>Top 5 weight <app-help-tip term="concentration" /></dt>
               <dd class="num">{{ pct(r.concentration.top5_weight) }}</dd>
             </div>
           </dl>
-          @if (r.holdings) {
-            <p class="hint">Today's weights over the last year of prices.</p>
-          }
+          <p class="hint">
+            @if (r.holdings) {
+              Today's weights over the last year of prices.
+            }
+            VaR 95% is a one-day loss beaten on about 1 day in 20. ES 95% is the average loss on
+            those worse days.
+          </p>
         }
       </div>
     </section>
@@ -261,7 +300,7 @@
         } @else if (agreement.value().holdings.length === 0) {
           <app-empty-state
             title="No holdings to check"
-            message="Each holding gets the view of every active strategy once the book holds positions."
+            message="Each holding gets the view of every approved strategy once the portfolio holds positions."
           />
         } @else {
           <ul class="holdings" aria-label="Holdings and what the strategies think">
@@ -277,7 +316,8 @@
                     <li [class]="'stance stance-' + o.stance">
                       <span class="mark" aria-hidden="true">{{ stance[o.stance].mark }}</span>
                       <span>
-                        <strong>{{ o.strategy_id }}</strong> {{ stance[o.stance].text }}.
+                        <strong>{{ strategyName(o.strategy_id) }}</strong>
+                        {{ stance[o.stance].text }}.
                         <span class="muted">{{ o.reason }}</span>
                       </span>
                     </li>
@@ -313,7 +353,7 @@
       } @else if (hp.items.length === 0) {
         <app-empty-state
           title="No snapshots yet"
-          message="Each trading run or broker sync saves one snapshot of the book."
+          message="Each trading run or broker sync saves one snapshot of the portfolio."
         />
       } @else {
         <app-data-table
@@ -327,14 +367,14 @@
           [busy]="history.isLoading()"
           (pageChange)="historyOffset.set($event.offset)"
         >
-          <!-- A snapshot from a trading run links to that run, by its date (UX-27). -->
-          <ng-template appCell="taken_at" [appCellOf]="hp.items" let-snap>
+          <!-- The trading day first; a snapshot from a trading run links to that run (UX-27). -->
+          <ng-template appCell="as_of" [appCellOf]="hp.items" let-snap>
             @if (snap.tick_id) {
-              <a class="cell-link" [routerLink]="['/orders/ticks', snap.tick_id]">{{
-                snap.taken_at | dateTime
+              <a class="cell-link num" [routerLink]="['/orders/ticks', snap.tick_id]">{{
+                snapshotDay(snap)
               }}</a>
             } @else {
-              {{ snap.taken_at | dateTime }}
+              <span class="num">{{ snapshotDay(snap) }}</span>
             }
           </ng-template>
         </app-data-table>
@@ -356,9 +396,9 @@
         } @else if (!totals.hasValue()) {
           <app-loading-state label="Loading totals" [rows]="3" />
         } @else if (totals.value().suppressed) {
-          <p class="totals-held">Totals appear once three or more traders have live money.</p>
-          <p class="hint">
-            Paper accounts are left out, and sums of fewer people would show theirs.
+          <p class="totals-held muted">
+            Totals across traders appear once three or more of them trade real money. Paper
+            portfolios are left out, and sums of fewer people would show theirs.
           </p>
         } @else {
           @let t = totals.value();

@@ -119,7 +119,7 @@ export function buildResearchStart(f: ResearchForm): ResearchStart {
           <p class="lead">
             The assistant writes down every proposal with its hypothesis before it runs. Tests only
             count data after the model's training cutoff, because a model may remember older prices.
-            A session never starts paper trading and never goes live. You decide that yourself.
+            A session never puts a strategy on trial and never trades. You decide that yourself.
           </p>
           @if (sessions.error(); as err) {
             <app-error-state

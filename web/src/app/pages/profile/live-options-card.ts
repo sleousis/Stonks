@@ -16,6 +16,7 @@ import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { formatDateTime } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
+import { stageText } from '../../shared/live-stages';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
 import { ErrorState, LoadingState } from '../../shared/ui/states';
@@ -73,6 +74,8 @@ export class LiveOptionsCard {
   protected readonly headline = optionsHeadline;
   protected readonly label = levelLabel;
   protected readonly dateTime = formatDateTime;
+  /** A server reason with stage names in trader words. */
+  protected readonly plain = stageText;
 
   protected readonly view = resource({
     params: () => ({ id: this.portfolioId() }),

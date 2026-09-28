@@ -1,6 +1,6 @@
 <app-page-header
   title="Halts"
-  description="Halts stop new orders before they reach the broker. The kill switch is the manual one."
+  description="Halts stop new orders before they reach the broker. Stop trading is the one you turn on yourself."
   [class.kill-on]="killOn()"
 >
   <app-updated-ago [at]="auto.updatedAt()" />
@@ -23,7 +23,7 @@
       <h2 id="active-title">Active halts <app-help-tip term="Circuit breaker" /></h2>
       @if (halts.hasValue()) {
         @if (killOn()) {
-          <app-status-pill status="error" tone="negative" label="Kill switch on" />
+          <app-status-pill status="error" tone="negative" label="Trading stopped" />
         } @else if (active().length) {
           <app-status-pill status="warn" tone="warn" [label]="active().length + ' active'" />
         } @else {
@@ -59,7 +59,7 @@
             @if (action(h) === 'resume') {
               <button
                 type="button"
-                class="btn btn-danger"
+                class="btn"
                 [disabled]="busyId() === h.id || !session.can(endPermission(h))"
                 [attr.aria-busy]="busyId() === h.id"
                 (click)="resume(h)"
@@ -84,125 +84,26 @@
     }
   </section>
 
-  <!-- Kill switch ----------------------------------------------------------->
+  <!-- Stop trading: the same sheet as the session strip (M7) ------------->
   <section class="panel span-12 kill" [class.live]="anyLive()" aria-labelledby="kill-title">
     <div class="panel-head">
-      <h2 id="kill-title">Kill switch <app-help-tip term="Kill switch" /></h2>
+      <h2 id="kill-title">Stop trading <app-help-tip term="Stop trading" /></h2>
     </div>
-    <form class="panel-body" novalidate (submit)="$event.preventDefault(); engage()">
+    <div class="panel-body">
       <p class="muted intro">
-        Stops new orders at once, from the next trading run on. Resuming needs the typed words
-        <strong>RESUME TRADING</strong> and a fresh second factor.
+        Stops new orders at once. No position is closed. Approved tickets not yet sent are held, and
+        orders still working at your broker are cancelled. It starts on
+        <strong>{{ onScreen() }}</strong
+        >; you pick the scope, what stops and the reason on the ticket. Resuming needs the typed
+        words <strong>RESUME TRADING</strong> and a fresh code.
       </p>
-      <div class="form-grid form-grid-2">
-        <fieldset class="scope">
-          <legend>Scope</legend>
-          @if (canKillGlobal()) {
-            <label class="check">
-              <input
-                type="radio"
-                name="kill-scope"
-                value="global"
-                [checked]="scope() === 'global'"
-                (change)="scope.set('global')"
-              />
-              Every portfolio
-            </label>
-          }
-          <label class="check">
-            <input
-              type="radio"
-              name="kill-scope"
-              value="portfolio"
-              [checked]="scope() === 'portfolio'"
-              (change)="scope.set('portfolio')"
-            />
-            One portfolio
-          </label>
-          <label class="check">
-            <input
-              type="radio"
-              name="kill-scope"
-              value="user"
-              [checked]="scope() === 'user'"
-              (change)="scope.set('user')"
-            />
-            All your portfolios
-          </label>
-          @if (canKill() && !canKillGlobal()) {
-            <p class="hint">Only admins can stop every portfolio at once.</p>
-          }
-        </fieldset>
-        @if (scope() === 'portfolio') {
-          <div class="field">
-            <label for="kill-portfolio">Portfolio</label>
-            @if (portfolioOptions().length) {
-              <select
-                id="kill-portfolio"
-                class="input"
-                [value]="portfolioId()"
-                (change)="portfolioId.set($any($event.target).value)"
-              >
-                @for (p of portfolioOptions(); track p.id) {
-                  <option [value]="p.id" [selected]="p.id === portfolioId()">{{ p.name }}</option>
-                }
-              </select>
-            } @else {
-              <input
-                id="kill-portfolio"
-                class="input"
-                spellcheck="false"
-                autocapitalize="off"
-                aria-describedby="kill-portfolio-hint"
-                [attr.aria-invalid]="submitted() && !!portfolioError()"
-                [value]="portfolioId()"
-                (input)="portfolioId.set($any($event.target).value)"
-              />
-              <p id="kill-portfolio-hint" class="hint">Your main portfolio is filled in.</p>
-            }
-            @if (submitted() && portfolioError(); as e) {
-              <p class="error">{{ e }}</p>
-            }
-          </div>
-        }
-        <div class="field span-all">
-          <label for="kill-reason">Reason</label>
-          <textarea
-            id="kill-reason"
-            class="input"
-            rows="2"
-            aria-describedby="kill-reason-hint"
-            [attr.aria-invalid]="submitted() && !!reasonError()"
-            [value]="reason()"
-            (input)="reason.set($any($event.target).value)"
-          ></textarea>
-          <p id="kill-reason-hint" class="hint">Kept in the audit log.</p>
-          @if (submitted() && reasonError(); as e) {
-            <p class="error">{{ e }}</p>
-          }
-        </div>
-        <label class="check span-all">
-          <input
-            type="checkbox"
-            [checked]="buysOnly()"
-            (change)="buysOnly.set($any($event.target).checked)"
-          />
-          Stop new buys only. Sells and exits still go out, and no position is closed.
-          <app-help-tip term="Stop new buys only" />
-        </label>
-      </div>
       <div class="form-actions">
-        <button
-          type="submit"
-          class="btn btn-danger"
-          [disabled]="engaging() || !canKill()"
-          [attr.aria-busy]="engaging()"
-        >
-          {{ engaging() ? 'Engaging…' : 'Engage kill switch' }}
+        <button type="button" class="btn btn-danger" [disabled]="!canKill()" (click)="stop()">
+          Stop trading…
         </button>
         <app-permission-note permission="killswitch.user" />
       </div>
-    </form>
+    </div>
   </section>
 
   <!-- Past ------------------------------------------------------------------>

@@ -45,9 +45,9 @@ const TOOL_LABELS: Readonly<Record<string, string>> = {
   get_leaderboard: 'Read the leaderboard',
   get_tear_sheet: 'Read a tear sheet',
   list_subscriptions: 'List the strategies you follow',
-  list_shadow_decisions: 'Read paper trading decisions',
-  list_shadow_pnl: 'Read paper trading results',
-  get_shadow_pnl: 'Read paper trading results',
+  list_shadow_decisions: 'Read test book decisions',
+  list_shadow_pnl: 'Read trial results',
+  get_shadow_pnl: 'Read trial results',
   // Risk and safety
   list_halts: 'Check whether trading is stopped',
   get_live_risk: 'Read live risk',

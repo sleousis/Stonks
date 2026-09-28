@@ -66,7 +66,7 @@ export function barTime(timestamp: string, interval: string): string {
       } @else if (rows().length === 0) {
         <app-empty-state
           [title]="ticker() ? 'No price data for ' + ticker() : 'No price data yet'"
-          message="Use Update data below to fetch daily prices or intraday bars."
+          message="Use Update data below to fetch daily or intraday prices."
         />
       } @else {
         <app-data-table
@@ -147,12 +147,12 @@ export class CoveragePanel {
     { key: 'interval', label: 'Interval' },
     {
       key: 'first_bar',
-      label: 'First bar',
+      label: 'First price',
       value: (r) => barTime(r.first_bar, r.interval),
       mobile: 'hide',
     },
-    { key: 'last_bar', label: 'Last bar', value: (r) => barTime(r.last_bar, r.interval) },
-    { key: 'rows', label: 'Rows', format: 'number' },
+    { key: 'last_bar', label: 'Last price', value: (r) => barTime(r.last_bar, r.interval) },
+    { key: 'rows', label: 'Prices', format: 'number' },
     { key: 'freshness', label: 'Freshness', value: (r) => RANK[r.freshness] },
   ];
   protected readonly key = (r: CoverageView) => `${r.ticker}|${r.interval}`;

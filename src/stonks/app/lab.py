@@ -159,7 +159,8 @@ _OBJECTIVES: dict[str, Callable[[], Objective]] = {
 _COST_MODELS: dict[str, tuple[str, Callable[[], CostModelSettings]]] = {
     "zero": ("No fees, spread or impact.", CostModelSettings),
     "realistic": (
-        "Retail-broker-ish per-asset-class fees and spreads plus square-root market impact.",
+        "Fees and spreads like a retail broker's for each asset class, plus the price "
+        "impact of large orders.",
         CostModelSettings.realistic,
     ),
     "ibkr_tiered": (
@@ -660,6 +661,10 @@ class LabRunView(BaseModel):
     best_params: dict[str, Any]
     best_score: FiniteFloat
     verdict: Literal["pass", "fail"]
+    #: The verdict in the product's words (``survived`` or
+    #: ``did_not_survive``), the same field the trial ledger carries. A
+    #: finished job whose strategy did not survive still succeeded as a job.
+    robustness: Literal["survived", "did_not_survive"] = "did_not_survive"
     survival_reports: list[SurvivalReportView]
     registered_strategy_id: str | None
     #: The run's id in the trial ledger (``lab_runs``).
@@ -699,6 +704,7 @@ class LabExecution:
             best_params=to_jsonable(result.best_params),
             best_score=finite(result.best_score),
             verdict=result.verdict,  # type: ignore[arg-type]
+            robustness="survived" if result.verdict == "pass" else "did_not_survive",
             survival_reports=[
                 SurvivalReportView(
                     test_id=r.test_id,

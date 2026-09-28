@@ -15,6 +15,7 @@ import { DataTable, TableCell, type TableColumn } from '../../../shared/ui/data-
 import { keepLatest } from '../../../shared/ui/data-table/keep-latest';
 import { PageHeader } from '../../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../../shared/ui/states';
+import { DataPlanNote } from '../../../shared/ui/data-plan-note';
 import { LabNav } from '../lab-nav';
 import { FORMULA_ROUTE, directionText, matchesQuery, warmupText } from './factor-requests';
 
@@ -29,6 +30,7 @@ type Kind = 'expression' | 'fundamental';
   selector: 'app-factors-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    DataPlanNote,
     RouterLink,
     PageHeader,
     LabNav,
@@ -46,6 +48,7 @@ type Kind = 'expression' | 'fundamental';
       <a actions class="btn" [routerLink]="['/lab/factors', formulaRoute]">Write a formula</a>
     </app-page-header>
     <app-lab-nav />
+    <app-data-plan-note kind="fundamentals" />
 
     <section class="panel" aria-labelledby="factors-title">
       <div class="panel-head">
@@ -156,6 +159,9 @@ type Kind = 'expression' | 'fundamental';
   styleUrl: '../ledger.page.scss',
   styles: `
     @use 'breakpoints' as bp;
+    app-data-plan-note {
+      margin-bottom: var(--space-4);
+    }
     .filters {
       @include bp.from-tablet {
         grid-template-columns: repeat(2, minmax(0, 1fr));

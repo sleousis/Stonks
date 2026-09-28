@@ -24,6 +24,9 @@ import { StatusPill } from '../../shared/ui/status-pill';
 import { AccountList, type LinkChoice } from './account-list';
 import { CONNECTION_STATUS_LABEL, SYNC_STATUS_LABEL, providerName } from './connection-labels';
 
+const READS =
+  "Stonks reads this broker's positions, cash and activity into the portfolios you link.";
+
 /**
  * One broker connection: its accounts and the portfolios they feed, Link,
  * Sync now (with what the sync found) and Disconnect.
@@ -70,6 +73,18 @@ export class ConnectionDetailPage implements OnInit {
     if (!this.connection.hasValue()) return 'Broker connection';
     const providers = this.providers.hasValue() ? this.providers.value() : undefined;
     return providerName(providers, this.connection.value().provider);
+  });
+
+  /** What Stonks does with this broker: reads only, or also trades when allowed (F53). */
+  protected readonly description = computed(() => {
+    if (!this.connection.hasValue() || !this.providers.hasValue()) return READS;
+    const name = this.connection.value().provider;
+    const provider = this.providers.value().find((p) => p.name === name);
+    if (!provider?.can_trade) return `${READS} It never places an order there.`;
+    return (
+      `${READS} It places orders there only for Approve each trade and Automatic follows, ` +
+      "and for orders you place or approve, at the linked portfolio's stage."
+    );
   });
 
   protected readonly statusLabel = CONNECTION_STATUS_LABEL;

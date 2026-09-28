@@ -2,7 +2,7 @@
 
 At a broker that does not run an algo itself (``NativeAlgoBroker``), a
 TWAP or VWAP ticket becomes a **parent** in ``algo_parents`` and its
-planned **child slices** in ``algo_slices`` (SQLite 053). The parent never
+planned **child slices** in ``algo_slices`` (SQLite 054). The parent never
 reaches the broker. Each child is an ordinary order: client id
 ``<parent>.sNN``, the parent's side, type, limit and decision, a day order,
 ``orders.parent_client_id`` set. So the order state machine,
@@ -65,7 +65,7 @@ SliceStatus = Literal["planned", "sent", "skipped"]
 
 
 def parents_recorded(state: SqliteState) -> bool:
-    """Whether the state DB has the parent tables (migration 053)."""
+    """Whether the state DB has the parent tables (migration 054)."""
     return bool(
         state.sql("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'algo_parents'")
     )

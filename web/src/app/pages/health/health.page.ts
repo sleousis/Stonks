@@ -27,17 +27,23 @@ import { PermissionNote } from '../../shared/ui/permission-note';
 import { StatTile, type StatTone } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { runWord } from '../../core/schedule/run-status';
 import { kindLabel, sourceLabel } from '../data/data-labels';
 import { parseTickers } from '../data/ingest-request';
 import { GatewayPanel } from './gateway-panel';
 import {
-  CHECK_TITLES,
+  CHECK_ACTIONS,
   type FreshnessRow,
   type HealthLevel,
   LEVEL_LABEL,
   LEVEL_TONE,
+  LEVEL_URGENCY,
   checkLevel,
+  checkMeaning,
+  checkPill,
   checkThreshold,
+  checkTitle,
+  plainDetail,
   splitChecks,
   worstLevel,
 } from './health-state';
@@ -120,6 +126,16 @@ export class HealthPage {
 
   protected readonly levelTone = LEVEL_TONE;
   protected readonly levelLabel = LEVEL_LABEL;
+  protected readonly levelUrgency = LEVEL_URGENCY;
+  protected readonly checkTitle = checkTitle;
+  protected readonly checkMeaning = checkMeaning;
+  protected readonly checkPill = checkPill;
+  protected readonly plainDetail = plainDetail;
+  protected readonly runWord = runWord;
+  protected readonly freshnessMeaning = checkMeaning('freshness');
+  protected checkAction(name: string) {
+    return CHECK_ACTIONS[name] ?? null;
+  }
 
   private readonly split = computed(() =>
     this.report.hasValue() ? splitChecks(this.report.value().checks) : { freshness: [], other: [] },
@@ -144,11 +160,10 @@ export class HealthPage {
   protected readonly headline = computed(() => {
     const { total, critical, warning } = this.counts();
     if (total === 0) return 'No checks ran';
-    if (!critical && !warning) return total === 1 ? 'The check passes' : `All ${total} checks pass`;
-    const parts: string[] = [];
-    if (critical) parts.push(`${critical} critical`);
-    if (warning) parts.push(`${warning} ${warning === 1 ? 'warning' : 'warnings'}`);
-    return parts.join(', ');
+    if (!critical && !warning)
+      return total === 1 ? 'The check passed' : `All ${total} checks passed`;
+    const failed = critical + warning;
+    return `${failed} of ${total} ${total === 1 ? 'check' : 'checks'} failed`;
   });
 
   protected readonly advice = computed(() => {
@@ -219,7 +234,6 @@ export class HealthPage {
       ).length,
   );
 
-  protected readonly checkTitle = (name: string) => CHECK_TITLES[name] ?? name;
   /** The limit a check compares against, from the report's thresholds. */
   protected threshold(name: string): string | null {
     return checkThreshold(name, this.report.hasValue() ? this.report.value().thresholds : null);
@@ -232,7 +246,7 @@ export class HealthPage {
       label: 'State',
       value: (r) => ({ good: 0, warning: 1, critical: 2 })[r.level],
     },
-    { key: 'detail', label: 'Latest bar', sortable: false },
+    { key: 'detail', label: 'Latest price', sortable: false },
   ];
   protected readonly freshnessKey = (r: FreshnessRow) => r.ticker;
 
@@ -242,7 +256,7 @@ export class HealthPage {
     { key: 'kind', label: 'Update', value: (r) => kindLabel(r.kind) },
     {
       key: 'tickers',
-      label: 'Tickers ok / failed',
+      label: 'Tickers updated / failed',
       sortable: false,
       align: 'end',
       value: (r) => `${r.tickers_ok ?? 0} / ${r.tickers_failed ?? 0}`,

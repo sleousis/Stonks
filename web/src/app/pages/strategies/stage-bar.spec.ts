@@ -27,23 +27,38 @@ describe('StageBar (UX-64)', () => {
   const current = (el: HTMLElement) =>
     el.querySelector('[aria-current="step"] .stage-label')?.textContent?.trim() ?? null;
 
-  it('marks the current stage for each status', () => {
+  it('uses the strategy ladder words, never Live (B1)', () => {
+    const el = render('active');
+    const labels = [...el.querySelectorAll('.stage-label')].map((s) => s.textContent?.trim());
+    expect(labels).toEqual(['Draft', 'On trial', 'Approved', 'Retired']);
+    expect(el.textContent).not.toMatch(/(?<!go-)\blive\b/i);
+  });
+
+  it('marks the current step for each status', () => {
     expect(current(render('draft'))).toBe('Draft');
-    expect(current(render('shadow', { passed: false }))).toBe('Paper');
-    expect(current(render('shadow', { passed: true }))).toBe('Ready');
-    expect(current(render('active'))).toBe('Live');
+    expect(current(render('shadow', { passed: false }))).toBe('On trial');
+    expect(current(render('active'))).toBe('Approved');
+    expect(current(render('retired'))).toBe('Retired');
   });
 
-  it('shows no current step and the way back when stopped', () => {
+  it('says a strategy on trial that passed the check is ready to approve', () => {
+    const el = render('shadow', { passed: true });
+    expect(current(el)).toBe('On trial');
+    expect(el.textContent).toContain('ready to approve');
+    const link = el.querySelector<HTMLAnchorElement>('.next a')!;
+    expect(link.getAttribute('href')).toBe('/strategies/mom_1a2b3c4d?tab=review');
+  });
+
+  it('lights only the retired step and shows the way back', () => {
     const el = render('retired');
-    expect(current(el)).toBeNull();
-    expect(el.textContent).toContain('Start paper trading');
+    expect(el.querySelectorAll('[data-state="done"]').length).toBe(0);
+    expect(el.textContent).toContain('Put on trial');
   });
 
-  it('never offers a Go live button of its own', () => {
+  it('never offers an Approve button of its own', () => {
     const el = render('shadow', { passed: true });
     expect([...el.querySelectorAll('button')].map((b) => b.textContent?.trim())).not.toContain(
-      'Go live',
+      'Approve',
     );
   });
 
@@ -59,7 +74,8 @@ describe('StageBar (UX-64)', () => {
     const el = render('shadow', { passed: false, report });
     const fold = el.querySelector('details.checks')!;
     expect(fold.querySelector('summary')!.textContent).toContain('2 of 3 to fix');
-    expect(fold.textContent).toContain('About 17 more trading days on paper.');
+    expect(fold.textContent).toContain('About 17 more trading days on trial.');
+    expect(fold.textContent).not.toMatch(/promotion/i);
     const lab = [...fold.querySelectorAll('a')].find((a) => a.textContent?.includes('Lab'))!;
     expect(lab.getAttribute('href')).toBe('/lab?strategy=mom_1a2b3c4d&preset=promotion');
   });

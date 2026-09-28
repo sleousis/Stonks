@@ -2,13 +2,13 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource } from '
 import { RouterLink } from '@angular/router';
 
 import { PortfolioService } from '../../api/portfolio.service';
+import { formatMoney, formatNumber, formatPercent, toneClass } from '../../core/format/format';
 import {
-  activeFormat,
-  formatMoney,
-  formatNumber,
-  formatPercent,
-  toneClass,
-} from '../../core/format/format';
+  dayChangeFrom,
+  dayChangeMoney,
+  dayChangePercent,
+  sessionLabel,
+} from '../../core/format/day-change';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { baseCurrencyLine } from '../../shared/base-currency';
 import { StatTile } from '../../shared/ui/stat-tile';
@@ -19,23 +19,8 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
 import { TradingDayService } from '../../core/schedule/trading-day.service';
 
 const TOP_HOLDINGS = 8;
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/**
- * The label of the day's-change tile (UX-34): "Today" for today's session,
- * the weekday ("Friday") for one earlier this week, else "Last session".
- * `day` is the P&L row's date (YYYY-MM-DD).
- */
-export function sessionLabel(day: string | null | undefined, now = new Date()): string {
-  if (!day) return 'Today';
-  const { locale, timeZone } = activeFormat();
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone }).format(now);
-  if (day === today) return 'Today';
-  const at = Date.parse(`${day}T00:00:00Z`);
-  const days = Math.round((Date.parse(`${today}T00:00:00Z`) - at) / DAY_MS);
-  if (!Number.isFinite(days) || days < 0 || days > 6) return 'Last session';
-  return new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }).format(at);
-}
+/** Moved to core/format/day-change.ts so every page names the day alike (M2). */
+export { sessionLabel } from '../../core/format/day-change';
 
 /** My portfolio: value, today's change and the biggest holdings. */
 @Component({
@@ -230,15 +215,20 @@ export class PortfolioCard {
     this.pnl.hasValue() ? (this.pnl.value()?.rows.at(-1) ?? null) : null,
   );
 
+  /** The portfolio's own currency, so the value reads the same here, on Dashboard and on Insights. */
+  private readonly currency = computed(() => {
+    const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
+    return book?.currency ?? undefined;
+  });
   protected readonly value = computed(() => {
     const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
-    return book ? formatMoney(book.total_value) : '';
+    return book ? formatMoney(book.total_value, { currency: this.currency() }) : '';
   });
   protected readonly total = computed(() => {
     const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
     return book ? book.total_value : null;
   });
-  protected readonly money = (n: number) => formatMoney(n);
+  protected readonly money = (n: number) => formatMoney(n, { currency: this.currency() });
   /** The value in the base currency when it differs, or why it is missing. */
   protected readonly baseLine = computed(() => {
     const book = this.portfolio.hasValue() ? this.portfolio.value() : null;
@@ -264,16 +254,20 @@ export class PortfolioCard {
   /** Paper or live, when the portfolio list is known. Brass means live. */
   protected readonly mode = computed(() => this.portfolioCtx.current()?.trading ?? null);
   protected readonly live = computed(() => this.mode() === 'live');
+  /** The API's one headline change (`day_change`), the same as Dashboard and Insights (M2). */
+  private readonly day = computed(() =>
+    dayChangeFrom(this.pnl.hasValue() ? this.pnl.value()?.day_change : null, this.latest()),
+  );
   protected readonly dayChange = computed(() => {
-    const row = this.latest();
-    return row?.daily_change == null ? null : formatMoney(row.daily_change, { signed: true });
+    const d = this.day();
+    return d?.change == null ? null : dayChangeMoney(d.change, this.currency());
   });
   protected readonly dayReturn = computed(() => {
-    const row = this.latest();
-    return row?.daily_return == null ? null : formatPercent(row.daily_return, { signed: true });
+    const d = this.day();
+    return d?.pct == null ? null : dayChangePercent(d.pct);
   });
-  protected readonly dayTone = computed(() => toneClass(this.latest()?.daily_change));
-  protected readonly dayLabel = computed(() => sessionLabel(this.latest()?.day));
+  protected readonly dayTone = computed(() => toneClass(this.day()?.change));
+  protected readonly dayLabel = computed(() => sessionLabel(this.day()?.day));
 
   private readonly sorted = computed(() =>
     this.portfolio.hasValue() && this.portfolio.value()

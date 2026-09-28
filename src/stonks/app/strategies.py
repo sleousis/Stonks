@@ -134,6 +134,14 @@ class StatusChangeRequest(BaseModel):
     actor: str | None = Field(default=None, min_length=1, max_length=100)
 
 
+class StarterLabelView(BaseModel):
+    """Set on a strategy of the starter set (``stonks starter install``):
+    a simple reference shipped with Stonks, On trial like any other."""
+
+    title: str
+    summary: str
+
+
 class StrategySummary(BaseModel):
     id: str
     class_path: str
@@ -143,6 +151,9 @@ class StrategySummary(BaseModel):
     metadata: StrategyMetadataView
     created_at: str
     updated_at: str
+    starter: StarterLabelView | None = Field(
+        default=None, description="Set for a starter strategy: its plain title and summary."
+    )
 
 
 class StrategyDetail(StrategySummary):
@@ -289,7 +300,10 @@ class StrategyService:
                 raise NotFoundError(f"no strategy with id {strategy_id!r}") from None
 
     def _summary(self, h: StrategyHandle) -> StrategySummary:
+        from stonks.starter import starter_info
+
         meta = _describe(h.class_path, h.params)
+        starter = starter_info(h.id)
         return StrategySummary(
             id=h.id,
             class_path=h.class_path,
@@ -305,6 +319,9 @@ class StrategyService:
             ),
             created_at=h.created_at,
             updated_at=h.updated_at,
+            starter=StarterLabelView(title=starter.title, summary=starter.summary)
+            if starter is not None
+            else None,
         )
 
 

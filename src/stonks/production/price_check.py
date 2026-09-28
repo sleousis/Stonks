@@ -20,7 +20,7 @@ wraps any :class:`~stonks.ingest.sources.base.DataSource` (Yahoo by
 default), :class:`BrokerMarks` reads a broker's quotes (IBKR marks for held
 tickers when a gateway is set), closes only and in major units.
 
-Every run is one ``price_checks`` row (SQLite migration 051). The tick
+Every run is one ``price_checks`` row (SQLite migration 052). The tick
 reads the held tickers of its day with :func:`price_holds`, and Health
 shows :func:`price_check_health`.
 """

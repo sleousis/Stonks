@@ -5,9 +5,10 @@ import { provideRouter } from '@angular/router';
 import type { MeView } from '../api/models';
 import { type Permission, allowed } from '../core/auth/permissions';
 import { SessionService } from '../core/auth/session.service';
+import { type Feature, FeatureFlagsService } from '../core/features/feature-flags.service';
 import { TicketCountService } from '../core/tickets/ticket-count.service';
 import { ADMIN, TRADER } from '../../testing/auth-fixtures';
-import { Nav } from './nav';
+import { NAV_GROUPS_STORAGE_KEY, Nav } from './nav';
 
 const VIEWER: MeView = { ...TRADER, role: 'viewer', scopes: ['read'] };
 
@@ -22,19 +23,25 @@ describe('Nav', () => {
   };
 
   const waiting = signal(0);
+  const off = signal<ReadonlySet<Feature>>(new Set());
   let watch: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     waiting.set(0);
+    off.set(new Set());
+    localStorage.removeItem(NAV_GROUPS_STORAGE_KEY);
     watch = vi.fn();
     TestBed.configureTestingModule({
       providers: [
         provideRouter([]),
         { provide: SessionService, useValue: session },
         { provide: TicketCountService, useValue: { waiting, watch } },
+        { provide: FeatureFlagsService, useValue: { on: (f: Feature) => !off().has(f) } },
       ],
     });
   });
+
+  afterEach(() => localStorage.removeItem(NAV_GROUPS_STORAGE_KEY));
 
   function render(user: MeView | null) {
     me.set(user);
@@ -47,38 +54,67 @@ describe('Nav', () => {
     return [...el.querySelectorAll(`${list} a span`)].map((s) => s.textContent);
   }
 
-  function group(el: HTMLElement, title: string): string[] {
-    const heading = [...el.querySelectorAll('.group')].find((g) => g.textContent === title);
-    if (!heading) return [];
-    return labels(el, `ul[aria-labelledby="${heading.id}"]`);
+  function heading(el: HTMLElement, title: string) {
+    return [...el.querySelectorAll<HTMLElement>('summary.group')].find(
+      (g) => g.textContent?.trim() === title,
+    );
   }
 
-  it('a trader sees Strategies and Orders without opening anything (UX-10)', () => {
+  function group(el: HTMLElement, title: string): string[] {
+    const h = heading(el, title);
+    if (!h) return [];
+    return labels(el, `ul[aria-labelledby="${h.id}"]`);
+  }
+
+  function isOpen(el: HTMLElement, title: string): boolean {
+    return (heading(el, title)?.parentElement as HTMLDetailsElement | undefined)?.open ?? false;
+  }
+
+  it('gives a trader seven pages on top, the rest in folding groups (M1)', () => {
     const el = render(TRADER);
-    expect(el.querySelector('details')).toBeNull();
     expect(labels(el, 'ul[aria-label="Trading"]')).toEqual([
       'Today',
       'Strategies',
       'Orders',
       'Approvals',
-      'Charts',
-      'Watchlists',
-      'Calendar',
       'Insights',
+      'Charts',
       'Notifications',
     ]);
-    expect(group(el, 'Research')).toEqual([
-      'Paper trading',
-      'Leaderboard',
+    expect(group(el, 'More')).toEqual([
+      'Going live',
+      'Watchlists',
+      'Calendar',
       'Screener',
-      'Options',
-      'Studio',
-      'Lab',
-      'Go live',
+      'Trial results',
+      'Leaderboard',
+      'Trade costs',
       'Assistant',
     ]);
+    expect(group(el, 'Advanced')).toEqual(['Studio', 'Lab', 'Options', 'Strategy review', 'Halts']);
     expect(group(el, 'System')).toEqual([]);
-    expect(el.textContent).not.toContain('Advanced');
+  });
+
+  it('never links a trader to an admin page (F11)', () => {
+    const hrefs = [...render(TRADER).querySelectorAll('a')].map((a) => a.getAttribute('href'));
+    for (const path of ['/ops/schedule', '/universes', '/data', '/health']) {
+      expect(hrefs).not.toContain(path);
+    }
+  });
+
+  it('opens More at first and keeps Advanced folded, remembering a choice', () => {
+    const el = render(TRADER);
+    expect(isOpen(el, 'More')).toBe(true);
+    expect(isOpen(el, 'Advanced')).toBe(false);
+    const advanced = heading(el, 'Advanced')!.parentElement as HTMLDetailsElement;
+    advanced.open = true;
+    advanced.dispatchEvent(new Event('toggle'));
+    expect(JSON.parse(localStorage.getItem(NAV_GROUPS_STORAGE_KEY)!)).toContain('Advanced');
+  });
+
+  it('hides the Assistant while the server has it off (F42)', () => {
+    off.set(new Set(['assistant']));
+    expect(group(render(TRADER), 'More')).not.toContain('Assistant');
   });
 
   it('a viewer does not see Schedule or Data quality, nor the build tools', () => {
@@ -89,24 +125,18 @@ describe('Nav', () => {
     expect(all).not.toContain('Users');
     expect(all).not.toContain('Studio');
     expect(all).not.toContain('Lab');
-    // Viewers may still read strategies, paper trading and the leaderboard.
+    expect(all).not.toContain('Approvals');
+    // Viewers may still read strategies, trial results and the leaderboard.
     expect(all).toContain('Strategies');
-    expect(group(el, 'Research')).toEqual([
-      'Paper trading',
-      'Leaderboard',
-      'Screener',
-      'Options',
-      'Go live',
-      'Assistant',
-    ]);
+    expect(group(el, 'Advanced')).toEqual(['Options', 'Strategy review']);
   });
 
-  it('gives admins the System group, with Overview, Halts and Users', () => {
+  it('gives admins the System group, with Dashboard, Halts and Users', () => {
     const el = render(ADMIN);
     expect(group(el, 'System')).toEqual([
-      'Overview',
+      'Dashboard',
       'Health',
-      'Live engine',
+      'Intraday engine',
       'Schedule',
       'Data',
       'Data quality',
@@ -115,11 +145,15 @@ describe('Nav', () => {
       'Halts',
       'Users',
     ]);
+    expect(labels(el)).not.toContain('Overview');
+    // Halts sits in System for admins, once.
+    expect(labels(el).filter((l) => l === 'Halts')).toHaveLength(1);
+    expect(group(el, 'Advanced')).not.toContain('Halts');
   });
 
   it('keeps account pages out of the main nav (they sit in the account menu)', () => {
     const all = labels(render(ADMIN));
-    for (const label of ['Profile', 'Settings', 'Broker connections', 'Glossary', 'Trade costs']) {
+    for (const label of ['Profile', 'Settings', 'Broker connections', 'Help']) {
       expect(all).not.toContain(label);
     }
   });
@@ -155,9 +189,9 @@ describe('Nav', () => {
     expect(watch).not.toHaveBeenCalled();
   });
 
-  it('points Paper trading at /paper', () => {
+  it('points Trial results at /paper', () => {
     const el = render(TRADER);
-    const link = [...el.querySelectorAll('a')].find((a) => a.textContent?.includes('Paper'))!;
+    const link = [...el.querySelectorAll('a')].find((a) => a.textContent?.includes('Trial'))!;
     expect(link.getAttribute('href')).toBe('/paper');
   });
 

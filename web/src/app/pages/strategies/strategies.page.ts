@@ -22,10 +22,12 @@ import { STATUS_FILTERS, asStatus, strategyDisplayName, strategyKindName } from 
 /** Enough for any realistic registry; search and paging then run in the browser. */
 const FETCH_LIMIT = 500;
 
-/** A registry row with its paper performance, when it has a paper book. */
+/** A registry row with its trial result, when it has a test book. */
 export interface StrategyRow extends StrategySummary {
-  /** The name to show (UX-27). */
+  /** The name to show (UX-27): a starter's title, else from the id. */
   name: string;
+  /** A starter strategy's one-line summary. */
+  summary: string | null;
   kind: string;
   paper_return: number | null;
   max_drawdown: number | null;
@@ -42,7 +44,8 @@ export function withPerformance(
     const p = byId.get(s.id);
     return {
       ...s,
-      name: strategyDisplayName(s.id),
+      name: strategyDisplayName(s.id, { starter: s.starter }),
+      summary: s.starter?.summary ?? null,
       kind: strategyKindName(s.class_path),
       paper_return: p?.cumulative_return ?? null,
       max_drawdown: p?.max_drawdown ?? null,
@@ -111,6 +114,7 @@ export class StrategiesPage {
       (s) =>
         s.id.toLowerCase().includes(q) ||
         s.name.toLowerCase().includes(q) ||
+        (s.summary ?? '').toLowerCase().includes(q) ||
         s.kind.toLowerCase().includes(q) ||
         s.class_path.toLowerCase().includes(q) ||
         s.applicable_asset_classes.some((a) => a.toLowerCase().includes(q)),
@@ -128,9 +132,9 @@ export class StrategiesPage {
   protected readonly columns: TableColumn<StrategyRow>[] = [
     { key: 'id', label: 'Strategy', mobile: 'title', value: (s) => s.name },
     { key: 'status', label: 'Status' },
-    { key: 'paper_return', label: 'Paper return', format: 'signedPercent', tone: true },
+    { key: 'paper_return', label: 'Trial return', format: 'signedPercent', tone: true },
     { key: 'max_drawdown', label: 'Max drawdown', format: 'percent' },
-    { key: 'paper_days', label: 'Days on paper', format: 'number' },
+    { key: 'paper_days', label: 'Days on trial', format: 'number' },
     { key: 'kind', label: 'Kind', mobile: 'hide' },
     {
       key: 'assets',
@@ -142,7 +146,7 @@ export class StrategiesPage {
   ];
   protected readonly strategyKey = (s: StrategyRow) => s.id;
 
-  /** "live", "paper trading" or "stopped", for the empty filter message. */
+  /** "approved", "on trial" or "retired", for the empty filter message. */
   protected readonly filterWord = computed(() => {
     const status = this.statusFilter();
     return status ? STATUS_WORDS[status].toLowerCase() : '';

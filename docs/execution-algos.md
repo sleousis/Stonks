@@ -91,4 +91,4 @@ Planned tickets carry no strategy: the trades are the portfolio's own, with the 
 
 ## Storage
 
-SQLite migration 053: `execution_algo_settings`, `orders.exec_algo`, `orders.parent_client_id`, `algo_parents` and `algo_slices`.
+SQLite migration 054: `execution_algo_settings`, `orders.exec_algo`, `orders.parent_client_id`, `algo_parents` and `algo_slices`.

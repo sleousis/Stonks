@@ -97,11 +97,13 @@ describe('InsightsPage', () => {
     expect(text).toContain('$100,000.00');
     expect(text).toContain('1.12');
     expect(text).toContain('Against SPY.US');
-    expect(text).toContain('equity');
+    // Asset classes read as words (M6).
+    expect(text).toContain('Equity');
     expect(text).toContain('70.0%');
     expect(text).toContain('Since the start');
     // Money changes carry their sign (UX-58).
-    expect(text).toContain('+$1,000.00 today');
+    // One day-change format on Today, Dashboard and Insights (M2).
+    expect(text).toMatch(/\+\$1,000\.00 \(\+[\d.]+%\) (today|on \w+|last session)/);
     expect(el.querySelector('.figures dd.gain')?.textContent).toContain('+$1,000.00');
     expect(text).toContain('n/a');
     expect(text).toContain('22.0%');
@@ -168,7 +170,24 @@ describe('InsightsPage', () => {
     expect(holding.getAttribute('aria-checked')).toBe('true');
     const slices = el.querySelector('.slices')!.textContent ?? '';
     expect(slices).toContain('AAPL.US');
-    expect(slices).not.toContain('equity');
+    expect(slices).not.toContain('Equity');
+  });
+
+  it('explains beta, gross and net exposure and the two returns where they show', async () => {
+    setup();
+    await flushAll();
+    const text = el.textContent ?? '';
+    expect(text).toContain('long minus short');
+    expect(text).toContain('of holdings covered');
+    const explain = el.querySelector('details.explain')!;
+    expect(explain.querySelector('summary')?.textContent).toContain('What these figures mean');
+    expect(explain.textContent).toContain('Gross exposure');
+    expect(explain.textContent).toContain('Net exposure');
+    expect(explain.textContent).toContain('Beta');
+    // TWR and MWR with one worked example, in the Returns panel.
+    const example = el.querySelector('.hint.example')?.textContent ?? '';
+    expect(example).toContain('about -1%');
+    expect(example).toContain('money-weighted return is worse');
   });
 
   it('lists what each strategy thinks of each holding, in words', async () => {
@@ -176,7 +195,9 @@ describe('InsightsPage', () => {
     await flushAll();
     const agree = el.querySelector('.holdings')!.textContent ?? '';
     expect(agree).toContain('1 agrees, 1 disagrees');
-    expect(agree).toContain('momentum-v3 agrees.');
+    // Ids without the generated suffix read as they are; generated ones get a name.
+    expect(agree).toContain('momentum-v3');
+    expect(agree).toContain('agrees.');
     expect(agree).toContain('priced above fair value');
   });
 
@@ -194,7 +215,10 @@ describe('InsightsPage', () => {
     // Each snapshot names its run by date, linked, never by its raw id (UX-27).
     const table = el.querySelector('section[aria-labelledby="history-title"] table')!;
     expect(table.textContent).not.toContain('t7');
-    expect(table.querySelector('a[href="/orders/ticks/t7"]')?.textContent).toMatch(/2026/);
+    // The trading day it is for leads, not the minute the run saved it (m4).
+    expect(table.querySelector('a[href="/orders/ticks/t7"]')?.textContent?.trim()).toBe(
+      '2026-09-25',
+    );
   });
 
   it('shows totals across every book to admins only', async () => {
@@ -219,7 +243,7 @@ describe('InsightsPage', () => {
     try {
       setup();
       await flushAll();
-      expect(el.textContent).toContain('Totals appear once three or more traders have live money.');
+      expect(el.textContent).toContain('appear once three or more of them trade real money');
       expect(el.textContent).not.toContain('People');
     } finally {
       totalsBody = TOTALS;

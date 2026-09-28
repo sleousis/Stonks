@@ -40,6 +40,8 @@ _FIT_CACHE_MAX = 20_000
 
 class TrendlineBreakoutStrategy(BaseStrategy):
     id = "trendline_breakout"
+    title = "Trendline breakout"
+    summary = "Buys when the close breaks through a resistance line drawn over recent prices."
     applicable_asset_classes = ("commodity", "crypto", "bond")
     hypothesis = (
         "A close through a resistance line fitted to the last N bars starts "

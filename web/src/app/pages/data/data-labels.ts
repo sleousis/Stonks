@@ -35,6 +35,19 @@ export function kindLabel(kind: string | null | undefined): string {
   return KIND_LABELS[kind] ?? humanize(kind);
 }
 
+/** Asset classes in words: "Stocks", never the lower-case id "equity". */
+export const ASSET_CLASS_LABELS: Readonly<Record<string, string>> = {
+  equity: 'Stocks',
+  crypto: 'Crypto',
+  commodity: 'Commodities',
+  bond: 'Bonds',
+};
+
+export function assetClassLabel(cls: string | null | undefined): string {
+  if (!cls) return '';
+  return ASSET_CLASS_LABELS[cls] ?? humanize(cls);
+}
+
 /** How a data update ended, for status pills. */
 export const RUN_STATUS_LABELS: Readonly<Record<string, string>> = {
   running: 'Running',

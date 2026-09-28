@@ -1,4 +1,4 @@
-"""Migration 049 and the journal store (roadmap 23.3): playbooks, trade
+"""Migration 050 and the journal store (roadmap 23.3): playbooks, trade
 annotations and labels, and the ledger read."""
 
 from __future__ import annotations

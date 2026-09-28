@@ -15,11 +15,11 @@
 --    brokers without an API, written into the tables a broker sync fills,
 --    with an undo per import.
 
-CREATE TEMP TABLE _seq_050 AS
+CREATE TEMP TABLE _seq_051 AS
     SELECT name, seq FROM sqlite_sequence
      WHERE name IN ('alerts', 'notification_outbox', 'notification_deliveries');
-CREATE TEMP TABLE _outbox_050 AS SELECT * FROM notification_outbox;
-CREATE TEMP TABLE _deliveries_050 AS SELECT * FROM notification_deliveries;
+CREATE TEMP TABLE _outbox_051 AS SELECT * FROM notification_outbox;
+CREATE TEMP TABLE _deliveries_051 AS SELECT * FROM notification_deliveries;
 
 DROP INDEX IF EXISTS idx_deliveries_due;
 DROP INDEX IF EXISTS idx_deliveries_user;
@@ -33,7 +33,7 @@ DROP TABLE notification_deliveries;
 DROP TABLE notification_outbox;
 
 -- ---- alerts (the in-app feed) ---------------------------------------------
-CREATE TABLE alerts_050 (
+CREATE TABLE alerts_051 (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     level        TEXT NOT NULL CHECK (level IN ('info', 'warning', 'error')),
     title        TEXT NOT NULL,
@@ -48,14 +48,14 @@ CREATE TABLE alerts_050 (
     read_at      TEXT
 );
 
-INSERT INTO alerts_050 (id, level, title, message, context_json, created_at, user_id,
+INSERT INTO alerts_051 (id, level, title, message, context_json, created_at, user_id,
     category, dedupe_key, read_at)
 SELECT id, level, title, message, context_json, created_at, user_id, category, dedupe_key,
     read_at
 FROM alerts;
 
 DROP TABLE alerts;
-ALTER TABLE alerts_050 RENAME TO alerts;
+ALTER TABLE alerts_051 RENAME TO alerts;
 
 CREATE INDEX IF NOT EXISTS idx_alerts_level ON alerts(level, id);
 CREATE INDEX IF NOT EXISTS idx_alerts_user ON alerts(user_id, id);
@@ -86,7 +86,7 @@ INSERT INTO notification_outbox (id, user_id, category, level, urgency, title, b
     strategy_id, portfolio_id, dedupe_key, dedupe_active, alert_id, created_at)
 SELECT id, user_id, category, level, urgency, title, body, deep_link, strategy_id,
     portfolio_id, dedupe_key, dedupe_active, alert_id, created_at
-FROM _outbox_050;
+FROM _outbox_051;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_outbox_user_dedupe
     ON notification_outbox(user_id, dedupe_key)
@@ -117,14 +117,14 @@ INSERT INTO notification_deliveries (id, notification_id, user_id, channel, targ
     attempts, deferred, next_attempt_at, last_error, sent_at, created_at, updated_at)
 SELECT id, notification_id, user_id, channel, target_id, status, attempts, deferred,
     next_attempt_at, last_error, sent_at, created_at, updated_at
-FROM _deliveries_050;
+FROM _deliveries_051;
 
 CREATE INDEX IF NOT EXISTS idx_deliveries_due
     ON notification_deliveries(status, next_attempt_at);
 CREATE INDEX IF NOT EXISTS idx_deliveries_user ON notification_deliveries(user_id, id);
 
 -- ---- preferences ----------------------------------------------------------
-CREATE TABLE notification_prefs_050 (
+CREATE TABLE notification_prefs_051 (
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     category    TEXT NOT NULL CHECK (category IN
                    ('signal', 'order', 'risk', 'system', 'price_alert', 'event_alert',
@@ -135,11 +135,11 @@ CREATE TABLE notification_prefs_050 (
     updated_at  TEXT NOT NULL
 );
 
-INSERT INTO notification_prefs_050 (user_id, category, strategy_id, channel, enabled, updated_at)
+INSERT INTO notification_prefs_051 (user_id, category, strategy_id, channel, enabled, updated_at)
 SELECT user_id, category, strategy_id, channel, enabled, updated_at FROM notification_prefs;
 
 DROP TABLE notification_prefs;
-ALTER TABLE notification_prefs_050 RENAME TO notification_prefs;
+ALTER TABLE notification_prefs_051 RENAME TO notification_prefs;
 
 CREATE UNIQUE INDEX IF NOT EXISTS ux_notification_prefs
     ON notification_prefs(user_id, category, COALESCE(strategy_id, ''), channel);
@@ -147,11 +147,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_notification_prefs
 -- ---- AUTOINCREMENT counters -----------------------------------------------
 DELETE FROM sqlite_sequence
  WHERE name IN ('alerts', 'notification_outbox', 'notification_deliveries');
-INSERT INTO sqlite_sequence (name, seq) SELECT name, seq FROM _seq_050;
+INSERT INTO sqlite_sequence (name, seq) SELECT name, seq FROM _seq_051;
 
-DROP TABLE _seq_050;
-DROP TABLE _outbox_050;
-DROP TABLE _deliveries_050;
+DROP TABLE _seq_051;
+DROP TABLE _outbox_051;
+DROP TABLE _deliveries_051;
 
 -- ---- screen alerts ------------------------------------------------------------
 -- One row per saved screen that alerts. cadence daily runs on every run of

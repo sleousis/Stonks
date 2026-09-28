@@ -24,7 +24,9 @@ def list_ticks(
     status: TickStatus | None = None,
 ) -> Page[TickRun]:
     """Every tick run, newest first. Summaries keep the global outcome
-    and the parts about your own portfolios only."""
+    and the parts about your own portfolios only: ``orders_placed`` and
+    ``fills`` count your own books and are null when none took part.
+    Admins find a run's whole counts in ``/api/portfolio/totals``."""
     runs = services.ticks.list(principal, status=status, limit=page.limit, offset=page.offset)
     return Page[TickRun](
         items=[typed_tick_run(r) for r in runs.items],

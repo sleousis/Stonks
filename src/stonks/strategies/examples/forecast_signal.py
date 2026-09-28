@@ -45,6 +45,7 @@ _log = get_logger("stonks.strategies.forecast_signal")
 
 class ForecastSignal(BaseStrategy):
     id = "forecast_signal"
+    summary = "Buys the stocks a forecasting model expects to rise over the next few days."
     hypothesis = (
         "A forecasting model (a pretrained foundation model or a statistical "
         "baseline) finds short-horizon structure in a ticker's own prices that "

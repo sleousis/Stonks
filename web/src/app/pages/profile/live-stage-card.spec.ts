@@ -67,7 +67,7 @@ function report(passed: boolean): GateReportView {
 
 describe('live stage words', () => {
   it('names the stages and what moving down may reach', () => {
-    expect(stageWords('live_small')).toMatchObject({ label: 'Live, small', live: true });
+    expect(stageWords('live_small')).toMatchObject({ label: 'Real money, small', live: true });
     expect(stageWords('broker_paper').live).toBe(false);
     expect(lowerStages('live_small')).toEqual(['sim_paper', 'broker_paper']);
     expect(lowerStages('sim_paper')).toEqual([]);
@@ -139,9 +139,9 @@ describe('LiveStageCard', () => {
     const here = el.querySelector('.step[aria-current="step"]');
     expect(here?.textContent).toContain('Broker paper');
     expect(el.querySelectorAll('.step.done').length).toBe(1);
-    expect(el.textContent).toContain('To move up to Live, small');
+    expect(el.textContent).toContain('To move up to Real money, small');
     const checks = [...el.querySelectorAll('.checks li')].map((li) => li.textContent ?? '');
-    expect(checks.find((t) => t.includes('Kill switch drill'))).toContain('No data yet');
+    expect(checks.find((t) => t.includes('Stop trading tested'))).toContain('Not enough data yet');
     expect(el.querySelector('.stage-note')?.textContent).toContain('never moves the stage');
     const days = [...el.querySelectorAll('.days li')].map((li) => li.textContent ?? '');
     expect(days[0]).toContain('Not clean');
@@ -152,14 +152,14 @@ describe('LiveStageCard', () => {
     const el = await render();
     type(el, '#stage-up-reason', 'soak went well');
     fixture.detectChanges();
-    button(el, 'Move up to Live, small').click();
+    button(el, 'Move up to Real money, small').click();
     const post = await nextRequest(http, '/api/portfolios/pf_live/live/stage/promote', 'POST');
     const options = confirm.mock.calls[0][0] as {
       typedConfirmation: string;
       tone: string;
       ticket: { live: boolean };
     };
-    expect(options.typedConfirmation).toBe('live_small');
+    expect(options.typedConfirmation).toBe('Real money, small');
     expect(options.tone).toBe('danger');
     expect(options.ticket.live).toBe(true);
     expect(ensure).toHaveBeenCalledTimes(1);
@@ -176,12 +176,14 @@ describe('LiveStageCard', () => {
     });
     await tick();
     fixture.detectChanges();
-    expect(el.querySelector('.step[aria-current="step"]')?.textContent).toContain('Live, small');
+    expect(el.querySelector('.step[aria-current="step"]')?.textContent).toContain(
+      'Real money, small',
+    );
   });
 
   it('cannot move up while a check is not met', async () => {
     const el = await render(false);
-    expect(button(el, 'Move up to Live, small').disabled).toBe(true);
+    expect(button(el, 'Move up to Real money, small').disabled).toBe(true);
     expect(el.textContent).toContain('Every check must be met first.');
   });
 
@@ -213,7 +215,7 @@ describe('LiveStageCard', () => {
   it('turns the controls off for someone who may not change the stage', async () => {
     allowed = false;
     const el = await render();
-    expect(button(el, 'Move up to Live, small').disabled).toBe(true);
+    expect(button(el, 'Move up to Real money, small').disabled).toBe(true);
     expect(button(el, 'Move down').disabled).toBe(true);
   });
 });

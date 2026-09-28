@@ -18,6 +18,7 @@ import {
   screenSize,
 } from '../../../testing/screener-fixtures';
 import { ScreenerPage } from './screener.page';
+import { provideFakeDataCoverage } from '../../../testing/fake-data-coverage';
 
 describe('ScreenerPage', () => {
   let http: HttpTestingController;
@@ -31,6 +32,7 @@ describe('ScreenerPage', () => {
     track.mockClear();
     TestBed.configureTestingModule({
       providers: [
+        provideFakeDataCoverage(),
         provideRouter([]),
         ...provideApi(),
         provideHttpClientTesting(),

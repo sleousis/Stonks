@@ -7,32 +7,8 @@ import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { nextRequest, tick } from '../../../testing/http';
+import { OPTIONS_OFF } from '../../../testing/fake-options-live';
 import { LiveOptionsCard, levelLabel, optionsHeadline } from './live-options-card';
-
-export const OPTIONS_OFF: OptionsLiveView = {
-  portfolio_id: 'pf_live',
-  enabled: false,
-  stage: 'broker_paper',
-  level: 'none',
-  allowed: false,
-  reasons: [
-    'options live is off: the admin has not turned it on',
-    'the portfolio is at stage broker_paper, not live_small or higher',
-    'the options approval level is none',
-  ],
-  reason: null,
-  updated_at: null,
-  updated_by: null,
-  levels: [
-    { level: 'none', allows: 'No option order opens. Closes still go out.' },
-    { level: 'covered', allows: 'Covered calls, cash-secured puts.' },
-    { level: 'spreads', allows: 'Everything in covered, plus verticals.' },
-    { level: 'naked', allows: 'Everything in spreads, plus uncovered short puts.' },
-  ],
-  auto_approve_closes: false,
-  expiry_action: 'close',
-  close_sessions: 1,
-};
 
 describe('live options words', () => {
   it('says whether options are live', () => {
@@ -91,6 +67,14 @@ describe('LiveOptionsCard', () => {
       'Options live: off',
     );
     expect(el.querySelectorAll('.reasons li').length).toBe(3);
+    // Off on the server: one line, the rest folded (F58), stage ids in trader words.
+    expect(el.querySelector('[data-testid="options-off-line"]')?.textContent).toContain(
+      'Not available on this server',
+    );
+    expect(el.querySelector('details.more')?.hasAttribute('open')).toBe(false);
+    expect(el.querySelector('.reasons')?.textContent).toContain(
+      'at stage Broker paper, not Real money, small or higher',
+    );
     expect(el.querySelector('[data-testid="options-level"]')?.textContent).toContain('None');
     expect(el.textContent).toContain('Wait for approval');
   });
@@ -137,6 +121,8 @@ describe('LiveOptionsCard', () => {
       'Options live: on',
     );
     expect(el.querySelector('.reasons')).toBeNull();
+    expect(el.querySelector('[data-testid="options-off-line"]')).toBeNull();
+    expect(el.querySelector('details.more')?.hasAttribute('open')).toBe(true);
   });
 
   it('cannot change the level without live.manage', async () => {

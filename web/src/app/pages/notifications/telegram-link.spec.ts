@@ -62,6 +62,15 @@ describe('TelegramLink', () => {
     const el = await render(link({ bot_configured: false }));
     expect(el.textContent).toContain('no Telegram bot yet');
     expect(button(el, 'Get a link code')).toBeUndefined();
+    // Only admins get the next step (F40).
+    expect(el.textContent).not.toContain('operations guide');
+  });
+
+  it('gives an admin the next step when the server has no bot (F40)', async () => {
+    vi.spyOn(TestBed.inject(SessionService), 'isAdmin').mockReturnValue(true);
+    const el = await render(link({ bot_configured: false }));
+    expect(el.textContent).toContain('operations guide');
+    expect(el.textContent).toContain('BotFather');
   });
 
   it('shows a one-time code with the bot to send it to, then checks the link', async () => {

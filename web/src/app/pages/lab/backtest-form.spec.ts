@@ -89,7 +89,7 @@ describe('BacktestFormView', () => {
     await create();
     submit();
     expect(emitted).toEqual([]);
-    expect(el.textContent).toContain('Pick a strategy class.');
+    expect(el.textContent).toContain('Pick a strategy.');
     expect(el.textContent).toContain('Fix the 2 highlighted fields to run it.');
   });
 

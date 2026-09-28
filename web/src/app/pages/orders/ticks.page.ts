@@ -15,7 +15,7 @@ import { autoRefresh } from '../../shared/auto-refresh';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
-import { DateTimePipe } from '../../shared/format.pipes';
+import { DateTimePipe, DayPipe } from '../../shared/format.pipes';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { TickModeTag } from './tick-mode';
 import { TickRunner } from './tick-runner';
@@ -23,12 +23,17 @@ import { tickOutcome } from './tick-summary';
 
 const PAGE_SIZE = 25;
 
+/** One word per run state, as docs/design/vocabulary.md says (M5). */
 const TICK_STATUSES = [
-  { value: 'ok', label: 'OK' },
-  { value: 'partial', label: 'Partial' },
-  { value: 'error', label: 'Error' },
+  { value: 'ok', label: 'Done' },
+  { value: 'partial', label: 'Partly done' },
+  { value: 'error', label: 'Failed' },
   { value: 'running', label: 'Running' },
 ];
+
+export function tickStatusLabel(status: string): string {
+  return TICK_STATUSES.find((s) => s.value === status)?.label ?? status;
+}
 
 /**
  * Trading run history (server paged, filter by status) and the runner. Each
@@ -40,6 +45,7 @@ const TICK_STATUSES = [
   imports: [
     RouterLink,
     DateTimePipe,
+    DayPipe,
     DataTable,
     TableCell,
     StatusPill,
@@ -105,14 +111,14 @@ const TICK_STATUSES = [
               [initialSort]="{ key: 'started_at', dir: 'desc' }"
               (pageChange)="offset.set($event.offset)"
             >
-              <ng-template appCell="started_at" [appCellOf]="p.items" let-t>
+              <ng-template appCell="as_of" [appCellOf]="p.items" let-t>
                 <a class="cell-link" [routerLink]="['/orders/ticks', t.id]">{{
-                  t.started_at | dateTime
+                  t.as_of ? (t.as_of | day) : (t.started_at | dateTime)
                 }}</a>
               </ng-template>
               <ng-template appCell="status" [appCellOf]="p.items" let-t>
                 <span class="status-cell">
-                  <app-status-pill [status]="t.status" />
+                  <app-status-pill [status]="t.status" [label]="statusLabel(t.status)" />
                   <app-tick-mode [summary]="t.summary" />
                 </span>
               </ng-template>
@@ -174,7 +180,14 @@ export class TicksPage {
   protected readonly auto = autoRefresh(() => [this.ticks]);
 
   protected readonly columns: TableColumn<TickRun>[] = [
-    { key: 'started_at', label: 'Started', format: 'datetime', mobile: 'title' },
+    // m4: the trading day it was for comes first, the time it ran second.
+    {
+      key: 'as_of',
+      label: 'Trading day',
+      mobile: 'title',
+      value: (t) => t.as_of ?? t.started_at,
+    },
+    { key: 'started_at', label: 'Ran at', format: 'datetime', mobile: 'hide' },
     { key: 'status', label: 'Status' },
     {
       key: 'orders',
@@ -194,5 +207,6 @@ export class TicksPage {
     },
   ];
   protected readonly key = (t: TickRun) => t.id;
+  protected readonly statusLabel = tickStatusLabel;
   protected readonly outcome = (t: TickRun) => tickOutcome(t.summary);
 }

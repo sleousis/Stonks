@@ -122,7 +122,8 @@ def test_the_system_checklist_is_for_admins(client, people):
     got = client.get("/api/onboarding/system", headers=people["ada"]["headers"])
     assert got.status_code == 200, got.text
     checks = {c["id"]: c for c in got.json()["checks"]}
-    assert set(checks) == {"data_source", "first_ingest", "backup", "scheduler"}
+    assert set(checks) == {"data_source", "first_ingest", "strategies", "backup", "scheduler"}
+    assert checks["strategies"]["done"] is True  # the seeded strategies
     assert checks["backup"]["done"] is False
     assert checks["scheduler"]["done"] is False and checks["scheduler"]["detail"]
     assert got.json()["complete"] is False

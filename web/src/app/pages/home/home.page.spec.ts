@@ -162,26 +162,37 @@ describe('HomePage', () => {
     controller.expectNone('/api/portfolio/totals');
   });
 
-  it('shows admins totals across traders instead of holdings', async () => {
+  it('shows admins their own portfolio first, with the totals across traders below (M3)', async () => {
     await signIn(ADMIN);
     const fixture = TestBed.createComponent(HomePage);
     fixture.detectChanges();
+    (await nextRequest(controller, '/api/portfolios')).flush(
+      page([book({ id: 'pf_1', name: 'Main' })]),
+    );
     (await nextRequest(controller, '/api/portfolio/totals')).flush({
       cash: 1000,
       total_value: 250_000,
       portfolios: 4,
       owners: 3,
     });
-    (await nextRequest(controller, '/api/portfolios')).flush(page([]));
+    (await nextRequest(controller, '/api/portfolio')).flush(PORTFOLIO);
+    (await nextRequest(controller, '/api/pnl')).flush(PNL);
     await flushCommon();
     await flushPersonal();
+    await flushTape();
     await tick();
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.textContent).toContain('All traders');
+    const headings = [...el.querySelectorAll('h2')].map((h) => h.textContent?.trim());
+    expect(headings).toEqual([
+      'My portfolio',
+      'All traders',
+      "Today's signals and runs",
+      'My strategies',
+      'Market breadth',
+    ]);
+    expect(el.textContent).toContain('$76,750.00');
     expect(el.textContent).toContain('$250,000.00');
-    expect(el.textContent).not.toContain('My portfolio');
-    controller.expectNone('/api/portfolio');
   });
 
   it('asks an anonymous dev visitor to sign in', async () => {

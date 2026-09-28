@@ -20,6 +20,8 @@ import type {
   ScreenSpec,
   ScreenUniverseView,
 } from '../../api/models';
+import { DataPlanNote } from '../../shared/ui/data-plan-note';
+import { HelpTip } from '../../shared/ui/help-tip';
 import { JobsApiService } from '../../api/jobs-api.service';
 import { ScreenerService } from '../../api/screener.service';
 import { UniversesService } from '../../api/universes.service';
@@ -82,6 +84,8 @@ interface OpenScreen {
     ScreenAlerts,
     JobProgress,
     ScreenFilters,
+    DataPlanNote,
+    HelpTip,
   ],
   templateUrl: './screener.page.html',
   styleUrl: './screener.page.scss',

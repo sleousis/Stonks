@@ -9,22 +9,18 @@
   min-width: 0;
 }
 
-.group-title {
-  font-size: var(--text-lg);
-}
-
 .group-note {
-  margin-top: calc(-1 * var(--space-2));
   font-size: var(--text-sm);
   color: var(--color-ink-2);
 }
 
-// Traders see only their account: use the full width in two columns.
+// A section's panels in two columns on wide screens; long ones span both.
 .wide {
   @include bp.from-desktop {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 
-    .group-title {
+    .group-note,
+    .full {
       grid-column: 1 / -1;
     }
   }
@@ -289,9 +285,30 @@ kbd {
     justify-self: start;
     display: inline-flex;
     align-items: center;
+    gap: var(--space-2);
     min-height: var(--touch-min);
     color: var(--color-ink-2);
     font-weight: var(--weight-semibold);
     cursor: pointer;
+    list-style: none;
+
+    // A chevron, so the fold reads as one and not as a stray heading (M14).
+    &::before {
+      content: '';
+      width: 0.45em;
+      height: 0.45em;
+      border-right: 1.5px solid currentColor;
+      border-bottom: 1.5px solid currentColor;
+      transform: rotate(-45deg);
+      transition: transform var(--dur-fast) var(--ease);
+    }
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  &[open] > summary::before {
+    transform: rotate(45deg);
   }
 }

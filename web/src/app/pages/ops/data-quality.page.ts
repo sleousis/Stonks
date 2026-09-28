@@ -98,14 +98,16 @@ type SeverityFilter = '' | StatementFlagView['severity'];
       } @else if (!page) {
         <app-loading-state label="Loading statement flags" [rows]="5" />
       } @else if (page.items.length === 0) {
-        <app-empty-state
-          [title]="filtered() ? 'No flags match' : 'No statement flags'"
-          [message]="
-            filtered()
-              ? 'Try another ticker or severity.'
-              : 'Company reports are checked each time their figures are updated. Periods that do not add up show here.'
-          "
-        />
+        @if (filtered()) {
+          <app-empty-state title="No flags match" message="Try another ticker or severity." />
+        } @else {
+          <app-empty-state
+            title="No statement flags"
+            message="Company reports are checked each time their figures are updated, and periods that do not add up show here. To check a ticker, update its Fundamentals on the Data page. That needs a data plan with company reports."
+          >
+            <a class="btn" routerLink="/data">Open data</a>
+          </app-empty-state>
+        }
       } @else {
         <app-data-table
           caption="Flagged statement periods"

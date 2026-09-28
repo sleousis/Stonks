@@ -53,6 +53,11 @@ HISTORY_MULTIPLE = 4
 
 class EWMACTrend(ForecastTrendStrategy):
     id = "ewmac_trend"
+    title = "Moving average trend"
+    summary = (
+        "Follows trends in any market by comparing a fast and a slow moving average, sized by "
+        "how strong the trend is."
+    )
     hypothesis = (
         "Prices underreact to news and then overshoot as trend followers and "
         "hedgers pile in, so the sign of a fast-minus-slow moving average "

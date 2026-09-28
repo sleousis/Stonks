@@ -171,7 +171,7 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
                     </div>
                   </dl>
                   @if (p.tests.length) {
-                    <ul class="tests" aria-label="Survival tests">
+                    <ul class="tests" aria-label="Robustness tests">
                       @for (t of p.tests; track t.id) {
                         <li>
                           <app-status-pill [status]="t.passed ? 'pass' : 'fail'" />

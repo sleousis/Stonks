@@ -62,6 +62,10 @@ class _LakeState:
 
 class RegimeFilter(InnerStrategyWrapper):
     id = "regime_filter"
+    title = "Bear market filter"
+    summary = (
+        "Wraps another strategy and stands aside in bear markets, high volatility or credit stress."
+    )
     id_suffix = "regime"
     hypothesis = (
         "Trend and momentum strategies lose most in bear markets, high "

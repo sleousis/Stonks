@@ -2,24 +2,99 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  Injectable,
   computed,
   effect,
   inject,
   input,
   output,
+  signal,
 } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { filter } from 'rxjs';
 
 import { SessionService } from '../core/auth/session.service';
+import { FeatureFlagsService } from '../core/features/feature-flags.service';
 import { TicketCountService } from '../core/tickets/ticket-count.service';
-import { NAV_GROUPS, NAV_ITEMS, type NavItem, navItemVisible, navViewer } from './nav-items';
+import {
+  type FoldingGroup,
+  NAV_GROUPS,
+  NAV_GROUPS_OPEN_BY_DEFAULT,
+  NAV_ITEMS,
+  type NavItem,
+  groupsForUrl,
+  navItemVisible,
+  navViewer,
+} from './nav-items';
+
+/** Where the open groups are kept between visits (a per-browser convenience). */
+export const NAV_GROUPS_STORAGE_KEY = 'stonks.nav.groups';
 
 /**
- * Main navigation (UX-10). The trader's pages sit on top with nothing to
- * open: Today, Strategies, Orders, Approvals, Charts, Watchlists, Insights and
- * Notifications. Research follows (paper trading, the leaderboard and the
- * build tools for those who can use them), then System for admins. Account
- * pages live in the account menu by the user's name.
+ * Which folding groups are open. Shared by the sidebar and the drawer, kept
+ * in local storage, and the group that holds the current page always opens.
+ */
+@Injectable({ providedIn: 'root' })
+export class NavGroupsState {
+  private readonly router = inject(Router);
+  readonly open = signal<ReadonlySet<FoldingGroup>>(readOpen());
+
+  constructor() {
+    this.reveal(this.router.url);
+    this.router.events
+      .pipe(
+        filter((e) => e instanceof NavigationEnd),
+        takeUntilDestroyed(),
+      )
+      .subscribe((e) => this.reveal((e as NavigationEnd).urlAfterRedirects));
+  }
+
+  set(group: FoldingGroup, on: boolean): void {
+    if (this.open().has(group) === on) return;
+    const next = new Set(this.open());
+    if (on) next.add(group);
+    else next.delete(group);
+    this.open.set(next);
+    try {
+      localStorage.setItem(NAV_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
+    } catch {
+      // Storage blocked: the choice lasts for this page view.
+    }
+  }
+
+  private reveal(url: string): void {
+    for (const group of groupsForUrl(url)) {
+      if ((NAV_GROUPS as readonly string[]).includes(group)) this.set(group as FoldingGroup, true);
+    }
+  }
+}
+
+function readOpen(): ReadonlySet<FoldingGroup> {
+  try {
+    const raw = localStorage.getItem(NAV_GROUPS_STORAGE_KEY);
+    if (raw) {
+      const list = JSON.parse(raw) as unknown;
+      if (Array.isArray(list)) {
+        return new Set(
+          list.filter((g): g is FoldingGroup => (NAV_GROUPS as readonly unknown[]).includes(g)),
+        );
+      }
+    }
+  } catch {
+    // Unreadable or blocked: fall back to the defaults.
+  }
+  return new Set(NAV_GROUPS_OPEN_BY_DEFAULT);
+}
+
+/**
+ * Main navigation (M1). About seven trader pages sit on top with nothing to
+ * open: Today, Strategies, Orders, Approvals, Insights, Charts and
+ * Notifications. Below them, folding groups: More (markets, trial results,
+ * trade costs, the assistant when it is on), Advanced (the build tools and
+ * the strategy review) and, for admins, System. Each group is a disclosure
+ * that remembers whether it is open, and the one holding the current page
+ * opens by itself. Account pages live in the account menu, pinned below.
  *
  * Approvals carries a badge with the tickets that wait (22.10). The number
  * is hidden from screen readers, and the link's label says it in words.
@@ -55,24 +130,29 @@ const TICKETS = '/tickets';
         }
       </ul>
       @for (group of groups(); track group.title) {
-        <p class="group" [id]="idPrefix() + '-group-' + group.title">{{ group.title }}</p>
-        <ul [attr.aria-labelledby]="idPrefix() + '-group-' + group.title">
-          @for (item of group.items; track item.path) {
-            <li>
-              <a
-                [routerLink]="item.path"
-                routerLinkActive="active"
-                ariaCurrentWhenActive="page"
-                (click)="navigate.emit()"
-              >
-                <span>{{ item.label }}</span>
-                @if (item.key) {
-                  <kbd aria-hidden="true">g {{ item.key }}</kbd>
-                }
-              </a>
-            </li>
-          }
-        </ul>
+        <details class="fold" [open]="isOpen(group.title)" (toggle)="onToggle(group.title, $event)">
+          <summary class="group" [id]="idPrefix() + '-group-' + group.title">
+            <span>{{ group.title }}</span>
+            <span class="chev" aria-hidden="true"></span>
+          </summary>
+          <ul [attr.aria-labelledby]="idPrefix() + '-group-' + group.title">
+            @for (item of group.items; track item.path) {
+              <li>
+                <a
+                  [routerLink]="item.path"
+                  routerLinkActive="active"
+                  ariaCurrentWhenActive="page"
+                  (click)="navigate.emit()"
+                >
+                  <span>{{ item.label }}</span>
+                  @if (item.key) {
+                    <kbd aria-hidden="true">g {{ item.key }}</kbd>
+                  }
+                </a>
+              </li>
+            }
+          </ul>
+        </details>
       }
     </nav>
   `,
@@ -82,11 +162,38 @@ const TICKETS = '/tickets';
       gap: var(--space-1);
     }
     .group {
-      margin: var(--space-3) 0 var(--space-1);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 32px;
+      margin: var(--space-2) 0 2px;
       padding: 0 var(--space-3);
+      border-radius: var(--radius-sm);
       font-size: var(--text-xs);
       font-weight: var(--weight-semibold);
       color: var(--color-ink-3);
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+    }
+    .group::-webkit-details-marker {
+      display: none;
+    }
+    .group:hover {
+      background: var(--color-surface-2);
+      color: var(--color-ink);
+    }
+    .chev {
+      width: 0.45em;
+      height: 0.45em;
+      margin-right: 2px;
+      border-right: 1.5px solid currentColor;
+      border-bottom: 1.5px solid currentColor;
+      transform: rotate(-45deg);
+      transition: transform var(--dur-fast) var(--ease);
+    }
+    details[open] > .group .chev {
+      transform: rotate(45deg);
     }
     ul {
       display: grid;
@@ -153,11 +260,17 @@ const TICKETS = '/tickets';
       opacity: 1;
     }
     @media (pointer: coarse), (max-width: 767.98px) {
-      a {
+      a,
+      .group {
         min-height: var(--touch-min);
       }
       kbd {
         display: none;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .chev {
+        transition: none;
       }
     }
   `,
@@ -166,7 +279,8 @@ export class Nav {
   readonly navigate = output<void>();
   /** Keeps ids unique: the sidebar and the drawer both render a nav. */
   readonly idPrefix = input('nav');
-  private readonly viewer = navViewer(inject(SessionService));
+  private readonly viewer = navViewer(inject(SessionService), inject(FeatureFlagsService));
+  private readonly folds = inject(NavGroupsState);
 
   private readonly visible = computed(() =>
     NAV_ITEMS.filter((i) => navItemVisible(i, this.viewer)),
@@ -182,6 +296,14 @@ export class Nav {
       watching = true;
       this.tickets.watch(destroyRef);
     });
+  }
+
+  protected isOpen(group: FoldingGroup): boolean {
+    return this.folds.open().has(group);
+  }
+
+  protected onToggle(group: FoldingGroup, event: Event): void {
+    this.folds.set(group, (event.target as HTMLDetailsElement).open);
   }
 
   /** The count shown on an item, or 0 for none. */

@@ -17,16 +17,33 @@ import { ExportButton } from '../../shared/ui/export-button';
 import { PageHeader } from '../../shared/ui/page-header';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { robustnessWords } from '../../shared/lab-results/robustness';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { SystemService } from '../../api/system.service';
+import { humanize } from '../../shared/ui/param-form/param-spec';
 import { LabNav } from './lab-nav';
 import { className, scoreText } from './ledger.page';
+import { OBJECTIVES, strategyTitle } from './lab-requests';
 
-/** `{lookback_days: 20, threshold: 0}` -> "lookback_days 20, threshold 0". */
+/** `{lookback_days: 20, threshold: 0}` -> "Lookback days 20, threshold 0". */
 export function paramsText(params: Record<string, unknown>): string {
-  const parts = Object.entries(params).map(
-    ([k, v]) => `${k} ${typeof v === 'number' ? formatNumber(v) : JSON.stringify(v)}`,
-  );
-  return parts.length ? parts.join(', ') : 'No parameters';
+  const parts = Object.entries(params).map(([k, v], i) => {
+    const words = humanize(k);
+    const name = i === 0 ? words : words.charAt(0).toLowerCase() + words.slice(1);
+    return `${name} ${typeof v === 'number' ? formatNumber(v) : JSON.stringify(v)}`;
+  });
+  return parts.length ? parts.join(', ') : 'No settings';
+}
+
+const SEARCH_NAMES: Readonly<Record<string, string>> = {
+  random: 'Random',
+  grid: 'Grid',
+  optuna: 'Bayesian',
+};
+
+/** The tuner a run used, in words: "random" -> "Random". */
+export function searchName(tuner: string): string {
+  return SEARCH_NAMES[tuner.toLowerCase().replace(/tuner$/, '')] ?? tuner;
 }
 
 /** One recorded lab run: what it set out to show, its data, and every trial. */
@@ -48,7 +65,10 @@ export function paramsText(params: Record<string, unknown>): string {
     LoadingState,
   ],
   template: `
-    <app-page-header title="Lab" description="One recorded lab run and every trial it tried.">
+    <app-page-header
+      title="Lab"
+      description="One recorded lab run and every setting it tried (its trials)."
+    >
       <app-export-button
         actions
         kind="lab-trials"
@@ -70,15 +90,21 @@ export function paramsText(params: Record<string, unknown>): string {
       <section class="panel" aria-labelledby="run-title">
         <div class="panel-head">
           <h2 id="run-title">{{ strategyName() }}, {{ when(r.started_at) }}</h2>
-          @if (r.verdict) {
-            <app-status-pill [status]="r.verdict" />
-          }
+          @let w = robustness(r.robustness);
+          <span class="verdict">
+            <span class="muted">Status</span>
+            <app-status-pill [status]="w.status" [label]="w.label" />
+          </span>
         </div>
         <div class="panel-body">
           <div class="tiles">
             <app-stat-tile label="Trials this run" help="trials" [value]="count(r.n_trials)" />
-            <app-stat-tile label="Failed trials" [value]="count(r.n_failed)" />
-            <app-stat-tile label="Best score" [value]="best()" [detail]="r.objective" />
+            <app-stat-tile
+              label="Trials with errors"
+              [value]="count(r.n_failed)"
+              detail="Settings that could not run"
+            />
+            <app-stat-tile label="Best score" [value]="best()" [detail]="objectiveName()" />
             <app-stat-tile
               label="Trials of this strategy"
               help="trials"
@@ -87,10 +113,15 @@ export function paramsText(params: Record<string, unknown>): string {
             />
           </div>
           <p class="lead">
+            A trial is one setting the search tried. It is Done when the setting ran, whatever its
+            score. The verdict is separate: it comes from the robustness tests
+            <app-help-tip term="robustness_tests" /> on the best setting, so a run can fail with
+            every trial done.
+          </p>
+          <p class="lead">
             {{ strategyName() }} has had {{ count(r.n_trials_class) }} trials across every run. The
-            more trials a strategy has had, the more likely a good result is luck, so the lab's
-            checks, such as the deflated Sharpe <app-help-tip term="deflated_sharpe" />, count them
-            all.
+            more trials a strategy has had, the more likely a good result is luck, so tests such as
+            the deflated Sharpe <app-help-tip term="deflated_sharpe" /> count them all.
           </p>
           <dl class="facts">
             <div>
@@ -135,7 +166,10 @@ export function paramsText(params: Record<string, unknown>): string {
               <span class="params">{{ params(t.params) }}</span>
             </ng-template>
             <ng-template appCell="status" [appCellOf]="r.trials" let-t>
-              <app-status-pill [status]="t.status === 'ok' ? 'passed' : 'failed'" />
+              <app-status-pill
+                [status]="t.status === 'ok' ? 'ok' : 'error'"
+                [label]="t.status === 'ok' ? 'Done' : 'Error'"
+              />
             </ng-template>
           </app-data-table>
         }
@@ -146,17 +180,32 @@ export function paramsText(params: Record<string, unknown>): string {
 })
 export class LedgerRunPage {
   private readonly lab = inject(LabService);
+  private readonly system = inject(SystemService);
 
   readonly runId = input.required<string>();
 
+  /** The catalog, for the strategy's plain name. */
+  private readonly classes = resource({ loader: () => this.system.strategyClasses() });
+
+  protected readonly robustness = robustnessWords;
   protected readonly run = resource({
     params: () => ({ id: this.runId() }),
     loader: ({ params }) => this.lab.ledgerRun(params.id),
   });
 
-  protected readonly strategyName = computed(() =>
-    this.run.hasValue() ? className(this.run.value().strategy_class) : '',
-  );
+  protected readonly strategyName = computed(() => {
+    if (!this.run.hasValue()) return '';
+    const path = this.run.value().strategy_class;
+    const known = this.classes.hasValue()
+      ? this.classes.value().find((c) => c.class_path === path)
+      : undefined;
+    return known ? strategyTitle(known) : className(path);
+  });
+  protected readonly objectiveName = computed(() => {
+    if (!this.run.hasValue()) return null;
+    const o = this.run.value().objective;
+    return o ? (OBJECTIVES.find((x) => x.id === o)?.label ?? o) : null;
+  });
   protected readonly best = computed(() =>
     this.run.hasValue() ? scoreText(this.run.value().best_score) : '',
   );
@@ -172,7 +221,10 @@ export class LedgerRunPage {
   protected readonly searchText = computed(() => {
     if (!this.run.hasValue()) return '';
     const r = this.run.value();
-    const parts = [r.tuner ? `${r.tuner} search` : null, r.budget ? `budget ${r.budget}` : null];
+    const parts = [
+      r.tuner ? `${searchName(r.tuner)} search` : null,
+      r.budget ? `up to ${r.budget} trials` : null,
+    ];
     if (r.seed != null) parts.push(`seed ${r.seed}`);
     return parts.filter(Boolean).join(', ') || 'Not recorded';
   });
@@ -184,9 +236,9 @@ export class LedgerRunPage {
 
   protected readonly columns: TableColumn<LedgerTrialView>[] = [
     { key: 'trial_index', label: 'Trial', format: 'number', mobile: 'title', help: false },
-    { key: 'params', label: 'Parameters', sortable: false, value: (t) => paramsText(t.params) },
+    { key: 'params', label: 'Settings', sortable: false, value: (t) => paramsText(t.params) },
     { key: 'score', label: 'Score', value: (t) => t.score ?? null, format: 'number' },
-    { key: 'n_bars', label: 'Bars', format: 'number', mobile: 'hide' },
-    { key: 'status', label: 'Status' },
+    { key: 'n_bars', label: 'Days of data', format: 'number', mobile: 'hide' },
+    { key: 'status', label: 'Trial', help: false },
   ];
 }

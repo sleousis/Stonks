@@ -160,13 +160,17 @@ describe('LabRunResultView', () => {
   it('renders the verdict, best score and best params', () => {
     const el = render();
     expect(tiles(el)).toEqual({
-      Verdict: 'Failed',
+      Status: 'Did not hold up',
       'Best score': '1.12',
       // Older results carry no trial counts.
       'Trials this run': 'n/a',
-      'Trials of this class': 'n/a',
+      'Trials of this strategy': 'n/a',
     });
-    expect(el.textContent).toContain('2 of 3 tests passed');
+    expect(el.textContent).toContain('2 of 3 robustness tests passed');
+    // The verdict in words, naming what failed, and why trials are not the verdict.
+    const plain = el.querySelector('.plain')!.textContent!;
+    expect(plain).toContain('It did not hold up: it failed 1 of 3 robustness tests (Walk-forward)');
+    expect(plain).toContain('A trial only says a setting ran');
     const params = [...el.querySelectorAll('.params div')].map((d) =>
       [d.querySelector('dt')!.textContent!.trim(), d.querySelector('dd')!.textContent!.trim()].join(
         ' ',
@@ -206,8 +210,10 @@ describe('LabRunResultView', () => {
     expect(rows.map((r) => r.querySelector('.test-name')!.textContent!.trim())).toEqual([
       'Out of sample',
       'Walk-forward',
-      'Monte Carlo permutation',
+      'Shuffled prices (MCPT)',
     ]);
+    // Each test says what it guards against.
+    expect(rows[0].querySelector('.hint')!.textContent).toContain('Guards against');
     expect(rows.map((r) => r.querySelector('app-status-pill')!.textContent!.trim())).toEqual([
       'Passed',
       'Failed',
@@ -224,7 +230,9 @@ describe('LabRunResultView', () => {
 
   it('links a registered strategy', () => {
     const el = render({ ...LAB_RUN_VIEW, verdict: 'pass', registered_strategy_id: 'momentum-7' });
+    expect(el.querySelector('.plain')!.textContent).toContain('It held up');
     const link = el.querySelector<HTMLAnchorElement>('.registered a')!;
+    expect(el.querySelector('.registered')!.textContent).toContain('Put on trial as');
     expect(link.textContent).toBe('momentum-7');
     expect(link.getAttribute('href')).toBe('/strategies/momentum-7');
   });
@@ -244,7 +252,7 @@ describe('LabRunResultView', () => {
     const el = render(LAB_RUN_VIEW_FULL);
     const t = tiles(el);
     expect(t['Trials this run']).toBe('40');
-    expect(t['Trials of this class']).toBe('180');
+    expect(t['Trials of this strategy']).toBe('180');
     expect(figures(el.querySelector('[aria-labelledby="lr-bench-title"]'))['Excess CAGR']).toBe(
       '+3.10%',
     );

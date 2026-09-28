@@ -37,8 +37,8 @@
     <span class="glyph" aria-hidden="true"></span>
     <div class="overall-text">
       <h2 id="overall-title">
-        <span class="visually-hidden">Overall: </span>{{ levelLabel[level()] }}
-        <span class="overall-count">{{ headline() }}</span>
+        <span class="visually-hidden">Overall: </span>{{ headline() }}
+        <span class="overall-count">{{ levelUrgency[level()] }}</span>
       </h2>
       <p>{{ advice() }}</p>
     </div>
@@ -96,6 +96,7 @@
         {{ tickers().length ? tickers().length + ' chosen tickers' : 'Tickers we trade' }}
       </span>
     </div>
+    <p class="panel-intro">{{ freshnessMeaning }}</p>
     <form class="ticker-form" (submit)="$event.preventDefault(); applyTickers(tickerInput.value)">
       <div class="field">
         <label for="health-tickers">Tickers to check</label>
@@ -129,12 +130,20 @@
     } @else if (!report.hasValue()) {
       <app-loading-state label="Loading freshness" [rows]="5" />
     } @else if (freshness().length === 0) {
-      <app-empty-state
-        title="No tickers checked"
-        message="No universe is set for trading yet. Ask your admin, or enter tickers above to check them."
-      >
-        <a class="btn" routerLink="/universes">Open universes</a>
-      </app-empty-state>
+      @if (canRunChecks()) {
+        <app-empty-state
+          title="No tickers checked"
+          message="No universe is set for trading yet, so there is nothing to check. Make a universe of the tickers to trade, then choose it as the trading universe in Settings. Or enter tickers above to check them now."
+        >
+          <a class="btn btn-primary" routerLink="/universes">Open universes</a>
+          <a class="btn" routerLink="/settings" fragment="system-group">Open settings</a>
+        </app-empty-state>
+      } @else {
+        <app-empty-state
+          title="No tickers checked"
+          message="No universe is set for trading yet. An admin chooses which tickers are traded. Enter tickers above to check them now."
+        />
+      }
     } @else {
       <app-data-table
         caption="Latest daily bar per ticker"
@@ -158,29 +167,35 @@
   <!-- Runs ----------------------------------------------------------------->
   <section class="panel span-5" aria-labelledby="runs-title">
     <div class="panel-head">
-      <h2 id="runs-title">Runs</h2>
+      <h2 id="runs-title">System checks</h2>
     </div>
     @if (report.error()) {
-      <p class="panel-body muted">Run checks are unavailable until the report loads.</p>
+      <p class="panel-body muted">System checks are unavailable until the report loads.</p>
     } @else if (!report.hasValue()) {
-      <app-loading-state label="Loading run checks" [rows]="3" />
+      <app-loading-state label="Loading system checks" [rows]="3" />
     } @else if (runChecks().length === 0) {
-      <app-empty-state title="No run checks" message="The report returned no run checks." />
+      <app-empty-state
+        title="No system checks"
+        message="The server sent no checks besides data freshness. Run the checks again, or look at the server's log."
+      />
     } @else {
       <ul class="checks">
         @for (c of runChecks(); track c.name) {
+          @let pill = checkPill(c);
           <li [attr.data-level]="c.level">
             <div class="check-head">
               <p class="check-name">{{ checkTitle(c.name) }}</p>
-              <app-status-pill
-                [status]="c.level"
-                [tone]="levelTone[c.level]"
-                [label]="levelLabel[c.level]"
-              />
+              <app-status-pill [status]="c.level" [tone]="pill.tone" [label]="pill.label" />
             </div>
-            <p class="check-detail">{{ c.detail === 'none' ? 'None.' : c.detail }}</p>
+            @if (checkMeaning(c.name); as meaning) {
+              <p class="check-meaning">{{ meaning }}</p>
+            }
+            <p class="check-detail">{{ plainDetail(c) }}</p>
             @if (threshold(c.name); as limit) {
               <p class="check-limit"><span class="visually-hidden">Limit: </span>{{ limit }}</p>
+            }
+            @if (!c.ok && canRunChecks() && checkAction(c.name); as action) {
+              <a class="check-action" [routerLink]="action.link">{{ action.label }}</a>
             }
           </li>
         }
@@ -263,7 +278,7 @@
           }}</a>
         </ng-template>
         <ng-template appCell="status" [appCellOf]="failedTicks.value().items" let-t>
-          <app-status-pill [status]="t.status" />
+          <app-status-pill [status]="t.status" [label]="runWord(t.status)" />
         </ng-template>
         <ng-template appCell="error" [appCellOf]="failedTicks.value().items" let-t>
           <span class="error-text">{{

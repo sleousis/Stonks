@@ -62,15 +62,15 @@ describe('DraftShip', () => {
     return b;
   }
 
-  it('starts paper trading only after the trader confirms', async () => {
+  it('puts it on trial only after the trader confirms', async () => {
     setup(makeDraft());
-    expect(el.textContent).toContain('Not started');
+    expect(el.textContent).toContain('Draft');
 
     buttonNamed(LIFECYCLE.paper.label).click();
     await tick();
     expect(confirm).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: 'Start paper trading RSI dip buyer?',
+        title: 'Put RSI dip buyer on trial?',
         confirmLabel: LIFECYCLE.paper.label,
       }),
     );
@@ -99,7 +99,7 @@ describe('DraftShip', () => {
     // Saving failed, so no register request went out (verify() checks it).
   });
 
-  it('goes live with a reason and a hold after the go-live check', async () => {
+  it('approves with a reason and a hold after the go-live check', async () => {
     setup(registered('shadow'));
     expect(el.querySelector('[role="switch"]')).toBeNull();
 
@@ -107,7 +107,7 @@ describe('DraftShip', () => {
     (await nextRequest(controller, '/api/strategies/studio_rsi_dip_buyer/golive')).flush(
       goLiveReport('studio_rsi_dip_buyer', true),
     );
-    // The go-live ticket reads the broker and who follows it, like the strategy page.
+    // The approval ticket reads the broker and who follows it, like the strategy page.
     (await nextRequest(controller, '/api/brokers')).flush({
       kind: 'simulated',
       paper: true,
@@ -131,15 +131,17 @@ describe('DraftShip', () => {
     fixture.componentRef.setInput('draft', emitted.at(-1));
     fixture.detectChanges();
     expect(buttonNamed(LIFECYCLE.pause.label)).toBeDefined();
-    expect(el.textContent).toContain('live');
+    expect(el.textContent).toContain('approved');
+    expect(el.textContent).not.toMatch(/(?<!go-)\blive\b/i);
   });
 
-  it('moves a live strategy back to paper trading with a reason', async () => {
+  it('puts an approved strategy back on trial with a reason, never red', async () => {
     setup(registered('active'));
     buttonNamed(LIFECYCLE.pause.label).click();
     await tick();
     fixture.detectChanges();
-    expect(dialogForm(el)?.querySelector('button.btn-danger')?.textContent).toContain(
+    expect(dialogForm(el)?.querySelector('button.btn-danger')).toBeNull();
+    expect(dialogForm(el)?.querySelector('button[type="submit"]')?.textContent).toContain(
       LIFECYCLE.pause.label,
     );
     answerDialog(fixture, { reason: 'Spread widened' });
@@ -150,7 +152,7 @@ describe('DraftShip', () => {
     expect(emitted.at(-1)?.strategy_status).toBe('shadow');
   });
 
-  it('does not offer to go live for a stopped strategy', () => {
+  it('does not offer to approve a retired strategy', () => {
     setup(
       makeDraft({
         status: 'registered',
@@ -158,12 +160,14 @@ describe('DraftShip', () => {
         strategy_status: 'retired',
       }),
     );
-    expect(el.textContent).not.toContain(LIFECYCLE.live.label);
-    expect(el.textContent).toContain('stopped');
+    expect([...el.querySelectorAll('button')].map((b) => b.textContent?.trim())).not.toContain(
+      LIFECYCLE.live.label,
+    );
+    expect(el.textContent).toContain('retired');
   });
 
   describe('permissions (UI-06)', () => {
-    it('disables Start paper trading with a reason without strategy.promote', async () => {
+    it('disables Put on trial with a reason without strategy.promote', async () => {
       setup(makeDraft(), true, false);
       const button = buttonNamed(LIFECYCLE.paper.label);
       expect(button.disabled).toBe(true);
@@ -173,7 +177,7 @@ describe('DraftShip', () => {
       expect(confirm).not.toHaveBeenCalled();
     });
 
-    it('disables Go live and Back to paper trading without strategy.promote', () => {
+    it('disables Approve and Back on trial without strategy.promote', () => {
       setup(registered('shadow'), true, false);
       expect(buttonNamed(LIFECYCLE.live.label).disabled).toBe(true);
       expect(el.textContent).toContain('Admins only.');

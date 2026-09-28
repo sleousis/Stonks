@@ -34,7 +34,7 @@ export const JOURNAL_PAGE_SIZE = 25;
         <h2 id="journal-title">Trade journal</h2>
         @if (latest(); as p) {
           @if (p.total > 0) {
-            <span class="muted num">{{ p.total }} orders</span>
+            <span class="muted num">{{ p.total }} {{ p.total === 1 ? 'order' : 'orders' }}</span>
           }
         }
       </div>

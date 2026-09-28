@@ -74,6 +74,7 @@ export class AssistantPage {
   private readonly confirm = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
   private readonly session = inject(SessionService);
+  protected readonly isAdmin = computed(() => this.session.isAdmin());
 
   /** The open conversation, from `?c=`. */
   readonly c = input<string | undefined>();

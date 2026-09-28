@@ -14,90 +14,121 @@ import { Router, RouterLink } from '@angular/router';
 import type {
   OrderView,
   PnlRowView,
+  ShadowDecisionView,
   StatusChangeView,
   StrategyDetail,
   StrategyMetadataView,
   SurvivalReportView,
 } from '../../api/models';
 import { OrdersService } from '../../api/orders.service';
-import { ShadowService } from '../../api/shadow.service';
 import { StrategiesService } from '../../api/strategies.service';
 import { SubscriptionsService } from '../../api/subscriptions.service';
 import { SystemService } from '../../api/system.service';
 import { SessionService } from '../../core/auth/session.service';
-import { formatDate, formatDateTime, formatMoney, formatPercent } from '../../core/format/format';
+import {
+  formatDate,
+  formatDateTime,
+  formatMoney,
+  formatNumber,
+  formatPercent,
+} from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
-import type { ChartSeries } from '../../shared/chart/chart-engine';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
+import { checkRow } from '../../shared/golive-checks';
 import { demoteOptions, isRealMoneyBroker, promoteThroughGate } from '../../shared/governance';
-import { LIFECYCLE, type LifecycleAction, STATUS_WORDS } from '../../shared/governance-labels';
+import {
+  LIFECYCLE,
+  type LifecycleAction,
+  STATUS_MEANING,
+  STATUS_WORDS,
+} from '../../shared/governance-labels';
 import { testLabel } from '../../shared/lab-results/survival-tests';
 import { formatMetric, metricLabel } from '../../shared/metrics';
+import { type Verdict, strategyVerdict } from '../../shared/strategy-verdict';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
+import { MonthlyReturns } from '../../shared/ui/monthly-returns';
 import { humanize } from '../../shared/ui/param-form/param-spec';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
-import { Segmented } from '../../shared/ui/segmented';
+import { type PageTab, PageTabs } from '../../shared/ui/page-tabs';
 import { SideTag } from '../../shared/ui/side-tag';
+import { StatTile } from '../../shared/ui/stat-tile';
 import { ErrorState, EmptyState, LoadingState } from '../../shared/ui/states';
 import { StatusChangeDialog } from '../../shared/ui/status-change-dialog';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { WhyNotPanel } from '../../shared/ui/why-not-panel';
+import { StrategyVerdict } from '../../shared/ui/strategy-verdict';
 import { OrderStatus } from '../orders/order-status';
 import { FollowPanel } from './follow-panel';
+import { GoliveCheckList } from './golive-check-list';
 import { ModelVersionsPanel } from './model-versions-panel';
 import { StageBar } from './stage-bar';
 import { formatParam, strategyDisplayName, strategyKindName } from './strategy-format';
+import { curveSeries, curveSummary } from './tearsheet-data';
 
-/** The page's tabs: the strategy itself, or its model versions (roadmap 22.6). */
-export type DetailTab = 'overview' | 'versions';
+/**
+ * The strategy page's tabs (F27): one place to judge a strategy.
+ * Overview (verdict, trial result, follow), Results (the tear sheet's
+ * figures), Review (the go-live check and status changes), Details (why it
+ * should work, parameters, robustness tests, history) and Model versions.
+ */
+export type DetailTab = 'overview' | 'results' | 'review' | 'details' | 'versions';
 
-/** A header action: the lifecycle steps, plus the admin's override (UX-23). */
+const TABS: readonly DetailTab[] = ['overview', 'results', 'review', 'details', 'versions'];
+
+export function asTab(value: string | null | undefined): DetailTab {
+  return TABS.includes(value as DetailTab) ? (value as DetailTab) : 'overview';
+}
+
+/** A status action: the lifecycle steps, plus the admin's override (UX-23). */
 export type DetailAction = LifecycleAction | 'override';
 
 export interface ActionButton {
   key: DetailAction;
   label: string;
   primary: boolean;
-  danger: boolean;
+}
+
+function button(key: DetailAction, label: string, primary = false): ActionButton {
+  return { key, label, primary };
 }
 
 /**
- * The header actions for a strategy (UX-23):
- * - stopped: only Start paper trading;
- * - live: Back to paper trading and Stop;
- * - paper trading: Go live (primary) only once the go-live check passed,
- *   otherwise an "Override..." for those who may go live, and Stop.
+ * The header's one forward step (UX-23, M9):
+ * - retired: Put on trial;
+ * - approved: nothing (stepping back lives on the Review tab);
+ * - on trial: Approve (primary) once the go-live check passed, otherwise an
+ *   "Override..." for those who may approve.
+ * Retire is never here: it is a quiet button on the Review tab, far from the
+ * kill switch at the top of every page.
  */
 export function detailActions(
   status: StrategyDetail['status'],
   golivePassed: boolean | null,
   canPromote: boolean,
 ): ActionButton[] {
-  const button = (key: DetailAction, label: string, primary = false): ActionButton => ({
-    key,
-    label,
-    primary,
-    danger: key === 'stop',
-  });
   if (status === 'retired') return [button('paper', LIFECYCLE.paper.label, true)];
+  if (status === 'active') return [];
+  if (golivePassed === true) return [button('live', LIFECYCLE.live.label, true)];
+  return canPromote ? [button('override', 'Override…')] : [];
+}
+
+/** The quiet steps back, on the Review tab: Back on trial and Retire. Never red. */
+export function statusActions(status: StrategyDetail['status']): ActionButton[] {
   if (status === 'active') {
     return [button('pause', LIFECYCLE.pause.label), button('stop', LIFECYCLE.stop.label)];
   }
-  const actions: ActionButton[] = [];
-  if (golivePassed === true) actions.push(button('live', LIFECYCLE.live.label, true));
-  else if (canPromote) actions.push(button('override', 'Override…'));
-  actions.push(button('stop', LIFECYCLE.stop.label));
-  return actions;
+  if (status === 'shadow') return [button('stop', LIFECYCLE.stop.label)];
+  return [];
 }
 
 /** Recent orders shown on the page; the Orders page has the rest. */
 export const RECENT_ORDERS = 10;
 
-/** Paper performance from a shadow P&L series. */
+/** A trial (test book) result from its daily value series. */
 export interface PaperPerformance {
   totalReturn: number | null;
   maxDrawdown: number | null;
@@ -143,6 +174,12 @@ const PREMISE_LABELS: Record<StrategyMetadataView['premise'], string> = {
   none: 'None stated',
 };
 
+/** Who changed a status, as people read it: the system is "Stonks" (F31). */
+export function actorName(actor: string): string {
+  if (!actor || /^(service|system)(:|$)/i.test(actor)) return 'Stonks';
+  return actor.replace(/^user:/i, '');
+}
+
 export interface HistoryEntry {
   id: number;
   when: string;
@@ -165,7 +202,7 @@ export function historyEntries(items: readonly StatusChangeView[]): HistoryEntry
       from: h.from_status,
       to: h.to_status,
       kind: h.kind,
-      actor: h.actor,
+      actor: actorName(h.actor),
       reason: h.reason,
       override: h.override,
       golive: h.golive_passed,
@@ -180,6 +217,8 @@ function metricList(report: SurvivalReportView): { key: string; label: string; v
   }));
 }
 
+const NA = 'n/a';
+
 @Component({
   selector: 'app-strategy-detail-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -191,11 +230,15 @@ function metricList(report: SurvivalReportView): { key: string; label: string; v
     StatusPill,
     StatusChangeDialog,
     StageBar,
+    StrategyVerdict,
     FollowPanel,
+    GoliveCheckList,
     ModelVersionsPanel,
     WhyNotPanel,
+    MonthlyReturns,
     PermissionNote,
-    Segmented,
+    PageTabs,
+    StatTile,
     TimeSeriesChart,
     DataTable,
     TableCell,
@@ -210,7 +253,6 @@ function metricList(report: SurvivalReportView): { key: string; label: string; v
 })
 export class StrategyDetailPage {
   private readonly strategiesApi = inject(StrategiesService);
-  private readonly shadowApi = inject(ShadowService);
   private readonly ordersApi = inject(OrdersService);
   private readonly systemApi = inject(SystemService);
   private readonly subscriptionsApi = inject(SubscriptionsService);
@@ -223,23 +265,29 @@ export class StrategyDetailPage {
 
   /** Route param `:id`. */
   readonly id = input.required<string>();
-  /** Query param `?tab=versions` opens the Model versions tab. */
+  /** Query param `?tab=results|review|details|versions` opens that tab. */
   readonly tab = input<string | undefined>(undefined);
 
-  protected readonly tabs = [
-    { value: 'overview', label: 'Overview' },
-    { value: 'versions', label: 'Model versions' },
-  ];
-  protected readonly shownTab = linkedSignal<DetailTab>(() =>
-    this.tab() === 'versions' ? 'versions' : 'overview',
+  /** Model versions are a builder's tool: shown to those who may run the Lab (F29). */
+  protected readonly canSeeVersions = computed(
+    () => this.session.can('lab.run') || this.session.can('strategy.promote'),
   );
+  /** The page's sections, in the console's one tab style (`<app-page-tabs>`, M4). */
+  protected readonly tabs = computed<PageTab[]>(() => [
+    { id: 'overview', label: 'Overview' },
+    { id: 'results', label: 'Results' },
+    { id: 'review', label: 'Review' },
+    { id: 'details', label: 'Details' },
+    ...(this.canSeeVersions() ? [{ id: 'versions', label: 'Model versions' }] : []),
+  ]);
+  protected readonly shownTab = linkedSignal<DetailTab>(() => asTab(this.tab()));
 
   /** Switch tabs and keep the choice in the address, so a link opens it. */
   protected setTab(value: string): void {
-    const tab: DetailTab = value === 'versions' ? 'versions' : 'overview';
+    const tab = asTab(value);
     this.shownTab.set(tab);
     void this.router.navigate([], {
-      queryParams: { tab: tab === 'versions' ? 'versions' : null },
+      queryParams: { tab: tab === 'overview' ? null : tab },
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
@@ -259,6 +307,17 @@ export class StrategyDetailPage {
     this.history.hasValue() ? historyEntries(this.history.value()) : [],
   );
 
+  /**
+   * Its trial record, whatever its status (F28): the test book's figures,
+   * value curve, monthly returns, recent trades and the go-live check. An
+   * approved strategy keeps showing the record it earned on trial.
+   */
+  protected readonly sheet = resource({
+    params: () => ({ id: this.id() }),
+    loader: ({ params }) => this.strategiesApi.tearSheet(params.id),
+  });
+  private readonly sheetValue = computed(() => (this.sheet.hasValue() ? this.sheet.value() : null));
+
   protected readonly busy = signal<DetailAction | null>(null);
 
   protected readonly detail = computed(() =>
@@ -267,12 +326,12 @@ export class StrategyDetailPage {
   private readonly status = computed(() => this.detail()?.status ?? null);
   /** A name to read, not the registry id (UX-27). The id sits under Technical details. */
   protected readonly displayName = computed(() =>
-    strategyDisplayName(this.detail()?.id ?? this.id()),
+    strategyDisplayName(this.detail()?.id ?? this.id(), { starter: this.detail()?.starter }),
   );
 
   /**
-   * The broker, read for a live strategy: its title carries the LIVE stamp
-   * when orders reach a real-money account (docs/ui.md: a stamp, not a pill).
+   * The broker, read for an approved strategy: its title carries the LIVE
+   * stamp only when followers' orders reach a real-money account.
    */
   protected readonly broker = resource({
     params: () => (this.status() === 'active' ? { live: true } : undefined),
@@ -282,60 +341,84 @@ export class StrategyDetailPage {
     () => this.broker.hasValue() && isRealMoneyBroker(this.broker.value()),
   );
 
-  /** The go-live verdict of a paper strategy, for the stage bar. */
-  protected readonly golive = resource({
-    params: () => (this.status() === 'shadow' ? { id: this.id() } : undefined),
-    loader: ({ params }) => this.strategiesApi.golive(params.id),
-  });
-  protected readonly golivePassed = computed(() =>
-    this.golive.hasValue() ? this.golive.value().passed : null,
-  );
-  protected readonly goliveReport = computed(() =>
-    this.golive.hasValue() ? this.golive.value() : null,
-  );
+  /** The go-live check, from the same read as the trial record. */
+  protected readonly goliveReport = computed(() => this.sheetValue()?.golive ?? null);
+  protected readonly golivePassed = computed(() => this.goliveReport()?.passed ?? null);
 
-  /** Its paper book's daily value (shadow strategies only). */
-  protected readonly pnl = resource({
-    params: () => (this.status() === 'shadow' ? { id: this.id() } : undefined),
-    loader: ({ params }) => this.shadowApi.pnl(params.id),
-  });
-  protected readonly performance = computed(() =>
-    this.pnl.hasValue() ? paperPerformance(this.pnl.value().rows) : null,
-  );
-  protected readonly chartSeries = computed<ChartSeries[]>(() => {
-    const rows = this.pnl.hasValue() ? this.pnl.value().rows : [];
-    return [
-      {
-        id: 'value',
-        label: 'Paper value',
-        kind: 'line',
-        color: 'primary',
-        format: 'money',
-        points: rows.map((r) => ({ time: r.day, value: r.total_value })),
+  /** One plain verdict (F33): worth following, promising, or not good enough yet. */
+  protected readonly verdict = computed<Verdict | null>(() => {
+    const s = this.detail();
+    const sheet = this.sheetValue();
+    if (!s || !sheet) return null;
+    const reports = s.survival_reports;
+    return strategyVerdict({
+      status: s.status,
+      golive: sheet.golive,
+      trial: {
+        total_return: sheet.paper.total_return ?? null,
+        max_drawdown: sheet.paper.max_drawdown ?? null,
+        days: sheet.paper.days,
       },
-      {
-        id: 'drawdown',
-        label: 'Drawdown',
-        kind: 'area',
-        color: 'loss',
-        pane: 1,
-        format: 'percent',
-        points: rows.map((r) => ({ time: r.day, value: r.drawdown })),
-      },
-    ];
+      tests: reports.length
+        ? { passed: reports.filter((r) => r.passed).length, total: reports.length }
+        : null,
+    });
   });
+  /** The verdict's Details fold: each check's value against its limit. */
+  protected readonly verdictChecks = computed(() => {
+    const g = this.goliveReport();
+    return g ? g.checks.map((c) => checkRow(c, g.strategy_id)) : [];
+  });
+
+  protected readonly curve = computed(() => this.sheetValue()?.curve ?? []);
+  protected readonly performance = computed(() => paperPerformance(this.curve()));
+  protected readonly chartSeries = computed(() => curveSeries(this.curve()));
   protected readonly chartSummary = computed(() => {
     const p = this.performance();
     if (!p) return null;
     return (
-      `Paper value went from ${formatMoney(p.firstValue)} on ${formatDate(p.firstDay)} to ` +
+      `Its test book went from ${formatMoney(p.firstValue)} on ${formatDate(p.firstDay)} to ` +
       `${formatMoney(p.lastValue)} on ${formatDate(p.lastDay)}, a return of ` +
       `${formatPercent(p.totalReturn, { signed: true })}. ` +
-      `The worst drawdown was ${formatPercent(p.maxDrawdown)}.`
+      `The worst drop was ${formatPercent(p.maxDrawdown)}.`
     );
   });
+  protected readonly resultsSummary = computed(() => curveSummary(this.curve()));
 
-  /** Orders it placed, newest first, for the picked portfolio. */
+  /** The Results tab's figures (the tear sheet's tiles). */
+  protected readonly tiles = computed(() => {
+    const sheet = this.sheetValue();
+    if (!sheet) return [];
+    const p = sheet.paper;
+    const pct = (v: number | null | undefined, signed = false) =>
+      v === null || v === undefined ? NA : formatPercent(v, { signed });
+    const num = (v: number | null | undefined) =>
+      v === null || v === undefined ? NA : formatNumber(v, { digits: 2 });
+    return [
+      { label: 'Total return', value: pct(p.total_return, true), help: 'total_return' },
+      { label: 'CAGR', value: pct(p.cagr, true), help: 'cagr' },
+      { label: 'Sharpe', value: num(p.sharpe), help: 'sharpe' },
+      { label: 'Max drawdown', value: pct(p.max_drawdown), help: 'max_drawdown' },
+      { label: 'Volatility', value: pct(p.volatility), help: 'volatility' },
+      { label: 'Days on trial', value: formatNumber(p.days), help: false as const },
+      {
+        label: 'Trades',
+        value: formatNumber(p.trades + sheet.book_trades),
+        help: false as const,
+      },
+    ];
+  });
+  protected readonly tradeColumns: TableColumn<ShadowDecisionView>[] = [
+    { key: 'as_of', label: 'Date', format: 'date', mobile: 'title' },
+    { key: 'side', label: 'Side', sortable: false },
+    { key: 'ticker', label: 'Ticker' },
+    { key: 'quantity', label: 'Qty', format: 'number' },
+    { key: 'price', label: 'Price', format: 'money' },
+    { key: 'status', label: 'Status', mobile: 'hide' },
+  ];
+  protected readonly tradeKey = (d: ShadowDecisionView) => String(d.id);
+
+  /** Orders it placed in the picked portfolio, newest first. */
   protected readonly orders = resource({
     params: () => ({ id: this.id(), portfolio: this.portfolioCtx.selectedId() }),
     loader: ({ params }) => this.ordersApi.list({ strategy_id: params.id, limit: RECENT_ORDERS }),
@@ -358,15 +441,24 @@ export class StrategyDetailPage {
     const s = this.detail();
     return s
       ? `${strategyKindName(s.class_path)}. ${STATUS_WORDS[s.status]}.`
-      : 'Status, parameters and robustness tests.';
+      : 'Verdict, trial results and how to follow it.';
+  });
+  protected readonly meaning = computed(() => {
+    const s = this.detail();
+    return s ? STATUS_MEANING[s.status] : '';
   });
 
   protected readonly canPromote = computed(() => this.session.can('strategy.promote'));
 
-  /** Actions that change the current status, in the order they are offered. */
+  /** The header's forward step, in the order offered. */
   protected readonly actions = computed<ActionButton[]>(() => {
     const s = this.detail();
     return s ? detailActions(s.status, this.golivePassed(), this.canPromote()) : [];
+  });
+  /** The quiet steps back on the Review tab. */
+  protected readonly backActions = computed<ActionButton[]>(() => {
+    const s = this.detail();
+    return s ? statusActions(s.status) : [];
   });
 
   protected readonly research = computed(() => {
@@ -427,9 +519,10 @@ export class StrategyDetailPage {
     if (!done) return;
     this.strategy.reload();
     this.history.reload();
+    this.sheet.reload();
   }
 
-  /** Names of your portfolios that paper trade or auto trade it, for the ticket. */
+  /** Names of your portfolios that trade it (not alerts only), for the ticket. */
   private async followers(id: string): Promise<string[]> {
     const subs = await this.subscriptionsApi.list();
     const names = this.portfolioCtx.options();
@@ -450,8 +543,8 @@ export class StrategyDetailPage {
       broker: () => this.systemApi.broker(),
       followers: () => this.followers(id),
       overrideFirst,
-      title: `Go live with ${name}?`,
-      message: 'It places orders through the broker from the next trading run.',
+      title: `Approve ${name}?`,
+      message: 'People can follow it from the next trading run.',
       confirmLabel: LIFECYCLE.live.label,
       busy: (on) => this.busy.set(on ? (overrideFirst ? 'override' : 'live') : null),
     });
@@ -467,8 +560,10 @@ export class StrategyDetailPage {
       action === 'pause' || action === 'stop'
         ? demoteOptions(action, name)
         : {
-            title: `Start paper trading ${name}?`,
-            message: 'It makes paper decisions from the next run without placing orders.',
+            title: `Put ${name} on trial?`,
+            message:
+              'The system paper-tests it on its own test book from the next trading run. ' +
+              'No portfolio trades it until someone approves it.',
             confirmLabel: words.label,
             minReason: 1,
           },

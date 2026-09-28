@@ -25,11 +25,13 @@ describe('RiskPage', () => {
   let chart: FakeChartEngine;
   let el: HTMLElement;
   let live: typeof LIVE;
+  let mine: Record<string, number>;
   const selected = signal<string | null>('pf_2');
   const seen: string[] = [];
 
   beforeEach(() => {
     live = LIVE;
+    mine = {};
     seen.length = 0;
     chart = new FakeChartEngine();
     TestBed.configureTestingModule({
@@ -73,6 +75,13 @@ describe('RiskPage', () => {
         return req.flush(INSIGHTS);
       case '/api/risk/policy':
         return req.flush(POLICY);
+      case '/api/risk/limits':
+        return req.flush({
+          system: POLICY,
+          mine,
+          effective: { ...POLICY, ...mine },
+          ignored: [],
+        });
       case '/api/risk/snapshots':
         return req.flush(RISK_HISTORY);
       default:
@@ -135,7 +144,28 @@ describe('RiskPage', () => {
     live = { ...LIVE, portfolio: null, strategies: [], as_of: null };
     await flushAll();
     expect(el.textContent).toContain('No risk readings yet');
-    expect(el.textContent).toContain('No strategy sleeves');
+    expect(el.textContent).toContain('No strategy parts yet');
+  });
+
+  it('shows your own stricter limits in the rows and says so (area 5)', async () => {
+    mine = { max_weight_per_ticker: 0.2, min_order_notional: 250 };
+    await flushAll();
+    const rows = [...el.querySelectorAll<HTMLElement>('.limits li')];
+    const largest = rows.find((r) => r.textContent?.includes('Largest holding'))!;
+    expect(largest.textContent).toContain('of 20.0%');
+    expect(largest.querySelector('.yours')?.textContent).toContain('Your limit');
+    const positions = rows.find((r) => r.textContent?.includes('Open positions'))!;
+    expect(positions.querySelector('.yours')).toBeNull();
+    const hint = el.querySelector('.limits + .hint')?.textContent ?? '';
+    expect(hint).toContain('Rows marked Your limit');
+    expect(hint).toContain('Buys worth less than $250.00 are skipped');
+    expect(el.querySelector('a[href="/settings"]')?.textContent).toContain('risk limits');
+  });
+
+  it('names each strategy part in words, not by id', async () => {
+    await flushAll();
+    expect(el.textContent).toContain("Each strategy's part");
+    expect(el.textContent).not.toContain('Strategy sleeves');
   });
 
   it('words misses without a ratio', async () => {

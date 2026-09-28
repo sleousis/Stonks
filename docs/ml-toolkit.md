@@ -85,7 +85,7 @@ The fit stores a feature profile with the model (`feature_profile.json` in its a
 
 Each real tick, the `feature_drift` hook:
 
-1. stores the rows each model strategy scores today in `model_feature_values` (SQLite migration 048),
+1. stores the rows each model strategy scores today in `model_feature_values` (SQLite migration 049),
 2. once the last `window_days` days hold `min_rows` rows, scores them against the profile with PSI per feature,
 3. warns when any feature's PSI passes `warn_psi`.
 

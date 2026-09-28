@@ -59,6 +59,8 @@ _MEMO_MAX = 50_000
 
 class FeatureRegimeFilter(InnerStrategyWrapper):
     id = "feature_regime_filter"
+    title = "Orderly market filter"
+    summary = "Wraps another strategy and lets it trade only while prices move in an orderly way."
     hypothesis = (
         "Some strategies only work when a market is orderly, and entropy "
         "style features tell orderly from random. Gating on them cuts "

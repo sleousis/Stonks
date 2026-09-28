@@ -46,6 +46,11 @@ from stonks.strategies.examples._forecast_trend import (
 
 class AllTimeHighTrend(ForecastTrendStrategy):
     id = "ath_trend"
+    title = "All-time high trend"
+    summary = (
+        "Buys stocks and coins at new all-time highs and holds while the trend lasts, with a "
+        "wide trailing stop."
+    )
     hypothesis = (
         "Stocks and coins making new all-time highs keep trending: anchoring "
         "on the old high and disposition-effect selling slow the move, and a "

@@ -55,6 +55,11 @@ class Permission(StrEnum):
     LIVE_MANAGE = "live.manage"
     #: A remote lab worker claims, runs and reports lab jobs (roadmap 14.9).
     LAB_WORKER = "lab.worker"
+    #: Read the system settings an admin may edit in the console (F61).
+    SETTINGS_READ = "settings.read"
+    #: Change or reset one of them. Risk limits guard real money, so it
+    #: needs a fresh second factor like a restore.
+    SETTINGS_MANAGE = "settings.manage"
 
 
 @dataclass(frozen=True)
@@ -100,6 +105,8 @@ POLICY: dict[Permission, Rule] = {
     # Its own scope: the worker writes results for every owner and registers
     # strategies, so only an admin mints one, and it can do nothing else.
     Permission.LAB_WORKER: Rule(_ADMINS, frozenset({ApiScope.LAB_WORKER})),
+    Permission.SETTINGS_READ: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
+    Permission.SETTINGS_MANAGE: Rule(_ADMINS, frozenset({ApiScope.ADMIN}), step_up=True),
 }
 
 

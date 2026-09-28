@@ -1,4 +1,4 @@
-"""The journal's own rows (SQLite 049): a person's playbooks, and per trade
+"""The journal's own rows (SQLite 050): a person's playbooks, and per trade
 the playbook, whether the plan was followed, a review, tags and mistakes.
 
 No ownership checks here: the service resolves the portfolio and the

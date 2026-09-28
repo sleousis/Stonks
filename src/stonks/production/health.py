@@ -216,9 +216,10 @@ def _var_violations(state: SqliteState, now: datetime) -> HealthCheck:
     if not risk_snapshots_enabled(state):
         return HealthCheck(name="var_violations", ok=True, detail="no risk_snapshots table")
     settings = RiskMonitorSettings()
+    rows = latest_portfolio_rows(state, now.astimezone(UTC).date())
     off = [
         f"{r.portfolio_id} ratio {r.violation_ratio_95:.2f} over {r.window_days}d"
-        for r in latest_portfolio_rows(state, now.astimezone(UTC).date())
+        for r in rows
         if r.ratio_out_of_band(settings)
     ]
     if off:
@@ -226,7 +227,12 @@ def _var_violations(state: SqliteState, now: datetime) -> HealthCheck:
         return HealthCheck(
             name="var_violations", ok=False, detail=f"outside {band}: {', '.join(off)}"
         )
-    return HealthCheck(name="var_violations", ok=True, detail="within band or too few days")
+    judged = any(
+        r.window_days >= settings.min_window and r.violation_ratio_95 is not None for r in rows
+    )
+    # The console reads "not enough days yet" as its own state, not a pass.
+    detail = "within band" if judged else "not enough days yet"
+    return HealthCheck(name="var_violations", ok=True, detail=detail)
 
 
 def _lab_queue(state: SqliteState, config: HealthConfig, now: datetime) -> HealthCheck:

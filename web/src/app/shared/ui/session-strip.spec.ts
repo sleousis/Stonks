@@ -132,6 +132,7 @@ describe('SessionStrip', () => {
   const names = computed(() => new Map(options().map((p) => [p.id, p.name] as const)));
   const halts = {
     active,
+    kills: computed(() => active().filter((h) => h.kind === 'kill' && h.active)),
     killOn: computed(() => active().some((h) => h.kind === 'kill' && h.active)),
     scopeText: computed(() => (h: HaltScope) => haltScopeText(h, names(), me()?.user_id)),
     summary: computed(() => haltSummary(active(), (h) => haltScopeText(h, names(), me()?.user_id))),
@@ -199,15 +200,23 @@ describe('SessionStrip', () => {
     const el = await renderEl();
     expect(overview).toHaveBeenCalledWith({ limit: 1 }, true);
     const next = el.querySelector<HTMLAnchorElement>('a.next')!;
-    expect(next.getAttribute('href')).toBe('/ops/schedule');
+    // A trader's next run opens Today, never the admin's Schedule page (F11).
+    expect(next.getAttribute('href')).toBe('/');
     expect(next.textContent).toContain('Trading run');
     expect(next.textContent).not.toContain('Price update');
     expect(next.textContent).toContain('Mon 20:45');
     expect(next.querySelector('.clock')!.textContent).toBe('2d 2h');
+    expect(next.getAttribute('aria-label')).toBe('Next trading run at Mon 20:45. Open Today.');
+    expect(el.querySelector('.strip')!.getAttribute('data-tone')).toBe('calm');
+  });
+
+  it('links an admin from the next run to the schedule', async () => {
+    me.set(ADMIN);
+    const next = (await renderEl()).querySelector<HTMLAnchorElement>('a.next')!;
+    expect(next.getAttribute('href')).toBe('/ops/schedule');
     expect(next.getAttribute('aria-label')).toBe(
       'Next trading run at Mon 20:45. Open the schedule.',
     );
-    expect(el.querySelector('.strip')!.getAttribute('data-tone')).toBe('calm');
   });
 
   it("with connections_sync at 14:00 and tick at 16:45, the strip shows 'Trading run 16:45'", async () => {
@@ -224,7 +233,7 @@ describe('SessionStrip', () => {
     expect(el.textContent).not.toMatch(/\btick\b/i);
   });
 
-  it('gives admins the next system job in a quieter slot, only when it comes first', async () => {
+  it('keeps system jobs out of the trading-day spine, even for admins (p3)', async () => {
     me.set(ADMIN);
     vi.setSystemTime(Date.parse('2026-09-28T12:00:00Z'));
     overview.mockResolvedValue({
@@ -236,7 +245,8 @@ describe('SessionStrip', () => {
       ],
     });
     const el = await renderEl();
-    expect(el.querySelector('a.other')!.textContent).toContain('Then Broker sync 14:00');
+    expect(el.textContent).not.toContain('Broker sync');
+    expect(el.textContent).not.toContain('Then ');
     expect(el.querySelector('a.next .job')!.textContent).toBe('Trading run');
   });
 
@@ -269,14 +279,51 @@ describe('SessionStrip', () => {
     expect(el.querySelector('.track')).toBeNull();
   });
 
-  it('turns red while a kill switch is on and links to the halts page', async () => {
+  it('turns red while a kill switch is on and links an admin to the halts page', async () => {
+    me.set(ADMIN);
     active.set([{ id: 1, kind: 'kill', scope: 'global', halt: 'all', active: true } as HaltView]);
     const el = await renderEl();
     const strip = el.querySelector('.strip')!;
     expect(strip.getAttribute('data-tone')).toBe('kill');
-    expect(strip.textContent).toContain('Kill switch on.');
+    expect(strip.textContent).toContain('Trading stopped.');
     expect(strip.textContent).toContain('Every portfolio');
     expect(strip.querySelector('a.strip-link')!.getAttribute('href')).toBe('/ops/halts');
+  });
+
+  it("tells a trader who may lift an admin's kill switch, with no link to an admin page (F11)", async () => {
+    active.set([{ id: 1, kind: 'kill', scope: 'global', halt: 'all', active: true } as HaltView]);
+    const el = await renderEl();
+    const strip = el.querySelector('.strip')!;
+    expect(strip.getAttribute('data-tone')).toBe('kill');
+    expect(strip.querySelector('a[href="/ops/halts"]')).toBeNull();
+    expect(strip.textContent).toContain('Only an admin can resume.');
+    expect(strip.querySelector('button.resume')).toBeNull();
+  });
+
+  it('lets a trader resume their own kill switch from the strip, with the ticket and code', async () => {
+    options.set([book({ id: 'pf_main', name: 'Main book', is_default: true })]);
+    active.set([
+      {
+        id: 7,
+        kind: 'kill',
+        scope: 'portfolio',
+        portfolio_id: 'pf_main',
+        user_id: 'usr_1',
+        halt: 'all',
+        active: true,
+        reason: 'Checking a fill',
+        tripped_at: '2026-09-26T17:00:00Z',
+      } as HaltView,
+    ]);
+    const fixture = await render();
+    const el = fixture.nativeElement as HTMLElement;
+    const resume = el.querySelector<HTMLButtonElement>('.halt button.resume')!;
+    expect(resume.textContent!.trim()).toBe('Resume');
+    resume.click();
+    fixture.detectChanges();
+    const sheet = el.querySelector('app-resume-sheet')!;
+    expect(sheet.textContent).toContain('Portfolio Main book');
+    expect(sheet.textContent).toContain('RESUME TRADING');
   });
 
   it('names the portfolio in the banner, never its id (UX-17)', async () => {
@@ -354,7 +401,7 @@ describe('SessionStrip', () => {
       expect(picked.value).toBe('portfolio');
       expect(picked.closest('label')!.textContent).toContain('Main book');
       // The ticket: scope, what stops, reason and the stamp.
-      const ticket = el.querySelector('[aria-label="Kill switch"]')!;
+      const ticket = el.querySelector('[aria-label="Stop trading ticket"]')!;
       expect(ticket.textContent).toContain('Portfolio Main book');
       expect(ticket.textContent).toContain('All new orders');
       expect(ticket.textContent).toContain(DEFAULT_KILL_REASON);
@@ -385,9 +432,10 @@ describe('SessionStrip', () => {
       expect(halts.add).toHaveBeenCalledWith(halt);
       expect(el.querySelector('.strip')!.getAttribute('data-tone')).toBe('kill');
       expect(el.querySelector('#kill-sheet-title')).toBeNull();
-      const resume = el.querySelector<HTMLAnchorElement>('a.stop.resume')!;
+      // A trader resumes from the strip itself, never from the admin's Halts page.
+      const resume = el.querySelector<HTMLButtonElement>('button.stop.resume')!;
       expect(resume.textContent!.trim()).toBe('Resume');
-      expect(resume.getAttribute('href')).toBe('/ops/halts');
+      expect(el.querySelector('a[href="/ops/halts"]')).toBeNull();
     });
 
     it('stops new buys only across all your portfolios, with an edited reason', async () => {
@@ -422,7 +470,7 @@ describe('SessionStrip', () => {
       reason.value = 'Fed day';
       reason.dispatchEvent(new Event('input'));
       fixture.detectChanges();
-      const ticket = el.querySelector('[aria-label="Kill switch"]')!;
+      const ticket = el.querySelector('[aria-label="Stop trading ticket"]')!;
       expect(ticket.textContent).toContain('Your portfolios');
       expect(ticket.textContent).toContain('New buys');
       expect(ticket.textContent).toContain('Sells and exits');
@@ -446,7 +494,9 @@ describe('SessionStrip', () => {
       expect(stop.classList).toContain('live');
       stop.click();
       fixture.detectChanges();
-      expect(el.querySelector('[aria-label="Kill switch"] .stamp')!.textContent).toContain('LIVE');
+      expect(el.querySelector('[aria-label="Stop trading ticket"] .stamp')!.textContent).toContain(
+        'LIVE',
+      );
     });
 
     it('lets admins stop every portfolio; viewers never see the control', async () => {

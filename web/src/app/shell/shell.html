@@ -75,7 +75,9 @@
         <span class="search-label">Search</span>
         <kbd aria-hidden="true">{{ modKey }} K</kbd>
       </button>
-      <app-nav idPrefix="sidebar" />
+      <div class="rail-scroll">
+        <app-nav idPrefix="sidebar" />
+      </div>
       <ng-container *ngTemplateOutlet="footer" />
     </aside>
 
@@ -115,7 +117,9 @@
         </svg>
       </button>
     </div>
-    <app-nav idPrefix="drawer" (navigate)="closeDrawer()" />
+    <div class="rail-scroll">
+      <app-nav idPrefix="drawer" (navigate)="closeDrawer()" />
+    </div>
     <ng-container *ngTemplateOutlet="footer" />
   </div>
 </dialog>

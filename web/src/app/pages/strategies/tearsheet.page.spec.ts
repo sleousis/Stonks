@@ -103,7 +103,7 @@ describe('tear sheet data', () => {
     expect(rows[1].cells[11].tone).toBe('loss');
   });
 
-  it('draws paper value in cool blue, never brass', () => {
+  it('draws the test book value in cool blue, never brass', () => {
     const [value, dd] = curveSeries(CURVE);
     expect(value.color).toBe('primary');
     expect(dd).toMatchObject({ kind: 'area', pane: 1, color: 'loss' });
@@ -129,7 +129,7 @@ describe('TearsheetPage', () => {
 
   afterEach(() => http.verify());
 
-  it('gathers the paper result, verdicts, trades and history', async () => {
+  it('gathers the verdict, trial result, tests, trades and history', async () => {
     const fixture = TestBed.createComponent(TearsheetPage);
     fixture.componentRef.setInput('id', 'mom_v2');
     fixture.detectChanges();
@@ -139,9 +139,13 @@ describe('TearsheetPage', () => {
     await tick(5);
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('h1')?.textContent).toContain('mom_v2');
-    expect(el.textContent).toContain('Momentum. Paper trading.');
+    expect(el.textContent).toContain('Momentum. On trial.');
+    // Only trial days are short: promising, not yet judged (F33).
+    expect(el.querySelector('app-strategy-verdict')?.textContent).toContain(
+      'Promising, needs more data',
+    );
     expect(el.textContent).toContain('Sharpe');
-    expect(el.textContent).toContain('Not yet');
+    expect(el.textContent).toContain('Failed');
     expect(el.textContent).toContain('first paper run');
     expect(el.querySelectorAll('.months tbody tr').length).toBe(2);
     expect(el.querySelector('app-side-tag')).not.toBeNull();
@@ -166,6 +170,6 @@ describe('TearsheetPage', () => {
     expect(button.disabled).toBe(false);
     button.click();
     expect(print).toHaveBeenCalledTimes(1);
-    expect(el.querySelector('.print-only')?.textContent).toContain('Paper results, not');
+    expect(el.querySelector('.print-only')?.textContent).toContain('Trial results on paper money');
   });
 });

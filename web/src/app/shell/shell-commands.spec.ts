@@ -59,9 +59,9 @@ describe('registerShellCommands', () => {
     }
   });
 
-  it('uses the nav words: Paper trading, Go live, Trade costs', () => {
+  it('uses the nav words: Trial results, Strategy review, Trade costs', () => {
     expect(labels()).toEqual(
-      expect.arrayContaining(['Paper trading', 'Go live', 'Trade costs', 'Strategies', 'Orders']),
+      expect.arrayContaining(['Trial results', 'Strategy review', 'Trade costs', 'Strategies']),
     );
   });
 

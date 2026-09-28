@@ -1,6 +1,6 @@
 import type { Mock } from 'vitest';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { computed, signal } from '@angular/core';
+import { Component, computed, signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
@@ -11,11 +11,11 @@ import { StepUpService } from '../../core/auth/step-up.service';
 import { type ConfirmOptions, ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
-import { nextRequest, page, tick } from '../../../testing/http';
+import { nextRequest, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
 import { answerDialog } from '../../../testing/status-dialog';
 import { provideFakeTax } from '../../../testing/fake-tax';
-import { OrderDraftsPage, draftSource, draftStatus } from './order-drafts.page';
+import { SuggestedOrders, draftSource, draftStatus } from './suggested-orders';
 
 function draft(over: Partial<OrderDraftView> = {}): OrderDraftView {
   return {
@@ -42,8 +42,17 @@ function draft(over: Partial<OrderDraftView> = {}): OrderDraftView {
   };
 }
 
-describe('OrderDraftsPage', () => {
-  let fixture: ComponentFixture<OrderDraftsPage>;
+@Component({
+  imports: [SuggestedOrders],
+  template: `<app-suggested-orders [drafts]="drafts()" (changed)="changes = changes + 1" />`,
+})
+class Host {
+  readonly drafts = signal<OrderDraftView[]>([]);
+  changes = 0;
+}
+
+describe('SuggestedOrders', () => {
+  let fixture: ComponentFixture<Host>;
   let http: HttpTestingController;
   let confirm: Mock<(o: ConfirmOptions) => Promise<boolean>>;
   let ensure: Mock<(reason?: string) => Promise<boolean>>;
@@ -82,11 +91,8 @@ describe('OrderDraftsPage', () => {
   }
 
   async function render(items: OrderDraftView[]) {
-    fixture = TestBed.createComponent(OrderDraftsPage);
-    fixture.detectChanges();
-    const req = await nextRequest(http, '/api/orders/drafts');
-    expect(req.request.urlWithParams).toContain('status=pending');
-    req.flush(page(items));
+    fixture = TestBed.createComponent(Host);
+    fixture.componentInstance.drafts.set(items);
     await settle();
     return fixture.nativeElement as HTMLElement;
   }
@@ -96,34 +102,31 @@ describe('OrderDraftsPage', () => {
       b.textContent?.trim().startsWith(text),
     )!;
 
-  it('shows each waiting draft as a ticket', async () => {
+  it('shows each suggested order as a ticket with its source', async () => {
     setup();
     const el = await render([draft()]);
     const ticket = el.querySelector('article.ticket')!;
-    expect(ticket.textContent).toContain('Buy 5 AAA.US');
+    expect(ticket.textContent).toContain('Buy');
+    expect(ticket.textContent).toContain('AAA.US');
     expect(ticket.textContent).toContain('Tess book');
     expect(ticket.textContent).toContain('$125.00');
     expect(ticket.textContent).toContain('momentum turned up');
-    expect(ticket.textContent).toContain('From The assistant');
+    expect(ticket.textContent).toContain('Suggested by the assistant');
     expect(ticket.textContent).toContain('PAPER');
+    expect(ticket.classList).not.toContain('live');
   });
 
-  it('says nothing is waiting', async () => {
-    setup();
-    const el = await render([]);
-    expect(el.textContent).toContain('Nothing waiting for you');
-  });
-
-  it('approves with a fresh code and the ticket, then reads the list again', async () => {
+  it('approves with a fresh code and the ticket, then asks for a new read', async () => {
     setup();
     const toast = vi.spyOn(TestBed.inject(ToastService), 'success');
     const el = await render([draft()]);
-    button(el, 'Approve and place').click();
+    button(el, 'Approve').click();
     const req = await nextRequest(http, '/api/orders/drafts/od_1/approve', 'POST');
     expect(ensure).toHaveBeenCalled();
     expect(confirm).toHaveBeenCalledWith(
       expect.objectContaining({
         confirmLabel: 'Approve and place',
+        tone: 'default',
         typedConfirmation: undefined,
         ticket: expect.objectContaining({ side: 'buy', live: false }),
       }),
@@ -144,16 +147,16 @@ describe('OrderDraftsPage', () => {
         live: false,
       },
     });
-    (await nextRequest(http, '/api/orders/drafts')).flush(page([]));
     await settle();
     expect(toast).toHaveBeenCalledWith('Placed and filled: buy 5 AAA.US.');
+    expect(fixture.componentInstance.changes).toBe(1);
   });
 
-  it('types the ticker for a real-money book and shows a refusal on the draft', async () => {
+  it('types the ticker for a real-money book and shows a refusal on the card', async () => {
     setup('live');
     const el = await render([draft()]);
     expect(el.querySelector('article.ticket')?.classList).toContain('live');
-    button(el, 'Approve and place').click();
+    button(el, 'Approve').click();
     const req = await nextRequest(http, '/api/orders/drafts/od_1/approve', 'POST');
     expect(confirm).toHaveBeenCalledWith(
       expect.objectContaining({ tone: 'danger', typedConfirmation: 'AAA.US' }),
@@ -167,7 +170,6 @@ describe('OrderDraftsPage', () => {
       },
       { status: 409, statusText: 'Conflict' },
     );
-    (await nextRequest(http, '/api/orders/drafts')).flush(page([draft()]));
     await settle();
     expect(el.querySelector('.failure')?.textContent).toContain('Not placed');
   });
@@ -176,7 +178,7 @@ describe('OrderDraftsPage', () => {
     setup();
     const el = await render([draft()]);
     ensure.mockResolvedValueOnce(false);
-    button(el, 'Approve and place').click();
+    button(el, 'Approve').click();
     await tick(5);
     expect(confirm).not.toHaveBeenCalled();
     expect(http.match(() => true)).toHaveLength(0);
@@ -191,28 +193,21 @@ describe('OrderDraftsPage', () => {
     const req = await nextRequest(http, '/api/orders/drafts/od_1/reject', 'POST');
     expect(req.request.body).toEqual({ note: 'not now' });
     req.flush(draft({ status: 'rejected' }));
-    (await nextRequest(http, '/api/orders/drafts')).flush(page([]));
     await settle();
+    expect(fixture.componentInstance.changes).toBe(1);
   });
 
-  it('reads another status when the filter changes', async () => {
+  it('shows no buttons on a decided order', async () => {
     setup();
-    const el = await render([]);
-    [...el.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
-      .find((b) => b.textContent?.trim() === 'All')!
-      .click();
-    fixture.detectChanges();
-    const req = await nextRequest(http, '/api/orders/drafts');
-    expect(req.request.urlWithParams).not.toContain('status=');
-    req.flush(page([draft({ status: 'expired' })]));
-    await settle();
+    const el = await render([draft({ status: 'expired' })]);
     expect(el.textContent).toContain('Expired');
+    expect(el.querySelectorAll('article button').length).toBe(0);
   });
 });
 
-describe('draft words', () => {
+describe('suggested order words', () => {
   it('names statuses and sources', () => {
     expect(draftStatus('pending').label).toBe('Waiting for you');
-    expect(draftSource('mcp')).toBe('An agent tool');
+    expect(draftSource('mcp')).toBe('an agent tool');
   });
 });

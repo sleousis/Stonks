@@ -1,7 +1,7 @@
 """Which execution algo a portfolio's orders use (roadmap 23.16).
 
 One row per portfolio (``strategy_id = ''``) and optionally one per
-strategy in it, in ``execution_algo_settings`` (SQLite 053). A strategy's
+strategy in it, in ``execution_algo_settings`` (SQLite 054). A strategy's
 row wins over the portfolio's. No row means plain orders, the default.
 
 :func:`attach_algos` puts the resolved algo on each order that has none
@@ -42,7 +42,7 @@ class AlgoSetting:
 
 
 def settings_recorded(state: SqliteState) -> bool:
-    """Whether the state DB has the settings table (migration 053)."""
+    """Whether the state DB has the settings table (migration 054)."""
     return bool(
         state.sql(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'execution_algo_settings'"

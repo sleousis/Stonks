@@ -216,13 +216,15 @@ min_eval_days = 63
     assert (q.quit_multiple, q.auto_demote, q.min_eval_days) == (2.0, True, 63)
 
 
-def test_the_default_config_keeps_the_breaker_off_and_the_quit_rule_alerting():
+def test_the_default_config_turns_the_breaker_on_and_keeps_the_quit_rule_alerting():
+    """The shipped config turns the breaker on (complexity audit F55); see
+    tests/unit/test_shipped_config_defaults.py for the values."""
     from pathlib import Path
 
     from stonks.production.quit_rule import QuitRuleSettings
 
     s = load_settings(config_path=Path("config/default.toml"))
-    assert not s.production.risk.rules.circuit_breaker.active
+    assert s.production.risk.rules.circuit_breaker.active
     assert not s.production.risk.rules.operational_halt.active
     assert s.production.quit_rule == QuitRuleSettings(
         quit_multiple=1.5, auto_demote=False, min_eval_days=126

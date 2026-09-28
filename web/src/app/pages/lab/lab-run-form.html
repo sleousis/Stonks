@@ -69,7 +69,8 @@
   </fieldset>
 
   <fieldset class="group" [attr.aria-describedby]="errors()['tests'] ? 'lr-tests-error' : null">
-    <legend>Survival tests</legend>
+    <legend>Robustness tests <app-help-tip term="robustness_tests" /></legend>
+    <p class="hint">Each test asks a different "is this luck?" question about the best settings.</p>
     <div class="suites" role="radiogroup" aria-label="Test suite">
       @for (s of suites(); track s.id) {
         <label class="suite" [class.chosen]="form().suite === s.id">
@@ -101,6 +102,12 @@
                 (change)="toggleTest(t.id, $any($event.target).checked)"
               />
               {{ t.label }}
+              @if (t.slow) {
+                <span class="legend-note">slow</span>
+              }
+              @if (t.informational) {
+                <span class="legend-note">never fails</span>
+              }
             </label>
             <span class="check-hint" [id]="'lr-test-' + t.id + '-hint'">{{ t.hint }}</span>
           </li>
@@ -110,7 +117,7 @@
       <p class="suite-list">
         <span class="muted">Runs:</span>
         @for (t of suiteTests(); track t.id) {
-          <span class="chip">{{ t.label }}</span>
+          <span class="chip" [title]="t.hint">{{ t.label }}</span>
         }
       </p>
     }
@@ -125,7 +132,7 @@
       <label for="lr-hypothesis">
         Hypothesis <app-help-tip term="hypothesis" />
         <span class="legend-note">{{
-          form().register ? 'needed to start paper trading' : 'recommended'
+          form().register ? 'needed to put it on trial' : 'recommended'
         }}</span>
       </label>
       <textarea
@@ -144,7 +151,7 @@
         <span class="error" id="lr-hypothesis-hint">{{ e }}</span>
       } @else {
         <span class="hint" id="lr-hypothesis-hint">
-          Saved with the run before tuning starts. The go-live check reads it.
+          Saved with the run before the search starts. The approval check reads it.
         </span>
       }
     </div>
@@ -159,14 +166,14 @@
         [checked]="form().register"
         (change)="setRegister($any($event.target).checked)"
       />
-      Start paper trading if it passes
+      Put it on trial if it passes
     </label>
     <span class="check-hint" id="lr-register-hint">
       @if (form().register && !form().registerIfPasses) {
-        Set under Advanced to start paper trading whatever the verdict.
+        Set under Advanced to put it on trial whatever the verdict.
       } @else {
-        The fitted strategy then trades on paper: it decides on every trading run without real
-        orders. Turning this on picks the go-live suite. You can change it.
+        On trial, Stonks tests the fitted strategy on paper at every trading run, with no real
+        orders. Turning this on picks the Full suite. You can change it.
       }
     </span>
   </div>
@@ -207,7 +214,7 @@
             </ul>
           } @else {
             <p class="muted summary">
-              {{ cls.name }} has no parameters. The run fits and tests it as is.
+              {{ title(cls) }} has no settings to tune. The run fits and tests it as is.
             </p>
           }
         </section>
@@ -777,10 +784,10 @@
             [checked]="form().register && !form().registerIfPasses"
             (change)="setRegisterAlways($any($event.target).checked)"
           />
-          Start paper trading whatever the verdict
+          Put it on trial whatever the verdict
         </label>
         <span class="check-hint" id="lr-register-always-hint">
-          Only for a strategy you want to watch on paper even though a test failed.
+          Only for a strategy you want to watch on trial even though a test failed.
         </span>
       </section>
     </div>

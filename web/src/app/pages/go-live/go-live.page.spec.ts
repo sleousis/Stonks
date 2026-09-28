@@ -1,146 +1,52 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 
-import type { BrokerInfo, GoLiveReport, Page, RiskPolicy, StrategySummary } from '../../api/models';
+import type { BrokerInfo, LeaderboardRow, LeaderboardView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { tick } from '../../../testing/http';
-import { STRATEGY_METADATA } from '../../../testing/strategy-fixtures';
-import { GoLivePage, checkRow } from './go-live.page';
+import { paper } from '../../../testing/strategy-fixtures';
+import { GoLivePage, reviewOrder } from './go-live.page';
 
-function strategy(id: string, status: StrategySummary['status']): StrategySummary {
+function row(id: string, extra: Partial<LeaderboardRow> = {}): LeaderboardRow {
   return {
-    id,
-    status,
-    class_path: 'stonks.strategies.momentum.MomentumStrategy',
-    applicable_asset_classes: ['equity'],
-    params: {},
-    created_at: '2026-09-01T10:00:00Z',
-    updated_at: '2026-09-20T10:00:00Z',
-    metadata: STRATEGY_METADATA,
+    rank: 1,
+    strategy_id: id,
+    class_path: 'stonks.strategies.examples.buy_and_hold:BuyAndHold',
+    status: 'shadow',
+    paper: paper(),
+    book_trades: 0,
+    live_since: null,
+    survival_passed: 4,
+    survival_total: 4,
+    golive_passed: false,
+    ...extra,
   };
 }
 
-const STRATEGIES: Page<StrategySummary> = {
-  items: [strategy('momentum-v3', 'active'), strategy('buyhold-spy', 'shadow')],
-  total: 2,
-  limit: 500,
-  offset: 0,
+const BOARD: LeaderboardView = {
+  sort: 'return',
+  as_of: '2026-09-25',
+  rows: [
+    row('momentum_0a1b2c3d', { status: 'active', golive_passed: true }),
+    row('value_1a2b3c4d'),
+    row('trend_2b3c4d5e', { golive_passed: true }),
+  ],
 };
-const BROKER: BrokerInfo = {
-  kind: 'alpaca',
+
+const PAPER_BROKER: BrokerInfo = {
+  kind: 'simulated',
   paper: true,
   allow_live: false,
-  credentials_configured: true,
-};
-const RISK: RiskPolicy = {
-  enabled: true,
-  max_weight_per_ticker: 0.2,
-  max_open_positions: 10,
-  cash_buffer_fraction: 0.05,
-  min_order_notional: 100,
-  max_weight_per_asset_class: { crypto: 0.1 },
+  credentials_configured: false,
 };
 
-let reportStatus = 'active';
-let presetPassed = true;
-
-function report(id: string, passed: boolean): GoLiveReport {
-  return {
-    strategy_id: id,
-    status: id === 'momentum-v3' ? reportStatus : 'shadow',
-    source: 'shadow',
-    passed,
-    policy: { min_days: 20, max_drawdown: 0.15, max_drift: 0.1, min_trades: 5 },
-    checks: [
-      {
-        name: 'status',
-        passed: true,
-        value: null,
-        limit: null,
-        detail: 'Paper trading, measured on its paper trading results',
-      },
-      {
-        name: 'min_days',
-        passed,
-        value: passed ? 25 : 3,
-        limit: 20,
-        detail: passed
-          ? '25 days of paper trading, needs at least 20'
-          : '3 days of paper trading, needs at least 20',
-      },
-      {
-        name: 'max_drawdown',
-        passed: true,
-        value: 0.042,
-        limit: 0.15,
-        detail: 'max drawdown 4.20%, limit 15.00%',
-      },
-      {
-        name: 'max_drift',
-        passed: true,
-        value: -0.013,
-        limit: 0.1,
-        detail: 'paper +1.00% vs backtest +2.30% (gap -1.30%, limit ±10.00%)',
-      },
-      {
-        name: 'min_trades',
-        passed: true,
-        value: 7,
-        limit: 5,
-        detail: '7 paper trades filled, needs at least 5',
-      },
-      { name: 'survival', passed: true, value: 4, limit: 4, detail: '4/4 passed' },
-      {
-        name: 'within_mc_band',
-        passed: true,
-        value: 0.042,
-        limit: 0.12,
-        detail: 'paper drawdown 4.20% vs Monte Carlo p95 12.00%',
-      },
-      { name: 'quit_rule', passed: true, value: 0.042, limit: 0.12, detail: 'within' },
-      {
-        name: 'promotion_preset',
-        passed: presetPassed,
-        value: 10,
-        limit: 10,
-        detail: '10 of 10 tests of the full test suite on record',
-      },
-      { name: 'nonzero_costs', passed: true, value: 2, limit: 1, detail: 'fee, spread' },
-      {
-        name: 'hypothesis_recorded',
-        passed: true,
-        value: 64,
-        limit: 40,
-        detail: 'Hypothesis of 64 characters, needs at least 40',
-      },
-      { name: 'backtest_min_trades', passed: true, value: 48, limit: 30, detail: '48 trades' },
-    ],
-    checklist: {
-      n_trials_class: 140,
-      dsr: 0.972,
-      pbo: null,
-      excess_cagr: 0.031,
-      min_capital: 4200,
-      lot_skipped_share: null,
-      hypothesis: 'Recent winners keep winning for a while.',
-      premortem: null,
-    },
-  };
-}
-
-describe('GoLivePage', () => {
+describe('GoLivePage (Strategy review)', () => {
   let fixture: ComponentFixture<GoLivePage>;
   let controller: HttpTestingController;
   let el: HTMLElement;
-  let goliveRequests: string[];
-  let goliveError: boolean;
 
   beforeEach(() => {
-    goliveRequests = [];
-    goliveError = false;
-    reportStatus = 'active';
-    presetPassed = true;
     TestBed.configureTestingModule({
       imports: [GoLivePage],
       providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
@@ -152,172 +58,80 @@ describe('GoLivePage', () => {
 
   afterEach(() => controller.verify());
 
-  async function flushAll(): Promise<void> {
-    for (let i = 0; i < 5; i++) {
+  async function flushAll(board = BOARD, broker = PAPER_BROKER): Promise<void> {
+    for (let i = 0; i < 4; i++) {
       for (const req of controller.match(() => true)) {
         const path = req.request.url.split('?')[0];
-        if (path === '/api/strategies') req.flush(STRATEGIES);
-        else if (path === '/api/brokers') req.flush(BROKER);
-        else if (path === '/api/risk/policy') req.flush(RISK);
-        else if (path.endsWith('/golive')) {
-          const id = decodeURIComponent(path.split('/')[3]);
-          if (goliveError) {
-            req.flush(
-              { title: 'Not found', status: 404, detail: 'no strategy' },
-              { status: 404, statusText: 'Not Found' },
-            );
-          } else {
-            goliveRequests.push(id);
-            req.flush(report(id, id === 'momentum-v3'));
-          }
-        } else throw new Error(`unexpected request ${path}`);
+        if (path === '/api/strategies/leaderboard') req.flush(board);
+        else if (path === '/api/brokers') req.flush(broker);
+        else throw new Error(`unexpected request ${path}`);
       }
       await tick(5);
       fixture.detectChanges();
     }
   }
 
-  it('asks for a strategy, shadow ones first, and shows broker and risk', async () => {
+  it('is called Strategy review and lists the ready ones first (F54)', async () => {
     fixture.detectChanges();
     await flushAll();
-
-    expect(el.querySelector('h1')?.textContent).toContain('Go-live');
-    expect(el.textContent).toContain('Pick a strategy');
-    expect(el.textContent).not.toContain('[golive]');
-    const options = Array.from(el.querySelectorAll('option')).map((o) => o.value);
-    expect(options).toEqual(['', 'buyhold-spy', 'momentum-v3']);
-
-    const broker = el.querySelector('section[aria-labelledby="broker-title"]');
-    expect(broker?.textContent).toContain('Alpaca');
-    expect(broker?.querySelector('app-mode-stamp')?.textContent).toContain('PAPER');
-    expect(broker?.textContent).toContain('Not allowed');
-
-    const risk = el.querySelector('section[aria-labelledby="risk-title"]');
-    expect(risk?.textContent).toContain('20.0%');
-    expect(risk?.textContent).toContain('Max weight, crypto');
+    expect(el.querySelector('h1')?.textContent).toContain('Strategy review');
+    expect(el.textContent).toContain('1 ready to approve, 2 on trial');
+    const names = [...el.querySelectorAll('a.name .id')].map((a) => a.textContent?.trim());
+    expect(names).toEqual(['Trend 2b3c', 'Value 1a2b', 'Momentum 0a1b']);
+    // Kind names, never class names (M6).
+    expect(el.textContent).toContain('Buy and hold');
+    expect(el.textContent).not.toContain('BuyAndHold');
   });
 
-  it('shows each check with its value, limit and the overall verdict', async () => {
-    fixture.componentRef.setInput('strategy', 'buyhold-spy');
+  it('sends each row to the Review tab of its strategy page (F27)', async () => {
     fixture.detectChanges();
     await flushAll();
-
-    expect(goliveRequests).toEqual(['buyhold-spy']);
-    const check = el.querySelector('section[aria-labelledby="check-title"]')!;
-    expect(check.querySelector('.verdict')?.textContent).toContain('Not ready');
-    expect(check.textContent).toContain('1 of 12 checks failed');
-    const rows = Array.from(check.querySelectorAll('.checks li'));
-    expect(rows.length).toBe(12);
-    const minDays = rows[1];
-    expect(minDays.textContent).toContain('Paper days');
-    // No raw check ids on the page.
-    expect(check.textContent).not.toContain('min_days');
-    expect(minDays.querySelector('app-status-pill')?.textContent).toContain('Failed');
-    // Each failing check says how to fix it (UX-28).
-    expect(minDays.querySelector('.check-fix')?.textContent).toContain(
-      'About 17 more trading days on paper.',
+    const links = [...el.querySelectorAll<HTMLAnchorElement>('a.review')].map((a) =>
+      a.getAttribute('href'),
     );
-    expect(minDays.querySelector('.check-value')?.textContent).toContain('3');
-    expect(minDays.querySelector('.check-limit')?.textContent).toContain('20');
-    expect(rows[2].querySelector('.check-value')?.textContent).toContain('4.20%');
-    expect(rows[3].querySelector('.check-value')?.textContent).toContain('-1.30%');
-    expect(checkRow({ ...report('x', true).checks[2], value: -0 }).value).toBe('0.00%');
-    expect(rows[5].querySelector('.check-value')?.textContent).toContain('4 of 4');
-    expect(rows[6].querySelector('.check-limit')?.textContent).toContain('≤ 12.00%');
-    expect(rows[8].querySelector('.check-value')?.textContent).toContain('10 of 10');
-    expect(rows[10].querySelector('.check-value')?.textContent).toContain('64 chars');
-    expect(rows[10].querySelector('.check-limit')?.textContent).toContain('≥ 40 chars');
-    expect(rows[11].querySelector('.check-limit')?.textContent).toContain('≥ 30');
-    expect(check.querySelector('.ready')).toBeNull();
-    // The API check is on the page: no command line, no config sections.
-    expect(el.querySelector('app-cli-command')).toBeNull();
-    expect(el.textContent).not.toContain('stonks');
-    expect(el.textContent).not.toContain('exits with code');
-    expect(el.textContent).not.toContain('[golive]');
-    expect(el.querySelector<HTMLSelectElement>('select')?.value).toBe('buyhold-spy');
-    expect(el.querySelector('a[href="/strategies/buyhold-spy"]')).not.toBeNull();
+    expect(links[0]).toBe('/strategies/trend_2b3c4d5e?tab=review');
+    expect(el.querySelectorAll('app-strategy-verdict').length).toBe(3);
+    expect(el.textContent).toContain('Worth following');
   });
 
-  it('switches strategy from the picker and loads its check', async () => {
+  it('says a paper broker moves no real money and points risk limits to Settings', async () => {
     fixture.detectChanges();
     await flushAll();
-
-    const select = el.querySelector<HTMLSelectElement>('select')!;
-    select.value = 'momentum-v3';
-    select.dispatchEvent(new Event('change'));
-    fixture.detectChanges();
-    await flushAll();
-
-    expect(goliveRequests).toEqual(['momentum-v3']);
-    const check = el.querySelector('section[aria-labelledby="check-title"]')!;
-    expect(check.querySelector('.verdict')?.textContent).toContain('Ready to go live');
-    // Shadow strategies that pass are handed to a human; active ones already trade.
-    expect(check.querySelector('.ready')).toBeNull();
-    expect(check.textContent).toContain('It is already live');
+    const broker = el.querySelector('section[aria-labelledby="broker-title"]')!;
+    expect(broker.querySelector('app-mode-stamp')?.textContent).toContain('PAPER');
+    expect(broker.textContent).toContain('Simulated, paper money');
+    expect(broker.textContent).toContain('moves no real money');
+    expect(el.querySelector('a[href="/settings"]')).not.toBeNull();
   });
 
-  it('failing promotion_preset row links to Lab with preset=promotion (UX-28)', async () => {
-    presetPassed = false;
-    fixture.componentRef.setInput('strategy', 'buyhold-spy');
+  it('uses trader words only (UX-09, B1)', async () => {
     fixture.detectChanges();
     await flushAll();
-    const rows = Array.from(el.querySelectorAll('.checks li'));
-    const preset = rows.find((li) => li.textContent?.includes('Full test suite'))!;
-    expect(preset.querySelector('.check-fix a')?.getAttribute('href')).toBe(
-      '/lab?strategy=buyhold-spy&preset=promotion',
-    );
+    expect(el.textContent).not.toMatch(/shadow|promot|regist|(?<!go-)\blive\b/i);
   });
 
-  it('uses trader words only: no system words on the page (UX-09)', async () => {
-    reportStatus = 'shadow';
-    fixture.componentRef.setInput('strategy', 'buyhold-spy');
+  it('opens the Review tab for an old ?strategy= link', async () => {
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    fixture.componentRef.setInput('strategy', 'value_1a2b3c4d');
     fixture.detectChanges();
     await flushAll();
-    expect(el.textContent).not.toMatch(/shadow|promot|regist|retire/i);
-    expect(el.textContent).toContain('Before you go live');
+    expect(navigate).toHaveBeenCalledWith(['/strategies', 'value_1a2b3c4d'], {
+      queryParams: { tab: 'review' },
+      replaceUrl: true,
+    });
   });
 
-  it('shows the ready state and the go-live evidence, nulls as n/a', async () => {
-    reportStatus = 'shadow';
-    fixture.componentRef.setInput('strategy', 'momentum-v3');
+  it('points to the Lab when nothing is on trial', async () => {
     fixture.detectChanges();
-    await flushAll();
+    await flushAll({ ...BOARD, rows: [] });
+    expect(el.textContent).toContain('No strategies yet');
+  });
 
-    const check = el.querySelector('section[aria-labelledby="check-title"]')!;
-    const ready = check.querySelector('.ready')!;
-    expect(ready.textContent).toContain('Ready for someone to take it live');
-    expect(ready.textContent).toContain('Go live');
-    expect(ready.querySelector('a')?.getAttribute('href')).toBe('/strategies/momentum-v3');
-
-    const items = Array.from(check.querySelectorAll('.checklist-grid > div')).map((d) =>
-      d.textContent!.replace(/\s+/g, ' ').trim(),
-    );
-    expect(items).toEqual([
-      'Trials of this class 140',
-      'Deflated Sharpe 0.972',
-      'PBO n/a',
-      'Excess CAGR +3.10%',
-      'Minimum capital $4.2K',
-      'Skipped by whole shares n/a',
-      'Hypothesis Recent winners keep winning for a while.',
-      'Premortem Not recorded',
+  it('orders the queue: ready, then on trial, then approved', () => {
+    expect(reviewOrder(BOARD.rows).map((r) => r.strategy_id)).toEqual([
+      'trend_2b3c4d5e',
+      'value_1a2b3c4d',
+      'momentum_0a1b2c3d',
     ]);
-  });
-
-  it('shows an error when the check cannot load', async () => {
-    goliveError = true;
-    fixture.componentRef.setInput('strategy', 'buyhold-spy');
-    fixture.detectChanges();
-    await flushAll();
-    expect(el.textContent).toContain('Could not run the go-live check');
-  });
-
-  it('flags an id that is not registered', async () => {
-    fixture.componentRef.setInput('strategy', 'ghost');
-    fixture.detectChanges();
-    await flushAll();
-    expect(el.textContent).toContain('Strategy not found');
-    expect(el.querySelector('app-cli-command')).toBeNull();
-    expect(goliveRequests).toEqual([]);
   });
 });

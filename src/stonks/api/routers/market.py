@@ -13,6 +13,7 @@ from stonks.app.market import (
     BarSeries,
     BreadthView,
     CoverageRow,
+    DataCoverage,
     InstrumentView,
 )
 from stonks.app.pagination import Page
@@ -45,6 +46,13 @@ def get_bars(
 ) -> BarSeries:
     """Bars in ``[start, end]``; the most recent ``limit`` when truncated."""
     return services.market.bars(ticker, interval=interval, start=start, end=end, limit=limit)
+
+
+@router.get("/data-coverage", response_model=DataCoverage, operation_id="getDataCoverage")
+def get_data_coverage(services: ServicesDep) -> DataCoverage:
+    """Which kinds of data are stored at all: fundamentals, calendars, news
+    and option chains (each needs a data plan that includes it)."""
+    return services.market.data_coverage()
 
 
 @router.get("/coverage", response_model=Page[CoverageRow], operation_id="listCoverage")

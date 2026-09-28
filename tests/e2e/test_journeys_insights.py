@@ -80,15 +80,23 @@ def test_a_trader_reads_insights_on_their_own_book(browse, stack, viewport):
     expect(page.get_by_role("heading", level=1)).to_have_text("Insights")
 
     alloc = page.locator(".slices")
-    expect(alloc).to_contain_text("equity")
+    expect(alloc).to_contain_text("Equity")
     page.get_by_role("radio", name="Holding", exact=True).click()
     expect(alloc).to_contain_text("AAA.US")
 
     expect(page.get_by_role("heading", name="Returns", exact=True)).to_be_visible()
     # The monthly returns heatmap, time weighted (13.7).
     months = page.locator("section", has=page.get_by_role("heading", name="Monthly returns"))
-    expect(months.locator("table")).to_be_visible()
     expect(months.locator("caption")).to_contain_text("deposits and withdrawals left out")
+    if viewport == "phone":
+        # Stacked by year on a phone, so the latest month is never off screen (M11).
+        stacked = months.locator(".stacked")
+        expect(stacked).to_be_visible()
+        expect(stacked).to_contain_text("Year total")
+        expect(months.locator("table")).to_be_hidden()
+    else:
+        expect(months.locator("table")).to_be_visible()
+        expect(months.locator("thead")).to_contain_text("Year total")
     agreement = page.locator(".holdings")
     expect(agreement).to_contain_text("AAA.US")
     expect(agreement).to_contain_text("bah_aaa")
@@ -103,6 +111,7 @@ def test_a_trader_reads_insights_on_their_own_book(browse, stack, viewport):
     limits = page.locator(".limits")
     expect(limits).to_contain_text("Largest holding")
     expect(limits).to_contain_text("No limit set")
+    expect(page.get_by_role("link", name="Change your risk limits")).to_be_visible()
     expect(page.get_by_role("heading", name="On a bad day")).to_be_visible()
     expect(page.get_by_text("No risk readings yet")).to_be_visible()
     v.check_page("insights-risk")
@@ -116,7 +125,7 @@ def test_an_admin_sees_totals_across_every_book(browse, stack, viewport):
     # says so. Other journeys open portfolios, so which one shows depends on
     # the order: either is right, zeros never are.
     totals = page.locator("section", has=page.get_by_role("heading", name="All portfolios"))
-    held = "Totals appear once three or more traders have live money."
+    held = "Totals across traders appear once three or more of them trade real money."
     shown = "Sums only. Admins never see anyone's holdings."
     expect(totals.get_by_text(held).or_(totals.get_by_text(shown))).to_be_visible()
     expect(totals).not_to_contain_text("$0.00")

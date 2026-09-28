@@ -35,6 +35,7 @@ from stonks.strategies.base import BaseStrategy
 
 class FilingEvents(BaseStrategy):
     id = "filing_events"
+    summary = "Holds a stock for a few days after a chosen kind of company filing, such as an earnings release."
     hypothesis = (
         "Investors underreact to news in company filings, so prices keep "
         "drifting for some days after a current report such as an earnings "

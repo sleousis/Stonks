@@ -42,7 +42,7 @@ describe('AccountMenu', () => {
       'Settings',
       'Broker connections',
       'Get set up',
-      'Glossary',
+      'Help',
       'Sign out',
     ]);
     expect(el.querySelector('a[href="/welcome"]')).not.toBeNull();

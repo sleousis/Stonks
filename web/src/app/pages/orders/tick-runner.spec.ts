@@ -201,7 +201,10 @@ describe('TickRunner', () => {
     dryRunBox().click();
     await settle();
     expect(el.querySelector('.alert')?.textContent).toContain('alpaca paper');
-    expect(runButton().textContent).toContain('Start trading run');
+    expect(el.querySelector('.alert')?.textContent).toContain('Paper run');
+    expect(el.querySelector('.alert')?.classList).not.toContain('live');
+    expect(runButton().textContent).toContain('Start paper run');
+    expect(runButton().classList).not.toContain('btn-danger');
 
     runButton().click();
     await settle();
@@ -211,17 +214,17 @@ describe('TickRunner', () => {
     expect(ticketEl().textContent).toContain('All in the universe');
     const typed = ticketEl().querySelector<HTMLInputElement>('#confirm-typed')!;
     expect(typed).not.toBeNull();
-    expect(ticketButton('Start trading run')!.disabled).toBe(true);
+    expect(ticketButton('Start paper run')!.disabled).toBe(true);
 
     typed.value = 'alpaca';
     typed.dispatchEvent(new Event('input'));
     await settle();
-    expect(ticketButton('Start trading run')!.disabled).toBe(true);
+    expect(ticketButton('Start paper run')!.disabled).toBe(true);
 
     typed.value = 'alpaca paper';
     typed.dispatchEvent(new Event('input'));
     await settle();
-    ticketButton('Start trading run')!.click();
+    ticketButton('Start paper run')!.click();
 
     const post = await nextRequest(controller, '/api/ticks', 'POST');
     expect(post.request.body).toMatchObject({ dry_run: false });

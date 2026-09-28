@@ -10,10 +10,12 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import { SubscriptionsService } from '../../api/subscriptions.service';
+import type { StrategyStatus } from '../../api/models';
+import { type SubscriptionView, SubscriptionsService } from '../../api/subscriptions.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { FollowControl } from '../../shared/follow/follow-control';
 import { MODES, type ModeOption, modeLabel } from '../../shared/governance-labels';
 import { strategyDisplayName } from '../../shared/strategy-names';
 import { HelpTip } from '../../shared/ui/help-tip';
@@ -21,23 +23,33 @@ import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { ErrorState, LoadingState } from '../../shared/ui/states';
 
-/** How a new follower starts. Approve and auto are never starting modes. */
+/** How a new follower starts. Approve each trade and Automatic are never starting modes. */
 export type FollowMode = 'notify' | 'paper';
 
-/** The starting modes, in the same words as Today's switch (UX-31). */
+/** The starting modes, in the same words as the follow control (UX-31). */
 export const FOLLOW_MODES = MODES.filter(
   (m): m is ModeOption & { value: FollowMode } => m.value === 'notify' || m.value === 'paper',
 );
 
 /**
- * Strategy page: follow this strategy, for signals only or paper trading in
- * one of your portfolios. Once followed, it says so and points to Today,
- * where the mode is changed (auto, after the paper record, asks for a code).
+ * Strategy page: follow this strategy (M8). Not followed yet: start with
+ * Alerts only, or Paper in one of your portfolios. Followed: the same
+ * follow control as Today, one per portfolio, to switch it on or off and
+ * change the mode (Approve each trade and Automatic open after 20 trading
+ * days on Paper and ask for a code).
  */
 @Component({
   selector: 'app-follow-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, HelpTip, ModeStamp, PermissionNote, ErrorState, LoadingState],
+  imports: [
+    RouterLink,
+    FollowControl,
+    HelpTip,
+    ModeStamp,
+    PermissionNote,
+    ErrorState,
+    LoadingState,
+  ],
   template: `
     <section class="panel" aria-labelledby="follow-title">
       <div class="panel-head">
@@ -51,19 +63,25 @@ export const FOLLOW_MODES = MODES.filter(
         />
       } @else if (!subs.hasValue()) {
         <app-loading-state label="Loading what you follow" [rows]="2" />
-      } @else if (mine(); as s) {
+      } @else if (mine().length) {
         <div class="panel-body following">
-          <p>
-            You follow this strategy:
-            <strong>{{ modeLabel(s.mode) }}</strong>
-            @if (s.portfolio_id) {
-              on {{ portfolioName(s.portfolio_id) }}
-            }
-            @if (!s.enabled) {
-              <span class="muted">(switched off)</span>
+          <p class="lead">
+            You follow {{ name() }}.
+            @if (status() && status() !== 'active') {
+              It trades for you only once it is approved.
             }
           </p>
-          <a routerLink="/" class="btn">Change it on Today</a>
+          <ul class="follows">
+            @for (s of mine(); track s.id) {
+              <li>
+                <app-follow-control [sub]="s" [strategyName]="name()" (changed)="replace($event)">
+                  <span>{{
+                    s.portfolio_id ? 'In ' + portfolioName(s.portfolio_id) : 'Alerts'
+                  }}</span>
+                </app-follow-control>
+              </li>
+            }
+          </ul>
         </div>
       } @else {
         <form
@@ -73,8 +91,11 @@ export const FOLLOW_MODES = MODES.filter(
           aria-describedby="follow-lead"
         >
           <p id="follow-lead" class="lead">
-            Get its signals, or let it paper trade. Real money comes later, from Today, after enough
-            paper days.
+            Get its signals, or let it trade your paper portfolio. Approve each trade and Automatic
+            open later, after 20 trading days on Paper.
+            @if (status() && status() !== 'active') {
+              It is not approved yet, so it trades for you only once it is.
+            }
           </p>
           <fieldset class="modes">
             <legend class="visually-hidden">How to follow</legend>
@@ -103,8 +124,11 @@ export const FOLLOW_MODES = MODES.filter(
           @if (mode() === 'paper') {
             @if (portfolios().length === 0) {
               <p class="note">
-                You have no portfolio yet. Open a paper portfolio on your
-                <a routerLink="/profile">profile</a> first.
+                You have no portfolio yet.
+                <a routerLink="/welcome" [queryParams]="{ step: 'portfolio' }"
+                  >Open a paper portfolio</a
+                >
+                first.
               </p>
             } @else {
               <div class="field">
@@ -154,10 +178,23 @@ export const FOLLOW_MODES = MODES.filter(
     .follow {
       display: grid;
       gap: var(--space-3);
+    }
+    .follow {
       justify-items: start;
     }
     .lead {
       color: var(--color-ink-2);
+    }
+    .follows {
+      display: grid;
+      gap: var(--space-3);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    .follows li + li {
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--color-border);
     }
     .modes {
       display: grid;
@@ -224,6 +261,10 @@ export const FOLLOW_MODES = MODES.filter(
 })
 export class FollowPanel {
   readonly strategyId = input.required<string>();
+  /** The name people read (the page's display name); defaults to one made from the id. */
+  readonly strategyName = input<string | null>(null);
+  /** The strategy's status, to say that one not yet approved trades only once it is. */
+  readonly status = input<StrategyStatus | null>(null);
 
   private readonly api = inject(SubscriptionsService);
   private readonly ctx = inject(PortfolioContextService);
@@ -232,11 +273,15 @@ export class FollowPanel {
 
   protected readonly modes = FOLLOW_MODES;
   protected readonly subs = resource({ loader: () => this.api.list() });
+  /** The list as shown, updated in place by the follow control's answers. */
+  private readonly items = linkedSignal(() => (this.subs.hasValue() ? this.subs.value() : []));
   protected readonly canTrade = computed(() => this.session.can('portfolio.trade'));
+  protected readonly name = computed(
+    () => this.strategyName()?.trim() || strategyDisplayName(this.strategyId()),
+  );
+  /** Your follows of this strategy, one per portfolio. */
   protected readonly mine = computed(() =>
-    this.subs.hasValue()
-      ? (this.subs.value().find((s) => s.strategy_id === this.strategyId()) ?? null)
-      : null,
+    this.items().filter((s) => s.strategy_id === this.strategyId()),
   );
   protected readonly portfolios = computed(() =>
     this.ctx.options().filter((p) => p.status !== 'archived'),
@@ -263,10 +308,14 @@ export class FollowPanel {
     return this.ctx.options().find((p) => p.id === id)?.name ?? 'one of your portfolios';
   }
 
+  protected replace(updated: SubscriptionView): void {
+    this.items.update((list) => list.map((s) => (s.id === updated.id ? updated : s)));
+  }
+
   protected async follow(): Promise<void> {
     if (!this.canFollow()) return;
     const paper = this.mode() === 'paper';
-    const name = strategyDisplayName(this.strategyId());
+    const name = this.name();
     this.busy.set(true);
     try {
       await this.api.subscribe({
@@ -277,8 +326,8 @@ export class FollowPanel {
       this.subs.reload();
       this.toasts.success(
         paper
-          ? `Following ${name} on paper in ${this.portfolioName(this.portfolioId())}.`
-          : `Following ${name} for signals.`,
+          ? `You follow ${name} on Paper in ${this.portfolioName(this.portfolioId())}.`
+          : `You follow ${name} for alerts.`,
       );
     } catch {
       // The error interceptor already showed the API's message.

@@ -114,9 +114,11 @@ uv run stonks mcp                # MCP server over the running API
 # Operations
 uv run stonks schedule run|next|runs|run-now JOB|check|metrics
 uv run stonks backup backup|verify|restore|list|prune
+uv run stonks settings list|set KEY VALUE|reset KEY --reason "..."   # console-editable system settings (overrides on TOML)
+uv run stonks starter install|list   # three simple strategies On trial and a small universe
 
 # People (the shell is admin, and passwords come from a no-echo prompt)
-uv run stonks users bootstrap|reset-password|list
+uv run stonks users bootstrap|reset-password|list   # bootstrap also installs the starter set (--no-starter)
 uv run stonks users create --email E --name N [--role viewer|trader|admin]
 uv run stonks users set-role|disable|enable|reset-2fa --email E   # reset-2fa: sole-admin lockout
 
@@ -163,6 +165,8 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - **`accounts/`**: users and roles (viewer, trader, admin), portfolios, subscriptions with modes `notify`/`paper`/`approve`/`auto`, `BookSpec` with tighten-only merges, `Scope` ownership checks, `audit_log`, paper accounts for broker portfolios (`paper.py`). Existing installs map to `usr_owner` and `pf_default`, and `default_book.py` subscribes `pf_default` to every strategy that turns active (paper, or auto at an external broker).
 - **`connections/`**: `BrokerConnection` seam for broker sync (positions, cash, activities) and, for auto books, trading. Providers `alpaca`, `snaptrade`, `ibkr` (an IB Gateway named in `[brokers.ibkr.gateways]`, sync plus `trader()`, optional Flex activities), `fake`, `fake_portal` and `fake_trading`; none enabled by default. Credentials sealed with `security/`.
 - **`insights/`**: portfolio insights for any portfolio you own, a synced broker account too: allocation, exposure, P&L, risk, and which active strategies agree with each holding, the behaviour report on manual and synced trades (`behaviour.py`, roadmap 23.5) (`/api/insights`, service in `app/insights.py`).
+- **`config_overrides/`**: the console-editable settings catalog (`catalog.py`: risk limits, universe, test books, alerts, schedule jobs; never secrets), `apply.py` (validated overrides per section), `store.py` (`settings_overrides` plus `audit_log`). `AppContext.settings` is the TOML base with the overrides (re-read every 2 s); the CLI and scheduler apply them at load. Service `app/system_settings.py`, `/api/settings/system`, `stonks settings`.
+- **`starter/`**: the starter set (`starter_buy_and_hold`, `starter_trend`, `starter_momentum`) registered On trial, never approved, plus the starter universe as a `production.universe` override when none is set. `stonks starter install`, `/api/starter`, run by `stonks users bootstrap`.
 - **`security/`**: AES-GCM envelope encryption (`SecretBox`) with master keys from `STONKS_SECRET_KEYS`.
 - **`notify/`**: `Notifier` seam for operator alerts (log, store, webhook) and the per-user notification router, outbox, delivery worker with retries, quiet hours and preferences, and channels (Web Push via VAPID, SMTP email, the user's own webhook).
 - **`scheduling/`**: built-in scheduler with exchange calendars, session/daily/interval triggers, catch-up, run records, dead-man deadlines and pings, Prometheus metrics, and `api`, `in_process` and `local` backends.
@@ -205,7 +209,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - `fund_holdings (fund, holding, as_of, source, weight, name, sector, country, known_at; PK (fund, holding, as_of, source))` (023): what each ETF holds, weights as fractions, read point in time by `known_at` (`stonks.funds`). Insights look-through and the sector cap's `look_through` read it.
 - `corporate_filings (accession_number, ticker, issuer_cik, form, filing_date, known_at, period_of_report, items, url, source)`, `institutional_holdings (accession_number, line, filer_cik, report_period, known_at, cusip, ticker, amount, amount_type, value_usd, put_call, investment_discretion, ...)` and `insider_transactions.known_at` (024): SEC filings point in time, `known_at` is the acceptance time in UTC. See `docs/edgar.md`.
 
-**State (SQLite, migrations 001-053):**
+**State (SQLite, migrations 001-054):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -243,12 +247,13 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - 045: `margin_checks (portfolio_id, checked_at, source, currency, equity, initial_margin, maintenance_margin, excess_liquidity, available_funds, buying_power, cushion, level, reported_type)`: each read of a margin account's cushion by the tick or the `live_margin` job, level in {ok, warn, reduce, call} (roadmap 19.13, margin accounts, off by default).
 - 046: `option_approvals` (per-portfolio options approval level), `option_events` (assignments, exercises, expiries, append only), and `order_tickets.hold` also takes `options` (roadmap 17.8).
 - 047: `shadow_decisions` and `model_version_decisions` statuses gain `working` and `expired`, plus `filled_on` (paper and model books fill at the next open).
-- 048: `model_feature_values (strategy_id, profile_id, as_of, ticker, values_json, recorded_at)`: the live input rows of model strategies, read by the warn-only `feature_drift` tick hook (PSI against the training profile, roadmap 23.10).
-- 049: `journal_playbooks`, `trade_annotations (portfolio_id, trade_id = opening fill id, playbook_id, followed_plan, review)` and `trade_labels` (tags and mistakes): the round-trip journal (roadmap 23.3, `journal/`, `docs/journal.md`).
-- 050 smaller comforts (roadmap 23.17): notification category `screen_alert` (alerts, outbox, deliveries and prefs rebuilt, ids and counters kept), `screen_alerts`, `screen_alert_matches`, `screen_alert_events`, `demo_portfolios (user_id, seed)` (the only row of the sample book), `statement_imports` and `broker_activities.import_id` (CSV statements with undo).
-- 051: `price_checks (id, as_of, checked_at, source, status, tickers_checked, tickers_compared, held_json, items_json, detail, halt_id)`: each run of the second-source price check before the tick, status in {clean, gaps, systematic, unavailable}, written once (roadmap 23.6).
-- 052: `trade_decisions (tick_id, portfolio_id, as_of, ticker, step, outcome, strategy_id, strategies, score, detail_json)`: why a ticker did or did not trade, per tick and book (roadmap 23.7, pruned after `[production.decisions]` days); `briefing_prefs` (per-person pre-open and post-close briefings, roadmap 23.8); `api_tokens.toolsets` (the MCP tool groups a token may use, NULL for all).
-- 053: `execution_algo_settings` (per portfolio, or per strategy within it), `orders.exec_algo`, `orders.parent_client_id`, `algo_parents` and `algo_slices` (parents Stonks works as child slices at a broker without the algo): execution algorithms (roadmap 23.16, `docs/execution-algos.md`).
+- 048: `settings_overrides (key, value_json, updated_at, updated_by, reason)`: system settings an admin changed in the console, laid over TOML by `config_overrides/` (catalog allowlist, never secrets), each change audited.
+- 049: `model_feature_values (strategy_id, profile_id, as_of, ticker, values_json, recorded_at)`: the live input rows of model strategies, read by the warn-only `feature_drift` tick hook (PSI against the training profile, roadmap 23.10).
+- 050: `journal_playbooks`, `trade_annotations (portfolio_id, trade_id = opening fill id, playbook_id, followed_plan, review)` and `trade_labels` (tags and mistakes): the round-trip journal (roadmap 23.3, `journal/`, `docs/journal.md`).
+- 051 smaller comforts (roadmap 23.17): notification category `screen_alert` (alerts, outbox, deliveries and prefs rebuilt, ids and counters kept), `screen_alerts`, `screen_alert_matches`, `screen_alert_events`, `demo_portfolios (user_id, seed)` (the only row of the sample book), `statement_imports` and `broker_activities.import_id` (CSV statements with undo).
+- 052: `price_checks (id, as_of, checked_at, source, status, tickers_checked, tickers_compared, held_json, items_json, detail, halt_id)`: each run of the second-source price check before the tick, status in {clean, gaps, systematic, unavailable}, written once (roadmap 23.6).
+- 053: `trade_decisions (tick_id, portfolio_id, as_of, ticker, step, outcome, strategy_id, strategies, score, detail_json)`: why a ticker did or did not trade, per tick and book (roadmap 23.7, pruned after `[production.decisions]` days); `briefing_prefs` (per-person pre-open and post-close briefings, roadmap 23.8); `api_tokens.toolsets` (the MCP tool groups a token may use, NULL for all).
+- 054: `execution_algo_settings` (per portfolio, or per strategy within it), `orders.exec_algo`, `orders.parent_client_id`, `algo_parents` and `algo_slices` (parents Stonks works as child slices at a broker without the algo): execution algorithms (roadmap 23.16, `docs/execution-algos.md`).
 
 ## Conventions to match
 

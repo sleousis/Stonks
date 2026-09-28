@@ -10,7 +10,7 @@ import {
 
 describe('model version words', () => {
   it('names each version status in trader words', () => {
-    expect(versionLook('live').label).toBe('Live model');
+    expect(versionLook('live').label).toBe('Model in use');
     expect(versionLook('candidate')).toMatchObject({ label: 'Candidate', tone: 'info' });
     expect(versionLook('failed').tone).toBe('negative');
     expect(versionLook('something_new').label).toBe('something_new');
@@ -33,7 +33,7 @@ describe('swapCheckRow', () => {
 
   it('formats days as a count against a floor', () => {
     expect(swapCheckRow(days)).toMatchObject({
-      label: 'Model book days',
+      label: 'Test book days',
       passed: false,
       value: '3',
       limit: '≥ 20',
@@ -43,7 +43,7 @@ describe('swapCheckRow', () => {
   it('formats the drawdown and the gap to live as percentages', () => {
     expect(swapCheckRow(drawdown)).toMatchObject({ value: '4.00%', limit: '≤ 25.00%' });
     const row = swapCheckRow(vsLive);
-    expect(row.label).toBe('Against the live model');
+    expect(row.label).toBe('Against the model in use');
     expect(row.value).toContain('3.00%');
     expect(row.limit).toContain('2.00%');
   });

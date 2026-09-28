@@ -24,9 +24,39 @@ import { PageHeader } from '../../shared/ui/page-header';
   imports: [PageHeader],
   template: `
     <app-page-header
-      title="Glossary"
-      description="What each trading word and figure in the console means, in plain words."
+      title="Help"
+      description="How Stonks works, and what each word and figure in the console means."
     />
+
+    <!-- The product in five sentences (F21), in the words of docs/design/vocabulary.md. -->
+    <section class="panel intro" aria-labelledby="how-title">
+      <div class="panel-head">
+        <h2 id="how-title">How Stonks works</h2>
+      </div>
+      <ol class="panel-body steps">
+        <li>
+          Stonks runs <strong>strategies</strong>: rules that read prices after each close and
+          decide what to buy and sell.
+        </li>
+        <li>
+          You <strong>follow</strong> a strategy in one of your <strong>portfolios</strong>, first
+          as alerts only or on paper, so you see how it does without risk.
+        </li>
+        <li>
+          After enough paper days you may let it trade <strong>real money</strong> at your broker,
+          approving each trade yourself or letting it trade automatically, always within the amount
+          you set.
+        </li>
+        <li>
+          <strong>Today</strong> shows what your money is doing, what your strategies want next and
+          anything waiting for you.
+        </li>
+        <li>
+          If anything looks wrong, <strong>Stop trading</strong> at the top of every page stops new
+          orders at once, and nothing starts again until you say so.
+        </li>
+      </ol>
+    </section>
 
     <div class="field search">
       <label for="glossary-filter">Find a term</label>
@@ -56,6 +86,9 @@ import { PageHeader } from '../../shared/ui/page-header';
                 <div class="term" [id]="e.key" tabindex="-1" [class.target]="e.key === target()">
                   <dt>{{ e.term }}</dt>
                   <dd>{{ e.short }}</dd>
+                  @if (e.example) {
+                    <dd class="example">For example: {{ e.example }}</dd>
+                  }
                   @if (e.aliases.length) {
                     <dd class="aliases muted">Also shown as {{ e.aliases.join(', ') }}</dd>
                   }
@@ -68,6 +101,17 @@ import { PageHeader } from '../../shared/ui/page-header';
     }
   `,
   styles: `
+    .intro {
+      margin-bottom: var(--space-5);
+    }
+    .steps {
+      display: grid;
+      gap: var(--space-2);
+      margin: 0;
+      padding-left: calc(var(--space-4) + 1.25rem);
+      max-width: 72ch;
+      color: var(--color-ink-2);
+    }
     .search {
       max-width: 28rem;
     }
@@ -109,6 +153,9 @@ import { PageHeader } from '../../shared/ui/page-header';
     .aliases {
       font-size: var(--text-xs);
     }
+    .example {
+      font-size: var(--text-sm);
+    }
   `,
 })
 export class GlossaryPage {
@@ -125,6 +172,7 @@ export class GlossaryPage {
         key,
         term: GLOSSARY[key].term,
         short: GLOSSARY[key].short,
+        example: GLOSSARY[key].example ?? null,
         aliases: (GLOSSARY[key].aliases ?? []).filter((a) => /\s|[A-Z]/.test(a)),
       }))
       .sort((a, b) => a.term.localeCompare(b.term)),
