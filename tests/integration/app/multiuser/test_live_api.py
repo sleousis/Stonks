@@ -262,6 +262,31 @@ def test_stage_starts_in_sim_paper_and_promotion_needs_a_step_up(app, client, se
     assert client.post(url, json=skip, headers=alice).status_code == 409
 
 
+def test_a_promotion_replays_recent_sessions_first(app, client, settings, people):
+    """Roadmap 23.15: the gate replays the book's strategies. No decision
+    blocks, an unknown universe only shows."""
+    alice = people["alice"]["headers"]
+    pid = _portfolio(settings, people["alice"], "Live")
+    _ready_for_broker_paper(settings, pid)
+    allow_step_up(app)
+    report_url = f"/api/portfolios/{pid}/live/gate-report"
+
+    def replay():
+        checks = client.get(report_url, headers=alice).json()["checks"]
+        return next(c for c in checks if c["name"] == "recent_replay")
+
+    assert replay()["passed"] is None  # no universe configured
+    settings.production.universe = ["UP.US"]
+    ok = replay()
+    assert ok["passed"] is True and ok["value"]["strategies"][0]["decisions"] > 0
+    settings.production.universe = ["DOWN.US"]  # BuyAndHold on UP.US has no view here
+    blocked = replay()
+    assert blocked["passed"] is False and "no decision" in blocked["detail"]
+    body = {"to_stage": "broker_paper", "reason": "soak", "confirm": "broker_paper"}
+    refused = client.post(f"/api/portfolios/{pid}/live/stage/promote", json=body, headers=alice)
+    assert refused.status_code == 409 and "recent_replay" in refused.json()["detail"]
+
+
 def test_demotion_needs_no_step_up_and_only_goes_down(client, settings, people):
     alice = people["alice"]["headers"]
     pid = _portfolio(settings, people["alice"], "Live")

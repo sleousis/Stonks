@@ -235,6 +235,31 @@ def test_auto_needs_a_step_up_then_the_paper_record(app, client, settings, peopl
     assert ok.json()["mode"] == "auto" and ok.json()["auto_blockers"] == []
 
 
+def test_auto_replays_recent_sessions_before_it_starts(app, client, settings, people):
+    """Roadmap 23.15: a strategy with no decision over the last sessions
+    may not start an auto book, whatever its P&L."""
+    alice = people["alice"]
+    pf = _portfolio(settings, alice, "Live", kind="broker")
+    with SqliteState(settings.state.path) as state:
+        link_connection(state, pf)
+    sub = client.post(
+        "/api/subscriptions",
+        json={"strategy_id": "bah_active", "portfolio_id": pf, "mode": "paper"},
+        headers=alice["headers"],
+    ).json()
+    with SqliteState(settings.state.path) as state:
+        seed_paper_days(state, sub["id"], 20, portfolio_id=pf)
+    allow_step_up(app)
+    url = f"/api/subscriptions/{sub['id']}"
+    settings.production.universe = ["DOWN.US"]  # BuyAndHold on UP.US has no view here
+    blocked = client.patch(url, json={"mode": "auto"}, headers=alice["headers"])
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["blockers"][0].startswith("recent replay: bah_active: no decision")
+    settings.production.universe = ["UP.US"]
+    ok = client.patch(url, json={"mode": "auto"}, headers=alice["headers"])
+    assert ok.status_code == 200, ok.text
+
+
 def _auto_subscription(app, client, settings, alice) -> tuple[str, str]:
     pf = _portfolio(settings, alice, "Live", kind="broker")
     with SqliteState(settings.state.path) as state:
