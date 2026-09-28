@@ -13,7 +13,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
-import { answerDialog } from '../../../testing/status-dialog';
+import { answerDialog, confirmButton, dialogForm } from '../../../testing/status-dialog';
 import { provideFakeTax } from '../../../testing/fake-tax';
 import { SuggestedOrders, draftSource, draftStatus } from './suggested-orders';
 
@@ -206,6 +206,9 @@ describe('SuggestedOrders', () => {
     const el = await render([draft()]);
     button(el, 'Reject').click();
     await settle();
+    // A paper order: no red button.
+    const form = dialogForm(fixture.nativeElement as HTMLElement)!;
+    expect(confirmButton(form).classList).not.toContain('btn-danger');
     answerDialog(fixture, { reason: 'not now' });
     const req = await nextRequest(http, '/api/orders/drafts/od_1/reject', 'POST');
     expect(req.request.body).toEqual({ note: 'not now' });

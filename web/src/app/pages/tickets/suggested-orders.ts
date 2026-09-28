@@ -337,7 +337,7 @@ export class SuggestedOrders {
       title: `Reject the suggested order for ${d.ticker}?`,
       message: 'Nothing is placed. The assistant sees that you said no.',
       confirmLabel: 'Reject',
-      tone: 'danger',
+      tone: this.isLive(d) ? 'danger' : 'default',
       minReason: 0,
       reasonHint: 'Optional. Kept with the suggested order.',
     });
