@@ -25,6 +25,27 @@ Every step is safe to rerun: ingest upserts, the tick reuses client ids for the 
 - `stonks tick --tickers ...` (or `--asset-class`) runs a scoped tick. It trades only those tickers and leaves every other holding alone, not even selling it. A tick over `[production].universe` still sells a holding that left the universe. Add `--full` to trade the whole book over those tickers. The CLI and the API tick job run the same code.
 - When the broker fills less than an order asked for (a simulated buy scaled down to cash), the order row keeps the filled quantity. Its `status_reason` says what was asked for.
 
+### How paper books fill
+
+A paper book fills the way a backtest does (principle P21). The tick decides after the close, and the order fills at the open of the next session.
+
+```mermaid
+flowchart LR
+  D[tick on day t: decide at the close] --> W[order working, nothing filled]
+  W --> S[tick on day t+1: fill at the open of t+1]
+  S --> N[then decide again at the close of t+1]
+```
+
+- The tick that decides records each order as working (`pending`, state `accepted`). The snapshot of that day holds no new fills.
+- The next tick fills it before it decides. It uses the first daily bar of the ticker after the decision day, with the same fill model (`[backtest.execution]`) and cost model (`[backtest.costs]`) as a backtest: the open as the price, the participation cap on that bar's volume, the gap guard, limit orders against the bar's range.
+- What the fill model leaves unfilled is cancelled with the reason "replaced by the next decision", as a backtest replaces its queue at each rebalance. The fill that did happen stays.
+- An order the fill model refuses outright (the gap guard, a limit not reached, no cash) expires.
+- A split between the decision and the fill rescales the order.
+- A halt in force when the next tick runs holds the working orders it blocks: all of them under `all`, those that do not reduce a position under `buys`. They are cancelled unfilled, as the kill switch cancels working orders at a broker.
+- The fill is booked by the next tick, not by a job after the open. The daily bar with that open is only in the lake after the session's price ingest.
+- `[production] paper_fills = "close"` keeps the old rule: fill at once at the latest close. Books at a broker are not affected. They send before the next open (tickets and the submit window).
+- `tests/integration/test_paper_fill_parity.py` runs one strategy through the paper tick day by day and through a backtest, and checks the fills are the same, a capped partial fill included.
+
 ## Scheduler
 
 The built-in scheduler runs the loop on the exchange calendar, catches up missed runs, alerts on missed deadlines and pings an external monitor.
@@ -62,11 +83,14 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `model_retrain`: refit strategies that learn from data into candidate versions (see [Model lifecycle](model-lifecycle.md)) | Saturday 06:00 UTC | none |
 | `live_submit`: send approved order tickets (see Live trading) | open - 20 min | none |
 | `live_stops`: protective stops for the entries the opening auction filled (see Protective stops) | open + 30 min | none |
+| `options_live`: book option assignments, plan expiry closes and rolls as held tickets (see Live options) | close + 55 min | none |
+| `options_expiry_watch`: alert on a short option still in the money on its expiry day (see Live options) | close - 60 min | none |
 | `live_gate_days`: the live stages' gate metrics for the session (see Live trading) | close + 75 min | none |
+| `live_margin`: the margin cushion of each margin account, with an alert when it is thin (see Margin accounts) | every 30 minutes | none |
 | `engine_start`: start the intraday engine process (see [intraday](design/intraday.md)) | open - 15 min | none |
 | `engine_stop`: ask the intraday engine to stop, and wait for it | close + 10 min | none |
 
-Session jobs run on NYSE trading days. The two engine jobs skip while `[engine] enabled = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
+Session jobs run on NYSE trading days. The two engine jobs skip while `[engine] enabled = false`. The two options jobs skip while `[production.options] live = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio, and `live_margin` while no portfolio has a margin profile). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 
 The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 
@@ -421,7 +445,8 @@ uv run stonks orders list --manual --user you@example.com
 - Every order goes through the kill switch, every halt and every risk rule of the book, like a strategy's order. The account rules and live safeguards of Phase 19 are risk rules too, so they apply as soon as they are registered.
 - A rule that would drop the order refuses it. A rule that would make it smaller refuses it too and says what is allowed, unless the person accepts a smaller order (`allow_reduce`). The answer lists each rule's adjustment.
 - The same client id places the order once. The ledger id is `manual:<portfolio>:<key>`.
-- A simulated book fills at once at the latest close. A limit order fills only when that close is at or better than the limit, else it is recorded as rejected. A book at a broker sends it through the broker and books fills when the broker reports them.
+- A simulated book fills a manual order at once at the latest close. A limit order fills only when that close is at or better than the limit, else it is recorded as rejected. A book at a broker sends it through the broker and books fills when the broker reports them.
+- Manual orders keep that rule on purpose, while strategy orders in paper books fill at the next open. Principle P21 asks a strategy to fill live the way its backtest filled, so its paper record can be compared with its backtest and feed go-live. A manual order has no backtest to match. The person sees the price on the ticket and places the order at it. Manual holdings stay out of every strategy's decisions, attribution and go-live evidence, so this rule never touches a strategy's record.
 - A book that trades real money needs a fresh second factor in the web app, so MCP and API tokens can only preview there. The CLI asks you to type `PLACE LIVE ORDER`.
 - A change cancels the working order and places a new one (`<id>.r1`, `<id>.r2`, ...) through every check again. Only a working manual order can change. Cancel works on any working order of your portfolio.
 - Each order is recorded with `origin = manual`, no strategy, who placed it and why, and an `audit_log` row. An order is refused while a tick runs.
@@ -492,6 +517,18 @@ PUT /api/portfolios/{id}/live/account-profile   {"jurisdiction": "us", "account_
 - The jurisdiction and base currency are stored once, in the tax settings and the portfolio (see [tax.md](tax.md)). Saving the profile updates them, and the tax settings page shows the same values.
 - The account is shared with your own trading. Stonks only trades the positions it opened (`[production.live] allow_manual_trades = true`).
 - The profile is locked while the portfolio trades real money (`live_small` or up). Move it down to `broker_paper` to change it.
+
+### Margin accounts
+
+Off by default. The first live account is a cash account, long only. Margin (longs and shorts at IBKR, roadmap 19.13) comes after the cash account runs well.
+
+- **Turn it on.** Set `[production.risk.rules.account_rules] margin_accounts = true`, with `enabled = true` there and `[production.risk.rules.margin_call] enabled = true`. Set the gateway's `account_type = "margin"` under `[brokers.ibkr.gateways.<name>]`. A portfolio override can turn margin off, never on.
+- **Choose it.** In Live settings, pick Margin, read the risks and tick "I understand these risks", then save with a fresh code. Stonks asks IBKR first and saves only when IBKR reports a margin account. The audit row records its answer. While margin accounts are off, a margin book opens nothing new.
+- **Buying power.** Every new order (a buy or a short sale) goes through IBKR's what-if first. Its initial and maintenance margin after the order, with the run's other orders, must stay within `1 - margin_buffer` of equity (`margin_buffer = 0.10` by default). The order is cut to fit, or dropped. A what-if that fails or warns drops it.
+- **Short sales** need IBKR's locate for today. A name IBKR cannot lend is dropped, a short is cut to the shares on offer, and a hard to borrow name waits for a person as a ticket, even in auto.
+- **Pattern day trader.** A US margin account under 25,000 USD may make at most 3 day trades in 5 trading days (the stricter of our count and IBKR's).
+- **Margin monitoring.** The cushion is excess liquidity over equity, from IBKR. Below `warn_cushion` (15%) the owner gets an alert. Below `reduce_cushion` (10%) the alert is urgent and the next run of the book drops new positions and sells its own positions until the cushion is back at `restore_cushion` (20%), before IBKR liquidates. At 0 IBKR may already be selling. These sit under `[production.risk.rules.margin_call]`. The tick and the `live_margin` job (every 30 minutes, on the reconcile client id) each write a `margin_checks` row. Alerts go out once per level and day.
+- **See it.** Live settings shows buying power, margin use, the cushion and its level, the new margin still allowed, and the day trade state (`GET /api/portfolios/{id}/live/margin`, MCP `get_live_margin`).
 
 ### Stages, gates and the preview
 
@@ -598,7 +635,7 @@ uv run stonks halts drill [--price 100] [--timeout 10] [--json-out drill.json]
 |------------|-------|
 | Every account | `restricted` (your list and names the broker refused), `short_permission`, `account_known` (no account state, nothing opens), `fx_funding` (spend only what a currency holds) |
 | Cash accounts | `settled_cash`: settled cash only. Sale proceeds wait for settlement (US T+1, EU and UK T+2), so nothing is bought with unsettled money. |
-| Margin accounts | `buying_power`: buys fit the available funds. |
+| Margin accounts | `margin_allowed` (margin accounts on, and the broker reports a margin account), `buying_power` (buys fit the available funds), `margin_what_if` (the broker's what-if margin of each new order leaves `margin_buffer` of equity unused) |
 | US | `pdt` (margin under 25,000 USD), `wash_sale` (warn or block), `reg_sho` (locate and the price test) |
 | EU and UK | `priips_kid` (retail clients cannot buy funds without a local document, most US ETFs), `short_disclosure` (stay under 0.1% of issued shares) |
 
@@ -745,12 +782,16 @@ A portfolio with `allow_short` trades on margin. Each tick its paper broker char
 
 A short book at IBKR (a margin gateway) reads borrow from the broker instead of the settings. The short rules ask IBKR whether a name can be borrowed and how many shares are on offer, and take the fee from the lake's `borrow_rates`. The `ingest_borrow` job fills that table each trading day while a gateway is configured.
 
+IBKR debits the real borrow fee itself. So the book's P&L sees it the day it is owed, each tick of a short book at IBKR also books the fee of its own shorts at IBKR's rate (the live locate and the `borrow_rates` fee) into `financing_charges`, from the stored accrual date. Debit interest is left to the broker's statement.
+
 ## Model books (shadow mode)
 
 `shadow` strategies are scored each tick and never traded. Each runs alone against a virtual portfolio seeded with `initial_cash`, with the same risk policy, always on a simulated broker:
 
 - `shadow_decisions`: one row per hypothetical order.
 - `shadow_portfolio_snapshots`: one row per strategy per `as_of`.
+
+Model books fill like paper books. With `paper_fills = "next_open"` a day's decisions are written as `working`. The next tick fills them at the next session's open before the book decides again, and marks each row `filled` (with `filled_on`, the day of that open) or `expired`. Version books (`model_version_decisions`) work the same way.
 
 A failing model book is reported in the tick summary and never affects real books. Turn it off with `[production].shadow_enabled = false`; `--dry-run` writes nothing.
 
@@ -824,10 +865,10 @@ The summary shows implementation shortfall in basis points of the traded value a
 - `fees`: the fees charged.
 - `IS`: all three together.
 - `opportunity`: what the unfilled part cost, measured at the next session's close.
-- `convention`: how much more the live fill paid than a backtest would have, which fills at the next session's open.
+- `convention`: how much more the live fill paid than a backtest would have, which fills at the next session's open. A paper book fills at that open, so its `convention` is zero.
 - `model` and `gap`: the cost model's estimate and the realised shortfall minus that estimate. A gap that stays above zero means the cost model is too cheap.
 
-The next session's open and close arrive a day later. The tick fills them in after every run, and `stonks tca refresh` does it by hand. For an external broker the arrival price is that next open.
+The next session's open and close arrive a day later. The tick fills them in after every run, and `stonks tca refresh` does it by hand. For an external broker the arrival price is that next open. For a paper book it is the open it filled at, before costs.
 
 The go-live report shows the strategy's live shortfall next to the modelled cost. The same numbers are in the API under `/api/tca` and in the MCP tools `tca_summary`, `trade_journal` and `order_tca`. A trader only sees the orders of their own portfolios and edits only their own notes.
 
@@ -861,6 +902,47 @@ uv run stonks options backtest vertical_spread --underlyings AAPL.US --start 202
 ```
 
 EODHD serves US options as a separate Marketplace subscription (not part of All-In-One). `ingest` keeps strikes within 30% of spot and expiries within a year by default (`--strike-band`, `--max-expiry-days`). Each run writes one `ingest_runs` row of kind `options`, and a failed underlying is a soft fail.
+
+## Live options
+
+Live options at IBKR (roadmap 17.8) are built and off. Turn them on only after live stock trading is stable and the IBKR options data add-on (OPRA) is bought. An option order opens only when all three hold:
+
+1. `[production.options] live = true` (the admin's switch).
+2. the portfolio is at stage `live_small` or higher.
+3. its owner set an options approval level above `none` on the Live settings page, with a reason and a fresh code.
+
+| Level | May open |
+|-------|----------|
+| `none` | nothing (the default) |
+| `covered` | covered calls, cash-secured puts, long calls and puts, protective puts |
+| `spreads` | plus verticals and iron condors |
+| `naked` | plus uncovered short puts. Naked short calls stay refused. |
+
+Keep the level at or below what IBKR granted the account. A close never needs the three conditions: a book can always wind down.
+
+```toml
+[production.options]
+live = false
+collar_share = 0.0            # limit at the mid, 1.0 at the touch. Never market orders.
+max_spread_pct = 0.5          # no order on a quote wider than this share of its mid
+auto_approve_closes = false   # every option order waits for a person
+max_loss_per_group = 0.02     # of equity, when option_max_loss sets none
+max_loss_total = 0.10
+
+[production.options.expiry]
+close_sessions = 1            # close or roll on the session before expiry
+action = "close"              # or "roll"
+roll_target_days = 35
+close_longs = true
+watch_band = 0.01
+```
+
+- `options_live` runs after the tick. It books IBKR's assignments, exercises and expiries into the ledger (from the Flex statement, so set up Flex), plans a close for every option with `close_sessions` sessions or fewer left, or a roll with `action = "roll"`, prices each at the mid from live quotes, runs the option risk rules on the live book and previews the margin with IBKR's what-if. Each leg becomes a ticket held for you (hold `options`). The owner hears when tickets wait.
+- Live books always run the defined-risk rules: `short_option_guard` capped at the approval level, `option_margin`, and `option_max_loss` at the tighter of its own limits and the ones above. Greek limits follow `[production.risk.rules.option_greek_limits]`.
+- Approve the tickets on the Tickets page. `live_submit` sends them before the next open: a single leg as a day limit, a roll or a spread as one combo order at its net limit. A combo waits whole while any leg is not approved.
+- `options_expiry_watch` runs an hour before the close. A short option that expires today, still held and in or near the money, sends a high urgency alert. It never sends an order. Close it by hand from the ticket, or in TWS.
+- A quote with no bid and ask, or one too wide, makes no order. The job reports it, and the watch still alerts on expiry day.
+- Shares an assignment or exercise delivers are booked at the strike and belong to no strategy. Keep them or sell them with a manual order.
 
 ## Without the scheduler
 

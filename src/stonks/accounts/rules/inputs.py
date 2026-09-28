@@ -20,7 +20,8 @@ import numpy as np
 from stonks.accounts.rules import AccountRuleInputs, InstrumentFacts
 from stonks.accounts.rules.profiles import get_profile
 from stonks.accounts.rules.settlement import load_settlements
-from stonks.execution.brokers.base import LiveAccountState
+from stonks.core.types import Order
+from stonks.execution.brokers.base import LiveAccountState, MarginPreview
 from stonks.fx import FxRates
 from stonks.production.rules._account_settings import AccountRulesSettings
 from stonks.store.state import SqliteState
@@ -160,6 +161,7 @@ def load_account_inputs(
     short_sale_restricted: frozenset[str] = frozenset(),
     currency_of: Callable[[str], str] | None = None,
     fx: FxRates | None = None,
+    margin_preview: Callable[[Order], MarginPreview] | None = None,
 ) -> AccountRuleInputs | None:
     """The inputs for ``portfolio_id`` on the execution session ``as_of``,
     or ``None`` when the portfolio has no account profile (then the
@@ -189,6 +191,8 @@ def load_account_inputs(
         day_trades=day_trades(fills, as_of, settings.pdt_window_days),
         opened_today=opened_on(fills, as_of),
         loss_sales=loss_sales(fills, as_of, settings.wash_sale_window_days),
-        shortable=dict(shortable or {}),
+        # a mapping as given: a lazy locate (``LocateMap``) asks the broker per ticker
+        shortable={} if shortable is None else shortable,
         short_sale_restricted=short_sale_restricted,
+        margin_preview=margin_preview if profile.account_type == "margin" else None,
     )

@@ -20,6 +20,16 @@ scale opening orders.
 In good standing, opening orders are clipped in turn so their initial
 requirement fits the excess equity (plus what this tick's closes free),
 keeping ``buffer`` of it unused. Off by default.
+
+A live margin account (roadmap 19.13) is judged by the broker's own
+numbers, not the model: its cushion (excess liquidity over equity, read
+from IBKR) is compared with the settings. Below ``reduce_cushion`` the
+book is treated as in breach before the broker liquidates: opening orders
+are dropped and positions are closed as above until the cushion is back at
+``restore_cushion``. Above it, the broker's what-if margin (the
+``margin_what_if`` account rule) governs new orders, so the model check is
+skipped. ``warn_cushion`` only alerts (``production.live.margin``). Only
+the book's own positions are closed, never the owner's.
 """
 
 from __future__ import annotations
@@ -31,6 +41,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 from stonks.core.types import Order
+from stonks.execution.brokers.base import LiveAccountState
 from stonks.execution.margin import MarginModel, MarginSettings
 from stonks.execution.orders import make_client_id
 from stonks.production.rules import EPS, RiskAdjustment, RiskContext, RiskRule, register_rule
@@ -48,6 +59,13 @@ class MarginCallSettings(BaseModel):
     margin: MarginSettings = MarginSettings(model="reg_t")
     #: Share of the excess equity new opens may not use.
     buffer: float = Field(default=0.0, ge=0.0, lt=1.0)
+    #: Live margin accounts (roadmap 19.13), as shares of equity. Below
+    #: ``warn_cushion`` the owner gets an alert, below ``reduce_cushion``
+    #: the book closes positions until the cushion is back at
+    #: ``restore_cushion``. The broker liquidates at 0.
+    warn_cushion: float = Field(default=0.15, gt=0.0, lt=1.0)
+    reduce_cushion: float = Field(default=0.10, gt=0.0, lt=1.0)
+    restore_cushion: float = Field(default=0.20, gt=0.0, lt=1.0)
 
     @property
     def active(self) -> bool:
@@ -76,21 +94,56 @@ class MarginCall(RiskRule):
         if settings is None or not settings.active:
             return list(orders), []
         model = margin_model(ctx, settings)
+        account = ctx.live.account if ctx.live is not None else None
+        if isinstance(account, LiveAccountState) and account.account_type == "margin":
+            return self._live(orders, ctx, model, account, settings)
         prices = dict(ctx.prices)
         deficit = model.deficit(ctx.portfolio, prices, ctx.asset_classes)
         if deficit > 0:
             return self._call(orders, ctx, model, deficit)
         return self._check(orders, ctx, model, settings.buffer)
 
+    def _live(
+        self,
+        orders: Sequence[Order],
+        ctx: RiskContext,
+        model: MarginModel,
+        account: LiveAccountState,
+        settings: MarginCallSettings,
+    ) -> tuple[list[Order], list[RiskAdjustment]]:
+        """The broker's cushion decides (roadmap 19.13)."""
+        cushion = account.cushion
+        reduce_at = settings.reduce_cushion
+        if cushion is None or cushion >= reduce_at:
+            return list(orders), []
+        restore = max(settings.restore_cushion, reduce_at)
+        excess = cushion * account.equity
+        deficit = restore * account.equity - excess
+        why = (
+            f"margin cushion {cushion:.1%} is below {reduce_at:.0%}: "
+            f"reducing to {restore:.0%} before the broker liquidates"
+        )
+        return self._call(orders, ctx, model, deficit, why=why)
+
     def _call(
-        self, orders: Sequence[Order], ctx: RiskContext, model: MarginModel, deficit: float
+        self,
+        orders: Sequence[Order],
+        ctx: RiskContext,
+        model: MarginModel,
+        deficit: float,
+        *,
+        why: str | None = None,
     ) -> tuple[list[Order], list[RiskAdjustment]]:
         positions = ctx.portfolio.positions
         kept: list[Order] = []
         adjustments: list[RiskAdjustment] = []
         for order in orders:
             if is_opening(order, positions):
-                reason = f"margin breach of {deficit:.2f}: no new positions"
+                reason = (
+                    f"{why}: no new positions"
+                    if why
+                    else (f"margin breach of {deficit:.2f}: no new positions")
+                )
                 adjustments.append(adjustment(order, self.name, 0.0, reason))
             else:
                 kept.append(order)
@@ -132,7 +185,9 @@ class MarginCall(RiskRule):
                 decision_context={"forced": self.name, "deficit": deficit},
             )
             kept.append(forced)
-            reason = f"margin breach of {deficit:.2f}: forced close"
+            reason = (
+                f"{why}: forced close" if why else f"margin breach of {deficit:.2f}: forced close"
+            )
             adjustments.append(adjustment(forced, self.name, extra, reason, original=0.0))
         return kept, adjustments
 

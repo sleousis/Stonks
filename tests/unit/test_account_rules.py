@@ -17,11 +17,12 @@ from stonks.accounts.rules import (
     run_account_rules,
 )
 from stonks.core.types import Order
-from stonks.execution.brokers.base import LiveAccountState
+from stonks.execution.brokers.base import LiveAccountState, MarginPreview
 from stonks.production.rules._account_settings import AccountRulesSettings
 
 AS_OF = date(2026, 9, 28)  # a Monday
-SETTINGS = AccountRulesSettings(enabled=True)
+#: Margin accounts are on here (their own rules: test_account_rules_margin.py).
+SETTINGS = AccountRulesSettings(enabled=True, margin_accounts=True)
 PRICES = {"AAPL.US": 100.0, "SPY.US": 500.0, "VUSA.LSE": 80.0, "SAP.XETRA": 200.0}
 
 
@@ -36,6 +37,7 @@ def account(**kw) -> LiveAccountState:
         "account_type": "cash",
     }
     base.update(kw)
+    base.setdefault("reported_type", base["account_type"])
     return LiveAccountState(**base)  # type: ignore[arg-type]
 
 
@@ -43,8 +45,13 @@ def profile(jurisdiction="us", **kw) -> AccountProfile:
     return AccountProfile(portfolio_id="pf_live", jurisdiction=jurisdiction, **kw)
 
 
+def no_margin(order: Order) -> MarginPreview:
+    return MarginPreview(order.client_id, 0.0, 0.0, 10_000.0, None)
+
+
 def inputs(prof=None, **kw) -> AccountRuleInputs:
     kw.setdefault("account", account())
+    kw.setdefault("margin_preview", no_margin)
     return AccountRuleInputs(profile=prof or profile(), as_of=AS_OF, **kw)
 
 

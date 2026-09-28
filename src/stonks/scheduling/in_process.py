@@ -355,6 +355,14 @@ def in_process_broker_health(ctx: RunContext) -> JobOutcome:
     return broker_health_action(ctx)
 
 
+@IN_PROCESS_ACTIONS.register("live_margin")
+def in_process_live_margin(ctx: RunContext) -> JobOutcome:
+    """State DB and the gateway only: runs in this process."""
+    from stonks.scheduling.local import live_margin_action
+
+    return live_margin_action(ctx)
+
+
 @IN_PROCESS_ACTIONS.register("live_reconcile")
 def in_process_live_reconcile(ctx: RunContext) -> JobOutcome:
     """State DB and the gateway only: runs in this process."""
@@ -394,6 +402,14 @@ def in_process_live_submit(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import live_submit_action
 
     return live_submit_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("options_live")
+def in_process_options_live(ctx: RunContext) -> JobOutcome:
+    """Live options read the state DB and the broker only (roadmap 17.8)."""
+    from stonks.scheduling.local import options_live_action
+
+    return options_live_action(ctx)
 
 
 @IN_PROCESS_ACTIONS.register("live_stops")

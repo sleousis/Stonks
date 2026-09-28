@@ -141,6 +141,22 @@ def test_live_order_ref_max_length_is_measured(client, broker, record_property):
     assert measured >= broker.order_settings.order_ref_max_length, results
 
 
+def test_live_account_reports_its_margin_type(client, broker, record_property):
+    """Record which account value names the margin type (roadmap 19.13). A
+    margin profile is refused unless it reads ``margin``. The tags are
+    logged and recorded, never asserted, since a cash paper account is
+    fine too."""
+    from stonks.execution.brokers.ibkr.broker import MARGIN_TYPE_TAGS, reported_account_type
+
+    values = client.account_values(ACCOUNT)
+    tags = {v.tag: v.value for v in values if v.tag in MARGIN_TYPE_TAGS}
+    reported = reported_account_type(values, account_id=ACCOUNT)
+    record_property("margin_type_tags", tags)
+    record_property("reported_account_type", reported)
+    get_logger("tests.ibkr_live").info("ibkr.margin_type", tags=tags, reported=reported)
+    assert broker.fetch_account().reported_type == reported
+
+
 def test_live_what_if_does_not_send(broker):
     order = Order(client_id=f"live-wi-{uuid.uuid4().hex[:8]}", ticker="AAPL.US", side="buy",
                   quantity=1, order_type="limit", limit_price=1.0, time_in_force="day")  # fmt: skip

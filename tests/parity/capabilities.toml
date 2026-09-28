@@ -1665,11 +1665,11 @@ mcp = ["start_research", "list_research_sessions", "get_research_session"]
 [[capability]]
 id = "live.settings.read"
 domain = "trading"
-title = "Read a live portfolio's allocation, account profile and live rules"
-routes = ["GET /api/portfolios/{portfolio_id}/live/allocation", "GET /api/portfolios/{portfolio_id}/live/account-profile", "GET /api/portfolios/{portfolio_id}/live/rules"]
-console = ["getLiveAllocation", "getAccountProfile", "getLiveRules"]
+title = "Read a live portfolio's allocation, account profile, live rules, buying power and margin use"
+routes = ["GET /api/portfolios/{portfolio_id}/live/allocation", "GET /api/portfolios/{portfolio_id}/live/account-profile", "GET /api/portfolios/{portfolio_id}/live/rules", "GET /api/portfolios/{portfolio_id}/live/margin"]
+console = ["getLiveAllocation", "getAccountProfile", "getLiveRules", "getLiveMargin"]
 cli = { limited = "owner settings live in the console, the API has them now" }
-mcp = ["get_live_allocation", "get_live_rules"]
+mcp = ["get_live_allocation", "get_live_rules", "get_live_margin"]
 
 [[capability]]
 id = "live.settings.write"
@@ -1677,6 +1677,26 @@ domain = "trading"
 title = "Set a live portfolio's allocation and account profile (step-up)"
 routes = ["PUT /api/portfolios/{portfolio_id}/live/allocation", "PUT /api/portfolios/{portfolio_id}/live/account-profile"]
 console = ["setLiveAllocation", "setAccountProfile"]
+cli = { limited = "needs a fresh second factor, done in the web app" }
+mcp = { limited = "needs a fresh second factor, done in the web app" }
+
+# ---- live options (roadmap 17.8, off by default) ------------------------------------
+
+[[capability]]
+id = "live.options.read"
+domain = "trading"
+title = "Whether options may open in a live portfolio, and why not"
+routes = ["GET /api/portfolios/{portfolio_id}/live/options"]
+console = "getOptionsLive"
+cli = { limited = "owner settings live in the console, the API has them now" }
+mcp = "get_options_live"
+
+[[capability]]
+id = "live.options.approval"
+domain = "trading"
+title = "Set a portfolio's options approval level (step-up)"
+routes = ["PUT /api/portfolios/{portfolio_id}/live/options/approval"]
+console = "setOptionsApproval"
 cli = { limited = "needs a fresh second factor, done in the web app" }
 mcp = { limited = "needs a fresh second factor, done in the web app" }
 

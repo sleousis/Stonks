@@ -106,12 +106,16 @@ def default_jobs() -> list[JobConfig]:
     ``live_submit`` (open minus 20 minutes) sends approved order tickets and
     skips while none is open. ``live_stops`` (open plus 30 minutes) places
     the protective stops of the entries that just filled, and skips while no
-    live book turns stops on.
+    live book turns stops on. ``options_live`` (close plus 55 minutes) and
+    ``options_expiry_watch`` (close minus 60 minutes) handle live options
+    and skip while ``[production.options] live = false``.
     ``live_gate_days`` (close plus 75 minutes)
     records the live stages' gate metrics and skips while no portfolio is
     past ``sim_paper``. ``engine_start`` (open minus 15 minutes) and
     ``engine_stop`` (close plus 10 minutes) run the intraday engine process
-    and skip while ``[engine] enabled = false``."""
+    and skip while ``[engine] enabled = false``. ``live_margin`` (every 30
+    minutes) reads the margin cushion of each margin account and skips
+    while there is none (the default)."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -236,12 +240,38 @@ def default_jobs() -> list[JobConfig]:
             trigger=SessionTriggerConfig(anchor="open", offset_minutes=30),
             catch_up="none",
         ),
+        # Live options (roadmap 17.8), both skip while [production.options]
+        # live = false: after the tick, expiry closes and rolls as held
+        # tickets; on expiry days an hour before the close, an alert for a
+        # short option still in the money. Never caught up late.
+        JobConfig(
+            name="options_live",
+            action="options_live",
+            trigger=SessionTriggerConfig(offset_minutes=55),
+            params={"phase": "plan"},
+            catch_up="none",
+        ),
+        JobConfig(
+            name="options_expiry_watch",
+            action="options_live",
+            trigger=SessionTriggerConfig(offset_minutes=-60),
+            params={"phase": "watch"},
+            catch_up="none",
+        ),
         # The live stages' gate metrics for the session, after the tick
         # wrote its snapshots (roadmap 19.9). A dirty week only alerts.
         JobConfig(
             name="live_gate_days",
             action="live_gate_days",
             trigger=SessionTriggerConfig(offset_minutes=75),
+        ),
+        # The margin cushion of every margin account (roadmap 19.13), with
+        # an alert when it is thin. Skips while no margin profile exists.
+        JobConfig(
+            name="live_margin",
+            action="live_margin",
+            trigger=IntervalTriggerConfig(every_minutes=30),
+            catch_up="none",
         ),
         # The intraday engine process (roadmap 21.2.5). Both skip while
         # [engine] is off. A missed start is not caught up: a late start

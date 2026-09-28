@@ -6,6 +6,12 @@
 - **Account profile**: where the broker account is held (US, EU or UK),
   cash or margin, retail or professional. It picks the account rules. It
   is locked while the portfolio trades real money (``live_small`` or up).
+  A margin profile (roadmap 19.13) also needs margin accounts on
+  (``[production.risk.rules.account_rules] margin_accounts``, off by
+  default), the account rules and the margin call rule on, the risks
+  acknowledged, and the broker itself reporting a margin account.
+- **Margin** (19.13): buying power and margin use, read from the broker
+  now, with the latest margin check and the pattern day trader state.
 - **Stage** (19.9): ``sim_paper``, ``broker_paper``, ``live_small``,
   ``live_scale``. A promotion goes one stage up with a passing gate report
   computed now, a typed confirmation and ``live.manage`` (a fresh second
@@ -22,7 +28,9 @@ writes an ``audit_log`` row.
 
 from __future__ import annotations
 
+import contextlib
 import json
+from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any, Literal
 
@@ -36,6 +44,7 @@ from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
+from stonks.execution.brokers.base import AccountReader, LiveAccountState
 from stonks.production.live.allocation import AllocationError, get_allocation, set_allocation
 from stonks.production.live.gates import GateFacts, GateReport, gate_days, gate_report
 from stonks.production.live.preview import LivePreview, PreviewError, live_book, run_preview
@@ -76,7 +85,7 @@ class LiveAllocationUpdate(BaseModel):
         return v.strip().upper()
 
 
-class AccountProfileBody(BaseModel):
+class _AccountProfileFields(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     jurisdiction: Literal["us", "eu", "uk"]
@@ -93,8 +102,78 @@ class AccountProfileBody(BaseModel):
         return v.strip().upper()
 
 
-class AccountProfileView(AccountProfileBody):
+class AccountProfileBody(_AccountProfileFields):
+    #: A switch to a margin account needs this: margin lends you money, so
+    #: losses can pass what you put in, and the broker may sell positions
+    #: without asking when the account falls below its maintenance margin.
+    acknowledge_margin_risks: bool = False
+
+
+class AccountProfileView(_AccountProfileFields):
     portfolio_id: str
+
+
+class MarginAccountView(BaseModel):
+    """The account as the broker reports it now."""
+
+    currency: str
+    equity: float
+    cash: float
+    available_funds: float
+    buying_power: float
+    excess_liquidity: float | None
+    initial_margin: float
+    maintenance_margin: float
+    #: Maintenance margin over equity (0 for a cash account).
+    margin_use: float | None
+    #: Excess liquidity over equity. At or below 0 the broker may sell.
+    cushion: float | None
+    #: ``ok``, ``warn``, ``reduce`` or ``call``. ``None`` for a cash account.
+    level: Literal["ok", "warn", "reduce", "call"] | None
+    #: Initial margin new orders may still use: the buffered share of
+    #: equity minus the initial margin in use (margin accounts).
+    margin_room: float | None
+    account_type: Literal["cash", "margin"]
+    #: What the broker itself says the account is (``None``: it did not say).
+    reported_type: Literal["cash", "margin"] | None
+    day_trades_remaining: int | None
+
+
+class PdtView(BaseModel):
+    #: The pattern day trader rule binds: a US margin account under the threshold.
+    applies: bool
+    equity_threshold: float
+    max_day_trades: int
+    window_days: int
+    #: The broker's count (``None``: it sent none).
+    day_trades_remaining: int | None
+
+
+class MarginCheckView(BaseModel):
+    checked_at: datetime
+    source: Literal["tick", "monitor"]
+    level: Literal["ok", "warn", "reduce", "call"]
+    cushion: float | None
+    equity: float
+    maintenance_margin: float
+
+
+class MarginView(BaseModel):
+    portfolio_id: str
+    #: The saved profile's account type (``None``: no profile).
+    profile_type: Literal["cash", "margin"] | None
+    #: Whether margin accounts are on for this portfolio.
+    margin_accounts_on: bool
+    #: ``None`` when the portfolio has no broker or the read failed.
+    account: MarginAccountView | None
+    read_error: str | None
+    #: Share of equity the what-if margin leaves unused.
+    buffer: float
+    warn_cushion: float
+    reduce_cushion: float
+    restore_cushion: float
+    pdt: PdtView
+    latest_check: MarginCheckView | None
 
 
 #: The live safeguards and protections, in the order the tick runs them.
@@ -293,9 +372,15 @@ class LivePreviewView(BaseModel):
     notes: list[str]
 
 
+#: Opens the broker of a live portfolio (``None``: it has none). Tests pass
+#: their own. The broker is closed after each use.
+BrokerOpener = Callable[[Portfolio], Any]
+
+
 class LiveService:
-    def __init__(self, context: AppContext) -> None:
+    def __init__(self, context: AppContext, *, brokers: BrokerOpener | None = None) -> None:
         self._ctx = context
+        self._brokers = brokers
 
     def get_allocation(self, principal: Principal, portfolio_id: str) -> LiveAllocationView:
         require(principal, Permission.READ)
@@ -352,20 +437,182 @@ class LiveService:
         self, principal: Principal, portfolio_id: str, body: AccountProfileBody
     ) -> AccountProfileView:
         require(principal, Permission.LIVE_MANAGE)
-        profile = AccountProfile(portfolio_id=portfolio_id, **body.model_dump())
+        fields = body.model_dump(exclude={"acknowledge_margin_risks"})
+        profile = AccountProfile(portfolio_id=portfolio_id, **fields)
         with self._ctx.state() as state:
-            self._owned(state, principal, portfolio_id)
+            portfolio = self._portfolio(state, principal, portfolio_id)
             stage = get_stage(state, portfolio_id)
             if trades_real_money(stage):
                 raise ConflictError(
                     "the account profile is locked while the portfolio trades real money"
                     f" ({stage}): demote it to broker_paper to change it"
                 )
+            details: dict[str, Any] = {}
+            if profile.account_type == "margin":
+                old = get_profile(state, portfolio_id)
+                switching = old is None or old.account_type != "margin"
+                details = self._check_margin_choice(state, portfolio, body, switching)
             try:
-                saved = set_profile(state, profile, actor=principal.actor)
+                saved = set_profile(state, profile, actor=principal.actor, details=details)
             except ProfileError as exc:
                 raise ValidationError(str(exc)) from exc
         return _profile_view(saved)
+
+    def _check_margin_choice(
+        self,
+        state: SqliteState,
+        portfolio: Portfolio,
+        body: AccountProfileBody,
+        switching: bool,
+    ) -> dict[str, Any]:
+        """Refuse a margin profile unless margin accounts are on, its guards
+        are on, the risks are acknowledged and the broker reports a margin
+        account (roadmap 19.13). The audit details on success."""
+        rules = self._policy(state, portfolio).rules
+        if not rules.account_rules.margin_accounts:
+            raise ConflictError(
+                "margin accounts are off: the admin turns them on with"
+                " [production.risk.rules.account_rules] margin_accounts = true"
+            )
+        missing = [
+            name
+            for name, on in (
+                ("account_rules", rules.account_rules.enabled),
+                ("margin_call", rules.margin_call.enabled),
+            )
+            if not on
+        ]
+        if missing:
+            raise ConflictError(
+                "a margin account needs these risk rules on first: " + ", ".join(missing)
+            )
+        if switching and not body.acknowledge_margin_risks:
+            raise ValidationError(
+                "a margin account needs the risks acknowledged (acknowledge_margin_risks)"
+            )
+        account, error = self._read_account(portfolio)
+        if account is None:
+            raise ConflictError(f"could not read the broker account to check its type: {error}")
+        if account.account_type != "margin":
+            raise ConflictError(
+                "the broker link is set up as a cash account"
+                " ([brokers.ibkr.gateways.<name>] account_type)"
+            )
+        if account.reported_type != "margin":
+            said = (
+                f"reports {account.reported_type}"
+                if account.reported_type
+                else "does not report its type"
+            )
+            raise ConflictError(f"the broker {said}: a margin profile needs a margin account")
+        return {"broker_reported_type": account.reported_type, "risks_acknowledged": True}
+
+    def _policy(self, state: SqliteState, portfolio: Portfolio) -> Any:
+        """The policy the portfolio's book follows: the system's, tightened
+        by the owner's limits and the portfolio's own."""
+        owner = state.sql("SELECT risk_policy_json FROM users WHERE id = ?", [portfolio.owner_id])
+        owner_risk = json.loads(owner[0]["risk_policy_json"] or "{}") if owner else {}
+        return tighter_of(
+            self._ctx.settings.production.risk, owner_risk or None, portfolio.risk_policy
+        )
+
+    def _read_account(self, portfolio: Portfolio) -> tuple[LiveAccountState | None, str | None]:
+        """The broker's account now, or ``(None, why)``. The broker is
+        closed after the read."""
+        try:
+            broker = (
+                self._brokers(portfolio)
+                if self._brokers is not None
+                else _open_broker(self._ctx, portfolio)
+            )
+        except Exception as exc:
+            return None, str(exc)
+        if broker is None:
+            return None, "the portfolio has no broker"
+        try:
+            if not isinstance(broker, AccountReader):
+                return None, "the broker does not report its account"
+            return broker.fetch_account(), None
+        except Exception as exc:
+            return None, str(exc)
+        finally:
+            close = getattr(broker, "close", None)
+            if callable(close):
+                with contextlib.suppress(Exception):  # a close that fails is ignored
+                    close()
+
+    def margin(self, principal: Principal, portfolio_id: str) -> MarginView:
+        """Buying power and margin use, read from the broker now (roadmap
+        19.13), with the margin settings, the pattern day trader state and
+        the latest margin check. Read only."""
+        from stonks.production.live.margin import latest_check, margin_level
+
+        require(principal, Permission.READ)
+        with self._ctx.state() as state:
+            portfolio = self._portfolio(state, principal, portfolio_id)
+            profile = get_profile(state, portfolio_id)
+            rules = self._policy(state, portfolio).rules
+            last = latest_check(state, portfolio_id)
+        account, error = self._read_account(portfolio)
+        accounts = rules.account_rules
+        call = rules.margin_call
+        view: MarginAccountView | None = None
+        if account is not None:
+            margin = account.account_type == "margin"
+            room = (1.0 - accounts.margin_buffer) * account.equity - account.initial_margin
+            view = MarginAccountView(
+                currency=account.currency,
+                equity=account.equity,
+                cash=account.cash,
+                available_funds=account.available_funds,
+                buying_power=account.buying_power,
+                excess_liquidity=account.excess_liquidity,
+                initial_margin=account.initial_margin,
+                maintenance_margin=account.maintenance_margin,
+                margin_use=account.maintenance_margin / account.equity
+                if account.equity > 0
+                else None,
+                cushion=account.cushion if margin else None,
+                level=margin_level(account, call) if margin else None,
+                margin_room=max(room, 0.0) if margin else None,
+                account_type=account.account_type,
+                reported_type=account.reported_type,
+                day_trades_remaining=account.day_trades_remaining,
+            )
+        us_margin = (
+            profile is not None
+            and profile.jurisdiction == "us"
+            and profile.account_type == "margin"
+        )
+        return MarginView(
+            portfolio_id=portfolio_id,
+            profile_type=None if profile is None else profile.account_type,
+            margin_accounts_on=bool(accounts.margin_accounts),
+            account=view,
+            read_error=error,
+            buffer=accounts.margin_buffer,
+            warn_cushion=call.warn_cushion,
+            reduce_cushion=call.reduce_cushion,
+            restore_cushion=call.restore_cushion,
+            pdt=PdtView(
+                applies=us_margin
+                and (account is None or account.equity < accounts.pdt_equity_threshold),
+                equity_threshold=accounts.pdt_equity_threshold,
+                max_day_trades=accounts.pdt_max_day_trades,
+                window_days=accounts.pdt_window_days,
+                day_trades_remaining=None if account is None else account.day_trades_remaining,
+            ),
+            latest_check=None
+            if last is None
+            else MarginCheckView(
+                checked_at=datetime.fromisoformat(last.checked_at),
+                source=last.source,
+                level=last.level,
+                cushion=last.cushion,
+                equity=last.equity,
+                maintenance_margin=last.maintenance_margin,
+            ),
+        )
 
     def rules(self, principal: Principal, portfolio_id: str) -> LiveRulesView:
         """Which live safeguards and account rules act on this portfolio,
@@ -374,14 +621,8 @@ class LiveService:
         require(principal, Permission.READ)
         with self._ctx.state() as state:
             portfolio = self._portfolio(state, principal, portfolio_id)
-            owner = state.sql(
-                "SELECT risk_policy_json FROM users WHERE id = ?", [portfolio.owner_id]
-            )
             profile = get_profile(state, portfolio_id)
-        owner_risk = json.loads(owner[0]["risk_policy_json"] or "{}") if owner else {}
-        policy = tighter_of(
-            self._ctx.settings.production.risk, owner_risk or None, portfolio.risk_policy
-        )
+            policy = self._policy(state, portfolio)
         safeguards = [
             LiveRuleView(
                 name=name,
@@ -559,6 +800,23 @@ class LiveService:
     @classmethod
     def _owned(cls, state: SqliteState, principal: Principal, portfolio_id: str) -> str:
         return cls._portfolio(state, principal, portfolio_id).id
+
+
+def _open_broker(context: AppContext, portfolio: Portfolio) -> Any:
+    """The broker of a live portfolio, opened on the API's own session
+    (roadmap 19.17), or ``None`` for a paper portfolio."""
+    from stonks.app.manual_orders import connection_trader
+
+    settings = context.settings
+    external_default = portfolio.id == DEFAULT_PORTFOLIO_ID and settings.brokers.kind != "simulated"
+    if portfolio.kind == "broker":
+        return connection_trader(context, portfolio)
+    if not external_default:
+        return None
+    from stonks.core.types import Portfolio as Book
+    from stonks.execution.brokers import make_broker
+
+    return make_broker(settings, Book(cash=0.0), ibkr_role="api")
 
 
 def _profile_view(p: AccountProfile) -> AccountProfileView:

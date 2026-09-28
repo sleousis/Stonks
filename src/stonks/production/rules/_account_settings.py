@@ -43,6 +43,13 @@ class AccountRulesSettings(BaseModel):
     #: EU and UK: keep each net short below this fraction of issued shares
     #: (0.1% must be reported to the regulator).
     short_disclosure_threshold: float = Field(default=0.001, gt=0.0, lt=1.0)
+    #: Margin accounts (roadmap 19.13). Off by default: the first live
+    #: account is a cash account, long only. While off, a margin profile
+    #: cannot be chosen and a margin book opens nothing new.
+    margin_accounts: bool = False
+    #: Share of the account's equity that the what-if margin (initial and
+    #: maintenance, after the order) must leave unused.
+    margin_buffer: float = Field(default=0.10, ge=0.0, lt=1.0)
 
     @field_validator("settlement_days")
     @classmethod

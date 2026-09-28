@@ -1,5 +1,6 @@
-"""Live trading reads (roadmap 19.9): a live portfolio's stage, its gate
-report, the allocation, the live rules and the IB Gateway health.
+"""Live trading reads (roadmap 19.9, 19.13): a live portfolio's stage, its
+gate report, the allocation, the live rules, buying power and margin use,
+and the IB Gateway health.
 
 Read only. Promoting a stage and changing the allocation or the account
 profile need a fresh second factor, so they stay in the console (and the
@@ -49,6 +50,24 @@ def register(t: ToolContext) -> None:
         """Which live safeguards and account rules act on a live portfolio,
         with their settings as its book follows them."""
         return await t.get(f"/api/portfolios/{seg(portfolio_id)}/live/rules")
+
+    @server.tool(annotations=READ)
+    async def get_live_margin(portfolio_id: LivePortfolio) -> dict[str, Any]:
+        """Buying power and margin use of a live portfolio, read from the
+        broker now: equity, available funds, initial and maintenance margin,
+        the margin cushion and its level (ok, warn, reduce, call), the
+        safety buffer, and whether the pattern day trader rule binds. A
+        margin account is chosen in the web app with a fresh second factor,
+        never here."""
+        return await t.get(f"/api/portfolios/{seg(portfolio_id)}/live/margin")
+
+    @server.tool(annotations=READ)
+    async def get_options_live(portfolio_id: LivePortfolio) -> dict[str, Any]:
+        """Whether an option order may open in a live portfolio (off by
+        default), with every reason it may not: the admin's switch, the
+        live stage and the options approval level (none, covered, spreads,
+        naked). Setting the level needs a fresh second factor in the web app."""
+        return await t.get(f"/api/portfolios/{seg(portfolio_id)}/live/options")
 
     @server.tool(annotations=READ)
     async def get_broker_gateways() -> dict[str, Any]:

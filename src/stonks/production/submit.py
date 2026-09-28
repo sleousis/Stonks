@@ -20,6 +20,10 @@ For each portfolio with tickets due:
    committed ``pending`` first, then sent, then ``submitted``. A rejection
    fails the ticket. A submit with no answer is ``unknown`` until
    reconciliation settles it, never sent twice.
+6. Live option combos (roadmap 17.8): the tickets of a multi-leg combo
+   are sent together as one order (the broker's ``place_combo``), and
+   only when every leg's ticket is sendable. Option tickets skip the gap
+   check: their limit at the mid already bounds the price.
 
 Then every submitted ticket follows its order (filled, unfilled,
 cancelled, failed). Tickets past their deadline expire first.
@@ -33,6 +37,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock, today
+from stonks.core.options import is_option_id
 from stonks.core.protocols import Broker
 from stonks.execution.brokers.base import (
     OrderRejectedError,
@@ -52,6 +57,7 @@ from stonks.production.halts import active_halts
 from stonks.production.live.checks import CheckResult, Publish, submit_gate
 from stonks.production.live.gap import gap_limit, is_opening, preopen_holds
 from stonks.production.live.settings import LiveSettings
+from stonks.production.submit_combos import send_combo, split_combos
 from stonks.production.tickets import (
     Ticket,
     due_tickets,
@@ -226,9 +232,12 @@ def _submit_portfolio(
     if held:
         log.warning("submit.held_by_halt", held=held)
 
+    sendable, combos, combo_held = split_combos(sendable)
+    held += combo_held
+    stock_like = [t for t in sendable if not is_option_id(t.ticker)]
     limit = gap_limit(_price_band(run.risk, owner))
     reasons = preopen_holds(
-        [t.order for t in sendable], _preopen_quotes(broker, sendable, limit, log), limit
+        [t.order for t in stock_like], _preopen_quotes(broker, stock_like, limit, log), limit
     )
     gapped = [t for t in sendable if t.client_id in reasons]
     if gapped:
@@ -242,6 +251,10 @@ def _submit_portfolio(
         outcome = _send(state, broker, ticket, clock)
         sent += outcome == "sent"
         failed += outcome == "failed"
+    for legs in combos:
+        outcome = send_combo(state, broker, legs, clock)
+        sent += len(legs) if outcome == "sent" else 0
+        failed += len(legs) if outcome == "failed" else 0
     status: PortfolioSubmitStatus = "partial" if failed else "ok"
     return PortfolioSubmit(
         portfolio_id,

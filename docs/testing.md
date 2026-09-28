@@ -81,7 +81,7 @@ Every journey runs twice, on a desktop (1280 by 800) and on a phone (375 by 812)
 | Universe from CSV | Create a list universe from a CSV file, refresh it and see its three members |
 | Lab run | Run momentum with the quick preset and see the verdict |
 | Promote | A trader is refused, the go-live gate refuses the admin, then the admin overrides with a reason and the strategy turns active |
-| Paper tick | A real tick on the simulated broker places one order and one fill, both listed on the Orders and Fills tabs, and the session strip stays calm |
+| Paper tick | A real tick on the simulated broker places one order that stays working, and the session strip stays calm. The next session's tick fills it at the open, listed on the Fills tab |
 | Kill switch | Engaging it turns the strip red and the next tick places no orders. Resume needs RESUME TRADING and a fresh code |
 | Backup | Back up now finishes and shows in the backup list |
 | Tenant isolation | The trader gets 404 for the admin's book and sees only their own value and orders |

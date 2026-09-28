@@ -7,25 +7,29 @@ import {
   getBrokerGateways,
   getLiveAllocation,
   getLiveGateReport,
+  getLiveMargin,
   getLiveRules,
   listReconcileReports,
   getLiveStage,
+  getOptionsLive,
   previewLiveOrders,
   promoteLiveStage,
   setAccountProfile,
   setLiveAllocation,
+  setOptionsApproval,
 } from './generated/sdk.gen';
 import type {
   AccountProfileBody,
   AccountProfileView,
   LiveAllocationUpdate,
+  OptionsApprovalUpdate,
   StageDemoteBody,
   StagePromoteBody,
 } from './models';
 
 /**
  * A live portfolio's owner settings (the allocation and the account
- * profile), the live rules that act on it, the broker gateways' health,
+ * profile), the live rules that act on it, its buying power and margin use, the broker gateways' health,
  * the reconciliation reports of your live portfolios, and the live stage
  * (roadmap 19.9): its gate report, promotion, demotion and the dry-run
  * preview. The settings writes and a promotion need a fresh second factor:
@@ -57,6 +61,11 @@ export class LiveService {
     return unwrap(getLiveRules({ path: { portfolio_id: portfolioId } }));
   }
 
+  /** Buying power and margin use, read from the broker now (roadmap 19.13). */
+  margin(portfolioId: string) {
+    return unwrap(getLiveMargin({ path: { portfolio_id: portfolioId } }));
+  }
+
   gateways() {
     return unwrap(getBrokerGateways());
   }
@@ -80,6 +89,16 @@ export class LiveService {
 
   demote(portfolioId: string, body: StageDemoteBody) {
     return unwrap(demoteLiveStage({ path: { portfolio_id: portfolioId }, body }));
+  }
+
+  /** Whether options may open here (off by default), and why not. */
+  optionsLive(portfolioId: string) {
+    return unwrap(getOptionsLive({ path: { portfolio_id: portfolioId } }));
+  }
+
+  /** The options approval level. Needs a fresh second factor. */
+  setOptionsApproval(portfolioId: string, body: OptionsApprovalUpdate) {
+    return unwrap(setOptionsApproval({ path: { portfolio_id: portfolioId }, body }));
   }
 
   /** A dry run through the broker's what-if. It never sends an order. */

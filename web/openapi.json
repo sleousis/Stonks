@@ -13,6 +13,11 @@
             "title": "Account Type",
             "type": "string"
           },
+          "acknowledge_margin_risks": {
+            "default": false,
+            "title": "Acknowledge Margin Risks",
+            "type": "boolean"
+          },
           "allow_short": {
             "default": false,
             "title": "Allow Short",
@@ -165,6 +170,18 @@
             "default": false,
             "title": "Enabled",
             "type": "boolean"
+          },
+          "margin_accounts": {
+            "default": false,
+            "title": "Margin Accounts",
+            "type": "boolean"
+          },
+          "margin_buffer": {
+            "default": 0.1,
+            "exclusiveMaximum": 1.0,
+            "minimum": 0.0,
+            "title": "Margin Buffer",
+            "type": "number"
           },
           "pdt_equity_threshold": {
             "default": 25000.0,
@@ -10491,6 +10508,153 @@
         "title": "ManualOrderResult",
         "type": "object"
       },
+      "MarginAccountView": {
+        "description": "The account as the broker reports it now.",
+        "properties": {
+          "account_type": {
+            "enum": [
+              "cash",
+              "margin"
+            ],
+            "title": "Account Type",
+            "type": "string"
+          },
+          "available_funds": {
+            "title": "Available Funds",
+            "type": "number"
+          },
+          "buying_power": {
+            "title": "Buying Power",
+            "type": "number"
+          },
+          "cash": {
+            "title": "Cash",
+            "type": "number"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "cushion": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cushion"
+          },
+          "day_trades_remaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Trades Remaining"
+          },
+          "equity": {
+            "title": "Equity",
+            "type": "number"
+          },
+          "excess_liquidity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excess Liquidity"
+          },
+          "initial_margin": {
+            "title": "Initial Margin",
+            "type": "number"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ok",
+                  "warn",
+                  "reduce",
+                  "call"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "maintenance_margin": {
+            "title": "Maintenance Margin",
+            "type": "number"
+          },
+          "margin_room": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin Room"
+          },
+          "margin_use": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin Use"
+          },
+          "reported_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "cash",
+                  "margin"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported Type"
+          }
+        },
+        "required": [
+          "currency",
+          "equity",
+          "cash",
+          "available_funds",
+          "buying_power",
+          "excess_liquidity",
+          "initial_margin",
+          "maintenance_margin",
+          "margin_use",
+          "cushion",
+          "level",
+          "margin_room",
+          "account_type",
+          "reported_type",
+          "day_trades_remaining"
+        ],
+        "title": "MarginAccountView",
+        "type": "object"
+      },
       "MarginCallSettings": {
         "additionalProperties": false,
         "properties": {
@@ -10519,9 +10683,86 @@
                 "maintenance_short": 0.3
               }
             }
+          },
+          "reduce_cushion": {
+            "default": 0.1,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Reduce Cushion",
+            "type": "number"
+          },
+          "restore_cushion": {
+            "default": 0.2,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Restore Cushion",
+            "type": "number"
+          },
+          "warn_cushion": {
+            "default": 0.15,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Warn Cushion",
+            "type": "number"
           }
         },
         "title": "MarginCallSettings",
+        "type": "object"
+      },
+      "MarginCheckView": {
+        "properties": {
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "cushion": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cushion"
+          },
+          "equity": {
+            "title": "Equity",
+            "type": "number"
+          },
+          "level": {
+            "enum": [
+              "ok",
+              "warn",
+              "reduce",
+              "call"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "maintenance_margin": {
+            "title": "Maintenance Margin",
+            "type": "number"
+          },
+          "source": {
+            "enum": [
+              "tick",
+              "monitor"
+            ],
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "checked_at",
+          "source",
+          "level",
+          "cushion",
+          "equity",
+          "maintenance_margin"
+        ],
+        "title": "MarginCheckView",
         "type": "object"
       },
       "MarginRates": {
@@ -10601,6 +10842,98 @@
           }
         },
         "title": "MarginSettings",
+        "type": "object"
+      },
+      "MarginView": {
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarginAccountView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "buffer": {
+            "title": "Buffer",
+            "type": "number"
+          },
+          "latest_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MarginCheckView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "margin_accounts_on": {
+            "title": "Margin Accounts On",
+            "type": "boolean"
+          },
+          "pdt": {
+            "$ref": "#/components/schemas/PdtView"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "profile_type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "cash",
+                  "margin"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Type"
+          },
+          "read_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read Error"
+          },
+          "reduce_cushion": {
+            "title": "Reduce Cushion",
+            "type": "number"
+          },
+          "restore_cushion": {
+            "title": "Restore Cushion",
+            "type": "number"
+          },
+          "warn_cushion": {
+            "title": "Warn Cushion",
+            "type": "number"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "profile_type",
+          "margin_accounts_on",
+          "account",
+          "read_error",
+          "buffer",
+          "warn_cushion",
+          "reduce_cushion",
+          "restore_cushion",
+          "pdt",
+          "latest_check"
+        ],
+        "title": "MarginView",
         "type": "object"
       },
       "MarkReadRequest": {
@@ -12243,6 +12576,33 @@
         "title": "OptionUnderlyingView",
         "type": "object"
       },
+      "OptionsApprovalUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "level": {
+            "enum": [
+              "none",
+              "covered",
+              "spreads",
+              "naked"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "reason"
+        ],
+        "title": "OptionsApprovalUpdate",
+        "type": "object"
+      },
       "OptionsBacktestRequest": {
         "properties": {
           "cash": {
@@ -12441,6 +12801,144 @@
           "verdict"
         ],
         "title": "OptionsBacktestView",
+        "type": "object"
+      },
+      "OptionsLevelView": {
+        "properties": {
+          "allows": {
+            "title": "Allows",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "none",
+              "covered",
+              "spreads",
+              "naked"
+            ],
+            "title": "Level",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "allows"
+        ],
+        "title": "OptionsLevelView",
+        "type": "object"
+      },
+      "OptionsLiveView": {
+        "description": "A portfolio's live options state. ``allowed`` is true only when the\nswitch is on, the stage is ``live_small`` or higher and the level is\nabove ``none``.",
+        "properties": {
+          "allowed": {
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "auto_approve_closes": {
+            "title": "Auto Approve Closes",
+            "type": "boolean"
+          },
+          "close_sessions": {
+            "title": "Close Sessions",
+            "type": "integer"
+          },
+          "enabled": {
+            "description": "[production.options] live, set by the admin",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "expiry_action": {
+            "title": "Expiry Action",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "none",
+              "covered",
+              "spreads",
+              "naked"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsLevelView"
+            },
+            "title": "Levels",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "why the level was set",
+            "title": "Reason"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "enabled",
+          "stage",
+          "level",
+          "allowed",
+          "reasons",
+          "levels",
+          "auto_approve_closes",
+          "expiry_action",
+          "close_sessions"
+        ],
+        "title": "OptionsLiveView",
         "type": "object"
       },
       "OrderCancelRequest": {
@@ -14751,6 +15249,46 @@
           "profit"
         ],
         "title": "PayoffPointView",
+        "type": "object"
+      },
+      "PdtView": {
+        "properties": {
+          "applies": {
+            "title": "Applies",
+            "type": "boolean"
+          },
+          "day_trades_remaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day Trades Remaining"
+          },
+          "equity_threshold": {
+            "title": "Equity Threshold",
+            "type": "number"
+          },
+          "max_day_trades": {
+            "title": "Max Day Trades",
+            "type": "integer"
+          },
+          "window_days": {
+            "title": "Window Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "applies",
+          "equity_threshold",
+          "max_day_trades",
+          "window_days",
+          "day_trades_remaining"
+        ],
+        "title": "PdtView",
         "type": "object"
       },
       "PendingActionView": {
@@ -18298,6 +18836,8 @@
             "default": {
               "account_rules": {
                 "enabled": false,
+                "margin_accounts": false,
+                "margin_buffer": 0.1,
                 "pdt_equity_threshold": 25000.0,
                 "pdt_max_day_trades": 3,
                 "pdt_window_days": 5,
@@ -18355,7 +18895,10 @@
                     "maintenance_long": 0.25,
                     "maintenance_short": 0.3
                   }
-                }
+                },
+                "reduce_cushion": 0.1,
+                "restore_cushion": 0.2,
+                "warn_cushion": 0.15
               },
               "max_holding": {},
               "max_orders_per_run": {},
@@ -18876,6 +19419,8 @@
             "$ref": "#/components/schemas/AccountRulesSettings",
             "default": {
               "enabled": false,
+              "margin_accounts": false,
+              "margin_buffer": 0.1,
               "pdt_equity_threshold": 25000.0,
               "pdt_max_day_trades": 3,
               "pdt_window_days": 5,
@@ -18972,7 +19517,10 @@
                   "maintenance_long": 0.25,
                   "maintenance_short": 0.3
                 }
-              }
+              },
+              "reduce_cushion": 0.1,
+              "restore_cushion": 0.2,
+              "warn_cushion": 0.15
             }
           },
           "max_holding": {
@@ -24134,7 +24682,8 @@
                 "enum": [
                   "approve_mode",
                   "runaway",
-                  "hard_to_borrow"
+                  "hard_to_borrow",
+                  "options"
                 ],
                 "type": "string"
               },
@@ -24142,7 +24691,7 @@
                 "type": "null"
               }
             ],
-            "description": "Why it waits for a person (approve mode, a runaway run, or a hard to borrow short sale).",
+            "description": "Why it waits for a person (approve mode, a runaway run, a hard to borrow short sale, or a live option order).",
             "title": "Hold"
           },
           "id": {
@@ -42047,7 +42596,7 @@
         ]
       },
       "put": {
-        "description": "Set where the account is held and its type. Shorts need a margin\naccount. Needs a fresh second factor.",
+        "description": "Set where the account is held and its type. Shorts need a margin\naccount. Needs a fresh second factor. A margin account also needs margin\naccounts turned on by the admin, the account rules and the margin call\nrule on, ``acknowledge_margin_risks`` and the broker reporting a margin\naccount (409 otherwise).",
         "operationId": "setAccountProfile",
         "parameters": [
           {
@@ -42420,6 +42969,286 @@
           "live"
         ],
         "x-permission": "data.read"
+      }
+    },
+    "/api/portfolios/{portfolio_id}/live/margin": {
+      "get": {
+        "description": "Buying power and margin use, read from the broker now, with the\nmargin cushion, the safety buffer, the pattern day trader state and the\nlatest margin check. ``account`` is ``null`` when the broker cannot be\nread (``read_error`` says why). Read only.",
+        "operationId": "getLiveMargin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarginView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Live Margin",
+        "tags": [
+          "live"
+        ],
+        "x-permission": "data.read"
+      }
+    },
+    "/api/portfolios/{portfolio_id}/live/options": {
+      "get": {
+        "description": "Whether an option order may open in this portfolio, and every\nreason it may not: the admin's switch, the live stage and the options\napproval level. Off by default.",
+        "operationId": "getOptionsLive",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsLiveView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Options Live",
+        "tags": [
+          "live"
+        ],
+        "x-permission": "data.read"
+      }
+    },
+    "/api/portfolios/{portfolio_id}/live/options/approval": {
+      "put": {
+        "description": "Set the options approval level (none, covered, spreads or naked)\nwith a reason. Needs a fresh second factor. It never turns options on\nby itself: the switch and the stage still apply.",
+        "operationId": "setOptionsApproval",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "title": "Portfolio Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptionsApprovalUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsLiveView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Options Approval",
+        "tags": [
+          "live"
+        ],
+        "x-permission": "live.manage"
       }
     },
     "/api/portfolios/{portfolio_id}/live/preview": {

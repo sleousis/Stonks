@@ -1,6 +1,7 @@
-"""A live portfolio's owner settings (roadmap 19.6, 19.7, 19.9): the
+"""A live portfolio's owner settings (roadmap 19.6, 19.7, 19.9, 19.13): the
 allocation Stonks may trade, the account profile that picks the account
-rules, the live stage with its gate reports, and the dry-run preview.
+rules, buying power and margin use, the live stage with its gate reports,
+and the dry-run preview.
 Changes and promotions need a fresh second factor (``live.manage``) and
 are audited. A demotion and a preview need ``portfolio.trade``."""
 
@@ -22,9 +23,11 @@ from stonks.app.live import (
     LiveRulesView,
     LiveService,
     LiveStageView,
+    MarginView,
     StageDemoteBody,
     StagePromoteBody,
 )
+from stonks.app.options_live import OptionsApprovalUpdate, OptionsLiveService, OptionsLiveView
 from stonks.auth import Permission
 
 router = APIRouter(prefix="/api/portfolios", tags=["live"], responses=PROBLEM_RESPONSES)
@@ -33,7 +36,7 @@ PortfolioId = Annotated[str, Path(max_length=64)]
 
 
 def _service(services: ServicesDep) -> LiveService:
-    return LiveService(services.context)
+    return services.live
 
 
 @router.get(
@@ -91,7 +94,10 @@ def set_account_profile(
     principal: PrincipalDep,
 ) -> AccountProfileView:
     """Set where the account is held and its type. Shorts need a margin
-    account. Needs a fresh second factor."""
+    account. Needs a fresh second factor. A margin account also needs margin
+    accounts turned on by the admin, the account rules and the margin call
+    rule on, ``acknowledge_margin_risks`` and the broker reporting a margin
+    account (409 otherwise)."""
     return _service(services).set_profile(principal, portfolio_id, body)
 
 
@@ -108,6 +114,22 @@ def get_live_rules(
     book follows them. Read only: the limits are set by the admin and your
     own risk limits."""
     return _service(services).rules(principal, portfolio_id)
+
+
+@router.get(
+    "/{portfolio_id}/live/margin",
+    response_model=MarginView,
+    operation_id="getLiveMargin",
+    dependencies=needs(Permission.READ),
+)
+def get_live_margin(
+    portfolio_id: PortfolioId, services: ServicesDep, principal: PrincipalDep
+) -> MarginView:
+    """Buying power and margin use, read from the broker now, with the
+    margin cushion, the safety buffer, the pattern day trader state and the
+    latest margin check. ``account`` is ``null`` when the broker cannot be
+    read (``read_error`` says why). Read only."""
+    return _service(services).margin(principal, portfolio_id)
 
 
 # ---- stages, gates and the preview (19.9) --------------------------------------------
@@ -191,3 +213,39 @@ def preview_live_orders(
     """The orders the live book would send now: a dry run through every
     rule and the broker's what-if. It never transmits an order."""
     return _service(services).preview(principal, portfolio_id)
+
+
+# ---- live options (17.8) ----------------------------------------------------------------
+
+
+@router.get(
+    "/{portfolio_id}/live/options",
+    response_model=OptionsLiveView,
+    operation_id="getOptionsLive",
+    dependencies=needs(Permission.READ),
+)
+def get_options_live(
+    portfolio_id: PortfolioId, services: ServicesDep, principal: PrincipalDep
+) -> OptionsLiveView:
+    """Whether an option order may open in this portfolio, and every
+    reason it may not: the admin's switch, the live stage and the options
+    approval level. Off by default."""
+    return OptionsLiveService(services.context).view(principal, portfolio_id)
+
+
+@router.put(
+    "/{portfolio_id}/live/options/approval",
+    response_model=OptionsLiveView,
+    operation_id="setOptionsApproval",
+    dependencies=needs(Permission.LIVE_MANAGE),
+)
+def set_options_approval(
+    portfolio_id: PortfolioId,
+    body: OptionsApprovalUpdate,
+    services: ServicesDep,
+    principal: PrincipalDep,
+) -> OptionsLiveView:
+    """Set the options approval level (none, covered, spreads or naked)
+    with a reason. Needs a fresh second factor. It never turns options on
+    by itself: the switch and the stage still apply."""
+    return OptionsLiveService(services.context).set_level(principal, portfolio_id, body)

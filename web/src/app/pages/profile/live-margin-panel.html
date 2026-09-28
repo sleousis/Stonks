@@ -1,0 +1,132 @@
+<section class="panel" aria-labelledby="margin-title">
+  <div class="panel-head">
+    <h2 id="margin-title">Buying power and margin</h2>
+    @if (isMargin()) {
+      <app-status-pill
+        [status]="view()?.account?.level ?? 'none'"
+        [label]="level().label"
+        [tone]="level().tone"
+        form="lamp"
+      />
+    }
+  </div>
+  <div class="panel-body stack">
+    @if (margin.error(); as err) {
+      <app-error-state
+        title="Could not load buying power"
+        [error]="err"
+        (retry)="margin.reload()"
+      />
+    } @else if (!view()) {
+      <app-loading-state label="Reading the account from the broker" [rows]="3" />
+    } @else {
+      @let v = view()!;
+      @if (v.account; as a) {
+        <dl class="figures" aria-label="The account as the broker reports it now">
+          <div>
+            <dt>Equity</dt>
+            <dd class="num">{{ money(a.equity, { currency: a.currency }) }}</dd>
+          </div>
+          <div>
+            <dt>Buying power</dt>
+            <dd class="num" data-testid="buying-power">
+              {{ money(a.buying_power, { currency: a.currency }) }}
+            </dd>
+          </div>
+          <div>
+            <dt>Available funds</dt>
+            <dd class="num">{{ money(a.available_funds, { currency: a.currency }) }}</dd>
+          </div>
+          @if (isMargin()) {
+            <div>
+              <dt>New margin allowed</dt>
+              <dd class="num" data-testid="margin-room">
+                {{ money(a.margin_room, { currency: a.currency }) }}
+              </dd>
+            </div>
+          }
+        </dl>
+
+        @if (isMargin()) {
+          <div class="meter-block">
+            <div class="meter-head">
+              <span id="margin-use-label">Margin use</span>
+              <span class="num" data-testid="margin-use">{{
+                pct(a.margin_use, { digits: 0 })
+              }}</span>
+            </div>
+            <div
+              class="meter"
+              role="meter"
+              aria-labelledby="margin-use-label"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              [attr.aria-valuenow]="(meter() * 100).toFixed(0)"
+              [attr.aria-valuetext]="pct(a.margin_use, { digits: 0 }) + ' of equity'"
+              [attr.data-level]="a.level"
+            >
+              <span class="meter-fill" [style.width.%]="meter() * 100"></span>
+            </div>
+            <p class="muted">
+              The maintenance margin the broker holds, as a share of equity. Cushion before a margin
+              call:
+              <span class="num" data-testid="cushion">{{ pct(a.cushion, { digits: 0 }) }}</span
+              >.
+            </p>
+          </div>
+          <p class="level-effect" [attr.data-level]="a.level" role="status">
+            {{ level().effect }}
+          </p>
+          <ul class="notes" aria-label="How Stonks guards the margin">
+            <li>
+              Each new order must leave
+              <span class="num">{{ pct(v.buffer, { digits: 0 }) }}</span> of equity unused, as the
+              broker's own margin check works it out.
+            </li>
+            <li>
+              Below a cushion of
+              <span class="num">{{ pct(v.warn_cushion, { digits: 0 }) }}</span> you get an alert.
+              Below <span class="num">{{ pct(v.reduce_cushion, { digits: 0 }) }}</span>
+              Stonks sells until it is back at
+              <span class="num">{{ pct(v.restore_cushion, { digits: 0 }) }}</span
+              >, before the broker does.
+            </li>
+            @if (pdt(); as p) {
+              <li data-testid="pdt">Pattern day trader rule: {{ p }}</li>
+            }
+          </ul>
+          @if (a.reported_type !== 'margin') {
+            <p class="warn-text">
+              The broker does not report this as a margin account, so nothing new opens on margin.
+            </p>
+          }
+        } @else {
+          <p class="muted">
+            A cash account borrows nothing: buys use settled cash only, and there are no short
+            sales.
+          </p>
+        }
+      } @else {
+        <p class="warn-text" data-testid="margin-read-error">
+          Could not read the account from the broker: {{ v.read_error ?? 'no broker linked' }}.
+        </p>
+      }
+
+      @if (v.latest_check; as c) {
+        <p class="muted">
+          Last margin check <span class="num">{{ dateTime(c.checked_at) }}</span> ({{
+            c.source === 'tick' ? 'trading run' : 'during the session'
+          }}).
+        </p>
+      }
+      @if (v.profile_type === 'margin' && !v.margin_accounts_on) {
+        <p class="warn-text">
+          Margin accounts are off, so this account opens nothing new. Your admin turns them on.
+        </p>
+      }
+      <div class="actions">
+        <button type="button" class="btn" (click)="margin.reload()">Read again</button>
+      </div>
+    }
+  </div>
+</section>

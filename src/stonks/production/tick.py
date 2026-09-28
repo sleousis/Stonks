@@ -72,6 +72,7 @@ from stonks.accounts.models import DEFAULT_PORTFOLIO_ID, Mode, Subscription
 from stonks.accounts.models import Portfolio as AccountPortfolio
 from stonks.accounts.paper import ensure_paper_account
 from stonks.backtest.costs import CostModel, CostModelSettings, FixedCostModel
+from stonks.backtest.fills import ExecutionSettings
 from stonks.backtest.simulated_broker import FinancingEvent, SimulatedBroker
 from stonks.core.interval import Interval
 from stonks.core.protocols import Broker, Strategy
@@ -80,6 +81,7 @@ from stonks.execution.borrow import BorrowSource
 from stonks.execution.brokers.base import (
     BrokerKind,
     BrokerMode,
+    LiveAccountState,
     MarginPreviewer,
     OrderRejectedError,
     OrderStateSource,
@@ -132,6 +134,7 @@ from stonks.production.decay import DecaySettings
 from stonks.production.financing import (
     broker_borrow_source,
     last_accrual,
+    live_short_financing,
     record_accrual,
     short_account,
 )
@@ -170,6 +173,12 @@ from stonks.production.ownership import (
     merge_holdings,
     owned_positions,
     strip_holdings,
+)
+from stonks.production.paper_fills import (
+    PaperFillMode,
+    PaperSweep,
+    record_open_fills,
+    sweep_paper_orders,
 )
 from stonks.production.portfolio_runs import PortfolioRun, record_run, runs_recorded
 from stonks.production.prices import PriceBook, held_tickers, load_history, load_prices
@@ -225,6 +234,8 @@ _BREACH_KINDS = frozenset({"month_loss", "week_loss", "drawdown"})
 
 #: Quantities closer than this are equal (a fill of the whole order).
 _QTY_EPSILON = 1e-9
+#: The default execution: every order in full at its price (no fill model).
+_IMMEDIATE_FILLS = ExecutionSettings.model_validate({})
 
 #: Bars of daily history the volatility-aware constructors read.
 _VOL_HISTORY_BARS = 260
@@ -307,6 +318,16 @@ class TickSettings:
     #: ``[production.live]``: live books may decide now and submit in the
     #: window before the next open (order tickets, roadmap 19.8).
     live: LiveSettings = field(default_factory=LiveSettings)
+    #: How a simulated (paper) book fills (P21): ``next_open`` keeps each
+    #: order working and fills it at the next session's open, as a
+    #: backtest does (``production.paper_fills``); ``close`` fills at once
+    #: at the latest close (the old convention). ``build_tick_settings``
+    #: passes ``[production] paper_fills`` (``next_open`` by default); a
+    #: direct construction keeps ``close``.
+    paper_fills: PaperFillMode = "close"
+    #: ``[backtest.execution]``: the fill model paper books fill through
+    #: at the next open, the one backtests use.
+    execution: ExecutionSettings = _IMMEDIATE_FILLS
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
@@ -1024,6 +1045,25 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     if plan is not None and plan.deferred:
         corporate_summary["deferred_corporate_actions"] = [event_as_dict(e) for e in plan.deferred]
 
+    # P21: a paper book's orders decided at an earlier close fill now, at
+    # the next session's open, as in a backtest. The next decision replaces
+    # whatever did not fill (production.paper_fills).
+    deferred = not external and settings.paper_fills == "next_open"
+    paper = PaperSweep()
+    if deferred:
+        paper = sweep_paper_orders(
+            state,
+            lake,
+            portfolio,
+            portfolio_id=scope,
+            as_of=as_of,
+            make_broker=lambda held_now: _paper_broker(held_now, settings, book),
+            actions=actions,
+            hold=_halt_hold(state, as_of, book),
+        )
+        working = {cid: t for cid, t in working.items() if cid not in paper.settled}
+    paper_summary = paper.as_dict()
+
     # 19.10: protective stops. A simulated book's working stops fill from
     # the bars since they were placed, before anything decides (the stop
     # fills and the orders are recorded with this run's snapshot).
@@ -1166,6 +1206,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             if external:
                 stop_summary = sync_stops(own_view(account), (), verdict)
             with state.transaction():
+                record_open_fills(state, paper, portfolio_id=scope)
                 for order, fill in stop_fills:
                     _record_order(state, order, status="filled", portfolio_id=scope)
                     _record_fill(state, fill, portfolio_id=scope)
@@ -1173,15 +1214,21 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                     stop_summary = sync_stops(
                         portfolio.positions, _ledger_fills(stop_fills), verdict
                     )
-                if persist_corporate_actions() or applied or stop_fills:
+                if persist_corporate_actions() or applied or stop_fills or paper.outcomes:
                     _snapshot_portfolio(state, tick_id, account, prices, as_of, portfolio_id=scope)
         log.info("tick.portfolio_noop", reason=reason)
         return result(
             "noop",
             None,
             0,
-            len(stop_fills) if not dry_run else 0,
-            {"reason": reason, **halt_summary, **corporate_summary, **stop_summary},
+            len(stop_fills) + paper.fills if not dry_run else 0,
+            {
+                "reason": reason,
+                **halt_summary,
+                **corporate_summary,
+                **paper_summary,
+                **stop_summary,
+            },
         )
 
     # 3. construct: the pipeline turns this book's signals into orders
@@ -1242,6 +1289,8 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             risk_context = replace(
                 risk_context, margin=margin, borrow=borrow or risk_context.borrow
             )
+    #: The broker's own borrow source (19.14), read once per book.
+    located: BorrowSource | None = None
     if external:
         # 19.8: a book at a real broker gives the live safeguards and the
         # account rules its live context (the account, quotes, the owner's
@@ -1410,7 +1459,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         (order, "filled", fill) for order, fill in stop_fills
     ]
     if not dry_run:
-        fills_count += len(stop_fills)
+        fills_count += len(stop_fills) + paper.fills
     #: ``status_reason`` per client id (simulated partial fills).
     reasons: dict[str, str] = {}
 
@@ -1467,6 +1516,11 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 continue
             if external:
                 place_external(order)
+                continue
+            if deferred:
+                # P21: it stays working and fills at the next open
+                placed += 1
+                outcomes.append((order, "pending", None))
                 continue
             try:
                 fill = broker.place_order(order)
@@ -1541,7 +1595,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         # external broker's portfolio object is not updated by fills, so its
         # buys are checked against the pre-sell cash: conservative.)
         place(sells)
-        if buys and not dry_run:
+        if buys and not dry_run and not deferred:
             second = apply_book_risk(buys, book_input, market, slice_policy)
             risk_adjustments.extend(second.adjustments)
             buys = second.orders
@@ -1585,12 +1639,21 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 ).prices
             )
         stop_summary = sync_stops(own_view(after), (), halt)
+        if book.spec.allow_short:
+            # 19.13: the book's own shorts owe the broker's borrow fee since
+            # the last accrual, booked so the P&L sees it the day it is owed
+            financing = _live_financing(
+                run, book, located, own_view(after), marks, since, asset_classes
+            )
         with state.transaction():
             persist_corporate_actions()
+            if financing is not None:
+                record_accrual(state, portfolio_id, as_of, financing, tick_id=tick_id)
             _snapshot_portfolio(state, tick_id, after, marks, as_of, portfolio_id=scope)
             hook_summary = hooks(after, marks)
     elif not dry_run:
         with state.transaction():
+            record_open_fills(state, paper, portfolio_id=scope)
             for order, order_status, fill in outcomes:
                 _record_order(
                     state,
@@ -1599,6 +1662,8 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                     reason=reasons.get(order.client_id or ""),
                     portfolio_id=scope,
                 )
+                if order_status == "pending":
+                    write_state(state, order.client_id, "accepted")
                 if fill is not None:
                     _record_fill(
                         state, fill, portfolio_id=scope, arrival_price=_arrival(broker, fill)
@@ -1666,6 +1731,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             "fills": fills_count,
             "risk_adjustments": [a.as_dict() for a in risk_adjustments],
             **corporate_summary,
+            **paper_summary,
             **({"financing": round(sum(e.amount for e in financing), 6)} if financing else {}),
             **stop_summary,
             **hook_summary,
@@ -1689,7 +1755,7 @@ def _live_context(
     from stonks.production.rules._common import settings_of
 
     try:
-        return build_live_context(
+        live = build_live_context(
             run.state,
             book.portfolio_id,
             run.as_of,
@@ -1702,6 +1768,58 @@ def _live_context(
     except Exception as exc:
         run.log.error("tick.live_context_failed", portfolio_id=book.portfolio_id, error=str(exc))
         return LiveContext(portfolio_id=book.portfolio_id)
+    account = live.account
+    # an external broker without our account type (Alpaca) is not a margin book
+    if (
+        isinstance(account, LiveAccountState)
+        and account.account_type == "margin"
+        and not run.dry_run
+    ):
+        _check_margin(run, book, account)
+    return live
+
+
+def _live_financing(
+    run: _TickRun,
+    book: TickBook,
+    source: BorrowSource | None,
+    positions: Mapping[str, float],
+    prices: Mapping[str, float],
+    snapshot_since: date | None,
+    asset_classes: Mapping[str, str],
+) -> list[FinancingEvent] | None:
+    """19.13: the borrow fees a short book at a real broker owes since its
+    last accrual (else its last snapshot), at the broker's borrow rates.
+    ``None`` when the broker has no borrow source or it fails: the clock
+    then stays where it is and the next run charges the days."""
+    if source is None:
+        return None
+    try:
+        return live_short_financing(
+            positions,
+            prices,
+            run.as_of,
+            since=last_accrual(run.state, book.portfolio_id) or snapshot_since,
+            borrow=source,
+            asset_classes=asset_classes,
+        )
+    except Exception as exc:
+        run.log.error("tick.live_financing_failed", portfolio_id=book.portfolio_id, error=str(exc))
+        return None
+
+
+def _check_margin(run: _TickRun, book: TickBook, account: LiveAccountState) -> None:
+    """19.13: record a live margin account's cushion and alert when thin.
+    The ``margin_call`` rule then reduces the book when it is too thin."""
+    from stonks.production.live.margin import check_margin
+    from stonks.production.rules._common import settings_of
+    from stonks.production.rules.margin_call import MarginCallSettings
+
+    settings = settings_of(book.spec.risk, "margin_call") or MarginCallSettings()
+    try:
+        check_margin(run.state, book.portfolio_id, account, settings, source="tick")
+    except Exception as exc:  # a failed record never stops the book
+        run.log.error("tick.margin_check_failed", portfolio_id=book.portfolio_id, error=str(exc))
 
 
 def _unreconciled(run: _TickRun, book: TickBook, unresolved: Sequence[str]) -> BookResult:
@@ -2365,6 +2483,40 @@ def _build_broker(
     return broker
 
 
+def _halt_hold(
+    state: SqliteState, as_of: date, book: TickBook
+) -> Callable[[Order], str | None] | None:
+    """What a halt in force holds back of a paper book's working orders:
+    every order under ``all``, orders that do not reduce a position under
+    ``buys``. ``None`` when nothing is halted."""
+    halts = active_halts(state, as_of, portfolio_id=book.portfolio_id, user_id=book.owner_id)
+    if book.parent_id is not None:
+        halts += active_halts(state, as_of, portfolio_id=book.parent_id)
+    modes = {h.halt for h in halts}
+    if not modes:
+        return None
+    mode = "all" if "all" in modes else "buys"
+
+    def hold(order: Order) -> str | None:
+        if mode == "all" or not _reduces(order):
+            return f"cancelled by a halt ({mode})"
+        return None
+
+    return hold
+
+
+def _paper_broker(portfolio: Portfolio, settings: TickSettings, book: TickBook) -> SimulatedBroker:
+    """The broker a paper book's working orders fill through at the next
+    open: the backtest's fill model and cost model, on margin for a short
+    book."""
+    broker = settings.simulated_costs.build_broker(
+        portfolio, fill_model=settings.execution.fill_model()
+    )
+    if book.spec.allow_short:
+        broker.enable_shorts(*short_account(book.spec.risk))
+    return broker
+
+
 def _shadow_phase(run: _TickRun) -> dict[str, Any]:
     """Advance the model books; return the tick-summary fragment. Never
     raises: a model-book failure must not fail the real tick."""
@@ -2419,6 +2571,7 @@ def _shadow_phase(run: _TickRun) -> dict[str, Any]:
             strategies=run.pool.checkout,
             statuses=statuses,
             risk_context=base_context,
+            lake=lake,
         )
     except Exception as exc:
         log.error("tick.shadow_failed", error=str(exc), error_type=type(exc).__name__)
@@ -2472,6 +2625,7 @@ def _version_book_phase(
             volumes=book.volumes,
             corporate_actions=actions,
             risk_context=base_context,
+            lake=run.lake,
         )
     except Exception as exc:
         run.log.error("tick.version_books_failed", error=str(exc), error_type=type(exc).__name__)

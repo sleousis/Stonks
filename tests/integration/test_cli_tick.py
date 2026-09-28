@@ -113,7 +113,10 @@ def test_tick_full_run_smoke(runner, seeded):
     try:
         assert state.count_rows("tick_runs") == 1
         assert state.count_rows("orders") >= 1
-        assert state.count_rows("fills") >= 1
+        # a paper order fills at the next open (P21): the one tick leaves it working
+        assert state.count_rows("fills") == 0
+        working = state.sql("SELECT COUNT(*) AS n FROM orders WHERE status = 'pending'")
+        assert working[0]["n"] >= 1
         assert state.count_rows("portfolio_snapshots") == 1
     finally:
         state.close()

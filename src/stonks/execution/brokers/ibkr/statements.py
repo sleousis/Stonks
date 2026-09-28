@@ -13,7 +13,10 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 
+from stonks.core.options import format_number
+from stonks.execution.brokers.ibkr.client import IbContract, IbOptionEvent
 from stonks.execution.brokers.ibkr.flex import (
     FlexCashTransaction,
     FlexClient,
@@ -25,6 +28,7 @@ from stonks.execution.drift import BrokerStatement, StatementCash, StatementExec
 __all__ = [
     "cached_statements",
     "clear_statement_cache",
+    "option_event_source",
     "statement_source",
     "to_broker_statement",
 ]
@@ -96,6 +100,42 @@ def cached_statements(client: FlexClient) -> list[FlexStatement]:
 def clear_statement_cache() -> None:
     with _LOCK:
         _CACHE.clear()
+
+
+def option_event_source(client: FlexClient) -> Callable[[], list[IbOptionEvent]]:
+    """The statement's option assignments, exercises and expiries as the
+    broker reads them (roadmap 17.8). The removed position is the opposite
+    of IBKR's closing quantity."""
+
+    def read() -> list[IbOptionEvent]:
+        out: list[IbOptionEvent] = []
+        for s in cached_statements(client):
+            for e in s.option_events:
+                if e.expiry is None or e.put_call not in ("C", "P") or e.date is None:
+                    continue
+                contract = IbContract(
+                    con_id=e.con_id or 0,
+                    symbol=e.underlying_symbol,
+                    sec_type="OPT",
+                    currency=e.currency or "USD",
+                    last_trade_date=f"{e.expiry:%Y%m%d}",
+                    strike=e.strike,
+                    right=e.put_call,
+                    multiplier=format_number(e.multiplier),
+                )
+                out.append(
+                    IbOptionEvent(
+                        event_id=e.event_id,
+                        account=e.account_id or s.account_id,
+                        contract=contract,
+                        kind=e.kind,  # type: ignore[arg-type]
+                        quantity=-e.quantity,
+                        time=datetime.combine(e.date, datetime.min.time(), tzinfo=UTC),
+                    )
+                )
+        return out
+
+    return read
 
 
 def statement_source(client: FlexClient) -> Callable[[], list[BrokerStatement]]:

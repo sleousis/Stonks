@@ -36,6 +36,11 @@ dividend_withholding_rate = 0.0
 # Which strategies keep a model book each tick: "shadow" (shadow strategies
 # only) or "all" non-retired strategies.
 model_books = "shadow"
+# How paper and model books fill (principle P21). "next_open": an order
+# decided at the close stays working and fills at the next session's open
+# through [backtest.execution] and [backtest.costs], as a backtest does. The
+# next tick books it. "close": fill at once at the latest close (old).
+paper_fills = "next_open"
 # true: trade one book per portfolio from its paper/auto subscriptions (and
 # record notify-mode signals). A promotion subscribes pf_default to the
 # strategy, so the default book still trades every active strategy.
@@ -100,6 +105,20 @@ min_order_notional = 0.0
 # max_borrow_fee = 0.10
 # max_adverse_pct = 0.25           # cover 25 % above entry
 # spike_pct = 0.30                 # cover after a 30 % rise in spike_bars bars
+
+# Margin accounts at IBKR (roadmap 19.13), off by default: the first live
+# account is a cash account, long only. To turn margin on, set these, the
+# gateway's account_type = "margin", then pick Margin in Live settings.
+# See docs/operations.md, "Margin accounts".
+# [production.risk.rules.account_rules]
+# enabled = true
+# margin_accounts = true
+# margin_buffer = 0.10             # the what-if margin leaves 10 % of equity unused
+# [production.risk.rules.margin_call]
+# enabled = true
+# warn_cushion = 0.15              # alert below 15 % excess liquidity over equity
+# reduce_cushion = 0.10            # sell own positions below 10 % ...
+# restore_cushion = 0.20           # ... until the cushion is back at 20 %
 
 # Circuit breaker (BL-28): halts new buys after a loss. Off until a limit is
 # set. Recommended values below. A trip opens a risk_halts row the owner
@@ -190,6 +209,25 @@ cash_tolerance_fraction = 0.0001   # of net liquidation, the larger wins
 cash_is_drift = false              # true: a cash difference halts buys
 compare_statement = true           # IBKR Flex, when configured
 commission_tolerance = 0.01
+
+[production.options]
+# Live options at IBKR (roadmap 17.8). Off. An option order opens only
+# when this is true, the portfolio is at live_small or higher and its
+# owner set an options approval level. Closes always go out. Needs the
+# OPRA market data add-on at IBKR (docs/release-1.0.md).
+live = false
+collar_share = 0.0                 # limit at the mid (1.0: at the touch), never market
+max_spread_pct = 0.5               # no order on a wider quote
+auto_approve_closes = false        # every option order waits for a person
+max_loss_per_group = 0.02          # of equity, when option_max_loss sets none
+max_loss_total = 0.10
+
+[production.options.expiry]
+close_sessions = 1                 # close or roll on the session before expiry
+action = "close"                   # or "roll" to the expiry nearest roll_target_days
+roll_target_days = 35
+close_longs = true
+watch_band = 0.01                  # expiry-day alert for shorts in or near the money
 
 [production.health]
 # `stonks health` thresholds.

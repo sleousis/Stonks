@@ -87,20 +87,11 @@
   "mentions_strategy": true
  },
  "tick": {
-  "cash": 0.0,
-  "fill_rows": [
-   [
-    "AAA.US",
-    103.0525186550822,
-    97.0379,
-    0.0
-   ]
-  ],
-  "fills": 1,
+  "cash": 10000.0,
+  "fill_rows": [],
+  "fills": 0,
   "orders": 1,
-  "positions": {
-   "AAA.US": 103.0525186550822
-  },
+  "positions": {},
   "status": "ok",
   "total_value": 10000.0,
   "winner": true

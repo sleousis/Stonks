@@ -53,6 +53,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_ledger_run`](#get_ledger_run) | read | no |
 | [`get_live_allocation`](#get_live_allocation) | read | no |
 | [`get_live_gate_report`](#get_live_gate_report) | read | no |
+| [`get_live_margin`](#get_live_margin) | read | no |
 | [`get_live_risk`](#get_live_risk) | read | no |
 | [`get_live_rules`](#get_live_rules) | read | no |
 | [`get_live_stage`](#get_live_stage) | read | no |
@@ -62,6 +63,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_notification_preferences`](#get_notification_preferences) | read | no |
 | [`get_option_chain`](#get_option_chain) | read | no |
 | [`get_option_payoff`](#get_option_payoff) | read | no |
+| [`get_options_live`](#get_options_live) | read | no |
 | [`get_order_tca`](#get_order_tca) | read | no |
 | [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
@@ -502,6 +504,21 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `portfolio_id` | string | yes |  | a portfolio id of yours (pf_...) |
 
+### `get_live_margin`
+
+Buying power and margin use of a live portfolio, read from the
+broker now: equity, available funds, initial and maintenance margin,
+the margin cushion and its level (ok, warn, reduce, call), the
+safety buffer, and whether the pattern day trader rule binds. A
+margin account is chosen in the web app with a fresh second factor,
+never here.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  | a portfolio id of yours (pf_...) |
+
 ### `get_live_risk`
 
 One of your portfolios on its latest tick day: one-day 95% and
@@ -621,6 +638,19 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `long_delta` | number \| null | no | `null` | absolute target delta, e.g. 0.30 |
 | `short_delta` | number \| null | no | `null` | absolute target delta, e.g. 0.30 |
 | `wing_delta` | number \| null | no | `null` | absolute target delta, e.g. 0.30 |
+
+### `get_options_live`
+
+Whether an option order may open in a live portfolio (off by
+default), with every reason it may not: the admin's switch, the
+live stage and the options approval level (none, covered, spreads,
+naked). Setting the level needs a fresh second factor in the web app.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  | a portfolio id of yours (pf_...) |
 
 ### `get_order_tca`
 

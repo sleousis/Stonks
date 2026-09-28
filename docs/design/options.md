@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 17. When it was written Stonks had no derivatives: positions were keyed by ticker, valued at `qty × price`, and every instrument lived in `instruments`.
 
-**Status:** stages 1 to 4 are built as research, off by default (roadmap 17.1 to 17.5), and the console and MCP can read chains, draw payoffs and run options backtests (17.6, section 10). Nothing in the tick, the console or MCP trades options. Stage 5 (live) waits for Phase 19. Section 9 lists what changed from this design.
+**Status:** stages 1 to 4 are built as research, off by default (roadmap 17.1 to 17.5), and the console and MCP can read chains, draw payoffs and run options backtests (17.6, section 10). Stage 5 (live options at IBKR, 17.8, section 11) is built and off by default: it waits for stable live stock trading and the IBKR options data add-on. Nothing in the tick trades options. Section 9 lists what changed from this design.
 
 Staging is the main decision: **read-only analytics first** (chains, implied volatility, Greeks, "what would a covered call on my holdings pay"), then backtests, then paper, and live trading last behind its own go-live.
 
@@ -142,7 +142,7 @@ Validation reuses the lab: survival tests run on the equity curve; options add a
 | 2 Backtests | 17.3 | Multipliers in valuation, combo fills, expiry, assignment, position groups | Simulated only |
 | 3 Risk and paper | 17.4 | Greek and max-loss rules, option margin; paper subscriptions | Paper |
 | 4 Strategies | 17.5 | The examples above through the lab and go-live | Paper, then auto |
-| 5 Live | after 17.5 | Auto only with `Capability.OPTIONS` on the connection; the broker's options approval level limits the allowed structures (level 1: covered and cash-secured; level 2: long options; level 3: spreads) | Auto with 2FA |
+| 5 Live | 17.8 | Built, off by default (section 11). Opens only with `[production.options] live`, a `live_small` stage and a per-portfolio approval level (none, covered, spreads, naked) that caps the structures. Every option order is a held ticket. | Approve by default |
 
 Owns, by stage: `core/options.py`, `ingest/sources/<vendor>_options.py`, lake migrations for `option_contracts`, `option_quotes` and analytics; `options/{pricing,surface,structures,selector}/*`; `backtest/{options_fills,expiry}.py` and multiplier support in `core/types.py` and `backtest/engine.py`; `production/rules/{greek_limits,max_loss,option_liquidity,expiry_rules,option_margin}.py`; `strategies/examples/options/*`.
 
@@ -183,7 +183,7 @@ The build follows the sections above, with these differences.
 - A separate engine, `backtest/options_engine.py`, so the stock backtest and its golden results are untouched.
 - Combos fill against the next day's quotes, not the decision day's (P12).
 - The next dividend, used for early assignment and `ctx.next_dividends`, is the next ex-date among dividends declared on or before the day (`declaration_date` in `dividends`, roadmap 17.9). A dividend with no declaration date is not known before its ex-date (P12).
-- Position groups live in the backtest ledger. There is no SQLite table yet, because nothing trades options on paper or live.
+- Position groups live in the backtest ledger. There is no SQLite table: a live combo is one ledger order per leg that carries its combo id (section 11).
 
 **Risk.**
 - Four rules at order 9: `option_greek_limits`, `option_max_loss`, `option_margin` (Reg T strategy-based or a risk-based estimate) and `short_option_guard` (approval levels 1 to 4, no naked calls, cash-secured puts). Liquidity is a leg selector filter and expiry handling is each strategy's `roll_dte`, not separate rules.
@@ -222,3 +222,68 @@ flowchart LR
 - **Synthetic chains.** Every view says `synthetic: true` when all quotes came from the synthetic source. The console then warns that the result is never evidence.
 - **MCP.** `list_option_underlyings`, `get_option_chain`, `list_option_strategies`, `list_option_structures`, `get_option_payoff` and `run_options_backtest`. The job tool follows the other research jobs: no confirm, and `wait_for_job` returns the typed result.
 - **Console.** The Options page under Research (`/options`). See `docs/ui.md`.
+
+## 11. Live options at IBKR (17.8)
+
+Built and off by default. The owner turns it on only after live stock trading is stable and the IBKR options data add-on (OPRA) is bought. Setup and the daily steps are in `docs/operations.md` (Live options).
+
+### The gate
+
+Every live option path asks one gate (`options/live/gate.py`). An option order may **open** only when:
+
+1. `[production.options] live = true`.
+2. the portfolio's live stage is `live_small` or higher.
+3. its options approval level is above `none`.
+
+A **close** never needs the gate (P28): a demoted book, or one whose switch was turned off, can still wind down. The broker checks a close against IBKR's positions. A "close" that holds nothing counts as an open.
+
+| Level | May open | Guard level |
+|---|---|---|
+| `none` | nothing (the default) | none |
+| `covered` | covered calls, cash-secured puts, long calls and puts, protective puts | 2 |
+| `spreads` | plus verticals and iron condors | 3 |
+| `naked` | plus uncovered short puts. Naked short calls stay refused. | 4 |
+
+The level lives in `option_approvals` (SQLite 046). The owner sets it with a reason and a fresh second factor (`PUT /api/portfolios/{id}/live/options/approval`, `live.manage`), and each change writes an `audit_log` row. MCP and the CLI can read it but not set it.
+
+### The IBKR adapter
+
+```mermaid
+flowchart LR
+  J[options_live job] --> Q[option_quotes and option_chain]
+  J --> R[option rules on the live book]
+  R --> T[held tickets, one per leg]
+  T --> S[live_submit]
+  S -->|one leg| O[OPT day limit]
+  S -->|two or more legs| B[BAG day limit at the net mid]
+  O --> G[IB Gateway]
+  B --> G
+  G --> X[executions per leg]
+  X --> L[ledger, by leg client id]
+  F[Flex OptionEAE] --> E[assignments into the ledger]
+```
+
+- **Contracts.** A contract id resolves to an `OPT` conId by underlying symbol, expiry, right, strike and multiplier, `SMART` routed. Exactly one match whose fields agree is kept, else the contract is refused. The answer is cached in `broker_contracts` under the contract id. US listed options only.
+- **Orders.** Never market orders. A leg is a day limit on the contract's tick grid (a buy rounds down, a sell up), whole contracts. A combo (`ComboOrder`, `core/combos.py`) is one `BAG` order: the legs in order with their own actions and whole ratios, `BUY` at the net limit per unit (positive a debit, negative a credit, rounded down). A one-leg combo goes out as a plain option order.
+- **Idempotency.** A combo's `orderRef` is its client id. Its legs are ledger orders `<combo>:<i>`. IBKR reports one execution per leg under the combo's reference, matched to leg `i` by conId. So a leg's state and fills come from the `BAG` order, and reconciliation books them on the leg. A second send is refused when IBKR already knows the reference.
+- **Quotes and Greeks.** `option_quotes` and `option_chain` read IBKR snapshots with IBKR's model Greeks (theta per day, vega per vol point, per share). The chain asks `reqSecDefOptParams` for the expiries, then one contract lookup per expiry, and keeps strikes within a band of spot. `BrokerOptionChainSource` puts it behind the `DataSource.fetch_option_quotes` seam: today only, in the same columns as EODHD. Without the data add-on IBKR answers 354 and the quotes are empty.
+- **What-if.** `what_if_combo` previews a combo's margin as one `BAG` what-if. A failure is written on the ticket.
+- **Events.** Assignments, exercises and expiries come from the Flex statement's `OptionEAE` rows (`option_event_source`), or from the fake gateway in tests.
+
+The adapter's option code is `execution/brokers/ibkr/options.py` (mapping) and `option_broker.py` (the calls). `IbkrBroker` delegates to them and offers the `OptionBroker` capability (`options/live/broker.py`).
+
+### Pricing, risk and tickets
+
+- **Mid.** Each leg is priced at its mid, moved by `collar_share` of the half spread toward the far side (`options/live/pricing.py`). No two-sided quote, or a spread wider than `max_spread_pct` of the mid, makes no order.
+- **Rules.** Live option combos run the four option rules on the account as IBKR reports it and the live quotes (`options/live/risk.py`). The guard is always on and capped at the approval level. `option_margin` is always on. `option_max_loss` takes the tighter of its own limits and `[production.options]`'s, so every live group has a defined max loss. A roll's closing leg is judged as its own exit, so a rolled cash-secured put stays level 2.
+- **Tickets.** Each leg is a ticket with hold `options`: it waits for a person by default. `auto_approve_closes` lets a closing combo go out approved by the system. The ticket shows the leg's limit, the notional with the multiplier, the net limit and the what-if. `live_submit` sends a combo only when every leg's ticket is sendable, as one order. Option tickets skip the pre-open gap check: the limit already bounds the price.
+
+### Expiry and assignment
+
+- **Plan** (`options_live`, close plus 55 minutes): an option with `close_sessions` sessions or fewer left gets a closing combo, a long too when `close_longs`. With `action = "roll"` a short is rolled: one combo that buys it back and sells the same right at the strike nearest the old one, on the expiry nearest `roll_target_days`. No roll target falls back to a close. A roll opens, so it needs the gate.
+- **Watch** (`options_expiry_watch`, close minus 60 minutes): a short option that expires today, still held and in the money or within `watch_band` of its strike, sends a high urgency alert. No spot means it is reported. It never sends an order.
+- **Assignment.** Each event is booked once (`option_events`, unique per portfolio and event id): the option leg leaves at price 0, and physical settlement moves `contracts x multiplier` shares at the strike. A short call assigned sells shares, a short put assigned buys them, a long call exercised buys and a long put exercised sells. The owner hears of every assignment and exercise.
+
+### Tests
+
+Hermetic, on `FakeIbGateway` with option contracts, chain parameters, option quotes with Greeks, `BAG` orders filled leg by leg and scripted assignments: `tests/unit/test_ibkr_options.py`, `tests/unit/test_options_live.py`, `tests/integration/test_options_live_flow.py`, `tests/integration/test_options_live_gate.py`. A live contract test for options waits for the data add-on.

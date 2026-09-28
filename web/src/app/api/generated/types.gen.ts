@@ -13,6 +13,10 @@ export type AccountProfileBody = {
      */
     account_type?: 'cash' | 'margin';
     /**
+     * Acknowledge Margin Risks
+     */
+    acknowledge_margin_risks?: boolean;
+    /**
      * Allow Short
      */
     allow_short?: boolean;
@@ -98,6 +102,14 @@ export type AccountRulesSettings = {
      * Enabled
      */
     enabled?: boolean;
+    /**
+     * Margin Accounts
+     */
+    margin_accounts?: boolean;
+    /**
+     * Margin Buffer
+     */
+    margin_buffer?: number;
     /**
      * Pdt Equity Threshold
      */
@@ -5594,6 +5606,74 @@ export type ManualOrderResult = {
 };
 
 /**
+ * MarginAccountView
+ *
+ * The account as the broker reports it now.
+ */
+export type MarginAccountView = {
+    /**
+     * Account Type
+     */
+    account_type: 'cash' | 'margin';
+    /**
+     * Available Funds
+     */
+    available_funds: number;
+    /**
+     * Buying Power
+     */
+    buying_power: number;
+    /**
+     * Cash
+     */
+    cash: number;
+    /**
+     * Currency
+     */
+    currency: string;
+    /**
+     * Cushion
+     */
+    cushion: number | null;
+    /**
+     * Day Trades Remaining
+     */
+    day_trades_remaining: number | null;
+    /**
+     * Equity
+     */
+    equity: number;
+    /**
+     * Excess Liquidity
+     */
+    excess_liquidity: number | null;
+    /**
+     * Initial Margin
+     */
+    initial_margin: number;
+    /**
+     * Level
+     */
+    level: 'ok' | 'warn' | 'reduce' | 'call' | null;
+    /**
+     * Maintenance Margin
+     */
+    maintenance_margin: number;
+    /**
+     * Margin Room
+     */
+    margin_room: number | null;
+    /**
+     * Margin Use
+     */
+    margin_use: number | null;
+    /**
+     * Reported Type
+     */
+    reported_type: 'cash' | 'margin' | null;
+};
+
+/**
  * MarginCallSettings
  */
 export type MarginCallSettings = {
@@ -5606,6 +5686,48 @@ export type MarginCallSettings = {
      */
     enabled?: boolean;
     margin?: MarginSettings;
+    /**
+     * Reduce Cushion
+     */
+    reduce_cushion?: number;
+    /**
+     * Restore Cushion
+     */
+    restore_cushion?: number;
+    /**
+     * Warn Cushion
+     */
+    warn_cushion?: number;
+};
+
+/**
+ * MarginCheckView
+ */
+export type MarginCheckView = {
+    /**
+     * Checked At
+     */
+    checked_at: string;
+    /**
+     * Cushion
+     */
+    cushion: number | null;
+    /**
+     * Equity
+     */
+    equity: number;
+    /**
+     * Level
+     */
+    level: 'ok' | 'warn' | 'reduce' | 'call';
+    /**
+     * Maintenance Margin
+     */
+    maintenance_margin: number;
+    /**
+     * Source
+     */
+    source: 'tick' | 'monitor';
 };
 
 /**
@@ -5653,6 +5775,47 @@ export type MarginSettings = {
         [key: string]: MarginRates;
     };
     rates?: MarginRates;
+};
+
+/**
+ * MarginView
+ */
+export type MarginView = {
+    account: MarginAccountView | null;
+    /**
+     * Buffer
+     */
+    buffer: number;
+    latest_check: MarginCheckView | null;
+    /**
+     * Margin Accounts On
+     */
+    margin_accounts_on: boolean;
+    pdt: PdtView;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Profile Type
+     */
+    profile_type: 'cash' | 'margin' | null;
+    /**
+     * Read Error
+     */
+    read_error: string | null;
+    /**
+     * Reduce Cushion
+     */
+    reduce_cushion: number;
+    /**
+     * Restore Cushion
+     */
+    restore_cushion: number;
+    /**
+     * Warn Cushion
+     */
+    warn_cushion: number;
 };
 
 /**
@@ -6521,6 +6684,20 @@ export type OptionUnderlyingView = {
 };
 
 /**
+ * OptionsApprovalUpdate
+ */
+export type OptionsApprovalUpdate = {
+    /**
+     * Level
+     */
+    level: 'none' | 'covered' | 'spreads' | 'naked';
+    /**
+     * Reason
+     */
+    reason: string;
+};
+
+/**
  * OptionsBacktestRequest
  */
 export type OptionsBacktestRequest = {
@@ -6634,6 +6811,86 @@ export type OptionsBacktestView = {
      * Verdict
      */
     verdict: 'passed' | 'failed' | 'not_run';
+};
+
+/**
+ * OptionsLevelView
+ */
+export type OptionsLevelView = {
+    /**
+     * Allows
+     */
+    allows: string;
+    /**
+     * Level
+     */
+    level: 'none' | 'covered' | 'spreads' | 'naked';
+};
+
+/**
+ * OptionsLiveView
+ *
+ * A portfolio's live options state. ``allowed`` is true only when the
+ * switch is on, the stage is ``live_small`` or higher and the level is
+ * above ``none``.
+ */
+export type OptionsLiveView = {
+    /**
+     * Allowed
+     */
+    allowed: boolean;
+    /**
+     * Auto Approve Closes
+     */
+    auto_approve_closes: boolean;
+    /**
+     * Close Sessions
+     */
+    close_sessions: number;
+    /**
+     * Enabled
+     *
+     * [production.options] live, set by the admin
+     */
+    enabled: boolean;
+    /**
+     * Expiry Action
+     */
+    expiry_action: string;
+    /**
+     * Level
+     */
+    level: 'none' | 'covered' | 'spreads' | 'naked';
+    /**
+     * Levels
+     */
+    levels: Array<OptionsLevelView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Reason
+     *
+     * why the level was set
+     */
+    reason?: string | null;
+    /**
+     * Reasons
+     */
+    reasons: Array<string>;
+    /**
+     * Stage
+     */
+    stage: string | null;
+    /**
+     * Updated At
+     */
+    updated_at?: string | null;
+    /**
+     * Updated By
+     */
+    updated_by?: string | null;
 };
 
 /**
@@ -8119,6 +8376,32 @@ export type PayoffPointView = {
      * Spot
      */
     spot: number;
+};
+
+/**
+ * PdtView
+ */
+export type PdtView = {
+    /**
+     * Applies
+     */
+    applies: boolean;
+    /**
+     * Day Trades Remaining
+     */
+    day_trades_remaining: number | null;
+    /**
+     * Equity Threshold
+     */
+    equity_threshold: number;
+    /**
+     * Max Day Trades
+     */
+    max_day_trades: number;
+    /**
+     * Window Days
+     */
+    window_days: number;
 };
 
 /**
@@ -12975,9 +13258,9 @@ export type TicketView = {
     /**
      * Hold
      *
-     * Why it waits for a person (approve mode, a runaway run, or a hard to borrow short sale).
+     * Why it waits for a person (approve mode, a runaway run, a hard to borrow short sale, or a live option order).
      */
-    hold: 'approve_mode' | 'runaway' | 'hard_to_borrow' | null;
+    hold: 'approve_mode' | 'runaway' | 'hard_to_borrow' | 'options' | null;
     /**
      * Id
      */
@@ -21907,6 +22190,144 @@ export type GetLiveGateReportResponses = {
 };
 
 export type GetLiveGateReportResponse = GetLiveGateReportResponses[keyof GetLiveGateReportResponses];
+
+export type GetLiveMarginData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/margin';
+};
+
+export type GetLiveMarginErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLiveMarginError = GetLiveMarginErrors[keyof GetLiveMarginErrors];
+
+export type GetLiveMarginResponses = {
+    /**
+     * Successful Response
+     */
+    200: MarginView;
+};
+
+export type GetLiveMarginResponse = GetLiveMarginResponses[keyof GetLiveMarginResponses];
+
+export type GetOptionsLiveData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/options';
+};
+
+export type GetOptionsLiveErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetOptionsLiveError = GetOptionsLiveErrors[keyof GetOptionsLiveErrors];
+
+export type GetOptionsLiveResponses = {
+    /**
+     * Successful Response
+     */
+    200: OptionsLiveView;
+};
+
+export type GetOptionsLiveResponse = GetOptionsLiveResponses[keyof GetOptionsLiveResponses];
+
+export type SetOptionsApprovalData = {
+    body: OptionsApprovalUpdate;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/options/approval';
+};
+
+export type SetOptionsApprovalErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetOptionsApprovalError = SetOptionsApprovalErrors[keyof SetOptionsApprovalErrors];
+
+export type SetOptionsApprovalResponses = {
+    /**
+     * Successful Response
+     */
+    200: OptionsLiveView;
+};
+
+export type SetOptionsApprovalResponse = SetOptionsApprovalResponses[keyof SetOptionsApprovalResponses];
 
 export type PreviewLiveOrdersData = {
     body?: never;

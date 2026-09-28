@@ -52,7 +52,8 @@ LEDGER = {
     " limit_price, status, status_reason, broker_order_id, created_at, updated_at",
     "fills": "id, order_client_id, ticker, quantity, price, fee, filled_at",
     "portfolio_snapshots": "id, tick_id, as_of, taken_at, cash, positions_json, total_value",
-    "shadow_decisions": "*",
+    "shadow_decisions": "id, tick_id, strategy_id, as_of, ticker, side, quantity, price, status,"
+    " created_at",
     "shadow_portfolio_snapshots": "*",
     "tick_runs": "*",
 }

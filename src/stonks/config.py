@@ -31,6 +31,7 @@ from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
 from stonks.lifecycle.settings import ModelLifecycleSettings
 from stonks.ops.config import BackupConfig
+from stonks.options.live.settings import OptionsLiveSettings
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.decay import DecaySettings
 from stonks.production.intraday_pnl_settings import IntradayPnlSettings
@@ -267,6 +268,11 @@ class ProductionConfig(BaseModel):
     # Which strategies keep a model book: "shadow" (only shadow strategies)
     # or "all" non-retired ones (design section 5).
     model_books: Literal["shadow", "all"] = "shadow"
+    # How paper books and model books fill (P21): "next_open" keeps an order
+    # working and fills it at the next session's open through
+    # [backtest.execution] and [backtest.costs], as a backtest does.
+    # "close" fills at once at the latest close (the old convention).
+    paper_fills: Literal["next_open", "close"] = "next_open"
     # Trade one book per portfolio from its paper/auto subscriptions (and
     # record notify signals). pf_default follows every active strategy: a
     # promotion subscribes it (accounts.default_book), so it trades like
@@ -289,6 +295,9 @@ class ProductionConfig(BaseModel):
     decay: DecaySettings = DecaySettings()
     # ``[production.live]``: live trading at a real broker (roadmap 19).
     live: LiveSettings = LiveSettings()
+    # ``[production.options]``: live options at a real broker (roadmap
+    # 17.8). Off by default.
+    options: OptionsLiveSettings = OptionsLiveSettings()
     # ``[production.intraday_pnl]``: live marks and intraday P&L snapshots
     # of the engine's books (roadmap 21.3.3). Off by default.
     intraday_pnl: IntradayPnlSettings = IntradayPnlSettings()

@@ -95,12 +95,42 @@ class FlexCashTransaction:
 
 
 @dataclass(frozen=True)
+class FlexOptionEvent:
+    """One ``OptionEAE`` row (roadmap 17.8): an option assigned, exercised
+    or expired. ``quantity`` is IBKR's, the trade that closed the option
+    (``+1`` buys back one assigned short). ``kind`` is ours."""
+
+    account_id: str
+    kind: str
+    con_id: int | None
+    underlying_symbol: str
+    expiry: date | None
+    put_call: str
+    strike: float
+    multiplier: float
+    quantity: float
+    date: date | None
+    currency: str | None = None
+
+    @property
+    def event_id(self) -> str:
+        day = self.date.isoformat() if self.date else ""
+        return f"flex:{self.account_id}:{self.con_id}:{day}:{self.kind}"
+
+
+#: ``OptionEAE`` transaction types -> our event kinds. ``Buy`` and ``Sell``
+#: rows are the stock legs of the same events, booked from the option row.
+_EAE_KINDS = {"assignment": "assignment", "exercise": "exercise", "expiration": "expiry"}
+
+
+@dataclass(frozen=True)
 class FlexStatement:
     account_id: str
     from_date: date | None
     to_date: date | None
     trades: tuple[FlexTrade, ...] = ()
     cash_transactions: tuple[FlexCashTransaction, ...] = ()
+    option_events: tuple[FlexOptionEvent, ...] = ()
 
 
 # ---- parsing --------------------------------------------------------------------------
@@ -130,12 +160,36 @@ def _statement(el: ET.Element) -> FlexStatement:
         rows = [r for r in rows if (r.get("levelOfDetail") or "").upper() not in _SUMMARY_LEVELS]
     trades = tuple(t for t in (_trade(r) for r in rows) if t is not None)
     cash = tuple(c for c in (_cash(r) for r in el.iter("CashTransaction")) if c is not None)
+    events = tuple(e for e in (_option_event(r) for r in el.iter("OptionEAE")) if e is not None)
     return FlexStatement(
         account_id=el.get("accountId") or "",
         from_date=_date(el.get("fromDate")),
         to_date=_date(el.get("toDate")),
         trades=trades,
         cash_transactions=cash,
+        option_events=events,
+    )
+
+
+def _option_event(r: ET.Element) -> FlexOptionEvent | None:
+    kind = _EAE_KINDS.get((r.get("transactionType") or "").strip().lower())
+    strike, quantity = _num(r.get("strike")), _num(r.get("quantity"))
+    if kind is None or strike is None or not quantity:
+        return None
+    if (r.get("assetCategory") or "OPT").upper() != "OPT":
+        return None
+    return FlexOptionEvent(
+        account_id=r.get("accountId") or "",
+        kind=kind,
+        con_id=_int(r.get("conid")),
+        underlying_symbol=(r.get("underlyingSymbol") or r.get("symbol") or "").split(" ")[0],
+        expiry=_date(r.get("expiry")),
+        put_call=(r.get("putCall") or "").upper()[:1],
+        strike=strike,
+        multiplier=_num(r.get("multiplier")) or 100.0,
+        quantity=quantity,
+        date=_date(r.get("date")),
+        currency=_text(r.get("currency")),
     )
 
 

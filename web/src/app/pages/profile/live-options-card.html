@@ -1,0 +1,114 @@
+<section class="panel options-card" aria-labelledby="options-live-title">
+  <div class="panel-head">
+    <h2 id="options-live-title">Options</h2>
+    @if (view.hasValue()) {
+      <app-status-pill
+        [status]="view.value().allowed ? 'on' : 'off'"
+        [label]="headline(view.value())"
+        [tone]="view.value().allowed ? 'warn' : 'neutral'"
+        form="lamp"
+      />
+    }
+  </div>
+  <div class="panel-body stack">
+    @if (view.error(); as err) {
+      <app-error-state
+        title="Could not load the options state"
+        [error]="err"
+        (retry)="view.reload()"
+      />
+    } @else if (!view.hasValue()) {
+      <app-loading-state label="Loading the options state" [rows]="2" />
+    } @else {
+      @let v = view.value();
+      <p class="headline" data-testid="options-headline">
+        <strong>{{ headline(v) }}</strong>
+        @if (v.allowed) {
+          <span class="muted">Option orders may open here, and each one waits for you.</span>
+        } @else {
+          <span class="muted">No option order opens here. Closes still go out.</span>
+        }
+      </p>
+      @if (v.reasons.length) {
+        <ul class="reasons" aria-label="Why options are off">
+          @for (r of v.reasons; track r) {
+            <li>{{ r }}</li>
+          }
+        </ul>
+      }
+      <dl class="facts">
+        <div>
+          <dt>Approval level</dt>
+          <dd data-testid="options-level">{{ label(v.level) }}</dd>
+        </div>
+        <div>
+          <dt>Before expiry</dt>
+          <dd>
+            {{ v.expiry_action === 'roll' ? 'Roll' : 'Close' }} with
+            <span class="num">{{ v.close_sessions }}</span> session(s) left
+          </dd>
+        </div>
+        <div>
+          <dt>Closing orders</dt>
+          <dd>{{ v.auto_approve_closes ? 'Sent without approval' : 'Wait for approval' }}</dd>
+        </div>
+      </dl>
+      @if (v.updated_at) {
+        <p class="muted">
+          Level set <span class="num">{{ dateTime(v.updated_at) }}</span>
+          @if (v.reason) {
+            . Why: {{ v.reason }}
+          }
+        </p>
+      }
+
+      <form
+        class="form-grid"
+        aria-labelledby="options-level-form-title"
+        (submit)="$event.preventDefault(); save()"
+        novalidate
+      >
+        <h3 id="options-level-form-title">Change the approval level</h3>
+        <div class="choice">
+          <span class="choice-label">Approval level</span>
+          <app-segmented label="Options approval level" [options]="levels" [(value)]="level" />
+        </div>
+        <p class="allows" aria-live="polite">{{ allows() }}</p>
+        <div class="field">
+          <label for="options-level-reason">Reason for the options level</label>
+          <textarea
+            id="options-level-reason"
+            class="input"
+            rows="2"
+            [attr.maxlength]="reasonMax"
+            [disabled]="!canManage()"
+            [attr.aria-invalid]="tried() && reasonError() ? true : null"
+            [attr.aria-describedby]="
+              tried() && reasonError() ? 'options-level-reason-error' : 'options-level-reason-hint'
+            "
+            [value]="reason()"
+            (input)="reason.set($any($event.target).value)"
+          ></textarea>
+          @if (tried() && reasonError(); as e) {
+            <span id="options-level-reason-error" class="error">{{ e }}</span>
+          } @else {
+            <span id="options-level-reason-hint" class="hint"
+              >Keep it at or below what your broker granted. You confirm with a code.</span
+            >
+          }
+        </div>
+        <div class="actions">
+          <button
+            type="submit"
+            class="btn btn-danger"
+            [disabled]="!canManage() || saving() || !changed()"
+            [attr.aria-busy]="saving()"
+          >
+            {{ saving() ? 'Setting…' : 'Set options level' }}
+          </button>
+          <app-permission-note permission="live.manage" />
+        </div>
+      </form>
+    }
+  </div>
+</section>

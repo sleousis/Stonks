@@ -195,7 +195,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - `borrow_rates (ticker, as_of, source, currency, isin, available_shares, fee_rate_annual, rebate_rate_annual; PK (ticker, as_of, source))` (021): daily stock borrow terms, rates as yearly fractions. Read through `execution.borrow.LakeBorrowSource`.
 - `instrument_sector_versions (ticker, sector, gic_sector, known_at)` (022): every sector label an instrument has had, with the time Stonks first saw it. Factor attribution reads the label known on each day (`factors.style.sector_labels`).
 
-**State (SQLite, migrations 001-044):**
+**State (SQLite, migrations 001-047):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -230,6 +230,9 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - 042: halt kind `intraday_loss` on `risk_halts` (rebuilt with `reconcile_reports`, ids and counter kept, roadmap 21.3.2).
 - 043: `intraday_snapshots (portfolio_id, strategy_id, day, at, start_value, value, realised, unrealised, fees, pnl, day_return, high_water_pnl, drawdown, gross_exposure, net_exposure, exposures_json, fills, unmarked, stale_marks, max_mark_age_seconds)`: intraday P&L per book and strategy sleeve every few minutes, unique on `(portfolio_id, strategy_id, at)` (roadmap 21.3.3).
 - 044: `engine_status (engine_id, calendar, state, started_at, updated_at, stopped_at, last_dispatch_at, snapshot_json)`: the engine monitor's status row, read by `/metrics`, `/api/stream/status` and the engine dead-man (roadmap 21.3.4).
+- 045: `margin_checks (portfolio_id, checked_at, source, currency, equity, initial_margin, maintenance_margin, excess_liquidity, available_funds, buying_power, cushion, level, reported_type)`: each read of a margin account's cushion by the tick or the `live_margin` job, level in {ok, warn, reduce, call} (roadmap 19.13, margin accounts, off by default).
+- 046: `option_approvals` (per-portfolio options approval level), `option_events` (assignments, exercises, expiries, append only), and `order_tickets.hold` also takes `options` (roadmap 17.8).
+- 047: `shadow_decisions` and `model_version_decisions` statuses gain `working` and `expired`, plus `filled_on` (paper and model books fill at the next open).
 
 ## Conventions to match
 

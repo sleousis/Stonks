@@ -7,6 +7,11 @@ submit, a gateway restart that renumbers order ids, a competing session,
 a lost link to IBKR, delayed quotes, missing market data and a what-if
 timeout. No network.
 
+Options (roadmap 17.8): option contracts (:func:`option`), chain
+parameters, option quotes with Greeks, combo (``BAG``) orders filled leg by
+leg (:meth:`FakeIbGateway.fill_combo`), and assignments, exercises and
+expiries (:meth:`FakeIbGateway.option_event`).
+
 Client ids (roadmap 19.17): the gateway is itself API client ``client_id``
 (11, the tick's). :meth:`FakeIbGateway.session` opens another client of the
 same gateway with its own id and socket. A client id connects once at a
@@ -20,7 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any, Literal
 
 from stonks.execution.brokers.ibkr.client import (
@@ -33,6 +38,10 @@ from stonks.execution.brokers.ibkr.client import (
     IbContractQuery,
     IbExecution,
     IbLinkStatus,
+    IbOptionEvent,
+    IbOptionEventKind,
+    IbOptionParams,
+    IbOptionSnapshot,
     IbOrderRequest,
     IbPosition,
     IbShortability,
@@ -73,6 +82,35 @@ def stock(
     )
 
 
+def option(
+    con_id: int,
+    symbol: str,
+    expiry: date,
+    right: Literal["C", "P"],
+    strike: float,
+    *,
+    multiplier: str = "100",
+    min_tick: float = 0.01,
+    trading_class: str | None = None,
+) -> IbContractDetails:
+    """A listed US option (roadmap 17.8)."""
+    return IbContractDetails(
+        contract=IbContract(
+            con_id=con_id,
+            symbol=symbol,
+            sec_type="OPT",
+            currency="USD",
+            exchange="SMART",
+            trading_class=trading_class or symbol,
+            last_trade_date=f"{expiry:%Y%m%d}",
+            strike=strike,
+            right=right,
+            multiplier=multiplier,
+        ),
+        min_tick=min_tick,
+    )
+
+
 AAPL = stock(265598, "AAPL", isin="US0378331005")
 MSFT = stock(272093, "MSFT", isin="US5949181045")
 BRKB = stock(72063691, "BRK B", primary="NYSE")
@@ -109,6 +147,8 @@ class FakeIbGateway:
         self.reject_next: tuple[int, str] | None = None
         self.what_if_timeout = False
         self.what_if_result: IbWhatIf | None = None
+        #: conId -> (initial, maintenance margin per share, warning)
+        self.what_if_rates: dict[int, tuple[float, float, str | None]] = {}
         self.snapshot_data: dict[int, IbSnapshot] = {}
         #: the shortable ticks by conId (roadmap 19.3)
         self.shortable_data: dict[int, IbShortability] = {}
@@ -134,6 +174,10 @@ class FakeIbGateway:
         self.global_cancels = 0
         self.what_ifs: list[tuple[IbContract, IbOrderRequest]] = []
         self.all_open_requests = 0
+        #: option quotes with Greeks by conId, and option events (17.8)
+        self.option_snapshot_data: dict[int, IbOptionSnapshot] = {}
+        self.option_snapshot_requests: list[list[int]] = []
+        self._option_events: list[IbOptionEvent] = []
 
     # ---- client ids -----------------------------------------------------------------
 
@@ -263,6 +307,67 @@ class FakeIbGateway:
         self._put(t)
         return t
 
+    def fill_combo(
+        self,
+        order_ref: str,
+        units: float,
+        leg_prices: Sequence[float],
+        *,
+        commission: float | None = None,
+    ) -> list[str]:
+        """A ``BAG`` order fills ``units``: one execution per leg (the leg's
+        contract, its side and ``units x ratio`` contracts at its price)."""
+        t = self.trade(order_ref)
+        legs = t.contract.combo_legs
+        assert len(legs) == len(leg_prices), "one price per leg"
+        by_con = {d.contract.con_id: d.contract for d in self.contracts}
+        ids: list[str] = []
+        for leg, price in zip(legs, leg_prices, strict=True):
+            exec_id = f"0002.{self._next_exec:04d}"
+            self._next_exec += 1
+            self._executions.append(
+                IbExecution(
+                    exec_id=exec_id,
+                    order_ref=order_ref,
+                    perm_id=t.perm_id,
+                    contract=by_con[leg.con_id],
+                    side="BOT" if leg.action == "BUY" else "SLD",
+                    shares=units * leg.ratio,
+                    price=price,
+                    time=self.now,
+                    account=t.account,
+                    commission=commission,
+                    commission_currency="USD" if commission is not None else None,
+                )
+            )
+            ids.append(exec_id)
+        filled = t.filled + units
+        status = "Filled" if filled >= t.total_quantity - 1e-9 else "Submitted"
+        self._put(replace(t, filled=filled, status=status))
+        return ids
+
+    def option_event(
+        self,
+        details: IbContractDetails,
+        kind: IbOptionEventKind,
+        quantity: float,
+        *,
+        event_id: str | None = None,
+        account: str | None = None,
+    ) -> IbOptionEvent:
+        """IBKR assigned, exercised or expired ``quantity`` (signed, the
+        position removed) of an option."""
+        event = IbOptionEvent(
+            event_id=event_id or f"eae-{len(self._option_events) + 1}",
+            account=account or self.accounts[0],
+            contract=details.contract,
+            kind=kind,
+            quantity=quantity,
+            time=self.now,
+        )
+        self._option_events.append(event)
+        return event
+
     def restart(self) -> None:
         """The gateway restarts: every session drops and open orders come back
         under new order ids."""
@@ -297,6 +402,75 @@ class FakeIbGateway:
                 rows.append(IbAccountValue(acct, tag, value[0], value[1]))
             else:
                 rows.append(IbAccountValue(acct, tag, value, "USD"))
+
+    # ---- a margin account (roadmap 19.13) ----------------------------------------------
+
+    def margin_account(
+        self,
+        *,
+        equity: float,
+        excess_liquidity: float | None = None,
+        initial: float = 0.0,
+        maintenance: float = 0.0,
+        available_funds: float | None = None,
+        buying_power: float | None = None,
+        cash: float | None = None,
+        day_trades_remaining: int = -1,
+        trading_type: str = "STKMRGN",
+        account: str | None = None,
+    ) -> None:
+        """Account values of a Reg T margin account, replacing any set
+        before. Excess liquidity defaults to equity minus maintenance."""
+        acct = account or self.accounts[0]
+        self.values_by_account[acct] = []
+        excess = equity - maintenance if excess_liquidity is None else excess_liquidity
+        available = equity - initial if available_funds is None else available_funds
+        self.set_values(
+            acct,
+            NetLiquidation=f"{equity}",
+            TotalCashValue=f"{equity if cash is None else cash}",
+            SettledCash=f"{equity if cash is None else cash}",
+            AvailableFunds=f"{available}",
+            BuyingPower=f"{available * 4 if buying_power is None else buying_power}",
+            ExcessLiquidity=f"{excess}",
+            FullInitMarginReq=f"{initial}",
+            FullMaintMarginReq=f"{maintenance}",
+            DayTradesRemaining=f"{day_trades_remaining}",
+            **{"TradingType-S": (trading_type, "")},
+        )
+
+    def margin_call(self, *, excess_liquidity: float, account: str | None = None) -> None:
+        """The market moved against the account: excess liquidity falls to
+        ``excess_liquidity`` (below 0: IBKR may liquidate), the maintenance
+        requirement grows by the same amount."""
+        acct = account or self.accounts[0]
+        rows = self.values_by_account.get(acct, [])
+        old = next(float(v.value) for v in rows if v.tag == "ExcessLiquidity")
+        maint = next(float(v.value) for v in rows if v.tag == "FullMaintMarginReq")
+        grown = maint + (old - excess_liquidity)
+        self.values_by_account[acct] = [
+            replace(v, value=f"{excess_liquidity}")
+            if v.tag == "ExcessLiquidity"
+            else replace(v, value=f"{grown}")
+            if v.tag == "FullMaintMarginReq"
+            else v
+            for v in rows
+        ]
+
+    def what_if_margin(
+        self,
+        contract: IbContractDetails,
+        *,
+        initial_per_share: float,
+        maintenance_per_share: float,
+        warning: str | None = None,
+    ) -> None:
+        """What-if answers for ``contract`` that scale with the quantity."""
+        self.what_if_rates[contract.contract.con_id] = (
+            initial_per_share,
+            maintenance_per_share,
+            warning,
+        )
 
     def _perm(self) -> int:
         self._next_perm += 1
@@ -348,7 +522,20 @@ class FakeIbGateway:
     def contract_details(self, query: IbContractQuery) -> Sequence[IbContractDetails]:
         self._need_connection()
         self.lookups.append(query)
-        if query.isin:
+        if query.sec_type == "OPT":
+            found = [
+                d
+                for d in self.contracts
+                if d.contract.sec_type == "OPT"
+                and d.contract.symbol == query.symbol
+                and d.contract.currency == query.currency
+                and (query.last_trade_date is None
+                     or d.contract.last_trade_date == query.last_trade_date)
+                and (query.right is None or d.contract.right == query.right)
+                and (query.strike is None or d.contract.strike == query.strike)
+                and (query.multiplier is None or d.contract.multiplier == query.multiplier)
+            ]  # fmt: skip
+        elif query.isin:
             found = [d for d in self.contracts if d.isin == query.isin]
         else:
             found = [
@@ -460,6 +647,20 @@ class FakeIbGateway:
             raise TimeoutError("what-if timed out")
         if self.what_if_result is not None:
             return self.what_if_result
+        rates = self.what_if_rates.get(contract.con_id)
+        if rates is not None:
+            initial, maintenance, warning = rates
+            rows = self.values_by_account.get(order.account or self.accounts[0], [])
+            equity = next((float(v.value) for v in rows if v.tag == "NetLiquidation"), 0.0)
+            qty = order.total_quantity
+            return IbWhatIf(
+                init_margin_change=initial * qty,
+                maint_margin_change=maintenance * qty,
+                equity_with_loan_after=equity,
+                commission=1.0,
+                commission_currency="USD",
+                warning=warning,
+            )
         return IbWhatIf(
             init_margin_change=0.0,
             maint_margin_change=0.0,
@@ -478,6 +679,40 @@ class FakeIbGateway:
         self._need_connection()
         self.shortable_requests += 1
         return [self.shortable_data[c.con_id] for c in contracts if c.con_id in self.shortable_data]
+
+    # ---- options (roadmap 17.8) -----------------------------------------------------
+
+    def option_params(self, symbol: str, underlying_con_id: int) -> Sequence[IbOptionParams]:
+        self._need_connection()
+        del underlying_con_id
+        options = [d.contract for d in self.contracts
+                   if d.contract.sec_type == "OPT" and d.contract.symbol == symbol]  # fmt: skip
+        if not options:
+            return []
+        return [
+            IbOptionParams(
+                exchange="SMART",
+                trading_class=options[0].trading_class or symbol,
+                multiplier=options[0].multiplier or "100",
+                expirations=tuple(sorted({c.last_trade_date or "" for c in options})),
+                strikes=tuple(sorted({float(c.strike or 0.0) for c in options})),
+            )
+        ]
+
+    def option_snapshots(self, contracts: Sequence[IbContract]) -> Sequence[IbOptionSnapshot]:
+        self._need_connection()
+        if self.no_market_data:
+            raise IbApiError(354, "Requested market data is not subscribed")
+        self.option_snapshot_requests.append([c.con_id for c in contracts])
+        return [
+            self.option_snapshot_data[c.con_id]
+            for c in contracts
+            if c.con_id in self.option_snapshot_data
+        ]
+
+    def option_events(self) -> Sequence[IbOptionEvent]:
+        self._need_connection()
+        return list(self._option_events)
 
 
 class FakeIbSession:
@@ -557,3 +792,12 @@ class FakeIbSession:
 
     def shortability(self, contracts: Sequence[IbContract]) -> Sequence[IbShortability]:
         return self._via("shortability", contracts)
+
+    def option_params(self, symbol: str, underlying_con_id: int) -> Sequence[IbOptionParams]:
+        return self._via("option_params", symbol, underlying_con_id)
+
+    def option_snapshots(self, contracts: Sequence[IbContract]) -> Sequence[IbOptionSnapshot]:
+        return self._via("option_snapshots", contracts)
+
+    def option_events(self) -> Sequence[IbOptionEvent]:
+        return self._via("option_events")
