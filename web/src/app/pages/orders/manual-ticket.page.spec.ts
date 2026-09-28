@@ -196,6 +196,41 @@ describe('ManualTicketPage', () => {
     expect(ticket.textContent).toContain('3 to 1');
   });
 
+  it('drops a size worked out for a stop that changed meanwhile', async () => {
+    setup();
+    const el = await render();
+    fill(el);
+    type(el, '#mo-stop', '24');
+    type(el, '#mo-risk', '1');
+    const qtyBefore = el.querySelector<HTMLInputElement>('#mo-qty')!.value;
+    button(el, 'Work out size').click();
+    const req = await nextRequest(http, '/api/orders/manual/plan', 'POST');
+    // The trader moves the stop while the size is on its way.
+    type(el, '#mo-stop', '20');
+    req.flush({
+      ticker: 'AAA.US',
+      side: 'buy',
+      entry_price: 25,
+      entry_is_close: true,
+      stop_price: 24,
+      target_price: null,
+      equity: 10_000,
+      cash: 10_000,
+      risk_budget: 100,
+      risk_per_share: 1,
+      quantity: 100,
+      risk_amount: 100,
+      notional: 2_500,
+      reward_risk: null,
+      capped_by: null,
+      note: null,
+    });
+    await settle();
+    expect(el.querySelector<HTMLInputElement>('#mo-qty')!.value).toBe(qtyBefore);
+    expect(el.querySelector('#mo-plan-result')?.textContent).not.toContain('to 1');
+    expect(el.querySelector('#mo-plan-result')?.textContent).toContain('whole shares');
+  });
+
   it('asks for the stop and the risk before sizing', async () => {
     setup();
     const el = await render();

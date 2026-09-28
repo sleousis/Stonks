@@ -668,20 +668,14 @@ export class ManualTicketPage implements OnInit {
       return;
     }
     if (errs.stop || errs.risk) return;
-    const value = Number(this.risk());
-    const limit = this.orderType() === 'limit' ? Number(this.limit()) : NaN;
+    const body = this.sizingBody();
     this.busy.set(true);
     this.failure.set(null);
     try {
-      const result = await this.api.plan({
-        ticker,
-        side: this.sideField(),
-        stop_price: Number(this.stop()),
-        target_price: optionalPrice(this.target()),
-        entry_price: limit > 0 ? limit : null,
-        risk_percent: this.riskMode() === 'percent' ? value : null,
-        risk_amount: this.riskMode() === 'amount' ? value : null,
-      });
+      const result = await this.api.plan(body);
+      // The ticket changed while the size was on its way: this size is for
+      // other inputs, so it must not fill the quantity.
+      if (JSON.stringify(this.sizingBody()) !== JSON.stringify(body)) return;
       this.triedPlan.set(false);
       if (result.quantity > 0) this.edit(this.quantity, String(result.quantity));
       this.plan.set(result);
@@ -692,6 +686,21 @@ export class ManualTicketPage implements OnInit {
       this.busy.set(false);
     }
   }
+  /** The sizing request for the fields as they stand now. */
+  private sizingBody() {
+    const value = Number(this.risk());
+    const limit = this.orderType() === 'limit' ? Number(this.limit()) : NaN;
+    return {
+      ticker: this.tickerField().trim().toUpperCase(),
+      side: this.sideField(),
+      stop_price: Number(this.stop()),
+      target_price: optionalPrice(this.target()),
+      entry_price: limit > 0 ? limit : null,
+      risk_percent: this.riskMode() === 'percent' ? value : null,
+      risk_amount: this.riskMode() === 'amount' ? value : null,
+    };
+  }
+
   protected money(v: number): string {
     return formatMoney(v, { currency: this.currency() });
   }
