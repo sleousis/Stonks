@@ -182,3 +182,39 @@ def test_london_prices_come_out_in_pounds(currency, price, proceeds):
     assert trade.price == pytest.approx(0.725)
     assert trade.proceeds == pytest.approx(-72.5)
     assert trade.currency == "GBP"
+
+
+# ---- option assignments, exercises and expiries (roadmap 17.8) ----------------------------
+
+EAE = """<FlexQueryResponse><FlexStatements count="1">
+<FlexStatement accountId="U1" fromDate="20261016" toDate="20261016"><OptionEAE>
+<OptionEAE accountId="U1" currency="USD" assetCategory="OPT" symbol="AAPL  261016P00190000"
+  underlyingSymbol="AAPL" conid="1003" strike="190" expiry="20261016" putCall="P"
+  multiplier="100" quantity="2" date="20261016" transactionType="Assignment"/>
+<OptionEAE accountId="U1" currency="USD" assetCategory="STK" symbol="AAPL" conid="265598"
+  strike="" quantity="200" date="20261016" transactionType="Buy"/>
+<OptionEAE accountId="U1" currency="USD" assetCategory="OPT" symbol="AAPL  261016C00230000"
+  underlyingSymbol="AAPL" conid="1009" strike="230" expiry="20261016" putCall="C"
+  multiplier="100" quantity="-1" date="20261016" transactionType="Expiration"/>
+</OptionEAE></FlexStatement></FlexStatements></FlexQueryResponse>"""
+
+
+def test_option_eae_rows_become_option_events():
+    [statement] = parse_flex_statements(EAE)
+    kinds = [(e.kind, e.con_id, e.put_call, e.quantity) for e in statement.option_events]
+    assert kinds == [("assignment", 1003, "P", 2.0), ("expiry", 1009, "C", -1.0)]
+    assert statement.option_events[0].event_id == "flex:U1:1003:2026-10-16:assignment"
+
+
+def test_the_event_source_reads_the_removed_position():
+    from stonks.execution.brokers.ibkr.statements import clear_statement_cache, option_event_source
+
+    clear_statement_cache()
+    flex = client(Transport(SEND_OK, EAE))
+    events = option_event_source(flex)()
+    clear_statement_cache()
+    assert [(e.kind, e.quantity, e.contract.strike, e.contract.right) for e in events] == [
+        ("assignment", -2.0, 190.0, "P"),  # a short put of 2 was assigned
+        ("expiry", 1.0, 230.0, "C"),  # a long call expired
+    ]
+    assert events[0].time.date() == date(2026, 10, 16)

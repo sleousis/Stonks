@@ -74,7 +74,11 @@ from stonks.execution.brokers.ibkr.flex import (
     FlexTrade,
 )
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig, IbkrGatewayConfig
-from stonks.execution.brokers.ibkr.statements import cached_statements, clear_statement_cache
+from stonks.execution.brokers.ibkr.statements import (
+    cached_statements,
+    clear_statement_cache,
+    option_event_source,
+)
 from stonks.logging import get_logger
 
 _log = get_logger("stonks.connections.providers.ibkr")
@@ -355,6 +359,9 @@ class IbkrConnection(BrokerConnection):
             state=extra.get("state"),
             client_factory=self._factory,
             borrow_fees=extra.get("borrow_fees"),
+            option_event_reader=(
+                option_event_source(self._flex) if self._flex is not None else None
+            ),
         )
         broker.expected_account = account_id
         return broker

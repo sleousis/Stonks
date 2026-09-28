@@ -4,8 +4,10 @@ It speaks only to an :class:`~stonks.execution.brokers.ibkr.client.IbClient`
 (``IbAsyncClient`` in production, ``FakeIbGateway`` in tests) and returns
 only our types. Capabilities: ``Broker``, ``OrderStateSource``,
 ``OrderCanceller``, ``GlobalCanceller``, ``AccountReader``,
-``MarginPreviewer``, ``ExecutionSource``, ``QuoteSource`` and
-``OpenOrderSource``.
+``MarginPreviewer``, ``ExecutionSource``, ``QuoteSource``,
+``OpenOrderSource`` and, for options (roadmap 17.8, off by default),
+``OptionBroker`` (``option_broker.py``: option and combo orders behind the
+portfolio's options gate, never market orders).
 
 Safety, in the order every call meets it (:meth:`IbkrBroker.ensure_ready`):
 
@@ -50,9 +52,11 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock, today
+from stonks.core.combos import ComboOrder
+from stonks.core.options import is_option_id
 from stonks.core.types import Fill, Order, OrderSide, Portfolio, TimeInForce
 from stonks.execution.borrow import BorrowSource
 from stonks.execution.brokers.base import (
@@ -71,12 +75,15 @@ from stonks.execution.brokers.base import (
     Quote,
     UnsupportedTickerError,
 )
+from stonks.execution.brokers.ibkr import option_broker
+from stonks.execution.brokers.ibkr import options as option_orders
 from stonks.execution.brokers.ibkr.client import (
     IbAccountValue,
     IbApiError,
     IbClient,
     IbContract,
     IbExecution,
+    IbOptionEvent,
     IbTrade,
 )
 from stonks.execution.brokers.ibkr.contracts import (
@@ -93,7 +100,11 @@ from stonks.execution.brokers.ibkr.orders import broker_ref, to_ib_order
 from stonks.execution.brokers.ibkr.settings import GatewayMode, IbkrOrderSettings
 from stonks.execution.brokers.ibkr.status import ibkr_state
 from stonks.execution.order_state import TERMINAL, ledger_status
+from stonks.ingest.option_schemas import OptionQuoteRow
 from stonks.logging import get_logger
+from stonks.options.chain import OptionQuote
+from stonks.options.live.events import OptionEvent
+from stonks.options.live.gate import OptionsGate
 from stonks.production.live.stages import REAL_MONEY
 
 _log = get_logger("stonks.execution.brokers.ibkr")
@@ -143,8 +154,20 @@ class IbkrBroker:
         master_client_id: int | None = None,
         owner_client: Callable[[int], IbClient | None] | None = None,
         portfolios: Sequence[str] = (),
+        options_gate: OptionsGate | None = None,
+        option_event_reader: Callable[[], Sequence[IbOptionEvent]] | None = None,
     ) -> None:
         self.client = client
+        #: The portfolio's live options gate (roadmap 17.8). ``None``: no
+        #: option order may open through this broker.
+        self.options_gate = options_gate
+        #: Extra option events (the Flex statement's assignments, exercises
+        #: and expiries) next to what the client reports itself.
+        self.option_event_reader = option_event_reader
+        #: orderRef -> leg conIds of a combo (BAG) order, and refs known not
+        #: to be combos.
+        self._bag_legs: dict[str, tuple[int, ...]] = {}
+        self._not_bags: set[str] = set()
         #: This session's API client id and the gateway's master client id.
         #: Unknown (``None``) counts as the master: the client's own view is
         #: taken as every order.
@@ -321,6 +344,14 @@ class IbkrBroker:
 
     def place_order(self, order: Order) -> None:
         account = self._ensure_may_trade()
+        if is_option_id(order.ticker):
+            # options pass their own gate, which knows a close from an open
+            self._refs[self.broker_ref(order.client_id)] = order.client_id
+            if self.get_order_state(order.client_id) is not None:
+                _log.info("ibkr.order.already_at_broker", client_id=order.client_id)
+                return
+            option_broker.place_option(self, order, account)
+            return
         self._ensure_stage_allows(order)
         ref = self.broker_ref(order.client_id)
         self._refs[ref] = order.client_id
@@ -403,7 +434,8 @@ class IbkrBroker:
             exec_avg = to_major(exec_avg, self.price_magnifier(execs[0].contract))
         if trade is None:
             if not execs:
-                return None
+                # a leg of a combo lives in its BAG order (roadmap 17.8)
+                return option_broker.leg_state(self, client_id)
             # executions but no order record (the gateway forgot it): the
             # order reached IBKR, its final state is for reconciliation
             first = execs[0]
@@ -553,14 +585,19 @@ class IbkrBroker:
         caller must never let a buy through on it."""
         account = self.account_id
         resolved = self.resolver.resolve(order.ticker)
-        request = to_ib_order(
-            order,
-            resolved.spec(),
-            account=account,
-            settings=self.order_settings,
-            price_magnifier=resolved.price_magnifier,
-            intraday=self.intraday,
-        )
+        if is_option_id(order.ticker):
+            request = option_orders.to_ib_option_order(
+                order, tick=resolved.min_tick, account=account, settings=self.order_settings
+            )
+        else:
+            request = to_ib_order(
+                order,
+                resolved.spec(),
+                account=account,
+                settings=self.order_settings,
+                price_magnifier=resolved.price_magnifier,
+                intraday=self.intraday,
+            )
         answer = self._guard(
             f"what-if of {order.client_id}",
             lambda: self.client.what_if(resolved.contract, request),
@@ -574,6 +611,28 @@ class IbkrBroker:
             commission_currency=answer.commission_currency or None,
             warning=answer.warning or None,
         )
+
+    # ---- options (roadmap 17.8) -------------------------------------------------------
+
+    def place_combo(self, combo: ComboOrder) -> None:
+        """A multi-leg option order as one ``BAG`` (all legs or none)."""
+        option_broker.place_combo(self, combo)
+
+    def what_if_combo(self, combo: ComboOrder) -> MarginPreview:
+        return option_broker.what_if_combo(self, combo)
+
+    def option_quotes(self, contract_ids: Sequence[str], as_of: date) -> dict[str, OptionQuote]:
+        return option_broker.option_quotes(self, contract_ids, as_of)
+
+    def option_chain(
+        self, underlying: str, as_of: date, *, max_expiry_days: int, strike_band: float
+    ) -> list[OptionQuoteRow]:
+        return option_broker.option_chain(
+            self, underlying, as_of, max_expiry_days=max_expiry_days, strike_band=strike_band
+        )
+
+    def option_events(self) -> list[OptionEvent]:
+        return option_broker.option_events(self)
 
     # ---- ExecutionSource ------------------------------------------------------------
 
@@ -741,7 +800,7 @@ class IbkrBroker:
     def _to_execution(self, e: IbExecution) -> Execution:
         return Execution(
             broker_exec_id=e.exec_id,
-            client_id=self._client_id_for(e.order_ref),
+            client_id=option_broker.leg_client_id(self, e, self._client_id_for(e.order_ref)),
             ticker=self._ticker_of(e.contract),
             side=_side(e.side),
             quantity=e.shares,

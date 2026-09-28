@@ -32,13 +32,14 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from ib_async import IB, Contract
+from ib_async import IB, ComboLeg, Contract
 from ib_async import Order as IbAsyncOrder
 
 from stonks.execution.brokers.ibkr.client import (
     IbAccountValue,
     IbAction,
     IbApiError,
+    IbComboLeg,
     IbConnectionError,
     IbContract,
     IbContractDetails,
@@ -46,6 +47,8 @@ from stonks.execution.brokers.ibkr.client import (
     IbEndpoint,
     IbExecution,
     IbLinkStatus,
+    IbOptionParams,
+    IbOptionSnapshot,
     IbOrderRequest,
     IbPosition,
     IbShortability,
@@ -289,6 +292,23 @@ class IbAsyncClient:
 
         return self._run(collect)
 
+    # ---- options (roadmap 17.8) -----------------------------------------------------
+
+    def option_params(self, symbol: str, underlying_con_id: int) -> Sequence[IbOptionParams]:
+        """``reqSecDefOptParams``: the expiries and strikes per exchange and
+        trading class of a stock's options."""
+        found = self._run(
+            lambda: self.ib.reqSecDefOptParamsAsync(symbol, "", "STK", underlying_con_id)
+        )
+        return [from_option_params(p) for p in _items(found)]
+
+    def option_snapshots(self, contracts: Sequence[IbContract]) -> Sequence[IbOptionSnapshot]:
+        """Option quotes with IBKR's model Greeks. Live values need the
+        OPRA market data add-on, else IBKR sends delayed ones (type 3)."""
+        wanted = [to_contract(c) for c in contracts]
+        tickers = self._run(lambda: self.ib.reqTickersAsync(*wanted))
+        return [from_option_ticker(t) for t in _items(tickers)]
+
     # ---- orders ----------------------------------------------------------------------
 
     def place_order(self, contract: IbContract, order: IbOrderRequest) -> IbTrade:
@@ -363,19 +383,51 @@ def _text(value: Any) -> str | None:
 
 
 def from_contract(c: Any) -> IbContract:
+    sec_type = str(c.secType or "STK")
+    option = sec_type in ("OPT", "FOP")
+    legs = tuple(
+        IbComboLeg(
+            con_id=int(leg.conId),
+            ratio=int(leg.ratio),
+            action="BUY" if str(leg.action).upper() == "BUY" else "SELL",
+            exchange=str(leg.exchange or "SMART"),
+        )
+        for leg in (getattr(c, "comboLegs", None) or [])
+    )
     return IbContract(
         con_id=int(c.conId),
         symbol=str(c.symbol),
-        sec_type=str(c.secType or "STK"),
+        sec_type=sec_type,
         currency=str(c.currency),
         exchange=str(c.exchange or "SMART"),
         primary_exchange=_text(c.primaryExchange),
         trading_class=_text(c.tradingClass),
         local_symbol=_text(c.localSymbol),
+        last_trade_date=_text(c.lastTradeDateOrContractMonth) if option else None,
+        strike=_opt(c.strike) if option else None,
+        right=_text(c.right) if option else None,
+        multiplier=_text(c.multiplier) if option else None,
+        combo_legs=legs,
     )
 
 
 def to_contract(c: IbContract) -> Contract:
+    if c.sec_type == "BAG":
+        return Contract(
+            symbol=c.symbol,
+            secType="BAG",
+            exchange=c.exchange or "SMART",
+            currency=c.currency,
+            comboLegs=[
+                ComboLeg(
+                    conId=leg.con_id,
+                    ratio=leg.ratio,
+                    action=leg.action,
+                    exchange=leg.exchange or "SMART",
+                )
+                for leg in c.combo_legs
+            ],
+        )
     return Contract(
         conId=c.con_id,
         symbol=c.symbol,
@@ -387,6 +439,17 @@ def to_contract(c: IbContract) -> Contract:
 
 
 def query_contract(q: IbContractQuery) -> Contract:
+    if q.sec_type == "OPT":
+        return Contract(
+            secType="OPT",
+            symbol=q.symbol,
+            exchange=q.exchange,
+            currency=q.currency,
+            lastTradeDateOrContractMonth=q.last_trade_date or "",
+            strike=q.strike or 0.0,
+            right=q.right or "",
+            multiplier=q.multiplier or "",
+        )
     if q.isin:
         return Contract(
             secType=q.sec_type,
@@ -524,6 +587,48 @@ def from_shortable(t: Any) -> IbShortability:
     indicator = None if _missing(t.shortable) else float(t.shortable)
     shares = None if _missing(t.shortableShares) else float(t.shortableShares)
     return IbShortability(con_id=int(t.contract.conId), indicator=indicator, shares=shares)
+
+
+def from_option_params(p: Any) -> IbOptionParams:
+    return IbOptionParams(
+        exchange=str(p.exchange),
+        trading_class=str(p.tradingClass),
+        multiplier=str(p.multiplier),
+        expirations=tuple(str(e) for e in (p.expirations or ())),
+        strikes=tuple(float(s) for s in (p.strikes or ())),
+    )
+
+
+def from_option_ticker(t: Any) -> IbOptionSnapshot:
+    """A ticker with IBKR's model Greeks (``modelGreeks``: theta per day,
+    vega per vol point, per share)."""
+    greeks = getattr(t, "modelGreeks", None)
+
+    def g(name: str) -> float | None:
+        return _opt(getattr(greeks, name, None)) if greeks is not None else None
+
+    call_oi, put_oi = (
+        _opt(getattr(t, "callOpenInterest", None)),
+        _opt(getattr(t, "putOpenInterest", None)),
+    )
+    right = str(getattr(t.contract, "right", "") or "").upper()
+    open_interest = call_oi if right.startswith("C") else put_oi
+    return IbOptionSnapshot(
+        con_id=int(t.contract.conId),
+        bid=_opt(t.bid),
+        ask=_opt(t.ask),
+        last=_opt(t.last),
+        time=_utc(t.time),
+        volume=_opt(getattr(t, "volume", None)),
+        open_interest=open_interest,
+        iv=g("impliedVol"),
+        delta=g("delta"),
+        gamma=g("gamma"),
+        vega=g("vega"),
+        theta=g("theta"),
+        underlying_price=g("undPrice"),
+        market_data_type=int(cast(int, t.marketDataType or 1)),
+    )
 
 
 def from_ticker(t: Any) -> IbSnapshot:

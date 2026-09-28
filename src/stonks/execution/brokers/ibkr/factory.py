@@ -14,7 +14,7 @@ is down fails that call, nothing else.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import timedelta
 from typing import Literal
@@ -24,7 +24,7 @@ from stonks.execution.borrow import BorrowSource
 from stonks.execution.brokers.base import AccountType, BrokerError
 from stonks.execution.brokers.ibkr.borrow import IbkrBorrowSource
 from stonks.execution.brokers.ibkr.broker import IbkrBroker
-from stonks.execution.brokers.ibkr.client import IbClient, IbEndpoint
+from stonks.execution.brokers.ibkr.client import IbClient, IbEndpoint, IbOptionEvent
 from stonks.execution.brokers.ibkr.contracts import (
     ContractResolver,
     InstrumentLookup,
@@ -32,6 +32,7 @@ from stonks.execution.brokers.ibkr.contracts import (
     SqliteContractCache,
 )
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig, IbkrGatewayConfig
+from stonks.options.live.gate import gate_lookup
 from stonks.store.state import SqliteState
 
 Role = Literal["tick", "sync", "health", "reconcile", "stream", "api"]
@@ -135,11 +136,18 @@ def connect_ibkr(
     clock: Clock = SYSTEM_CLOCK,
     client_factory: ClientFactory = default_client_factory,
     borrow_fees: BorrowSource | None = None,
+    option_event_reader: Callable[[], Sequence[IbOptionEvent]] | None = None,
 ) -> IbkrBroker:
     """``account_type`` defaults to the gateway's. A margin account may
     short: its broker checks each opening sell against IBKR's locate
     (``IbkrBorrowSource``), with fees from ``borrow_fees`` (the lake's
-    ``borrow_rates``, say) when given."""
+    ``borrow_rates``, say) when given.
+
+    Options (roadmap 17.8): with a state DB and a served portfolio, the
+    broker reads the portfolio's live options gate at each option order
+    (``[production.options] live``, its stage and its approval level).
+    Without them no option order may open. ``option_event_reader`` adds
+    the Flex statement's assignments, exercises and expiries."""
     _, gw = pick_gateway(config, gateway=gateway, portfolio_id=portfolio_id)
     kind: AccountType = account_type or gw.account_type
     served = portfolio_id or (gw.portfolios[0] if len(gw.portfolios) == 1 else None)
@@ -173,6 +181,10 @@ def connect_ibkr(
         if endpoint.readonly
         else owner_sessions(config, endpoint, client_factory),
         portfolios=gw.portfolios,
+        options_gate=(
+            gate_lookup(state, served) if state is not None and served is not None else None
+        ),
+        option_event_reader=option_event_reader,
     )
     if kind == "margin":
         broker.borrow = IbkrBorrowSource(broker, fees=borrow_fees)
