@@ -158,4 +158,9 @@ def test_a_trader_records_a_deposit_and_sets_up_tax(browse, stack, viewport):
     with page.expect_download() as download:
         page.get_by_role("button", name="Realized gains CSV").click()
     assert re.fullmatch(r"stonks-tax-gains-\d{4}\.csv", download.value.suggested_filename)
+    # The open lots on a day come as a CSV too (13.12).
+    page.get_by_label("Open lots on").fill("2026-06-30")
+    with page.expect_download() as lots:
+        page.get_by_role("button", name="Open lots CSV").click()
+    assert lots.value.suggested_filename == "stonks-tax-lots-2026-06-30.csv"
     v.check_page("tax")

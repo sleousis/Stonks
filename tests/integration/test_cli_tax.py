@@ -77,6 +77,21 @@ def test_tax_gains_to_stdout_and_file(runner, workdir):
     assert divs.exit_code == 0 and divs.output.startswith("ticker,ex_date")
 
 
+def test_tax_lots_on_a_day(runner, workdir):
+    held = runner.invoke(app, ["tax", "lots", "--as-of", "2025-03-01"])
+    assert held.exit_code == 0, held.output
+    rows = list(csv.DictReader(io.StringIO(held.output)))
+    assert [(r["ticker"], r["quantity"], r["cost_basis"]) for r in rows] == [
+        ("UP.US", "5", "500.00")
+    ]
+    assert rows[0]["days_held"] == "58"
+    sold = runner.invoke(app, ["tax", "lots", "--as-of", "2025-07-01"])
+    assert sold.exit_code == 0 and sold.output.startswith("ticker,lot_kind")
+    assert len(sold.output.strip().splitlines()) == 1
+    bad = runner.invoke(app, ["tax", "lots", "--as-of", "yesterday"])
+    assert bad.exit_code != 0
+
+
 def test_tax_settings_show_and_set(runner, workdir):
     shown = runner.invoke(app, ["tax", "settings"])
     assert shown.exit_code == 0 and "base USD" in shown.output

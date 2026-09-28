@@ -652,7 +652,7 @@ Tickers open `/data?instrument=<id>`.
 
 | Page | Route | What it does |
 |---|---|---|
-| Insights | `/insights` | The picked portfolio's value, beta, exposure and largest holding, where the money sits (asset class, sector, currency or holding), returns over periods, risk, which strategies agree with each holding, and the snapshot history |
+| Insights | `/insights` | The picked portfolio's value, beta, exposure and largest holding, where the money sits (asset class, sector, currency or holding), returns over periods, a monthly returns heatmap, risk, which strategies agree with each holding, and the snapshot history |
 | Risk | `/insights/risk` | Each measure against its limit, today's VaR and ES with how often the model missed, each strategy sleeve with its alpha-decay check, and the daily history as a chart and a table |
 
 ```mermaid
@@ -768,7 +768,7 @@ flowchart LR
 |---|---|---|
 | Assistant | `/assistant`, `/assistant?c=<id>` | Chat with the AI assistant: streamed answers, each tool it uses as a step, a yes or no step for anything that changes something, the trace, and your conversations |
 | Cash flows | `/insights/cash-flows` | Returns with deposits and withdrawals left out, the list of flows, and a form to record one |
-| Tax | `/insights/tax` | Base currency, where you file, the lot method, US wash sales, specific lot picks, and the yearly gains and dividends CSVs |
+| Tax | `/insights/tax` | Base currency, where you file, the lot method, US wash sales, specific lot picks, the yearly gains and dividends CSVs, and the open lots on a day as CSV |
 
 ```mermaid
 flowchart LR
@@ -815,11 +815,21 @@ flowchart LR
   show the value in the base currency when it differs, or which exchange
   rate is missing (`shared/base-currency.ts`). Glossary terms: time-weighted
   return and money-weighted return.
+- **Monthly returns.** `InsightsView.monthly_returns` is the time-weighted
+  return of each month from the daily values, so a deposit is never a
+  gain. `<app-monthly-returns>` (`shared/ui/monthly-returns.ts`) draws it:
+  a row per year, a cell per month shaded by sign and size (three steps),
+  the signed percent in every cell and the year compounded at the end. It
+  scrolls sideways on a phone and can take keyboard focus. The tear sheet
+  uses the same component.
 - **Tax.** Save stays off until something changed. Specific lots
   (`<app-lot-picks>`) lists your sales, then the earlier buys of that ticker
   with a number field each. Picks may not add up to more than the sale.
-  "Use oldest first" clears them. The CSVs download through
-  `TaxService.download()` and `saveFile()`.
+  "Use oldest first" clears them. The yearly CSVs download through
+  `TaxService.download()` and `saveFile()`. "Open lots on" (a day, today by
+  default) downloads every lot still held with its cost basis, days held,
+  short or long term, the day it turns long term and the gain at the latest
+  close (`TaxService.openLots()`, `GET /api/tax/exports/lots`).
 
 ## Trader workspace (Phase 13)
 
@@ -827,9 +837,9 @@ flowchart LR
 |---|---|---|
 | Get set up | `/welcome` | The first-run guide: five steps, each can be skipped, kept per user on the server. Admins also see the install checklist |
 | Watchlists | `/watchlists` | Your own ticker lists: create, edit, delete, open in the lab, chart a ticker |
-| Charts | `/charts`, `/charts/:ticker` | Daily candles, volume, moving averages, your fills (B and S) and strategy signals, with the fills and signals listed below |
+| Charts | `/charts`, `/charts/:ticker?vs=` | Daily candles, volume, moving averages, your fills (B and S) and strategy signals, other tickers compared on one scale, the rolling Sharpe and drawdown, with the fills and signals listed below |
 | Leaderboard | `/leaderboard` | Strategies ranked by risk-adjusted paper result, each linking to its tear sheet |
-| Tear sheet | `/strategies/:id/tearsheet` | Paper figures and curve, monthly returns, recent trades, survival verdicts, go-live check, status history |
+| Tear sheet | `/strategies/:id/tearsheet` | Paper figures and curve, monthly returns, recent trades, survival verdicts, go-live check, status history, Download PDF |
 
 ```mermaid
 flowchart LR
@@ -863,10 +873,33 @@ flowchart LR
   Moving averages are computed in the page (`pages/charts/chart-data.ts`)
   over 199 extra bars so the 200-day line starts at the left edge. The wheel
   scrolls the page; zoom with the range buttons, a pinch or the price axis.
+- **Compare, rolling Sharpe and drawdown.** Under the candles,
+  `GET /api/charts/compare?tickers=&limit=&window=` returns each ticker's
+  adjusted close rebased to 100 on the first day they all have a price, its
+  drawdown from the running peak and its rolling Sharpe (the window's bars
+  before the range feed the first points; 365 days a year for crypto).
+  Compare adds up to five tickers next to the chart's own, kept in `?vs=`
+  so a link reopens the same view, each a categorical line
+  (`pages/charts/compare-data.ts`), with a table of change, worst drawdown
+  and Sharpe. The second panel draws the ticker's rolling Sharpe (3M, 6M or
+  1Y window) with its drawdown below. Both go through
+  `<app-time-series-chart>`, so the `ChartEngine` seam stays the only door
+  to the charting library.
 - **Leaderboard and tear sheets.** `GET /api/strategies/leaderboard?sort=`
   (`sharpe`, `return`, `drawdown`, `trades`) and
   `GET /api/strategies/{id}/tearsheet`. Paper value is a `primary` line,
   never brass. The stage words come from `shared/governance-labels.ts`.
+- **Download PDF.** The tear sheet's Download PDF opens the browser's print
+  dialog, where you pick Save as PDF (`PrintService`, `shared/print.service.ts`).
+  No PDF library runs on the server: WeasyPrint needs GTK libraries that do
+  not install cleanly on Windows, and a headless browser would grow the
+  Docker image a lot. The print stylesheet at the end of `styles.scss` keeps
+  only the content, on white, without navigation, the session strip, toasts
+  or buttons, and keeps panels and table rows whole. A dark theme switches
+  to light for the print and back, so charts print in ink colours. Add
+  `.print-only` or `.print-hide` to show or hide a block on paper. The
+  backtest tear sheet file (`stonks report --backtest`) carries its own
+  print rules, so it saves to an A4 PDF the same way.
 - **Risk limits.** `<app-risk-limits-panel>` in Settings reads
   `GET /api/risk/limits` (system, yours, what you follow, ignored) and saves
   with `PUT /api/risk/limits` (`portfolio.manage`). Percents are typed 0 to
@@ -1121,12 +1154,15 @@ about the same thing.
 | Get set up (first-run guide) | `/api/onboarding` | none | none |
 | Watchlists | `/api/watchlists` | none | `list_watchlists`, `get_watchlist`, `create_watchlist`, `update_watchlist` |
 | Charts | `/api/charts/{ticker}` | none | `get_chart` |
+| Compare tickers, rolling Sharpe and drawdown | `/api/charts/compare` | none | `compare_tickers` |
 | Leaderboard, tear sheet | `/api/strategies/leaderboard`, `.../tearsheet` | none | `get_leaderboard`, `get_tear_sheet` |
 | Your risk limits | `/api/risk/limits` | none | `get_my_risk_limits` |
 | Live settings (allocation, account profile, live safeguards, account rules) | `/api/portfolios/{id}/live/*` | none | none |
 | Broker gateways (Health) | `/api/brokers/gateways` | none | none |
 | Live engine | `/api/stream/status` | none | `get_stream_status` |
 | Download CSV | `/api/exports/*` | none | none |
+| Tax files: gains, dividends, open lots | `/api/tax/exports/*` | `stonks tax gains`, `dividends`, `lots` | none |
+| Download PDF (tear sheet) | browser print, no route | `stonks report --backtest` (HTML) | none |
 | New order, orders by hand | `/api/orders/manual`, `origin=manual` | `stonks orders` | `place_order`, `change_order`, `cancel_order` |
 | Drafts (to approve) | `/api/orders/drafts` | none | `draft_order`, `list_order_drafts` |
 | Price alerts | `/api/price-alerts` | `stonks price-alerts` | `list_price_alerts`, `create_price_alert`, `update_price_alert`, `delete_price_alert`, `list_price_alert_events` |

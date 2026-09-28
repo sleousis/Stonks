@@ -437,3 +437,59 @@ textarea {
     outline-color: Highlight;
   }
 }
+
+// Printing (roadmap 13.12). "Download PDF" opens the browser's print dialog
+// (Save as PDF): only the page's content prints, on white, without the
+// navigation, the session strip, toasts or buttons. `.print-only` shows on
+// paper alone, `.print-hide` hides a block on paper.
+.print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .skip-link,
+  .topbar,
+  .sidebar,
+  .drawer,
+  app-session-strip,
+  app-toast-outlet,
+  .page-header .actions,
+  .btn,
+  .print-hide {
+    display: none !important;
+  }
+  .print-only {
+    display: block;
+  }
+  .frame,
+  main {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  .panel {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+  tr {
+    break-inside: avoid;
+  }
+}

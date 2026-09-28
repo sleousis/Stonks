@@ -6,7 +6,7 @@ from datetime import date
 
 import pytest
 
-from stonks.insights.returns import Flow, mwr, net_flows, twr, twr_since
+from stonks.insights.returns import Flow, monthly_twr, mwr, net_flows, twr, twr_since
 
 D = [date(2026, 1, d) for d in range(1, 11)]
 
@@ -209,3 +209,24 @@ def test_a_foreign_flow_without_a_rate_is_never_guessed(tmp_path):
             external_flows(state, "pf_b")
         with pytest.raises(FxRateMissing):
             external_flows(state, "pf_b", fx_loader=lambda codes: FxRates([]))
+
+
+def test_monthly_twr_chains_from_the_last_value_of_the_month_before():
+    points = [
+        (date(2026, 1, 5), 100.0),
+        (date(2026, 1, 30), 110.0),
+        (date(2026, 2, 2), 1115.0),  # a 1000 deposit lands on 2 February
+        (date(2026, 2, 27), 1210.0),
+        (date(2026, 4, 1), 1331.0),  # no March value: April runs from 27 February
+    ]
+    flows = [Flow(date(2026, 2, 2), 1000.0)]
+    got = monthly_twr(points, flows)
+    assert [m for m, _ in got] == ["2026-01", "2026-02", "2026-04"]
+    assert got[0][1] == pytest.approx(0.10)
+    assert got[1][1] == pytest.approx(1115 / 1110 * 1210 / 1115 - 1)  # deposit left out
+    assert got[2][1] == pytest.approx(0.10)
+
+
+def test_monthly_twr_of_a_lone_first_value_is_unknown():
+    assert monthly_twr([(date(2026, 1, 5), 100.0)], []) == [("2026-01", None)]
+    assert monthly_twr([], []) == []

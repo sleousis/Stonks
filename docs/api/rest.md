@@ -106,6 +106,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/charts/compare` | Compare Charts | sign-in |  | [CompareView](#compareview) |
 | GET | `/api/charts/{ticker}` | Get Chart | sign-in |  | [ChartView](#chartview) |
 
 ## connections endpoints
@@ -464,6 +465,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/tax/exports/dividends` | Dividends and withholding as CSV | sign-in |  | `text/csv` |
 | GET | `/api/tax/exports/gains` | Realized gains per lot as CSV | sign-in |  | `text/csv` |
+| GET | `/api/tax/exports/lots` | Open tax lots as CSV | sign-in |  | `text/csv` |
 | GET | `/api/tax/lots/picks` | List Tax Lot Picks | sign-in |  | [Page_LotPickView_](#page_lotpickview_) |
 | PUT | `/api/tax/lots/picks` | Set Tax Lot Picks | `portfolio.manage` | [LotPicksUpdate](#lotpicksupdate) | list[[LotPickView](#lotpickview)] |
 | GET | `/api/tax/settings` | Get Tax Settings | sign-in |  | [TaxSettingsView](#taxsettingsview) |
@@ -962,6 +964,36 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `reason` | string | yes |  |
+
+### ComparePoint
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `time` | date | yes |  |
+| `value` | number | yes |  |
+
+### CompareSeriesView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `drawdown` | list[[ComparePoint](#comparepoint)] | yes |  |
+| `max_drawdown` | number \| null | yes |  |
+| `periods_per_year` | number | yes |  |
+| `points` | list[[ComparePoint](#comparepoint)] | yes |  |
+| `rolling_sharpe` | list[[ComparePoint](#comparepoint)] | yes |  |
+| `sharpe` | number \| null | yes |  |
+| `ticker` | string | yes |  |
+| `total_return` | number \| null | yes |  |
+
+### CompareView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `end` | date \| null | yes |  |
+| `missing` | list[string] | yes |  |
+| `series` | list[[CompareSeriesView](#compareseriesview)] | yes |  |
+| `start` | date \| null | yes |  |
+| `window` | integer | yes |  |
 
 ### Concentration
 
@@ -1968,6 +2000,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers, sect
 | `currency` | string | yes | Reporting currency. Amounts are not FX-converted. |
 | `exposure` | [Exposure](#exposure) | yes |  |
 | `fx_missing` | list[string] | no | Held currencies with no FX rate to the base currency. |
+| `monthly_returns` | list[[MonthlyReturn](#monthlyreturn)] | no | Time-weighted return of each month from the daily values, oldest first: deposits and withdrawals are left out. Empty when a flow has no FX rate. |
 | `mwr` | number \| null | no | Money-weighted return since inception, annualized (XIRR of the start value, deposits, withdrawals and the latest value). |
 | `net_flows` | number | no | Deposits less withdrawals since inception. |
 | `notes` | list[string] | yes |  |
@@ -2677,7 +2710,7 @@ Keep a ticker when ``min <= value <= max``. A ticker with no value for the metri
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `month` | string | yes |  |
+| `month` | string | yes | YYYY-MM |
 | `value` | number \| null | yes |  |
 
 ### NetExposureSettings

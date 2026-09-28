@@ -64,9 +64,21 @@ No wash sale adjustment. UK share matching rules (same day, 30 day, section 104 
 
 Deposits and withdrawals are not income. They are recorded as cash flows and taken out of the returns (see "Returns and cash flows" in `operations.md`).
 
+## Open lots
+
+`GET /api/tax/exports/lots?as_of=2025-12-31` or `stonks tax lots --as-of 2025-12-31` (default today). One row per lot still held at the end of the day, from the same replay as the gains file, so your lot method and picks decide which lots earlier sales closed.
+
+- **Cost basis**: what the lot cost, fee and any wash sale basis moved onto it included. For a short lot it is what the short sale brought in, less its fee.
+- **Days held**, the **holding period** on that day, and **long term on**, the first day a sale would be long term (empty for a short).
+- **Price, market value and unrealized gain** at the latest close on or before the day, empty when there is no price. A short gains when the price falls.
+- Splits up to the day rescale the lots, even when no later trade came.
+- **Base amounts**: the cost at the purchase day's rate, the market value at the report day's rate.
+
 ## CSV columns
 
 Gains: `ticker, lot_kind, quantity, acquired, disposed, holding_period, currency, proceeds, cost_basis, wash_sale_disallowed, gain, base_currency, proceeds_base, cost_basis_base, wash_sale_disallowed_base, gain_base, open_fill_id, close_fill_id`.
+
+Open lots: `ticker, lot_kind, quantity, acquired, days_held, holding_period, long_term_on, currency, cost_per_share, cost_basis, wash_sale_adjustment, price, market_value, unrealized_gain, base_currency, cost_basis_base, market_value_base, unrealized_gain_base, open_fill_id`.
 
 Dividends: `ticker, ex_date, quantity, per_share, currency, gross, withholding, net, base_currency, gross_base, withholding_base, net_base`.
 

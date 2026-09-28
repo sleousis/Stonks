@@ -28,6 +28,7 @@ from stonks.app.portfolio import (
     PortfolioService,
     totals_suppressed,
 )
+from stonks.app.serialize import finite
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.insights import (
@@ -50,7 +51,8 @@ from stonks.insights import (
     weighted_returns,
 )
 from stonks.insights.flows import flows_or_missing, lake_fx_loader
-from stonks.insights.returns import mwr, net_flows
+from stonks.insights.models import MonthlyReturn
+from stonks.insights.returns import monthly_twr, mwr, net_flows
 from stonks.logging import get_logger
 from stonks.production.ledger import ledger_filter
 from stonks.production.pnl import load_pnl
@@ -112,6 +114,11 @@ class InsightsView(BaseModel):
         "value, deposits, withdrawals and the latest value).",
     )
     net_flows: float = Field(default=0.0, description="Deposits less withdrawals since inception.")
+    monthly_returns: list[MonthlyReturn] = Field(
+        default_factory=list,
+        description="Time-weighted return of each month from the daily values, oldest first: "
+        "deposits and withdrawals are left out. Empty when a flow has no FX rate.",
+    )
 
 
 class AgreementView(BaseModel):
@@ -213,6 +220,9 @@ class InsightsService:
             fx_missing=fx_missing,
             mwr=None if flow_missing else mwr(points, flows),
             net_flows=net_flows(points, flows),
+            monthly_returns=[]
+            if flow_missing
+            else [MonthlyReturn(month=m, value=finite(r)) for m, r in monthly_twr(points, flows)],
         )
 
     def _total_in_base(self, book: Book) -> tuple[float | None, list[str]]:

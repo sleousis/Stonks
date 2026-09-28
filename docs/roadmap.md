@@ -11,7 +11,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 10 | Done: 10.1 to 10.5. |
 | 11 | Done except parts of 11.6. 11.8 is this docs refresh. |
 | 12 | Mostly done. Open: three runbooks (tick failed, broker unreachable, disk full). |
-| 13 | Partly done: PWA and push, command palette, in-app help, accessibility and locale. The rest is planned. |
+| 13 | Done: 13.1 to 13.14. |
 | 14 | Done. |
 | 15 | Mostly done: design, data model, connection seam, insights, automation modes, notifications, home screen. The tick trades one book per portfolio. Open: order placement for real providers. |
 | 16 | 16.1 and 16.2 done, off by default. 16.3 and 16.4 planned. |
@@ -264,16 +264,16 @@ What it takes to run Stonks unattended every day and trust it.
 
 ## Phase 13: Trader-ready UX
 
-**Status:**
+**Status:** done.
 
 - Done: 13.1 (sign-in, roles, TOTP, step-up; see `docs/security.md`), 13.3, 13.9 (trade journal with notes next to the status history), 13.10, 13.11, 13.13, 13.14 (Playwright journeys on desktop and 375px).
 - Done: 13.2 first-run wizard. `/welcome` walks a trader through five steps (second factor, portfolio, watchlist or universe, follow a strategy, push alerts). Each can be skipped; progress is stored per user (`onboarding_steps`, `onboarding_status`, migration 026) and steps the data shows done tick themselves. Today shows a "Finish setting up" card. Admins also get an install checklist: data source key, first data load, a backup on disk, a running scheduler (`/api/onboarding`, `/api/onboarding/system`).
 - Done: 13.4. Universes are managed on `/universes`. Watchlists (`watchlists`, migration 026, `/api/watchlists`, never shared) live on `/watchlists`: a list opens in the lab as its tickers, and filters Today's tape and signals and the chart picker.
-- Done: 13.5 trading charts. `/charts/:ticker` draws daily candles, volume, moving averages (20, 50, 200), your fills as B and S and strategy signals, from one read (`/api/charts/{ticker}`), through the `ChartEngine` seam (Lightweight Charts, lazy loaded). Ranges from 3 months to all; works on phones. Open: compare several tickers, rolling Sharpe.
-- Done: 13.6. `/leaderboard` ranks strategies by risk-adjusted paper result with trade counts, survival tests and the go-live verdict; `/strategies/:id/tearsheet` gathers the paper curve, monthly returns, recent trades, survival verdicts, the go-live report and the status history. The sweep viewer is on `/lab/sweeps`. Open: a PDF tear sheet.
+- Done: 13.5 trading charts. `/charts/:ticker` draws daily candles, volume, moving averages (20, 50, 200), your fills as B and S and strategy signals, from one read (`/api/charts/{ticker}`), through the `ChartEngine` seam (Lightweight Charts, lazy loaded). Ranges from 3 months to all; works on phones. Under the candles, Compare puts up to five more tickers on one scale (rebased to 100 on the first shared day, kept in `?vs=`) with each one's change, worst drawdown and Sharpe, and a second panel draws the rolling Sharpe (3M, 6M or 1Y) with the drawdown below (`/api/charts/compare`, MCP `compare_tickers`), both through the same seam.
+- Done: 13.6. `/leaderboard` ranks strategies by risk-adjusted paper result with trade counts, survival tests and the go-live verdict; `/strategies/:id/tearsheet` gathers the paper curve, monthly returns, recent trades, survival verdicts, the go-live report and the status history. The sweep viewer is on `/lab/sweeps`. Download PDF prints the tear sheet through the browser (Save as PDF) with a print stylesheet; see 13.12.
 - Done: 13.8. Kill switch, breaker and halts (`/ops/halts`), the schedule and backups, health checks, users and settings were already in the console; a trader can now set their own risk limits in Settings (`/api/risk/limits`, tighten only, audited). Left for operators on purpose: bulk ingests, the statement audit and TCA refresh (scheduled jobs), database setup and the servers (see `tests/parity/capabilities.toml`).
-- Done: 13.12 CSV exports of orders, fills, the trade journal, snapshots, daily P&L and lab trials (`/api/exports/*`), downloaded over the session from the Orders, Trade costs, Insights and trial ledger pages. Open: PDF tear sheets and a tax-lot report.
-- 13.7 portfolio analytics is covered by Insights and Risk (15.4, 9.x); the monthly returns heatmap per portfolio is open.
+- Done: 13.12 CSV exports of orders, fills, the trade journal, snapshots, daily P&L and lab trials (`/api/exports/*`), downloaded over the session from the Orders, Trade costs, Insights and trial ledger pages. The tax-lot report lists every lot still open on a day with its cost basis (fee and wash sale basis in), days held, holding period, the day it turns long term and the gain at the latest close, from the same lot replay as the gains export (`/api/tax/exports/lots`, `stonks tax lots`, the Tax page). PDF tear sheets use the browser's print to PDF: WeasyPrint needs GTK libraries that do not install cleanly on Windows and a headless browser would grow the Docker image, so the tear sheet page and the backtest tear sheet file carry print stylesheets (A4, content only, light colours) and the page has a Download PDF button.
+- Done: 13.7 portfolio analytics. Insights and Risk (15.4, 9.x) cover exposure, risk and attribution; Insights adds a monthly returns heatmap per portfolio, time weighted from the daily values so deposits and withdrawals never count as return (`InsightsView.monthly_returns`).
 
 What a trader needs to use the console daily without the CLI.
 

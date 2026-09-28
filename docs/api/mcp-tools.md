@@ -14,6 +14,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`change_order`](#change_order) | guarded | yes |
 | [`check_factor_expression`](#check_factor_expression) | read | no |
 | [`check_model_swap`](#check_model_swap) | read | no |
+| [`compare_tickers`](#compare_tickers) | read | no |
 | [`create_draft`](#create_draft) | job | no |
 | [`create_price_alert`](#create_price_alert) | job | no |
 | [`create_screen`](#create_screen) | job | no |
@@ -208,6 +209,23 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `strategy_id` | string | yes |  |  |
 | `version` | integer | yes |  | the model version number |
+
+### `compare_tickers`
+
+Several tickers on one scale: daily adjusted closes rebased to 100
+on the first day they all have a price, each with its drawdown from
+the running peak, its rolling Sharpe, total return and worst
+drawdown. Tickers without prices come back in ``missing``.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `tickers` | list[string] | yes |  | instrument ids, e.g. AAPL.US |
+| `start` | string \| null | no | `null` | YYYY-MM-DD |
+| `end` | string \| null | no | `null` | YYYY-MM-DD |
+| `limit` | integer | no | `750` |  |
+| `window` | integer | no | `63` | bars behind each rolling Sharpe point |
 
 ### `get_api_health`
 

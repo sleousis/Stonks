@@ -27,6 +27,7 @@ import { baseCurrencyLine } from '../../shared/base-currency';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { HelpTip } from '../../shared/ui/help-tip';
+import { MonthlyReturns } from '../../shared/ui/monthly-returns';
 import { ExportButton } from '../../shared/ui/export-button';
 import { PageHeader } from '../../shared/ui/page-header';
 import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
@@ -91,6 +92,7 @@ export function agreementLine(h: HoldingAgreement): string {
     TableCell,
     DateTimePipe,
     HelpTip,
+    MonthlyReturns,
     UpdatedAgo,
     LoadingState,
     EmptyState,
@@ -196,6 +198,13 @@ export class InsightsPage {
     if (e.beta == null) return 'No beta for these holdings yet';
     return `Against ${e.benchmark ?? 'the benchmark'}, ${this.pct(e.beta_coverage, false)} covered`;
   });
+
+  /** At least one month with a measured return for the heatmap. */
+  protected readonly hasMonths = computed(
+    () =>
+      this.insights.hasValue() &&
+      (this.insights.value().monthly_returns ?? []).some((m) => m.value !== null),
+  );
 
   protected readonly periodLabel = (p: PeriodPnl) => PERIOD_LABELS[p.period];
   /** The time-weighted return of a period: deposits and withdrawals left out. */

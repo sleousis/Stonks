@@ -157,6 +157,31 @@
       </div>
     </section>
 
+    <!-- Monthly returns ----------------------------------------------------->
+    <section class="panel span-12" aria-labelledby="months-title">
+      <div class="panel-head">
+        <h2 id="months-title">Monthly returns</h2>
+        <span class="muted">Time-weighted <app-help-tip term="twr" /></span>
+      </div>
+      @if (insights.error()) {
+        <p class="panel-body muted">Monthly returns show once insights load.</p>
+      } @else if (!insights.hasValue()) {
+        <div class="panel-body">
+          <app-loading-state label="Loading monthly returns" [rows]="2" />
+        </div>
+      } @else if (!hasMonths()) {
+        <p class="panel-body muted">
+          Each month gets a return once the book has daily values in it. Deposits and withdrawals
+          never count as return.
+        </p>
+      } @else {
+        <app-monthly-returns
+          caption="Time-weighted return by month; deposits and withdrawals left out"
+          [months]="insights.value().monthly_returns ?? []"
+        />
+      }
+    </section>
+
     <!-- Risk summary -------------------------------------------------------->
     <section class="panel span-5" aria-labelledby="risk-title">
       <div class="panel-head">

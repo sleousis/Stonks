@@ -91,7 +91,7 @@ uv run stonks live stage show|report|promote|demote PORTFOLIO [--to STAGE --reas
 uv run stonks live preview PORTFOLIO   # the live book's next orders through the broker's what-if, never sent
 uv run stonks price-alerts list|create|delete|events --user E | run   # price alerts, run = the scheduler job
 uv run stonks telegram link-code|status|unlink --user E | poll [--once]
-uv run stonks tax gains|dividends --year Y [--portfolio ID] | settings   # yearly tax CSVs, see docs/tax.md
+uv run stonks tax gains|dividends --year Y [--portfolio ID] | lots [--as-of D] | settings   # tax CSVs, see docs/tax.md
 uv run stonks ingest fx --pairs EURUSD,GBPUSD [--since ...]   # FX rates into the lake
 uv run stonks ingest borrow [--markets usa,uk]   # IBKR short stock files into borrow_rates
 uv run stonks cash-flows record|list --user E --portfolio ID   # deposits and withdrawals (TWR, MWR)

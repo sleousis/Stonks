@@ -117,5 +117,26 @@ def twr_since(
     return twr(window, flows)
 
 
+def monthly_twr(
+    points: Sequence[tuple[date, float]], flows: Sequence[Flow]
+) -> list[tuple[str, float | None]]:
+    """Time-weighted return of each calendar month, ``("YYYY-MM", r)``
+    oldest first. A month runs from the last value of the month before
+    (the first month from its first value) to its own last value, so a
+    deposit inside it is never counted as profit. ``None`` for a month
+    whose return cannot be measured (one value only, or a base that is not
+    positive)."""
+    months: dict[str, list[tuple[date, float]]] = {}
+    for p in points:
+        months.setdefault(p[0].strftime("%Y-%m"), []).append(p)
+    out: list[tuple[str, float | None]] = []
+    prev: tuple[date, float] | None = None
+    for key, rows in months.items():
+        window = rows if prev is None else [prev, *rows]
+        out.append((key, twr(window, flows)))
+        prev = rows[-1]
+    return out
+
+
 def as_flows(amounts: Mapping[date, float]) -> list[Flow]:
     return [Flow(d, a) for d, a in sorted(amounts.items())]

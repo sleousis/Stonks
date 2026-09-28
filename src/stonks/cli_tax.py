@@ -1,5 +1,5 @@
-"""``stonks tax``: tax settings and yearly tax exports per portfolio
-(roadmap 20.5).
+"""``stonks tax``: tax settings, yearly tax exports and the open-lot
+report per portfolio (roadmap 20.5, 13.12).
 
 Mounted by :mod:`stonks.cli`. Every command runs as the operator
 (``service:cli``, every book) unless ``--user`` names a user, who then only
@@ -81,6 +81,27 @@ def dividends(
     context, service = _service()
     _, pf = _target(context, user, portfolio)
     _emit(_call(lambda: service.dividends_csv(pf, year)), out)
+
+
+@app.command("lots")
+def lots(
+    as_of: str | None = typer.Option(
+        None, "--as-of", help="report day (YYYY-MM-DD); default today"
+    ),
+    portfolio: str | None = _PORTFOLIO,
+    user: str | None = _USER,
+    out: Path | None = _OUT,
+) -> None:
+    """Open lots with cost basis and holding period on a day, as CSV."""
+    from datetime import date
+
+    try:
+        day = date.fromisoformat(as_of) if as_of else None
+    except ValueError:
+        raise typer.BadParameter("use YYYY-MM-DD", param_hint="--as-of") from None
+    context, service = _service()
+    _, pf = _target(context, user, portfolio)
+    _emit(_call(lambda: service.open_lots_csv(pf, day)), out)
 
 
 @app.command("settings")

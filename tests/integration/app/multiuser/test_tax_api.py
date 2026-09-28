@@ -212,6 +212,39 @@ def test_dividends_csv(client, people, book):
     )
 
 
+def test_open_lots_csv(client, people, book):
+    """FIFO leaves 8 of the second buy and the 2-share repurchase, which
+    carries the disallowed wash sale loss (roadmap 13.12)."""
+    alice = people["alice"]["headers"]
+    q = {"portfolio_id": book["pid"]}
+    f = book["fills"]
+    early = client.get("/api/tax/exports/lots", params=q | {"as_of": "2025-09-30"}, headers=alice)
+    assert early.status_code == 200, early.text
+    assert early.headers["content-type"].startswith("text/csv")
+    assert "tax-lots-" in early.headers["content-disposition"]
+    rows = _rows(early.text)
+    assert [(r["open_fill_id"], r["quantity"], r["cost_basis"]) for r in rows] == [
+        (str(f["o2"]), "8", "960.00"),
+        (str(f["o4"]), "2", "210.00"),
+    ]
+    assert rows[1]["wash_sale_adjustment"] == "20.00"
+    assert all(r["holding_period"] == "short" and r["price"] == "" for r in rows)
+    assert rows[0]["long_term_on"] == "2026-02-04"
+
+    late = _rows(
+        client.get("/api/tax/exports/lots", params=q | {"as_of": "2026-04-01"}, headers=alice).text
+    )
+    assert late[0]["holding_period"] == "long"
+    assert late[0]["price"] == "200.000000"
+    assert late[0]["unrealized_gain"] == "640.00"
+    before = _rows(
+        client.get("/api/tax/exports/lots", params=q | {"as_of": "2025-01-31"}, headers=alice).text
+    )
+    assert [r["open_fill_id"] for r in before] == [str(f["o1"])]
+    bob = people["bob"]["headers"]
+    assert client.get("/api/tax/exports/lots", params=q, headers=bob).status_code == 404
+
+
 def test_fx_rate_read(client, people, settings):
     lake = DuckDBLake(settings.lake.path)
     lake.upsert_fx_rates(

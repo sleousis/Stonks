@@ -1316,6 +1316,15 @@ cli = { limited = "a chart is visual, research reads live in the console and MCP
 mcp = "get_chart"
 
 [[capability]]
+id = "charts.compare"
+domain = "data"
+title = "Compare tickers on one scale, with drawdown and rolling Sharpe"
+routes = ["GET /api/charts/compare"]
+console = "compareCharts"
+cli = { limited = "a chart is visual, research reads live in the console and MCP" }
+mcp = "compare_tickers"
+
+[[capability]]
 id = "strategies.leaderboard"
 domain = "strategies"
 title = "Strategy leaderboard ranked by risk-adjusted paper results"
@@ -1531,10 +1540,10 @@ mcp = "list_tax_lot_picks"
 [[capability]]
 id = "tax.exports"
 domain = "portfolio"
-title = "Yearly tax exports as CSV: realized gains per lot, dividends and withholding"
-routes = ["GET /api/tax/exports/gains", "GET /api/tax/exports/dividends"]
-console = ["exportTaxGains", "exportTaxDividends"]
-cli = ["stonks tax gains", "stonks tax dividends"]
+title = "Tax exports as CSV: realized gains per lot, dividends and withholding, open lots"
+routes = ["GET /api/tax/exports/gains", "GET /api/tax/exports/dividends", "GET /api/tax/exports/lots"]
+console = ["exportTaxGains", "exportTaxDividends", "exportTaxLots"]
+cli = ["stonks tax gains", "stonks tax dividends", "stonks tax lots"]
 mcp = { limited = "CSV files are downloads for the console and the CLI" }
 
 [[capability]]

@@ -18,6 +18,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { WatchlistContextService } from '../../core/watchlists/watchlist-context.service';
 import { PriceChart } from '../../shared/chart/price-chart';
+import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
 import { SideTag } from '../../shared/ui/side-tag';
@@ -33,6 +34,18 @@ import {
   chartData,
   chartSummary,
 } from './chart-data';
+import {
+  MAX_COMPARED,
+  SHARPE_WINDOWS,
+  type SharpeWindow,
+  addTickers,
+  compareRows,
+  compareSeries,
+  compareSummary,
+  parseTickers,
+  performanceSeries,
+  performanceSummary,
+} from './compare-data';
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -47,7 +60,9 @@ const SIGNAL_WORDS: Record<string, string> = {
 /**
  * A price chart per ticker: daily candles and volume, moving averages, your
  * fills marked B and S, and the strategies' signals as dots, with the same
- * fills and signals listed below for screen readers and phones.
+ * fills and signals listed below for screen readers and phones. Below the
+ * candles: other tickers compared on one scale (rebased to 100, kept in
+ * `?vs=`), and the ticker's rolling Sharpe with its drawdown.
  */
 @Component({
   selector: 'app-chart-page',
@@ -56,6 +71,7 @@ const SIGNAL_WORDS: Record<string, string> = {
     RouterLink,
     PageHeader,
     PriceChart,
+    TimeSeriesChart,
     DataTable,
     TableCell,
     SideTag,
@@ -71,6 +87,8 @@ const SIGNAL_WORDS: Record<string, string> = {
 export class ChartPage {
   /** Route param (`/charts/:ticker`); absent on `/charts`. */
   readonly ticker = input<string>();
+  /** Query param `?vs=MSFT.US,SPY.US`: tickers compared with this one. */
+  readonly vs = input<string>();
 
   private readonly api = inject(ChartsService);
   private readonly search = inject(SearchService);
@@ -92,6 +110,54 @@ export class ChartPage {
   protected readonly showVolume = signal(true);
 
   private readonly bars = computed(() => RANGES.find((r) => r.id === this.range())?.bars ?? 252);
+
+  // ---- compare and performance ---------------------------------------------------
+  protected readonly maxCompared = MAX_COMPARED;
+  protected readonly sharpeWindows = SHARPE_WINDOWS;
+  protected readonly sharpeWindow = signal<SharpeWindow>(63);
+  /** Tickers on the compare chart next to this one. */
+  protected readonly compared = linkedSignal(() =>
+    parseTickers(this.vs())
+      .filter((t) => t !== this.symbol())
+      .slice(0, MAX_COMPARED),
+  );
+  protected readonly compareText = signal('');
+
+  protected readonly comparison = resource({
+    params: () =>
+      this.symbol()
+        ? {
+            tickers: [this.symbol(), ...this.compared()],
+            limit: Math.min(5_000, this.bars()),
+            window: this.sharpeWindow(),
+          }
+        : undefined,
+    loader: ({ params }) =>
+      this.api.compare(params.tickers, { limit: params.limit, window: params.window }),
+  });
+  protected readonly compareLines = computed(() =>
+    this.comparison.hasValue() ? compareSeries(this.comparison.value()) : [],
+  );
+  protected readonly compareCaption = computed(() =>
+    this.comparison.hasValue() ? compareSummary(this.comparison.value()) : null,
+  );
+  protected readonly compareTable = computed(() =>
+    this.comparison.hasValue() ? compareRows(this.comparison.value()) : [],
+  );
+  /** The chart's own ticker in the comparison (absent without prices). */
+  private readonly own = computed(() =>
+    this.comparison.hasValue()
+      ? (this.comparison.value().series.find((s) => s.ticker === this.symbol()) ?? null)
+      : null,
+  );
+  protected readonly performance = computed(() => {
+    const own = this.own();
+    return own ? performanceSeries(own, this.comparison.value()!.window) : [];
+  });
+  protected readonly performanceText = computed(() => {
+    const own = this.own();
+    return own ? performanceSummary(own, this.comparison.value()!.window) : null;
+  });
 
   protected readonly chart = resource({
     params: () =>
@@ -177,6 +243,27 @@ export class ChartPage {
     event.preventDefault();
     const t = this.query().trim().toUpperCase();
     if (t) void this.router.navigate(['/charts', t]);
+  }
+
+  protected addCompare(event: Event): void {
+    event.preventDefault();
+    const next = addTickers(this.symbol(), this.compared(), parseTickers(this.compareText()));
+    this.compareText.set('');
+    this.setCompared(next);
+  }
+
+  protected removeCompare(ticker: string): void {
+    this.setCompared(this.compared().filter((t) => t !== ticker));
+  }
+
+  /** Keep the compared tickers in the address, so a link reopens the same chart. */
+  private setCompared(list: string[]): void {
+    this.compared.set(list);
+    void this.router.navigate([], {
+      queryParams: { vs: list.length ? list.join(',') : null },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
   protected toggleAverage(length: number): void {

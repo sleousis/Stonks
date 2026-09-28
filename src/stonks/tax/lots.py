@@ -99,6 +99,42 @@ class Disposal:
         return "long" if self.disposed > _one_year_after(self.acquired) else "short"
 
 
+@dataclass(frozen=True)
+class OpenLot:
+    """A lot still held. For a long lot the basis is what it cost (fee and
+    wash sale basis included); for a short lot it is what the short sale
+    brought in, less its fee."""
+
+    ticker: str
+    kind: LotKind
+    quantity: float
+    acquired: date
+    #: Cost per share (long) or proceeds per share (short), before any wash
+    #: sale basis.
+    per_share: float
+    #: Disallowed wash sale loss added to this lot's basis.
+    wash_sale_adjustment: float
+    currency: str | None
+    open_fill_id: int
+
+    @property
+    def cost_basis(self) -> float:
+        return self.per_share * self.quantity + self.wash_sale_adjustment
+
+    def days_held(self, as_of: date) -> int:
+        return max(0, (as_of - self.acquired).days)
+
+    def long_term_on(self) -> date | None:
+        """The first day a sale would be long term; ``None`` for a short."""
+        if self.kind == "short":
+            return None
+        return _one_year_after(self.acquired) + timedelta(days=1)
+
+    def holding_period(self, as_of: date) -> HoldingPeriod:
+        starts = self.long_term_on()
+        return "long" if starts is not None and as_of >= starts else "short"
+
+
 def _one_year_after(day: date) -> date:
     try:
         return day.replace(year=day.year + 1)
@@ -137,6 +173,55 @@ def realized_disposals(
     open lots of their ticker (quantity x ratio, per share / ratio) before
     the first fill on or after the ex-date, so fills keep their own share
     count."""
+    return _replay(fills, settings, picks, splits)[0]
+
+
+def open_lots(
+    fills: Iterable[TaxFill],
+    as_of: date,
+    settings: TaxSettings | None = None,
+    picks: Mapping[int, Sequence[tuple[int, float]]] | None = None,
+    splits: Iterable[TaxSplit] = (),
+) -> list[OpenLot]:
+    """The lots still open at the end of ``as_of``, by ticker then age.
+
+    The same replay as :func:`realized_disposals` over the fills filled on
+    or before ``as_of``, so a lot's cost carries its fee and any wash sale
+    basis moved onto it. Splits with an ex-date on or before ``as_of``
+    rescale the lots even when no later fill of the ticker came."""
+    upto = [f for f in fills if f.day <= as_of]
+    books = _replay(upto, settings, picks, splits, until=as_of)[1]
+    out: list[OpenLot] = []
+    for ticker in sorted(books):
+        for lot in books[ticker].lots:
+            if lot.quantity <= _EPS:
+                continue
+            out.append(
+                OpenLot(
+                    ticker=ticker,
+                    kind=lot.kind,
+                    quantity=lot.quantity,
+                    acquired=lot.day,
+                    per_share=lot.per_share,
+                    wash_sale_adjustment=lot.added_basis,
+                    currency=lot.currency,
+                    open_fill_id=lot.fill_id,
+                )
+            )
+    return out
+
+
+def _replay(
+    fills: Iterable[TaxFill],
+    settings: TaxSettings | None = None,
+    picks: Mapping[int, Sequence[tuple[int, float]]] | None = None,
+    splits: Iterable[TaxSplit] = (),
+    *,
+    until: date | None = None,
+) -> tuple[list[Disposal], dict[str, _Book]]:
+    """Disposals in fill order and the open lots left per ticker. With
+    ``until``, splits due on or before it that no fill reached yet are
+    applied to the open lots at the end."""
     cfg = settings or TaxSettings()
     ordered = sorted(fills, key=lambda f: (f.filled_at, f.id))
     specific = picks if cfg.lot_method == "specific" and picks else {}
@@ -255,7 +340,15 @@ def realized_disposals(
         book.lots = [x for x in book.lots if x.quantity > _EPS]
         if remaining > _EPS:
             book.lots.append(_Lot(f.id, "short", f.day, remaining, net_price, f.currency))
-    return out
+    if until is not None:
+        for ticker, waiting in due_splits.items():
+            book = books.get(ticker)
+            while book is not None and waiting and waiting[0].ex_date <= until:
+                ratio = waiting.pop(0).ratio
+                for lot in book.lots:
+                    lot.quantity *= ratio
+                    lot.per_share /= ratio
+    return out, books
 
 
 def _taken(chosen: list[tuple[_Lot, float]], lot: _Lot) -> float:

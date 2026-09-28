@@ -93,4 +93,13 @@ table.grid td,table.grid th{text-align:right;white-space:nowrap}
 table.grid td:first-child,table.grid th:first-child{text-align:left}
 .nodata{color:var(--muted);padding:24px;text-align:center;border:1px dashed var(--border);
 border-radius:6px}
+@page{size:A4;margin:14mm 12mm}
+@media print{:root{--bg:#fff;--panel:#fff;--fg:#000;--muted:#444;--border:#bbb;--grid:#ddd;
+--s1:#1d4ed8;--s2:#b45309;--neg:#b91c1c;--ok:#166534;--bad:#991b1b}
+body{font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+header,main{max-width:none;padding:0}
+section{border:0;border-top:1px solid var(--border);border-radius:0;padding:8px 0;margin:8px 0;
+break-inside:avoid}
+h2,h3{break-after:avoid}tr,svg.chart,.tile{break-inside:avoid}
+.scroll{overflow:visible}svg.chart{height:180px}}
 """

@@ -66,6 +66,34 @@ def register(t: ToolContext) -> None:
         return await t.get(f"/api/charts/{seg(ticker)}", params=query)
 
     @server.tool(annotations=READ)
+    async def compare_tickers(
+        tickers: Annotated[
+            list[str],
+            Field(min_length=1, max_length=6, description="instrument ids, e.g. AAPL.US"),
+        ],
+        start: Day = None,
+        end: Day = None,
+        limit: Annotated[int, Field(ge=1, le=5000)] = 750,
+        window: Annotated[
+            int, Field(ge=5, le=252, description="bars behind each rolling Sharpe point")
+        ] = 63,
+    ) -> dict[str, Any]:
+        """Several tickers on one scale: daily adjusted closes rebased to 100
+        on the first day they all have a price, each with its drawdown from
+        the running peak, its rolling Sharpe, total return and worst
+        drawdown. Tickers without prices come back in ``missing``."""
+        query = drop_none(
+            {
+                "tickers": ",".join(tickers),
+                "start": start,
+                "end": end,
+                "limit": limit,
+                "window": window,
+            }
+        )
+        return await t.get("/api/charts/compare", params=query)
+
+    @server.tool(annotations=READ)
     async def get_leaderboard(
         sort: SortKey = "sharpe", include_retired: bool = False
     ) -> dict[str, Any]:

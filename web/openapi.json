@@ -2174,6 +2174,158 @@
         "title": "ClearHaltRequest",
         "type": "object"
       },
+      "ComparePoint": {
+        "properties": {
+          "time": {
+            "format": "date",
+            "title": "Time",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "time",
+          "value"
+        ],
+        "title": "ComparePoint",
+        "type": "object"
+      },
+      "CompareSeriesView": {
+        "properties": {
+          "drawdown": {
+            "items": {
+              "$ref": "#/components/schemas/ComparePoint"
+            },
+            "title": "Drawdown",
+            "type": "array"
+          },
+          "max_drawdown": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Drawdown"
+          },
+          "periods_per_year": {
+            "title": "Periods Per Year",
+            "type": "number"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/ComparePoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "rolling_sharpe": {
+            "items": {
+              "$ref": "#/components/schemas/ComparePoint"
+            },
+            "title": "Rolling Sharpe",
+            "type": "array"
+          },
+          "sharpe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharpe"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          },
+          "total_return": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Return"
+          }
+        },
+        "required": [
+          "ticker",
+          "points",
+          "drawdown",
+          "rolling_sharpe",
+          "total_return",
+          "max_drawdown",
+          "sharpe",
+          "periods_per_year"
+        ],
+        "title": "CompareSeriesView",
+        "type": "object"
+      },
+      "CompareView": {
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/CompareSeriesView"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "window": {
+            "title": "Window",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "window",
+          "series",
+          "missing"
+        ],
+        "title": "CompareView",
+        "type": "object"
+      },
       "Concentration": {
         "properties": {
           "effective_holdings": {
@@ -7225,6 +7377,14 @@
             "title": "Fx Missing",
             "type": "array"
           },
+          "monthly_returns": {
+            "description": "Time-weighted return of each month from the daily values, oldest first: deposits and withdrawals are left out. Empty when a flow has no FX rate.",
+            "items": {
+              "$ref": "#/components/schemas/MonthlyReturn"
+            },
+            "title": "Monthly Returns",
+            "type": "array"
+          },
           "mwr": {
             "anyOf": [
               {
@@ -11008,6 +11168,7 @@
       "MonthlyReturn": {
         "properties": {
           "month": {
+            "description": "YYYY-MM",
             "title": "Month",
             "type": "string"
           },
@@ -30424,6 +30585,158 @@
         ]
       }
     },
+    "/api/charts/compare": {
+      "get": {
+        "description": "Daily adjusted closes of up to six tickers rebased to 100 on the\nfirst day they all have a price, each with its drawdown from the\nrunning peak and its rolling Sharpe (annualized, 365 days for crypto).\nTickers without prices are listed in ``missing``.",
+        "operationId": "compareCharts",
+        "parameters": [
+          {
+            "description": "comma-separated instrument ids, at most 6, e.g. AAPL.US,MSFT.US",
+            "in": "query",
+            "name": "tickers",
+            "required": true,
+            "schema": {
+              "description": "comma-separated instrument ids, at most 6, e.g. AAPL.US,MSFT.US",
+              "maxLength": 400,
+              "minLength": 1,
+              "title": "Tickers",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 750,
+              "maximum": 5000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "bars behind each rolling Sharpe point",
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "default": 63,
+              "description": "bars behind each rolling Sharpe point",
+              "maximum": 252,
+              "minimum": 5,
+              "title": "Window",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompareView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Compare Charts",
+        "tags": [
+          "charts"
+        ]
+      }
+    },
     "/api/charts/{ticker}": {
       "get": {
         "description": "Bars of one ticker (the latest ``limit`` in the window), your fills\nof it in one of your portfolios (default your own book; none when you\nhave no portfolio) and every strategy's signal events for it.",
@@ -49145,6 +49458,124 @@
           }
         ],
         "summary": "Realized gains per lot as CSV",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
+    "/api/tax/exports/lots": {
+      "get": {
+        "description": "Every lot still open at the end of ``as_of``: quantity, acquired day,\ncost basis (fee and wash sale basis in), days held, holding period, the\nday it turns long term, and the value and unrealized gain at the latest\nclose. Your lot method decides which lots earlier sells closed.",
+        "operationId": "exportTaxLots",
+        "parameters": [
+          {
+            "description": "YYYY-MM-DD; default today",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD; default today",
+              "title": "As Of"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "A CSV file with a header row"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Open tax lots as CSV",
         "tags": [
           "tax"
         ]

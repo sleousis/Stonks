@@ -1,5 +1,6 @@
 """TaxService (roadmap 20.5): a portfolio's tax settings, specific-lot
-picks, and yearly CSV exports of realized gains and dividends.
+picks, yearly CSV exports of realized gains and dividends, and the open
+lots on a day (roadmap 13.12).
 
 Callers resolve ``portfolio_id`` to one the caller owns first
 (``PortfolioService.resolve`` in the API, ``owned_portfolio`` in the CLI).
@@ -8,6 +9,7 @@ Writes take the caller (a :class:`Principal` from the API, or a bare
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
@@ -24,12 +26,15 @@ from stonks.store.state import SqliteState
 from stonks.tax import (
     DIVIDEND_COLUMNS,
     GAINS_COLUMNS,
+    OPEN_LOT_COLUMNS,
     DividendEvent,
     TaxFill,
     TaxSettings,
     TaxSplit,
     dividend_rows,
     gains_rows,
+    open_lot_rows,
+    open_lots,
     realized_disposals,
     to_csv,
 )
@@ -233,6 +238,28 @@ class TaxService:
     def gains_csv(self, portfolio_id: str, year: int) -> str:
         """Realized gains per lot disposed in ``year`` (see ``stonks.tax.lots``)."""
         _check_year(year)
+        inputs = self._lot_inputs(portfolio_id)
+        disposals = realized_disposals(inputs.fills, inputs.settings, inputs.picks, inputs.splits)
+        fx = self._fx({f.currency for f in inputs.fills if f.currency}, inputs.base)
+        return to_csv(GAINS_COLUMNS, gains_rows(disposals, year, inputs.base, fx))
+
+    def open_lots_csv(self, portfolio_id: str, as_of: date | None = None) -> str:
+        """The lots still open at the end of ``as_of`` (default today, UTC):
+        cost basis, days held, holding period, and the value and unrealized
+        gain at the latest close on or before that day (roadmap 13.12)."""
+        day = as_of or datetime.now(UTC).date()
+        if not date(1900, 1, 1) <= day <= date(2200, 12, 31):
+            raise ValidationError("as_of must be between 1900 and 2200")
+        inputs = self._lot_inputs(portfolio_id)
+        lots = open_lots(inputs.fills, day, inputs.settings, inputs.picks, inputs.splits)
+        prices = self._closes(sorted({lot.ticker for lot in lots}), day)
+        currencies = {lot.currency for lot in lots if lot.currency}
+        fx = self._fx(currencies, inputs.base)
+        return to_csv(OPEN_LOT_COLUMNS, open_lot_rows(lots, day, inputs.base, fx, prices))
+
+    def _lot_inputs(self, portfolio_id: str) -> _LotInputs:
+        """The portfolio's fills (fees in the trade currency), lot picks,
+        splits and tax settings: what the lot replay reads."""
         with self._ctx.state() as state:
             view = _settings_view(state, portfolio_id)
             raw = state.sql(
@@ -301,18 +328,17 @@ class TaxService:
             picks.setdefault(int(r["sell_fill_id"]), []).append(
                 (int(r["buy_fill_id"]), float(r["quantity"]))
             )
-        disposals = realized_disposals(
-            fills,
-            TaxSettings(
+        return _LotInputs(
+            base=view.base_currency,
+            settings=TaxSettings(
                 jurisdiction=view.jurisdiction,
                 lot_method=view.lot_method,
                 wash_sales=view.wash_sales,
             ),
-            picks,
-            splits,
+            fills=fills,
+            picks=picks,
+            splits=splits,
         )
-        fx = self._fx({f.currency for f in fills if f.currency}, view.base_currency)
-        return to_csv(GAINS_COLUMNS, gains_rows(disposals, year, view.base_currency, fx))
 
     def dividends_csv(self, portfolio_id: str, year: int) -> str:
         """Dividends with an ex-date in ``year``, from the corporate action
@@ -355,11 +381,32 @@ class TaxService:
             )
         return {str(i): str(c) for i, c in zip(df["id"], df["currency"], strict=True)}
 
+    def _closes(self, tickers: list[str], day: date) -> dict[str, float]:
+        """The latest daily close on or before ``day`` per ticker."""
+        if not tickers:
+            return {}
+        with self._ctx.lake() as lake:
+            df = lake.sql(
+                "SELECT ticker, arg_max(close, date) AS close FROM prices"
+                " WHERE ticker = ANY(?) AND date <= ? AND close IS NOT NULL GROUP BY ticker",
+                [tickers, day],
+            )
+        return {str(r["ticker"]): float(r["close"]) for r in df.to_dict("records")}
+
     def _fx(self, currencies: set[str], base: str) -> FxRates:
         if not currencies - {base}:
             return FxRates([])
         with self._ctx.lake() as lake:
             return load_fx_rates(lake, {*currencies, base})
+
+
+@dataclass(frozen=True)
+class _LotInputs:
+    base: str
+    settings: TaxSettings
+    fills: list[TaxFill]
+    picks: dict[int, list[tuple[int, float]]]
+    splits: list[TaxSplit]
 
 
 def _check_year(year: int) -> None:

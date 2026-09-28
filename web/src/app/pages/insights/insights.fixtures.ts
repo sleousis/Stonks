@@ -20,6 +20,11 @@ export const INSIGHTS: InsightsView = {
   fx_missing: [],
   mwr: 0.085,
   net_flows: 5_000,
+  monthly_returns: [
+    { month: '2026-07', value: 0.012 },
+    { month: '2026-08', value: -0.031 },
+    { month: '2026-09', value: 0.004 },
+  ],
   allocation: {
     asset_class: [
       { key: 'equity', value: 70_000, weight: 0.7, holdings: 2 },

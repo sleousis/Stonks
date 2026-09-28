@@ -1,21 +1,23 @@
-"""Yearly tax exports as CSV (roadmap 20.5): realized gains per lot and
-dividends with withholding, in the trade currency and the base currency.
+"""Tax exports as CSV: realized gains per lot and dividends with
+withholding (roadmap 20.5), and the open lots on a day (roadmap 13.12), in
+the trade currency and the base currency.
 
 Base amounts: the cost at the acquired day's FX rate, the proceeds at the
-disposed day's rate, and dividends at the ex-date's rate. An amount whose
+disposed day's rate, dividends at the ex-date's rate, and an open lot's
+market value at the report day's rate. An amount whose
 currency has no stored rate is left empty (never guessed)."""
 
 from __future__ import annotations
 
 import csv
 import io
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
 from stonks.fx import FxRates
-from stonks.tax.lots import Disposal
+from stonks.tax.lots import Disposal, OpenLot
 
 GAINS_COLUMNS = (
     "ticker",
@@ -51,6 +53,29 @@ DIVIDEND_COLUMNS = (
     "gross_base",
     "withholding_base",
     "net_base",
+)
+
+
+OPEN_LOT_COLUMNS = (
+    "ticker",
+    "lot_kind",
+    "quantity",
+    "acquired",
+    "days_held",
+    "holding_period",
+    "long_term_on",
+    "currency",
+    "cost_per_share",
+    "cost_basis",
+    "wash_sale_adjustment",
+    "price",
+    "market_value",
+    "unrealized_gain",
+    "base_currency",
+    "cost_basis_base",
+    "market_value_base",
+    "unrealized_gain_base",
+    "open_fill_id",
 )
 
 
@@ -120,6 +145,57 @@ def gains_rows(
                 "gain_base": _money(gain_base),
                 "open_fill_id": d.open_fill_id,
                 "close_fill_id": d.close_fill_id,
+            }
+        )
+    return rows
+
+
+def open_lot_rows(
+    lots: Iterable[OpenLot],
+    as_of: date,
+    base: str,
+    fx: FxRates,
+    prices: Mapping[str, float] | None = None,
+) -> list[dict[str, Any]]:
+    """One row per open lot. A short lot's basis is its sale proceeds and
+    its unrealized gain is the proceeds less today's cost to cover. Price
+    columns stay empty for a ticker with no price in ``prices``."""
+    rows: list[dict[str, Any]] = []
+    for lot in lots:
+        ccy = lot.currency or base
+        price = (prices or {}).get(lot.ticker)
+        value = None if price is None else price * lot.quantity
+        gain = None
+        if value is not None:
+            gain = value - lot.cost_basis if lot.kind == "long" else lot.cost_basis - value
+        # a long's cost is paid at the purchase; a short's proceeds come in then too
+        cost_base = fx.convert(lot.cost_basis, ccy, base, lot.acquired)
+        value_base = None if value is None else fx.convert(value, ccy, base, as_of)
+        gain_base = None
+        if cost_base is not None and value_base is not None:
+            gain_base = value_base - cost_base if lot.kind == "long" else cost_base - value_base
+        starts = lot.long_term_on()
+        rows.append(
+            {
+                "ticker": lot.ticker,
+                "lot_kind": lot.kind,
+                "quantity": _qty(lot.quantity),
+                "acquired": lot.acquired.isoformat(),
+                "days_held": lot.days_held(as_of),
+                "holding_period": lot.holding_period(as_of),
+                "long_term_on": starts.isoformat() if starts else "",
+                "currency": ccy,
+                "cost_per_share": f"{lot.cost_basis / lot.quantity:.6f}" if lot.quantity else "",
+                "cost_basis": _money(lot.cost_basis),
+                "wash_sale_adjustment": _money(lot.wash_sale_adjustment),
+                "price": "" if price is None else f"{price:.6f}",
+                "market_value": _money(value),
+                "unrealized_gain": _money(gain),
+                "base_currency": base,
+                "cost_basis_base": _money(cost_base),
+                "market_value_base": _money(value_base),
+                "unrealized_gain_base": _money(gain_base),
+                "open_fill_id": lot.open_fill_id,
             }
         )
     return rows

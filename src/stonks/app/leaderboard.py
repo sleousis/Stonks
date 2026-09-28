@@ -29,6 +29,7 @@ from stonks.app.operations import PnlRowView, ShadowDecisionView
 from stonks.app.serialize import finite
 from stonks.app.strategies import StatusChangeView, StrategyDetail, StrategyService
 from stonks.backtest import metrics
+from stonks.insights.models import MonthlyReturn
 from stonks.logging import get_logger
 from stonks.production.pnl import PnlRow, load_pnl
 from stonks.registry.store import StatusChange
@@ -79,11 +80,6 @@ class LeaderboardView(BaseModel):
     sort: SortKey
     #: Days of history behind the figures (the longest model book).
     as_of: date | None
-
-
-class MonthlyReturn(BaseModel):
-    month: str  # YYYY-MM
-    value: float | None
 
 
 class TearSheetView(BaseModel):

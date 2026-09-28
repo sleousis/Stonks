@@ -51,6 +51,8 @@ def test_a_deposit_mid_period_is_not_return(client, people, settings):
     assert inception["change"] == 5_000 and inception["twr"] == pytest.approx(0.0)
     assert insights["net_flows"] == 5_000
     assert insights["cash"] == 20_000
+    # the monthly heatmap is time weighted too: March made nothing (13.7)
+    assert insights["monthly_returns"] == [{"month": "2026-03", "value": pytest.approx(0.0)}]
 
 
 def test_withdrawals_and_refusals(client, people, settings):

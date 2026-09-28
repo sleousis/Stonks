@@ -155,6 +155,7 @@ READ_TOOLS = {
     "list_survival_presets",
     "get_studio_capabilities",
     "get_chart",
+    "compare_tickers",
     "get_leaderboard",
     "get_tear_sheet",
     "list_watchlists",

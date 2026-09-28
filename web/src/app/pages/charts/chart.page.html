@@ -145,6 +145,147 @@
     </div>
   </section>
 
+  <div class="analysis">
+    <section class="panel" aria-labelledby="compare-title">
+      <div class="panel-head">
+        <h2 id="compare-title">Compare</h2>
+        <span class="muted">Rebased to 100</span>
+      </div>
+      <div class="panel-body compare-body">
+        <form class="compare-form" (submit)="addCompare($event)">
+          <label for="compare-ticker" class="visually-hidden">Ticker to compare</label>
+          <input
+            id="compare-ticker"
+            class="input num"
+            type="search"
+            list="chart-suggestions"
+            placeholder="Add a ticker, e.g. SPY.US"
+            autocomplete="off"
+            autocapitalize="characters"
+            spellcheck="false"
+            maxlength="200"
+            [disabled]="compared().length >= maxCompared"
+            [value]="compareText()"
+            (input)="compareText.set($any($event.target).value)"
+          />
+          <button
+            type="submit"
+            class="btn"
+            [disabled]="compared().length >= maxCompared || !compareText().trim()"
+          >
+            Compare
+          </button>
+        </form>
+        @if (compared().length) {
+          <ul class="compared" aria-label="Tickers compared">
+            @for (t of compared(); track t) {
+              <li class="chip num">
+                {{ t }}
+                <button
+                  type="button"
+                  class="chip-remove"
+                  [attr.aria-label]="'Stop comparing ' + t"
+                  (click)="removeCompare(t)"
+                >
+                  <span aria-hidden="true">×</span>
+                </button>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="hint">
+            Add up to {{ maxCompared }} tickers to see how they moved against {{ symbol() }} over
+            the same range.
+          </p>
+        }
+        @if (comparison.error(); as err) {
+          <app-error-state
+            title="Could not load the comparison"
+            [error]="err"
+            (retry)="comparison.reload()"
+          />
+        } @else if (!comparison.hasValue()) {
+          <app-loading-state label="Loading the comparison" [rows]="4" />
+        } @else if (compareLines().length === 0) {
+          <p class="muted">No prices to compare in this range.</p>
+        } @else {
+          <app-time-series-chart
+            ariaLabel="Tickers compared, rebased to 100"
+            [summary]="compareCaption()"
+            [series]="compareLines()"
+            [height]="260"
+          />
+          @if (comparison.value().missing.length) {
+            <p class="hint">No prices for {{ comparison.value().missing.join(', ') }}.</p>
+          }
+          <div class="figures-scroll">
+            <table class="figures-table">
+              <caption class="visually-hidden">
+                Change, worst drawdown and rolling Sharpe of each ticker over the range
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Ticker</th>
+                  <th scope="col">Change</th>
+                  <th scope="col">Worst drawdown</th>
+                  <th scope="col">Sharpe</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (r of compareTable(); track r.ticker) {
+                  <tr>
+                    <th scope="row" class="num">{{ r.ticker }}</th>
+                    <td class="num" [attr.data-tone]="r.tone">{{ r.change }}</td>
+                    <td class="num">{{ r.worst }}</td>
+                    <td class="num">{{ r.sharpe }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="perf-title">
+      <div class="panel-head controls">
+        <h2 id="perf-title">Rolling Sharpe and drawdown</h2>
+        <div class="segmented" role="group" aria-label="Sharpe window">
+          @for (w of sharpeWindows; track w.bars) {
+            <button
+              type="button"
+              class="seg num"
+              [attr.aria-pressed]="sharpeWindow() === w.bars"
+              (click)="sharpeWindow.set(w.bars)"
+            >
+              {{ w.label }}
+            </button>
+          }
+        </div>
+      </div>
+      <div class="panel-body">
+        @if (comparison.error()) {
+          <p class="muted">The panel shows once the comparison loads.</p>
+        } @else if (!comparison.hasValue()) {
+          <app-loading-state label="Loading rolling Sharpe and drawdown" [rows]="4" />
+        } @else if (performance().length === 0) {
+          <p class="muted">No prices for {{ symbol() }} in this range.</p>
+        } @else {
+          <app-time-series-chart
+            [ariaLabel]="symbol() + ' rolling Sharpe, with drawdown below'"
+            [summary]="performanceText()"
+            [series]="performance()"
+            [height]="260"
+          />
+          <p class="hint">
+            Sharpe over the trailing window, per year. Drawdown is the fall from the highest close
+            so far in the range.
+          </p>
+        }
+      </div>
+    </section>
+  </div>
+
   @if (chart.hasValue()) {
     <div class="lists">
       <section class="panel" aria-labelledby="fills-title">
