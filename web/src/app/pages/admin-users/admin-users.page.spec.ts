@@ -78,6 +78,10 @@ describe('AdminUsersPage', () => {
     expect(el.textContent).toContain('Never signed in');
     expect(button(rowOf(el, 'Boss'), 'Disable').disabled).toBe(true);
     expect(button(rowOf(el, 'Ann'), 'Disable').disabled).toBe(false);
+    // Resetting your own sign-in would end your session: Profile is the place for that.
+    expect(button(rowOf(el, 'Boss'), 'Reset sign-in app').disabled).toBe(true);
+    expect(button(rowOf(el, 'Boss'), 'Reset password').disabled).toBe(true);
+    expect(button(rowOf(el, 'Ann'), 'Reset password').disabled).toBe(false);
   });
 
   it('says how to add the next person when the admin is alone', async () => {

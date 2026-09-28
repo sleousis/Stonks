@@ -181,7 +181,7 @@
             <button
               type="button"
               class="btn"
-              [disabled]="busy() === u.id || !u.mfa_enrolled"
+              [disabled]="busy() === u.id || !u.mfa_enrolled || u.id === myId()"
               [attr.aria-label]="'Reset authenticator for ' + u.display_name"
               (click)="resetMfa(u)"
             >
@@ -190,7 +190,7 @@
             <button
               type="button"
               class="btn"
-              [disabled]="busy() === u.id"
+              [disabled]="busy() === u.id || u.id === myId()"
               [attr.aria-label]="'Reset password for ' + u.display_name"
               (click)="openReset(u)"
             >
