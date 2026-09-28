@@ -13,6 +13,10 @@ export type AccountProfileBody = {
      */
     account_type?: 'cash' | 'margin';
     /**
+     * Acknowledge Margin Risks
+     */
+    acknowledge_margin_risks?: boolean;
+    /**
      * Allow Short
      */
     allow_short?: boolean;
@@ -98,6 +102,14 @@ export type AccountRulesSettings = {
      * Enabled
      */
     enabled?: boolean;
+    /**
+     * Margin Accounts
+     */
+    margin_accounts?: boolean;
+    /**
+     * Margin Buffer
+     */
+    margin_buffer?: number;
     /**
      * Pdt Equity Threshold
      */
@@ -5594,6 +5606,74 @@ export type ManualOrderResult = {
 };
 
 /**
+ * MarginAccountView
+ *
+ * The account as the broker reports it now.
+ */
+export type MarginAccountView = {
+    /**
+     * Account Type
+     */
+    account_type: 'cash' | 'margin';
+    /**
+     * Available Funds
+     */
+    available_funds: number;
+    /**
+     * Buying Power
+     */
+    buying_power: number;
+    /**
+     * Cash
+     */
+    cash: number;
+    /**
+     * Currency
+     */
+    currency: string;
+    /**
+     * Cushion
+     */
+    cushion: number | null;
+    /**
+     * Day Trades Remaining
+     */
+    day_trades_remaining: number | null;
+    /**
+     * Equity
+     */
+    equity: number;
+    /**
+     * Excess Liquidity
+     */
+    excess_liquidity: number | null;
+    /**
+     * Initial Margin
+     */
+    initial_margin: number;
+    /**
+     * Level
+     */
+    level: 'ok' | 'warn' | 'reduce' | 'call' | null;
+    /**
+     * Maintenance Margin
+     */
+    maintenance_margin: number;
+    /**
+     * Margin Room
+     */
+    margin_room: number | null;
+    /**
+     * Margin Use
+     */
+    margin_use: number | null;
+    /**
+     * Reported Type
+     */
+    reported_type: 'cash' | 'margin' | null;
+};
+
+/**
  * MarginCallSettings
  */
 export type MarginCallSettings = {
@@ -5606,6 +5686,48 @@ export type MarginCallSettings = {
      */
     enabled?: boolean;
     margin?: MarginSettings;
+    /**
+     * Reduce Cushion
+     */
+    reduce_cushion?: number;
+    /**
+     * Restore Cushion
+     */
+    restore_cushion?: number;
+    /**
+     * Warn Cushion
+     */
+    warn_cushion?: number;
+};
+
+/**
+ * MarginCheckView
+ */
+export type MarginCheckView = {
+    /**
+     * Checked At
+     */
+    checked_at: string;
+    /**
+     * Cushion
+     */
+    cushion: number | null;
+    /**
+     * Equity
+     */
+    equity: number;
+    /**
+     * Level
+     */
+    level: 'ok' | 'warn' | 'reduce' | 'call';
+    /**
+     * Maintenance Margin
+     */
+    maintenance_margin: number;
+    /**
+     * Source
+     */
+    source: 'tick' | 'monitor';
 };
 
 /**
@@ -5653,6 +5775,47 @@ export type MarginSettings = {
         [key: string]: MarginRates;
     };
     rates?: MarginRates;
+};
+
+/**
+ * MarginView
+ */
+export type MarginView = {
+    account: MarginAccountView | null;
+    /**
+     * Buffer
+     */
+    buffer: number;
+    latest_check: MarginCheckView | null;
+    /**
+     * Margin Accounts On
+     */
+    margin_accounts_on: boolean;
+    pdt: PdtView;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Profile Type
+     */
+    profile_type: 'cash' | 'margin' | null;
+    /**
+     * Read Error
+     */
+    read_error: string | null;
+    /**
+     * Reduce Cushion
+     */
+    reduce_cushion: number;
+    /**
+     * Restore Cushion
+     */
+    restore_cushion: number;
+    /**
+     * Warn Cushion
+     */
+    warn_cushion: number;
 };
 
 /**
@@ -8119,6 +8282,32 @@ export type PayoffPointView = {
      * Spot
      */
     spot: number;
+};
+
+/**
+ * PdtView
+ */
+export type PdtView = {
+    /**
+     * Applies
+     */
+    applies: boolean;
+    /**
+     * Day Trades Remaining
+     */
+    day_trades_remaining: number | null;
+    /**
+     * Equity Threshold
+     */
+    equity_threshold: number;
+    /**
+     * Max Day Trades
+     */
+    max_day_trades: number;
+    /**
+     * Window Days
+     */
+    window_days: number;
 };
 
 /**
@@ -21907,6 +22096,52 @@ export type GetLiveGateReportResponses = {
 };
 
 export type GetLiveGateReportResponse = GetLiveGateReportResponses[keyof GetLiveGateReportResponses];
+
+export type GetLiveMarginData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/margin';
+};
+
+export type GetLiveMarginErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLiveMarginError = GetLiveMarginErrors[keyof GetLiveMarginErrors];
+
+export type GetLiveMarginResponses = {
+    /**
+     * Successful Response
+     */
+    200: MarginView;
+};
+
+export type GetLiveMarginResponse = GetLiveMarginResponses[keyof GetLiveMarginResponses];
 
 export type PreviewLiveOrdersData = {
     body?: never;

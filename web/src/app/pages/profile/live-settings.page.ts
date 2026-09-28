@@ -25,6 +25,7 @@ import {
   type ClientClass,
   JURISDICTION_OPTIONS,
   type Jurisdiction,
+  MARGIN_RISKS,
   accountRuleWords,
   profileNotes,
   safeguardWords,
@@ -35,6 +36,7 @@ import { PermissionNote } from '../../shared/ui/permission-note';
 import { Segmented } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { LiveMarginPanel } from './live-margin-panel';
 import { LivePreviewPanel } from './live-preview-panel';
 import { LiveStageCard } from './live-stage-card';
 
@@ -65,13 +67,23 @@ export function allocationErrors(d: AllocationDraft): AllocationErrors {
   return errors;
 }
 
+/** A save switches the account to margin (so the risks must be acknowledged). */
+export function switchesToMargin(
+  current: AccountProfileView | null,
+  draft: { account_type: AccountType },
+): boolean {
+  return draft.account_type === 'margin' && current?.account_type !== 'margin';
+}
+
 /** The profile a save sends: the three choices, the rest kept as stored. */
 export function profileBody(
   current: AccountProfileView | null,
   draft: { jurisdiction: Jurisdiction; account_type: AccountType; client_class: ClientClass },
   baseCurrency: string,
+  acknowledged = false,
 ): AccountProfileBody {
   return {
+    acknowledge_margin_risks: draft.account_type === 'margin' && acknowledged,
     jurisdiction: draft.jurisdiction,
     account_type: draft.account_type,
     client_class: draft.client_class,
@@ -119,6 +131,7 @@ export function profileText(p: {
     ErrorState,
     LoadingState,
     LiveStageCard,
+    LiveMarginPanel,
     LivePreviewPanel,
   ],
   templateUrl: './live-settings.page.html',
@@ -245,6 +258,13 @@ export class LiveSettingsPage {
     () => this.stored()?.client_class ?? 'retail',
   );
   protected readonly savingProfile = signal(false);
+  protected readonly marginRisks = MARGIN_RISKS;
+  /** The risks of margin, ticked by the owner before a switch to margin. */
+  protected readonly acknowledged = signal(false);
+  protected readonly toMargin = computed(() => switchesToMargin(this.stored(), this.draft()));
+  protected readonly canSaveProfile = computed(
+    () => this.profileChanged() && (!this.toMargin() || this.acknowledged()),
+  );
 
   private readonly draft = computed(() => ({
     jurisdiction: this.jurisdiction(),
@@ -267,12 +287,14 @@ export class LiveSettingsPage {
 
   async saveProfile(): Promise<void> {
     const p = this.portfolio();
-    if (!p || this.savingProfile() || !this.profileChanged()) return;
+    if (!p || this.savingProfile() || !this.canSaveProfile()) return;
     const current = this.stored();
-    const body = profileBody(current, this.draft(), p.base_currency);
+    const body = profileBody(current, this.draft(), p.base_currency, this.acknowledged());
     const ok = await this.confirm.confirm({
       title: `Save the account profile of ${p.name}?`,
-      message: 'The account rules of the next trading run follow this profile.',
+      message: this.toMargin()
+        ? 'The account rules of the next trading run follow this profile. Stonks checks with the broker that this is a margin account first.'
+        : 'The account rules of the next trading run follow this profile.',
       confirmLabel: 'Save profile',
       tone: 'danger',
       ticket: {
@@ -291,6 +313,7 @@ export class LiveSettingsPage {
     try {
       const saved = await this.live.setProfile(p.id, body);
       this.profile.set(saved);
+      this.acknowledged.set(false);
       this.rules.reload();
       this.toasts.success(`Saved the account profile of ${p.name}.`);
     } catch {

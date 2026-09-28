@@ -76,6 +76,16 @@ export const ACCOUNT_RULE_WORDS: Record<string, RuleWords> = {
     label: 'Buying power',
     effect: 'Buys fit the funds the broker says are available.',
   },
+  margin_allowed: {
+    label: 'Margin allowed',
+    effect:
+      'New positions on margin need margin accounts turned on by your admin and the broker reporting a margin account.',
+  },
+  margin_what_if: {
+    label: 'Margin check',
+    effect:
+      'The broker prices each new order first. Its margin must leave a safety share of your equity unused.',
+  },
   fx_funding: {
     label: 'Currency on hand',
     effect: 'A buy only spends cash already held in its currency.',
@@ -163,7 +173,7 @@ export function profileNotes(p: {
   notes.push(
     p.account_type === 'cash'
       ? `Cash account: buys use settled cash only, and sale money settles ${settles}. No short sales.`
-      : 'Margin account: buys fit the buying power the broker reports.',
+      : 'Margin account: each new order fits the margin the broker works out for it, with a safety share left unused. Short sales need shares the broker can lend.',
   );
   if (p.jurisdiction === 'us') {
     notes.push('US rules: wash sales are flagged, and short sales follow the US short sale rules.');
@@ -179,4 +189,56 @@ export function profileNotes(p: {
     );
   }
   return notes;
+}
+
+/**
+ * What a margin account risks, in plain words. Shown before a switch to
+ * margin, which needs these acknowledged (roadmap 19.13).
+ */
+export const MARGIN_RISKS: readonly string[] = [
+  'The broker lends you money. You can lose more than you put in.',
+  'You pay interest on what you borrow, and a fee for every share you short.',
+  'If the account falls below its maintenance margin, the broker can sell your positions without asking, at any price.',
+  'A short sale has no ceiling on its loss, and the broker can recall the shares you borrowed.',
+  'Stonks sells before the broker does when the cushion gets thin, but a fast market can still beat it.',
+];
+
+export type MarginLevel = 'ok' | 'warn' | 'reduce' | 'call';
+
+/** A margin level in plain words, with the tone of its pill. */
+export function marginLevelWords(level: MarginLevel | null | undefined): {
+  label: string;
+  tone: 'positive' | 'warn' | 'negative' | 'neutral';
+  effect: string;
+} {
+  switch (level) {
+    case 'ok':
+      return {
+        label: 'Healthy',
+        tone: 'positive',
+        effect: 'Plenty of room above the maintenance margin.',
+      };
+    case 'warn':
+      return {
+        label: 'Thin',
+        tone: 'warn',
+        effect: 'The cushion is getting thin. You get an alert. Nothing is sold yet.',
+      };
+    case 'reduce':
+      return {
+        label: 'Reducing',
+        tone: 'negative',
+        effect:
+          'Too thin. The next run sells positions until the cushion is back, before the broker does.',
+      };
+    case 'call':
+      return {
+        label: 'Margin call',
+        tone: 'negative',
+        effect:
+          'Below the maintenance margin. The broker may be selling now. Add cash or close positions.',
+      };
+    default:
+      return { label: 'No margin', tone: 'neutral', effect: 'A cash account borrows nothing.' };
+  }
 }

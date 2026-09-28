@@ -2,14 +2,20 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import type { GateReportView, LiveRulesView, LiveStageView } from '../../api/models';
+import type { GateReportView, LiveRulesView, LiveStageView, MarginView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
-import { LiveSettingsPage, allocationErrors, profileBody, profileText } from './live-settings.page';
+import {
+  LiveSettingsPage,
+  allocationErrors,
+  profileBody,
+  profileText,
+  switchesToMargin,
+} from './live-settings.page';
 
 const LIVE = book({
   id: 'pf_live',
@@ -42,6 +48,42 @@ const STAGE: LiveStageView = {
   real_money: false,
   history: [],
   days: [],
+};
+
+const MARGIN_CASH: MarginView = {
+  portfolio_id: 'pf_live',
+  profile_type: null,
+  margin_accounts_on: false,
+  account: {
+    currency: 'USD',
+    equity: 10000,
+    cash: 10000,
+    available_funds: 9000,
+    buying_power: 9000,
+    excess_liquidity: null,
+    initial_margin: 0,
+    maintenance_margin: 0,
+    margin_use: 0,
+    cushion: null,
+    level: null,
+    margin_room: null,
+    account_type: 'cash',
+    reported_type: 'cash',
+    day_trades_remaining: null,
+  },
+  read_error: null,
+  buffer: 0.1,
+  warn_cushion: 0.15,
+  reduce_cushion: 0.1,
+  restore_cushion: 0.2,
+  pdt: {
+    applies: false,
+    equity_threshold: 25000,
+    max_day_trades: 3,
+    window_days: 5,
+    day_trades_remaining: null,
+  },
+  latest_check: null,
 };
 
 const REPORT: GateReportView = {
@@ -84,6 +126,7 @@ describe('live settings helpers', () => {
       'EUR',
     );
     expect(body).toEqual({
+      acknowledge_margin_risks: false,
       jurisdiction: 'us',
       account_type: 'cash',
       client_class: 'retail',
@@ -99,6 +142,37 @@ describe('live settings helpers', () => {
     expect(profileText({ jurisdiction: 'eu', account_type: 'margin' })).toBe(
       'EU, margin account, retail client',
     );
+  });
+
+  it('asks for the margin risks only on a switch to margin', () => {
+    expect(switchesToMargin(null, { account_type: 'margin' })).toBe(true);
+    expect(switchesToMargin(null, { account_type: 'cash' })).toBe(false);
+    const margin = {
+      portfolio_id: 'p',
+      jurisdiction: 'us' as const,
+      account_type: 'margin' as const,
+      client_class: 'retail' as const,
+      base_currency: 'USD',
+      fx_policy: 'refuse' as const,
+      wash_sale_mode: 'warn' as const,
+      allow_short: false,
+    };
+    expect(switchesToMargin(margin, { account_type: 'margin' })).toBe(false);
+    const body = profileBody(
+      null,
+      { jurisdiction: 'us', account_type: 'margin', client_class: 'retail' },
+      'USD',
+      true,
+    );
+    expect(body.acknowledge_margin_risks).toBe(true);
+    expect(
+      profileBody(
+        null,
+        { jurisdiction: 'us', account_type: 'cash', client_class: 'retail' },
+        'USD',
+        true,
+      ).acknowledge_margin_risks,
+    ).toBe(false);
   });
 });
 
@@ -146,6 +220,7 @@ describe('LiveSettingsPage', () => {
       (await nextRequest(http, '/api/portfolios/pf_live/live/rules')).flush(RULES);
       (await nextRequest(http, '/api/portfolios/pf_live/live/stage')).flush(STAGE);
       (await nextRequest(http, '/api/portfolios/pf_live/live/gate-report')).flush(REPORT);
+      (await nextRequest(http, '/api/portfolios/pf_live/live/margin')).flush(MARGIN_CASH);
       await tick();
       fixture.detectChanges();
     }
@@ -250,6 +325,40 @@ describe('LiveSettingsPage', () => {
     fixture.detectChanges();
     expect(el.textContent).toContain('UK, cash account, retail client');
     expect(el.textContent).toContain('Settled cash only');
+  });
+
+  it('shows the risks of margin and needs them ticked before a switch', async () => {
+    const el = await render();
+    expect(el.querySelector('.margin-risks')).toBeNull();
+    const margin = [...el.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(
+      (b) => b.textContent?.trim() === 'Margin',
+    )!;
+    margin.click();
+    fixture.detectChanges();
+    const risks = el.querySelector('.margin-risks');
+    expect(risks?.textContent).toContain('You can lose more than you put in.');
+    expect(risks?.textContent).toContain('sell your positions without asking');
+    expect(button(el, 'Save profile').disabled).toBe(true);
+    const ack = el.querySelector<HTMLInputElement>('[data-testid="margin-ack"]')!;
+    ack.checked = true;
+    ack.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(button(el, 'Save profile').disabled).toBe(false);
+    button(el, 'Save profile').click();
+    const put = await nextRequest(http, '/api/portfolios/pf_live/live/account-profile', 'PUT');
+    expect(put.request.body).toMatchObject({
+      account_type: 'margin',
+      acknowledge_margin_risks: true,
+    });
+    put.flush({ detail: 'margin accounts are off' }, { status: 409, statusText: 'Conflict' });
+    await tick();
+  });
+
+  it('shows buying power from the broker', async () => {
+    const el = await render();
+    const panel = el.querySelector('app-live-margin-panel');
+    expect(panel?.querySelector('[data-testid="buying-power"]')?.textContent).toContain('9,000');
+    expect(panel?.textContent).toContain('A cash account borrows nothing');
   });
 
   it('lists which live safeguards are on, read only', async () => {

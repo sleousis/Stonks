@@ -7,6 +7,7 @@ import {
   getBrokerGateways,
   getLiveAllocation,
   getLiveGateReport,
+  getLiveMargin,
   getLiveRules,
   listReconcileReports,
   getLiveStage,
@@ -25,7 +26,7 @@ import type {
 
 /**
  * A live portfolio's owner settings (the allocation and the account
- * profile), the live rules that act on it, the broker gateways' health,
+ * profile), the live rules that act on it, its buying power and margin use, the broker gateways' health,
  * the reconciliation reports of your live portfolios, and the live stage
  * (roadmap 19.9): its gate report, promotion, demotion and the dry-run
  * preview. The settings writes and a promotion need a fresh second factor:
@@ -55,6 +56,11 @@ export class LiveService {
 
   rules(portfolioId: string) {
     return unwrap(getLiveRules({ path: { portfolio_id: portfolioId } }));
+  }
+
+  /** Buying power and margin use, read from the broker now (roadmap 19.13). */
+  margin(portfolioId: string) {
+    return unwrap(getLiveMargin({ path: { portfolio_id: portfolioId } }));
   }
 
   gateways() {
