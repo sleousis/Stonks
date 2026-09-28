@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from stonks.backtest.costs import CostModelSettings
+from stonks.backtest.fills import FillModel
 from stonks.backtest.simulated_broker import SimulatedBroker
 from stonks.core.types import Portfolio
 
@@ -47,15 +48,22 @@ class SimulatedCosts:
         p = settings.production
         return cls(slippage_bps=p.slippage_bps, fee_per_trade=p.fee_per_trade)
 
-    def build_broker(self, portfolio: Portfolio) -> SimulatedBroker:
+    def build_broker(
+        self, portfolio: Portfolio, fill_model: FillModel | None = None
+    ) -> SimulatedBroker:
         """An in-memory broker trading ``portfolio``. The caller still sets
-        prices (and volumes / asset classes, which the model reads)."""
+        prices (and volumes / asset classes, which the model reads).
+        ``fill_model`` (default: the whole order at the price given) is the
+        one a paper book fills through at the next open."""
         if self.model is not None:
-            return SimulatedBroker(portfolio=portfolio, cost_model=self.model.build())
+            return SimulatedBroker(
+                portfolio=portfolio, cost_model=self.model.build(), fill_model=fill_model
+            )
         return SimulatedBroker(
             portfolio=portfolio,
             slippage_bps=self.slippage_bps,
             fee_per_trade=self.fee_per_trade,
+            fill_model=fill_model,
         )
 
 
