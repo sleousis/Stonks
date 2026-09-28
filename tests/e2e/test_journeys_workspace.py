@@ -9,6 +9,8 @@ Each test runs on desktop and on a 375px phone (the ``viewport`` fixture).
 
 from __future__ import annotations
 
+import re
+
 import pyotp
 import pytest
 from playwright.sync_api import expect
@@ -111,9 +113,23 @@ def test_a_trader_charts_a_ticker_from_a_watchlist(browse, stack, viewport):
     expect(chart.locator("canvas").first).to_be_visible()
     expect(chart.locator(".legend")).to_contain_text("C ")
     expect(chart.locator(".legend")).to_contain_text("MA 50")
-    page.get_by_role("button", name="3M").click()
-    expect(page.get_by_role("button", name="3M")).to_have_attribute("aria-pressed", "true")
+    ranges = page.get_by_role("group", name="Range")
+    ranges.get_by_role("button", name="3M").click()
+    expect(ranges.get_by_role("button", name="3M")).to_have_attribute("aria-pressed", "true")
     expect(page.locator("section", has_text="Your fills")).to_be_visible()
+
+    # Compare another ticker on one scale, then read the rolling Sharpe (13.5).
+    page.get_by_label("Ticker to compare").fill("aaa.us")
+    page.get_by_role("button", name="Compare", exact=True).click()
+    expect(page).to_have_url(re.compile(r"vs=AAA\.US"))
+    figures = page.locator(".figures-table")
+    expect(figures).to_contain_text("BBB.US")
+    expect(figures).to_contain_text("AAA.US")
+    expect(page.get_by_role("button", name="Stop comparing AAA.US")).to_be_visible()
+    perf = page.locator("section", has=page.get_by_role("heading", name="Rolling Sharpe"))
+    expect(perf.locator("canvas").first).to_be_visible()
+    perf.get_by_role("button", name="6M").click()
+    expect(perf.get_by_role("button", name="6M")).to_have_attribute("aria-pressed", "true")
     v.check_page("chart")
 
     # Orders download as a CSV file over the session.
