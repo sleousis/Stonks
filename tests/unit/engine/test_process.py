@@ -335,3 +335,59 @@ def test_two_books_trade_their_own_portfolios(lake, state, recording) -> None:
     assert len(sent_ids(state)) + len(sent_ids(state, "pf_second")) == stats.orders_sent
     assert all(i.startswith("pf_second:") for i in sent_ids(state, "pf_second"))
     assert process.driver.stats.total_handler_errors == 0
+
+
+# ---- a shared broker account ------------------------------------------------------------
+
+
+class _AccountBroker:
+    """A broker account that also holds the owner's own shares (what an
+    IBKR account reports): the book's simulated fills plus ``external``."""
+
+    def __init__(self, sim: IntradaySimBroker, external: dict[str, float]) -> None:
+        self.sim = sim
+        self.external = external
+
+    def fetch_portfolio(self) -> Portfolio:
+        mine = self.sim.fetch_portfolio()
+        positions = dict(mine.positions)
+        for ticker, qty in self.external.items():
+            positions[ticker] = positions.get(ticker, 0.0) + qty
+        return Portfolio(cash=mine.cash, positions=positions)
+
+    def place_order(self, order: Order) -> None:
+        self.sim.place_order(order)
+
+    def reconcile(self) -> list:
+        return self.sim.reconcile()
+
+    def executions(self, since: datetime) -> list:
+        return self.sim.executions(since)
+
+    def get_order_state(self, client_id: str):
+        return self.sim.get_order_state(client_id)
+
+    def cancel_order(self, client_id: str) -> bool:
+        return self.sim.cancel_order(client_id)
+
+    def on_bar_close(self, event: BarClose) -> list:
+        return self.sim.on_bar_close(event)
+
+    def set_asset_classes(self, classes) -> None:
+        self.sim.set_asset_classes(classes)
+
+
+def test_a_broker_book_never_trades_the_owners_own_holdings(lake, state, recording) -> None:
+    """At a real broker the account holds the owner's shares too. The book
+    decides, exits and flattens only what its own fills bought."""
+    clock = FakeClock(datetime(2026, 9, 24, tzinfo=UTC))
+    sim = IntradaySimBroker(Portfolio(cash=100_000.0), fill=PARITY_FILLS, clock=clock,
+                            session_key=None)  # fmt: skip
+    account = _AccountBroker(sim, {"OWN.US": 50.0, "AAA.US": 7.0})
+    rules = SessionRules(flatten_at_close=True, flatten_minutes=5, entry_cutoff_minutes=10)
+    process = replay_process(lake, state, recording, [book(PF, sessions=rules, broker=account)])
+    process.run()
+    assert sent_ids(state), "the book traded"
+    assert not state.sql("SELECT 1 FROM orders WHERE ticker = 'OWN.US'")
+    # the owner's 7 AAA.US stay: the book ends flat on its own shares only
+    assert account.fetch_portfolio().positions.get("AAA.US") == pytest.approx(7.0)
