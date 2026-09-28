@@ -238,6 +238,8 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/portfolios/{portfolio_id}/live/allocation` | Get Live Allocation | sign-in |  | [LiveAllocationView](#liveallocationview) |
 | PUT | `/api/portfolios/{portfolio_id}/live/allocation` | Set Live Allocation | `live.manage` | [LiveAllocationUpdate](#liveallocationupdate) | [LiveAllocationView](#liveallocationview) |
 | GET | `/api/portfolios/{portfolio_id}/live/gate-report` | Get Live Gate Report | `data.read` |  | [GateReportView](#gatereportview) |
+| GET | `/api/portfolios/{portfolio_id}/live/options` | Get Options Live | `data.read` |  | [OptionsLiveView](#optionsliveview) |
+| PUT | `/api/portfolios/{portfolio_id}/live/options/approval` | Set Options Approval | `live.manage` | [OptionsApprovalUpdate](#optionsapprovalupdate) | [OptionsLiveView](#optionsliveview) |
 | POST | `/api/portfolios/{portfolio_id}/live/preview` | Preview Live Orders | `portfolio.trade` |  | [LivePreviewView](#livepreviewview) |
 | GET | `/api/portfolios/{portfolio_id}/live/rules` | Get Live Rules | `data.read` |  | [LiveRulesView](#liverulesview) |
 | GET | `/api/portfolios/{portfolio_id}/live/stage` | Get Live Stage | `data.read` |  | [LiveStageView](#livestageview) |
@@ -2950,6 +2952,13 @@ Keep a ticker when ``min <= value <= max``. A ticker with no value for the metri
 | `synthetic` | boolean | yes |  |
 | `underlying` | string | yes |  |
 
+### OptionsApprovalUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `level` | "none" \| "covered" \| "spreads" \| "naked" | yes |  |
+| `reason` | string | yes |  |
+
 ### OptionsBacktestRequest
 
 | Field | Type | Required | Description |
@@ -2984,6 +2993,33 @@ Keep a ticker when ``min <= value <= max``. A ticker with no value for the metri
 | `underlyings` | list[string] | yes |  |
 | `validation` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
 | `verdict` | "passed" \| "failed" \| "not_run" | yes |  |
+
+### OptionsLevelView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `allows` | string | yes |  |
+| `level` | "none" \| "covered" \| "spreads" \| "naked" | yes |  |
+
+### OptionsLiveView
+
+A portfolio's live options state. ``allowed`` is true only when the switch is on, the stage is ``live_small`` or higher and the level is above ``none``.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `allowed` | boolean | yes |  |
+| `auto_approve_closes` | boolean | yes |  |
+| `close_sessions` | integer | yes |  |
+| `enabled` | boolean | yes | [production.options] live, set by the admin |
+| `expiry_action` | string | yes |  |
+| `level` | "none" \| "covered" \| "spreads" \| "naked" | yes |  |
+| `levels` | list[[OptionsLevelView](#optionslevelview)] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `reason` | string \| null | no | why the level was set |
+| `reasons` | list[string] | yes |  |
+| `stage` | string \| null | yes |  |
+| `updated_at` | date-time \| null | no |  |
+| `updated_by` | string \| null | no |  |
 
 ### OrderCancelRequest
 

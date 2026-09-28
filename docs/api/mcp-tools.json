@@ -2546,6 +2546,31 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Whether an option order may open in a live portfolio (off by\ndefault), with every reason it may not: the admin's switch, the\nlive stage and the options approval level (none, covered, spreads,\nnaked). Setting the level needs a fresh second factor in the web app.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "description": "a portfolio id of yours (pf_...)",
+            "title": "Portfolio Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id"
+        ],
+        "title": "get_options_liveArguments",
+        "type": "object"
+      },
+      "name": "get_options_live",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One of your orders in full: decision price and context, arrival\nand fill prices, the shortfall split and the notes.",
       "input_schema": {
         "properties": {

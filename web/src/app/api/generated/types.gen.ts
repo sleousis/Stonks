@@ -6521,6 +6521,20 @@ export type OptionUnderlyingView = {
 };
 
 /**
+ * OptionsApprovalUpdate
+ */
+export type OptionsApprovalUpdate = {
+    /**
+     * Level
+     */
+    level: 'none' | 'covered' | 'spreads' | 'naked';
+    /**
+     * Reason
+     */
+    reason: string;
+};
+
+/**
  * OptionsBacktestRequest
  */
 export type OptionsBacktestRequest = {
@@ -6634,6 +6648,86 @@ export type OptionsBacktestView = {
      * Verdict
      */
     verdict: 'passed' | 'failed' | 'not_run';
+};
+
+/**
+ * OptionsLevelView
+ */
+export type OptionsLevelView = {
+    /**
+     * Allows
+     */
+    allows: string;
+    /**
+     * Level
+     */
+    level: 'none' | 'covered' | 'spreads' | 'naked';
+};
+
+/**
+ * OptionsLiveView
+ *
+ * A portfolio's live options state. ``allowed`` is true only when the
+ * switch is on, the stage is ``live_small`` or higher and the level is
+ * above ``none``.
+ */
+export type OptionsLiveView = {
+    /**
+     * Allowed
+     */
+    allowed: boolean;
+    /**
+     * Auto Approve Closes
+     */
+    auto_approve_closes: boolean;
+    /**
+     * Close Sessions
+     */
+    close_sessions: number;
+    /**
+     * Enabled
+     *
+     * [production.options] live, set by the admin
+     */
+    enabled: boolean;
+    /**
+     * Expiry Action
+     */
+    expiry_action: string;
+    /**
+     * Level
+     */
+    level: 'none' | 'covered' | 'spreads' | 'naked';
+    /**
+     * Levels
+     */
+    levels: Array<OptionsLevelView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Reason
+     *
+     * why the level was set
+     */
+    reason?: string | null;
+    /**
+     * Reasons
+     */
+    reasons: Array<string>;
+    /**
+     * Stage
+     */
+    stage: string | null;
+    /**
+     * Updated At
+     */
+    updated_at?: string | null;
+    /**
+     * Updated By
+     */
+    updated_by?: string | null;
 };
 
 /**
@@ -21907,6 +22001,98 @@ export type GetLiveGateReportResponses = {
 };
 
 export type GetLiveGateReportResponse = GetLiveGateReportResponses[keyof GetLiveGateReportResponses];
+
+export type GetOptionsLiveData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/options';
+};
+
+export type GetOptionsLiveErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetOptionsLiveError = GetOptionsLiveErrors[keyof GetOptionsLiveErrors];
+
+export type GetOptionsLiveResponses = {
+    /**
+     * Successful Response
+     */
+    200: OptionsLiveView;
+};
+
+export type GetOptionsLiveResponse = GetOptionsLiveResponses[keyof GetOptionsLiveResponses];
+
+export type SetOptionsApprovalData = {
+    body: OptionsApprovalUpdate;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/live/options/approval';
+};
+
+export type SetOptionsApprovalErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetOptionsApprovalError = SetOptionsApprovalErrors[keyof SetOptionsApprovalErrors];
+
+export type SetOptionsApprovalResponses = {
+    /**
+     * Successful Response
+     */
+    200: OptionsLiveView;
+};
+
+export type SetOptionsApprovalResponse = SetOptionsApprovalResponses[keyof SetOptionsApprovalResponses];
 
 export type PreviewLiveOrdersData = {
     body?: never;

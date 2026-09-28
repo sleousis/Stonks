@@ -51,6 +51,14 @@ def register(t: ToolContext) -> None:
         return await t.get(f"/api/portfolios/{seg(portfolio_id)}/live/rules")
 
     @server.tool(annotations=READ)
+    async def get_options_live(portfolio_id: LivePortfolio) -> dict[str, Any]:
+        """Whether an option order may open in a live portfolio (off by
+        default), with every reason it may not: the admin's switch, the
+        live stage and the options approval level (none, covered, spreads,
+        naked). Setting the level needs a fresh second factor in the web app."""
+        return await t.get(f"/api/portfolios/{seg(portfolio_id)}/live/options")
+
+    @server.tool(annotations=READ)
     async def get_broker_gateways() -> dict[str, Any]:
         """IB Gateway health: connected or not, the last good check, and the
         auto books of yours a gateway outage paused."""

@@ -55,7 +55,7 @@ class OptionsLiveState:
 def options_live_state(enabled: bool, stage: str | None, level: ApprovalLevel) -> OptionsLiveState:
     reasons: list[str] = []
     if not enabled:
-        reasons.append("options live is off ([production.options] live = false)")
+        reasons.append("options live is off: the admin has not turned it on")
     if stage not in REAL_MONEY:
         reasons.append(f"the portfolio is at stage {stage or 'unknown'}, not live_small or higher")
     if level == "none":

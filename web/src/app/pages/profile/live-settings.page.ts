@@ -35,6 +35,7 @@ import { PermissionNote } from '../../shared/ui/permission-note';
 import { Segmented } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { LiveOptionsCard } from './live-options-card';
 import { LivePreviewPanel } from './live-preview-panel';
 import { LiveStageCard } from './live-stage-card';
 
@@ -120,6 +121,7 @@ export function profileText(p: {
     LoadingState,
     LiveStageCard,
     LivePreviewPanel,
+    LiveOptionsCard,
   ],
   templateUrl: './live-settings.page.html',
   styleUrl: './live-settings.page.scss',

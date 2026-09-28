@@ -9,6 +9,7 @@ import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
+import { OPTIONS_OFF } from './live-options-card.spec';
 import { LiveSettingsPage, allocationErrors, profileBody, profileText } from './live-settings.page';
 
 const LIVE = book({
@@ -146,6 +147,9 @@ describe('LiveSettingsPage', () => {
       (await nextRequest(http, '/api/portfolios/pf_live/live/rules')).flush(RULES);
       (await nextRequest(http, '/api/portfolios/pf_live/live/stage')).flush(STAGE);
       (await nextRequest(http, '/api/portfolios/pf_live/live/gate-report')).flush(REPORT);
+      await tick();
+      fixture.detectChanges();
+      (await nextRequest(http, '/api/portfolios/pf_live/live/options')).flush(OPTIONS_OFF);
       await tick();
       fixture.detectChanges();
     }
