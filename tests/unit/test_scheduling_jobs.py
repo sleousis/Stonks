@@ -53,6 +53,7 @@ def test_default_jobs_build():
         "live_eod_check",
         "calendars_refresh",
         "model_retrain",
+        "lab_verify",
         "live_submit",
         "live_stops",
         "options_live",

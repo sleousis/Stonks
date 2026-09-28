@@ -74,7 +74,8 @@ class JobConfig(BaseModel):
     name: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_.-]+$")
     #: A registered job action (``ingest_prices``, ``tick``, ``health``,
     #: ``report``, ``universes_refresh``, ``backup``, ``connections_sync``,
-    #: ``price_alerts``, ``calendars_refresh``, ``model_retrain``).
+    #: ``price_alerts``, ``calendars_refresh``, ``model_retrain``,
+    #: ``lab_verify``).
     action: str
     trigger: TriggerConfig
     params: dict[str, Any] = Field(default_factory=dict)
@@ -103,6 +104,9 @@ def default_jobs() -> list[JobConfig]:
     close) skip while no gateway is configured.
     ``model_retrain`` refits the strategies that learn from data every
     Saturday into candidate versions, and skips when there are none.
+    ``lab_verify`` reruns every active strategy's lab result from its stored
+    manifest on Sunday and alerts when a restatement moved one beyond
+    ``[lab.verify] tolerance``; it skips while none is active.
     ``live_submit`` (open minus 20 minutes) sends approved order tickets and
     skips while none is open. ``live_stops`` (open plus 30 minutes) places
     the protective stops of the entries that just filled, and skips while no
@@ -191,6 +195,12 @@ def default_jobs() -> list[JobConfig]:
             name="model_retrain",
             action="model_retrain",
             trigger=DailyTriggerConfig(at=time(6, 0), weekdays=[5]),
+        ),
+        # Roadmap 23.9: did vendor restatements move a registered result?
+        JobConfig(
+            name="lab_verify",
+            action="lab_verify",
+            trigger=DailyTriggerConfig(at=time(7, 0), weekdays=[6]),
         ),
         JobConfig(
             name="ibkr_reauth_reminder",

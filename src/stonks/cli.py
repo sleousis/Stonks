@@ -2525,6 +2525,12 @@ from stonks.cli_model_versions import register as _register_model_versions  # no
 
 _register_model_versions(registry_app)
 
+# ---- lab verify (roadmap 23.9) --------------------------------------------------
+
+from stonks.cli_lab_verify import register as _register_lab_verify  # noqa: E402
+
+_register_lab_verify(lab_app)
+
 # ---- going live: stages, preview, soak report and kill switch drill ----------
 
 from stonks.cli_live import app as live_app  # noqa: E402

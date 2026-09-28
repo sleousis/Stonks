@@ -350,6 +350,24 @@ def model_retrain_action(ctx: RunContext) -> JobOutcome:
     return retrain_outcome(result.model_dump(mode="json"))
 
 
+@register_action("lab_verify")
+def lab_verify_action(ctx: RunContext) -> JobOutcome:
+    """Rerun active strategies from their manifests in this process."""
+    from stonks.app.context import AppContext
+    from stonks.app.lab import lab_objectives
+    from stonks.app.lab_verify import LabVerifyService, VerifyRequest
+    from stonks.scheduling.jobs import verify_body, verify_outcome
+
+    context = AppContext(ctx.settings)
+    try:
+        result = LabVerifyService(context, objectives=lab_objectives()).verify(
+            VerifyRequest.model_validate(verify_body(ctx))
+        )
+    finally:
+        context.close()
+    return verify_outcome(result.model_dump(mode="json"))
+
+
 @register_action("connections_sync")
 def connections_sync_action(ctx: RunContext) -> JobOutcome:
     """Sync every broker connection whose next sync is due."""

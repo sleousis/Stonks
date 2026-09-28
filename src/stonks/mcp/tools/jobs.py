@@ -60,6 +60,7 @@ RESULT_ROUTES: dict[str, str] = {
     "universe_refresh": "/api/universes/refresh/{id}/result",
     "universe_ensure": "/api/universes/ensure/{id}/result",
     "model_retrain": "/api/model-versions/jobs/{id}/result",
+    "lab_verify": "/api/lab/verify/jobs/{id}/result",
     "options_backtest": "/api/options/backtests/{id}/result",
 }
 
@@ -435,6 +436,25 @@ def register(t: ToolContext) -> None:
             }
         )
         return await t.post("/api/lab/signal-ic", body)
+
+    @server.tool(annotations=JOB)
+    async def verify_lab_results(
+        targets: Annotated[
+            list[str] | None,
+            Field(description="lab run ids or strategy ids (default: every active strategy)"),
+        ] = None,
+        tolerance: Annotated[
+            float | None,
+            Field(ge=0.0, description="allowed score drift (default [lab.verify] tolerance)"),
+        ] = None,
+    ) -> dict[str, Any]:
+        """Queue a rerun of lab results from their stored manifests: per
+        target the stored and rerun objective score, whether it moved beyond
+        the tolerance, and the tickers whose bars or corporate actions changed
+        since (vendor restatements). Returns the job; use wait_for_job for the
+        result. Research only: writes nothing."""
+        body = drop_none({"targets": targets, "tolerance": tolerance})
+        return await t.post("/api/lab/verify", body)
 
     @server.tool(annotations=JOB_OPEN_WORLD)
     async def run_ingest(

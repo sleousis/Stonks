@@ -23,7 +23,8 @@ from stonks.app.factors import FactorService
 from stonks.app.ingest import IngestService
 from stonks.app.insights import InsightsService
 from stonks.app.jobs import Job, JobRunner, JobStore
-from stonks.app.lab import LabService
+from stonks.app.lab import LabService, lab_objectives
+from stonks.app.lab_verify import LabVerifyService
 from stonks.app.lab_workers import LabWorkerService
 from stonks.app.live import LiveService
 from stonks.app.manual_orders import ManualOrdersService
@@ -187,6 +188,7 @@ class Services:
     portfolio: PortfolioService
     strategies: StrategyService
     model_versions: ModelVersionService
+    lab_verify: LabVerifyService
     market: MarketDataService
     orders: OrdersService
     manual_orders: ManualOrdersService
@@ -264,6 +266,7 @@ class Services:
             portfolio=portfolio,
             strategies=strategies,
             model_versions=ModelVersionService(context, runner),
+            lab_verify=LabVerifyService(context, runner, objectives=lab_objectives()),
             market=MarketDataService(context),
             orders=orders,
             manual_orders=manual_orders,

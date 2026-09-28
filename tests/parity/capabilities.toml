@@ -258,6 +258,15 @@ cli = "stonks lab ic"
 mcp = "run_signal_ic"
 
 [[capability]]
+id = "lab.verify"
+domain = "lab"
+title = "Rerun lab results from their stored manifests and flag the ones restatements moved"
+routes = ["POST /api/lab/verify", "GET /api/lab/verify/jobs/{job_id}/result"]
+console = { limited = "an operator check, run weekly by the lab_verify job, which alerts on a move" }
+cli = "stonks lab verify"
+mcp = "verify_lab_results"
+
+[[capability]]
 id = "factors.catalog"
 domain = "lab"
 title = "The factor library: Alpha158, classic price factors and fundamentals scores"
@@ -449,6 +458,15 @@ routes = ["GET /api/strategies/{strategy_id}/versions/{version}/check"]
 console = "checkModelSwap"
 cli = "stonks registry swap-check"
 mcp = "check_model_swap"
+
+[[capability]]
+id = "strategies.versions.calibration"
+domain = "strategies"
+title = "Live calibration of a classifier model version: Brier score and reliability"
+routes = ["GET /api/strategies/{strategy_id}/versions/{version}/calibration"]
+console = "getModelCalibration"
+cli = "stonks registry calibration"
+mcp = "get_model_calibration"
 
 [[capability]]
 id = "strategies.versions.swap"
