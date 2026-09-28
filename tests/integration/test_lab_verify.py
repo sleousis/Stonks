@@ -85,3 +85,40 @@ def test_unknown_target(run):
     state, registry, artifacts, *_ = run
     with pytest.raises(KeyError):
         resolve_target(state, registry, artifacts, "nope")
+
+
+def test_a_restated_statement_is_reported_without_moving_a_price_strategy(run):
+    import pandas as pd
+
+    state, registry, artifacts, result, sid, lake = run
+    row = {"ticker": "UP.US", "period_end": date(2025, 9, 30), "frequency": "Q"}
+    lake.upsert_income_statement(pd.DataFrame([{**row, "revenue": 1.0}]))
+    lake.upsert_income_statement(pd.DataFrame([{**row, "revenue": 2.0}]))  # the restatement
+    target = resolve_target(state, registry, artifacts, result.run_id)
+    report = verify(target, lake=lake, settings=Settings(), tolerance=1e-9)
+    assert report.data_changed is True
+    assert report.changed_tickers == ["UP.US"]
+    assert report.restated_tickers == ["UP.US"]
+    assert report.moved is False  # momentum reads no statements
+    assert report.as_dict()["restated_tickers"] == ["UP.US"]
+
+
+def test_statements_after_the_window_are_not_a_change(run):
+    import pandas as pd
+
+    state, registry, artifacts, result, sid, lake = run
+    row = {"ticker": "UP.US", "period_end": date(2026, 6, 30), "frequency": "Q"}
+    lake.upsert_income_statement(pd.DataFrame([{**row, "revenue": 1.0}]))
+    target = resolve_target(state, registry, artifacts, result.run_id)
+    report = verify(target, lake=lake, settings=Settings(), tolerance=1e-9)
+    assert report.data_changed is False and report.restated_tickers == []
+
+
+def test_a_fingerprint_stored_before_statements_were_hashed_still_matches(run):
+    from stonks.lab.manifest import refingerprint
+
+    *_, result, _sid, lake = run
+    stored = dict(result.manifest["data_fingerprint"])
+    stored.pop("statements")
+    current = refingerprint(lake, stored)
+    assert "statements" not in current

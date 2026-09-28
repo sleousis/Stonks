@@ -5,8 +5,10 @@ the same answer on today's data? It takes the stored manifest of a lab run
 (or of the lab run behind a registered strategy) and:
 
 1. recomputes the data fingerprint over exactly the tickers, window and
-   interval the run read, and lists the tickers whose bars or corporate
-   actions changed since (a vendor restatement, a new split, a filled gap);
+   interval the run read, and lists the tickers whose bars, corporate
+   actions or point-in-time statement versions changed since (a vendor
+   restatement, a new split, a filled gap), with the restated statements
+   named apart;
 2. compares the config hash and the code version with today's;
 3. rebuilds the chosen parameters on the run's dataset and scores them with
    the run's objective on its train window, seeded like the original
@@ -28,7 +30,13 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-from stonks.lab.manifest import config_hash, fingerprint_changes, git_info, refingerprint
+from stonks.lab.manifest import (
+    config_hash,
+    fingerprint_changes,
+    git_info,
+    refingerprint,
+    restated_tickers,
+)
 from stonks.lab.trials import TrialLedger
 from stonks.logging import get_logger
 
@@ -65,6 +73,8 @@ class VerifyReport:
     current_score: float | None = None
     data_changed: bool | None = None
     changed_tickers: list[str] = field(default_factory=list)
+    #: Tickers whose statement versions changed (a subset of the above).
+    restated_tickers: list[str] = field(default_factory=list)
     config_changed: bool | None = None
     code_changed: bool | None = None
     error: str | None = None
@@ -100,6 +110,7 @@ class VerifyReport:
             "moved": self.moved,
             "data_changed": self.data_changed,
             "changed_tickers": list(self.changed_tickers),
+            "restated_tickers": list(self.restated_tickers),
             "config_changed": self.config_changed,
             "code_changed": self.code_changed,
             "error": self.error,
@@ -171,12 +182,15 @@ def verify(
     errors: list[str] = []
     data_changed: bool | None = None
     changed: list[str] = []
+    restated: list[str] = []
     stored_fp = manifest.get("data_fingerprint")
     if isinstance(stored_fp, dict) and stored_fp.get("window"):
         try:
             current = refingerprint(lake, stored_fp)
             data_changed = current["hash"] != stored_fp.get("hash")
-            changed = fingerprint_changes(stored_fp, current) if data_changed else []
+            if data_changed:
+                changed = fingerprint_changes(stored_fp, current)
+                restated = restated_tickers(stored_fp, current)
         except Exception as exc:
             errors.append(f"fingerprint: {type(exc).__name__}: {exc}")
     stored_config = manifest.get("config_hash")
@@ -206,6 +220,7 @@ def verify(
         current_score=current_score,
         data_changed=data_changed,
         changed_tickers=changed,
+        restated_tickers=restated,
         config_changed=config_changed,
         code_changed=code_changed,
         error="; ".join(errors) or None,
@@ -217,6 +232,7 @@ def verify(
         delta=report.score_delta,
         data_changed=data_changed,
         changed_tickers=len(changed),
+        restated_tickers=len(restated),
     )
     return report
 

@@ -41,3 +41,33 @@ def test_fingerprint_changes_name_the_tickers() -> None:
     }
     assert fingerprint_changes(before, after) == ["B", "SPY"]
     assert fingerprint_changes(before, before) == []
+
+
+def test_moved_results_raise_one_operator_alert(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    import stonks.notify as notify
+    from stonks.app.lab_verify import LabVerifyService
+
+    sent = []
+    monkeypatch.setattr(
+        notify,
+        "notifier_from_settings",
+        lambda settings: SimpleNamespace(notify=sent.append),
+    )
+    service = LabVerifyService(SimpleNamespace(settings=None))  # type: ignore[arg-type]
+    moved = VerifyReport(**{**_report(1.0, 0.5).__dict__, "changed_tickers": ["UP.US"]})
+    assert service._alert([moved, _report(1.0, 1.0)]) is True
+    (note,) = sent
+    assert note.level == "warning" and "1 result(s) moved" in note.title
+    assert "UP.US" in note.message and note.fields["moved"] == ["t"]
+
+
+def test_fingerprint_changes_cover_statement_versions() -> None:
+    from stonks.lab.manifest import restated_tickers
+
+    before = {"tickers": {"A": {"bars_hash": "1"}}, "statements": {"A": "x"}}
+    after = {"tickers": {"A": {"bars_hash": "1"}}, "statements": {"A": "y", "B": "z"}}
+    assert fingerprint_changes(before, after) == ["A", "B"]
+    assert restated_tickers(before, after) == ["A", "B"]
+    assert restated_tickers({"tickers": {}}, {"tickers": {}}) == []
