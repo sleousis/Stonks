@@ -28,8 +28,18 @@
 		flush_interval -1
 	}
 
+	# JSON access log. A browser EventSource sends the short-lived job
+	# stream token as ?token=, so the logged URI carries it redacted.
+	# Caddy already leaves Cookie and Authorization out of the log.
 	log {
 		output stdout
-		format json
+		format filter {
+			wrap json
+			fields {
+				request>uri query {
+					replace token REDACTED
+				}
+			}
+		}
 	}
 }
