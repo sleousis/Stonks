@@ -34,7 +34,9 @@ def test_a_trader_researches_options(browse, stack, viewport):
     v.open_nav()
     page.get_by_role("link", name="Options", exact=True).click()
     expect(page.get_by_role("heading", level=1)).to_have_text("Options research")
-    expect(page.get_by_role("note").first).to_contain_text("Research only, nothing trades options")
+    note = page.get_by_role("note").first
+    expect(note).to_contain_text("Research only, nothing on this page trades options.")
+    expect(note).to_contain_text("Options live is off by default")
     expect(page.get_by_label("Underlying", exact=True)).to_have_value("AAA.US")
     expect(page.get_by_text("Generated chains, not market quotes")).to_be_visible()
     expect(page.get_by_text(re.compile(r"Expiry \d{4}-\d{2}-\d{2}, \d+ days out"))).to_be_visible()
