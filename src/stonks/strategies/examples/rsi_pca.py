@@ -62,6 +62,11 @@ from stonks.strategies.examples._nt888_common import train_bars
 
 class RSIPCAStrategy(BaseStrategy):
     id = "rsi_pca"
+    title = "RSI shape model"
+    summary = (
+        "Reads the shape of the RSI indicator over many periods to predict the next few days. "
+        "Purely statistical."
+    )
     hypothesis = (
         "The shape of RSI across many periods, compressed with PCA, "
         "carries a small linear signal for the next few bars. Purely "

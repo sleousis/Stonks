@@ -17,6 +17,7 @@ from stonks.app.ingest import IngestRequest
 from stonks.app.lab import BacktestRequest, LabRunRequest
 from stonks.app.strategies import StrategyRef
 from stonks.app.ticks import TickRequest
+from stonks.store.lake import DuckDBLake
 
 #: The bootstrap admin, owner of pf_default.
 OWNER = Scope(user_id=DEFAULT_OWNER_ID, role=Role.ADMIN)
@@ -253,6 +254,21 @@ def test_coverage(services):
     assert up.rows > 100
     only = services.market.coverage(ticker="DOWN.US", limit=10, offset=0)
     assert [c.ticker for c in only.items] == ["DOWN.US"]
+
+
+def test_data_coverage_says_which_paid_kinds_are_stored(services, settings):
+    before = services.market.data_coverage()
+    assert not before.news and not before.calendars
+    lake = DuckDBLake(settings.lake.path)
+    try:
+        lake.con.execute(
+            "INSERT INTO news (ticker, published_at, title) VALUES ('UP.US', '2026-04-01', 'Hi')"
+        )
+    finally:
+        lake.close()
+    after = services.market.data_coverage()
+    assert after.news is True
+    assert after.calendars is False and after.options is False
 
 
 # ---- orders -----------------------------------------------------------------

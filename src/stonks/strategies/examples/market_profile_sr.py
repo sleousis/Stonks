@@ -51,6 +51,8 @@ from stonks.strategies.examples._nt888_base import SingleTickerLongFlat, common_
 
 class MarketProfileSRStrategy(SingleTickerLongFlat):
     id = "market_profile_sr"
+    title = "Busy price levels"
+    summary = "Buys when price closes up through a level where much trading happened before."
     hypothesis = (
         "Prices where much trading happened act as support and "
         "resistance. A close up through such a level shows buyers won and "

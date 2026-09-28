@@ -53,6 +53,8 @@ _log = get_logger("stonks.strategies.latent_regime")
 
 class LatentRegimeFilter(InnerStrategyWrapper):
     id = "latent_regime_filter"
+    title = "Calm market filter"
+    summary = "Wraps another strategy and stands aside when a model says markets turned turbulent."
     id_suffix = "latent_regime"
     fits_itself = True
     hypothesis = (

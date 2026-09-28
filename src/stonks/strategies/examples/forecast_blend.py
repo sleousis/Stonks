@@ -125,6 +125,8 @@ def period_start(ts: pd.Timestamp, refit: str) -> pd.Timestamp:
 
 class ForecastBlend(ForecastTrendStrategy):
     id = "forecast_blend"
+    title = "Blended trend"
+    summary = "Blends trend rules at several speeds and favours the ones that are cheap to trade."
     hypothesis = (
         "Trend rules at several speeds each predict returns (Carver; Hurst, "
         "Ooi & Pedersen), but the fast ones trade so often that costs eat "

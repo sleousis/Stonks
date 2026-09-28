@@ -57,9 +57,37 @@ class CoverageRow(BaseModel):
     rows: int
 
 
+class DataCoverage(BaseModel):
+    """Which kinds of data the lake holds at all. Calendars, news,
+    fundamentals and option chains need a paid data plan, so an empty page
+    can say "needs a data plan" instead of looking broken (audit F49)."""
+
+    fundamentals: bool
+    calendars: bool
+    news: bool
+    options: bool
+
+
+#: The lake tables whose rows mean a kind of data is stored.
+_COVERAGE_TABLES: dict[str, tuple[str, ...]] = {
+    "fundamentals": ("income_statement", "balance_sheet", "cash_flow_statement"),
+    "calendars": ("earnings_calendar", "dividend_calendar", "economic_events"),
+    "news": ("news", "news_sentiment"),
+    "options": ("option_quotes",),
+}
+
+
 class MarketDataService:
     def __init__(self, context: AppContext) -> None:
         self._ctx = context
+
+    def data_coverage(self) -> DataCoverage:
+        """True for each kind of data with at least one stored row."""
+        found: dict[str, bool] = {}
+        with self._ctx.lake() as lake:
+            for kind, tables in _COVERAGE_TABLES.items():
+                found[kind] = any(_has_rows(lake, t) for t in tables)
+        return DataCoverage(**found)
 
     def instruments(
         self,
@@ -168,6 +196,14 @@ class MarketDataService:
 
 
 _PRICE_COLS = ("open", "high", "low", "close", "adj_close", "volume")
+
+
+def _has_rows(lake: Any, table: str) -> bool:
+    """Whether ``table`` holds a row; a table an older lake lacks holds none."""
+    try:
+        return bool(len(lake.sql(f"SELECT 1 AS x FROM {table} LIMIT 1")))
+    except Exception:  # a missing table (lake not migrated yet)
+        return False
 
 
 def _parse_interval(code: str) -> Interval:

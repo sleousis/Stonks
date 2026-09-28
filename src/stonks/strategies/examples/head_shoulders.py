@@ -197,6 +197,8 @@ def replay_inverse_hs(
 
 class HeadShouldersStrategy(SingleTickerLongFlat):
     id = "head_shoulders"
+    title = "Inverse head and shoulders"
+    summary = "Buys when price breaks up through the neckline of an inverse head and shoulders."
     hypothesis = (
         "An inverse head and shoulders marks the end of a downtrend. A "
         "close through the neckline traps short sellers and starts a "

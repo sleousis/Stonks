@@ -175,6 +175,11 @@ def replay_bull_harmonic(
 
 class HarmonicXABCDStrategy(SingleTickerLongFlat):
     id = "harmonic_xabcd"
+    title = "Harmonic pattern"
+    summary = (
+        "Buys where price swings retrace in set ratios that can mark the end of a fall. Weak "
+        "evidence."
+    )
     hypothesis = (
         "Swings that retrace in set Fibonacci ratios mark exhausted "
         "selling, so price turns up at the D point. Buyers get in near "

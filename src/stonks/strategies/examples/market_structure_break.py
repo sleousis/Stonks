@@ -66,6 +66,8 @@ def market_structure_positions(
 
 class MarketStructureBreakStrategy(SingleTickerLongFlat):
     id = "market_structure_break"
+    title = "Break of the last swing high"
+    summary = "Buys when price closes above the last major swing high, a sign a new rise has begun."
     hypothesis = (
         "A close above the last major swing high breaks the market "
         "structure and starts a new up leg, as stops of short sellers get "

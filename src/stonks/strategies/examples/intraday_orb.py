@@ -30,6 +30,8 @@ from stonks.strategies.examples._intraday import (
 
 class OpeningRangeBreakout(IntradayStrategy):
     id = "intraday_orb"
+    title = "Opening range breakout"
+    summary = "Buys during the day when price breaks above the range of the first half hour."
     applicable_asset_classes = ("equity", "commodity")
     hypothesis = (
         "The first half hour sets the day's reference range while overnight "

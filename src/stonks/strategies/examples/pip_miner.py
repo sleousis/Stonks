@@ -117,6 +117,11 @@ def _martin(rets: np.ndarray) -> float:
 
 class PIPMinerStrategy(BaseStrategy):
     id = "pip_miner"
+    title = "Price pattern miner"
+    summary = (
+        "Trades price shapes that past data says are followed by better returns. Purely "
+        "statistical."
+    )
     hypothesis = (
         "Some price shapes, found by clustering past patterns, are "
         "followed by better returns than others. The edge is purely "
