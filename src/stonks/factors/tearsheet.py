@@ -386,7 +386,7 @@ def _periods(
             continue
         mean, _, _, se = _mean_se(x[mask], lags)
         s_mean = _mean_se(spread[mask], lags)[0]
-        days = stamps[mask]
+        days = [pd.Timestamp(d) for d in stamps[mask]]
         out.append(
             PeriodIC(
                 period=period,

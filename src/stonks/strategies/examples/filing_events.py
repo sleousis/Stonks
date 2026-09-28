@@ -78,15 +78,19 @@ class FilingEvents(BaseStrategy):
         reader = getattr(lake, "get_corporate_filings", None)
         if not callable(reader):
             return None
-        filings = reader([ticker], items=self._items())
-        if filings is None or filings.empty:
+        filings: Any = reader([ticker], items=self._items())
+        if not isinstance(filings, pd.DataFrame) or filings.empty:
             return None
-        known = pd.to_datetime(filings["known_at"])
-        close = datetime.combine(as_of, datetime.max.time())
-        seen = known[known <= pd.Timestamp(close)]
-        if seen.empty:
+        known = pd.Series(pd.to_datetime(filings["known_at"]))
+        close = pd.Timestamp(datetime.combine(as_of, datetime.max.time()))
+        seen = [
+            date.fromisoformat(str(k)[:10])
+            for k in known
+            if pd.notna(k) and pd.Timestamp(k) <= close
+        ]
+        if not seen:
             return None
-        age = as_of - seen.max().date()
+        age = as_of - max(seen)
         hold = int(self.params["hold_days"])
         if age > timedelta(days=hold):
             return None

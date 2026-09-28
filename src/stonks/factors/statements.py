@@ -46,20 +46,22 @@ def _annual(frame: pd.DataFrame | None, as_of: datetime) -> pd.DataFrame:
     """Annual rows, newest period first, the newest not stale."""
     if frame is None or frame.empty or "frequency" not in frame:
         return pd.DataFrame()
-    rows = frame[frame["frequency"] == "A"].copy()
+    rows = pd.DataFrame(frame.loc[frame["frequency"] == "A"]).copy()
     if rows.empty:
         return rows
     rows["period_end"] = pd.to_datetime(rows["period_end"])
-    rows = rows.sort_values("period_end", ascending=False).reset_index(drop=True)
-    age = (pd.Timestamp(as_of) - rows["period_end"].iloc[0]).days
+    rows = pd.DataFrame(rows.sort_values(by="period_end", ascending=False)).reset_index(drop=True)
+    newest = pd.Timestamp(rows["period_end"].iloc[0])
+    age = (pd.Timestamp(as_of) - newest).days
     return rows if age <= MAX_REPORT_AGE_DAYS else pd.DataFrame()
 
 
 def _number(row: pd.Series, column: str) -> float | None:
     if column not in row:
         return None
+    raw: Any = row[column]
     try:
-        value = float(row[column])
+        value = float(raw)
     except (TypeError, ValueError):
         return None
     return value if math.isfinite(value) else None
@@ -108,16 +110,25 @@ def _split_factor(view: Any, ticker: str, start: date, end: date) -> float:
     reader = getattr(view, "get_corporate_actions", None)
     if not callable(reader):
         return 1.0
-    actions = reader([ticker])
-    if actions is None or actions.empty:
+    actions: Any = reader([ticker])
+    if not isinstance(actions, pd.DataFrame) or actions.empty:
         return 1.0
     factor = 1.0
-    for row in actions.itertuples(index=False):
-        ex = pd.Timestamp(row.ex_date).date()
-        value = float(row.value)
-        if row.kind == "split" and start < ex <= end and value > 0:
-            factor *= value
+    for kind, ex_date, value in zip(
+        actions["kind"], actions["ex_date"], actions["value"], strict=True
+    ):
+        ex = _as_day(ex_date)
+        ratio = float(value)
+        if kind == "split" and ex is not None and start < ex <= end and ratio > 0:
+            factor *= ratio
     return factor
+
+
+def _as_day(value: Any) -> date | None:
+    stamp = pd.Timestamp(value)
+    if pd.isna(stamp):
+        return None
+    return date.fromisoformat(str(stamp)[:10])
 
 
 def net_share_issuance(view: Any, ticker: str, as_of: datetime) -> float | None:
@@ -128,7 +139,10 @@ def net_share_issuance(view: Any, ticker: str, as_of: datetime) -> float | None:
     now, before = (_number(r, column) for r in pair)
     if now is None or before is None or now <= 0 or before <= 0:
         return None
-    splits = _split_factor(view, ticker, pair[1]["period_end"].date(), pair[0]["period_end"].date())
+    start, end = _as_day(pair[1]["period_end"]), _as_day(pair[0]["period_end"])
+    if start is None or end is None:
+        return None
+    splits = _split_factor(view, ticker, start, end)
     return math.log(now / (before * splits))
 
 

@@ -29,21 +29,21 @@ def insider_net_buying(view: Any, ticker: str, as_of: datetime) -> float | None:
     reader = getattr(view, "get_insider_transactions", None)
     if not callable(reader):
         return None
-    rows = reader(ticker)
-    if rows is None or rows.empty:
+    rows: Any = reader(ticker)
+    if not isinstance(rows, pd.DataFrame) or rows.empty:
         return None
-    start = (as_of - timedelta(days=INSIDER_WINDOW_DAYS)).date()
-    traded = pd.to_datetime(rows["transaction_date"]).dt.date
-    recent = rows[(traded >= start) & rows["transaction_code"].isin(["P", "S"])]
-    if recent.empty:
+    start = pd.Timestamp((as_of - timedelta(days=INSIDER_WINDOW_DAYS)).date())
+    traded = pd.Series(pd.to_datetime(rows["transaction_date"]), index=rows.index)
+    codes = pd.Series(rows["transaction_code"], index=rows.index)
+    keep = (traded >= start) & codes.isin(["P", "S"])
+    if not keep.any():
         return None
-    value = pd.to_numeric(recent["value"], errors="coerce")
-    fallback = pd.to_numeric(recent["shares"], errors="coerce") * pd.to_numeric(
-        recent["price"], errors="coerce"
-    )
-    dollars = value.where(value.notna(), fallback).abs()
-    bought = float(dollars[recent["transaction_code"] == "P"].sum())
-    sold = float(dollars[recent["transaction_code"] == "S"].sum())
+    value = pd.Series(pd.to_numeric(rows["value"], errors="coerce"), index=rows.index)
+    shares = pd.Series(pd.to_numeric(rows["shares"], errors="coerce"), index=rows.index)
+    price = pd.Series(pd.to_numeric(rows["price"], errors="coerce"), index=rows.index)
+    dollars = value.where(value.notna(), shares * price).abs()
+    bought = float(dollars[keep & (codes == "P")].sum())
+    sold = float(dollars[keep & (codes == "S")].sum())
     total = bought + sold
     if not math.isfinite(total) or total <= 0:
         return None

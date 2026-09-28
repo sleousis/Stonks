@@ -1835,7 +1835,7 @@ class DuckDBLake:
         for col in self._FILING_COLS:
             if col not in frame.columns:
                 frame[col] = None
-        if frame["updated_at"].isna().all():
+        if bool(pd.Series(frame["updated_at"]).isna().all()):
             frame["updated_at"] = datetime.now(UTC).replace(tzinfo=None)
         return self._upsert(
             frame, table="corporate_filings", cols=self._FILING_COLS, pk=("accession_number",)
