@@ -39,7 +39,12 @@ from stonks.lab.dataset import LabDataset
 from stonks.lab.heatmap import HeatmapOptions, ParameterHeatmap, pick_axes, plateau_overlay
 from stonks.lab.manifest import build_manifest, collect_seeds
 from stonks.lab.parallel import ParallelSettings
-from stonks.lab.preflight import PreflightError, PreflightReport, run_preflight
+from stonks.lab.preflight import (
+    PreflightError,
+    PreflightReport,
+    forecast_cutoff_issues,
+    run_preflight,
+)
 from stonks.lab.survival.base import SurvivalSuite, TuningSetup
 from stonks.lab.survival.plateau import PlateauOptions
 from stonks.lab.trials import (
@@ -216,11 +221,19 @@ class LabRunner:
         class_path = f"{strategy_cls.__module__}:{strategy_cls.__name__}"
         if self._heatmap is not None:  # a bad axis name fails before any work
             pick_axes(strategy_cls.parameter_spec(), self._heatmap, set(fixed_params or {}))
+        # the pretraining cutoff rule (roadmap 23.11) holds even with the
+        # preflight off, and before any data is fetched
+        cutoff_issues = forecast_cutoff_issues(dataset, strategy_cls, fixed_params)
+        if cutoff_issues:
+            _log.error("lab.forecast_cutoff", strategy=class_path)
+            raise PreflightError(PreflightReport(cutoff_issues))
         dataset, ensured = prepare_dataset(
             dataset, ensurer=self._data_ensurer, strategy=strategy_cls
         )
         dataset = with_strategy_references(dataset, strategy_cls, fixed_params)
-        preflight, preflight_record = self._run_preflight(strategy_cls, dataset, class_path)
+        preflight, preflight_record = self._run_preflight(
+            strategy_cls, dataset, class_path, fixed_params
+        )
         seeds = collect_seeds(self._tuner, self._suite.tests)
         manifest = self._manifest(dataset, seeds)
         if ensured is not None:
@@ -421,7 +434,11 @@ class LabRunner:
         )
 
     def _run_preflight(
-        self, strategy_cls: type[Strategy], dataset: LabDataset, class_path: str
+        self,
+        strategy_cls: type[Strategy],
+        dataset: LabDataset,
+        class_path: str,
+        fixed_params: Mapping[str, Any] | None = None,
     ) -> tuple[PreflightReport | None, dict[str, Any] | None]:
         """The preflight report and its manifest record. Raises
         :class:`PreflightError` on errors. A preflight that crashes never
@@ -429,7 +446,9 @@ class LabRunner:
         if not self._preflight:
             return None, None
         try:
-            report = run_preflight(dataset, strategy_cls, strict=self._strict_preflight)
+            report = run_preflight(
+                dataset, strategy_cls, strict=self._strict_preflight, params=fixed_params
+            )
         except Exception as exc:
             _log.warning("lab.preflight.failed", strategy=class_path, error=str(exc))
             return None, {"error": str(exc)}
