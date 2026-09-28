@@ -236,3 +236,47 @@ def test_bob_cannot_cancel_alices_order(client, people, settings):
         headers=bob["headers"],
     )
     assert r.status_code == 404
+
+
+def test_plan_sizes_an_entry_and_the_order_keeps_its_stop(client, people, settings):
+    alice = people["alice"]
+    pid = _book(settings, alice["id"])
+    plan = client.post(
+        "/api/orders/manual/plan",
+        json={
+            "portfolio_id": pid,
+            "ticker": "UP.US",
+            "side": "buy",
+            "stop_price": 180.0,
+            "target_price": 260.0,
+            "risk_percent": 1.0,
+        },
+        headers=alice["headers"],
+    )
+    assert plan.status_code == 200, plan.text
+    got = plan.json()
+    assert got["quantity"] == int(got["risk_budget"] // got["risk_per_share"])
+    assert got["entry_is_close"] is True and got["reward_risk"] > 0
+    bad = client.post(
+        "/api/orders/manual/plan",
+        json={"portfolio_id": pid, "ticker": "UP.US", "side": "buy", "stop_price": 180.0},
+        headers=alice["headers"],
+    )
+    assert bad.status_code == 422
+    r = client.post(
+        "/api/orders/manual",
+        json=_body(pid, quantity=got["quantity"], stop_price=180.0, target_price=260.0),
+        headers=alice["headers"],
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["stop_price"] == 180.0 and r.json()["reward_risk"] > 0
+    wrong = client.post(
+        "/api/orders/manual/preview", json=_body(pid, stop_price=1e6), headers=alice["headers"]
+    )
+    assert wrong.status_code == 409 and "below the entry" in wrong.json()["detail"]
+    viewer = client.post(
+        "/api/orders/manual/plan",
+        json={"ticker": "UP.US", "side": "buy", "stop_price": 1.0, "risk_amount": 5.0},
+        headers=people["vic"]["headers"],
+    )
+    assert viewer.status_code == 403

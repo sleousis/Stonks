@@ -33,6 +33,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`ensure_universe_data`](#ensure_universe_data) | guarded | yes |
 | [`get_api_health`](#get_api_health) | read | no |
 | [`get_bars`](#get_bars) | read | no |
+| [`get_behaviour_report`](#get_behaviour_report) | read | no |
 | [`get_broker`](#get_broker) | read | no |
 | [`get_broker_gateways`](#get_broker_gateways) | read | no |
 | [`get_calendar`](#get_calendar) | read | no |
@@ -87,6 +88,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_stream_status`](#get_stream_status) | read | no |
 | [`get_studio_capabilities`](#get_studio_capabilities) | read | no |
 | [`get_tax_settings`](#get_tax_settings) | read | no |
+| [`get_tax_year`](#get_tax_year) | read | no |
 | [`get_tca_summary`](#get_tca_summary) | read | no |
 | [`get_tear_sheet`](#get_tear_sheet) | read | no |
 | [`get_tick`](#get_tick) | read | no |
@@ -153,6 +155,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`mark_notifications_read`](#mark_notifications_read) | job | no |
 | [`order_tca`](#order_tca) | read | no |
 | [`place_order`](#place_order) | guarded | yes |
+| [`preview_trade_tax`](#preview_trade_tax) | read | no |
 | [`promote_strategy`](#promote_strategy) | guarded | yes |
 | [`refresh_universe`](#refresh_universe) | guarded | yes |
 | [`register_draft`](#register_draft) | guarded | yes |
@@ -261,6 +264,20 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `start` | date \| null | no | `null` | YYYY-MM-DD |
 | `end` | date \| null | no | `null` | YYYY-MM-DD |
 | `limit` | integer \| null | no | `null` | max bars |
+
+### `get_behaviour_report`
+
+How you trade by hand in one of your portfolios: manual and synced
+broker trades as round trips, with P&L by holding time and weekday,
+win rate, the disposition effect, overtrading, revenge trades after
+a loss, and what trading against the active strategies cost.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+| `since` | string \| null | no | `null` |  |
 
 ### `get_broker`
 
@@ -908,6 +925,18 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
+
+### `get_tax_year`
+
+The gains one of your portfolios realised this year (or ``year``)
+and the estimated tax owed on them, in its base currency.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `year` | integer \| null | no | `null` |  |
 | `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 
 ### `get_tca_summary`
@@ -1646,6 +1675,23 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `client_id` | string | yes |  |  |
+
+### `preview_trade_tax`
+
+Before a trade in one of your portfolios: the lots a sell closes
+under your lot method, the realised gain and holding period, the
+estimated tax at the configured rate, the after-tax proceeds and a
+US wash sale warning. An estimate, not tax advice. Places nothing.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `ticker` | string | yes |  |  |
+| `side` | "buy" \| "sell" | yes |  |  |
+| `quantity` | number | yes |  |  |
+| `price` | number \| null | no | `null` | Default: latest close |
+| `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 
 ### `risk_snapshots`
 

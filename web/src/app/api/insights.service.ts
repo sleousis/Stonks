@@ -4,6 +4,7 @@ import { PortfolioContextService } from '../core/portfolio/portfolio-context.ser
 
 import { unwrap } from './api-call';
 import {
+  getBehaviourReport,
   getInsights,
   getInsightsTotals,
   getLookThrough,
@@ -35,6 +36,11 @@ export class InsightsService {
    */
   lookThrough(top?: number) {
     return unwrap(getLookThrough({ query: { ...this.ctx.query(), top } }));
+  }
+
+  /** How you trade by hand: manual and synced trades as round trips. */
+  behaviour(since?: string) {
+    return unwrap(getBehaviourReport({ query: { ...this.ctx.query(), since: since ?? null } }));
   }
 
   /** Admins: asset-class allocation and exposure summed over every book. */

@@ -27,6 +27,7 @@ from stonks.production.rules.intraday_orders import IntradayOrderRateSettings
 from stonks.production.rules.intraday_stale import IntradayStaleDataSettings
 from stonks.production.rules.liquidity import LiquiditySettings
 from stonks.production.rules.live_caps import LiveNotionalCapsSettings
+from stonks.production.rules.manual_discipline import ManualDisciplineSettings
 from stonks.production.rules.margin_call import MarginCallSettings
 from stonks.production.rules.max_holding import MaxHoldingSettings
 from stonks.production.rules.max_orders import MaxOrdersPerRunSettings
@@ -62,6 +63,7 @@ __all__ = [
     "LiquiditySettings",
     "LiveNotionalCapsSettings",
     "LosingLockSettings",
+    "ManualDisciplineSettings",
     "MarginCallSettings",
     "MaxHoldingSettings",
     "MaxOrdersPerRunSettings",
@@ -133,6 +135,9 @@ class RuleSettings(BaseModel):
     intraday_drawdown: IntradayDrawdownSettings = IntradayDrawdownSettings()
     intraday_order_rate: IntradayOrderRateSettings = IntradayOrderRateSettings()
     intraday_stale_data: IntradayStaleDataSettings = IntradayStaleDataSettings()
+    # Limits a person sets on their own manual orders (roadmap 23.4), off
+    # by default.
+    manual_discipline: ManualDisciplineSettings = ManualDisciplineSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -308,6 +313,13 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "max_orders_per_day": _min_optional,
     },
     "intraday_stale_data": {"max_bar_age_seconds": _min_optional},
+    "manual_discipline": {
+        "enabled": _either,
+        "require_stop_live": _either,
+        "cooldown_minutes": _max_optional,
+        "max_entries_per_day": _min_optional,
+        "max_daily_loss": _min_optional,
+    },
 }
 
 

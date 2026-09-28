@@ -16,6 +16,7 @@ import { nextRequest, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
 import { ManualTicketPage, orderLines } from './manual-ticket.page';
 import { provideFakeCalendars } from '../../../testing/fake-calendars';
+import { provideFakeTax } from '../../../testing/fake-tax';
 
 function result(over: Partial<ManualOrderResult> = {}): ManualOrderResult {
   return {
@@ -56,6 +57,7 @@ describe('ManualTicketPage', () => {
         provideRouter([]),
         ...provideApi(),
         provideHttpClientTesting(),
+        provideFakeTax(),
         provideFakeCalendars(),
         {
           provide: PortfolioContextService,
@@ -130,6 +132,67 @@ describe('ManualTicketPage', () => {
     expect(el.querySelector('#mo-ticker-error')?.textContent).toContain('Enter a ticker');
     expect(el.querySelector('#mo-qty-error')?.textContent).toContain('above zero');
     expect(el.querySelector('#mo-reason-error')).not.toBeNull();
+    await tick(5);
+    expect(http.match(() => true)).toHaveLength(0);
+  });
+
+  it('works out a whole-share size from the risk and the stop', async () => {
+    setup();
+    const el = await render();
+    fill(el);
+    type(el, '#mo-stop', '24');
+    type(el, '#mo-target', '28');
+    type(el, '#mo-risk', '1');
+    button(el, 'Work out size').click();
+    const req = await nextRequest(http, '/api/orders/manual/plan', 'POST');
+    expect(req.request.body).toMatchObject({
+      portfolio_id: 'pf_1',
+      ticker: 'AAA.US',
+      side: 'buy',
+      stop_price: 24,
+      target_price: 28,
+      risk_percent: 1,
+      risk_amount: null,
+    });
+    req.flush({
+      ticker: 'AAA.US',
+      side: 'buy',
+      entry_price: 25,
+      entry_is_close: true,
+      stop_price: 24,
+      target_price: 28,
+      equity: 10_000,
+      cash: 10_000,
+      risk_budget: 100,
+      risk_per_share: 1,
+      quantity: 100,
+      risk_amount: 100,
+      notional: 2_500,
+      reward_risk: 3,
+      capped_by: null,
+      note: null,
+    });
+    await settle();
+    expect(el.querySelector<HTMLInputElement>('#mo-qty')!.value).toBe('100');
+    expect(el.querySelector('#mo-plan-result')?.textContent).toContain('3 to 1');
+    button(el, 'Check order').click();
+    const check = await nextRequest(http, '/api/orders/manual/preview', 'POST');
+    expect(check.request.body).toMatchObject({ quantity: 100, stop_price: 24, target_price: 28 });
+    check.flush(result({ quantity: 100, requested_quantity: 100, stop_price: 24, reward_risk: 3 }));
+    await settle();
+    const ticket = el.querySelector('[aria-label="Checked order"]')!;
+    expect(ticket.textContent).toContain('Stop');
+    expect(ticket.textContent).toContain('3 to 1');
+  });
+
+  it('asks for the stop and the risk before sizing', async () => {
+    setup();
+    const el = await render();
+    type(el, '#mo-ticker', 'aaa.us');
+    button(el, 'Work out size').click();
+    fixture.detectChanges();
+    expect(el.querySelector('#mo-stop-error')?.textContent).toContain('stop');
+    expect(el.querySelector('#mo-risk-error')?.textContent).toContain('risk');
     await tick(5);
     expect(http.match(() => true)).toHaveLength(0);
   });

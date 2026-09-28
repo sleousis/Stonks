@@ -1,7 +1,8 @@
 """A stop written on the opening order itself: the trade plan of the manual
-ticket (roadmap 23.4). Read from the order's decision context, under
-``plan.stop`` (or ``plan.stop_price``), with ``plan.target`` as the profit
-target. A top-level ``stop_loss`` also counts."""
+ticket (roadmap 23.4). Read from the order's decision context: the manual
+ticket writes ``stop_price`` and ``target_price`` at the top level. A
+``plan.stop`` (or ``plan.stop_price``) with ``plan.target``, and a
+top-level ``stop_loss``, also count."""
 
 from __future__ import annotations
 
@@ -35,5 +36,8 @@ class OrderPlanStop(StopSource):
             stop = _price(plan.get("stop", plan.get("stop_price")))
             if stop is not None:
                 return FoundStop(stop, self.name, target=_price(plan.get("target")))
+        stop = _price(context.get("stop_price"))
+        if stop is not None:
+            return FoundStop(stop, self.name, target=_price(context.get("target_price")))
         stop = _price(context.get("stop_loss"))
         return FoundStop(stop, self.name) if stop is not None else None

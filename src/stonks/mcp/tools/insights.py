@@ -54,6 +54,18 @@ def register(t: ToolContext) -> None:
         return await t.get("/api/insights/look-through", {"portfolio_id": portfolio_id, "top": top})
 
     @server.tool(annotations=READ)
+    async def get_behaviour_report(
+        portfolio_id: PortfolioId = None,
+        since: Annotated[str | None, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")] = None,
+    ) -> dict[str, Any]:
+        """How you trade by hand in one of your portfolios: manual and synced
+        broker trades as round trips, with P&L by holding time and weekday,
+        win rate, the disposition effect, overtrading, revenge trades after
+        a loss, and what trading against the active strategies cost."""
+        query = {"portfolio_id": portfolio_id, "since": since}
+        return await t.get("/api/insights/behaviour", {k: v for k, v in query.items() if v})
+
+    @server.tool(annotations=READ)
     async def get_strategy_agreement(portfolio_id: PortfolioId = None) -> dict[str, Any]:
         """For each holding of one of your portfolios: whether each active
         strategy's latest signal agrees or disagrees with it, and why."""

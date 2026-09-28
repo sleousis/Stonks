@@ -671,3 +671,18 @@ high_low_window = 252             # about one year
 distribution_window = 25          # sessions
 distribution_drop = 0.002         # an index fall of 0.2 % or more on higher volume
 lookback_days = 400
+
+# Estimated tax rates for the pre-trade tax preview and the tax owed this
+# year (roadmap 23.5). A guide, not tax advice: set the rates that apply to
+# you. short_term: held one year or less; long_term: held longer.
+[tax.rates.us]
+short_term = 0.32
+long_term = 0.15
+
+[tax.rates.eu]
+short_term = 0.26
+long_term = 0.26
+
+[tax.rates.uk]
+short_term = 0.24
+long_term = 0.24

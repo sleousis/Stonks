@@ -74,6 +74,25 @@ Deposits and withdrawals are not income. They are recorded as cash flows and tak
 - Splits up to the day rescale the lots, even when no later trade came.
 - **Base amounts**: the cost at the purchase day's rate, the market value at the report day's rate.
 
+## Before you trade
+
+`GET /api/tax/preview?ticker=AAPL.US&side=sell&quantity=10` (the order ticket and each waiting draft show it). It replays your fills with the trade added last, under your lot method, and shows:
+
+- The lots a sell closes, each with its holding period and gain.
+- The realised gain, short and long term.
+- The estimated tax at your rate, the after-tax proceeds, and how much the trade changes this year's tax.
+- A US wash sale warning: a loss disallowed by a recent buy, a loss a buy back within 30 days would disallow, or a buy within 30 days of a loss sale.
+
+The price is yours or the latest close. Fees are left out. `GET /api/tax/year` gives the gains realised this year and the tax owed on them, in the base currency. Losses offset gains within each term first, then across terms.
+
+The rates are yours to set, one pair per jurisdiction. They are an estimate, not tax advice:
+
+```toml
+[tax.rates.us]
+short_term = 0.32   # held one year or less
+long_term = 0.15    # held longer
+```
+
 ## CSV columns
 
 Gains: `ticker, lot_kind, quantity, acquired, disposed, holding_period, currency, proceeds, cost_basis, wash_sale_disallowed, gain, base_currency, proceeds_base, cost_basis_base, wash_sale_disallowed_base, gain_base, open_fill_id, close_fill_id`.

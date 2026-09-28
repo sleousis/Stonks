@@ -45,7 +45,7 @@ With daily bars the entry day's whole range counts.
 Stop sources live in `journal/stops/`. Each is one module, found at start.
 The first that finds a stop wins.
 
-1. `order_plan`: a stop written on the opening order (`plan.stop` in its
+1. `order_plan`: a stop written on the opening order (`stop_price` in its
    decision context), such as the manual ticket's trade plan.
 2. `protective_stop`: the first protective stop Stonks placed for the entry.
 

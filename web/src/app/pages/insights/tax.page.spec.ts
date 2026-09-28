@@ -6,7 +6,7 @@ import {
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
-import type { TaxSettingsView } from '../../api/models';
+import type { TaxSettingsView, TaxYearView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
@@ -22,6 +22,20 @@ const SETTINGS: TaxSettingsView = {
   lot_method: 'fifo',
   wash_sales: true,
   updated_at: null,
+};
+
+const YEAR: TaxYearView = {
+  portfolio_id: 'pf_1',
+  year: 2026,
+  base_currency: 'USD',
+  jurisdiction: 'us',
+  short_term_gain: 200,
+  long_term_gain: 500,
+  wash_sale_disallowed: 0,
+  estimated_tax: 139,
+  disposals: 3,
+  unconverted: 0,
+  rates: { short_term: 0.32, long_term: 0.15 },
 };
 
 describe('TaxPage', () => {
@@ -65,6 +79,7 @@ describe('TaxPage', () => {
     const path = new URL(req.request.urlWithParams, 'http://x').pathname;
     if (path === '/api/tax/settings') return req.flush(settings);
     if (path === '/api/orders/fills') return req.flush(page([]));
+    if (path === '/api/tax/year') return req.flush(YEAR);
     throw new Error(`unexpected ${path}`);
   }
 
@@ -213,5 +228,12 @@ describe('TaxPage', () => {
     expect(taxYears(new Date('2026-03-01T00:00:00Z'))).toEqual([
       2026, 2025, 2024, 2023, 2022, 2021,
     ]);
+  });
+  it('shows the tax owed this year', async () => {
+    await render();
+    const card = el.querySelector('app-tax-year-card')!;
+    expect(card.textContent).toContain('Tax owed this year');
+    expect(card.textContent).toContain('$139.00');
+    expect(card.textContent).toContain('3 sales in 2026');
   });
 });

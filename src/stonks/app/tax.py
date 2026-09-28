@@ -38,6 +38,7 @@ from stonks.tax import (
     realized_disposals,
     to_csv,
 )
+from stonks.tax.preview import preview_trade, year_tax
 
 Jurisdiction = Literal["us", "eu", "uk"]
 LotMethod = Literal["fifo", "specific"]
@@ -88,6 +89,67 @@ class LotPickView(BaseModel):
     buy_fill_id: int
     ticker: str
     quantity: float
+
+
+class TaxRatesView(BaseModel):
+    short_term: float = Field(description="Rate on gains held one year or less.")
+    long_term: float = Field(description="Rate on gains held more than one year.")
+
+
+class PreviewLotView(BaseModel):
+    open_fill_id: int = Field(description="The fill that opened the lot.")
+    kind: Literal["long", "short"]
+    quantity: float
+    acquired: date
+    holding_period: Literal["short", "long"]
+    cost_basis: float
+    proceeds: float
+    gain: float
+    wash_sale_disallowed: float
+
+
+class TaxPreviewView(BaseModel):
+    """What a trade would realise now, before it is placed. An estimate at
+    your configured rates, not tax advice."""
+
+    portfolio_id: str
+    ticker: str
+    side: Literal["buy", "sell"]
+    quantity: float
+    price: float = Field(description="The price used: yours, else the latest close.")
+    currency: str = Field(description="The trade's currency; every amount is in it.")
+    jurisdiction: Jurisdiction
+    lot_method: LotMethod
+    lots: list[PreviewLotView] = Field(description="The lots the trade closes, in order.")
+    proceeds: float
+    realized_gain: float
+    short_term_gain: float
+    long_term_gain: float
+    wash_sale_disallowed: float
+    estimated_tax: float = Field(description="Tax on this trade's own gains (0 on a loss).")
+    after_tax_proceeds: float
+    year_tax_change: float = Field(
+        description="How much the trade changes this year's estimated tax (negative lowers it)."
+    )
+    wash_sale_warning: str | None = None
+    rates: TaxRatesView
+
+
+class TaxYearView(BaseModel):
+    """Gains realised this year and the estimated tax on them, in the base
+    currency. Short and long term losses offset gains first."""
+
+    portfolio_id: str
+    year: int
+    base_currency: str
+    jurisdiction: Jurisdiction
+    short_term_gain: float
+    long_term_gain: float
+    wash_sale_disallowed: float
+    estimated_tax: float
+    disposals: int
+    unconverted: int = Field(description="Disposals left out for want of an FX rate.")
+    rates: TaxRatesView
 
 
 def _now() -> str:
@@ -232,6 +294,114 @@ class TaxService:
                 ip=ip,
             )
         return self.picks(portfolio_id, body.sell_fill_id)
+
+    # ---- estimates (roadmap 23.5) ---------------------------------------------------
+
+    def preview(
+        self,
+        portfolio_id: str,
+        *,
+        ticker: str,
+        side: Literal["buy", "sell"],
+        quantity: float,
+        price: float | None = None,
+        now: datetime | None = None,
+    ) -> TaxPreviewView:
+        """The lots a trade would close under the portfolio's lot method,
+        its realised gain, holding periods, estimated tax and after-tax
+        proceeds, and a US wash sale warning. Nothing is placed."""
+        if not quantity > 0:
+            raise ValidationError("quantity must be above zero")
+        when = now or datetime.now(UTC)
+        ticker = ticker.upper()
+        if price is None:
+            price = self._closes([ticker], when.date()).get(ticker)
+            if price is None:
+                raise ValidationError(f"no close for {ticker} in the lake; give the price")
+        inputs = self._lot_inputs(portfolio_id)
+        currency = self._currencies([ticker]).get(ticker) or inputs.base
+        got = preview_trade(
+            inputs.fills,
+            inputs.settings,
+            self._ctx.settings.tax.rates,
+            ticker=ticker,
+            side=side,
+            quantity=quantity,
+            price=price,
+            when=when,
+            currency=currency,
+            past_picks=inputs.picks,
+            splits=inputs.splits,
+        )
+        return TaxPreviewView(
+            portfolio_id=portfolio_id,
+            ticker=ticker,
+            side=side,
+            quantity=quantity,
+            price=price,
+            currency=currency,
+            jurisdiction=inputs.settings.jurisdiction,
+            lot_method=inputs.settings.lot_method,
+            lots=[
+                PreviewLotView(
+                    open_fill_id=lot.open_fill_id,
+                    kind=lot.kind,  # type: ignore[arg-type]
+                    quantity=lot.quantity,
+                    acquired=lot.acquired,
+                    holding_period=lot.holding_period,
+                    cost_basis=lot.cost_basis,
+                    proceeds=lot.proceeds,
+                    gain=lot.gain,
+                    wash_sale_disallowed=lot.wash_sale_disallowed,
+                )
+                for lot in got.lots
+            ],
+            proceeds=got.proceeds,
+            realized_gain=got.realized_gain,
+            short_term_gain=got.short_term_gain,
+            long_term_gain=got.long_term_gain,
+            wash_sale_disallowed=got.wash_sale_disallowed,
+            estimated_tax=got.estimated_tax,
+            after_tax_proceeds=got.after_tax_proceeds,
+            year_tax_change=got.year_tax_change,
+            wash_sale_warning=got.wash_sale_warning,
+            rates=TaxRatesView(**got.rates.model_dump()),
+        )
+
+    def year(self, portfolio_id: str, year: int | None = None) -> TaxYearView:
+        """The gains realised in ``year`` (default this year, up to today)
+        and the estimated tax on them, in the base currency."""
+        today = datetime.now(UTC).date()
+        year = year or today.year
+        _check_year(year)
+        inputs = self._lot_inputs(portfolio_id)
+        fx = self._fx({f.currency for f in inputs.fills if f.currency}, inputs.base)
+
+        def to_base(amount: float, currency: str | None, day: date) -> float | None:
+            return fx.convert(amount, currency or inputs.base, inputs.base, day)
+
+        got = year_tax(
+            inputs.fills,
+            inputs.settings,
+            self._ctx.settings.tax.rates,
+            year=year,
+            picks=inputs.picks,
+            splits=inputs.splits,
+            to_base=to_base,
+        )
+        return TaxYearView(
+            portfolio_id=portfolio_id,
+            year=year,
+            base_currency=inputs.base,
+            jurisdiction=inputs.settings.jurisdiction,
+            short_term_gain=got.short_term_gain,
+            long_term_gain=got.long_term_gain,
+            wash_sale_disallowed=got.wash_sale_disallowed,
+            estimated_tax=got.estimated_tax,
+            disposals=got.disposals,
+            unconverted=got.unconverted,
+            rates=TaxRatesView(**got.rates.model_dump()),
+        )
 
     # ---- exports ----------------------------------------------------------------------
 

@@ -47,6 +47,7 @@ from stonks.screener.settings import ScreenerSettings
 from stonks.store.audit import AuditTolerances
 from stonks.store.bars import BarBackend
 from stonks.streaming.settings import StreamingSettings
+from stonks.tax.settings import TaxConfig
 from stonks.telegram.settings import TelegramConfig
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -607,6 +608,8 @@ class Settings(BaseSettings):
     engine: EngineSettings = Field(default_factory=EngineSettings)
     # ``[breadth]``: the market breadth card on Today (roadmap 23.14).
     breadth: BreadthSettings = Field(default_factory=BreadthSettings)
+    # ``[tax]``: estimated tax rates per jurisdiction (roadmap 23.5).
+    tax: TaxConfig = TaxConfig()
 
 
 #: Secrets read straight from the environment by blocks that keep their own

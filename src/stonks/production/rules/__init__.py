@@ -48,6 +48,8 @@ Order of application (``order``; lower first):
 4d. the live safeguards, which act only when ``ctx.live`` is set
    (roadmap 19.6): ``capital_ramp`` (4, the owner's allocation cap),
    ``live_notional_caps`` (9) and ``price_band`` (9);
+4e. ``manual_discipline`` (4), which acts only on an order a person places
+   by hand (``ctx.manual``, roadmap 23.4): stop required, cooldown, caps;
 5. one order-rule pass: ``sell_within_position`` (10), ``require_price``
    (20), ``max_open_positions`` (30), ``max_weight_per_ticker`` (40),
    ``max_weight_per_asset_class`` (50), ``risk_per_position`` (52),
@@ -85,6 +87,7 @@ if TYPE_CHECKING:
     from stonks.config import RiskPolicy
     from stonks.production.live.context import LiveContext
     from stonks.production.rules._intraday import IntradayContext
+    from stonks.production.rules._manual import ManualContext
 
 __all__ = [
     "EPS",
@@ -187,6 +190,10 @@ class RiskContext:
     #: event time, the session's equity marks, bar times and orders sent.
     #: ``None`` for a daily book, so the intraday rules do nothing there.
     intraday: IntradayContext | None = None
+    #: The state of one order a person places by hand (roadmap 23.4):
+    #: today's manual entries, exits and losses. ``None`` for a strategy's
+    #: orders, so the manual discipline rule does nothing there.
+    manual: ManualContext | None = None
 
     def __post_init__(self) -> None:
         if self.cost_model is not None and (self.slippage_bps or self.fee_per_trade):

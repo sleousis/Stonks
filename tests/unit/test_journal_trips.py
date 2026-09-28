@@ -190,6 +190,21 @@ def test_r_multiple_from_a_plan_on_the_entry_order():
     assert t.target_price == pytest.approx(106.0)
 
 
+def test_r_multiple_from_the_manual_ticket_plan():
+    """The manual ticket (23.4) writes its plan at the top of the decision
+    context: stop_price, target_price and entry_price."""
+    fills = [
+        _fill(1, "m1", "buy", 10, 100.0, 0, origin="manual"),
+        _fill(2, "m2", "sell", 10, 104.0, 1, origin="manual"),
+    ]
+    context = {"trigger": "manual", "entry_price": 100.0, "stop_price": 98.0, "target_price": 106.0}
+    orders = [_order("m1", origin="manual", context=context)]
+    [t] = build_trades(_ledger(fills, orders), bars=None, now=NOW)
+    assert t.stop_source == "order_plan"
+    assert t.r_multiple == pytest.approx(2.0)
+    assert t.target_price == pytest.approx(106.0)
+
+
 def test_a_stop_on_the_wrong_side_gives_no_r():
     fills = [
         _fill(1, "m1", "buy", 10, 100.0, 0, origin="manual"),
