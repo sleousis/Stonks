@@ -23,6 +23,7 @@ import type {
 import { StudioService } from '../../api/studio.service';
 import { SessionService } from '../../core/auth/session.service';
 import { formatPercent } from '../../core/format/format';
+import { errorMessage } from '../../core/http/api-error';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { BacktestResultView } from '../../shared/lab-results/backtest-result';
@@ -224,7 +225,12 @@ export class DraftTest {
       this.btRun.set(handle);
       const last = await handle.finished;
       if (last?.status === 'succeeded') {
-        const done = await this.jobsApi.get(job.id);
+        // A failed read is not toasted by the interceptor (it is a GET): say so here.
+        const done = await this.jobsApi.get(job.id).catch((err: unknown) => {
+          this.toasts.error(errorMessage(err), 'Could not load the result');
+          return null;
+        });
+        if (!done) return;
         this.btResult.set((done.result as BacktestResult | null) ?? null);
         this.toasts.success('Backtest finished.');
       }
@@ -258,7 +264,12 @@ export class DraftTest {
       this.labRun.set(handle);
       const last = await handle.finished;
       if (last?.status === 'succeeded') {
-        const done = await this.jobsApi.get(job.id);
+        // A failed read is not toasted by the interceptor (it is a GET): say so here.
+        const done = await this.jobsApi.get(job.id).catch((err: unknown) => {
+          this.toasts.error(errorMessage(err), 'Could not load the result');
+          return null;
+        });
+        if (!done) return;
         this.labResult.set((done.result as LabRunView | null) ?? null);
         this.toasts.success('Lab run finished.');
       }

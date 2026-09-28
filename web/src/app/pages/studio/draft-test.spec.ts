@@ -7,6 +7,7 @@ import type { BacktestResult, CostModelPreset, Job, LabRunView } from '../../api
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
+import { ToastService } from '../../core/notify/toast.service';
 import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
 import { nextRequest, tick } from '../../../testing/http';
 import { makeDraft } from '../../../testing/studio-fixtures';
@@ -189,6 +190,20 @@ describe('DraftTest', () => {
     expect(series.map((s) => s.id)).toEqual(['equity', 'drawdown']);
     expect(series[0].points[0]).toEqual({ time: '2026-01-02', value: 10_000 });
     expect(series[1].points[2].value).toBeCloseTo(-0.1);
+  });
+
+  it('says so when the finished result cannot be read', async () => {
+    const error = vi.spyOn(TestBed.inject(ToastService), 'error');
+    buttonNamed('Run backtest').click();
+    const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/backtests', 'POST');
+    req.flush({ ...job('job_bt', null), status: 'queued', progress: 0 });
+    (await nextRequest(controller, '/api/jobs/job_bt')).flush(
+      { title: 'Server error', status: 500, detail: 'lake is busy' },
+      { status: 500, statusText: 'Server Error' },
+    );
+    await settle();
+    expect(el.querySelector('app-backtest-result')).toBeNull();
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('lake is busy'), expect.anything());
   });
 
   it('default request carries non-zero costs (UX-06)', async () => {
