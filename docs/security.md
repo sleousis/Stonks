@@ -159,6 +159,8 @@ uv run stonks users reset-password --email you@example.com
 uv run stonks users list
 ```
 
+A shell reset, like an admin reset, signs the person out everywhere and revokes their API tokens.
+
 The password is prompted without echo, or read from `STONKS_AUTH_PASSWORD` in scripts. It is never a command option. The second factor is set up at the first sign-in. `python -m stonks.auth bootstrap-admin|reset-password` does the same.
 
 ## Error codes

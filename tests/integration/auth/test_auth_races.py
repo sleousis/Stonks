@@ -113,3 +113,14 @@ def test_as12_admin_second_factor_reset_revokes_the_users_tokens(db):
     svc.reset_mfa(session_principal(DEFAULT_OWNER_ID, Role.ADMIN), uid)
     with pytest.raises(NotAuthenticated):
         svc.principal_for_bearer(token)
+
+
+def test_a_shell_password_reset_revokes_the_users_tokens_too(db):
+    # `stonks users reset-password` is the operator's answer to a leak, like
+    # the admin reset: a token made before it must stop working.
+    svc = make_service(db)
+    uid = add_user(db, "alice@example.com")
+    _, token = svc.create_token(session_principal(uid, Role.TRADER), name="t", scopes=["read"])
+    svc.set_password_by_email("alice@example.com", "another long passphrase")
+    with pytest.raises(NotAuthenticated):
+        svc.principal_for_bearer(token)
