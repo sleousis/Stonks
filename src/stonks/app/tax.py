@@ -335,7 +335,7 @@ class TaxService:
             ticker=ticker,
             side=side,
             quantity=quantity,
-            price=price,
+            price=price * _multiplier(ticker),
             when=when,
             currency=currency,
             past_picks=inputs.picks,
@@ -500,7 +500,9 @@ class TaxService:
                 ticker=r["ticker"],
                 side=r["side"],
                 quantity=float(r["quantity"]),
-                price=float(r["price"]),
+                # an option fill's price is per share of the deliverable:
+                # the lot counts it per contract
+                price=float(r["price"]) * _multiplier(r["ticker"]),
                 fee=fee_of(r),
                 filled_at=_utc(r["filled_at"]),
                 currency=currencies.get(r["ticker"]),
@@ -668,3 +670,11 @@ def _settings_view(state: SqliteState, portfolio_id: str) -> TaxSettingsView:
         updated_at=datetime.fromisoformat(r["updated_at"]),
         locked=locked,
     )
+
+
+def _multiplier(ticker: str) -> float:
+    """Money per unit of price for one unit held: an option contract's
+    multiplier, 1 for anything else."""
+    from stonks.core.instruments import InstrumentBook
+
+    return InstrumentBook().multiplier(ticker)
