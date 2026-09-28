@@ -9,7 +9,6 @@ import { TicksService } from '../../api/ticks.service';
 import {
   formatDate,
   formatDateTime,
-  formatDuration,
   formatMoney,
   formatPercent,
   toneClass,
@@ -17,11 +16,11 @@ import {
 import type { ChartSeries } from '../../shared/chart/chart-engine';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
-import { CHECK_TITLES } from '../health/health-state';
+import { checkPill, checkTitle, plainDetail, splitChecks } from '../health/health-state';
+import { runWord } from '../../core/schedule/run-status';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
-import { DateTimePipe } from '../../shared/format.pipes';
+import { DateTimePipe, DayPipe } from '../../shared/format.pipes';
 import { PageHeader } from '../../shared/ui/page-header';
-import { humanize } from '../../shared/ui/param-form/param-spec';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { NoBook, bookState } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -29,15 +28,6 @@ import { StatusPill } from '../../shared/ui/status-pill';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const RECENT_TICKS = 8;
-const FRESHNESS_PREFIX = 'freshness:';
-
-/** A health check's name for people: "Stuck ticks", "Freshness of AAPL.US". */
-export function checkTitle(name: string): string {
-  if (CHECK_TITLES[name]) return CHECK_TITLES[name];
-  if (name.startsWith(FRESHNESS_PREFIX))
-    return `Freshness of ${name.slice(FRESHNESS_PREFIX.length)}`;
-  return humanize(name.replace(/:+/g, ' '));
-}
 
 /**
  * Reference page: read-only overview built from GET routes. Each panel owns
@@ -59,6 +49,7 @@ export function checkTitle(name: string): string {
     TimeSeriesChart,
     UpdatedAgo,
     DateTimePipe,
+    DayPipe,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -205,18 +196,13 @@ export class DashboardPage {
   });
 
   // Tables ------------------------------------------------------------------
+  /**
+   * A summary: the columns that fit a half-width panel at desktop width
+   * (M10). Cost, price and dates are on Insights.
+   */
   protected readonly positionColumns: TableColumn<PositionView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
-    { key: 'quantity', label: 'Quantity', format: 'number' },
-    {
-      key: 'avg_cost',
-      label: 'Avg cost',
-      format: 'money',
-      currency: (p) => p.currency,
-      mobile: 'hide',
-    },
-    { key: 'price', label: 'Price', format: 'money', currency: (p) => p.currency },
-    { key: 'price_date', label: 'Priced', format: 'date', mobile: 'hide' },
+    { key: 'quantity', label: 'Quantity', format: 'number', mobile: 'hide' },
     { key: 'market_value', label: 'Value', format: 'money', currency: (p) => p.currency },
     {
       key: 'unrealized_pnl',
@@ -225,20 +211,19 @@ export class DashboardPage {
       tone: true,
       currency: (p) => p.currency,
     },
-    {
-      key: 'unrealized_pnl_pct',
-      label: 'P&L %',
-      format: 'signedPercent',
-      tone: true,
-      mobile: 'hide',
-    },
     { key: 'weight', label: 'Weight', format: 'percent' },
   ];
   protected readonly positionKey = (p: PositionView) => p.ticker;
 
+  /** The trading day each run was for, its outcome and counts; the rest is on its page. */
   protected readonly tickColumns: TableColumn<TickRun>[] = [
-    { key: 'started_at', label: 'Started', format: 'datetime', mobile: 'title' },
-    { key: 'status', label: 'Status' },
+    {
+      key: 'as_of',
+      label: 'For',
+      mobile: 'title',
+      value: (t) => t.as_of ?? t.started_at,
+    },
+    { key: 'status', label: 'Status', value: (t) => runWord(t.status) },
     {
       key: 'orders',
       label: 'Orders',
@@ -246,28 +231,34 @@ export class DashboardPage {
       value: (t) => t.summary?.orders_placed ?? null,
     },
     { key: 'fills', label: 'Fills', format: 'number', value: (t) => t.summary?.fills ?? null },
-    {
-      key: 'winner',
-      label: 'Winner',
-      value: (t) => t.summary?.winner_strategy_id ?? null,
-      mobile: 'hide',
-    },
-    {
-      key: 'duration',
-      label: 'Took',
-      sortable: false,
-      value: (t) => formatDuration(t.started_at, t.finished_at),
-      align: 'end',
-      mobile: 'hide',
-    },
   ];
   protected readonly tickKey = (t: TickRun) => t.id;
   protected readonly checkTitle = checkTitle;
+  protected readonly checkPill = checkPill;
+  protected readonly plainDetail = plainDetail;
+  protected readonly runWord = runWord;
 
   // Health ------------------------------------------------------------------
   protected readonly failingChecks = computed(() =>
     this.health.hasValue() ? this.health.value().checks.filter((c) => !c.ok).length : 0,
   );
+  protected readonly checkCount = computed(() =>
+    this.health.hasValue() ? this.health.value().checks.length : 0,
+  );
+  /** Per-ticker freshness folds into one line; the Health page lists each ticker. */
+  private readonly split = computed(() =>
+    this.health.hasValue() ? splitChecks(this.health.value().checks) : null,
+  );
+  protected readonly systemChecks = computed(() => this.split()?.other ?? []);
+  protected readonly freshness = computed(() => {
+    const rows = this.split()?.freshness ?? [];
+    if (!rows.length) return null;
+    const fresh = rows.filter((r) => r.level === 'good').length;
+    return {
+      ok: fresh === rows.length,
+      detail: `${fresh} of ${rows.length} tickers have a recent price.`,
+    };
+  });
 
   protected refresh(): void {
     this.auto.refresh();
