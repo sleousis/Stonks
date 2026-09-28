@@ -163,6 +163,22 @@ def test_other_tokens_cannot_act_as_a_worker(http, auth, settings, role, scopes)
     assert http.post("/api/lab/worker/claim", json={"worker_id": "w1"}).status_code == 401
 
 
+def test_a_worker_token_of_a_demoted_admin_reads_nothing(http, auth, settings):
+    # Demoting the admin clamps the lab_worker scope away. The token is then
+    # left with no scope at all, and must not fall back to plain reads.
+    uid = add_user(settings.state.path, "was-admin@example.com", Role.ADMIN)
+    _, token = auth.create_token(
+        session_principal(uid, Role.ADMIN), name="w", scopes=["lab_worker"]
+    )
+    with SqliteState(settings.state.path) as state:
+        state.execute("UPDATE users SET role = 'trader' WHERE id = ?", [uid])
+    headers = _auth(token)
+    for path in ("/api/strategies", "/api/universes", "/api/market/instruments", "/api/auth/me"):
+        assert http.get(path, headers=headers).status_code == 403, path
+    claim = http.post("/api/lab/worker/claim", json={"worker_id": "w1"}, headers=headers)
+    assert claim.status_code == 403
+
+
 def test_a_trader_cannot_mint_a_worker_token(auth, settings):
     from stonks.auth import PermissionDenied
 
