@@ -41,6 +41,10 @@ Order of application (``order``; lower first):
 4c. ``option_greek_limits``, ``option_margin``, ``option_max_loss`` and
    ``short_option_guard`` (9): the option rules (roadmap 17.4). They see
    a combo as one unit and only drop opening option units;
+4c'. the intraday rules, which act only when ``ctx.intraday`` is set
+   (roadmap 21.3.2): ``intraday_drawdown`` (4), ``intraday_loss_limit``
+   (4) and ``intraday_stale_data`` (5); ``intraday_order_rate`` (79) runs
+   just before ``max_orders_per_run``;
 4d. the live safeguards, which act only when ``ctx.live`` is set
    (roadmap 19.6): ``capital_ramp`` (4, the owner's allocation cap),
    ``live_notional_caps`` (9) and ``price_band`` (9);
@@ -80,6 +84,7 @@ if TYPE_CHECKING:
 
     from stonks.config import RiskPolicy
     from stonks.production.live.context import LiveContext
+    from stonks.production.rules._intraday import IntradayContext
 
 __all__ = [
     "EPS",
@@ -174,6 +179,10 @@ class RiskContext:
     #: ``size``, ``value``, ``volatility``, ``sector``; roadmap 22.4). The
     #: style exposure rule reads the bars instead when ``None``.
     factor_exposures: pd.DataFrame | None = None
+    #: The state of an intraday book at one event (roadmap 21.3.2): the
+    #: event time, the session's equity marks, bar times and orders sent.
+    #: ``None`` for a daily book, so the intraday rules do nothing there.
+    intraday: IntradayContext | None = None
 
     def __post_init__(self) -> None:
         if self.cost_model is not None and (self.slippage_bps or self.fee_per_trade):

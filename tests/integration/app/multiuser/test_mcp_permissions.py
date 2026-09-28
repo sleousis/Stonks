@@ -312,6 +312,9 @@ CASES: dict[str, Case] = {
     "list_risk_snapshots": _c(
         "GET", "/api/risk/snapshots", lambda i: {"portfolio_id": i["portfolio"]}
     ),
+    "list_intraday_snapshots": _c(
+        "GET", "/api/risk/intraday", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
     "get_golive_report": _c(
         "GET", "/api/strategies/{strategy_id}/golive", lambda i: {"strategy_id": "bah_active"}
     ),
@@ -340,6 +343,7 @@ CASES: dict[str, Case] = {
         "GET", "/api/shadow/strategies/{strategy_id}/pnl", lambda i: {"strategy_id": "bah_shadow"}
     ),
     "get_health_report": _c("GET", "/api/health/report"),
+    "get_stream_status": _c("GET", "/api/stream/status"),
     "get_broker": _c("GET", "/api/brokers"),
     "list_sources": _c("GET", "/api/sources"),
     "list_cost_models": _c("GET", "/api/lab/cost-models"),

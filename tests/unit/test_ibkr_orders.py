@@ -230,3 +230,59 @@ def test_an_exit_shares_the_stop_group_and_an_order_without_one_has_none():
     assert (exit_req.oca_group, exit_req.oca_type) == ("g", 2)
     plain = to_ib_order(order(decision_price=100.0), SPEC, account="DU1", settings=SETTINGS)
     assert (plain.oca_group, plain.oca_type) == (None, None)
+
+
+# ---- intraday books: day orders (roadmap 21.2.3) -------------------------------------------
+
+
+def test_intraday_order_without_a_time_in_force_goes_out_day_not_opg():
+    assert SETTINGS.default_time_in_force == "opg"
+    req = to_ib_order(
+        order(decision_price=200.0), SPEC, account="DU1", settings=SETTINGS, intraday=True
+    )
+    assert req.tif == "DAY"
+
+
+def test_intraday_stop_without_a_time_in_force_is_a_day_order():
+    req = to_ib_order(
+        order(side="sell", order_type="stop", stop_price=90.0, position_effect="close"),
+        SPEC,
+        account="DU1",
+        settings=SETTINGS,
+        intraday=True,
+    )
+    assert req.tif == "DAY"
+
+
+def test_intraday_keeps_ioc():
+    req = to_ib_order(
+        order(order_type="limit", limit_price=10.0, time_in_force="ioc"),
+        SPEC,
+        account="DU1",
+        settings=SETTINGS,
+        intraday=True,
+    )
+    assert req.tif == "IOC"
+
+
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"order_type": "limit", "limit_price": 10.0, "time_in_force": "opg"},
+        {"side": "sell", "order_type": "stop", "stop_price": 9.0, "time_in_force": "gtc"},
+    ],
+)
+def test_intraday_refuses_the_opening_auction_and_good_till_cancelled(kw):
+    with pytest.raises(OrderRejectedError, match="intraday"):
+        to_ib_order(order(**kw), SPEC, account="DU1", settings=SETTINGS, intraday=True)
+
+
+def test_intraday_still_refuses_orders_outside_the_session():
+    with pytest.raises(OrderRejectedError, match="outside regular hours"):
+        to_ib_order(
+            order(order_type="limit", limit_price=10.0, outside_rth=True),
+            SPEC,
+            account="DU1",
+            settings=SETTINGS,
+            intraday=True,
+        )

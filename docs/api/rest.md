@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -359,6 +359,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/risk/intraday` | List Intraday Snapshots | `data.read` |  | [Page_IntradaySnapshotView_](#page_intradaysnapshotview_) |
 | GET | `/api/risk/limits` | Get My Risk Limits | sign-in |  | [RiskLimitsView](#risklimitsview) |
 | PUT | `/api/risk/limits` | Set My Risk Limits | `portfolio.manage` | [RiskLimitsUpdate](#risklimitsupdate) | [RiskLimitsView](#risklimitsview) |
 | GET | `/api/risk/live` | Get Live Risk | sign-in |  | [RiskSummaryView](#risksummaryview) |
@@ -422,6 +423,12 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/strategies/{strategy_id}/retire` | Retire | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
 | POST | `/api/strategies/{strategy_id}/shadow` | Shadow | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [StrategyDetail](#strategydetail) |
 | GET | `/api/strategies/{strategy_id}/tearsheet` | Get Tear Sheet | sign-in |  | [TearSheetView](#tearsheetview) |
+
+## stream endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/stream/status` | Get Stream Status | `data.read` |  | [StreamStatusView](#streamstatusview) |
 
 ## studio endpoints
 
@@ -1283,6 +1290,31 @@ Which economic releases alert you. Turned on or off by the ``economic`` switch i
 | `period` | string \| null | no |  |
 | `previous` | number \| null | no |  |
 
+### EngineView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `bar_closes` | integer | yes |  |
+| `bars` | integer | yes |  |
+| `calendar` | string | yes |  |
+| `deadman` | "ok" \| "silent" \| "closed" \| "stopped" | yes |  |
+| `dispatch_lag` | [LatencyView](#latencyview) | yes |  |
+| `engine_id` | string | yes |  |
+| `event_to_order` | [LatencyView](#latencyview) | yes |  |
+| `handler_errors` | dict[str, integer] | yes |  |
+| `last_dispatch_age_seconds` | number \| null | yes |  |
+| `last_dispatch_at` | date-time \| null | yes |  |
+| `late_bars` | integer | yes |  |
+| `live` | boolean | yes |  |
+| `market_open` | boolean | yes |  |
+| `pending_closes` | integer | yes |  |
+| `silent_seconds` | number \| null | yes |  |
+| `started_at` | date-time | yes |  |
+| `state` | string | yes |  |
+| `stopped_at` | date-time \| null | yes |  |
+| `stream` | [StreamHealthView](#streamhealthview) \| null | yes |  |
+| `updated_at` | date-time | yes |  |
+
 ### EnrolStartView
 
 | Field | Type | Required | Description |
@@ -1720,7 +1752,7 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | `expires_on` | date \| null | yes |  |
 | `halt` | "buys" \| "all" | yes |  |
 | `id` | integer | yes |  |
-| `kind` | "month_loss" \| "week_loss" \| "drawdown" \| "operational" \| "kill" \| "runaway" \| "broker_drift" | yes |  |
+| `kind` | "month_loss" \| "week_loss" \| "drawdown" \| "operational" \| "kill" \| "runaway" \| "broker_drift" \| "intraday_loss" | yes |  |
 | `portfolio_id` | string \| null | yes |  |
 | `reason` | string | yes |  |
 | `scope` | "global" \| "user" \| "portfolio" | yes |  |
@@ -1970,6 +2002,71 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers, sect
 | `is_intraday` | boolean | yes |  |
 | `seconds` | integer | yes |  |
 
+### IntradayDrawdownSettings
+
+``(drawdown from the day's high, size)`` levels; ``None`` is off.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schedule` | list[list[any]] \| null | no |  |
+
+### IntradayLossLimitSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `flatten` | boolean | no |  |
+| `hard_loss` | number \| null | no |  |
+| `max_loss` | number \| null | no |  |
+| `window_minutes` | integer | no |  |
+
+### IntradayOrderRateSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_orders_per_day` | integer \| null | no |  |
+| `max_orders_per_minute` | integer \| null | no |  |
+
+### IntradayPnlView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `available` | boolean | yes |  |
+| `note` | string | yes |  |
+| `snapshot_minutes` | integer | yes |  |
+
+### IntradaySnapshotView
+
+One book at one moment of a session. ``strategy_id`` is null for the whole portfolio. Money is in the book's currency.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `at` | date-time | yes |  |
+| `day` | date | yes |  |
+| `day_return` | number \| null | yes |  |
+| `drawdown` | number | yes |  |
+| `exposures` | dict[str, number] | yes |  |
+| `fees` | number | yes |  |
+| `fills` | integer | yes |  |
+| `gross_exposure` | number | yes |  |
+| `high_water_pnl` | number | yes |  |
+| `max_mark_age_seconds` | number \| null | yes |  |
+| `net_exposure` | number | yes |  |
+| `pnl` | number | yes |  |
+| `portfolio_id` | string | yes |  |
+| `realised` | number | yes |  |
+| `stale_marks` | integer | yes |  |
+| `start_value` | number | yes |  |
+| `strategy_id` | string \| null | yes |  |
+| `unmarked` | integer | yes |  |
+| `unrealised` | number | yes |  |
+| `value` | number | yes |  |
+
+### IntradayStaleDataSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_bar_age_seconds` | integer \| null | no |  |
+
 ### Job
 
 | Field | Type | Required | Description |
@@ -2099,6 +2196,16 @@ Tunes the class the ``strategy`` ref points at over its parameter space. The ref
 | `run_id` | string | no |  |
 | `survival_reports` | list[[SurvivalReportView](#survivalreportview)] | yes |  |
 | `verdict` | "pass" \| "fail" | yes |  |
+
+### LatencyView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `count` | integer | yes |  |
+| `max_seconds` | number \| null | yes |  |
+| `mean_seconds` | number \| null | yes |  |
+| `p50_seconds` | number \| null | yes |  |
+| `p95_seconds` | number \| null | yes |  |
 
 ### LeaderboardRow
 
@@ -3007,6 +3114,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[InstrumentView](#instrumentview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_IntradaySnapshotView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[IntradaySnapshotView](#intradaysnapshotview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -4129,6 +4245,10 @@ Type: "viewer" \| "trader" \| "admin"
 | `circuit_breaker` | [CircuitBreakerSettings](#circuitbreakersettings) | no |  |
 | `drawdown_scaling` | [DrawdownScalingSettings](#drawdownscalingsettings) | no |  |
 | `gross_exposure` | [GrossExposureSettings](#grossexposuresettings) | no |  |
+| `intraday_drawdown` | [IntradayDrawdownSettings](#intradaydrawdownsettings) | no |  |
+| `intraday_loss_limit` | [IntradayLossLimitSettings](#intradaylosslimitsettings) | no |  |
+| `intraday_order_rate` | [IntradayOrderRateSettings](#intradayorderratesettings) | no |  |
+| `intraday_stale_data` | [IntradayStaleDataSettings](#intradaystaledatasettings) | no |  |
 | `liquidity` | [LiquiditySettings](#liquiditysettings) | no |  |
 | `live_notional_caps` | [LiveNotionalCapsSettings](#livenotionalcapssettings) | no |  |
 | `losing_lock` | [LosingLockSettings](#losinglocksettings) | no |  |
@@ -4676,6 +4796,38 @@ How many registered strategies are in each lifecycle status.
 | `params` | object | yes |  |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
 | `updated_at` | string | yes |  |
+
+### StreamHealthView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `backfills_failed` | integer | yes |  |
+| `backfills_ok` | integer | yes |  |
+| `bars_written` | integer | yes |  |
+| `connected` | boolean | yes |  |
+| `connected_at` | date-time \| null | yes |  |
+| `connects` | integer | yes |  |
+| `disconnects` | integer | yes |  |
+| `gaps` | integer | yes |  |
+| `last_error` | string \| null | yes |  |
+| `last_event_age_seconds` | number \| null | yes |  |
+| `last_event_at` | date-time \| null | yes |  |
+| `late_ticks` | integer | yes |  |
+| `source` | string | yes |  |
+| `state` | string | yes |  |
+| `write_errors` | integer | yes |  |
+
+### StreamStatusView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date-time | yes |  |
+| `deadman_minutes` | integer | yes |  |
+| `engines` | list[[EngineView](#engineview)] | yes |  |
+| `intraday_pnl` | [IntradayPnlView](#intradaypnlview) | yes |  |
+| `source` | string | yes |  |
+| `stale_after_seconds` | number | yes |  |
+| `streaming_enabled` | boolean | yes |  |
 
 ### StreamToken
 

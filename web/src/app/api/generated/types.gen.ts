@@ -2089,6 +2089,85 @@ export type EconomicEvent = {
 };
 
 /**
+ * EngineView
+ */
+export type EngineView = {
+    /**
+     * Bar Closes
+     */
+    bar_closes: number;
+    /**
+     * Bars
+     */
+    bars: number;
+    /**
+     * Calendar
+     */
+    calendar: string;
+    /**
+     * Deadman
+     */
+    deadman: 'ok' | 'silent' | 'closed' | 'stopped';
+    dispatch_lag: LatencyView;
+    /**
+     * Engine Id
+     */
+    engine_id: string;
+    event_to_order: LatencyView;
+    /**
+     * Handler Errors
+     */
+    handler_errors: {
+        [key: string]: number;
+    };
+    /**
+     * Last Dispatch Age Seconds
+     */
+    last_dispatch_age_seconds: number | null;
+    /**
+     * Last Dispatch At
+     */
+    last_dispatch_at: string | null;
+    /**
+     * Late Bars
+     */
+    late_bars: number;
+    /**
+     * Live
+     */
+    live: boolean;
+    /**
+     * Market Open
+     */
+    market_open: boolean;
+    /**
+     * Pending Closes
+     */
+    pending_closes: number;
+    /**
+     * Silent Seconds
+     */
+    silent_seconds: number | null;
+    /**
+     * Started At
+     */
+    started_at: string;
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Stopped At
+     */
+    stopped_at: string | null;
+    stream: StreamHealthView | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
  * EnrolStartView
  */
 export type EnrolStartView = {
@@ -3262,7 +3341,7 @@ export type HaltView = {
     /**
      * Kind
      */
-    kind: 'month_loss' | 'week_loss' | 'drawdown' | 'operational' | 'kill' | 'runaway' | 'broker_drift';
+    kind: 'month_loss' | 'week_loss' | 'drawdown' | 'operational' | 'kill' | 'runaway' | 'broker_drift' | 'intraday_loss';
     /**
      * Portfolio Id
      */
@@ -3963,6 +4042,176 @@ export type IntervalInfo = {
 };
 
 /**
+ * IntradayDrawdownSettings
+ *
+ * ``(drawdown from the day's high, size)`` levels; ``None`` is off.
+ */
+export type IntradayDrawdownSettings = {
+    /**
+     * Schedule
+     */
+    schedule?: Array<[
+        number,
+        number
+    ]> | null;
+};
+
+/**
+ * IntradayLossLimitSettings
+ */
+export type IntradayLossLimitSettings = {
+    /**
+     * Flatten
+     */
+    flatten?: boolean;
+    /**
+     * Hard Loss
+     */
+    hard_loss?: number | null;
+    /**
+     * Max Loss
+     */
+    max_loss?: number | null;
+    /**
+     * Window Minutes
+     */
+    window_minutes?: number;
+};
+
+/**
+ * IntradayOrderRateSettings
+ */
+export type IntradayOrderRateSettings = {
+    /**
+     * Max Orders Per Day
+     */
+    max_orders_per_day?: number | null;
+    /**
+     * Max Orders Per Minute
+     */
+    max_orders_per_minute?: number | null;
+};
+
+/**
+ * IntradayPnlView
+ */
+export type IntradayPnlView = {
+    /**
+     * Available
+     */
+    available: boolean;
+    /**
+     * Note
+     */
+    note: string;
+    /**
+     * Snapshot Minutes
+     */
+    snapshot_minutes: number;
+};
+
+/**
+ * IntradaySnapshotView
+ *
+ * One book at one moment of a session. ``strategy_id`` is null for the
+ * whole portfolio. Money is in the book's currency.
+ */
+export type IntradaySnapshotView = {
+    /**
+     * At
+     */
+    at: string;
+    /**
+     * Day
+     */
+    day: string;
+    /**
+     * Day Return
+     */
+    day_return: number | null;
+    /**
+     * Drawdown
+     */
+    drawdown: number;
+    /**
+     * Exposures
+     */
+    exposures: {
+        [key: string]: number;
+    };
+    /**
+     * Fees
+     */
+    fees: number;
+    /**
+     * Fills
+     */
+    fills: number;
+    /**
+     * Gross Exposure
+     */
+    gross_exposure: number;
+    /**
+     * High Water Pnl
+     */
+    high_water_pnl: number;
+    /**
+     * Max Mark Age Seconds
+     */
+    max_mark_age_seconds: number | null;
+    /**
+     * Net Exposure
+     */
+    net_exposure: number;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Realised
+     */
+    realised: number;
+    /**
+     * Stale Marks
+     */
+    stale_marks: number;
+    /**
+     * Start Value
+     */
+    start_value: number;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+    /**
+     * Unmarked
+     */
+    unmarked: number;
+    /**
+     * Unrealised
+     */
+    unrealised: number;
+    /**
+     * Value
+     */
+    value: number;
+};
+
+/**
+ * IntradayStaleDataSettings
+ */
+export type IntradayStaleDataSettings = {
+    /**
+     * Max Bar Age Seconds
+     */
+    max_bar_age_seconds?: number | null;
+};
+
+/**
  * Job
  */
 export type Job = {
@@ -4363,6 +4612,32 @@ export type LabRunView = {
      * Verdict
      */
     verdict: 'pass' | 'fail';
+};
+
+/**
+ * LatencyView
+ */
+export type LatencyView = {
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Max Seconds
+     */
+    max_seconds: number | null;
+    /**
+     * Mean Seconds
+     */
+    mean_seconds: number | null;
+    /**
+     * P50 Seconds
+     */
+    p50_seconds: number | null;
+    /**
+     * P95 Seconds
+     */
+    p95_seconds: number | null;
 };
 
 /**
@@ -6753,6 +7028,28 @@ export type PageInstrumentView = {
      * Items
      */
     items: Array<InstrumentView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[IntradaySnapshotView]
+ */
+export type PageIntradaySnapshotView = {
+    /**
+     * Items
+     */
+    items: Array<IntradaySnapshotView>;
     /**
      * Limit
      */
@@ -9793,6 +10090,10 @@ export type RuleSettings = {
     circuit_breaker?: CircuitBreakerSettings;
     drawdown_scaling?: DrawdownScalingSettings;
     gross_exposure?: GrossExposureSettings;
+    intraday_drawdown?: IntradayDrawdownSettings;
+    intraday_loss_limit?: IntradayLossLimitSettings;
+    intraday_order_rate?: IntradayOrderRateSettings;
+    intraday_stale_data?: IntradayStaleDataSettings;
     liquidity?: LiquiditySettings;
     live_notional_caps?: LiveNotionalCapsSettings;
     losing_lock?: LosingLockSettings;
@@ -11181,6 +11482,103 @@ export type StrategySummary = {
      * Updated At
      */
     updated_at: string;
+};
+
+/**
+ * StreamHealthView
+ */
+export type StreamHealthView = {
+    /**
+     * Backfills Failed
+     */
+    backfills_failed: number;
+    /**
+     * Backfills Ok
+     */
+    backfills_ok: number;
+    /**
+     * Bars Written
+     */
+    bars_written: number;
+    /**
+     * Connected
+     */
+    connected: boolean;
+    /**
+     * Connected At
+     */
+    connected_at: string | null;
+    /**
+     * Connects
+     */
+    connects: number;
+    /**
+     * Disconnects
+     */
+    disconnects: number;
+    /**
+     * Gaps
+     */
+    gaps: number;
+    /**
+     * Last Error
+     */
+    last_error: string | null;
+    /**
+     * Last Event Age Seconds
+     */
+    last_event_age_seconds: number | null;
+    /**
+     * Last Event At
+     */
+    last_event_at: string | null;
+    /**
+     * Late Ticks
+     */
+    late_ticks: number;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Write Errors
+     */
+    write_errors: number;
+};
+
+/**
+ * StreamStatusView
+ */
+export type StreamStatusView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Deadman Minutes
+     */
+    deadman_minutes: number;
+    /**
+     * Engines
+     */
+    engines: Array<EngineView>;
+    intraday_pnl: IntradayPnlView;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Stale After Seconds
+     */
+    stale_after_seconds: number;
+    /**
+     * Streaming Enabled
+     */
+    streaming_enabled: boolean;
 };
 
 /**
@@ -21705,6 +22103,82 @@ export type GetReconcileReportResponses = {
 
 export type GetReconcileReportResponse = GetReconcileReportResponses[keyof GetReconcileReportResponses];
 
+export type ListIntradaySnapshotsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Day
+         *
+         * the trading day; default the latest day with rows
+         */
+        day?: string | null;
+        /**
+         * Strategy Id
+         *
+         * one strategy's sleeve; default the whole portfolio
+         */
+        strategy_id?: string | null;
+        /**
+         * All Books
+         *
+         * every book: the whole portfolio and each sleeve
+         */
+        all_books?: boolean;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/risk/intraday';
+};
+
+export type ListIntradaySnapshotsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListIntradaySnapshotsError = ListIntradaySnapshotsErrors[keyof ListIntradaySnapshotsErrors];
+
+export type ListIntradaySnapshotsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageIntradaySnapshotView;
+};
+
+export type ListIntradaySnapshotsResponse = ListIntradaySnapshotsResponses[keyof ListIntradaySnapshotsResponses];
+
 export type GetMyRiskLimitsData = {
     body?: never;
     path?: never;
@@ -23571,6 +24045,47 @@ export type SwapModelVersionResponses = {
 };
 
 export type SwapModelVersionResponse = SwapModelVersionResponses[keyof SwapModelVersionResponses];
+
+export type GetStreamStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/stream/status';
+};
+
+export type GetStreamStatusErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetStreamStatusError = GetStreamStatusErrors[keyof GetStreamStatusErrors];
+
+export type GetStreamStatusResponses = {
+    /**
+     * Successful Response
+     */
+    200: StreamStatusView;
+};
+
+export type GetStreamStatusResponse = GetStreamStatusResponses[keyof GetStreamStatusResponses];
 
 export type GetStudioCapabilitiesData = {
     body?: never;

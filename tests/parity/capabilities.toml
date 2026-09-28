@@ -748,6 +748,24 @@ console = { limited = "operator or scheduled job" }
 cli = "stonks tca refresh"
 mcp = { limited = "operator or scheduled job" }
 
+[[capability]]
+id = "tca.intraday"
+domain = "tca"
+title = "Intraday shortfall with quoted spreads"
+routes = []
+console = { limited = "operator reads recorded quotes on the host" }
+cli = "stonks tca intraday"
+mcp = { limited = "operator reads recorded quotes on the host" }
+
+[[capability]]
+id = "tca.calibrate"
+domain = "tca"
+title = "Propose minute cost model parameters"
+routes = []
+console = { limited = "operator tool, a proposal a person reviews" }
+cli = "stonks tca calibrate"
+mcp = { limited = "operator tool, a proposal a person reviews" }
+
 # ---- risk and halts ------------------------------------------------------------------
 
 [[capability]]
@@ -857,6 +875,15 @@ routes = ["GET /api/risk/snapshots"]
 console = "listRiskSnapshots"
 cli = { limited = "trader reads live in the console and MCP" }
 mcp = "list_risk_snapshots"
+
+[[capability]]
+id = "risk.intraday"
+domain = "risk"
+title = "Intraday P&L and risk snapshots of a portfolio for one day"
+routes = ["GET /api/risk/intraday"]
+console = { limited = "the live console panel of roadmap 21.3.4 reads it" }
+cli = { limited = "trader reads intraday P&L in the console and MCP" }
+mcp = "list_intraday_snapshots"
 
 # ---- schedule and ops -------------------------------------------------------------------
 
@@ -1202,6 +1229,15 @@ routes = ["POST /api/health/run"]
 console = "runHealthChecks"
 cli = "stonks health"
 mcp = { limited = "changing a safety stop stays with a person" }
+
+[[capability]]
+id = "health.stream"
+domain = "health"
+title = "Live engine status: stream health, latency and the engine dead-man"
+routes = ["GET /api/stream/status"]
+console = "getStreamStatus"
+cli = { limited = "the engine process logs its state, Prometheus scrapes /metrics" }
+mcp = "get_stream_status"
 
 [[capability]]
 id = "health.api"

@@ -228,6 +228,7 @@ def start_in_process_scheduler(
     another scheduler already holds the lock (e.g. a separate worker), so
     the API starts either way.
     """
+    from stonks.engine.deadman import engine_deadman_from_settings
     from stonks.notify import notifier_from_settings
     from stonks.scheduling.deadman import DeadlineWatchdog, HttpPinger
     from stonks.scheduling.runs import RunStore
@@ -263,7 +264,14 @@ def start_in_process_scheduler(
     )
     thread = threading.Thread(
         target=scheduler.run_forever,
-        kwargs={"watchdog": DeadlineWatchdog(specs, store, notifier)},
+        kwargs={
+            "watchdog": DeadlineWatchdog(
+                specs,
+                store,
+                notifier,
+                extra_checks=[engine_deadman_from_settings(settings, store, notifier)],
+            )
+        },
         name="stonks-scheduler",
         daemon=True,
     )
@@ -404,3 +412,20 @@ def in_process_live_gate_days(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import live_gate_days_action
 
     return live_gate_days_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("engine_start")
+def in_process_engine_start_action(ctx: RunContext) -> JobOutcome:
+    """The engine is its own process, controlled through files next to the
+    state DB, so every backend starts it the same way (roadmap 21.2.5)."""
+    from stonks.scheduling.jobs import engine_start_job
+
+    return engine_start_job(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("engine_stop")
+def in_process_engine_stop_action(ctx: RunContext) -> JobOutcome:
+    """Every backend stops the engine the same way (roadmap 21.2.5)."""
+    from stonks.scheduling.jobs import engine_stop_job
+
+    return engine_stop_job(ctx)

@@ -8,6 +8,7 @@ const KIND_TEXT: Record<HaltView['kind'], string> = {
   operational: 'operational halt',
   runaway: 'runaway order halt',
   broker_drift: 'broker drift halt',
+  intraday_loss: 'intraday loss halt',
 };
 
 export type HaltScope = Pick<HaltView, 'scope' | 'portfolio_id' | 'user_id'>;

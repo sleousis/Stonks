@@ -21,6 +21,7 @@ from stonks.assistant.settings import AssistantConfig
 from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
 from stonks.core.types import AssetClass
+from stonks.engine.settings import EngineSettings
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
 from stonks.factors.settings import FactorSettings
 from stonks.ingest.ensure_settings import EnsureSettings
@@ -32,6 +33,7 @@ from stonks.lifecycle.settings import ModelLifecycleSettings
 from stonks.ops.config import BackupConfig
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.decay import DecaySettings
+from stonks.production.intraday_pnl_settings import IntradayPnlSettings
 from stonks.production.live.settings import LiveSettings
 from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.quit_rule import QuitRuleSettings
@@ -286,6 +288,9 @@ class ProductionConfig(BaseModel):
     decay: DecaySettings = DecaySettings()
     # ``[production.live]``: live trading at a real broker (roadmap 19).
     live: LiveSettings = LiveSettings()
+    # ``[production.intraday_pnl]``: live marks and intraday P&L snapshots
+    # of the engine's books (roadmap 21.3.3). Off by default.
+    intraday_pnl: IntradayPnlSettings = IntradayPnlSettings()
 
 
 class GoLivePolicy(BaseModel):
@@ -559,6 +564,8 @@ class Settings(BaseSettings):
     streaming: StreamingSettings = Field(default_factory=StreamingSettings)
     # ``[screener]``: candidate cap, job threshold and result cache (roadmap 20.11).
     screener: ScreenerSettings = Field(default_factory=ScreenerSettings)
+    # ``[engine]``: the intraday engine process (roadmap 21.2.5). Off by default.
+    engine: EngineSettings = Field(default_factory=EngineSettings)
 
 
 #: Secrets read straight from the environment by blocks that keep their own

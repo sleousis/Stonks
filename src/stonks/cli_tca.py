@@ -6,7 +6,9 @@ sees their own portfolios."""
 
 from __future__ import annotations
 
-from datetime import date
+import json
+from datetime import UTC, date, datetime, time
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -270,3 +272,206 @@ def refresh() -> None:
     with context.lake() as lake, context.state() as state:
         updated = refresh_benchmarks(state, lake)
     console.print(f"benchmark prices filled for {updated} order(s)")
+
+
+# ---- intraday (roadmap 21.3.5) ------------------------------------------------------
+
+
+def _start_of(day: date | None) -> datetime | None:
+    return datetime.combine(day, time.min, UTC) if day is not None else None
+
+
+def _end_of(day: date | None) -> datetime | None:
+    return datetime.combine(day, time.max, UTC) if day is not None else None
+
+
+def _intraday_interval(code: str) -> Any:
+    from stonks.core.interval import Interval
+
+    try:
+        interval = Interval.parse(code)
+    except ValueError:
+        raise typer.BadParameter(f"unknown interval {code!r}", param_hint="--interval") from None
+    if not interval.is_intraday:
+        raise typer.BadParameter("an intraday interval, like 1m", param_hint="--interval")
+    return interval
+
+
+_RECORDING = typer.Option(
+    None, "--recording", help="recorded stream folder; default: \\[streaming.record] dir"
+)
+_INTERVAL = typer.Option("1m", "--interval", help="the book's bar interval (intraday)")
+
+
+@app.command("intraday")
+def intraday(
+    by: str = typer.Option(
+        "all", "--by", help="order | all | strategy | sleeve | ticker | portfolio | day"
+    ),
+    since: str | None = _SINCE,
+    until: str | None = typer.Option(None, "--until", help="orders decided on or before this day"),
+    strategy: str | None = typer.Option(None, "--strategy", help="one strategy id"),
+    ticker: str | None = typer.Option(None, "--ticker", help="one ticker"),
+    interval: str = _INTERVAL,
+    recording: str | None = _RECORDING,
+    as_json: bool = typer.Option(False, "--json", help="print JSON"),
+    portfolio: str | None = _PORTFOLIO,
+    user: str | None = _USER,
+) -> None:
+    """Intraday shortfall: arrival at the next minute, spread from the
+    recorded quotes, per order or per group (a sleeve is a portfolio and
+    strategy)."""
+    from stonks.production.intraday_tca import (
+        INTRADAY_GROUP_BYS,
+        MinuteBars,
+        QuoteBook,
+        lake_bar_reader,
+        load_intraday_tca,
+        summarize_intraday,
+    )
+
+    if by != "order" and by not in INTRADAY_GROUP_BYS:
+        raise typer.BadParameter(
+            f"order or one of {', '.join(INTRADAY_GROUP_BYS)}", param_hint="--by"
+        )
+    step = _intraday_interval(interval)
+    lo, hi = _start_of(_day(since, "--since")), _end_of(_day(until, "--until"))
+    context, _ = _service()
+    scope = _who(context, user)
+    pf = _portfolio(context, scope, portfolio)
+    root = recording or context.settings.streaming.record.dir
+    quotes = QuoteBook.from_recording(root, end=hi)
+    with context.lake() as lake, context.state() as state:
+        bars = MinuteBars(lake_bar_reader(lake, step), interval=step, end=hi)
+        rows = load_intraday_tca(
+            state, quotes, bars, pf, since=lo, until=hi, strategy_id=strategy, ticker=ticker
+        )
+    if by == "order":
+        if as_json:
+            typer.echo(json.dumps([r.as_dict() for r in rows], default=str))
+        elif not rows:
+            console.print("no intraday orders")
+        else:
+            console.print(_order_table(pf, rows))
+        return
+    groups = summarize_intraday(rows, by)  # type: ignore[arg-type]
+    if as_json:
+        typer.echo(json.dumps([g.as_dict() for g in groups], default=str))
+    elif not groups:
+        console.print("no intraday orders")
+    else:
+        console.print(_group_table(pf, by, groups))
+
+
+def _order_table(pf: str, rows: Any) -> Table:
+    table = Table(title=f"intraday shortfall, bps ({pf}, {len(rows)} orders)")
+    for col in ("order", "strategy", "side", "arrival", "delay", "spread", "residual",
+                "fees", "IS", "quoted"):  # fmt: skip
+        table.add_column(col)
+    for r in rows:
+        s = r.order.shortfall
+        table.add_row(
+            r.order.client_id,
+            r.order.strategy_id or "-",
+            r.order.side,
+            r.arrival_source or "-",
+            _bps(s.delay_bps),
+            _bps(r.spread_cost_bps),
+            _bps(r.residual_impact_bps),
+            _bps(s.fee_bps),
+            _bps(s.is_bps),
+            _bps(r.decision_spread_bps),
+        )
+    return table
+
+
+def _group_table(pf: str, by: str, groups: Any) -> Table:
+    table = Table(title=f"intraday shortfall, bps ({pf}, by {by})")
+    for col in (by, "orders", "filled", "notional", "delay", "impact", "spread", "residual",
+                "fees", "IS", "opportunity", "quoted", "model", "gap"):  # fmt: skip
+        table.add_column(col)
+    for g in groups:
+        b = g.base
+        table.add_row(
+            g.key,
+            str(b.orders),
+            str(b.filled_orders),
+            f"{b.filled_notional:,.0f}",
+            _bps(b.delay_bps),
+            _bps(b.impact_bps),
+            _bps(g.spread_cost_bps),
+            _bps(g.residual_impact_bps),
+            _bps(b.fee_bps),
+            _bps(b.is_bps),
+            _bps(b.opportunity_bps),
+            _bps(g.decision_spread_bps),
+            _bps(b.expected_bps),
+            _bps(b.model_gap_bps),
+        )
+    return table
+
+
+@app.command("calibrate")
+def calibrate(
+    end: str = typer.Option(..., "--end", help="last day of evidence (YYYY-MM-DD); nothing later"),
+    start: str | None = typer.Option(None, "--start", help="first day of evidence"),
+    interval: str = _INTERVAL,
+    recording: str | None = _RECORDING,
+    portfolio: str | None = typer.Option(None, "--portfolio", help="one portfolio; default: all"),
+    out: str | None = typer.Option(None, "--out", help="write the proposed block to this file"),
+    as_json: bool = typer.Option(False, "--json", help="print the fit as JSON"),
+) -> None:
+    """Fit the cost model's spread and impact to recorded quotes and intraday
+    fills, and propose a \\[backtest.costs] block. Never applied: review it and
+    copy it into your config by hand."""
+    from stonks.production.intraday_tca import calibrate_minute_costs, lake_bar_reader
+
+    step = _intraday_interval(interval)
+    last = _day(end, "--end")
+    if last is None:  # pragma: no cover - typer requires --end
+        raise typer.BadParameter("required", param_hint="--end")
+    context, _ = _service()
+    root = recording or context.settings.streaming.record.dir
+    with context.lake() as lake, context.state() as state:
+        fit = calibrate_minute_costs(
+            state,
+            root,
+            lake_bar_reader(lake, step),
+            start=_day(start, "--start"),
+            end=last,
+            current=context.settings.backtest.costs,
+            interval=step,
+            asset_classes=_asset_classes(lake),
+            portfolio_id=portfolio,
+        )
+    block = fit.to_toml()
+    if out is not None:
+        Path(out).write_text(block, encoding="utf-8")
+    if as_json:
+        typer.echo(json.dumps({**fit.as_dict(), "proposed_toml": block}, default=str))
+        return
+    console.print(
+        f"quotes: {sum(fit.quotes.values())}, fills used: {fit.fills_used} of {fit.fills}",
+        markup=False,
+    )
+    for cls, value in sorted(fit.half_spreads.items()):
+        console.print(f"  {cls} half spread: {value:.2f} bps", markup=False)
+    if fit.impact_bps is not None:
+        console.print(
+            f"  impact: {fit.impact_bps:.1f} bps at a whole bar (r2 {fit.impact_r2:.2f},"
+            f" residual sd {fit.residual_std_bps:.1f} bps)",
+            markup=False,
+        )
+    for text in fit.notes:
+        console.print(f"  note: {text}", markup=False)
+    if out is not None:
+        console.print(f"proposal written to {out} (not applied)", markup=False)
+    else:
+        typer.echo(block)
+
+
+def _asset_classes(lake: Any) -> dict[str, Any]:
+    """Each instrument's asset class; a ticker the lake does not know reads
+    as equity."""
+    frame = lake.sql("SELECT id, asset_class FROM instruments")
+    return {str(r.id): str(r.asset_class) for r in frame.itertuples(index=False) if r.asset_class}

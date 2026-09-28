@@ -18,7 +18,7 @@ This roadmap took Stonks from a research engine with a simulated loop to paper t
 | 17 | Planned. |
 | 19 | Wave 1 done: 19.1, 19.4, 19.6 and 19.7, with console screens. 19.2 IBKR adapter, 19.3 connection and borrow, 19.5 reconciliation and drift, 19.15 deeper reconciliation, 19.8 tickets and approve mode, and 19.16 broker edge cases done. Design: `docs/design/live-trading.md`. |
 | 20 | 20.1 to 20.11 done, backend and console. |
-| 21 | 21.1 streaming data, 21.2.1 event driver, 21.2.4 session rules and 21.3.1 intraday strategies done, off by default. The rest of 21.2 and 21.3 in small work packages. Design: `docs/design/intraday.md`. |
+| 21 | All of 21.1 to 21.3.5 done and connected in the engine process, off by default. Design: `docs/design/intraday.md`. |
 | 22 | All of 22.1 to 22.10 done. Factors: `docs/factors.md`. |
 
 Rules for every package: follow `CLAUDE.md` (TDD, hermetic default tests, vendor-agnostic schemas, third-party libraries wrapped behind a seam). Live-network tests go under `tests/integration/live/` behind `@pytest.mark.live`.
@@ -495,23 +495,23 @@ Decided with the owner on 2026-09-27. Stonks stays private: the owner plus invit
 
 Streaming prices (EODHD websockets, IBKR), a live event engine that decides on minute bars, intraday strategies with realistic fills and session rules, intraday risk (per-minute loss limits, halts), and the monitoring an always-on intraday loop needs. Design: `docs/design/intraday.md`.
 
-**Status:** 21.1 and 21.2.1 done. Real intraday trading still waits for live daily trading to be stable.
+**Status:** all done, off by default. The engine process connects the pieces: the monitor and its status row, intraday risk and halts on every bar close, intraday P&L, and the decision interval intraday TCA reads (`docs/design/intraday.md` section 13). Real intraday trading still waits for live daily trading to be stable.
 
 | WP | Scope | Owns | Status |
 |----|-------|------|--------|
 | 21.1 Streaming data | The `StreamingSource` seam and registry (`eodhd` websockets, `ibkr` over the adapter's quotes, `replay`), ticks to 1m bars with the `bars` columns, idempotent writes into the `BarStore`, a Parquet recorder and replayer, and a supervised runner (reconnect with backoff, gap backfill through the REST intraday ingest, health metrics). Off by default (`[streaming]`). | `core/stream.py`, `streaming/*` | done (no migration) |
 | 21.2.1 Event driver | `EventDriver` over any `StreamingSource`, the `FakeClock` hand-off, bar-close dispatch, and a source that replays lake bars for the backtest. | `engine/driver.py`, `streaming/sources/lake_bars.py` | done (no migration) |
-| 21.2.2 Decision step | Decide on a bar close through `Strategy.decide` and a minute point-in-time lake, then `build_orders` per book. The intraday backtest runs on the driver. | `engine/step.py`, `backtest/intraday.py` | planned |
-| 21.2.3 Intraday router and fills | Orders through the order state machine, next-bar fills with the participation cap and half spread, day orders at IBKR, reconciliation of intraday fills. | `engine/router.py`, `backtest/fills.py`, `execution/brokers/ibkr/orders.py` | planned |
+| 21.2.2 Decision step | Decide on a bar close through `Strategy.decide` and a minute point-in-time lake, then `build_orders` per book. The intraday backtest runs on the driver. | `engine/step.py`, `backtest/intraday.py` | done (no migration) |
+| 21.2.3 Intraday router and fills | Orders through the order state machine, next-bar fills with the participation cap and half spread, day orders at IBKR, reconciliation of intraday fills. | `engine/router.py`, `engine/sim_broker.py`, `backtest/fills.py`, `execution/brokers/ibkr/orders.py` | done |
 | 21.2.4 Session rules | Regular hours only, no entries at the open and close edges, flatten before the close, per-ticker trading halts, early closes. | `engine/sessions.py` | done |
-| 21.2.5 Engine process | The always-on process, scheduler jobs around the session, startup reconcile, restart and state recovery. | `engine/process.py`, `scheduling/jobs.py` | planned |
+| 21.2.5 Engine process | The always-on process (`python -m stonks.engine run\|replay\|status\|stop`) over the stream runner or a replay, startup reconcile before the first order, flatten orders through the router, restart from the ledger without re-sending, and the `engine_start` and `engine_stop` jobs on all three backends, off unless `[engine] enabled = true`. A parity test holds the replay path to the intraday backtest. | `engine/process.py`, `engine/recovery.py`, `engine/control.py`, `scheduling/jobs.py` | done (SQLite 041 `engine_runs`) |
 | 21.3.1 Intraday strategies | Opening range breakout, VWAP reversion and intraday momentum with hypothesis cards, lab windows by session. See `docs/strategies/intraday.md`. | `strategies/examples/intraday_*.py`, `lab/dataset.py` | done |
-| 21.3.2 Intraday risk | Per-minute loss limit and the `intraday_loss` halt, intraday drawdown scaling, orders per minute cap, stale data gate, kill switch per event. | `production/rules/intraday_*.py`, `production/halts.py`, a new SQLite migration | planned |
-| 21.3.3 Live marks and P&L | Minute marks from the stream, intraday P&L per book and sleeve, intraday risk snapshots. | `production/intraday_pnl.py`, a new SQLite migration | planned |
-| 21.3.4 Monitoring | Stream and engine metrics, engine dead-man, event to order latency, alerts, a live console panel. | `scheduling/metrics.py`, `api/routers/stream.py`, `web/src/app/pages/live/*` | planned |
-| 21.3.5 Intraday TCA | Spread from recorded quotes, arrival at the next minute, cost calibration for minute trading. | `production/tca.py`, `backtest/costs.py` | planned |
+| 21.3.2 Intraday risk | Per-minute loss limit and the `intraday_loss` halt, intraday drawdown scaling, orders per minute cap, stale data gate, kill switch per event. | `production/rules/intraday_*.py`, `production/intraday_halts.py`, `production/halts.py`, SQLite migration 042 | done |
+| 21.3.3 Live marks and P&L | Minute marks from the stream, intraday P&L per book and sleeve, intraday risk snapshots. Done: the `MarkBook` (a runner subscriber and driver handler), realised P&L from fills at average cost and unrealised from marks, per portfolio and strategy sleeve, `intraday_snapshots` every five minutes with the drawdown from the day's high, `GET /api/risk/intraday` and the MCP tool `list_intraday_snapshots`. The engine books it after each bar's fills with `[production.intraday_pnl] enabled`, and the Live page shows each portfolio's latest row. | `production/intraday_pnl.py`, SQLite migration 043 | done |
+| 21.3.4 Monitoring | Stream and engine metrics, engine dead-man, event to order latency, alerts, a live console panel. | `scheduling/metrics.py`, `api/routers/stream.py`, `web/src/app/pages/live/*` | done: `engine/monitor.py`, `engine/status.py` (SQLite 044 `engine_status`), `engine/deadman.py`, `GET /api/stream/status`, `get_stream_status`, Live engine page |
+| 21.3.5 Intraday TCA | Spread from recorded quotes at the decision and at each fill, arrival at the next minute, shortfall per order and per strategy sleeve, and `stonks tca calibrate --interval 1m`, which fits the spread and impact from quotes and fills up to its end date and proposes a `[backtest.costs]` block, never applied. | `production/intraday_tca.py`, `backtest/cost_calibration.py`, `cli_tca.py` | done (no migration) |
 
-Waves: 21.1 first (done), then 21.2.1, 21.2.4 and 21.3.1, then 21.2.2, 21.2.3 and 21.3.2, then 21.2.5, 21.3.3, 21.3.4 and 21.3.5.
+Waves (all done): 21.1 first, then 21.2.1, 21.2.4 and 21.3.1, then 21.2.2, 21.2.3 and 21.3.2, then 21.2.5, 21.3.3, 21.3.4 and 21.3.5.
 
 ## Phase 22: Research depth
 

@@ -57,8 +57,15 @@ def test_default_jobs_build():
         "live_stops",
         "live_gate_days",
         "ingest_borrow",
+        "engine_start",
+        "engine_stop",
     }
     tick = by_name["tick"]
+    # 21.2.5: the engine runs from before the open to after the close
+    start, stop = by_name["engine_start"], by_name["engine_stop"]
+    assert start.trigger == SessionTrigger("XNYS", "open", timedelta(minutes=-15))
+    assert start.catch_up == "none"
+    assert stop.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=10))
     # 19.8: approved tickets go out before the open, never caught up late
     submit = by_name["live_submit"]
     assert submit.trigger == SessionTrigger("XNYS", "open", timedelta(minutes=-20))

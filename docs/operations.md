@@ -63,8 +63,10 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `live_submit`: send approved order tickets (see Live trading) | open - 20 min | none |
 | `live_stops`: protective stops for the entries the opening auction filled (see Protective stops) | open + 30 min | none |
 | `live_gate_days`: the live stages' gate metrics for the session (see Live trading) | close + 75 min | none |
+| `engine_start`: start the intraday engine process (see [intraday](design/intraday.md)) | open - 15 min | none |
+| `engine_stop`: ask the intraday engine to stop, and wait for it | close + 10 min | none |
 
-Session jobs run on NYSE trading days. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
+Session jobs run on NYSE trading days. The two engine jobs skip while `[engine] enabled = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 
 The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 
@@ -126,6 +128,7 @@ A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_r
 
 - **Deadlines.** A watchdog checks every `watchdog_seconds` that each job with `deadline_minutes` succeeded (or was skipped) in time. A miss sends one error alert, recorded in `scheduler_deadline_alerts` so restarts don't repeat it.
 - **Pings.** With `ping_url_env`, a job POSTs `<url>/start`, then `<url>` or `<url>/fail`. The external monitor alerts when pings stop, which also covers a dead scheduler or server. Logs show only `scheme://host/***`.
+- **Engine dead-man.** The same watchdog checks each live intraday engine. When no bar close was dispatched for `[streaming.monitor] deadman_minutes` (5) while the engine's market is open, it sends one error alert per silent stretch. Silence counts from the last bar close, the engine's start or today's open, whichever is latest. A stopped engine or a closed market never alerts. The alert is recorded in `scheduler_deadline_alerts` as job `engine:<id>`, so restarts don't repeat it. `python -m stonks.scheduling check` runs it once too.
 
 ## Health and metrics
 
@@ -152,6 +155,31 @@ The API serves `GET /api/health` (liveness, used by Docker and Caddy) and `GET /
 `stonks serve` serves the same set, data age included, at `GET /metrics`. Scrapes from a loopback peer need no token. From anywhere else they need the scrape-only bearer token `STONKS_METRICS_TOKEN`. The API token is not accepted there, so Prometheus never holds an admin credential. `STONKS_METRICS_ALLOW_LOOPBACK=false` requires the token on loopback too.
 
 A useful alert: `time() - stonks_scheduled_job_last_success_timestamp_seconds{job="tick"} > 26 * 3600` on weekdays.
+
+### Live engine monitoring
+
+The intraday engine runs in its own process. Its monitor writes one `engine_status` row (SQLite migration 044) every `publish_seconds` (15) and when it stops. `GET /metrics` renders it, labelled by `engine` and `source`, never by key or account:
+
+| Metric | What it tells |
+|---|---|
+| `stonks_stream_up`, `stonks_stream_state` | The stream is connected (0 when the engine stopped reporting) |
+| `stonks_stream_last_event_age_seconds` | Seconds since the last trade, quote or bar |
+| `stonks_stream_bars_written_total`, `stonks_stream_late_ticks_total` | Bars built from the stream, late prices dropped |
+| `stonks_stream_connects_total`, `_disconnects_total`, `_gaps_total`, `_backfills_total` | Connection churn and gap repair |
+| `stonks_engine_up` | The engine runs and reported within `stale_after_seconds` (120) |
+| `stonks_engine_last_dispatch_age_seconds` | Seconds since the last bar close was dispatched |
+| `stonks_engine_bar_closes_total`, `_bars_total`, `_late_bars_total` | Driver counters |
+| `stonks_engine_handler_errors_total{handler}` | Steps that raised on a bar close |
+| `stonks_engine_dispatch_lag_seconds` (histogram) | Clock time from a bar's settle time to its dispatch |
+| `stonks_engine_event_to_order_seconds` (histogram) | Time from a bar close dispatch to the order it caused |
+
+`GET /api/stream/status` (`data.read`) and the MCP tool `get_stream_status` show the same with the dead-man state. The console shows it on Live engine (`/live`). Useful alerts:
+
+- `stonks_engine_up == 0` during market hours.
+- `histogram_quantile(0.95, rate(stonks_engine_event_to_order_seconds_bucket[15m])) > 2`.
+- `rate(stonks_engine_handler_errors_total[5m]) > 0`.
+
+Settings live under `[streaming.monitor]`: `deadman_minutes`, `stale_after_seconds` and `publish_seconds`.
 
 Over HTTP, `GET /api/health/live` (the process, plus the scheduler when `stonks serve` hosts it) and `GET /api/health/ready` (state migrated, lake present) are open to everyone, like `GET /api/health`. They answer 200 with each check's name and `ok`, or 503 naming the failing checks; details go to the log, not the response.
 
@@ -524,6 +552,21 @@ fallback_pct = 0.10   # distance as a share of the entry when there is no ATR
 - A stop fills at the market after a gap. It limits how long a loss runs while nobody watches, not the size of an overnight gap.
 - The kill switch in stop-all mode cancels the stops too. They come back once trading resumes.
 
+### Intraday risk
+
+These risk rules act only on intraday books, on each event of the intraday engine (roadmap 21.3.2). Engine books use `[production.risk]`, so the rules below apply to them once set. A daily book never sees them. They never drop or shrink a closing order. All are off by default:
+
+| Rule | Setting under `[production.risk.rules.*]` | Effect |
+|------|-------------------------------------------|--------|
+| `intraday_loss_limit` | `max_loss`, `hard_loss`, `window_minutes` (5), `flatten` | A fall of `max_loss` from the highest mark of the window drops opening orders and opens an `intraday_loss` halt on new buys. A fall of `hard_loss` stops every new order. With `flatten` it also closes every position and the halt stays on buys, so the closes get out. |
+| `intraday_drawdown` | `schedule` | Opening orders are sized by the drawdown from the day's high, like `drawdown_scaling`. |
+| `intraday_order_rate` | `max_orders_per_minute`, `max_orders_per_day` | Opening orders over the cap are dropped, lowest score first, and a `runaway` halt opens. Closes use the room first and always go out. |
+| `intraday_stale_data` | `max_bar_age_seconds` | No opening order when the latest bar of its ticker is older than the limit, or while the stream is stale or reconnecting. |
+
+- Overrides only tighten. A longer loss window is tighter, because it sees a higher peak.
+- The engine checks the halts on every event (`production.intraday_halts.event_verdict`), so a kill switch stops the next order, not the next day. A stop-all kill switch also cancels the book's working orders at the broker. The engine run summary counts halted orders, tripped halts and cancelled orders.
+- Clearing an `intraday_loss` halt needs a reason, like every halt.
+
 ### Order states
 
 Live orders carry a fine state in `orders.state`: `pending`, `submitted`, `accepted`, `partially_filled`, `filled`, `pending_cancel`, `cancelled`, `expired`, `rejected` or `unknown`. The `status` column follows it. An order whose submit or cancel timed out is `unknown`, and nothing is sent for it again until reconciliation finds it at the broker by client id. A submit window stays shut while any order of the portfolio is `unknown`. A client id names one order for good: a ticket whose order is already `cancelled`, `rejected` or `expired` fails and is never sent again under that id, a resume included.
@@ -568,7 +611,7 @@ Risk rules run between construction and the broker, configured under `[productio
 | `cash_buffer_fraction` | Buys are clipped so this fraction stays in cash, net of costs. |
 | `min_order_notional` | Smaller buys are dropped. |
 
-Weights use portfolio value before the tick's orders. Sells are never blocked, only clipped to the held quantity, and go before buys. Portfolio and subscription overrides can only tighten the policy. The rules are a registry (`production/rules/`); the newer ones (`risk_per_position`, `portfolio_vol`, `drawdown_scaling`, `liquidity`, `sector_cap`, `max_holding`, `circuit_breaker`, `operational_halt`, `style_exposure`) are set under `[production.risk.rules.<name>]` and stay off until a limit is set there (see `config/default.toml`).
+Weights use portfolio value before the tick's orders. Sells are never blocked, only clipped to the held quantity, and go before buys. Portfolio and subscription overrides can only tighten the policy. The rules are a registry (`production/rules/`); the newer ones (`risk_per_position`, `portfolio_vol`, `drawdown_scaling`, `liquidity`, `sector_cap`, `max_holding`, `circuit_breaker`, `operational_halt`, `style_exposure`, and the [intraday rules](#intraday-risk)) are set under `[production.risk.rules.<name>]` and stay off until a limit is set there (see `config/default.toml`).
 
 ## Halts and the kill switch
 
@@ -591,8 +634,9 @@ flowchart LR
 | `drawdown` | Value is 20% below its peak. | Only when a person clears it. |
 | `operational` | The scheduled health job or `stonks health` finds stale data or a stuck run. | When one of them passes again. |
 | `kill` | A person turns on the kill switch. | Resume with the typed confirmation. |
-| `runaway` | A live run tries to close more positions than `max_orders_per_run.max_closing_orders`. | Only when a person clears it. |
+| `runaway` | A live run tries to close more positions than `max_orders_per_run.max_closing_orders`, or an intraday book goes over `intraday_order_rate`. | Only when a person clears it. |
 | `broker_drift` | Reconciliation finds a difference it cannot explain (roadmap 19.5, not wired yet). | Only when a person clears it. |
+| `intraday_loss` | An intraday book loses more than `intraday_loss_limit.max_loss` within its window (buys), or `hard_loss` (all, unless it flattens). | Only when a person clears it. |
 
 - The breaker limits live in `[production.risk.rules.circuit_breaker]` (`max_month_loss`, `max_week_loss`, `max_drawdown_halt`, `cooldown`). They are off until set. The same rule runs in backtests.
 - Breaker halts block buys. Sells and exits still go through.
@@ -620,6 +664,16 @@ After each real tick the `risk_monitor` hook writes one `risk_snapshots` row per
 - **Alpha decay.** For each sleeve, the rolling 60 and 120 day IR. It fires when the 60 day IR stays below zero for 20 days, or the 120 day IR falls below half of the backtest's (the `oos` Sharpe, else the benchmark-relative IR).
 
 The portfolio owner gets a `risk` warning when the violation ratio leaves the band or a sleeve decays, once per crossing. `GET /api/risk/live` shows one of your portfolios on its latest day and `GET /api/risk/snapshots` pages its history (`?strategy_id=` for one sleeve). The MCP tools `live_risk` and `risk_snapshots` read the same.
+
+### Intraday P&L
+
+The intraday engine (Phase 21) keeps P&L during the session when `[production.intraday_pnl] enabled = true` (off by default, `snapshot_minutes` 5, `stale_mark_seconds` 120). It builds nothing on a daily install. The engine updates it after each bar's fills, for the portfolios of its books.
+
+- **Marks.** The latest price per ticker from the stream: a trade, the last trade or mid of a live quote, or a bar's close. A delayed quote never counts.
+- **P&L.** Per portfolio and per strategy sleeve. The day starts from the last tick's snapshot, priced at the prior close. Fills of the day book at average cost: realised P&L when a fill reduces a position, unrealised from the marks, fees apart. A manual fill counts only in the whole portfolio.
+- **Snapshots.** Every five minutes one `intraday_snapshots` row per book: the P&L split, the day's return, the drawdown from the day's high, gross and net exposure, and how many held names have a stale (older than two minutes) or missing mark. The day's high survives a restart.
+
+`GET /api/risk/intraday` pages one of your portfolios for a day, newest first (`?day=`, `?strategy_id=` for one sleeve, `?all_books=true` for every book). The MCP tool `list_intraday_snapshots` reads the same, and the console's Live page shows each of your portfolios' latest row.
 
 In the lab, the `pool_correlation` survival test refuses a strategy whose validation returns correlate above 0.7 with any active strategy, unless its IR is at least 10% better. It is not in a preset yet; add it with `--tests`.
 
@@ -772,6 +826,23 @@ The next session's open and close arrive a day later. The tick fills them in aft
 The go-live report shows the strategy's live shortfall next to the modelled cost. The same numbers are in the API under `/api/tca` and in the MCP tools `tca_summary`, `trade_journal` and `order_tca`. A trader only sees the orders of their own portfolios and edits only their own notes.
 
 Backtests use the same math. `Backtester.decision_prices` holds the close each order was decided at, and `production.tca.backtest_shortfalls` prices the simulated fills against it.
+
+### Intraday costs
+
+Intraday orders are priced against minutes and the recorded quotes (`[streaming.record]`), not the next session.
+
+```bash
+uv run stonks tca intraday                        # all intraday orders of the default book
+uv run stonks tca intraday --by sleeve            # or order, strategy, ticker, portfolio, day
+uv run stonks tca intraday --by order --json      # one row per order
+uv run stonks tca calibrate --interval 1m --end 2026-09-25 [--start 2026-09-01] [--out proposed.toml]
+```
+
+- The arrival price is the next minute's open, the price a backtest fills at.
+- `spread` is the quoted half spread paid at the fills and `residual` is the rest of the impact. `quoted` is the spread at the decision.
+- A quote older than 60 seconds is not used.
+
+`stonks tca calibrate` fits the cost model's half spread (per asset class) and square-root impact to the recorded quotes and the intraday fills. It reads nothing after `--end`. It prints a proposed `[backtest.costs]` block, or writes it to `--out`. Stonks never applies it. Read the fit (quotes, fills used, r2, notes), then copy the block into your config by hand. With too little data a value stays as it is and a note says why. Books filled with recorded quotes already pay the quoted half spread, so set `half_spread_bps` to 0 for them.
 
 ## Options research
 

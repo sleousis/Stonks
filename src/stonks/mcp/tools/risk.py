@@ -48,5 +48,37 @@ def register(t: ToolContext) -> None:
         )
         return await t.get("/api/risk/snapshots", params=query)
 
+    @server.tool(annotations=READ)
+    async def list_intraday_snapshots(
+        portfolio_id: str | None = None,
+        day: Annotated[
+            str | None, Field(description="YYYY-MM-DD; default the latest day with rows")
+        ] = None,
+        strategy_id: Annotated[
+            str | None, Field(description="one strategy's sleeve; default the whole portfolio")
+        ] = None,
+        all_books: Annotated[
+            bool, Field(description="every book: the whole portfolio and each sleeve")
+        ] = False,
+        limit: Annotated[int, Field(ge=1, le=200)] = 50,
+        offset: Annotated[int, Field(ge=0)] = 0,
+    ) -> dict[str, Any]:
+        """Intraday P&L and risk snapshots of one of your portfolios for one
+        day, newest first, one every few minutes of the session: realised
+        and unrealised P&L from live marks, fees, the day's return, the
+        drawdown from the day's high, gross and net exposure, and how many
+        held names had a stale or missing mark."""
+        query = drop_none(
+            {
+                "portfolio_id": portfolio_id,
+                "day": day,
+                "strategy_id": strategy_id,
+                "all_books": all_books or None,
+                "limit": limit,
+                "offset": offset,
+            }
+        )
+        return await t.get("/api/risk/intraday", params=query)
+
     add_alias(t, get_live_risk, READ)
     add_alias(t, list_risk_snapshots, READ)

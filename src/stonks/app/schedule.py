@@ -359,7 +359,23 @@ class ScheduleService:
             except Exception as exc:  # data age is optional; the rest still renders
                 _log.warning("metrics.data_age_failed", error_type=type(exc).__name__)
         text = metrics_text(settings.state.path, now=self._clock(), specs=specs, latest_bars=bars)
-        return text + self._lab_queue_metrics()
+        return text + self._lab_queue_metrics() + self._engine_metrics()
+
+    def _engine_metrics(self) -> str:
+        """Roadmap 21.3.4: stream and engine families from the engine's
+        status row (empty with no engine or when it can't be read)."""
+        from stonks.engine.status import engine_metrics_text
+
+        monitor = self._ctx.settings.streaming.monitor
+        try:
+            return engine_metrics_text(
+                self._ctx.settings.state.path,
+                now=self._clock(),
+                stale_after=timedelta(seconds=monitor.stale_after_seconds),
+            )
+        except Exception as exc:
+            _log.warning("metrics.engine_failed", error_type=type(exc).__name__)
+            return ""
 
     def _lab_queue_metrics(self) -> str:
         """Roadmap 14.9: the lab worker queue (empty when it can't be read)."""

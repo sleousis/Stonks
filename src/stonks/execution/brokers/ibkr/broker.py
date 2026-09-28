@@ -137,6 +137,7 @@ class IbkrBroker:
         borrow: BorrowSource | None = None,
         ref_lookup: Callable[[str], str | None] | None = None,
         stage_lookup: Callable[[], str | None] | None = None,
+        intraday: bool = False,
         clock: Clock = SYSTEM_CLOCK,
         client_id: int | None = None,
         master_client_id: int | None = None,
@@ -173,6 +174,8 @@ class IbkrBroker:
         #: The live stage of the portfolio this broker trades, read at each
         #: opening order (``None``: unknown, so a live gateway opens nothing).
         self._stage_lookup = stage_lookup
+        #: An intraday book: every order goes out as a day order (21.2.3).
+        self.intraday = intraday
         self._account: str | None = None
         self._checked_connects = -1
         self._seen_execs: set[str] = set()
@@ -334,6 +337,7 @@ class IbkrBroker:
             account=account,
             settings=self.order_settings,
             price_magnifier=resolved.price_magnifier,
+            intraday=self.intraday,
         )
         try:
             self.client.place_order(resolved.contract, request)
@@ -555,6 +559,7 @@ class IbkrBroker:
             account=account,
             settings=self.order_settings,
             price_magnifier=resolved.price_magnifier,
+            intraday=self.intraday,
         )
         answer = self._guard(
             f"what-if of {order.client_id}",

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
+import pytest
+
 from stonks.scheduling.jobs import JobSpec
 from stonks.scheduling.metrics import (
     CONTENT_TYPE,
@@ -13,7 +15,9 @@ from stonks.scheduling.metrics import (
     age_bucket,
     build_metrics,
     collect_snapshot,
+    histogram_family,
     liveness,
+    merge_families,
     metrics_text,
     readiness,
     render_prometheus,
@@ -223,3 +227,43 @@ def test_scheduler_liveness(tmp_path):
     assert not scheduler_liveness(store, now=NOW + timedelta(minutes=10)).ok
     store.mark_stopped("i", now=NOW)
     assert "stopped" in scheduler_liveness(store, now=NOW).checks["scheduler"]
+
+
+# ---- histograms and merging (roadmap 21.3.4) ------------------------------------
+
+
+def test_histogram_family_renders_cumulative_buckets():
+    fam = histogram_family(
+        "stonks_x_seconds",
+        "A latency.",
+        bounds=(0.1, 1.0),
+        counts=(2, 1, 1),  # per bucket, the last one is +Inf
+        total=3.5,
+        labels={"engine": "e1"},
+    )
+    text = render_prometheus([fam])
+    assert "# TYPE stonks_x_seconds histogram" in text
+    assert 'stonks_x_seconds_bucket{engine="e1",le="0.1"} 2' in text
+    assert 'stonks_x_seconds_bucket{engine="e1",le="1"} 3' in text
+    assert 'stonks_x_seconds_bucket{engine="e1",le="+Inf"} 4' in text
+    assert 'stonks_x_seconds_sum{engine="e1"} 3.5' in text
+    assert 'stonks_x_seconds_count{engine="e1"} 4' in text
+
+
+def test_histogram_family_needs_one_count_per_bucket_plus_inf():
+    with pytest.raises(ValueError):
+        histogram_family("h", "h", bounds=(1.0,), counts=(1,), total=0.0)
+
+
+def test_merge_families_joins_samples_under_one_header():
+    a = [MetricFamily("m", "help", "gauge", [Sample(1, {"engine": "a"})])]
+    b = [
+        MetricFamily("m", "help", "gauge", [Sample(2, {"engine": "b"})]),
+        MetricFamily("n", "other", "counter", [Sample(3)]),
+    ]
+    merged = merge_families([a, b])
+    assert [f.name for f in merged] == ["m", "n"]
+    text = render_prometheus(merged)
+    assert text.count("# TYPE m gauge") == 1
+    assert 'm{engine="a"} 1' in text
+    assert 'm{engine="b"} 2' in text

@@ -144,6 +144,14 @@ long_window = 120
 negative_days = 20
 min_fraction = 0.5
 
+[production.intraday_pnl]
+# Live marks and intraday P&L of the engine's books (roadmap 21.3.3): one
+# intraday_snapshots row per portfolio and strategy sleeve every
+# snapshot_minutes, read by GET /api/risk/intraday and the Live page.
+enabled = false
+snapshot_minutes = 5
+stale_mark_seconds = 120          # a held name with an older mark counts as stale
+
 [production.live]
 # Live trading at a real broker (roadmap 19). Stonks trades only the
 # positions it opened in a shared account.
@@ -320,6 +328,27 @@ bar_mode = "auto"         # auto | trades | quotes
 stale_after_seconds = 60
 backfill = true           # fill gaps from the REST intraday ingest
 backfill_source = "eodhd"
+
+[engine]
+# The intraday engine process (roadmap 21.2.5, docs/design/intraday.md).
+# Off by default: the engine_start and engine_stop jobs skip. Run it by hand
+# with `python -m stonks.engine run` or replay a recording with `replay`.
+# Books are listed as [[engine.books]] (id, portfolio_id, strategies,
+# broker = "simulated" | "ibkr", initial_cash, sessions).
+enabled = false
+interval = "1m"
+calendar = "XNYS"
+universe = []                      # [] = [streaming].tickers
+start_before_open_minutes = 15     # engine_start fires at open minus this
+stop_after_close_minutes = 10      # engine_stop fires, and the process stops, at close plus this
+stale_after_seconds = 180          # no new entries on a ticker with no bar for this long
+stop_timeout_seconds = 60
+[streaming.monitor]
+# Engine monitoring (roadmap 21.3.4): stream and engine metrics on /metrics,
+# the live panel, and the engine dead-man in the scheduler's watchdog.
+deadman_minutes = 5          # alert when no bar close for this long in market hours
+stale_after_seconds = 120    # an engine silent this long counts as down
+publish_seconds = 15         # how often the engine writes its status
 
 [audit]
 # Statement audit tolerances (BL-36): relative gaps above which
