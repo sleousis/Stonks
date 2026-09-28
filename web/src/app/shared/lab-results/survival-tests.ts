@@ -16,7 +16,7 @@ export interface SurvivalTestInfo {
 }
 
 /**
- * Every robustness test the engine runs (22, plus a legacy alias), in the
+ * Every robustness test the engine runs (24, plus a legacy alias), in the
  * order a suite runs them. The server's `stonks.lab.survival.registry`
  * discovers them; `production/golive.py` names them the same way.
  */
@@ -51,6 +51,11 @@ export const SURVIVAL_TESTS: readonly SurvivalTestInfo[] = [
     id: 'pbo',
     label: 'Overfitting (PBO)',
     hint: 'Guards against picking the luckiest setting: measures how often the best one loses on new data.',
+  },
+  {
+    id: 'data_snooping',
+    label: 'Not luck from many tries',
+    hint: 'Guards against a winner found by trying many settings: the best one must still beat cash once every try is counted.',
   },
   {
     id: 'mc_trades',

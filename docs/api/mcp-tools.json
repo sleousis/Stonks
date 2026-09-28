@@ -2619,6 +2619,37 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Live calibration of a classifier version's probability forecasts:\nBrier score against the base rate, skill, expected calibration error\nand the reliability table. Empty for a model with no forecasts.",
+      "input_schema": {
+        "properties": {
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "version": {
+            "description": "the model version number",
+            "minimum": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "version"
+        ],
+        "title": "get_model_calibrationArguments",
+        "type": "object"
+      },
+      "name": "get_model_calibration",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "A strategy's append-only version log (baseline, candidate, swap,\nreject, supersede, fail), with actor, reason and swap check result.",
       "input_schema": {
         "properties": {
@@ -10474,6 +10505,53 @@
         "type": "object"
       },
       "name": "validate_rule_spec",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue a rerun of lab results from their stored manifests: per\ntarget the stored and rerun objective score, whether it moved beyond\nthe tolerance, and the tickers whose bars or corporate actions changed\nsince (vendor restatements). Returns the job; use wait_for_job for the\nresult. Research only: writes nothing.",
+      "input_schema": {
+        "properties": {
+          "targets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "lab run ids or strategy ids (default: every active strategy)",
+            "title": "Targets"
+          },
+          "tolerance": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "allowed score drift (default [lab.verify] tolerance)",
+            "title": "Tolerance"
+          }
+        },
+        "title": "verify_lab_resultsArguments",
+        "type": "object"
+      },
+      "name": "verify_lab_results",
       "needs_confirm": false
     },
     {

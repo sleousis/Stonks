@@ -719,6 +719,7 @@ _TEST_NAMES = {
     "walk_forward": "Walk-forward",
     "deflated_sharpe": "Deflated Sharpe",
     "pbo": "Overfitting (PBO)",
+    "data_snooping": "Not luck from many tries",
     "mc_trades": "Reshuffled trades",
     "cost_stress": "Higher costs",
     "plateau": "Nearby settings",

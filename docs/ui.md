@@ -765,7 +765,7 @@ top of Settings, System. It reads `GET /api/settings/system` through
 
 | Page | Route | What it does |
 |---|---|---|
-| Model versions tab | `/strategies/:id?tab=versions` | Every fit of the strategy's model, the candidate's test book against the model in use, the swap check, Swap in and Reject, a retrain of this strategy, and the version log |
+| Model versions tab | `/strategies/:id?tab=versions` | Every fit of the strategy's model, the candidate's test book against the model in use, the swap check, the forecast calibration of the model in use and the candidate, Swap in and Reject, a retrain of this strategy, and the version log |
 | Model versions | `/ops/models` | Admins: every candidate across strategies, each linking to its tab, and Retrain all |
 
 - **The tab** is the last tab of the strategy page, shown to people who may

@@ -30,6 +30,7 @@ from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.offload.settings import LabOffloadSettings
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
+from stonks.lab.verify_settings import LabVerifySettings
 from stonks.lifecycle.settings import ModelLifecycleSettings
 from stonks.ops.config import BackupConfig
 from stonks.options.live.settings import OptionsLiveSettings
@@ -575,6 +576,8 @@ class LabSettings(BaseModel):
     #: ``[lab.offload]``: run heavy lab jobs in a separate worker process
     #: (roadmap 14.9). Env: ``STONKS_LAB_EXECUTOR``.
     offload: LabOffloadSettings = LabOffloadSettings()
+    #: ``[lab.verify]``: reruns from the stored manifest (roadmap 23.9).
+    verify: LabVerifySettings = LabVerifySettings()
 
 
 class AuditConfig(BaseModel):

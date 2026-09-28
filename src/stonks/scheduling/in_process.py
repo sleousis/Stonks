@@ -343,6 +343,20 @@ def in_process_model_retrain(ctx: RunContext) -> JobOutcome:
     return retrain_job_outcome(*ex.run_job(job, RETRAIN_JOB, RetrainResultView))
 
 
+@IN_PROCESS_ACTIONS.register("lab_verify")
+def in_process_lab_verify(ctx: RunContext) -> JobOutcome:
+    """Rerun on the server's JobRunner; a moved result raises an alert."""
+    from stonks.app.lab_verify import VERIFY_JOB, VerifyRequest, VerifyResultView
+    from stonks.scheduling.jobs import verify_body, verify_outcome
+
+    ex = _executor(ctx)
+    job = ex.services.lab_verify.submit(VerifyRequest.model_validate(verify_body(ctx)))
+    status, error, result, job_id = ex.run_job(job, VERIFY_JOB, VerifyResultView)
+    if status != "succeeded" or result is None:
+        return JobOutcome("failed", {"job_id": job_id, "error": error})
+    return verify_outcome(result, job_id)
+
+
 @IN_PROCESS_ACTIONS.register("connections_sync")
 def in_process_connections_sync(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import connections_sync_action

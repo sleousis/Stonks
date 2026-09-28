@@ -259,6 +259,8 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/lab/survival-tests` | List Survival Tests | sign-in |  | list[[SurvivalTestInfo](#survivaltestinfo)] |
 | POST | `/api/lab/sweeps` | Start Sweep | `lab.run` | [SweepRequest](#sweeprequest) | [Job](#job) |
 | GET | `/api/lab/sweeps/{job_id}/result` | Get Sweep Result | sign-in |  | [SweepResultView](#sweepresultview) |
+| POST | `/api/lab/verify` | Start Verify | `lab.run` | [VerifyRequest](#verifyrequest) \| null | [Job](#job) |
+| GET | `/api/lab/verify/jobs/{job_id}/result` | Get Verify Result | sign-in |  | [VerifyResultView](#verifyresultview) |
 
 ## lab-worker endpoints
 
@@ -309,6 +311,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/model-versions/retrain` | Start Retrain | `lab.run` | [RetrainRequest](#retrainrequest) \| null | [Job](#job) |
 | GET | `/api/strategies/{strategy_id}/versions` | List Versions | sign-in |  | [Page_ModelVersionView_](#page_modelversionview_) |
 | GET | `/api/strategies/{strategy_id}/versions/history` | Version History | sign-in |  | [Page_VersionEventView_](#page_versioneventview_) |
+| GET | `/api/strategies/{strategy_id}/versions/{version}/calibration` | Model Calibration | sign-in |  | [CalibrationView](#calibrationview) |
 | GET | `/api/strategies/{strategy_id}/versions/{version}/check` | Check Swap | sign-in |  | [SwapReportView](#swapreportview) |
 | POST | `/api/strategies/{strategy_id}/versions/{version}/reject` | Reject Version | `strategy.promote` | [VersionChangeRequest](#versionchangerequest) \| null | [ModelVersionView](#modelversionview) |
 | POST | `/api/strategies/{strategy_id}/versions/{version}/swap` | Swap Version | `strategy.promote` | [VersionChangeRequest](#versionchangerequest) \| null | [ModelVersionView](#modelversionview) |
@@ -1185,6 +1188,24 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `tickers` | list[string] \| null | yes |  |
 | `truncated` | boolean | no |  |
 
+### CalibrationView
+
+Live calibration of a classifier version's probability forecasts (roadmap 23.9): Brier score against always forecasting the base rate, the reliability table and the expected calibration error. Empty for a model that forecasts no probabilities.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_rate` | number \| null | yes |  |
+| `bins` | list[[ReliabilityBinView](#reliabilitybinview)] | yes |  |
+| `brier` | number \| null | yes |  |
+| `brier_base_rate` | number \| null | yes |  |
+| `ece` | number \| null | yes |  |
+| `mean_forecast` | number \| null | yes |  |
+| `n_forecasts` | integer | yes |  |
+| `n_resolved` | integer | yes |  |
+| `skill` | number \| null | yes |  |
+| `strategy_id` | string | yes |  |
+| `version` | integer | yes |  |
+
 ### CapitalRampSettings
 
 | Field | Type | Required | Description |
@@ -1648,7 +1669,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strict_preflight` | boolean \| null | no |  |
-| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "forecast_skill" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "data_snooping" \| "deflated_sharpe" \| "drift" \| "event_study" \| "forecast_skill" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" \| "optuna" | no |  |
@@ -2806,7 +2827,7 @@ Tunes the class the ``strategy`` ref points at over its parameter space. The ref
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
 | `strict_preflight` | boolean \| null | no |  |
-| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "forecast_skill" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "data_snooping" \| "deflated_sharpe" \| "drift" \| "event_study" \| "forecast_skill" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" \| "optuna" | no |  |
@@ -5150,6 +5171,16 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 |-------|------|----------|-------------|
 | `recovery_codes` | list[string] | yes |  |
 
+### ReliabilityBinView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `count` | integer | yes |  |
+| `lower` | number | yes |  |
+| `mean_forecast` | number \| null | yes |  |
+| `observed_rate` | number \| null | yes |  |
+| `upper` | number | yes |  |
+
 ### ResearchProposalView
 
 | Field | Type | Required | Description |
@@ -6364,7 +6395,7 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `start` | date | yes |  |
 | `strategies` | list[string] \| null | no |  |
 | `strict_preflight` | boolean \| null | no |  |
-| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "forecast_skill" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "data_snooping" \| "deflated_sharpe" \| "drift" \| "event_study" \| "forecast_skill" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" \| "optuna" | no |  |
@@ -7049,6 +7080,44 @@ Smoke-run on these lake tickers (sample data when empty), over the last ``bars``
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `public_key` | string \| null | yes |  |
+
+### VerifyReportView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `changed_tickers` | list[string] | yes |  |
+| `class_path` | string | yes |  |
+| `code_changed` | boolean \| null | yes |  |
+| `config_changed` | boolean \| null | yes |  |
+| `current_score` | number \| null | yes |  |
+| `data_changed` | boolean \| null | yes |  |
+| `error` | string \| null | yes |  |
+| `kind` | string | yes |  |
+| `moved` | boolean | yes |  |
+| `objective` | string \| null | yes |  |
+| `restated_tickers` | list[string] | no |  |
+| `run_id` | string \| null | yes |  |
+| `score_delta` | number \| null | yes |  |
+| `stored_score` | number \| null | yes |  |
+| `target` | string | yes |  |
+| `tolerance` | number | yes |  |
+
+### VerifyRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alert` | boolean | no |  |
+| `targets` | list[string] | no |  |
+| `tolerance` | number \| null | no |  |
+
+### VerifyResultView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alerted` | boolean | no |  |
+| `checked` | integer | yes |  |
+| `moved` | list[string] | yes |  |
+| `reports` | list[[VerifyReportView](#verifyreportview)] | yes |  |
 
 ### VerifyView
 

@@ -60,3 +60,26 @@ class FailingFit(MeanFit):
 
     def fit(self, dataset: Any) -> None:
         raise ValueError("too few trades to fit")
+
+
+class ForecastingMeanFit(MeanFit):
+    """``MeanFit`` that forecasts P(close above its fitted mean) at 0.7 for
+    its ticker, one event per day, known the next day (roadmap 23.9)."""
+
+    id = "forecasting_mean_fit"
+
+    def forecast_probability(self, ticker: str, as_of: Any, lake: Any) -> Any:
+        from stonks.core.forecasts import ProbabilityForecast
+
+        if ticker != self.params["ticker"] or self.mean_close is None:
+            return None
+        return ProbabilityForecast(event_key=str(as_of), probability=0.7)
+
+    def forecast_outcome(self, ticker: str, event_key: str, as_of: Any, lake: Any) -> bool | None:
+        if str(as_of) <= event_key:
+            return None
+        df = lake.sql(
+            "SELECT close FROM prices WHERE ticker = ? AND date <= ? ORDER BY date DESC LIMIT 1",
+            [ticker, as_of],
+        )
+        return bool(float(df["close"].iloc[0]) > (self.mean_close or 0.0))

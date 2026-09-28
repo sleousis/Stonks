@@ -1,5 +1,6 @@
 import { CANDIDATE_V2, swapReport, versionEvent } from '../../testing/model-version-fixtures';
 import {
+  calibrationRow,
   compareBooks,
   eventWords,
   newestFirst,
@@ -40,12 +41,12 @@ describe('swapCheckRow', () => {
     });
   });
 
-  it('formats the drawdown and the gap to live as percentages', () => {
+  it('formats the drawdown as a percentage and the paired test as a t-statistic', () => {
     expect(swapCheckRow(drawdown)).toMatchObject({ value: '4.00%', limit: '≤ 25.00%' });
     const row = swapCheckRow(vsLive);
     expect(row.label).toBe('Against the model in use');
-    expect(row.value).toContain('3.00%');
-    expect(row.limit).toContain('2.00%');
+    expect(row.value).toContain('2.4');
+    expect(row.limit).toContain('1.6');
   });
 
   it('shows dashes for a check without figures', () => {
@@ -75,5 +76,34 @@ describe('newestFirst', () => {
       versionEvent({ id: 2, created_at: '2026-09-20T06:00:00Z' }),
     ]);
     expect(log.map((e) => e.id)).toEqual([2, 1]);
+  });
+});
+
+describe('calibrationRow', () => {
+  const base = {
+    strategy_id: 'm',
+    version: 3,
+    n_forecasts: 22,
+    n_resolved: 20,
+    brier: 0.18,
+    brier_base_rate: 0.25,
+    skill: 0.28,
+    base_rate: 0.5,
+    mean_forecast: 0.6,
+    ece: 0.05,
+    bins: [],
+  };
+
+  it('formats a resolved model and says whether it beats the base rate', () => {
+    const row = calibrationRow(base);
+    expect(row).toMatchObject({ version: 3, resolved: '20 of 22', beatsBaseRate: true });
+    expect(row.brier).toContain('0.18');
+    expect(calibrationRow({ ...base, skill: -0.1 }).beatsBaseRate).toBe(false);
+  });
+
+  it('waits for resolved forecasts before judging', () => {
+    const row = calibrationRow({ ...base, n_resolved: 0, brier: null, skill: null, ece: null });
+    expect(row.beatsBaseRate).toBeNull();
+    expect(row.brier).toBe('–');
   });
 });

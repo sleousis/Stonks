@@ -60,6 +60,7 @@ def test_retrain_then_swap_through_the_cli(cli_env):
 
     check = CliRunner().invoke(app, ["registry", "swap-check", "mf", "2"])
     assert check.exit_code == 1 and "min_days" in check.output
+    assert "none resolved yet" in _ok(["registry", "calibration", "mf", "2"])
 
     refused = CliRunner().invoke(app, ["registry", "swap", "mf", "2"])
     assert refused.exit_code == 1 and "swap refused" in refused.output

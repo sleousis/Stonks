@@ -110,7 +110,7 @@ Add a new term here first, then in the console glossary (`web/src/app/core/help/
 
 | Old words | New words |
 |---|---|
-| Survival tests | Robustness tests (22, each named in plain words with what it guards against) |
+| Survival tests | Robustness tests (24, each named in plain words with what it guards against) |
 | Go-live suite (the `promotion` preset) | Full suite |
 | Verdict (of a lab run) | Robustness verdict: Passed or Failed |
 | A trial that ran, a trial that broke | Done, Error (a trial is one setting the search tried, never a test) |

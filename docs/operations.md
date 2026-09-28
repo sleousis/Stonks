@@ -97,6 +97,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `live_eod_check`: the same after the close, before the tick decides | close + 15 min | none |
 | `calendars_refresh`: earnings, dividend and economic calendars, then the event alerts (see [calendars](calendars.md)) | 06:00 UTC daily | none |
 | `model_retrain`: refit strategies that learn from data into candidate versions (see [Model lifecycle](model-lifecycle.md)) | Saturday 06:00 UTC | none |
+| `lab_verify`: rerun each active strategy's lab result on today's data and alert when a restatement moved it (see [Strategy lab](blocks/03_strategy_lab.md#lab-verify-roadmap-239)) | Sunday 07:00 UTC | none |
 | `live_submit`: send approved order tickets (see Live trading) | open - 20 min | none |
 | `live_stops`: protective stops for the entries the opening auction filled (see Protective stops) | open + 30 min | none |
 | `options_live`: book option assignments, plan expiry closes and rolls as held tickets (see Live options) | close + 55 min | none |

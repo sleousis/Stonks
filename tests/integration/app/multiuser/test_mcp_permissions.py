@@ -501,6 +501,7 @@ CASES: dict[str, Case] = {
         "/api/lab/signal-ic",
         lambda i: {"universe": ["UP.US"], "strategy_id": "bah_active"} | _WINDOW,
     ),
+    "verify_lab_results": _c("POST", "/api/lab/verify", lambda i: {"targets": ["nope"]}),
     "run_factor_tearsheet": _c(
         "POST",
         "/api/factors/tearsheets",
@@ -590,6 +591,11 @@ CASES: dict[str, Case] = {
     "check_model_swap": _c(
         "GET",
         "/api/strategies/{strategy_id}/versions/{version}/check",
+        lambda i: {"strategy_id": "bah_active", "version": 1},
+    ),
+    "get_model_calibration": _c(
+        "GET",
+        "/api/strategies/{strategy_id}/versions/{version}/calibration",
         lambda i: {"strategy_id": "bah_active", "version": 1},
     ),
     "retrain_models": _c(

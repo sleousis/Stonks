@@ -3,6 +3,7 @@ import { Injectable } from '@angular/core';
 import { allItems, unwrap } from './api-call';
 import {
   checkModelSwap,
+  getModelCalibration,
   getModelRetrainResult,
   getModelVersionHistory,
   listModelCandidates,
@@ -14,6 +15,7 @@ import {
 import type { RetrainRequest, VersionChangeRequest } from './generated/types.gen';
 
 export type {
+  CalibrationView,
   ModelVersionView,
   RetrainOutcomeView,
   RetrainRequest,
@@ -54,6 +56,11 @@ export class ModelVersionsService {
   /** The swap check of a candidate against the live version. Reports only. */
   check(strategyId: string, version: number) {
     return unwrap(checkModelSwap({ path: { strategy_id: strategyId, version } }));
+  }
+
+  /** Live calibration of a classifier version: Brier score and reliability (roadmap 23.9). */
+  calibration(strategyId: string, version: number) {
+    return unwrap(getModelCalibration({ path: { strategy_id: strategyId, version } }));
   }
 
   /** Make the candidate live. 409 when the check fails and there is no override. */

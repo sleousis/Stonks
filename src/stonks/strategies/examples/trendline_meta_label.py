@@ -102,6 +102,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from stonks.core.forecasts import ProbabilityForecast
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
@@ -592,6 +593,36 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
             return None
         _done, still_open = self._simulate(bars)
         return still_open
+
+    # ---- probability forecasts (roadmap 23.9, lifecycle calibration) -----------
+
+    def forecast_probability(
+        self, ticker: str, as_of: Any, lake: Any
+    ) -> ProbabilityForecast | None:
+        """``P(win)`` of the base trade open at ``as_of``, keyed by its entry."""
+        if not self.is_fitted:
+            return None
+        trade = self.open_trade(ticker, as_of, lake)
+        if trade is None:
+            return None
+        p = min(max(self._probability(trade.features), 0.0), 1.0)
+        return ProbabilityForecast(event_key=iso(trade.entry_ts), probability=p)
+
+    def forecast_outcome(self, ticker: str, event_key: str, as_of: Any, lake: Any) -> bool | None:
+        """Whether the base trade that entered at ``event_key`` closed above
+        its entry (its meta-label), once it has closed by ``as_of``."""
+        if lake is None or ticker != self.params["ticker"]:
+            return None
+        interval = Interval.parse(self.params["interval"])
+        n = self.feature_tail + 3 * int(self.params["hold_period"])
+        bars = self._bar_caches.for_lake(lake).last_n_bars(ticker, interval, as_of, n)
+        if len(bars) < self.feature_tail + 1:
+            return None
+        done, _still_open = self._simulate(bars)
+        for trade in done:
+            if iso(trade.entry_ts) == event_key:
+                return trade.label
+        return None
 
     def _raw_probability(self, features: tuple[float, ...]) -> float:
         p = self._prob_memo.get(features)

@@ -1,4 +1,4 @@
-"""``stonks registry versions|version-history|candidates|retrain|swap-check|swap|reject``:
+"""``stonks registry versions|version-history|candidates|retrain|swap-check|calibration|swap|reject``:
 model versions under one strategy id (roadmap 22.6).
 
 Mounted on the ``registry`` group by :mod:`stonks.cli`. Every command goes
@@ -66,6 +66,10 @@ def _run[T](fn: Callable[[], T]) -> T:
 
 def _pct(value: float | None) -> str:
     return "-" if value is None else f"{value:+.2%}"
+
+
+def _num(value: float | None) -> str:
+    return "-" if value is None else f"{value:.3f}"
 
 
 def register(app: typer.Typer) -> None:
@@ -178,6 +182,31 @@ def register(app: typer.Typer) -> None:
             console.print(f"  {mark} {c.name}: {c.detail}")
         if not report.passed:
             raise typer.Exit(code=1)
+
+    @app.command("calibration")
+    def calibration(strategy_id: str, version: int) -> None:
+        """Live calibration of a classifier version: Brier score and reliability."""
+        view = _run(lambda: _service().calibration(strategy_id, version))
+        if not view.n_resolved:
+            console.print(
+                f"{strategy_id} v{version}: {view.n_forecasts} forecast(s), none resolved yet"
+            )
+            return
+        console.print(
+            f"{strategy_id} v{version}: {view.n_resolved} of {view.n_forecasts} resolved  "
+            f"brier={view.brier:.4f} base rate brier={_num(view.brier_base_rate)} "
+            f"skill={_num(view.skill)} ece={_num(view.ece)}"
+        )
+        table = Table("forecast", "count", "mean forecast", "happened")
+        for b in view.bins:
+            if b.count:
+                table.add_row(
+                    f"{b.lower:.1f}-{b.upper:.1f}",
+                    str(b.count),
+                    _num(b.mean_forecast),
+                    _num(b.observed_rate),
+                )
+        console.print(table)
 
     @app.command("swap")
     def swap(

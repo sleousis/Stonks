@@ -391,6 +391,19 @@ def api_model_retrain(ctx: RunContext) -> JobOutcome:
     return retrain_job_outcome(status, error, result, job_id)
 
 
+@API_ACTIONS.register("lab_verify")
+def api_lab_verify(ctx: RunContext) -> JobOutcome:
+    """The server holds the lake, so it reruns (``POST /api/lab/verify``)."""
+    from stonks.scheduling.jobs import verify_body, verify_outcome
+
+    job_id, status, error, result = _run_job(
+        _executor(ctx), "/api/lab/verify", verify_body(ctx), "/api/lab/verify/jobs/{job_id}/result"
+    )
+    if status != "succeeded" or result is None:
+        return JobOutcome("failed", {"job_id": job_id, "error": error})
+    return verify_outcome(result, job_id)
+
+
 @API_ACTIONS.register("connections_sync")
 def api_connections_sync(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import connections_sync_action

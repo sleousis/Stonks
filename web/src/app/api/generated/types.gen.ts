@@ -1573,6 +1573,61 @@ export type CalendarView = {
 };
 
 /**
+ * CalibrationView
+ *
+ * Live calibration of a classifier version's probability forecasts
+ * (roadmap 23.9): Brier score against always forecasting the base rate,
+ * the reliability table and the expected calibration error. Empty for a
+ * model that forecasts no probabilities.
+ */
+export type CalibrationView = {
+    /**
+     * Base Rate
+     */
+    base_rate: number | null;
+    /**
+     * Bins
+     */
+    bins: Array<ReliabilityBinView>;
+    /**
+     * Brier
+     */
+    brier: number | null;
+    /**
+     * Brier Base Rate
+     */
+    brier_base_rate: number | null;
+    /**
+     * Ece
+     */
+    ece: number | null;
+    /**
+     * Mean Forecast
+     */
+    mean_forecast: number | null;
+    /**
+     * N Forecasts
+     */
+    n_forecasts: number;
+    /**
+     * N Resolved
+     */
+    n_resolved: number;
+    /**
+     * Skill
+     */
+    skill: number | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Version
+     */
+    version: number;
+};
+
+/**
  * CapitalRampSettings
  */
 export type CapitalRampSettings = {
@@ -2822,7 +2877,7 @@ export type DraftLabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'forecast_skill' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'data_snooping' | 'deflated_sharpe' | 'drift' | 'event_study' | 'forecast_skill' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -6053,7 +6108,7 @@ export type LabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'forecast_skill' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'data_snooping' | 'deflated_sharpe' | 'drift' | 'event_study' | 'forecast_skill' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -12382,6 +12437,32 @@ export type RecoveryCodesView = {
 };
 
 /**
+ * ReliabilityBinView
+ */
+export type ReliabilityBinView = {
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Lower
+     */
+    lower: number;
+    /**
+     * Mean Forecast
+     */
+    mean_forecast: number | null;
+    /**
+     * Observed Rate
+     */
+    observed_rate: number | null;
+    /**
+     * Upper
+     */
+    upper: number;
+};
+
+/**
  * ResearchProposalView
  */
 export type ResearchProposalView = {
@@ -15656,7 +15737,7 @@ export type SweepRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'forecast_skill' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'data_snooping' | 'deflated_sharpe' | 'drift' | 'event_study' | 'forecast_skill' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -17613,6 +17694,116 @@ export type VapidKeyView = {
      * Public Key
      */
     public_key: string | null;
+};
+
+/**
+ * VerifyReportView
+ */
+export type VerifyReportView = {
+    /**
+     * Changed Tickers
+     */
+    changed_tickers: Array<string>;
+    /**
+     * Class Path
+     */
+    class_path: string;
+    /**
+     * Code Changed
+     */
+    code_changed: boolean | null;
+    /**
+     * Config Changed
+     */
+    config_changed: boolean | null;
+    /**
+     * Current Score
+     */
+    current_score: number | null;
+    /**
+     * Data Changed
+     */
+    data_changed: boolean | null;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Moved
+     */
+    moved: boolean;
+    /**
+     * Objective
+     */
+    objective: string | null;
+    /**
+     * Restated Tickers
+     */
+    restated_tickers?: Array<string>;
+    /**
+     * Run Id
+     */
+    run_id: string | null;
+    /**
+     * Score Delta
+     */
+    score_delta: number | null;
+    /**
+     * Stored Score
+     */
+    stored_score: number | null;
+    /**
+     * Target
+     */
+    target: string;
+    /**
+     * Tolerance
+     */
+    tolerance: number;
+};
+
+/**
+ * VerifyRequest
+ */
+export type VerifyRequest = {
+    /**
+     * Alert
+     */
+    alert?: boolean;
+    /**
+     * Targets
+     */
+    targets?: Array<string>;
+    /**
+     * Tolerance
+     */
+    tolerance?: number | null;
+};
+
+/**
+ * VerifyResultView
+ */
+export type VerifyResultView = {
+    /**
+     * Alerted
+     */
+    alerted?: boolean;
+    /**
+     * Checked
+     */
+    checked: number;
+    /**
+     * Moved
+     */
+    moved: Array<string>;
+    /**
+     * Reports
+     */
+    reports: Array<VerifyReportView>;
 };
 
 /**
@@ -24455,6 +24646,96 @@ export type GetSweepResultResponses = {
 
 export type GetSweepResultResponse = GetSweepResultResponses[keyof GetSweepResultResponses];
 
+export type StartLabVerifyData = {
+    /**
+     * Body
+     */
+    body?: VerifyRequest | null;
+    path?: never;
+    query?: never;
+    url: '/api/lab/verify';
+};
+
+export type StartLabVerifyErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartLabVerifyError = StartLabVerifyErrors[keyof StartLabVerifyErrors];
+
+export type StartLabVerifyResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type StartLabVerifyResponse = StartLabVerifyResponses[keyof StartLabVerifyResponses];
+
+export type GetLabVerifyResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/lab/verify/jobs/{job_id}/result';
+};
+
+export type GetLabVerifyResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLabVerifyResultError = GetLabVerifyResultErrors[keyof GetLabVerifyResultErrors];
+
+export type GetLabVerifyResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: VerifyResultView;
+};
+
+export type GetLabVerifyResultResponse = GetLabVerifyResultResponses[keyof GetLabVerifyResultResponses];
+
 export type ClaimLabWorkerJobData = {
     body: WorkerRef;
     path?: never;
@@ -31071,6 +31352,56 @@ export type GetModelVersionHistoryResponses = {
 };
 
 export type GetModelVersionHistoryResponse = GetModelVersionHistoryResponses[keyof GetModelVersionHistoryResponses];
+
+export type GetModelCalibrationData = {
+    body?: never;
+    path: {
+        /**
+         * Strategy Id
+         */
+        strategy_id: string;
+        /**
+         * Version
+         */
+        version: number;
+    };
+    query?: never;
+    url: '/api/strategies/{strategy_id}/versions/{version}/calibration';
+};
+
+export type GetModelCalibrationErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetModelCalibrationError = GetModelCalibrationErrors[keyof GetModelCalibrationErrors];
+
+export type GetModelCalibrationResponses = {
+    /**
+     * Successful Response
+     */
+    200: CalibrationView;
+};
+
+export type GetModelCalibrationResponse = GetModelCalibrationResponses[keyof GetModelCalibrationResponses];
 
 export type CheckModelSwapData = {
     body?: never;

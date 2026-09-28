@@ -156,6 +156,14 @@ _OBJECTIVES: dict[str, Callable[[], Objective]] = {
     "cv_cagr": lambda: CVObjective(CAGRObjective()),
     "cv_final_return": lambda: CVObjective(FinalReturnObjective()),
 }
+
+
+def lab_objectives() -> dict[str, Callable[[], Objective]]:
+    """Every objective a lab request can name, by name (also what ``lab
+    verify`` rescores with)."""
+    return dict(_OBJECTIVES)
+
+
 _COST_MODELS: dict[str, tuple[str, Callable[[], CostModelSettings]]] = {
     "zero": ("No fees, spread or impact.", CostModelSettings),
     "realistic": (

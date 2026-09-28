@@ -91,7 +91,7 @@ def test_swap_check_gates_the_swap(env):
 
     for day in DAYS:
         run_tick(state, lake, registry, SETTINGS, as_of=day)
-    report = evaluate_swap(state, versions, sid, 2, SwapPolicy(min_days=2))
+    report = evaluate_swap(state, versions, sid, 2, SwapPolicy(min_days=2, min_paired_days=2))
     assert report.passed, report.as_dict()
     assert report.days == 3 and report.live_version == 1
     assert report.candidate_return == pytest.approx(report.live_return)
@@ -109,3 +109,31 @@ def test_rejected_candidate_stops_its_book(env):
     ModelVersionRegistry.on(registry).reject(sid, 2, actor="test", reason="bad fit")
     result = run_tick(state, lake, registry, SETTINGS, as_of=DAYS[0])
     assert "model_versions" not in _summary(state, result.tick_id)
+
+
+def test_classifier_versions_record_their_calibration(tmp_path, lake_trending):
+    """Roadmap 23.9: each forecasting version logs its forecasts in the tick
+    and the next ticks resolve them, per version."""
+    from stonks.lifecycle.calibration import calibration_report
+    from tests.fixtures.lifecycle import ForecastingMeanFit
+
+    state = SqliteState(tmp_path / "state.sqlite")
+    state.migrate()
+    registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts")
+    sid = registry.register(ForecastingMeanFit({"ticker": "UP.US"}), reports=[])
+    seed_status(registry, sid, "active")
+    retrain_models(
+        state, lake_trending, registry, LIFECYCLE, as_of=DAYS[0], universe=["UP.US"],
+        actor="test", max_workers=1,
+    )  # fmt: skip
+    for day in DAYS:
+        result = run_tick(state, lake_trending, registry, SETTINGS, as_of=day)
+    summary = _summary(state, result.tick_id)
+    assert {(c["strategy_id"], c["version"]) for c in summary["model_calibration"]} == {
+        (sid, 1),
+        (sid, 2),
+    }
+    report = calibration_report(state, sid, 2)
+    assert report.n_forecasts == 3 and report.n_resolved == 2
+    assert report.brier is not None
+    state.close()

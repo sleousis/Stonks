@@ -73,9 +73,11 @@ export function swapReport(passed: boolean, over: Partial<SwapReportView> = {}):
       {
         name: 'vs_live',
         passed,
-        value: passed ? 0.013 : -0.03,
-        limit: -0.02,
-        detail: passed ? 'candidate leads live v1 by 1.30%' : 'candidate trails live v1 by 3.00%',
+        value: passed ? 0.8 : -2.4,
+        limit: -1.645,
+        detail: passed
+          ? 'mean daily gap +0.040% vs live v1 over 20 paired days (HAC t +0.80)'
+          : 'mean daily gap -0.150% vs live v1 over 20 paired days (HAC t -2.40): trails live',
       },
     ],
     ...over,

@@ -97,6 +97,7 @@ from stonks.execution.reconcile import (
     startup_reconcile,
 )
 from stonks.factors.style import safe_style_exposures, uses_style_model
+from stonks.lifecycle.calibration import track_calibration
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
 from stonks.portfolio import returns as portfolio_returns
@@ -2714,7 +2715,22 @@ def _version_book_phase(
     except Exception as exc:
         run.log.error("tick.version_books_failed", error=str(exc), error_type=type(exc).__name__)
         return {"model_versions_error": f"{type(exc).__name__}: {exc}"}
-    return {"model_versions": [o.as_dict() for o in outcomes]}
+    summary: dict[str, Any] = {"model_versions": [o.as_dict() for o in outcomes]}
+    # 23.9: each classifier version's forecasts, for its live calibration.
+    try:
+        calibration = track_calibration(
+            state,
+            run.lake,
+            [(b.strategy_id, b.version, strategy(b.store.book_id)) for b in books],
+            [*settings.universe, *held],
+            run.as_of,
+        )
+    except Exception as exc:  # a model that fails to load must not fail the tick
+        run.log.error("tick.calibration_failed", error=str(exc), error_type=type(exc).__name__)
+        calibration = []
+    if calibration:
+        summary["model_calibration"] = calibration
+    return summary
 
 
 def _record_signal_phase(run: _TickRun) -> None:

@@ -44,6 +44,8 @@ def test_retrain_check_and_governed_swap(client, ml_id):
 
     check = client.get(f"/api/strategies/{ml_id}/versions/2/check", headers=AUTH).json()
     assert check["passed"] is False and check["live_version"] == 1
+    calib = client.get(f"/api/strategies/{ml_id}/versions/2/calibration", headers=AUTH).json()
+    assert (calib["n_forecasts"], calib["brier"], calib["bins"]) == (0, None, [])
 
     refused = client.post(f"/api/strategies/{ml_id}/versions/2/swap", headers=AUTH)
     assert refused.status_code == 409
@@ -84,6 +86,8 @@ def test_reject_and_unknown_ids(client, ml_id):
     assert ok.json()["status"] == "rejected"
     assert client.get("/api/strategies/nope/versions", headers=AUTH).status_code == 404
     assert client.get(f"/api/strategies/{ml_id}/versions/9/check", headers=AUTH).status_code == 404
+    missing = client.get(f"/api/strategies/{ml_id}/versions/9/calibration", headers=AUTH)
+    assert missing.status_code == 404
 
 
 def test_writes_need_permission(remote, ml_id):

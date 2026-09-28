@@ -345,6 +345,7 @@ class LabRunner:
             n_trials_class=n_class,
             n_trials_family=n_family,
             n_trials_searched=n_searched,
+            family=family,
         )
         suite = self._suite_for(strategy)
         for test in suite.tests:

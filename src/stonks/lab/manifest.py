@@ -209,17 +209,81 @@ def data_fingerprint(dataset: Any) -> dict[str, Any]:
     ticker the run reads: each strategy's reference tickers (a regime
     filter's index, a reference market) and the benchmark. An intraday run
     also reads daily bars (regime filters, daily features), so ``daily``
-    hashes them for every ticker (BE-28)."""
+    hashes them for every ticker (BE-28).
+
+    ``statements`` hashes every stored version of the universe's income
+    statement, balance sheet and cash flow rows with a period end up to the
+    window end, ``known_at`` included (migration 018). A vendor restatement
+    appends a version, so it changes this part even when the point-in-time
+    read at each decision would not see it (roadmap 23.9)."""
     from stonks.lab.dataset import data_tickers
 
     start, end = dataset.full_window
-    interval = _interval_code(dataset)
     universe = sorted(set(dataset.universe))
     references = sorted(set(data_tickers(dataset)) - set(universe))
+    return _fingerprint(
+        dataset.lake,
+        universe,
+        references,
+        _interval_code(dataset),
+        start,
+        end,
+        statements=True,
+    )
+
+
+def refingerprint(lake: Any, stored: dict[str, Any]) -> dict[str, Any]:
+    """A stored :func:`data_fingerprint` recomputed on ``lake`` today: the
+    same tickers, references, window and interval, so the two hashes match
+    exactly when no bar, corporate action or statement version they cover
+    changed (roadmap 23.9, ``stonks lab verify``). A fingerprint stored
+    before statements were hashed is recomputed without them."""
+    start, end = (date.fromisoformat(str(d)[:10]) for d in stored["window"])
+    return _fingerprint(
+        lake,
+        sorted(stored.get("tickers") or {}),
+        sorted(stored.get("references") or {}),
+        str(stored.get("interval") or "1d"),
+        start,
+        end,
+        statements="statements" in stored,
+    )
+
+
+def fingerprint_changes(stored: dict[str, Any], current: dict[str, Any]) -> list[str]:
+    """Tickers whose bars, corporate actions or statement versions differ
+    between two fingerprints of the same data, sorted."""
+    changed: set[str] = set()
+    for part in ("tickers", "references", "daily", "statements"):
+        changed.update(_part_changes(stored, current, part))
+    return sorted(changed)
+
+
+def restated_tickers(stored: dict[str, Any], current: dict[str, Any]) -> list[str]:
+    """Tickers whose statement versions differ between two fingerprints (a
+    restatement, or a period filed since), sorted."""
+    return sorted(_part_changes(stored, current, "statements"))
+
+
+def _part_changes(stored: dict[str, Any], current: dict[str, Any], part: str) -> set[str]:
+    before, after = stored.get(part) or {}, current.get(part) or {}
+    return {t for t in set(before) | set(after) if before.get(t) != after.get(t)}
+
+
+def _fingerprint(
+    lake: Any,
+    universe: list[str],
+    references: list[str],
+    interval: str,
+    start: Any,
+    end: Any,
+    *,
+    statements: bool = False,
+) -> dict[str, Any]:
     everyone = universe + references
     stop = _as_date(end) + timedelta(days=1)
-    bars = _bars_hashes(dataset.lake, everyone, interval, _as_date(start), stop)
-    actions = _actions_hashes(dataset.lake, everyone, stop)
+    bars = _bars_hashes(lake, everyone, interval, _as_date(start), stop)
+    actions = _actions_hashes(lake, everyone, stop)
 
     def entries(names: list[str], hashes: dict[str, dict[str, Any]]) -> dict[str, Any]:
         out: dict[str, dict[str, Any]] = {}
@@ -237,8 +301,10 @@ def data_fingerprint(dataset: Any) -> dict[str, Any]:
         "references": entries(references, bars),
     }
     if _is_intraday(interval):
-        daily = _bars_hashes(dataset.lake, everyone, "1d", _as_date(start), stop)
+        daily = _bars_hashes(lake, everyone, "1d", _as_date(start), stop)
         body["daily"] = {t: dict(daily.get(t, _NO_BARS)) for t in everyone}
+    if statements:
+        body["statements"] = _statement_hashes(lake, universe, _as_date(end))
     digest = hashlib.sha256(json.dumps(body, sort_keys=True).encode()).hexdigest()
     return {**body, "hash": digest}
 
@@ -306,6 +372,32 @@ def _actions_hashes(lake: Any, universe: list[str], stop: date) -> dict[str, str
         ) GROUP BY ticker
         """,
         [universe, stop, universe, stop],
+    )
+    return {str(r.ticker): str(r.h) for r in df.itertuples(index=False)}
+
+
+#: The versioned statement tables (migration 018) the fingerprint covers.
+_STATEMENT_VERSIONS = (
+    "income_statement_versions",
+    "balance_sheet_versions",
+    "cash_flow_statement_versions",
+)
+
+
+def _statement_hashes(lake: Any, universe: list[str], end: date) -> dict[str, str]:
+    """Per ticker, a hash of every statement version (all columns and
+    ``known_at``) with a period end on or before ``end``. Tickers with none
+    are left out."""
+    if not universe:
+        return {}
+    parts = " UNION ALL ".join(
+        f"SELECT ticker, '{i}|' || CAST(v AS VARCHAR) AS row FROM {table} v"
+        " WHERE ticker = ANY(?) AND period_end <= ?"
+        for i, table in enumerate(_STATEMENT_VERSIONS)
+    )
+    df = lake.sql(
+        f"SELECT ticker, md5(string_agg(row, ',' ORDER BY row)) AS h FROM ({parts}) GROUP BY ticker",
+        [arg for _ in _STATEMENT_VERSIONS for arg in (universe, end)],
     )
     return {str(r.ticker): str(r.h) for r in df.itertuples(index=False)}
 
