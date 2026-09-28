@@ -49,6 +49,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_insights`](#get_insights) | read | no |
 | [`get_insights_totals`](#get_insights_totals) | read | no |
 | [`get_job`](#get_job) | read | no |
+| [`get_journal_breakdown`](#get_journal_breakdown) | read | no |
 | [`get_leaderboard`](#get_leaderboard) | read | no |
 | [`get_ledger_run`](#get_ledger_run) | read | no |
 | [`get_live_allocation`](#get_live_allocation) | read | no |
@@ -66,11 +67,13 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_options_live`](#get_options_live) | read | no |
 | [`get_order_tca`](#get_order_tca) | read | no |
 | [`get_pnl`](#get_pnl) | read | no |
+| [`get_pnl_calendar`](#get_pnl_calendar) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
 | [`get_portfolio_totals`](#get_portfolio_totals) | read | no |
 | [`get_reconcile_report`](#get_reconcile_report) | read | no |
 | [`get_research_session`](#get_research_session) | read | no |
 | [`get_risk_policy`](#get_risk_policy) | read | no |
+| [`get_round_trip`](#get_round_trip) | read | no |
 | [`get_rule_schema`](#get_rule_schema) | read | no |
 | [`get_schedule`](#get_schedule) | read | no |
 | [`get_screen`](#get_screen) | read | no |
@@ -113,6 +116,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_option_underlyings`](#list_option_underlyings) | read | no |
 | [`list_order_drafts`](#list_order_drafts) | read | no |
 | [`list_orders`](#list_orders) | read | no |
+| [`list_playbooks`](#list_playbooks) | read | no |
 | [`list_portfolio_snapshots`](#list_portfolio_snapshots) | read | no |
 | [`list_portfolios`](#list_portfolios) | read | no |
 | [`list_price_alert_events`](#list_price_alert_events) | read | no |
@@ -120,6 +124,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_reconcile_reports`](#list_reconcile_reports) | read | no |
 | [`list_research_sessions`](#list_research_sessions) | read | no |
 | [`list_risk_snapshots`](#list_risk_snapshots) | read | no |
+| [`list_round_trips`](#list_round_trips) | read | no |
 | [`list_screen_metrics`](#list_screen_metrics) | read | no |
 | [`list_screens`](#list_screens) | read | no |
 | [`list_shadow_decisions`](#list_shadow_decisions) | read | no |
@@ -456,6 +461,23 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `job_id` | string | yes |  |  |
 
+### `get_journal_breakdown`
+
+Win rate, P&L, profit factor, average R and exit efficiency per
+group: by sleeve, tag, mistake, playbook, or followed versus broke
+plan.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `by` | "all" \| "sleeve" \| "origin" \| "ticker" \| "side" \| "exit_trigger" \| "tag" \| "mistake" \| "playbook" \| "plan" | no | `"all"` | how to group the trades |
+| `since` | string \| null | no | `null` | YYYY-MM-DD |
+| `until` | string \| null | no | `null` | YYYY-MM-DD |
+| `sleeve` | string \| null | no | `null` |  |
+| `origin` | "strategy" \| "manual" \| null | no | `null` | strategy or manual orders |
+| `portfolio_id` | string \| null | no | `null` |  |
+
 ### `get_leaderboard`
 
 Every strategy ranked by its risk-adjusted paper result (the
@@ -675,6 +697,21 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `since` | date \| null | no | `null` | YYYY-MM-DD; first day to include |
 | `portfolio_id` | string \| null | no | `null` | one of your portfolios (not found otherwise); default: your own book |
 
+### `get_pnl_calendar`
+
+Realised P&L of closed trades by exit day, with weekly and
+monthly totals, in the portfolio's base currency.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `since` | string \| null | no | `null` | YYYY-MM-DD |
+| `until` | string \| null | no | `null` | YYYY-MM-DD |
+| `sleeve` | string \| null | no | `null` |  |
+| `origin` | "strategy" \| "manual" \| null | no | `null` | strategy or manual orders |
+| `portfolio_id` | string \| null | no | `null` |  |
+
 ### `get_portfolio`
 
 Current portfolio: cash, positions valued at the latest stored closes,
@@ -724,6 +761,17 @@ The [production.risk] limits applied between a strategy's orders and the broker 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 No inputs.
+
+### `get_round_trip`
+
+One trade with every leg (each partial exit) and its review.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `trade_id` | integer | yes |  | the id of the opening fill |
+| `portfolio_id` | string \| null | no | `null` |  |
 
 ### `get_rule_schema`
 
@@ -1194,6 +1242,16 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
+### `list_playbooks`
+
+Your playbooks: the setups you trade, with their rules.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `include_archived` | boolean | no | `false` |  |
+
 ### `list_portfolio_snapshots`
 
 Portfolio history: one snapshot per production tick, newest first.
@@ -1274,6 +1332,30 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `portfolio_id` | string \| null | no | `null` |  |
 | `strategy_id` | string \| null | no | `null` | one strategy's sleeve; default the whole portfolio |
 | `since` | string \| null | no | `null` | YYYY-MM-DD |
+| `limit` | integer | no | `50` |  |
+| `offset` | integer | no | `0` |  |
+
+### `list_round_trips`
+
+Your round trips built from fills, open first then newest exit
+first: entry and exit, holding days, P&L, adverse and favourable
+excursion, R multiple (when a stop is known), exit efficiency, and
+your tags, mistakes and playbook.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `status` | "all" \| "open" \| "closed" | no | `"all"` | all, open or closed |
+| `sleeve` | string \| null | no | `null` | one strategy id, or manual |
+| `origin` | "strategy" \| "manual" \| null | no | `null` | strategy or manual orders |
+| `ticker` | string \| null | no | `null` |  |
+| `since` | string \| null | no | `null` | YYYY-MM-DD |
+| `until` | string \| null | no | `null` | YYYY-MM-DD |
+| `tag` | string \| null | no | `null` |  |
+| `mistake` | string \| null | no | `null` |  |
+| `plan` | "followed" \| "broke" \| "not_said" \| null | no | `null` | whether the plan was followed |
+| `portfolio_id` | string \| null | no | `null` |  |
 | `limit` | integer | no | `50` |  |
 | `offset` | integer | no | `0` |  |
 

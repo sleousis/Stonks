@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [lab-worker](#lab-worker-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [journal](#journal-endpoints) · [lab](#lab-endpoints) · [lab-worker](#lab-worker-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -197,6 +197,20 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/jobs/{job_id}/cancel` | Cancel Job | `lab.run` |  | [Job](#job) |
 | GET | `/api/jobs/{job_id}/events` | Stream Job Events | sign-in |  | SSE of [JobEvent](#jobevent) |
 | POST | `/api/jobs/{job_id}/stream-token` | Create Stream Token | `data.read` |  | [StreamToken](#streamtoken) |
+
+## journal endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/journal/breakdown` | Get Journal Breakdown | sign-in |  | [BreakdownView](#breakdownview) |
+| GET | `/api/journal/calendar` | Get Pnl Calendar | sign-in |  | [PnlCalendarView](#pnlcalendarview) |
+| GET | `/api/journal/labels` | List Journal Labels | sign-in |  | [JournalLabelsView](#journallabelsview) |
+| GET | `/api/journal/playbooks` | List Playbooks | sign-in |  | list[[PlaybookView](#playbookview)] |
+| POST | `/api/journal/playbooks` | Create Playbook | `portfolio.manage` | [PlaybookCreate](#playbookcreate) | [PlaybookView](#playbookview) |
+| PATCH | `/api/journal/playbooks/{playbook_id}` | Update Playbook | `portfolio.manage` | [PlaybookUpdate](#playbookupdate) | [PlaybookView](#playbookview) |
+| GET | `/api/journal/trades` | List Journal Trades | sign-in |  | [Page_JournalTradeView_](#page_journaltradeview_) |
+| GET | `/api/journal/trades/{trade_id}` | Get Journal Trade | sign-in |  | [JournalTradeDetailView](#journaltradedetailview) |
+| PUT | `/api/journal/trades/{trade_id}/review` | Review Journal Trade | `portfolio.manage` | [AnnotationRequest](#annotationrequest) | [AnnotationView](#annotationview) |
 
 ## lab endpoints
 
@@ -667,6 +681,31 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | `n_periods` | integer | no |  |
 | `r_squared` | number \| null | no |  |
 
+### AnnotationRequest
+
+A trade's review. Replaces what was there.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `followed_plan` | boolean \| null | no |  |
+| `mistakes` | list[string] | no |  |
+| `playbook_id` | string \| null | no |  |
+| `review` | string \| null | no |  |
+| `tags` | list[string] | no |  |
+
+### AnnotationView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `followed_plan` | boolean \| null | yes |  |
+| `mistakes` | list[string] | yes |  |
+| `playbook_id` | string \| null | yes |  |
+| `review` | string \| null | yes |  |
+| `tags` | list[string] | yes |  |
+| `trade_id` | integer | yes |  |
+| `updated_at` | string | yes |  |
+| `updated_by` | string | yes |  |
+
 ### ApiScope
 
 What a credential may do. A token never exceeds its user's role.
@@ -851,6 +890,19 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `hard_fee_rate_annual` | number | no |  |
 | `none` | list[string] | no |  |
 
+### BreakdownView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_currency` | string | yes |  |
+| `by` | "all" \| "sleeve" \| "origin" \| "ticker" \| "side" \| "exit_trigger" \| "tag" \| "mistake" \| "playbook" \| "plan" | yes |  |
+| `fx_missing` | list[string] | yes |  |
+| `groups` | list[[GroupStatsView](#groupstatsview)] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `since` | date \| null | yes |  |
+| `unconverted` | integer | yes |  |
+| `until` | date \| null | yes |  |
+
 ### BrokerInfo
 
 | Field | Type | Required | Description |
@@ -859,6 +911,17 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `credentials_configured` | boolean | yes |  |
 | `kind` | "simulated" \| "alpaca" \| "ibkr" | yes |  |
 | `paper` | boolean | yes |  |
+
+### CalendarBucketView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `end` | date | yes |  |
+| `key` | string | yes |  |
+| `pnl` | number | yes |  |
+| `start` | date | yes |  |
+| `trades` | integer | yes |  |
+| `wins` | integer | yes |  |
 
 ### CalendarRefreshRequest
 
@@ -1816,6 +1879,28 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | `n_dates` | integer | yes |  |
 | `t_stat_hac` | number \| null | yes |  |
 
+### GroupStatsView
+
+Results of one group of closed legs, money in the base currency.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `avg_exit_efficiency` | number \| null | yes |  |
+| `avg_holding_days` | number \| null | yes |  |
+| `avg_loss` | number \| null | yes |  |
+| `avg_pnl` | number \| null | yes |  |
+| `avg_r` | number \| null | yes |  |
+| `avg_win` | number \| null | yes |  |
+| `key` | string | yes |  |
+| `losses` | integer | yes |  |
+| `open` | integer | yes |  |
+| `pnl` | number | yes |  |
+| `profit_factor` | number \| null | yes |  |
+| `r_trades` | integer | yes |  |
+| `trades` | integer | yes |  |
+| `win_rate` | number \| null | yes |  |
+| `wins` | integer | yes |  |
+
 ### HaltView
 
 | Field | Type | Required | Description |
@@ -2203,6 +2288,15 @@ One order: why it was placed, the signal context, the outcome and the notes peop
 | `ticker` | string | yes |  |
 | `trigger` | string \| null | yes |  |
 
+### JournalLabelsView
+
+Tags and mistakes already used in the portfolio, for suggestions.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mistakes` | list[string] | yes |  |
+| `tags` | list[string] | yes |  |
+
 ### JournalNoteView
 
 | Field | Type | Required | Description |
@@ -2213,6 +2307,74 @@ One order: why it was placed, the signal context, the outcome and the notes peop
 | `note` | string | yes |  |
 | `order_client_id` | string | yes |  |
 | `updated_at` | string | yes |  |
+
+### JournalTradeDetailView
+
+A whole trade: every leg and its review.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `followed_plan` | boolean \| null | yes |  |
+| `legs` | list[[JournalTradeView](#journaltradeview)] | yes |  |
+| `mistakes` | list[string] | yes |  |
+| `origin` | "strategy" \| "manual" | yes |  |
+| `playbook_id` | string \| null | yes |  |
+| `playbook_name` | string \| null | yes |  |
+| `pnl` | number | yes |  |
+| `pnl_base` | number \| null | yes |  |
+| `portfolio_id` | string | yes |  |
+| `review` | string \| null | yes |  |
+| `side` | "long" \| "short" | yes |  |
+| `sleeve` | string | yes |  |
+| `tags` | list[string] | yes |  |
+| `ticker` | string | yes |  |
+| `trade_id` | integer | yes |  |
+| `updated_at` | string \| null | yes |  |
+| `updated_by` | string \| null | yes |  |
+
+### JournalTradeView
+
+One leg of a trade. Money is in the instrument's currency, and ``pnl_base`` in the portfolio's base currency (null with no FX rate).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `currency` | string | yes |  |
+| `dividends` | number | yes |  |
+| `entry_at` | date-time | yes |  |
+| `entry_client_id` | string | yes |  |
+| `entry_price` | number | yes |  |
+| `exit_at` | date-time \| null | yes |  |
+| `exit_client_id` | string \| null | yes |  |
+| `exit_efficiency` | number \| null | yes |  |
+| `exit_price` | number | yes |  |
+| `exit_trigger` | string \| null | yes |  |
+| `fees` | number | yes |  |
+| `followed_plan` | boolean \| null | yes |  |
+| `holding_days` | number | yes |  |
+| `is_open` | boolean | yes |  |
+| `leg_id` | string | yes |  |
+| `mae_pct` | number \| null | yes |  |
+| `mae_r` | number \| null | yes |  |
+| `mfe_pct` | number \| null | yes |  |
+| `mistakes` | list[string] | yes |  |
+| `origin` | "strategy" \| "manual" | yes |  |
+| `playbook_id` | string \| null | yes |  |
+| `playbook_name` | string \| null | yes |  |
+| `pnl` | number | yes |  |
+| `pnl_base` | number \| null | yes |  |
+| `quantity` | number | yes |  |
+| `r_multiple` | number \| null | yes |  |
+| `return_pct` | number | yes |  |
+| `review` | string \| null | yes |  |
+| `risk_amount` | number \| null | yes |  |
+| `side` | "long" \| "short" | yes |  |
+| `sleeve` | string | yes |  |
+| `stop_price` | number \| null | yes |  |
+| `stop_source` | string \| null | yes |  |
+| `tags` | list[string] | yes |  |
+| `target_price` | number \| null | yes |  |
+| `ticker` | string | yes |  |
+| `trade_id` | integer | yes |  |
 
 ### KillSwitchRequest
 
@@ -3314,6 +3476,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_JournalTradeView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[JournalTradeView](#journaltradeview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_LedgerRunView_
 
 | Field | Type | Required | Description |
@@ -3711,6 +3882,52 @@ The plateau test's verdict on the tuned set, laid over the map.
 | `step` | number | yes |  |
 | `x_range` | list[number] \| null | no |  |
 | `y_range` | list[number] \| null | no |  |
+
+### PlaybookCreate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string \| null | no |  |
+| `name` | string | yes |  |
+
+### PlaybookUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `archived` | boolean \| null | no |  |
+| `description` | string \| null | no |  |
+| `name` | string \| null | no |  |
+
+### PlaybookView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `archived` | boolean | yes |  |
+| `created_at` | string | yes |  |
+| `description` | string \| null | yes |  |
+| `id` | string | yes |  |
+| `name` | string | yes |  |
+| `updated_at` | string | yes |  |
+
+### PnlCalendarView
+
+Realised P&L of closed legs by exit day, ISO week and month.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_currency` | string | yes |  |
+| `best_day` | string \| null | yes |  |
+| `days` | list[[CalendarBucketView](#calendarbucketview)] | yes |  |
+| `fx_missing` | list[string] | yes |  |
+| `months` | list[[CalendarBucketView](#calendarbucketview)] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `since` | date \| null | yes |  |
+| `total` | number | yes |  |
+| `trades` | integer | yes |  |
+| `unconverted` | integer | yes |  |
+| `until` | date \| null | yes |  |
+| `weeks` | list[[CalendarBucketView](#calendarbucketview)] | yes |  |
+| `worst_day` | string \| null | yes |  |
 
 ### PnlRowView
 
