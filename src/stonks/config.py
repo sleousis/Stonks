@@ -33,6 +33,7 @@ from stonks.lifecycle.settings import ModelLifecycleSettings
 from stonks.ops.config import BackupConfig
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.decay import DecaySettings
+from stonks.production.intraday_pnl_settings import IntradayPnlSettings
 from stonks.production.live.settings import LiveSettings
 from stonks.production.monitor_settings import RiskMonitorSettings
 from stonks.production.quit_rule import QuitRuleSettings
@@ -287,6 +288,9 @@ class ProductionConfig(BaseModel):
     decay: DecaySettings = DecaySettings()
     # ``[production.live]``: live trading at a real broker (roadmap 19).
     live: LiveSettings = LiveSettings()
+    # ``[production.intraday_pnl]``: live marks and intraday P&L snapshots
+    # of the engine's books (roadmap 21.3.3). Off by default.
+    intraday_pnl: IntradayPnlSettings = IntradayPnlSettings()
 
 
 class GoLivePolicy(BaseModel):

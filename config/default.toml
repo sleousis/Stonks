@@ -144,6 +144,14 @@ long_window = 120
 negative_days = 20
 min_fraction = 0.5
 
+[production.intraday_pnl]
+# Live marks and intraday P&L of the engine's books (roadmap 21.3.3): one
+# intraday_snapshots row per portfolio and strategy sleeve every
+# snapshot_minutes, read by GET /api/risk/intraday and the Live page.
+enabled = false
+snapshot_minutes = 5
+stale_mark_seconds = 120          # a held name with an older mark counts as stale
+
 [production.live]
 # Live trading at a real broker (roadmap 19). Stonks trades only the
 # positions it opened in a shared account.

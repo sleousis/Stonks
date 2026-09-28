@@ -43,11 +43,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, Field
-
 from stonks.core.clock import SYSTEM_CLOCK, Clock
 from stonks.core.stream import QuoteTick, StreamBar, StreamEvent, TradeTick
 from stonks.logging import get_logger
+from stonks.production.intraday_pnl_settings import IntradayPnlSettings
 from stonks.production.ledger import ledger_filter
 from stonks.store.state import SqliteState
 
@@ -86,17 +85,6 @@ Side = Literal["buy", "sell"]
 
 #: ``reference_prices(tickers, day)``: the prior close of each ticker before ``day``.
 ReferencePrices = Callable[[Sequence[str], date], Mapping[str, float]]
-
-
-class IntradayPnlSettings(BaseModel):
-    """``[production.intraday_pnl]``: marks and intraday snapshots."""
-
-    enabled: bool = False
-    #: Store one row per book this often (bar closes in between update the
-    #: high-water mark only).
-    snapshot_minutes: int = Field(default=5, ge=1, le=390)
-    #: A held name whose mark is older than this counts as stale.
-    stale_mark_seconds: int = Field(default=120, ge=1)
 
 
 # ---- marks -------------------------------------------------------------------------

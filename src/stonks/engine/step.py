@@ -127,6 +127,7 @@ class DecisionStep:
         stale_after: timedelta | None = None,
         history_bars: int = 260,
         fresh_reads: bool = False,
+        intraday: Callable[[str, datetime], Any] | None = None,
     ) -> None:
         if not strategies:
             raise ValueError("the decision step needs at least one strategy")
@@ -147,6 +148,10 @@ class DecisionStep:
         self.fresh_reads = fresh_reads
         self._portfolio = portfolio
         self._on_decision = on_decision
+        #: ``intraday(book_id, at)``: the book's intraday risk state at the
+        #: event (``production.rules._intraday.IntradayContext``), set on
+        #: ``RiskContext.intraday`` so the intraday rules act (21.3.2).
+        self._intraday = intraday
         self._asset_classes = dict(asset_classes) if asset_classes is not None else None
         self._pit = PitSession(lake)
         self._marks: dict[str, float] = {}
@@ -161,6 +166,11 @@ class DecisionStep:
     def marks(self) -> dict[str, float]:
         """The last close per ticker (a copy)."""
         return dict(self._marks)
+
+    @property
+    def last_bar_at(self) -> dict[str, datetime]:
+        """The close of the latest bar seen per ticker (a copy)."""
+        return dict(self._last_bar)
 
     @property
     def asset_classes(self) -> dict[str, str]:
@@ -252,7 +262,7 @@ class DecisionStep:
             risk_overrides=book.risk_overrides,
             prior_attribution=self._attribution[book.id],
             costs=book.costs or FillCosts(),
-            risk_context=self._risk_context(book, portfolio, market, as_of),
+            risk_context=self.risk_context(book, portfolio, market.prices, at),
             allow_short=book.allow_short,
         )
         prefix = f"{book.portfolio_id}:" if book.portfolio_id else ""
@@ -283,6 +293,7 @@ class DecisionStep:
             )
             for o in orders
         ]
+        orders = [self.with_interval(o) for o in orders]
         dropped: list[DroppedOrder] = []
         flattened: list[str] = []
         if book.sessions is not None:
@@ -311,7 +322,9 @@ class DecisionStep:
             return kept, dropped, []
         closing = {o.ticker for o in flat}
         kept = [o for o in kept if o.ticker not in closing]
-        flat = [replace(o, decision_price=self._marks.get(o.ticker)) for o in flat]
+        flat = [
+            self.with_interval(replace(o, decision_price=self._marks.get(o.ticker))) for o in flat
+        ]
         return kept + flat, dropped, sorted(closing)
 
     def _market(
@@ -345,19 +358,34 @@ class DecisionStep:
             market = replace(market, returns_history=past.returns, volumes=past.volumes)
         return market
 
-    def _risk_context(self, book: StepBook, portfolio: Portfolio, market: Any, as_of: datetime):
+    def with_interval(self, order: Order) -> Order:
+        """``order`` with the decision bar in its decision context
+        (``interval``), which intraday TCA selects orders by (21.3.5)."""
+        context = dict(order.decision_context or {})
+        if context.get("interval") == self.interval.code:
+            return order
+        context["interval"] = self.interval.code
+        return replace(order, decision_context=context)
+
+    def risk_context(
+        self, book: StepBook, portfolio: Portfolio, prices: Mapping[str, float], at: datetime
+    ):
+        """The risk rules' view of ``book`` at the bar close ``at``, with
+        its intraday state when the step has an ``intraday`` source.
+        ``None`` for a book without a risk policy."""
         if book.risk is None:
             return None
         from stonks.production.rules import RiskContext
 
         return RiskContext(
             portfolio=portfolio,
-            prices=market.prices,
-            asset_classes=market.asset_classes,
+            prices=prices,
+            asset_classes=self.asset_classes,
             policy=book.risk,
-            as_of=as_of.date(),
+            as_of=at.astimezone(UTC).date(),
             portfolio_id=book.portfolio_id,
             allow_short=book.allow_short,
+            intraday=self._intraday(book.id, at) if self._intraday is not None else None,
         )
 
     def _daily(self, view: PointInTimeLake, tickers: set[str]) -> dict[str, pd.DataFrame]:

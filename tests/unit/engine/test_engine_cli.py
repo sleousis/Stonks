@@ -106,3 +106,21 @@ def test_stop_times_out_while_the_engine_holds_on(settings, capsys) -> None:
         assert control.stop_requested()
     finally:
         lock.release()
+
+
+def test_a_replay_writes_the_engine_status_and_intraday_pnl(settings, tmp_path, capsys) -> None:
+    """``build_engine`` wires the monitor (21.3.4) and, with
+    ``[production.intraday_pnl] enabled``, the P&L tracker (21.3.3)."""
+    settings.production.intraday_pnl.enabled = True
+    rec = record(day_frame(DAYS[0]), tmp_path / "rec")
+    code = cli.main(["replay", str(rec), "--session", DAYS[0].isoformat()], settings=settings,
+                    strategies=strategies())  # fmt: skip
+    assert code == 0
+    summary = last_json(capsys.readouterr().out)
+    with SqliteState(settings.state.path) as state:
+        status = state.sql("SELECT calendar, stopped_at, snapshot_json FROM engine_status")
+        assert len(status) == 1 and status[0]["stopped_at"] is not None
+        latency = json.loads(status[0]["snapshot_json"])["latency"]["event_to_order"]
+        assert sum(latency["counts"]) == summary["orders_sent"]
+        snaps = state.sql("SELECT count(*) AS n FROM intraday_snapshots")[0]["n"]
+        assert snaps > 0

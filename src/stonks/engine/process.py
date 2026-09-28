@@ -12,10 +12,20 @@ EngineProcess.on_event -> EventDriver -> bar close -> EngineProcess.on_bar_close
     2. write the decision bars to the bar store (live), so the step sees them
     3. per book: IntradayRouter.on_bar_close (simulated fills, reconcile)
     4. the step learns the new fills from the ledger
-    5. DecisionStep: signals, build_orders, session gates, flatten orders
-    6. per book: IntradayRouter.route(orders)
-    7. checkpoint and heartbeat in engine_runs
+    5. marks: intraday P&L (IntradayPnlTracker, 21.3.3), each book's marked
+       value, then trip_intraday_loss and the halts in force (event_verdict);
+       a stop-all kill switch cancels the book's working orders (21.3.2)
+    6. DecisionStep: signals, build_orders with RiskContext.intraday (the
+       intraday rules), session gates, flatten orders
+    7. per book: trip_intraday_runaway, gate_event_orders, then
+       IntradayRouter.route(orders); each sent order feeds the monitor's
+       event to order histogram (21.3.4)
+    8. checkpoint and heartbeat in engine_runs
 ```
+
+The :class:`~stonks.engine.monitor.EngineMonitor` (21.3.4) is attached to
+the driver, so it measures every dispatch and publishes the
+``engine_status`` row the API, ``/metrics`` and the dead-man read.
 
 - **Startup** (:meth:`EngineProcess.start`) runs before the first order.
   A run left ``running`` is marked ``crashed``. A simulated book is
@@ -55,6 +65,7 @@ from stonks.core.stream import StreamEvent
 from stonks.core.types import Order
 from stonks.engine.control import EngineControl
 from stonks.engine.driver import BarClose, EventDriver
+from stonks.engine.monitor import EngineMonitor
 from stonks.engine.recovery import (
     EngineMode,
     EngineRun,
@@ -81,6 +92,10 @@ if TYPE_CHECKING:
     from stonks.backtest.costs import CostModel
     from stonks.backtest.fills import MinuteFillSettings
     from stonks.config import Settings
+    from stonks.engine.status import EngineStatusStore
+    from stonks.production.intraday_halts import EventVerdict
+    from stonks.production.intraday_pnl import IntradayPnlTracker
+    from stonks.production.rules._intraday import IntradayContext
     from stonks.store.bars import BarStore
     from stonks.streaming.runner import StreamRunner
 
@@ -156,6 +171,12 @@ class EngineStats:
     flatten_orders: int = 0
     step_errors: int = 0
     route_errors: int = 0
+    #: Orders the halts in force stopped at the event (21.3.2).
+    orders_halted: int = 0
+    #: Halts the engine opened: intraday loss and order bursts.
+    halts_tripped: int = 0
+    #: Working orders a stop-all kill switch cancelled.
+    orders_cancelled: int = 0
     last_close_at: datetime | None = None
 
     def snapshot(self) -> dict[str, Any]:
@@ -191,6 +212,12 @@ class EngineProcess:
         bar_store: BarStore | None = None,
         on_decision: Callable[[RoutedDecision], object] | None = None,
         settle: timedelta | None = None,
+        status: EngineStatusStore | None = None,
+        engine_id: str = "default",
+        calendar: str = "XNYS",
+        publish_seconds: float = 15.0,
+        pnl: IntradayPnlTracker | None = None,
+        notify_halts: bool = True,
     ) -> None:
         if (source is None) == (runner is None):
             raise ValueError("give the engine either a source (replay) or a runner (live)")
@@ -225,8 +252,25 @@ class EngineProcess:
         self._owner: dict[str, str | None] = {}
         self._registered: frozenset[str] = frozenset()
         self._last_heartbeat: datetime | None = None
+        #: Intraday risk state per book (21.3.2): the session's marked
+        #: values, when each order went out, the halts in force now.
+        self._equity: dict[str, list[tuple[datetime, float]]] = {b.id: [] for b in self.books}
+        self._sent: dict[str, list[datetime]] = {b.id: [] for b in self.books}
+        self._intraday: dict[str, IntradayContext] = {}
+        self._verdicts: dict[str, EventVerdict] = {}
+        self._notify_halts = notify_halts
+        self.pnl = pnl
         stream = source if source is not None else runner.source  # type: ignore[union-attr]
         self.driver = EventDriver(stream, clock=clock, interval=interval, settle=settle)
+        self.monitor = EngineMonitor(
+            self.driver,
+            engine_id=engine_id,
+            calendar=calendar,
+            health=getattr(runner, "health", None),
+            store=status,
+            publish_seconds=publish_seconds,
+        )
+        self.monitor.attach()
         self.step = DecisionStep(
             strategies,
             [b.spec for b in self.books],
@@ -238,6 +282,7 @@ class EngineProcess:
             halts=halts,
             stale_after=stale_after,
             fresh_reads=self.mode == "live",
+            intraday=lambda book_id, _at: self._intraday.get(book_id),
         )
         self.driver.register(self, name=self.name, priority=ROUTER_PRIORITY)
 
@@ -314,6 +359,7 @@ class EngineProcess:
         )
         report.run_id = self.run_id
         self._last_heartbeat = self.clock.now()
+        self.monitor.start()
         _log.info(
             "engine.started",
             run_id=self.run_id,
@@ -376,6 +422,7 @@ class EngineProcess:
         for book in self.books:
             self._routers[book.id].on_bar_close(event)
             self._learn_fills(book)
+        self._after_marks(event)
         try:
             decisions = self.step.on_bar_close(event)
         except Exception as exc:
@@ -385,7 +432,7 @@ class EngineProcess:
         routed: list[RoutedDecision] = []
         for decision in decisions:
             try:
-                routed.append(self._route(decision))
+                routed.append(self._route(decision, event))
             except Exception as exc:  # one book's failure never stops the others
                 self.stats.route_errors += 1
                 _log.error(
@@ -455,6 +502,121 @@ class EngineProcess:
             self.step.record_fill(book.id, fill.ticker, owner)
             self._last_fill[book.id] = fill.id
 
+    # ---- intraday risk (21.3.2) and P&L (21.3.3) ---------------------------------------
+
+    def _after_marks(self, event: BarClose) -> None:
+        """After the fills of a bar close: intraday P&L, each book's marked
+        value and loss limit, the halts in force, and the kill switch's
+        cancels. A failure here is logged; it never stops the loop."""
+        from stonks.production.intraday_halts import event_verdict, trip_intraday_loss
+        from stonks.production.rules._intraday import IntradayContext
+
+        at = event.at.astimezone(UTC)
+        if self.pnl is not None:
+            try:
+                self.pnl.on_bar_close(event)
+            except Exception as exc:
+                _log.warning("engine.pnl_failed", close=at.isoformat(), error=str(exc))
+        marks = {**self.step.marks, **{b.ticker: b.close for b in event.bars}}
+        last_bar = {**self.step.last_bar_at, **{b.ticker: at for b in event.bars}}
+        stale = self._stream_stale()
+        for book in self.books:
+            try:
+                portfolio = self._brokers[book.id].fetch_portfolio()
+                value = _marked_value(portfolio.cash, portfolio.positions, marks)
+                equity = [(t, v) for t, v in self._equity[book.id] if t.date() == at.date()]
+                sent = [t for t in self._sent[book.id] if t.date() == at.date()]
+                self._sent[book.id] = sent
+                self._intraday[book.id] = IntradayContext(
+                    now=at,
+                    equity_marks=tuple(equity),
+                    last_bar_at=last_bar,
+                    sent_at=tuple(sent),
+                    stream_stale=stale,
+                )
+                if value is not None:
+                    equity.append((at, value))
+                self._equity[book.id] = equity
+                ctx = self.step.risk_context(book.spec, portfolio, marks, at)
+                if ctx is not None and value is not None:
+                    halt = trip_intraday_loss(
+                        self.state, book.portfolio_id, ctx, notify=self._notify_halts
+                    )
+                    if halt is not None:
+                        self.stats.halts_tripped += 1
+                verdict = event_verdict(self.state, book.portfolio_id, now=at)
+                self._verdicts[book.id] = verdict
+                if verdict.cancel_working:
+                    self._cancel_working(book)
+            except Exception as exc:
+                _log.warning(
+                    "engine.intraday_risk_failed",
+                    book=book.id,
+                    close=at.isoformat(),
+                    error=str(exc),
+                )
+
+    def _stream_stale(self) -> bool:
+        """The live stream has no fresh prices (reconnecting or failed)."""
+        health = getattr(self._runner, "health", None)
+        return health is not None and health.state in ("backoff", "connecting", "failed")
+
+    def _cancel_working(self, book: EngineBook) -> None:
+        from stonks.execution.cancel import cancel_working_orders
+
+        summary = cancel_working_orders(
+            self._brokers[book.id],
+            self.state,
+            portfolio_id=book.portfolio_id,
+            now=self.clock.now(),
+        )
+        self.stats.orders_cancelled += len(summary.cancelled)
+        if summary.cancelled:
+            _log.warning(
+                "engine.kill_switch_cancelled", book=book.id, orders=list(summary.cancelled)
+            )
+
+    def _gate_halts(self, decision: StepDecision) -> list[Order]:
+        """The decision's orders the halts in force let through: trip the
+        order burst halt first (the rate cap dropped an opening order), then
+        read the halts again and gate."""
+        from stonks.production.intraday_halts import (
+            event_verdict,
+            gate_event_orders,
+            trip_intraday_runaway,
+        )
+
+        book = next(b for b in self.books if b.id == decision.book_id)
+        at = decision.at.astimezone(UTC)
+        verdict = self._verdicts.get(book.id)
+        adjustments = decision.result.adjustments if decision.result is not None else []
+        if adjustments:
+            halt = trip_intraday_runaway(
+                self.state,
+                book.portfolio_id,
+                adjustments,
+                on=at.date(),
+                notify=self._notify_halts,
+            )
+            if halt is not None:
+                self.stats.halts_tripped += 1
+                verdict = event_verdict(self.state, book.portfolio_id, now=at)
+                self._verdicts[book.id] = verdict
+        if verdict is None or verdict.mode is None or not decision.orders:
+            return list(decision.orders)
+        positions = self._brokers[book.id].fetch_portfolio().positions
+        kept, blocked = gate_event_orders(decision.orders, verdict, positions)
+        if blocked:
+            self.stats.orders_halted += len(blocked)
+            _log.warning(
+                "engine.orders_halted",
+                book=book.id,
+                mode=verdict.mode,
+                orders=[o.client_id for o in blocked],
+                reasons=list(verdict.reasons),
+            )
+        return kept
+
     def _flatten_only(self, event: BarClose) -> list[StepDecision]:
         """The flatten orders of every book in its flatten window, for a bar
         where the step failed: an intraday book still ends the day flat."""
@@ -476,15 +638,18 @@ class EngineProcess:
                 prices=marks,
             )
             if orders:
-                orders = [replace(o, decision_price=marks.get(o.ticker)) for o in orders]
+                orders = [
+                    self.step.with_interval(replace(o, decision_price=marks.get(o.ticker)))
+                    for o in orders
+                ]
                 flat = sorted({o.ticker for o in orders})
                 out.append(StepDecision(book.id, at, as_of, orders, flattened=flat))
         return out
 
-    def _route(self, decision: StepDecision) -> RoutedDecision:
+    def _route(self, decision: StepDecision, event: BarClose | None = None) -> RoutedDecision:
         router = self._routers[decision.book_id]
         orders = []
-        for order in decision.orders:
+        for order in self._gate_halts(decision):
             self._owner[order.client_id] = order.strategy_id
             if order.strategy_id is not None and order.strategy_id not in self._registered:
                 # orders.strategy_id references the registry: a catalog
@@ -499,6 +664,9 @@ class EngineProcess:
         for ack in acks:
             if ack.status == "sent":
                 s.orders_sent += 1
+                self._sent[decision.book_id].append(decision.at.astimezone(UTC))
+                if event is not None:
+                    self.monitor.record_order(event, self.clock.now())
             elif ack.status == "known":
                 s.orders_known += 1
             elif ack.status == "held":
@@ -511,6 +679,11 @@ class EngineProcess:
         return routed
 
     def _shutdown(self, status: str, error: str | None) -> None:
+        if self.pnl is not None:
+            try:
+                self.pnl.finish()
+            except Exception as exc:
+                _log.warning("engine.pnl_finish_failed", error=str(exc))
         for book in self.books:
             broker = self._brokers.get(book.id)
             if broker is None:
@@ -535,7 +708,24 @@ class EngineProcess:
                     "handler_errors": dict(self.driver.stats.handler_errors),
                 },
             )
+        self.monitor.stop()
         _log.info("engine.stopped", run_id=self.run_id, status=status, **self.stats.snapshot())
+
+
+def _marked_value(
+    cash: float, positions: Mapping[str, float], marks: Mapping[str, float]
+) -> float | None:
+    """Cash plus positions at their marks, ``None`` when a holding has no
+    mark (an unknown value never reads as a loss)."""
+    value = float(cash)
+    for ticker, quantity in positions.items():
+        if not quantity:
+            continue
+        mark = marks.get(ticker)
+        if mark is None:
+            return None
+        value += float(quantity) * float(mark)
+    return value
 
 
 # ---- building from settings ------------------------------------------------------------
@@ -623,6 +813,9 @@ def build_engine(
             id=b.id,
             portfolio_id=b.portfolio_id,
             construction=b.construction,
+            # ``[production.risk]``: the caps and the intraday rules
+            # (``[production.risk.rules.intraday_*]``, 21.3.2)
+            risk=settings.production.risk,
             strategy_weights=weights,
             sessions=b.sessions,
         )
@@ -634,6 +827,19 @@ def build_engine(
     bar_store = None
     if write_bars if write_bars is not None else live:
         bar_store = getattr(lake, "bar_store", None)
+    from stonks.engine.status import EngineStatusStore
+
+    pnl = None
+    if settings.production.intraday_pnl.enabled:
+        from stonks.production.intraday_pnl import IntradayPnlTracker, lake_reference_prices
+
+        pnl = IntradayPnlTracker(
+            state,
+            [b.portfolio_id for b in books],
+            reference_prices=lake_reference_prices(lake),
+            settings=settings.production.intraday_pnl,
+            clock=clock,
+        )
     return EngineProcess(
         strategies={n: pool[n] for n in names},
         books=books,
@@ -652,4 +858,8 @@ def build_engine(
         if live and cfg.stale_after_seconds
         else None,
         bar_store=bar_store,
+        status=EngineStatusStore(settings.state.path),
+        calendar=cfg.calendar,
+        publish_seconds=settings.streaming.monitor.publish_seconds,
+        pnl=pnl,
     )
