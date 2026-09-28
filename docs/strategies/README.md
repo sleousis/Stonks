@@ -33,6 +33,7 @@ uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --prese
 | Id | What it does |
 |----|--------------|
 | `factor` | Holds the top slice of a universe by any library factor or formula, equal weight, month-end rebalance. |
+| `learning_ranker` | A gradient-boosting model ranks the universe from many factors (Alpha158 by default), trained on purged windows, retrained through the model lifecycle ([details](learning-ranker.md)). |
 
 ## Book strategies ([details](book-strategies.md))
 
