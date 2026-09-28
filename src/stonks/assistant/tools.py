@@ -138,7 +138,10 @@ class McpToolBridge(ToolBridge):
         self._api = ApiClient(
             IN_PROCESS_URL, token=IN_PROCESS_TOKEN, timeout=timeout, transport=transport
         )
-        self._server = build_server(self._api, max_wait_seconds=min(timeout, 60.0))
+        # a token limited to some MCP toolsets keeps the same limit here (23.8)
+        self._server = build_server(
+            self._api, max_wait_seconds=min(timeout, 60.0), toolsets=principal.toolsets
+        )
         self._tools: list[ToolInfo] | None = None
 
     async def tools(self) -> list[ToolInfo]:

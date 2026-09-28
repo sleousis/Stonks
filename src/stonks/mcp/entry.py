@@ -54,6 +54,28 @@ def api_client(settings: Settings) -> ApiClient:
         raise McpConfigError(str(exc)) from None
 
 
+def resolve_toolsets(api: ApiClient) -> frozenset[str] | None:
+    """The MCP tool groups the token may use, from ``GET /api/auth/me``
+    (roadmap 23.8). None: every group. When the API cannot say (down, or
+    the token is refused), only ``whoami`` stays: a limited token never
+    gets more tools by accident. Closes ``api`` (a client of its own)."""
+    import anyio
+
+    async def ask() -> object:
+        try:
+            return await api.get("/api/auth/me")
+        finally:
+            await api.aclose()
+
+    try:
+        me = anyio.run(ask)
+    except Exception as exc:
+        get_logger("stonks.mcp").warning("mcp.toolsets_unknown", error=type(exc).__name__)
+        return frozenset()
+    groups = me.get("toolsets") if isinstance(me, dict) else None
+    return None if groups is None else frozenset(str(g) for g in groups)
+
+
 def run(settings: Settings) -> None:
     # Validate first: a bad config exits without reconfiguring logging.
     api = api_client(settings)
@@ -65,7 +87,13 @@ def run(settings: Settings) -> None:
             hint="the shared STONKS_API_TOKEN acts as the bootstrap admin; set "
             "STONKS_MCP_TOKEN to a personal token so every tool acts as you",
         )
-    log.info("mcp.started", api_url=api.base_url, write_tools_enabled=api.has_token)
+    toolsets = resolve_toolsets(api_client(settings))
+    log.info(
+        "mcp.started",
+        api_url=api.base_url,
+        write_tools_enabled=api.has_token,
+        toolsets=sorted(toolsets) if toolsets is not None else "all",
+    )
     from stonks.mcp.server import run_stdio
 
-    run_stdio(api, max_wait_seconds=settings.mcp.max_wait_seconds)
+    run_stdio(api, max_wait_seconds=settings.mcp.max_wait_seconds, toolsets=toolsets)

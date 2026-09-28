@@ -20,7 +20,7 @@ from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from stonks.accounts import Role
 from stonks.api.deps import (
@@ -45,6 +45,7 @@ from stonks.auth import (
     Permission,
     UserAuthInfo,
 )
+from stonks.mcp.toolsets import toolset_about, unknown_toolsets
 
 _RESPONSES = {
     **PROBLEM_RESPONSES,
@@ -105,6 +106,8 @@ class MeView(BaseModel):
     mfa_enrolled: bool
     #: Second factor verified recently enough for sensitive actions.
     mfa_fresh: bool
+    #: MCP tool groups this credential may use; null means every group.
+    toolsets: list[str] | None = None
 
 
 class AuthCheck(BaseModel):
@@ -124,6 +127,19 @@ class TokenCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     scopes: list[ApiScope] = Field(min_length=1)
     expires_in_days: int | None = Field(default=None, ge=1, le=365)
+    #: MCP tool groups the token may use (``GET /api/auth/toolsets``); null
+    #: means every group.
+    toolsets: list[str] | None = Field(default=None, min_length=1, max_length=64)
+
+    @field_validator("toolsets")
+    @classmethod
+    def _known_toolsets(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        unknown = unknown_toolsets(value)
+        if unknown:
+            raise ValueError(f"unknown MCP toolsets: {', '.join(unknown)}")
+        return sorted(set(value))
 
 
 class TokenView(BaseModel):
@@ -134,6 +150,15 @@ class TokenView(BaseModel):
     last_used_at: str | None
     expires_at: str | None
     revoked_at: str | None
+    #: MCP tool groups the token may use; null means every group.
+    toolsets: list[str] | None = None
+
+
+class ToolsetView(BaseModel):
+    """One MCP tool group a token can be limited to."""
+
+    name: str
+    about: str
 
 
 class TokenCreatedView(BaseModel):
@@ -181,6 +206,7 @@ def _token_view(info: ApiTokenInfo) -> TokenView:
         last_used_at=info.last_used_at,
         expires_at=info.expires_at,
         revoked_at=info.revoked_at,
+        toolsets=list(info.toolsets) if info.toolsets is not None else None,
     )
 
 
@@ -350,6 +376,7 @@ def me(principal: PrincipalDep, auth: AuthDep) -> MeView:
         scopes=sorted(principal.scopes, key=list(ApiScope).index),
         mfa_enrolled=info.mfa_enrolled,
         mfa_fresh=principal.mfa_fresh,
+        toolsets=sorted(principal.toolsets) if principal.toolsets is not None else None,
     )
 
 
@@ -412,8 +439,17 @@ def create_token(
         scopes=body.scopes,
         expires_in_days=body.expires_in_days,
         ip=client_ip(request),
+        toolsets=body.toolsets,
     )
     return TokenCreatedView(token=token, info=_token_view(info))
+
+
+@router.get("/toolsets", response_model=Page[ToolsetView], operation_id="listMcpToolsets")
+def list_toolsets(page: PageDep) -> Page[ToolsetView]:
+    """The MCP tool groups a token can be limited to, in the order the MCP
+    server registers them. A limited token keeps ``whoami`` too."""
+    views = [ToolsetView(name=n, about=a) for n, a in toolset_about()]
+    return page_of(views, page)
 
 
 @router.delete(
