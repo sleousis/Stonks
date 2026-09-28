@@ -296,7 +296,7 @@ flowchart LR
    | `HC_PING_RESTORE_TEST` | monthly, 1st, 04:00 UTC | 1 day |
    | `HC_PING_INGEST`, `HC_PING_TICK`, `HC_PING_HEALTH` | weekdays after the close | 1 hour |
 
-   The first three are pinged by the scripts in `deploy/`. The last three are for the scheduler jobs, through `ping_url_env` (see [Known gaps](#known-gaps)). Connect healthchecks.io to the same chat channel as `STONKS_NOTIFY_WEBHOOK_URL`.
+   The first three are pinged by the scripts in `deploy/`. The last three are pinged by the default `ingest_prices`, `tick` and `health` jobs through their `ping_url_env`. Leave one empty to turn it off. Connect healthchecks.io to the same chat channel as `STONKS_NOTIFY_WEBHOOK_URL`.
 
 2. **Uptime check.** Public mode: point an external monitor (healthchecks.io does not do this; use UptimeRobot, Better Stack or Uptime Kuma) at `https://<domain>/api/health`. Tailscale mode: nothing outside can reach the server, so `HC_PING_HOST` doubles as the uptime signal. If the server dies, the pings stop and you get an alert.
 
@@ -527,6 +527,5 @@ For a single-user setup on Windows, run `uv run stonks serve` as a service with 
 
 ## Known gaps
 
-- Scheduler dead-man pings: each job pings the URL in the variable named by its `ping_url_env`, but the default job list sets none. Listing `[[scheduler.jobs]]` replaces the whole list, so to use `HC_PING_INGEST`, `HC_PING_TICK` and `HC_PING_HEALTH`, copy the default jobs ([operations.md](operations.md#default-jobs)) and add `ping_url_env` to those three. The scheduler's own deadline alerts and the engine dead-man work without it.
 - `[api]` host and allowed hosts cannot be set from the environment yet, so Caddy presents requests to the API as `localhost` (see `deploy/Caddyfile`).
 - A lab worker on another machine needs a queue over the API, which is not built (see [10. Lab offload](#10-lab-offload)).
