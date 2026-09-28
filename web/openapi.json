@@ -1252,6 +1252,181 @@
         "title": "BarView",
         "type": "object"
       },
+      "BehaviourBucketView": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "pnl": {
+            "title": "Pnl",
+            "type": "number"
+          },
+          "trades": {
+            "title": "Trades",
+            "type": "integer"
+          },
+          "win_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Win Rate"
+          }
+        },
+        "required": [
+          "label",
+          "trades",
+          "pnl",
+          "win_rate"
+        ],
+        "title": "BehaviourBucketView",
+        "type": "object"
+      },
+      "BehaviourView": {
+        "description": "How you trade by hand: your manual orders and the trades a broker\nsync brought in, paired into round trips (FIFO, fees in).",
+        "properties": {
+          "against_strategies_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "P&L of the trades against the strategies (negative: what it cost).",
+            "title": "Against Strategies Cost"
+          },
+          "avg_loss": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Loss"
+          },
+          "avg_win": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Win"
+          },
+          "by_holding": {
+            "items": {
+              "$ref": "#/components/schemas/BehaviourBucketView"
+            },
+            "title": "By Holding",
+            "type": "array"
+          },
+          "by_weekday": {
+            "description": "By the weekday of the entry.",
+            "items": {
+              "$ref": "#/components/schemas/BehaviourBucketView"
+            },
+            "title": "By Weekday",
+            "type": "array"
+          },
+          "disposition": {
+            "$ref": "#/components/schemas/DispositionView"
+          },
+          "open_positions": {
+            "title": "Open Positions",
+            "type": "integer"
+          },
+          "overtrading": {
+            "$ref": "#/components/schemas/OvertradingView"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "revenge": {
+            "$ref": "#/components/schemas/BehaviourBucketView",
+            "description": "Entries within a day of a losing exit, and how they did."
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "sources": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Fills by source: manual or broker.",
+            "title": "Sources",
+            "type": "object"
+          },
+          "total_pnl": {
+            "title": "Total Pnl",
+            "type": "number"
+          },
+          "trades": {
+            "description": "Closed round trips.",
+            "title": "Trades",
+            "type": "integer"
+          },
+          "versus_strategies": {
+            "description": "Trades with, against or without a view of the active strategies' signals at the entry.",
+            "items": {
+              "$ref": "#/components/schemas/BehaviourBucketView"
+            },
+            "title": "Versus Strategies",
+            "type": "array"
+          },
+          "win_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Win Rate"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "since",
+          "trades",
+          "open_positions",
+          "win_rate",
+          "total_pnl",
+          "avg_win",
+          "avg_loss",
+          "by_holding",
+          "by_weekday",
+          "disposition",
+          "overtrading",
+          "revenge",
+          "versus_strategies",
+          "against_strategies_cost",
+          "sources"
+        ],
+        "title": "BehaviourView",
+        "type": "object"
+      },
       "BenchmarkStatsView": {
         "description": "A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``).\nRatios are ``None`` when not finite.",
         "properties": {
@@ -3062,6 +3237,57 @@
           "remote_error"
         ],
         "title": "DisconnectView",
+        "type": "object"
+      },
+      "DispositionView": {
+        "properties": {
+          "avg_days_losers": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Days Losers"
+          },
+          "avg_days_winners": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Days Winners"
+          },
+          "present": {
+            "description": "Losers are held clearly longer than winners.",
+            "title": "Present",
+            "type": "boolean"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Losers held this many times longer than winners.",
+            "title": "Ratio"
+          }
+        },
+        "required": [
+          "avg_days_winners",
+          "avg_days_losers",
+          "ratio",
+          "present"
+        ],
+        "title": "DispositionView",
         "type": "object"
       },
       "DividendEvent": {
@@ -10217,6 +10443,61 @@
         "title": "LotPicksUpdate",
         "type": "object"
       },
+      "ManualDisciplineSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "cooldown_minutes": {
+            "anyOf": [
+              {
+                "maximum": 10080.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cooldown Minutes"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "max_daily_loss": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Daily Loss"
+          },
+          "max_entries_per_day": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Entries Per Day"
+          },
+          "require_stop_live": {
+            "default": true,
+            "title": "Require Stop Live",
+            "type": "boolean"
+          }
+        },
+        "title": "ManualDisciplineSettings",
+        "type": "object"
+      },
       "ManualOrderChange": {
         "additionalProperties": false,
         "description": "A new quantity or limit for one of your working manual orders. It is\ncancelled at the broker and replaced by a new order.",
@@ -10355,6 +10636,32 @@
             "title": "Side",
             "type": "string"
           },
+          "stop_price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A protective stop for this entry: below a buy, above a short sale. A book at a broker gets a stop order once the entry fills.",
+            "title": "Stop Price"
+          },
+          "target_price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where you plan to take the profit (recorded).",
+            "title": "Target Price"
+          },
           "ticker": {
             "description": "Instrument id, e.g. AAPL.US",
             "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\-^=]{0,31}$",
@@ -10441,6 +10748,18 @@
             "title": "Portfolio Id",
             "type": "string"
           },
+          "protective_stop": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The client id of the stop order placed at the broker.",
+            "title": "Protective Stop"
+          },
           "quantity": {
             "description": "What was placed (smaller when allow_reduce applied).",
             "title": "Quantity",
@@ -10467,6 +10786,18 @@
             "title": "Requested Quantity",
             "type": "number"
           },
+          "reward_risk": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The gain at the target over the loss at the stop.",
+            "title": "Reward Risk"
+          },
           "side": {
             "enum": [
               "buy",
@@ -10486,6 +10817,29 @@
             ],
             "title": "Status",
             "type": "string"
+          },
+          "stop_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The protective stop planned.",
+            "title": "Stop Price"
+          },
+          "target_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Price"
           },
           "ticker": {
             "title": "Ticker",
@@ -13462,6 +13816,52 @@
           "updated_at"
         ],
         "title": "OrderView",
+        "type": "object"
+      },
+      "OvertradingView": {
+        "properties": {
+          "active_days": {
+            "title": "Active Days",
+            "type": "integer"
+          },
+          "busy_day_pnl": {
+            "title": "Busy Day Pnl",
+            "type": "number"
+          },
+          "busy_days": {
+            "description": "Days with many entries (5 or more).",
+            "title": "Busy Days",
+            "type": "integer"
+          },
+          "entries_per_active_day": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entries Per Active Day"
+          },
+          "max_entries_in_a_day": {
+            "title": "Max Entries In A Day",
+            "type": "integer"
+          },
+          "other_day_pnl": {
+            "title": "Other Day Pnl",
+            "type": "number"
+          }
+        },
+        "required": [
+          "active_days",
+          "entries_per_active_day",
+          "max_entries_in_a_day",
+          "busy_days",
+          "busy_day_pnl",
+          "other_day_pnl"
+        ],
+        "title": "OvertradingView",
         "type": "object"
       },
       "Page_AlertView_": {
@@ -16555,6 +16955,69 @@
         "title": "PreviewAccountView",
         "type": "object"
       },
+      "PreviewLotView": {
+        "properties": {
+          "acquired": {
+            "format": "date",
+            "title": "Acquired",
+            "type": "string"
+          },
+          "cost_basis": {
+            "title": "Cost Basis",
+            "type": "number"
+          },
+          "gain": {
+            "title": "Gain",
+            "type": "number"
+          },
+          "holding_period": {
+            "enum": [
+              "short",
+              "long"
+            ],
+            "title": "Holding Period",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "long",
+              "short"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "open_fill_id": {
+            "description": "The fill that opened the lot.",
+            "title": "Open Fill Id",
+            "type": "integer"
+          },
+          "proceeds": {
+            "title": "Proceeds",
+            "type": "number"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "wash_sale_disallowed": {
+            "title": "Wash Sale Disallowed",
+            "type": "number"
+          }
+        },
+        "required": [
+          "open_fill_id",
+          "kind",
+          "quantity",
+          "acquired",
+          "holding_period",
+          "cost_basis",
+          "proceeds",
+          "gain",
+          "wash_sale_disallowed"
+        ],
+        "title": "PreviewLotView",
+        "type": "object"
+      },
       "PreviewOrderView": {
         "properties": {
           "adjustments": {
@@ -18882,6 +19345,10 @@
               "losing_lock": {
                 "lock_days": 30
               },
+              "manual_discipline": {
+                "enabled": false,
+                "require_stop_live": true
+              },
               "margin_call": {
                 "buffer": 0.0,
                 "enabled": false,
@@ -19500,6 +19967,13 @@
             "$ref": "#/components/schemas/LosingLockSettings",
             "default": {
               "lock_days": 30
+            }
+          },
+          "manual_discipline": {
+            "$ref": "#/components/schemas/ManualDisciplineSettings",
+            "default": {
+              "enabled": false,
+              "require_stop_live": true
             }
           },
           "margin_call": {
@@ -23451,6 +23925,156 @@
         "title": "SystemChecklistView",
         "type": "object"
       },
+      "TaxPreviewView": {
+        "description": "What a trade would realise now, before it is placed. An estimate at\nyour configured rates, not tax advice.",
+        "properties": {
+          "after_tax_proceeds": {
+            "title": "After Tax Proceeds",
+            "type": "number"
+          },
+          "currency": {
+            "description": "The trade's currency; every amount is in it.",
+            "title": "Currency",
+            "type": "string"
+          },
+          "estimated_tax": {
+            "description": "Tax on this trade's own gains (0 on a loss).",
+            "title": "Estimated Tax",
+            "type": "number"
+          },
+          "jurisdiction": {
+            "enum": [
+              "us",
+              "eu",
+              "uk"
+            ],
+            "title": "Jurisdiction",
+            "type": "string"
+          },
+          "long_term_gain": {
+            "title": "Long Term Gain",
+            "type": "number"
+          },
+          "lot_method": {
+            "enum": [
+              "fifo",
+              "specific"
+            ],
+            "title": "Lot Method",
+            "type": "string"
+          },
+          "lots": {
+            "description": "The lots the trade closes, in order.",
+            "items": {
+              "$ref": "#/components/schemas/PreviewLotView"
+            },
+            "title": "Lots",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "price": {
+            "description": "The price used: yours, else the latest close.",
+            "title": "Price",
+            "type": "number"
+          },
+          "proceeds": {
+            "title": "Proceeds",
+            "type": "number"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "number"
+          },
+          "rates": {
+            "$ref": "#/components/schemas/TaxRatesView"
+          },
+          "realized_gain": {
+            "title": "Realized Gain",
+            "type": "number"
+          },
+          "short_term_gain": {
+            "title": "Short Term Gain",
+            "type": "number"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          },
+          "wash_sale_disallowed": {
+            "title": "Wash Sale Disallowed",
+            "type": "number"
+          },
+          "wash_sale_warning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wash Sale Warning"
+          },
+          "year_tax_change": {
+            "description": "How much the trade changes this year's estimated tax (negative lowers it).",
+            "title": "Year Tax Change",
+            "type": "number"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "ticker",
+          "side",
+          "quantity",
+          "price",
+          "currency",
+          "jurisdiction",
+          "lot_method",
+          "lots",
+          "proceeds",
+          "realized_gain",
+          "short_term_gain",
+          "long_term_gain",
+          "wash_sale_disallowed",
+          "estimated_tax",
+          "after_tax_proceeds",
+          "year_tax_change",
+          "rates"
+        ],
+        "title": "TaxPreviewView",
+        "type": "object"
+      },
+      "TaxRatesView": {
+        "properties": {
+          "long_term": {
+            "description": "Rate on gains held more than one year.",
+            "title": "Long Term",
+            "type": "number"
+          },
+          "short_term": {
+            "description": "Rate on gains held one year or less.",
+            "title": "Short Term",
+            "type": "number"
+          }
+        },
+        "required": [
+          "short_term",
+          "long_term"
+        ],
+        "title": "TaxRatesView",
+        "type": "object"
+      },
       "TaxSettingsUpdate": {
         "additionalProperties": false,
         "properties": {
@@ -23568,6 +24192,75 @@
           "wash_sales"
         ],
         "title": "TaxSettingsView",
+        "type": "object"
+      },
+      "TaxYearView": {
+        "description": "Gains realised this year and the estimated tax on them, in the base\ncurrency. Short and long term losses offset gains first.",
+        "properties": {
+          "base_currency": {
+            "title": "Base Currency",
+            "type": "string"
+          },
+          "disposals": {
+            "title": "Disposals",
+            "type": "integer"
+          },
+          "estimated_tax": {
+            "title": "Estimated Tax",
+            "type": "number"
+          },
+          "jurisdiction": {
+            "enum": [
+              "us",
+              "eu",
+              "uk"
+            ],
+            "title": "Jurisdiction",
+            "type": "string"
+          },
+          "long_term_gain": {
+            "title": "Long Term Gain",
+            "type": "number"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "rates": {
+            "$ref": "#/components/schemas/TaxRatesView"
+          },
+          "short_term_gain": {
+            "title": "Short Term Gain",
+            "type": "number"
+          },
+          "unconverted": {
+            "description": "Disposals left out for want of an FX rate.",
+            "title": "Unconverted",
+            "type": "integer"
+          },
+          "wash_sale_disallowed": {
+            "title": "Wash Sale Disallowed",
+            "type": "number"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "year",
+          "base_currency",
+          "jurisdiction",
+          "short_term_gain",
+          "long_term_gain",
+          "wash_sale_disallowed",
+          "estimated_tax",
+          "disposals",
+          "unconverted",
+          "rates"
+        ],
+        "title": "TaxYearView",
         "type": "object"
       },
       "TcaGroupView": {
@@ -25046,6 +25739,228 @@
           "arguments"
         ],
         "title": "ToolCallView",
+        "type": "object"
+      },
+      "TradePlanRequest": {
+        "additionalProperties": false,
+        "description": "Size an entry from the risk you choose and the distance to the stop.",
+        "properties": {
+          "entry_price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Your entry, e.g. a limit. Default: the latest close.",
+            "title": "Entry Price"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          },
+          "risk_amount": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Risk as an amount in the book's currency.",
+            "title": "Risk Amount"
+          },
+          "risk_percent": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Risk as a percent of the book's value.",
+            "title": "Risk Percent"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "stop_price": {
+            "exclusiveMinimum": 0.0,
+            "title": "Stop Price",
+            "type": "number"
+          },
+          "target_price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Price"
+          },
+          "ticker": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\-^=]{0,31}$",
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "side",
+          "stop_price"
+        ],
+        "title": "TradePlanRequest",
+        "type": "object"
+      },
+      "TradePlanView": {
+        "properties": {
+          "capped_by": {
+            "anyOf": [
+              {
+                "const": "cash",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "cash: the cash cut the size.",
+            "title": "Capped By"
+          },
+          "cash": {
+            "title": "Cash",
+            "type": "number"
+          },
+          "entry_is_close": {
+            "description": "The entry is the latest close.",
+            "title": "Entry Is Close",
+            "type": "boolean"
+          },
+          "entry_price": {
+            "title": "Entry Price",
+            "type": "number"
+          },
+          "equity": {
+            "description": "The book's value at the latest closes.",
+            "title": "Equity",
+            "type": "number"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "notional": {
+            "title": "Notional",
+            "type": "number"
+          },
+          "quantity": {
+            "description": "Whole shares whose loss at the stop fits the risk.",
+            "title": "Quantity",
+            "type": "integer"
+          },
+          "reward_risk": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The gain at the target over the risk.",
+            "title": "Reward Risk"
+          },
+          "risk_amount": {
+            "description": "The loss at the stop for that quantity.",
+            "title": "Risk Amount",
+            "type": "number"
+          },
+          "risk_budget": {
+            "description": "The risk you chose, as an amount.",
+            "title": "Risk Budget",
+            "type": "number"
+          },
+          "risk_per_share": {
+            "title": "Risk Per Share",
+            "type": "number"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "stop_price": {
+            "title": "Stop Price",
+            "type": "number"
+          },
+          "target_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Price"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "side",
+          "entry_price",
+          "entry_is_close",
+          "stop_price",
+          "target_price",
+          "equity",
+          "cash",
+          "risk_budget",
+          "risk_per_share",
+          "quantity",
+          "risk_amount",
+          "notional",
+          "reward_risk",
+          "capped_by"
+        ],
+        "title": "TradePlanView",
         "type": "object"
       },
       "TradeStatsView": {
@@ -35389,6 +36304,123 @@
         ]
       }
     },
+    "/api/insights/behaviour": {
+      "get": {
+        "description": "How you trade by hand: your manual orders and synced broker trades as\nround trips. P&L by holding time and weekday, win rate, the disposition\neffect, overtrading, revenge trades after a loss, and what trading\nagainst the active strategies cost.",
+        "operationId": "getBehaviourReport",
+        "parameters": [
+          {
+            "description": "First day to include, YYYY-MM-DD",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "First day to include, YYYY-MM-DD",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BehaviourView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Behaviour",
+        "tags": [
+          "insights"
+        ]
+      }
+    },
     "/api/insights/totals": {
       "get": {
         "description": "Admins: asset-class allocation and exposure summed over every active\nportfolio. No tickers and no per-person numbers.",
@@ -41168,6 +42200,94 @@
           }
         ],
         "summary": "Place Manual Order",
+        "tags": [
+          "orders"
+        ],
+        "x-permission": "portfolio.trade"
+      }
+    },
+    "/api/orders/manual/plan": {
+      "post": {
+        "description": "Size an entry from the risk you choose (a percent of the book or an\namount) and the distance to your stop, in whole shares within the cash.\nNothing is placed.",
+        "operationId": "planManualOrder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TradePlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TradePlanView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Plan Manual Order",
         "tags": [
           "orders"
         ],
@@ -51678,6 +52798,157 @@
         "x-permission": "portfolio.manage"
       }
     },
+    "/api/tax/preview": {
+      "get": {
+        "description": "Before you trade: the lots a sell closes under your lot method, the\nrealised gain and holding period, the estimated tax at the configured\nrate, the after-tax proceeds and a wash sale warning. An estimate, not\ntax advice. Nothing is placed.",
+        "operationId": "previewTradeTax",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "ticker",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\-^=]{0,31}$",
+              "title": "Ticker",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "side",
+            "required": true,
+            "schema": {
+              "enum": [
+                "buy",
+                "sell"
+              ],
+              "title": "Side",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quantity",
+            "required": true,
+            "schema": {
+              "exclusiveMinimum": 0,
+              "maximum": 1000000000.0,
+              "title": "Quantity",
+              "type": "number"
+            }
+          },
+          {
+            "description": "Default: the latest close",
+            "in": "query",
+            "name": "price",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Default: the latest close",
+              "title": "Price"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxPreviewView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Preview Trade Tax",
+        "tags": [
+          "tax"
+        ]
+      }
+    },
     "/api/tax/settings": {
       "get": {
         "description": "Base currency, jurisdiction, lot method and wash sale switch of one\nof your portfolios (defaults when never set).",
@@ -51881,6 +53152,124 @@
           "tax"
         ],
         "x-permission": "portfolio.manage"
+      }
+    },
+    "/api/tax/year": {
+      "get": {
+        "description": "Gains realised this year so far and the estimated tax owed on them,\nin the base currency. An estimate at the configured rates.",
+        "operationId": "getTaxYear",
+        "parameters": [
+          {
+            "description": "Default: this year",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2200,
+                  "minimum": 1900,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Default: this year",
+              "title": "Year"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaxYearView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Tax Year",
+        "tags": [
+          "tax"
+        ]
       }
     },
     "/api/tca/journal": {

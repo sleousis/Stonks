@@ -725,6 +725,107 @@ export type BarView = {
 };
 
 /**
+ * BehaviourBucketView
+ */
+export type BehaviourBucketView = {
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Trades
+     */
+    trades: number;
+    /**
+     * Win Rate
+     */
+    win_rate: number | null;
+};
+
+/**
+ * BehaviourView
+ *
+ * How you trade by hand: your manual orders and the trades a broker
+ * sync brought in, paired into round trips (FIFO, fees in).
+ */
+export type BehaviourView = {
+    /**
+     * Against Strategies Cost
+     *
+     * P&L of the trades against the strategies (negative: what it cost).
+     */
+    against_strategies_cost: number | null;
+    /**
+     * Avg Loss
+     */
+    avg_loss: number | null;
+    /**
+     * Avg Win
+     */
+    avg_win: number | null;
+    /**
+     * By Holding
+     */
+    by_holding: Array<BehaviourBucketView>;
+    /**
+     * By Weekday
+     *
+     * By the weekday of the entry.
+     */
+    by_weekday: Array<BehaviourBucketView>;
+    disposition: DispositionView;
+    /**
+     * Open Positions
+     */
+    open_positions: number;
+    overtrading: OvertradingView;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Entries within a day of a losing exit, and how they did.
+     */
+    revenge: BehaviourBucketView;
+    /**
+     * Since
+     */
+    since: string | null;
+    /**
+     * Sources
+     *
+     * Fills by source: manual or broker.
+     */
+    sources: {
+        [key: string]: number;
+    };
+    /**
+     * Total Pnl
+     */
+    total_pnl: number;
+    /**
+     * Trades
+     *
+     * Closed round trips.
+     */
+    trades: number;
+    /**
+     * Versus Strategies
+     *
+     * Trades with, against or without a view of the active strategies' signals at the entry.
+     */
+    versus_strategies: Array<BehaviourBucketView>;
+    /**
+     * Win Rate
+     */
+    win_rate: number | null;
+};
+
+/**
  * BenchmarkStatsView
  *
  * A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``).
@@ -1678,6 +1779,32 @@ export type DisconnectView = {
      * Remote Removed
      */
     remote_removed: boolean | null;
+};
+
+/**
+ * DispositionView
+ */
+export type DispositionView = {
+    /**
+     * Avg Days Losers
+     */
+    avg_days_losers: number | null;
+    /**
+     * Avg Days Winners
+     */
+    avg_days_winners: number | null;
+    /**
+     * Present
+     *
+     * Losers are held clearly longer than winners.
+     */
+    present: boolean;
+    /**
+     * Ratio
+     *
+     * Losers held this many times longer than winners.
+     */
+    ratio: number | null;
 };
 
 /**
@@ -5438,6 +5565,32 @@ export type LotPicksUpdate = {
 };
 
 /**
+ * ManualDisciplineSettings
+ */
+export type ManualDisciplineSettings = {
+    /**
+     * Cooldown Minutes
+     */
+    cooldown_minutes?: number | null;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Max Daily Loss
+     */
+    max_daily_loss?: number | null;
+    /**
+     * Max Entries Per Day
+     */
+    max_entries_per_day?: number | null;
+    /**
+     * Require Stop Live
+     */
+    require_stop_live?: boolean;
+};
+
+/**
  * ManualOrderChange
  *
  * A new quantity or limit for one of your working manual orders. It is
@@ -5516,6 +5669,18 @@ export type ManualOrderRequest = {
      */
     side: 'buy' | 'sell';
     /**
+     * Stop Price
+     *
+     * A protective stop for this entry: below a buy, above a short sale. A book at a broker gets a stop order once the entry fills.
+     */
+    stop_price?: number | null;
+    /**
+     * Target Price
+     *
+     * Where you plan to take the profit (recorded).
+     */
+    target_price?: number | null;
+    /**
      * Ticker
      *
      * Instrument id, e.g. AAPL.US
@@ -5570,6 +5735,12 @@ export type ManualOrderResult = {
      */
     portfolio_id: string;
     /**
+     * Protective Stop
+     *
+     * The client id of the stop order placed at the broker.
+     */
+    protective_stop?: string | null;
+    /**
      * Quantity
      *
      * What was placed (smaller when allow_reduce applied).
@@ -5592,6 +5763,12 @@ export type ManualOrderResult = {
      */
     requested_quantity: number;
     /**
+     * Reward Risk
+     *
+     * The gain at the target over the loss at the stop.
+     */
+    reward_risk?: number | null;
+    /**
      * Side
      */
     side: 'buy' | 'sell';
@@ -5599,6 +5776,16 @@ export type ManualOrderResult = {
      * Status
      */
     status: 'preview' | 'pending' | 'filled' | 'partially_filled' | 'rejected' | 'cancelled';
+    /**
+     * Stop Price
+     *
+     * The protective stop planned.
+     */
+    stop_price?: number | null;
+    /**
+     * Target Price
+     */
+    target_price?: number | null;
     /**
      * Ticker
      */
@@ -7162,6 +7349,38 @@ export type OrderView = {
      * Updated At
      */
     updated_at: string;
+};
+
+/**
+ * OvertradingView
+ */
+export type OvertradingView = {
+    /**
+     * Active Days
+     */
+    active_days: number;
+    /**
+     * Busy Day Pnl
+     */
+    busy_day_pnl: number;
+    /**
+     * Busy Days
+     *
+     * Days with many entries (5 or more).
+     */
+    busy_days: number;
+    /**
+     * Entries Per Active Day
+     */
+    entries_per_active_day: number | null;
+    /**
+     * Max Entries In A Day
+     */
+    max_entries_in_a_day: number;
+    /**
+     * Other Day Pnl
+     */
+    other_day_pnl: number;
 };
 
 /**
@@ -9113,6 +9332,50 @@ export type PreviewAccountView = {
 };
 
 /**
+ * PreviewLotView
+ */
+export type PreviewLotView = {
+    /**
+     * Acquired
+     */
+    acquired: string;
+    /**
+     * Cost Basis
+     */
+    cost_basis: number;
+    /**
+     * Gain
+     */
+    gain: number;
+    /**
+     * Holding Period
+     */
+    holding_period: 'short' | 'long';
+    /**
+     * Kind
+     */
+    kind: 'long' | 'short';
+    /**
+     * Open Fill Id
+     *
+     * The fill that opened the lot.
+     */
+    open_fill_id: number;
+    /**
+     * Proceeds
+     */
+    proceeds: number;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Wash Sale Disallowed
+     */
+    wash_sale_disallowed: number;
+};
+
+/**
  * PreviewOrderView
  */
 export type PreviewOrderView = {
@@ -10567,6 +10830,7 @@ export type RuleSettings = {
     liquidity?: LiquiditySettings;
     live_notional_caps?: LiveNotionalCapsSettings;
     losing_lock?: LosingLockSettings;
+    manual_discipline?: ManualDisciplineSettings;
     margin_call?: MarginCallSettings;
     max_holding?: MaxHoldingSettings;
     max_orders_per_run?: MaxOrdersPerRunSettings;
@@ -12634,6 +12898,116 @@ export type SystemChecklistView = {
 };
 
 /**
+ * TaxPreviewView
+ *
+ * What a trade would realise now, before it is placed. An estimate at
+ * your configured rates, not tax advice.
+ */
+export type TaxPreviewView = {
+    /**
+     * After Tax Proceeds
+     */
+    after_tax_proceeds: number;
+    /**
+     * Currency
+     *
+     * The trade's currency; every amount is in it.
+     */
+    currency: string;
+    /**
+     * Estimated Tax
+     *
+     * Tax on this trade's own gains (0 on a loss).
+     */
+    estimated_tax: number;
+    /**
+     * Jurisdiction
+     */
+    jurisdiction: 'us' | 'eu' | 'uk';
+    /**
+     * Long Term Gain
+     */
+    long_term_gain: number;
+    /**
+     * Lot Method
+     */
+    lot_method: 'fifo' | 'specific';
+    /**
+     * Lots
+     *
+     * The lots the trade closes, in order.
+     */
+    lots: Array<PreviewLotView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Price
+     *
+     * The price used: yours, else the latest close.
+     */
+    price: number;
+    /**
+     * Proceeds
+     */
+    proceeds: number;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    rates: TaxRatesView;
+    /**
+     * Realized Gain
+     */
+    realized_gain: number;
+    /**
+     * Short Term Gain
+     */
+    short_term_gain: number;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell';
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Wash Sale Disallowed
+     */
+    wash_sale_disallowed: number;
+    /**
+     * Wash Sale Warning
+     */
+    wash_sale_warning?: string | null;
+    /**
+     * Year Tax Change
+     *
+     * How much the trade changes this year's estimated tax (negative lowers it).
+     */
+    year_tax_change: number;
+};
+
+/**
+ * TaxRatesView
+ */
+export type TaxRatesView = {
+    /**
+     * Long Term
+     *
+     * Rate on gains held more than one year.
+     */
+    long_term: number;
+    /**
+     * Short Term
+     *
+     * Rate on gains held one year or less.
+     */
+    short_term: number;
+};
+
+/**
  * TaxSettingsUpdate
  */
 export type TaxSettingsUpdate = {
@@ -12691,6 +13065,58 @@ export type TaxSettingsView = {
      * US wash sale adjustment (us jurisdiction only).
      */
     wash_sales: boolean;
+};
+
+/**
+ * TaxYearView
+ *
+ * Gains realised this year and the estimated tax on them, in the base
+ * currency. Short and long term losses offset gains first.
+ */
+export type TaxYearView = {
+    /**
+     * Base Currency
+     */
+    base_currency: string;
+    /**
+     * Disposals
+     */
+    disposals: number;
+    /**
+     * Estimated Tax
+     */
+    estimated_tax: number;
+    /**
+     * Jurisdiction
+     */
+    jurisdiction: 'us' | 'eu' | 'uk';
+    /**
+     * Long Term Gain
+     */
+    long_term_gain: number;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    rates: TaxRatesView;
+    /**
+     * Short Term Gain
+     */
+    short_term_gain: number;
+    /**
+     * Unconverted
+     *
+     * Disposals left out for want of an FX rate.
+     */
+    unconverted: number;
+    /**
+     * Wash Sale Disallowed
+     */
+    wash_sale_disallowed: number;
+    /**
+     * Year
+     */
+    year: number;
 };
 
 /**
@@ -13440,6 +13866,136 @@ export type ToolCallView = {
      * Name
      */
     name: string;
+};
+
+/**
+ * TradePlanRequest
+ *
+ * Size an entry from the risk you choose and the distance to the stop.
+ */
+export type TradePlanRequest = {
+    /**
+     * Entry Price
+     *
+     * Your entry, e.g. a limit. Default: the latest close.
+     */
+    entry_price?: number | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
+    /**
+     * Risk Amount
+     *
+     * Risk as an amount in the book's currency.
+     */
+    risk_amount?: number | null;
+    /**
+     * Risk Percent
+     *
+     * Risk as a percent of the book's value.
+     */
+    risk_percent?: number | null;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell';
+    /**
+     * Stop Price
+     */
+    stop_price: number;
+    /**
+     * Target Price
+     */
+    target_price?: number | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+};
+
+/**
+ * TradePlanView
+ */
+export type TradePlanView = {
+    /**
+     * Capped By
+     *
+     * cash: the cash cut the size.
+     */
+    capped_by: 'cash' | null;
+    /**
+     * Cash
+     */
+    cash: number;
+    /**
+     * Entry Is Close
+     *
+     * The entry is the latest close.
+     */
+    entry_is_close: boolean;
+    /**
+     * Entry Price
+     */
+    entry_price: number;
+    /**
+     * Equity
+     *
+     * The book's value at the latest closes.
+     */
+    equity: number;
+    /**
+     * Note
+     */
+    note?: string | null;
+    /**
+     * Notional
+     */
+    notional: number;
+    /**
+     * Quantity
+     *
+     * Whole shares whose loss at the stop fits the risk.
+     */
+    quantity: number;
+    /**
+     * Reward Risk
+     *
+     * The gain at the target over the risk.
+     */
+    reward_risk: number | null;
+    /**
+     * Risk Amount
+     *
+     * The loss at the stop for that quantity.
+     */
+    risk_amount: number;
+    /**
+     * Risk Budget
+     *
+     * The risk you chose, as an amount.
+     */
+    risk_budget: number;
+    /**
+     * Risk Per Share
+     */
+    risk_per_share: number;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell';
+    /**
+     * Stop Price
+     */
+    stop_price: number;
+    /**
+     * Target Price
+     */
+    target_price: number | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
 };
 
 /**
@@ -18605,6 +19161,60 @@ export type GetStrategyAgreementResponses = {
 
 export type GetStrategyAgreementResponse = GetStrategyAgreementResponses[keyof GetStrategyAgreementResponses];
 
+export type GetBehaviourReportData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Since
+         *
+         * First day to include, YYYY-MM-DD
+         */
+        since?: string | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/insights/behaviour';
+};
+
+export type GetBehaviourReportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetBehaviourReportError = GetBehaviourReportErrors[keyof GetBehaviourReportErrors];
+
+export type GetBehaviourReportResponses = {
+    /**
+     * Successful Response
+     */
+    200: BehaviourView;
+};
+
+export type GetBehaviourReportResponse = GetBehaviourReportResponses[keyof GetBehaviourReportResponses];
+
 export type GetInsightsTotalsData = {
     body?: never;
     path?: never;
@@ -21330,6 +21940,47 @@ export type PlaceManualOrderResponses = {
 };
 
 export type PlaceManualOrderResponse = PlaceManualOrderResponses[keyof PlaceManualOrderResponses];
+
+export type PlanManualOrderData = {
+    body: TradePlanRequest;
+    path?: never;
+    query?: never;
+    url: '/api/orders/manual/plan';
+};
+
+export type PlanManualOrderErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type PlanManualOrderError = PlanManualOrderErrors[keyof PlanManualOrderErrors];
+
+export type PlanManualOrderResponses = {
+    /**
+     * Successful Response
+     */
+    200: TradePlanView;
+};
+
+export type PlanManualOrderResponse = PlanManualOrderResponses[keyof PlanManualOrderResponses];
 
 export type PreviewManualOrderData = {
     body: ManualOrderRequest;
@@ -26363,6 +27014,72 @@ export type SetTaxLotPicksResponses = {
 
 export type SetTaxLotPicksResponse = SetTaxLotPicksResponses[keyof SetTaxLotPicksResponses];
 
+export type PreviewTradeTaxData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Ticker
+         */
+        ticker: string;
+        /**
+         * Side
+         */
+        side: 'buy' | 'sell';
+        /**
+         * Quantity
+         */
+        quantity: number;
+        /**
+         * Price
+         *
+         * Default: the latest close
+         */
+        price?: number | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/tax/preview';
+};
+
+export type PreviewTradeTaxErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type PreviewTradeTaxError = PreviewTradeTaxErrors[keyof PreviewTradeTaxErrors];
+
+export type PreviewTradeTaxResponses = {
+    /**
+     * Successful Response
+     */
+    200: TaxPreviewView;
+};
+
+export type PreviewTradeTaxResponse = PreviewTradeTaxResponses[keyof PreviewTradeTaxResponses];
+
 export type GetTaxSettingsData = {
     body?: never;
     path?: never;
@@ -26458,6 +27175,60 @@ export type UpdateTaxSettingsResponses = {
 };
 
 export type UpdateTaxSettingsResponse = UpdateTaxSettingsResponses[keyof UpdateTaxSettingsResponses];
+
+export type GetTaxYearData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Year
+         *
+         * Default: this year
+         */
+        year?: number | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/tax/year';
+};
+
+export type GetTaxYearErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetTaxYearError = GetTaxYearErrors[keyof GetTaxYearErrors];
+
+export type GetTaxYearResponses = {
+    /**
+     * Successful Response
+     */
+    200: TaxYearView;
+};
+
+export type GetTaxYearResponse = GetTaxYearResponses[keyof GetTaxYearResponses];
 
 export type ListJournalData = {
     body?: never;

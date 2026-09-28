@@ -693,6 +693,15 @@ cli = { limited = "trader reads live in the console and MCP" }
 mcp = "get_strategy_agreement"
 
 [[capability]]
+id = "insights.behaviour"
+domain = "insights"
+title = "Behaviour report on manual and synced trades"
+routes = ["GET /api/insights/behaviour"]
+console = "getBehaviourReport"
+cli = { limited = "trader reads live in the console and MCP" }
+mcp = "get_behaviour_report"
+
+[[capability]]
 id = "insights.totals"
 domain = "insights"
 title = "Admin allocation totals"
@@ -1452,6 +1461,15 @@ cli = ["stonks orders place", "stonks orders preview", "stonks orders change", "
 mcp = ["place_order", "change_order"]
 
 [[capability]]
+id = "orders.manual_plan"
+domain = "trading"
+title = "Size a manual entry from a chosen risk and its stop"
+routes = ["POST /api/orders/manual/plan"]
+console = "planManualOrder"
+cli = { limited = "sizing is a step of the console ticket; the CLI takes a quantity" }
+mcp = { limited = "the assistant proposes quantities in drafts; a person sizes on the ticket" }
+
+[[capability]]
 id = "orders.cancel"
 domain = "trading"
 title = "Cancel a working order of your portfolio"
@@ -1562,6 +1580,15 @@ routes = ["GET /api/tax/exports/gains", "GET /api/tax/exports/dividends", "GET /
 console = ["exportTaxGains", "exportTaxDividends", "exportTaxLots"]
 cli = ["stonks tax gains", "stonks tax dividends", "stonks tax lots"]
 mcp = { limited = "CSV files are downloads for the console and the CLI" }
+
+[[capability]]
+id = "tax.estimates"
+domain = "portfolio"
+title = "Tax preview before a trade and the tax owed this year"
+routes = ["GET /api/tax/preview", "GET /api/tax/year"]
+console = ["previewTradeTax", "getTaxYear"]
+cli = { limited = "estimates show on the console ticket and in MCP; the CLI exports the figures" }
+mcp = ["preview_trade_tax", "get_tax_year"]
 
 [[capability]]
 id = "fx.rate"

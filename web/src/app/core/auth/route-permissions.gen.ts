@@ -125,6 +125,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'POST /api/orders/drafts/{draft_id}/approve': 'orders.approve',
   'POST /api/orders/drafts/{draft_id}/reject': 'portfolio.trade',
   'POST /api/orders/manual': 'portfolio.trade',
+  'POST /api/orders/manual/plan': 'portfolio.trade',
   'POST /api/orders/manual/preview': 'portfolio.trade',
   'POST /api/portfolios': 'portfolio.manage',
   'POST /api/portfolios/{portfolio_id}/cash-flows': 'portfolio.manage',

@@ -186,6 +186,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/insights` | Get Insights | sign-in |  | [InsightsView](#insightsview) |
 | GET | `/api/insights/agreement` | Get Agreement | sign-in |  | [AgreementView](#agreementview) |
+| GET | `/api/insights/behaviour` | Get Behaviour | sign-in |  | [BehaviourView](#behaviourview) |
 | GET | `/api/insights/totals` | Get Totals | `portfolio.totals` |  | [InsightsTotalsView](#insightstotalsview) |
 
 ## jobs endpoints
@@ -312,6 +313,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/orders/drafts/{draft_id}/reject` | Reject Order Draft | `portfolio.trade` | [OrderDraftDecision](#orderdraftdecision) | [OrderDraftView](#orderdraftview) |
 | GET | `/api/orders/fills` | List Fills | sign-in |  | [Page_FillView_](#page_fillview_) |
 | POST | `/api/orders/manual` | Place Manual Order | `portfolio.trade` | [ManualOrderRequest](#manualorderrequest) | [ManualOrderResult](#manualorderresult) |
+| POST | `/api/orders/manual/plan` | Plan Manual Order | `portfolio.trade` | [TradePlanRequest](#tradeplanrequest) | [TradePlanView](#tradeplanview) |
 | POST | `/api/orders/manual/preview` | Preview Manual Order | `portfolio.trade` | [ManualOrderRequest](#manualorderrequest) | [ManualOrderResult](#manualorderresult) |
 | POST | `/api/orders/{client_id}/cancel` | Cancel Order | `portfolio.trade` | [OrderCancelRequest](#ordercancelrequest) | [OrderCancelResult](#ordercancelresult) |
 | POST | `/api/orders/{client_id}/change` | Change Manual Order | `portfolio.trade` | [ManualOrderChange](#manualorderchange) | [ManualOrderResult](#manualorderresult) |
@@ -483,8 +485,10 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/tax/exports/lots` | Open tax lots as CSV | sign-in |  | `text/csv` |
 | GET | `/api/tax/lots/picks` | List Tax Lot Picks | sign-in |  | [Page_LotPickView_](#page_lotpickview_) |
 | PUT | `/api/tax/lots/picks` | Set Tax Lot Picks | `portfolio.manage` | [LotPicksUpdate](#lotpicksupdate) | list[[LotPickView](#lotpickview)] |
+| GET | `/api/tax/preview` | Preview Trade Tax | sign-in |  | [TaxPreviewView](#taxpreviewview) |
 | GET | `/api/tax/settings` | Get Tax Settings | sign-in |  | [TaxSettingsView](#taxsettingsview) |
 | PUT | `/api/tax/settings` | Update Tax Settings | `portfolio.manage` | [TaxSettingsUpdate](#taxsettingsupdate) | [TaxSettingsView](#taxsettingsview) |
+| GET | `/api/tax/year` | Get Tax Year | sign-in |  | [TaxYearView](#taxyearview) |
 
 ## tca endpoints
 
@@ -805,6 +809,38 @@ Give ``universe`` (tickers) or ``universe_id``: a stored universe, every member 
 | `open` | number \| null | yes |  |
 | `timestamp` | date-time | yes |  |
 | `volume` | number \| null | yes |  |
+
+### BehaviourBucketView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `label` | string | yes |  |
+| `pnl` | number | yes |  |
+| `trades` | integer | yes |  |
+| `win_rate` | number \| null | yes |  |
+
+### BehaviourView
+
+How you trade by hand: your manual orders and the trades a broker sync brought in, paired into round trips (FIFO, fees in).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `against_strategies_cost` | number \| null | yes | P&L of the trades against the strategies (negative: what it cost). |
+| `avg_loss` | number \| null | yes |  |
+| `avg_win` | number \| null | yes |  |
+| `by_holding` | list[[BehaviourBucketView](#behaviourbucketview)] | yes |  |
+| `by_weekday` | list[[BehaviourBucketView](#behaviourbucketview)] | yes | By the weekday of the entry. |
+| `disposition` | [DispositionView](#dispositionview) | yes |  |
+| `open_positions` | integer | yes |  |
+| `overtrading` | [OvertradingView](#overtradingview) | yes |  |
+| `portfolio_id` | string | yes |  |
+| `revenge` | [BehaviourBucketView](#behaviourbucketview) | yes | Entries within a day of a losing exit, and how they did. |
+| `since` | date \| null | yes |  |
+| `sources` | dict[str, integer] | yes | Fills by source: manual or broker. |
+| `total_pnl` | number | yes |  |
+| `trades` | integer | yes | Closed round trips. |
+| `versus_strategies` | list[[BehaviourBucketView](#behaviourbucketview)] | yes | Trades with, against or without a view of the active strategies' signals at the entry. |
+| `win_rate` | number \| null | yes |  |
 
 ### BenchmarkStatsView
 
@@ -1170,6 +1206,15 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 | `connection_id` | string | yes |  |
 | `remote_error` | string \| null | yes |  |
 | `remote_removed` | boolean \| null | yes |  |
+
+### DispositionView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `avg_days_losers` | number \| null | yes |  |
+| `avg_days_winners` | number \| null | yes |  |
+| `present` | boolean | yes | Losers are held clearly longer than winners. |
+| `ratio` | number \| null | yes | Losers held this many times longer than winners. |
 
 ### DividendEvent
 
@@ -2521,6 +2566,16 @@ The lots one sell fill closes. An empty list clears the picks.
 | `picks` | list[[LotPick](#lotpick)] | no |  |
 | `sell_fill_id` | integer | yes |  |
 
+### ManualDisciplineSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cooldown_minutes` | integer \| null | no |  |
+| `enabled` | boolean | no |  |
+| `max_daily_loss` | number \| null | no |  |
+| `max_entries_per_day` | integer \| null | no |  |
+| `require_stop_live` | boolean | no |  |
+
 ### ManualOrderChange
 
 A new quantity or limit for one of your working manual orders. It is cancelled at the broker and replaced by a new order.
@@ -2547,6 +2602,8 @@ One order you place by hand. It goes through the kill switch, every halt and eve
 | `quantity` | number | yes |  |
 | `reason` | string | yes | Why you trade (recorded). |
 | `side` | "buy" \| "sell" | yes |  |
+| `stop_price` | number \| null | no | A protective stop for this entry: below a buy, above a short sale. A book at a broker gets a stop order once the entry fills. |
+| `target_price` | number \| null | no | Where you plan to take the profit (recorded). |
 | `ticker` | string | yes | Instrument id, e.g. AAPL.US |
 
 ### ManualOrderResult
@@ -2562,12 +2619,16 @@ One order you place by hand. It goes through the kill switch, every halt and eve
 | `live` | boolean | yes | The book trades real money. |
 | `order_type` | "market" \| "limit" | yes |  |
 | `portfolio_id` | string | yes |  |
+| `protective_stop` | string \| null | no | The client id of the stop order placed at the broker. |
 | `quantity` | number | yes | What was placed (smaller when allow_reduce applied). |
 | `reason` | string \| null | no | Why it ended in its status. |
 | `reference_price` | number | yes | The latest close the order was checked at. |
 | `requested_quantity` | number | yes |  |
+| `reward_risk` | number \| null | no | The gain at the target over the loss at the stop. |
 | `side` | "buy" \| "sell" | yes |  |
 | `status` | "preview" \| "pending" \| "filled" \| "partially_filled" \| "rejected" \| "cancelled" | yes |  |
+| `stop_price` | number \| null | no | The protective stop planned. |
+| `target_price` | number \| null | no |  |
 | `ticker` | string | yes |  |
 
 ### MarginAccountView
@@ -3169,6 +3230,17 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `ticker` | string | yes |  |
 | `time_in_force` | string \| null | no |  |
 | `updated_at` | string | yes |  |
+
+### OvertradingView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `active_days` | integer | yes |  |
+| `busy_day_pnl` | number | yes |  |
+| `busy_days` | integer | yes | Days with many entries (5 or more). |
+| `entries_per_active_day` | number \| null | yes |  |
+| `max_entries_in_a_day` | integer | yes |  |
+| `other_day_pnl` | number | yes |  |
 
 ### Page_AlertView_
 
@@ -3921,6 +3993,20 @@ The BL-37 data preflight of a lab run. A run only starts with no errors, so a re
 | `equity` | number | yes |  |
 | `settled_cash` | number | yes |  |
 
+### PreviewLotView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `acquired` | date | yes |  |
+| `cost_basis` | number | yes |  |
+| `gain` | number | yes |  |
+| `holding_period` | "short" \| "long" | yes |  |
+| `kind` | "long" \| "short" | yes |  |
+| `open_fill_id` | integer | yes | The fill that opened the lot. |
+| `proceeds` | number | yes |  |
+| `quantity` | number | yes |  |
+| `wash_sale_disallowed` | number | yes |  |
+
 ### PreviewOrderView
 
 | Field | Type | Required | Description |
@@ -4443,6 +4529,7 @@ Type: "viewer" \| "trader" \| "admin"
 | `liquidity` | [LiquiditySettings](#liquiditysettings) | no |  |
 | `live_notional_caps` | [LiveNotionalCapsSettings](#livenotionalcapssettings) | no |  |
 | `losing_lock` | [LosingLockSettings](#losinglocksettings) | no |  |
+| `manual_discipline` | [ManualDisciplineSettings](#manualdisciplinesettings) | no |  |
 | `margin_call` | [MarginCallSettings](#margincallsettings) | no |  |
 | `max_holding` | [MaxHoldingSettings](#maxholdingsettings) | no |  |
 | `max_orders_per_run` | [MaxOrdersPerRunSettings](#maxordersperrunsettings) | no |  |
@@ -5232,6 +5319,39 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `checks` | list[[SystemCheckView](#systemcheckview)] | yes |  |
 | `complete` | boolean | yes |  |
 
+### TaxPreviewView
+
+What a trade would realise now, before it is placed. An estimate at your configured rates, not tax advice.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `after_tax_proceeds` | number | yes |  |
+| `currency` | string | yes | The trade's currency; every amount is in it. |
+| `estimated_tax` | number | yes | Tax on this trade's own gains (0 on a loss). |
+| `jurisdiction` | "us" \| "eu" \| "uk" | yes |  |
+| `long_term_gain` | number | yes |  |
+| `lot_method` | "fifo" \| "specific" | yes |  |
+| `lots` | list[[PreviewLotView](#previewlotview)] | yes | The lots the trade closes, in order. |
+| `portfolio_id` | string | yes |  |
+| `price` | number | yes | The price used: yours, else the latest close. |
+| `proceeds` | number | yes |  |
+| `quantity` | number | yes |  |
+| `rates` | [TaxRatesView](#taxratesview) | yes |  |
+| `realized_gain` | number | yes |  |
+| `short_term_gain` | number | yes |  |
+| `side` | "buy" \| "sell" | yes |  |
+| `ticker` | string | yes |  |
+| `wash_sale_disallowed` | number | yes |  |
+| `wash_sale_warning` | string \| null | no |  |
+| `year_tax_change` | number | yes | How much the trade changes this year's estimated tax (negative lowers it). |
+
+### TaxRatesView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `long_term` | number | yes | Rate on gains held more than one year. |
+| `short_term` | number | yes | Rate on gains held one year or less. |
+
 ### TaxSettingsUpdate
 
 | Field | Type | Required | Description |
@@ -5251,6 +5371,24 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `portfolio_id` | string | yes |  |
 | `updated_at` | date-time \| null | no |  |
 | `wash_sales` | boolean | yes | US wash sale adjustment (us jurisdiction only). |
+
+### TaxYearView
+
+Gains realised this year and the estimated tax on them, in the base currency. Short and long term losses offset gains first.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_currency` | string | yes |  |
+| `disposals` | integer | yes |  |
+| `estimated_tax` | number | yes |  |
+| `jurisdiction` | "us" \| "eu" \| "uk" | yes |  |
+| `long_term_gain` | number | yes |  |
+| `portfolio_id` | string | yes |  |
+| `rates` | [TaxRatesView](#taxratesview) | yes |  |
+| `short_term_gain` | number | yes |  |
+| `unconverted` | integer | yes | Disposals left out for want of an FX rate. |
+| `wash_sale_disallowed` | number | yes |  |
+| `year` | integer | yes |  |
 
 ### TcaGroupView
 
@@ -5514,6 +5652,42 @@ One order ticket: the order a live book decided, why, and what became of it.
 | `arguments` | object | yes |  |
 | `id` | string | yes |  |
 | `name` | string | yes |  |
+
+### TradePlanRequest
+
+Size an entry from the risk you choose and the distance to the stop.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `entry_price` | number \| null | no | Your entry, e.g. a limit. Default: the latest close. |
+| `portfolio_id` | string \| null | no |  |
+| `risk_amount` | number \| null | no | Risk as an amount in the book's currency. |
+| `risk_percent` | number \| null | no | Risk as a percent of the book's value. |
+| `side` | "buy" \| "sell" | yes |  |
+| `stop_price` | number | yes |  |
+| `target_price` | number \| null | no |  |
+| `ticker` | string | yes |  |
+
+### TradePlanView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `capped_by` | "cash" \| null | yes | cash: the cash cut the size. |
+| `cash` | number | yes |  |
+| `entry_is_close` | boolean | yes | The entry is the latest close. |
+| `entry_price` | number | yes |  |
+| `equity` | number | yes | The book's value at the latest closes. |
+| `note` | string \| null | no |  |
+| `notional` | number | yes |  |
+| `quantity` | integer | yes | Whole shares whose loss at the stop fits the risk. |
+| `reward_risk` | number \| null | yes | The gain at the target over the risk. |
+| `risk_amount` | number | yes | The loss at the stop for that quantity. |
+| `risk_budget` | number | yes | The risk you chose, as an amount. |
+| `risk_per_share` | number | yes |  |
+| `side` | "buy" \| "sell" | yes |  |
+| `stop_price` | number | yes |  |
+| `target_price` | number \| null | yes |  |
+| `ticker` | string | yes |  |
 
 ### TradeStatsView
 

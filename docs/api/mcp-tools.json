@@ -1367,6 +1367,50 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "How you trade by hand in one of your portfolios: manual and synced\nbroker trades as round trips, with P&L by holding time and weekday,\nwin rate, the disposition effect, overtrading, revenge trades after\na loss, and what trading against the active strategies cost.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Since"
+          }
+        },
+        "title": "get_behaviour_reportArguments",
+        "type": "object"
+      },
+      "name": "get_behaviour_report",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "The broker production ticks trade through: kind (simulated/alpaca), paper, allow_live and whether credentials are configured (keys are never shown). Read-only.",
       "input_schema": {
         "properties": {},
@@ -3015,6 +3059,51 @@
         "type": "object"
       },
       "name": "get_tax_settings",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "The gains one of your portfolios realised this year (or ``year``)\nand the estimated tax owed on them, in its base currency.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2200,
+                "minimum": 1900,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Year"
+          }
+        },
+        "title": "get_tax_yearArguments",
+        "type": "object"
+      },
+      "name": "get_tax_year",
       "needs_confirm": false
     },
     {
@@ -5612,6 +5701,75 @@
       },
       "name": "place_order",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Before a trade in one of your portfolios: the lots a sell closes\nunder your lot method, the realised gain and holding period, the\nestimated tax at the configured rate, the after-tax proceeds and a\nUS wash sale warning. An estimate, not tax advice. Places nothing.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Default: latest close",
+            "title": "Price"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0,
+            "maximum": 1000000000.0,
+            "title": "Quantity",
+            "type": "number"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "ticker": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\-^=]{0,31}$",
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "side",
+          "quantity"
+        ],
+        "title": "preview_trade_taxArguments",
+        "type": "object"
+      },
+      "name": "preview_trade_tax",
+      "needs_confirm": false
     },
     {
       "annotations": {
