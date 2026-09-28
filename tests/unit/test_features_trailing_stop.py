@@ -109,3 +109,10 @@ def test_replay_prefix_is_stable_when_bars_are_appended():
     part = replay_trades(closes[:150], atrs[:150], entries[:150], k=2.0)
     closed = [t for t in full if t.exit is not None and t.exit < 150]
     assert [t for t in part if t.exit is not None] == closed
+
+
+def test_a_missing_close_does_not_freeze_the_high_water_mark():
+    """One NaN close spread through ``maximum.accumulate`` and the stop
+    never rose again: [10, nan, 12, 14, 13] with ATR 1 stayed at 9."""
+    levels = trailing_stop_levels(np.array([10.0, np.nan, 12.0, 14.0, 13.0]), np.ones(5), 1.0)
+    assert levels.tolist() == pytest.approx([9.0, 9.0, 11.0, 13.0, 13.0])
