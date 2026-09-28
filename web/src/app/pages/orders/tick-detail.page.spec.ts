@@ -164,7 +164,8 @@ describe('TickDetailPage', () => {
     expect(el.querySelector('.detail-head')?.textContent).toContain('Dry run');
     expect(el.textContent).not.toMatch(/shadow|\bticks?\b/i);
     expect(el.textContent).not.toContain('evaluated');
-    expect(el.textContent).toContain('Paper trading');
+    expect(el.textContent).toContain('Strategies on trial');
+    expect(el.textContent).not.toMatch(/paper trading strateg/i);
   });
 
   it('stamps a live run LIVE in the header', async () => {

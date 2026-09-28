@@ -132,7 +132,7 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
               autocomplete="off"
               [(ngModel)]="strategyId"
             />
-            <small class="muted">Its latest model book weights are the targets.</small>
+            <small class="muted">The latest weights of its test book are the targets.</small>
           </div>
         }
         <div class="field">

@@ -98,7 +98,9 @@ def test_every_scored_strategy_is_recorded_once_with_reasons(env):
     assert flat.strength == pytest.approx(0.5, abs=0.02)
     down = events[("bh_down", "DOWN.US", "entry")]
     assert down.reason["explain_error"] == "RuntimeError: no words"
-    assert down.text.startswith("The model book bought DOWN.US")
+    # Vocabulary: a test book, and no "expected return" read off a book's score.
+    assert down.text.startswith("The test book bought DOWN.US")
+    assert "expected return" not in down.text and "rank 1 of" in down.text
     [up] = [e for (sid, t, k), e in events.items() if sid == "mom" and t == "UP.US"]
     assert up.kind == "entry" and up.reason["source"] == "scores"
     assert up.text.startswith("mom now scores UP.US: expected return")

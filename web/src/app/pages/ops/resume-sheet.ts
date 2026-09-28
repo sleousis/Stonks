@@ -73,7 +73,7 @@ const CHECK_LABEL: Record<string, string> = {
             </dl>
           </div>
           <p id="resume-message" class="sheet-message">
-            Turns off the kill switch. Orders go out again from the next trading run.
+            Ends Stop trading. Orders go out again from the next trading run.
           </p>
           <section class="checks" aria-labelledby="resume-checks-title">
             <h3 id="resume-checks-title">Checks before resuming</h3>

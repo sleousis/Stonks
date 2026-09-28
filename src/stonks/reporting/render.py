@@ -145,7 +145,7 @@ def _strategy_section(panel: StrategyPanel) -> str:
         "no survival reports",
     )
     if paper.source == "shadow":
-        paper_title = "Shadow P&L vs backtest expectation"
+        paper_title = "Test book P&L vs backtest expectation"
     elif paper.source == "portfolio":
         paper_title = "Live vs backtest drift (combined real portfolio)"
     else:

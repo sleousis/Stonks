@@ -19264,7 +19264,7 @@
             "title": "Short Term Rate"
           },
           "source": {
-            "description": "strategy: the strategy's latest model book weights; targets: your list.",
+            "description": "strategy: the weights of the strategy's test book; targets: your list.",
             "enum": [
               "strategy",
               "targets"
@@ -19489,7 +19489,7 @@
             "title": "Short Term Rate"
           },
           "source": {
-            "description": "strategy: the strategy's latest model book weights; targets: your list.",
+            "description": "strategy: the weights of the strategy's test book; targets: your list.",
             "enum": [
               "strategy",
               "targets"

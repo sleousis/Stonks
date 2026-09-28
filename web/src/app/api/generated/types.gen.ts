@@ -10631,7 +10631,7 @@ export type PlanConfirm = {
     /**
      * Source
      *
-     * strategy: the strategy's latest model book weights; targets: your list.
+     * strategy: the weights of the strategy's test book; targets: your list.
      */
     source: 'strategy' | 'targets';
     /**
@@ -10747,7 +10747,7 @@ export type PlanRequest = {
     /**
      * Source
      *
-     * strategy: the strategy's latest model book weights; targets: your list.
+     * strategy: the weights of the strategy's test book; targets: your list.
      */
     source: 'strategy' | 'targets';
     /**

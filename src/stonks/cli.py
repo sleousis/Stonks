@@ -2205,7 +2205,7 @@ def lab_sweep(
 
 # ---- risk halts and the kill switch ------------------------------------------
 
-halts_app = typer.Typer(help="Kill switch and risk halts", no_args_is_help=True)
+halts_app = typer.Typer(help="Stop trading and risk halts", no_args_is_help=True)
 app.add_typer(halts_app, name="halts")
 
 _HALT_USER = typer.Option(
@@ -2335,12 +2335,12 @@ def halts_kill(
             ),
         )
     )
-    console.print(f"[red]kill switch on[/red]: halt #{view.id} ({view.scope}, {view.halt})")
+    console.print(f"[red]trading stopped[/red]: halt #{view.id} ({view.scope}, {view.halt})")
 
 
 @halts_app.command("resume")
 def halts_resume(
-    halt_id: int = typer.Argument(..., help="the kill switch's halt id"),
+    halt_id: int = typer.Argument(..., help="the Stop trading halt id"),
     reason: str = typer.Option(..., "--reason", help="why trading may resume (audited)"),
     user: str | None = _HALT_USER,
     override_checks: bool = typer.Option(

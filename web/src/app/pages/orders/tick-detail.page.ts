@@ -217,22 +217,22 @@ export const TICK_FILLS_LIMIT = 200;
 
         <section class="panel span-6" aria-labelledby="shadow-title">
           <div class="panel-head">
-            <h2 id="shadow-title">Paper trading</h2>
+            <h2 id="shadow-title">Strategies on trial</h2>
             <a class="cell-link" routerLink="/shadow">Open paper trading</a>
           </div>
           @if (s?.shadow_error) {
             <p class="alert-line" role="alert">
-              Paper trading could not be checked: {{ s?.shadow_error }}
+              Strategies on trial could not be checked: {{ s?.shadow_error }}
             </p>
           }
           @if (shadows().length === 0) {
             <app-empty-state
-              title="No paper trading strategies checked"
-              message="Paper trading strategies are checked after real trading runs, not dry runs."
+              title="No strategies on trial checked"
+              message="Strategies on trial are checked after real trading runs, not dry runs."
             />
           } @else {
             <app-data-table
-              caption="How each paper trading strategy did"
+              caption="How each strategy on trial did"
               [rows]="shadows()"
               [columns]="shadowColumns"
               [rowKey]="shadowKey"
@@ -315,7 +315,7 @@ export class TickDetailPage {
   });
   protected readonly shadowCount = computed(() => {
     const n = this.shadows().length;
-    return n ? `${n} paper trading strateg${n === 1 ? 'y' : 'ies'} checked` : null;
+    return n ? `${n} strateg${n === 1 ? 'y' : 'ies'} on trial checked` : null;
   });
 
   protected readonly dateTime = formatDateTime;

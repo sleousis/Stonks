@@ -4515,7 +4515,7 @@ A parent order Stonks works as child slices.
 | `portfolio_id` | string | yes |  |
 | `reason` | string | yes |  |
 | `short_term_rate` | number \| null | no |  |
-| `source` | "strategy" \| "targets" | yes | strategy: the strategy's latest model book weights; targets: your list. |
+| `source` | "strategy" \| "targets" | yes | strategy: the weights of the strategy's test book; targets: your list. |
 | `strategy_id` | string \| null | no |  |
 | `targets` | list[[PlanTarget](#plantarget)] | no |  |
 
@@ -4555,7 +4555,7 @@ A parent order Stonks works as child slices.
 | `min_trade_value` | number | no |  |
 | `portfolio_id` | string | yes |  |
 | `short_term_rate` | number \| null | no |  |
-| `source` | "strategy" \| "targets" | yes | strategy: the strategy's latest model book weights; targets: your list. |
+| `source` | "strategy" \| "targets" | yes | strategy: the weights of the strategy's test book; targets: your list. |
 | `strategy_id` | string \| null | no |  |
 | `targets` | list[[PlanTarget](#plantarget)] | no |  |
 
