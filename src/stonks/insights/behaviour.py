@@ -207,10 +207,16 @@ def behaviour_report(
     settings: BehaviourSettings | None = None,
     *,
     stance: StanceFn | None = None,
+    since: date | None = None,
 ) -> BehaviourReport:
-    """The behaviour report of ``fills`` (see the module doc)."""
+    """The behaviour report of ``fills`` (see the module doc). With
+    ``since``, the trips entered on or after it: the pairing still runs
+    over every fill, so an exit of an older lot never opens a short."""
     cfg = settings or BehaviourSettings()
     trips, still_open = round_trips(fills)
+    if since is not None:
+        trips = [t for t in trips if t.entry_at.date() >= since]
+        fills = [f for f in fills if f.filled_at.date() >= since]
     wins = [t for t in trips if t.pnl > _EPS]
     losses = [t for t in trips if t.pnl <= _EPS]
 

@@ -248,6 +248,27 @@ def test_behaviour_report_of_manual_trades(client, people, settings, alice_book)
     assert bob.status_code == 404
 
 
+def test_behaviour_since_pairs_exits_with_entries_made_before_it(
+    client, people, settings, alice_book
+):
+    """``since`` picks the trades entered on or after it. A sell of shares
+    bought before it closes that older lot: it opens no short, and the
+    buy back after it is a new long, not the cover of a phantom short."""
+    path = settings.state.path
+    _manual_fill(path, alice_book, "manual:s:1", "buy", 10, 100.0, "2026-01-05T15:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:s:2", "sell", 10, 110.0, "2026-02-02T15:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:s:3", "buy", 10, 105.0, "2026-02-10T15:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:s:4", "sell", 10, 120.0, "2026-02-20T15:00:00+00:00")
+    body = client.get(
+        "/api/insights/behaviour",
+        params={"portfolio_id": alice_book, "since": "2026-02-01"},
+        headers=people["alice"]["headers"],
+    ).json()
+    assert body["trades"] == 1
+    assert body["total_pnl"] == pytest.approx(150.0)
+    assert body["open_positions"] == 0
+
+
 def test_dashboard_and_insights_share_one_day_change(client, people, alice_book):
     """Visual audit M2: the P&L series (Dashboard, Today) and Insights read
     the headline value and day change from one service, so they agree."""

@@ -399,9 +399,10 @@ class InsightsService:
 
     def behaviour(self, portfolio_id: str, *, since: date | None = None) -> BehaviourView:
         """The behaviour report of the portfolio's manual and synced trades."""
-        fills = self._behaviour_fills(portfolio_id, since)
+        # every fill, so a lot opened before ``since`` still pairs with its exit
+        fills = self._behaviour_fills(portfolio_id)
         stance = self._stance_at_entry(sorted({f.ticker for f in fills}))
-        report = behaviour_report(fills, stance=stance)
+        report = behaviour_report(fills, stance=stance, since=since)
 
         def bucket(b: Any) -> BehaviourBucketView:
             return BehaviourBucketView(
@@ -427,16 +428,15 @@ class InsightsService:
             sources=report.sources,
         )
 
-    def _behaviour_fills(self, portfolio_id: str, since: date | None) -> list[BehaviourFill]:
+    def _behaviour_fills(self, portfolio_id: str) -> list[BehaviourFill]:
         """Manual fills, plus synced broker trades that no Stonks fill of the
         book explains (a strategy's or a manual order sent to that broker)."""
-        start = (since or date(1900, 1, 1)).isoformat()
         with self._ctx.state() as state:
             manual = state.sql(
                 "SELECT f.id, f.ticker, f.quantity, f.price, f.fee, f.filled_at, o.side"
                 " FROM fills f JOIN orders o ON o.client_id = f.order_client_id"
-                " WHERE f.portfolio_id = ? AND o.origin = 'manual' AND f.filled_at >= ?",
-                [portfolio_id, start],
+                " WHERE f.portfolio_id = ? AND o.origin = 'manual'",
+                [portfolio_id],
             )
             own = state.sql(
                 "SELECT f.ticker, f.quantity, substr(f.filled_at, 1, 10) AS day, o.side"
@@ -447,8 +447,8 @@ class InsightsService:
             synced = state.sql(
                 "SELECT id, ticker, quantity, price, fee, trade_date FROM broker_activities"
                 " WHERE portfolio_id = ? AND kind = 'trade' AND ticker IS NOT NULL"
-                " AND quantity IS NOT NULL AND price IS NOT NULL AND trade_date >= ?",
-                [portfolio_id, start],
+                " AND quantity IS NOT NULL AND price IS NOT NULL",
+                [portfolio_id],
             )
         out = [
             BehaviourFill(
