@@ -617,7 +617,7 @@ export class TicketsPage {
 
   protected async reject(ticket: TicketView): Promise<void> {
     const what = `${ticket.side === 'buy' ? 'Buy' : 'Sell'} ${ticket.ticker}`;
-    const reason = await this.rejectSheet().open(what);
+    const reason = await this.rejectSheet().open(what, this.isLive(ticket.portfolio_id));
     if (reason === null) return;
     this.mark([ticket.id], true);
     try {
