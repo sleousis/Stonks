@@ -441,6 +441,8 @@ markets = ["usa"]
 # fills in memory against the last portfolio snapshot and needs no keys.
 # "alpaca" is opt-in: the tick reconciles open orders, reads the portfolio
 # from the Alpaca account, and books fills only through reconciliation.
+# "ibkr" trades the default portfolio through the IB Gateway under
+# [brokers.ibkr.gateways] that lists it (deploy/ibkr/README.md).
 kind = "simulated"
 
 [brokers.alpaca]

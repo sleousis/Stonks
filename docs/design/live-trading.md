@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 19. It takes Stonks from simulated paper trading to real orders at Interactive Brokers (IBKR), in stages, with a gate between each stage.
 
-Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2), the IBKR connection and borrow (19.3), reconciliation (19.5), tickets, approve mode and submit (19.8), stages, gates and preview (19.9), protective stops (19.10) and live tests, drills and runbooks (19.11). The rest is planned.
+Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2), the IBKR connection and borrow (19.3), reconciliation (19.5), tickets, approve mode and submit (19.8), stages, gates and preview (19.9), protective stops (19.10), live tests, drills and runbooks (19.11), and 19.14 to 19.18 (the live pieces connected, deeper reconciliation, broker edge cases, the API's own session, review leftovers). Planned: 19.12 (run the stages with real money) and 19.13 (margin accounts).
 
 Owner decisions (2026-09-27):
 

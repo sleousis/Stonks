@@ -115,6 +115,7 @@ A wrapper gates an inner strategy. It takes the inner strategy's asset classes.
 | `last_trade_filter` | Takes the inner strategy's entry only after its previous trade lost (or won). [Details](nt888-filters-ml.md). |
 | `regime_filter` | Blocks buys, exits or scales down when at least k of n regime conditions (macro, benchmark trend, volatility, yield curve, weekly trend, VIX term structure) say risk off. [Details](book-strategies.md#regimefilter-bl-42). |
 | `latent_regime_filter` | Blocks buys (or exits) when a Markov-switching model of a reference market's returns puts the high-volatility state above a threshold. Fitted on the train window only, filtered probabilities only (BL-46). |
+| `trailing_stop` | A volatility-scaled trailing stop around any strategy. After a stop-out the ticker waits for a fresh entry. [Details](book-strategies.md#trailingstopwrapper). |
 
 The `vix_term_structure` regime condition triggers when spot VIX is above 3-month VIX (an inverted curve). It reads `vix_spot` and `vix_3m` from `macro_indicators`. Load them with `stonks ingest macro --source yahoo --countries USA --indicators vix_spot,vix_3m`.
 
@@ -139,7 +140,6 @@ uv run stonks options backtest covered_call --underlyings AAPL.US --start 2025-0
 
 ## Not in the catalog
 
-- **`TrailingStopWrapper`** (`strategies/trailing_stop.py`): a volatility-scaled trailing stop around any strategy. Used in code; `stonks lab run` cannot name it yet. [Details](book-strategies.md#trailingstopwrapper).
 - **`RuleStrategy`** (`strategies/rule_based.py`): a strategy defined by a JSON spec (indicators including efficiency ratio and KAMA, entry and exit rules, sizing, percentage stops and vol or ATR trailing stops). Built, backtested and registered from the Strategy Studio page in the console.
 
 ## Portfolio constructors
@@ -153,7 +153,12 @@ A constructor turns the strategies' signals into target weights (`portfolio/`). 
 | `inverse_vol` | Weight proportional to 1/volatility across the top N, scaled to a gross limit. |
 | `vol_target` | Carver's position sizing from forecasts to a volatility target. In long/short mode a negative forecast is a short. |
 | `atr_parity` | Equal daily risk per position: weight = risk factor x price / ATR. |
+| `hrp` | Hierarchical risk parity: clusters names by correlation, then splits weight by inverse variance. Never inverts the covariance. |
+| `erc` | Equal risk contribution: each name adds the same share of portfolio variance. |
+| `mean_variance_costs` | Mean-variance on expected returns from the scores, net of spread and impact costs, with a turnover cap (cvxpy). |
+
+`hrp`, `erc` and `mean_variance_costs` read a covariance estimator, including the `pca` and `style` factor risk models.
 
 Every constructor takes `long_only`, `max_gross`, `min_net`, `max_net` and `neutral` (`none`, `dollar` or `beta`). A book that may short runs its constructor with `long_only = false`. Gross may then go above 1.0 (up to 4.0), net stays inside `[min_net, max_net]`, and `dollar` or `beta` shrinks the bigger leg until the legs match. `beta` works on `equal_weight_top_n` and `vol_target`. A book that cannot short always runs long-only at no more than 1.0 gross.
 
-A portfolio picks its constructor in `portfolios.construction_json`; a backtest in `BacktestConfig.construction`. A global `[production.construction]` table is not read from the config file yet.
+`[production.construction]` sets the constructor for every book. A portfolio's `portfolios.construction_json` is merged on top, and a backtest picks one in `BacktestConfig.construction`.
