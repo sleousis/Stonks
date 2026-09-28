@@ -204,3 +204,46 @@ def test_another_users_kill_switch_leaves_the_default_book_trading(tmp_path, lak
 def test_the_gate_resolves_the_owner_when_the_book_has_none(state):
     trip_halt(state, "kill", reason="m", actor="user:usr_owner", scope="user", user_id=OWNER)
     assert RiskHaltGate().check(_ctx(state, owner=None)).halt == "buys"
+
+
+def test_a_user_kill_switch_cancels_the_legacy_books_working_paper_orders(tmp_path, lake_trending):
+    """P21 paper fills: a working order decided yesterday fills at today's
+    open unless a halt holds it. The owner's user-scope kill switch must
+    hold pf_default's working orders too, although the legacy book carries
+    no owner id (TO-02, as the gate does)."""
+    from stonks.core.protocols import SurvivalReport
+    from stonks.production.tick import TickSettings, run_tick
+    from stonks.registry.store import StrategyRegistry
+    from stonks.strategies.examples.buy_and_hold import BuyAndHold
+    from tests.fixtures.governance import seed_status
+
+    s = SqliteState(tmp_path / "state.sqlite")
+    s.migrate()
+    try:
+        registry = StrategyRegistry(state=s, artifacts_dir=tmp_path / "artifacts")
+        registry.register(
+            BuyAndHold({"ticker": "UP.US", "allocation": 0.4}),
+            reports=[SurvivalReport(test_id="oos", passed=True, metrics={})],
+            strategy_id="bh_up",
+        )
+        seed_status(registry, "bh_up", "active")
+        settings = TickSettings(universe=["UP.US"], initial_cash=10_000.0, paper_fills="next_open")
+        run_tick(s, lake_trending, registry, settings, as_of=date(2026, 3, 19))
+        [working] = s.sql("SELECT client_id, status FROM orders")
+        assert working["status"] == "pending"
+        trip_halt(
+            s,
+            "kill",
+            reason="stop mine",
+            actor="user:usr_owner",
+            scope="user",
+            user_id=OWNER,
+            halt="all",
+            on=date(2026, 3, 20),
+        )
+        run_tick(s, lake_trending, registry, settings, as_of=date(2026, 3, 20))
+        row = s.sql("SELECT status FROM orders WHERE client_id = ?", [working["client_id"]])[0]
+        assert row["status"] == "cancelled"
+        assert s.count_rows("fills") == 0
+    finally:
+        s.close()

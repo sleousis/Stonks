@@ -147,7 +147,7 @@ from stonks.production.financing import (
     record_accrual,
     short_account,
 )
-from stonks.production.halts import active_halts
+from stonks.production.halts import active_halts, halts_enabled
 from stonks.production.hooks import (
     GateContext,
     NotifySignal,
@@ -2575,8 +2575,15 @@ def _halt_hold(
 ) -> Callable[[Order], str | None] | None:
     """What a halt in force holds back of a paper book's working orders:
     every order under ``all``, orders that do not reduce a position under
-    ``buys``. ``None`` when nothing is halted."""
-    halts = active_halts(state, as_of, portfolio_id=book.portfolio_id, user_id=book.owner_id)
+    ``buys``. ``None`` when nothing is halted. The legacy book carries no
+    owner id: its owner comes from the portfolio row, as the gate reads it
+    (TO-02)."""
+    from stonks.production.hooks.risk_halts import portfolio_owner
+
+    owner = book.owner_id
+    if owner is None and halts_enabled(state):
+        owner = portfolio_owner(state, book.portfolio_id)
+    halts = active_halts(state, as_of, portfolio_id=book.portfolio_id, user_id=owner)
     if book.parent_id is not None:
         halts += active_halts(state, as_of, portfolio_id=book.parent_id)
     modes = {h.halt for h in halts}
