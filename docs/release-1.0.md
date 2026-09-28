@@ -56,6 +56,12 @@ Docker is not installed on the machine that prepared the release, so `docker com
 7. **Market data plan.** The free EODHD plan gives end-of-day prices only, one year back. Fundamentals, calendars, news and the EODHD websockets for intraday need a paid plan (the planned choice is All-in-one). Quotes for the live preview, the pre-open gap check and the IBKR streaming source need IBKR market data subscriptions for each market you trade.
 8. **Wiki.** The docs workflow syncs the API and MCP references to the wiki on the merge. The guides and glossary on the wiki live outside this repository and still need a manual read against this release.
 9. **Real money** waits for each stage gate (`stonks live stage report`), roadmap 19.12.
+10. **Live options** (roadmap 17.8) ship off. Turn them on only once live stock trading is stable:
+    1. Buy the IBKR options market data add-on (OPRA, US options) for the live account, and ask IBKR for the options trading level you want.
+    2. Set up the Flex statement (`STONKS_IBKR_FLEX_TOKEN` and a query with the "Option Exercises, Assignments and Expirations" section), so assignments reach the ledger.
+    3. Set `[production.options] live = true` and restart the api and scheduler services.
+    4. On the Live settings page of a portfolio at `live_small` or higher, set its options approval level, at or below what IBKR granted. It shows "Options live: on" once all three hold.
+    5. Every option order waits on the Tickets page. See [operations.md](operations.md#live-options).
 
 ## Could not be checked here
 
