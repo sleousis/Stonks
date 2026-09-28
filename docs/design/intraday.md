@@ -257,6 +257,8 @@ flowchart LR
 
 **The state machine.** Each order is committed `pending`, sent, then `submitted`, then synced by client id (`accepted` once the broker lists it). A rejection ends it `rejected`. A submit with no answer is `unknown`, and nothing more is sent for that ticker until reconciliation settles it. Other tickers keep trading. A missing `decided_at` is set to the clock.
 
+**A book at a real broker.** The step sees only what the book's own fills bought (`production.ownership.managed_view`), never the owner's shares or another book's in the same account. A ticker with an order of the book still working at the broker gets no new order until that one settles, so the next bar never stacks a second order on the first. The simulated broker keeps the backtest's model.
+
 **Day orders.** Every order goes out as a day order (`as_day_order`). No time in force means `day`, `ioc` stays, and `opg` or `gtc` are refused, since an intraday book ends with the session. `IbkrBroker(intraday=True)` checks the same rule again in `to_ib_order(intraday=True)`, so a day order is sent even though the daily default is the opening auction.
 
 **Per event.** Register the router on the driver at `ROUTER_PRIORITY` (-10), before the step. On each bar close it first lets the simulated broker fill its working orders against the new bars, then reconciles the book's open orders through `execution.reconcile.reconcile_orders`. Both brokers report executions and order state, so the execution path books one fill per execution id, with its fee, and a repeat books nothing. With no open order the reconcile is skipped.

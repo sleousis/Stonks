@@ -361,7 +361,11 @@ class EngineProcess:
                 setter(self.step.asset_classes)
             self._brokers[book.id] = broker
             self._routers[book.id] = IntradayRouter(
-                broker, self.state, portfolio_id=book.portfolio_id, clock=self.clock
+                broker,
+                self.state,
+                portfolio_id=book.portfolio_id,
+                clock=self.clock,
+                hold_working=not book.simulated,
             )
             for fill in ledger_fills(self.state, book.portfolio_id):
                 self.step.record_fill(book.id, fill.ticker, fill.strategy_id)

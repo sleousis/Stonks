@@ -391,3 +391,33 @@ def test_a_broker_book_never_trades_the_owners_own_holdings(lake, state, recordi
     assert not state.sql("SELECT 1 FROM orders WHERE ticker = 'OWN.US'")
     # the owner's 7 AAA.US stay: the book ends flat on its own shares only
     assert account.fetch_portfolio().positions.get("AAA.US") == pytest.approx(7.0)
+
+
+class _HoldsAAA(MinuteMomentum):
+    """Wants AAA.US all day."""
+
+    def estimate_return(self, ticker: str, as_of: Any, lake: Any) -> float | None:
+        return 0.01 if ticker == "AAA.US" else None
+
+
+class _NeverFills(_AccountBroker):
+    """A broker account where the book's orders keep working unfilled (a
+    limit the market moved away from)."""
+
+    def on_bar_close(self, event: BarClose) -> list:
+        return []
+
+
+def test_a_working_order_at_a_real_broker_is_not_sent_again_on_the_next_bar(
+    lake, state, recording
+) -> None:
+    clock = FakeClock(datetime(2026, 9, 24, tzinfo=UTC))
+    sim = IntradaySimBroker(Portfolio(cash=100_000.0), fill=PARITY_FILLS, clock=clock,
+                            session_key=None)  # fmt: skip
+    account = _NeverFills(sim, {})
+    process = replay_process(
+        lake, state, recording, [book(PF, broker=account)], strategy=_HoldsAAA({"lookback": 10})
+    )
+    process.run()
+    buys = state.sql("SELECT quantity FROM orders WHERE ticker = 'AAA.US' AND side = 'buy'")
+    assert len(buys) == 1, "one buy works until it fills; the next bars add nothing"
