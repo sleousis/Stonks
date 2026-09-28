@@ -37,10 +37,10 @@ def register(app: typer.Typer) -> None:
     @app.command("verify")
     def verify(
         targets: list[str] = typer.Argument(  # noqa: B008
-            None, help="lab run ids or strategy ids (default: every strategy of [lab.verify])"
+            None, help="lab run ids or strategy ids (default: every strategy of \\[lab.verify])"
         ),
         tolerance: float | None = typer.Option(
-            None, "--tolerance", min=0.0, help="allowed score drift ([lab.verify] tolerance)"
+            None, "--tolerance", min=0.0, help="allowed score drift (\\[lab.verify] tolerance)"
         ),
         alert: bool = typer.Option(False, "--alert", help="raise an operator alert on a move"),
         as_json: bool = typer.Option(False, "--json", help="print the result as JSON"),
