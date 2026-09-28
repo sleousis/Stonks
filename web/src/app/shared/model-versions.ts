@@ -72,8 +72,9 @@ export function swapCheckRow(c: SwapCheckView): SwapCheckRow {
     value = pct(c.value);
     limit = c.limit == null ? MISSING : `≤ ${formatPercent(c.limit)}`;
   } else if (c.name === 'vs_live') {
-    value = pct(c.value, true);
-    limit = c.limit == null ? MISSING : `≥ ${formatPercent(c.limit, { signed: true })}`;
+    // A paired test (roadmap 23.9): the HAC t-statistic of the daily gap.
+    value = c.value == null ? MISSING : `t ${formatNumber(c.value, { digits: 2 })}`;
+    limit = c.limit == null ? MISSING : `≥ ${formatNumber(c.limit, { digits: 2 })}`;
   }
   return {
     name: c.name,

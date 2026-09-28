@@ -99,7 +99,7 @@ def test_family_trials_are_counted(tmp_path) -> None:
     state.migrate()
     ledger = TrialLedger(state, tmp_path / "artifacts")
     rng = np.random.default_rng(0)
-    for k in range(4):
+    for _ in range(4):
         rid = ledger.start_run(LabRunSpec("pkg:Strat", family="fam"))
         vals = rng.normal(0.0, 0.01, size=(400, 50))
         ledger.record_trials(

@@ -60,7 +60,7 @@ A swap needs a passing swap check, or an override with a reason of at least 20 c
 | `candidate` | the version is a candidate and the strategy is not retired |
 | `min_days` | the candidate book has at least `min_days` days |
 | `max_drawdown` | the candidate book fell no deeper than `max_drawdown` |
-| `vs_live` | over the same days, the candidate trails the live book by at most `max_underperformance` |
+| `vs_live` | a paired test on the two books' daily returns over the same days does not show the candidate trailing (see below) |
 
 ```bash
 uv run stonks registry swap-check mom_ml_1a2b 2
@@ -68,6 +68,10 @@ uv run stonks registry swap mom_ml_1a2b 2
 uv run stonks registry swap mom_ml_1a2b 2 --override --reason "the refit handles the new regime"
 uv run stonks registry reject mom_ml_1a2b 2 --reason "worse fit"
 ```
+
+### The paired test
+
+A few weeks of returns are mostly noise, so the check never compares raw cumulative returns. It takes each day both books have a return, subtracts the live return from the candidate's, and runs a t-test on the mean gap with a Newey-West (HAC) standard error. It fails when the candidate trails the live model with a one-sided p-value below `vs_live_alpha`, or when there are fewer than `min_paired_days` paired days. The report shows the t-statistic and its limit. Roadmap 23.9.
 
 The next tick after a swap trades the new model. A retired strategy never swaps.
 
@@ -92,8 +96,11 @@ min_days_between_fits = 5
 [lifecycle.swap]
 min_days = 20
 max_drawdown = 0.25
-max_underperformance = 0.02
+vs_live_alpha = 0.05       # refuse when the candidate trails live with p below this
+min_paired_days = 10
 ```
+
+An old config with `max_underperformance` still loads. The key is ignored with a warning.
 
 ## API and MCP
 

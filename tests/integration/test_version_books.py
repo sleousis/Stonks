@@ -91,7 +91,7 @@ def test_swap_check_gates_the_swap(env):
 
     for day in DAYS:
         run_tick(state, lake, registry, SETTINGS, as_of=day)
-    report = evaluate_swap(state, versions, sid, 2, SwapPolicy(min_days=2))
+    report = evaluate_swap(state, versions, sid, 2, SwapPolicy(min_days=2, min_paired_days=2))
     assert report.passed, report.as_dict()
     assert report.days == 3 and report.live_version == 1
     assert report.candidate_return == pytest.approx(report.live_return)

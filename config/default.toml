@@ -561,7 +561,8 @@ min_days_between_fits = 5         # a newer fit is kept, not redone (unless forc
 [lifecycle.swap]
 min_days = 20                     # candidate model book days before a swap
 max_drawdown = 0.25
-max_underperformance = 0.02       # the candidate may trail the live version by this much
+vs_live_alpha = 0.05              # refuse when the candidate trails live with p below this
+min_paired_days = 10              # paired daily returns the vs_live test needs
 
 [mcp]
 # `stonks mcp` talks to the running REST API (`stonks serve`); it never opens

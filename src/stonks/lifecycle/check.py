@@ -7,8 +7,12 @@ start on the same day for the candidate and the live version, and checks:
 - ``candidate``: the version is a candidate and the strategy is not retired;
 - ``min_days``: the candidate book has at least ``min_days`` snapshots;
 - ``max_drawdown``: the candidate book's deepest fall is within the limit;
-- ``vs_live``: over the candidate's days, its return trails the live
-  version's by at most ``max_underperformance``.
+- ``vs_live``: a paired test over the days both books have (roadmap
+  23.9). The daily return gaps (candidate minus live) get a HAC t-test of
+  their mean. It fails when the candidate trails with a one-sided p-value
+  below ``vs_live_alpha``, or with fewer than ``min_paired_days`` pairs.
+  Raw cumulative returns are reported, never judged: over a few weeks
+  their gap is mostly noise.
 
 Missing data never passes. The check only reports; the swap itself goes
 through ``ModelVersionRegistry.swap``, which stores the report.
@@ -16,13 +20,18 @@ through ``ModelVersionRegistry.swap``, which stores the report.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
+from scipy.stats import norm
+
 from stonks.lifecycle.settings import SwapPolicy
-from stonks.production.pnl import daily_pnl
+from stonks.production.pnl import PnlRow, daily_pnl
 from stonks.production.version_books import version_book_curve
 from stonks.registry.versions import ModelVersionRegistry
+from stonks.stats.hac import hac_mean_test
 from stonks.store.state import SqliteState
 
 
@@ -54,6 +63,10 @@ class SwapReport:
     candidate_return: float | None = None
     live_return: float | None = None
     candidate_drawdown: float | None = None
+    #: Days both books have a daily return, and the HAC t-statistic of the
+    #: mean daily gap (``None`` with fewer than two pairs).
+    paired_days: int = 0
+    gap_t_stat: float | None = None
 
     @property
     def passed(self) -> bool:
@@ -69,6 +82,8 @@ class SwapReport:
             "candidate_return": self.candidate_return,
             "live_return": self.live_return,
             "candidate_drawdown": self.candidate_drawdown,
+            "paired_days": self.paired_days,
+            "gap_t_stat": self.gap_t_stat,
             "checks": [c.as_dict() for c in self.checks],
         }
 
@@ -95,6 +110,8 @@ def evaluate_swap(
     cand_return = candidate_rows[-1].cumulative_return if candidate_rows else None
     live_return = live_rows[-1].cumulative_return if live_rows else None
     drawdown = -min(r.drawdown for r in candidate_rows) if candidate_rows else None
+    gaps = paired_gaps(candidate_rows, live_rows)
+    vs_live, t_stat = _vs_live_check(gaps, live.version, policy)
 
     checks = [
         _status_check(target.status, row["status"]),
@@ -116,7 +133,7 @@ def evaluate_swap(
                 else f"max drawdown {drawdown:.2%}, limit {policy.max_drawdown:.2%}"
             ),
         ),
-        _vs_live_check(cand_return, live_return, live.version, policy),
+        vs_live,
     ]
     return SwapReport(
         strategy_id=strategy_id,
@@ -127,6 +144,8 @@ def evaluate_swap(
         candidate_return=cand_return,
         live_return=live_return,
         candidate_drawdown=drawdown,
+        paired_days=len(gaps),
+        gap_t_stat=t_stat,
     )
 
 
@@ -140,26 +159,52 @@ def _status_check(version_status: str, strategy_status: str) -> SwapCheck:
     return SwapCheck(name="candidate", passed=ok, value=None, limit=None, detail=detail)
 
 
+def paired_gaps(candidate: list[PnlRow], live: list[PnlRow]) -> list[float]:
+    """Candidate minus live daily return on each day both books have one."""
+    live_by_day = {r.day: r.daily_return for r in live if r.daily_return is not None}
+    return [
+        r.daily_return - live_by_day[r.day]
+        for r in candidate
+        if r.daily_return is not None and r.day in live_by_day
+    ]
+
+
 def _vs_live_check(
-    candidate: float | None, live: float | None, live_version: int, policy: SwapPolicy
-) -> SwapCheck:
-    limit = -policy.max_underperformance
-    if candidate is None or live is None:
-        return SwapCheck(
+    gaps: list[float], live_version: int, policy: SwapPolicy
+) -> tuple[SwapCheck, float | None]:
+    """The paired test. ``value`` is the HAC t-statistic of the mean daily
+    gap, ``limit`` the one-sided critical value it must reach."""
+    limit = float(norm.ppf(policy.vs_live_alpha))
+    if len(gaps) < 2:
+        check = SwapCheck(
             name="vs_live",
             passed=False,
             value=None,
             limit=limit,
-            detail=f"no model books for the candidate and live v{live_version} over the same days",
+            detail=f"{len(gaps)} paired day(s) with the live v{live_version} model book",
         )
-    gap = candidate - live
-    return SwapCheck(
-        name="vs_live",
-        passed=gap >= limit,
-        value=gap,
-        limit=limit,
-        detail=(
-            f"candidate {candidate:+.2%} vs live v{live_version} {live:+.2%} "
-            f"(gap {gap:+.2%}, may trail by {policy.max_underperformance:.2%})"
-        ),
+        return check, None
+    test = hac_mean_test(np.asarray(gaps))
+    enough = test.n >= policy.min_paired_days
+    not_worse = test.p_below >= policy.vs_live_alpha
+    words = (
+        f"mean daily gap {test.mean:+.3%} vs live v{live_version} over {test.n} paired days "
+        f"(HAC t {test.t_stat:+.2f}, p {test.p_below:.3f} that it trails)"
     )
+    if not enough:
+        words += f", need >= {policy.min_paired_days} paired days"
+    elif not not_worse:
+        words += f": trails live at p < {policy.vs_live_alpha:g}"
+    t_stat = _finite_or_none(test.t_stat)
+    check = SwapCheck(
+        name="vs_live",
+        passed=enough and not_worse,
+        value=t_stat,
+        limit=limit,
+        detail=words,
+    )
+    return check, t_stat
+
+
+def _finite_or_none(x: float) -> float | None:
+    return float(x) if math.isfinite(x) else None

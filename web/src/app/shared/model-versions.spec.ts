@@ -40,12 +40,12 @@ describe('swapCheckRow', () => {
     });
   });
 
-  it('formats the drawdown and the gap to live as percentages', () => {
+  it('formats the drawdown as a percentage and the paired test as a t-statistic', () => {
     expect(swapCheckRow(drawdown)).toMatchObject({ value: '4.00%', limit: '≤ 25.00%' });
     const row = swapCheckRow(vsLive);
     expect(row.label).toBe('Against the live model');
-    expect(row.value).toContain('3.00%');
-    expect(row.limit).toContain('2.00%');
+    expect(row.value).toContain('2.40');
+    expect(row.limit).toContain('1.6');
   });
 
   it('shows dashes for a check without figures', () => {
