@@ -247,6 +247,22 @@ describe('ScreenerPage', () => {
     expect(button(root, 'Save changes').disabled).toBe(true);
   });
 
+  it('opens a saved screen only once the metrics are known (percent bounds)', async () => {
+    const fixture = TestBed.createComponent(ScreenerPage);
+    fixture.detectChanges();
+    const metrics = await nextRequest(http, '/api/screener/metrics');
+    (await nextRequest(http, '/api/screener/screens')).flush(page([SAVED]));
+    (await nextRequest(http, '/api/universes')).flush(page([]));
+    await settle(fixture);
+    http.match((r) => r.url.startsWith('/api/screener/alerts')).forEach((r) => r.flush(page([])));
+    await settle(fixture);
+    // Without the units a stored 4% would read as 0.04 and save back as 0.0004.
+    expect(button(el(fixture), 'Open').disabled).toBe(true);
+    metrics.flush(METRICS);
+    await settle(fixture);
+    expect(button(el(fixture), 'Open').disabled).toBe(false);
+  });
+
   it('says so when a saved screen cannot be opened', async () => {
     const fixture = await render();
     const root = el(fixture);

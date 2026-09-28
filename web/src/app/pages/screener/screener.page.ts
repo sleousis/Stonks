@@ -282,6 +282,8 @@ export class ScreenerPage {
   // ---- saved screens ------------------------------------------------------------------
 
   async openScreen(s: SavedScreenView): Promise<void> {
+    // The form reads percent bounds through the metric units: wait for them.
+    if (!this.metrics.hasValue()) return;
     try {
       const fresh = await this.api.get(s.id);
       this.load(fresh);
