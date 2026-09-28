@@ -877,6 +877,15 @@ cli = { limited = "trader reads live in the console and MCP" }
 mcp = "list_risk_snapshots"
 
 [[capability]]
+id = "decisions.why_not"
+domain = "risk"
+title = "Why a ticker did or did not trade: the step that kept it out or trimmed it"
+routes = ["GET /api/decisions"]
+console = "listTradeDecisions"
+cli = { limited = "trader reads why-not in the console, MCP and the assistant" }
+mcp = "list_trade_decisions"
+
+[[capability]]
 id = "risk.intraday"
 domain = "risk"
 title = "Intraday P&L and risk snapshots of a portfolio for one day"

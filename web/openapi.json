@@ -622,7 +622,7 @@
         "type": "object"
       },
       "AssistantEventView": {
-        "description": "One server-sent event of a turn. ``kind`` is also the SSE event name.\n\n- ``text``: ``{delta}``, a piece of the answer\n- ``tool_call``: ``{id, name, arguments, needs_confirmation}``\n- ``tool_result``: ``{id, name, ok, result | error}``\n- ``confirm_required``: ``{action_id, tool, description, arguments, preview}``\n- ``error``: ``{code, message}`` (``model_error``, ``timeout``, ``max_steps``, ...)\n- ``done``: ``{conversation_id, steps, pending_action_id}``, always last",
+        "description": "One server-sent event of a turn. ``kind`` is also the SSE event name.\n\n- ``text``: ``{delta}``, a piece of the answer\n- ``tool_call``: ``{id, name, arguments, needs_confirmation}``\n- ``tool_result``: ``{id, name, ok, result | error}``\n- ``confirm_required``: ``{action_id, tool, description, arguments, preview}``\n- ``grounding``: ``{status, ok, checked, ungrounded, ...}``: the numeric\n  grounding check (``rewriting``: the answer so far is replaced by a\n  rewrite, ``restored``: ``{answer}`` is shown again, ``ok`` or ``flagged``)\n- ``error``: ``{code, message}`` (``model_error``, ``timeout``, ``max_steps``, ...)\n- ``done``: ``{conversation_id, steps, pending_action_id}``, always last",
         "properties": {
           "data": {
             "additionalProperties": true,
@@ -635,6 +635,7 @@
               "tool_call",
               "tool_result",
               "confirm_required",
+              "grounding",
               "done",
               "error"
             ],
@@ -14735,6 +14736,37 @@
         "title": "Page[TokenView]",
         "type": "object"
       },
+      "Page_TradeDecisionView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TradeDecisionView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[TradeDecisionView]",
+        "type": "object"
+      },
       "Page_TradingModeView_": {
         "properties": {
           "items": {
@@ -25048,6 +25080,94 @@
         "title": "ToolCallView",
         "type": "object"
       },
+      "TradeDecisionView": {
+        "description": "One ticker in one book on one tick: the step that kept it out or\ntrimmed it. ``step`` is one of universe, rank, constructor, buffer,\nstale_price, risk_rule, scope, external, halt, held or traded.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "step": {
+            "title": "Step",
+            "type": "string"
+          },
+          "step_text": {
+            "title": "Step Text",
+            "type": "string"
+          },
+          "strategies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Strategies",
+            "type": "array"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Id"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "tick_id": {
+            "title": "Tick Id",
+            "type": "string"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tick_id",
+          "portfolio_id",
+          "as_of",
+          "ticker",
+          "step",
+          "outcome",
+          "strategy_id",
+          "strategies",
+          "score",
+          "detail",
+          "summary",
+          "step_text"
+        ],
+        "title": "TradeDecisionView",
+        "type": "object"
+      },
       "TradeStatsView": {
         "description": "Trade-level statistics of a backtest (``backtest.trades.TradeStats``).\nWin/loss figures are over closed round trips; ``None`` marks an\nunbounded ratio (no losing trades).",
         "properties": {
@@ -32789,6 +32909,211 @@
           "connections"
         ],
         "x-permission": "portfolio.manage"
+      }
+    },
+    "/api/decisions": {
+      "get": {
+        "description": "Why a ticker did or did not trade in one of your portfolios, newest\nfirst: the step that kept it out or trimmed it (universe, rank,\nconstructor, buffer, stale price, a named risk rule, a halt).",
+        "operationId": "listTradeDecisions",
+        "parameters": [
+          {
+            "description": "one ticker, e.g. AAPL.US",
+            "in": "query",
+            "name": "ticker",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "one ticker, e.g. AAPL.US",
+              "title": "Ticker"
+            }
+          },
+          {
+            "description": "rows this strategy owned or scored",
+            "in": "query",
+            "name": "strategy_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "rows this strategy owned or scored",
+              "title": "Strategy Id"
+            }
+          },
+          {
+            "description": "one tick",
+            "in": "query",
+            "name": "tick_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "one tick",
+              "title": "Tick Id"
+            }
+          },
+          {
+            "description": "days on or after this one",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "days on or after this one",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_TradeDecisionView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Trade Decisions",
+        "tags": [
+          "portfolio"
+        ],
+        "x-permission": "data.read"
       }
     },
     "/api/exports/fills": {

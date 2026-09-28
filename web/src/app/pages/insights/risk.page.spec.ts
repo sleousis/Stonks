@@ -3,7 +3,7 @@ import {
   type TestRequest,
   provideHttpClientTesting,
 } from '@angular/common/http/testing';
-import { signal } from '@angular/core';
+import { Component, signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
@@ -12,7 +12,12 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
 import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
 import { tick } from '../../../testing/http';
 import { INSIGHTS, LIVE, POLICY, RISK_HISTORY } from './insights.fixtures';
+import { WhyNotPanel } from '../../shared/ui/why-not-panel';
 import { RiskPage, violationText } from './risk.page';
+
+/** The why-not panel has its own spec. */
+@Component({ selector: 'app-why-not-panel', template: 'Why not' })
+class WhyNotPanelStub {}
 
 describe('RiskPage', () => {
   let fixture: ComponentFixture<RiskPage>;
@@ -45,6 +50,10 @@ describe('RiskPage', () => {
           },
         },
       ],
+    });
+    TestBed.overrideComponent(RiskPage, {
+      remove: { imports: [WhyNotPanel] },
+      add: { imports: [WhyNotPanelStub] },
     });
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(RiskPage);

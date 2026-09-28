@@ -5280,6 +5280,103 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Why a ticker did or did not trade in one of your portfolios,\nnewest first. Each row names the step that kept it out or trimmed\nit: universe, rank (another pick won), constructor (no weight),\nbuffer (inside the no-trade band), stale_price, risk_rule (with the\nrule and the quantities), scope, external, halt, held or traded.\nAsk with a ticker to answer \"why didn't we buy X\".",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 20,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "rows this strategy owned or scored",
+            "title": "Strategy Id"
+          },
+          "tick_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one tick",
+            "title": "Tick Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one ticker, e.g. AAPL.US",
+            "title": "Ticker"
+          }
+        },
+        "title": "list_trade_decisionsArguments",
+        "type": "object"
+      },
+      "name": "list_trade_decisions",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Your orders, newest first: why each was placed (trigger, signal\nscore and rank), the outcome (shortfall, next-day move) and notes.",
       "input_schema": {
         "properties": {
