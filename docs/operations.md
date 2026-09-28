@@ -413,7 +413,7 @@ Before switching models, run the eval set: `uv run stonks assistant eval` checks
 
 ## Broker connections
 
-Connections sync a user's broker accounts: positions, cash and activities, into a linked `broker` portfolio. A provider that can trade (`ibkr`) also places the orders of that portfolio's auto and approve books. Providers are `alpaca`, `snaptrade`, `ibkr` (an IB Gateway named in `[brokers.ibkr.gateways]`, see [Live trading](#live-trading)) and the fakes for tests. No provider works until an admin enables it.
+Connections sync a user's broker accounts: positions, cash and activities, into a linked `broker` portfolio. A provider that can trade (`ibkr`) also places the orders of that portfolio's auto and approve books, the manual orders placed there and the suggested orders its owner approves, at the portfolio's stage. Alerts only and Paper follows never place an order at a broker, and a provider that only reads (`snaptrade`, `alpaca` here) never places one. The console's Broker connections page says this on every provider card and under "When Stonks trades". Providers are `alpaca`, `snaptrade`, `ibkr` (an IB Gateway named in `[brokers.ibkr.gateways]`, see [Live trading](#live-trading)) and the fakes for tests. No provider works until an admin enables it.
 
 ```bash
 export STONKS_SECRET_KEYS="$(uv run python -m stonks.security keygen 2>/dev/null)"   # once; keep it secret
@@ -511,7 +511,7 @@ PUT /api/portfolios/{id}/live/allocation        {"amount": 2500, "currency": "US
 PUT /api/portfolios/{id}/live/account-profile   {"jurisdiction": "us", "account_type": "cash"}
 ```
 
-- In the console: Profile, then Live settings next to the LIVE portfolio. The page also lists which live safeguards and account rules act on it (`GET /api/portfolios/{id}/live/rules`). Gateway health and the reconcile reports show on Health (`GET /api/brokers/gateways`, `GET /api/reconcile/reports`).
+- In the console: Profile, then Real-money settings next to the broker portfolio. The page also lists which safeguards and account rules act on it (`GET /api/portfolios/{id}/live/rules`). Gateway health and the reconcile reports show on Health (`GET /api/brokers/gateways`, `GET /api/reconcile/reports`).
 - The allocation is the most Stonks may hold in the book. There are no automatic steps. A bad week alerts but never changes it.
 - The profile picks the account rules: `us`, `eu` or `uk`, `cash` (default) or `margin`, `retail` (default) or `professional`. Shorts need a margin account.
 - The jurisdiction and base currency are stored once, in the tax settings and the portfolio (see [tax.md](tax.md)). Saving the profile updates them, and the tax settings page shows the same values.
@@ -523,12 +523,12 @@ PUT /api/portfolios/{id}/live/account-profile   {"jurisdiction": "us", "account_
 Off by default. The first live account is a cash account, long only. Margin (longs and shorts at IBKR, roadmap 19.13) comes after the cash account runs well.
 
 - **Turn it on.** Set `[production.risk.rules.account_rules] margin_accounts = true`, with `enabled = true` there and `[production.risk.rules.margin_call] enabled = true`. Set the gateway's `account_type = "margin"` under `[brokers.ibkr.gateways.<name>]`. A portfolio override can turn margin off, never on.
-- **Choose it.** In Live settings, pick Margin, read the risks and tick "I understand these risks", then save with a fresh code. Stonks asks IBKR first and saves only when IBKR reports a margin account. The audit row records its answer. While margin accounts are off, a margin book opens nothing new.
+- **Choose it.** In Real-money settings, pick Margin, read the risks and tick "I understand these risks", then save with a fresh code. Stonks asks IBKR first and saves only when IBKR reports a margin account. The audit row records its answer. While margin accounts are off, a margin book opens nothing new.
 - **Buying power.** Every new order (a buy or a short sale) goes through IBKR's what-if first. Its initial and maintenance margin after the order, with the run's other orders, must stay within `1 - margin_buffer` of equity (`margin_buffer = 0.10` by default). The order is cut to fit, or dropped. A what-if that fails or warns drops it.
 - **Short sales** need IBKR's locate for today. A name IBKR cannot lend is dropped, a short is cut to the shares on offer, and a hard to borrow name waits for a person as a ticket, even in auto.
 - **Pattern day trader.** A US margin account under 25,000 USD may make at most 3 day trades in 5 trading days (the stricter of our count and IBKR's).
 - **Margin monitoring.** The cushion is excess liquidity over equity, from IBKR. Below `warn_cushion` (15%) the owner gets an alert. Below `reduce_cushion` (10%) the alert is urgent and the next run of the book drops new positions and sells its own positions until the cushion is back at `restore_cushion` (20%), before IBKR liquidates. At 0 IBKR may already be selling. These sit under `[production.risk.rules.margin_call]`. The tick and the `live_margin` job (every 30 minutes, on the reconcile client id) each write a `margin_checks` row. Alerts go out once per level and day.
-- **See it.** Live settings shows buying power, margin use, the cushion and its level, the new margin still allowed, and the day trade state (`GET /api/portfolios/{id}/live/margin`, MCP `get_live_margin`).
+- **See it.** Real-money settings shows buying power, margin use, the cushion and its level, the new margin still allowed, and the day trade state (`GET /api/portfolios/{id}/live/margin`, MCP `get_live_margin`).
 
 ### Stages, gates and the preview
 
@@ -536,8 +536,10 @@ Every portfolio has a live stage (roadmap 19.9):
 
 ```mermaid
 flowchart LR
-  A[sim_paper] --> B[broker_paper] --> C[live_small] --> D[live_scale]
+  A["Simulated (sim_paper)"] --> B["Broker paper (broker_paper)"] --> C["Real money, small (live_small)"] --> D["Real money, full (live_scale)"]
 ```
+
+The console shows the words, the API and the CLI the ids in brackets. Only the two Real money stages move real money, and only there does the console use brass and the LIVE stamp.
 
 - Moving up goes one stage at a time. It needs a gate report that passes, computed at that moment, a reason, the target stage typed again, and a fresh second factor (`live.manage`). Moving down goes to any lower stage with a reason and needs no code. Both write a `live_stage_changes` row and an audit row.
 - The IBKR adapter only sends an opening order to a live gateway when the portfolio is at `live_small` or up. Closes and cancels still go out, so a book moved down can wind down.
@@ -553,7 +555,22 @@ uv run stonks live stage demote PORTFOLIO --to sim_paper --reason "..."
 uv run stonks live preview PORTFOLIO
 ```
 
-In the console: Live settings of the portfolio, the Stage card and Order preview. Over the API: `GET /api/portfolios/{id}/live/stage`, `GET .../live/gate-report`, `POST .../live/stage/promote`, `POST .../live/stage/demote`, `POST .../live/preview`. MCP reads the stage and the gate report only.
+In the console: Real-money settings of the portfolio, the Stage card and Order preview. Moving up asks you to type the next stage's name ("Broker paper"). Over the API: `GET /api/portfolios/{id}/live/stage`, `GET .../live/gate-report`, `POST .../live/stage/promote`, `POST .../live/stage/demote`, `POST .../live/preview`. MCP reads the stage and the gate report only.
+
+### Going live in the console
+
+The Going live page (`/going-live`, linked from Real-money settings and Broker connections) walks one portfolio through every step to real money, in order, and says for each whether it is done and who acts:
+
+1. **Server gateway set up** (admin): an IB Gateway under `[brokers.ibkr.gateways]` lists the portfolio and is connected.
+2. **Broker connected**: the portfolio is linked to a connection that can trade.
+3. **Portfolio stage**: done at Real money, small or full. Otherwise it lists the checks the next stage still needs.
+4. **Allocation**: set on Real-money settings with a fresh code.
+5. **Account profile**: saved on the same page, with a fresh code.
+6. **Safeguards** (admin): every safeguard on.
+7. **Preview**: a dry run through the broker's what-if ran on this device.
+8. **Mode switch**: a follow in this portfolio set to Approve each trade or Automatic (on Today).
+
+The page only reads; each change happens on the linked page with its own ticket and code.
 
 ### Live safeguards
 
@@ -693,6 +710,7 @@ flowchart LR
 - A trip sends a `risk` notification to the portfolio owner, or to the admins for a global halt.
 - A halt on a broker portfolio also stops its paper account.
 - MCP can list halts and turn the kill switch on (with `confirm=true`). It cannot resume.
+- In the console the kill switch is called Stop trading. The session strip, the command palette and the Halts page open the same sheet: it starts on the portfolio on screen, shows the ticket and needs a reason. Resuming stays on the Halts page, behind the typed words and a fresh code.
 
 ### Quit rule
 
@@ -909,7 +927,7 @@ Live options at IBKR (roadmap 17.8) are built and off. Turn them on only after l
 
 1. `[production.options] live = true` (the admin's switch).
 2. the portfolio is at stage `live_small` or higher.
-3. its owner set an options approval level above `none` on the Live settings page, with a reason and a fresh code.
+3. its owner set an options approval level above `none` on the Real-money settings page, with a reason and a fresh code.
 
 | Level | May open |
 |-------|----------|

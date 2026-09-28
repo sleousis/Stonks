@@ -446,7 +446,9 @@ describe('SessionStrip', () => {
       expect(stop.classList).toContain('live');
       stop.click();
       fixture.detectChanges();
-      expect(el.querySelector('[aria-label="Stop trading ticket"] .stamp')!.textContent).toContain('LIVE');
+      expect(el.querySelector('[aria-label="Stop trading ticket"] .stamp')!.textContent).toContain(
+        'LIVE',
+      );
     });
 
     it('lets admins stop every portfolio; viewers never see the control', async () => {

@@ -91,10 +91,11 @@
     </div>
     <div class="panel-body">
       <p class="muted intro">
-        Stops new orders at once. No position is closed. Approved tickets not yet sent are held,
-        and orders already at the broker stay there. It starts on
-        <strong>{{ onScreen() }}</strong>; you pick the scope, what stops and the reason on the
-        ticket. Resuming needs the typed words <strong>RESUME TRADING</strong> and a fresh code.
+        Stops new orders at once. No position is closed. Approved tickets not yet sent are held, and
+        orders still working at your broker are cancelled. It starts on
+        <strong>{{ onScreen() }}</strong
+        >; you pick the scope, what stops and the reason on the ticket. Resuming needs the typed
+        words <strong>RESUME TRADING</strong> and a fresh code.
       </p>
       <div class="form-actions">
         <button type="button" class="btn btn-danger" [disabled]="!canKill()" (click)="stop()">

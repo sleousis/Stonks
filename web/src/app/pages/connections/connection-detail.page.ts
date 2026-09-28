@@ -24,7 +24,8 @@ import { StatusPill } from '../../shared/ui/status-pill';
 import { AccountList, type LinkChoice } from './account-list';
 import { CONNECTION_STATUS_LABEL, SYNC_STATUS_LABEL, providerName } from './connection-labels';
 
-const READS = "Stonks reads this broker's positions, cash and activity into the portfolios you link.";
+const READS =
+  "Stonks reads this broker's positions, cash and activity into the portfolios you link.";
 
 /**
  * One broker connection: its accounts and the portfolios they feed, Link,

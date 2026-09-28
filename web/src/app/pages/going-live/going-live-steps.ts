@@ -29,14 +29,7 @@ export interface StepLink {
 
 export interface GoingLiveStep {
   key:
-    | 'gateway'
-    | 'broker'
-    | 'stage'
-    | 'allocation'
-    | 'profile'
-    | 'safeguards'
-    | 'preview'
-    | 'mode';
+    'gateway' | 'broker' | 'stage' | 'allocation' | 'profile' | 'safeguards' | 'preview' | 'mode';
   title: string;
   state: StepState;
   /** One plain sentence: what is true now, or what to do. */
@@ -241,7 +234,10 @@ function brokerStep(f: GoingLiveFacts): GoingLiveStep {
     };
   }
   if (f.connections === undefined || f.providers === undefined) return checking('broker', title);
-  const link: StepLink = { label: 'Open the connection', path: `/connections/${p.broker_connection_id}` };
+  const link: StepLink = {
+    label: 'Open the connection',
+    path: `/connections/${p.broker_connection_id}`,
+  };
   const conn = f.connections.find((c) => c.id === p.broker_connection_id);
   const provider = conn ? f.providers.find((x) => x.name === conn.provider) : undefined;
   if (!conn || conn.status !== 'active') {

@@ -19,7 +19,12 @@ const IBKR: ProviderView = {
   has_paper: true,
 };
 
-const SNAP: ProviderView = { ...IBKR, name: 'snaptrade', display_name: 'SnapTrade', can_trade: false };
+const SNAP: ProviderView = {
+  ...IBKR,
+  name: 'snaptrade',
+  display_name: 'SnapTrade',
+  can_trade: false,
+};
 
 function conn(over: Partial<ConnectionView> = {}): ConnectionView {
   return {
@@ -183,7 +188,10 @@ describe('goingLiveSteps', () => {
         stage: { ...STAGE, stage: 'live_small', real_money: true },
         allocation: { ...facts().allocation!, amount: 2500, currency: 'USD' },
         profile: { portfolio_id: 'pf_b', jurisdiction: 'us' },
-        rules: { ...facts().rules!, safeguards: [{ name: 'capital_ramp', on: true, settings: {} }] },
+        rules: {
+          ...facts().rules!,
+          safeguards: [{ name: 'capital_ramp', on: true, settings: {} }],
+        },
         follows: [follow({ mode: 'approve' })],
         previewedAt: '2026-09-27T10:00:00Z',
       }),
@@ -200,7 +208,9 @@ describe('goingLiveSteps', () => {
     expect(none['gateway'].detail).toContain('Your admin sets up');
     const admin = byKey(facts({ isAdmin: true, gateways: { configured: false, gateways: [] } }));
     expect(admin['gateway'].link).toMatchObject({ path: '/health' });
-    const down = byKey(facts({ gateways: { configured: true, gateways: [gateway({ connected: false })] } }));
+    const down = byKey(
+      facts({ gateways: { configured: true, gateways: [gateway({ connected: false })] } }),
+    );
     expect(down['gateway'].detail).toContain('not connected');
     const other = byKey(
       facts({ gateways: { configured: true, gateways: [gateway({ your_portfolios: [] })] } }),

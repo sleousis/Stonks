@@ -47,7 +47,7 @@ export const DEFAULT_KILL_REASON = 'Stopped from the console.';
           <h2 id="kill-sheet-title">Stop trading</h2>
           <p id="kill-sheet-message" class="sheet-message">
             New orders stop at once. No position is closed. Approved tickets not yet sent are held,
-            and orders already at the broker stay there. You can resume on the Halts page.
+            and orders still working at your broker are cancelled. You can resume on the Halts page.
           </p>
 
           <fieldset class="choices">
@@ -134,7 +134,12 @@ export const DEFAULT_KILL_REASON = 'Stopped from the console.';
             }
           </div>
 
-          <div class="ticket" [class.live]="ticket().live" role="group" aria-label="Stop trading ticket">
+          <div
+            class="ticket"
+            [class.live]="ticket().live"
+            role="group"
+            aria-label="Stop trading ticket"
+          >
             <p class="ticket-head">
               <span class="ticket-kind">{{ ticket().kind }}</span>
               <app-mode-stamp [live]="ticket().live" />

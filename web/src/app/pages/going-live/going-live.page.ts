@@ -136,8 +136,8 @@ import { lastPreview } from './preview-memory';
       </ol>
 
       <p class="foot muted">
-        Real money moves only at the two Real money stages, and only for follows set to Approve
-        each trade or Automatic. You can stop trading from any page at any time.
+        Real money moves only at the two Real money stages, and only for follows set to Approve each
+        trade or Automatic. You can stop trading from any page at any time.
       </p>
     }
   `,

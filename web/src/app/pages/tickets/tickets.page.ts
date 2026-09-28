@@ -114,7 +114,11 @@ interface Group {
       [attr.aria-labelledby]="'tab-' + view()"
     >
       @if (list.error(); as err) {
-        <app-error-state title="Could not load your tickets" [error]="err" (retry)="list.reload()" />
+        <app-error-state
+          title="Could not load your tickets"
+          [error]="err"
+          (retry)="list.reload()"
+        />
       } @else if (!list.hasValue()) {
         <app-loading-state label="Loading your tickets" [rows]="3" />
       } @else if (view() === 'waiting') {
@@ -137,7 +141,9 @@ interface Group {
                 From strategies you follow
                 <span class="muted">{{ waiting().length }}</span>
               </h2>
-              <p class="muted">Each ticket goes to your broker in the window before the next open.</p>
+              <p class="muted">
+                Each ticket goes to your broker in the window before the next open.
+              </p>
               @for (group of groups(); track group.key) {
                 <section class="run" [attr.aria-labelledby]="'run-' + group.key">
                   <div class="run-head">
@@ -184,7 +190,9 @@ interface Group {
                             <div>
                               <dt>Price</dt>
                               <dd>
-                                {{ t.limit_price ? 'Limit ' + money(t.limit_price) : 'At the open' }}
+                                {{
+                                  t.limit_price ? 'Limit ' + money(t.limit_price) : 'At the open'
+                                }}
                               </dd>
                             </div>
                             <div>
@@ -218,8 +226,9 @@ interface Group {
                             @if (lines.length) {
                               <details class="rules">
                                 <summary>
-                                  Checked by {{ lines.length }}
-                                  rule{{ lines.length === 1 ? '' : 's' }}
+                                  Checked by {{ lines.length }} rule{{
+                                    lines.length === 1 ? '' : 's'
+                                  }}
                                 </summary>
                                 <ul>
                                   @for (line of lines; track $index) {

@@ -71,8 +71,8 @@ def test_a_trader_sets_live_allocation_and_profile(browse, stack, viewport):
     v.guard.expect_refusal(404, r"/live/account-profile$", "no account profile saved yet")
 
     v.go("/profile")
-    page.get_by_role("link", name=f"Live settings of {name}").click()
-    expect(page.get_by_role("heading", level=1)).to_have_text("Live settings")
+    page.get_by_role("link", name=f"Real-money settings of {name}").click()
+    expect(page.get_by_role("heading", level=1)).to_have_text("Real-money settings")
     figure = page.get_by_test_id("allocation-figure")
     expect(figure).to_have_text("Not set")
     expect(page.get_by_text("No automatic steps.")).to_be_visible()
@@ -100,6 +100,15 @@ def test_a_trader_sets_live_allocation_and_profile(browse, stack, viewport):
     expect(safeguards).to_contain_text("Allocation cap")
     expect(safeguards).to_contain_text("Off")
     v.check_page("live settings saved")
+
+    # F52: the checklist walks the same path, and shows these two steps done.
+    page.get_by_role("link", name="Going live checklist").click()
+    expect(page.get_by_role("heading", level=1)).to_have_text("Going live")
+    steps = page.locator("ol.steps")
+    expect(steps.locator("li[data-step='allocation'] .state")).to_have_text("Done")
+    expect(steps.locator("li[data-step='profile'] .state")).to_have_text("Done")
+    expect(steps.locator("li[data-step='stage'] .state")).to_have_text("Not yet")
+    v.check_page("going live checklist")
 
     v.go("/orders")
     expect(page.get_by_text("Outcome unknown").first).to_be_visible()

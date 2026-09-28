@@ -176,7 +176,9 @@ describe('LiveStageCard', () => {
     });
     await tick();
     fixture.detectChanges();
-    expect(el.querySelector('.step[aria-current="step"]')?.textContent).toContain('Real money, small');
+    expect(el.querySelector('.step[aria-current="step"]')?.textContent).toContain(
+      'Real money, small',
+    );
   });
 
   it('cannot move up while a check is not met', async () => {

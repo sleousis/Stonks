@@ -47,8 +47,9 @@ export function stageWords(stage: string): StageWords {
 
 /** A server sentence with stage ids ("live_small") put in trader words ("Real money, small"). */
 export function stageText(text: string): string {
-  return text.replace(/\b(sim_paper|broker_paper|live_small|live_scale)\b/g, (id) =>
-    stageWords(id).label,
+  return text.replace(
+    /\b(sim_paper|broker_paper|live_small|live_scale)\b/g,
+    (id) => stageWords(id).label,
   );
 }
 

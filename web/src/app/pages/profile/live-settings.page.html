@@ -2,7 +2,9 @@
   title="Real-money settings"
   [description]="
     portfolio()
-      ? 'What Stonks may do in ' + portfolio()!.name + ', an account at a real broker. Real money moves only at the two Real money stages.'
+      ? 'What Stonks may do in ' +
+        portfolio()!.name +
+        ', an account at a real broker. Real money moves only at the two Real money stages.'
       : 'What Stonks may do in an account at a real broker.'
   "
 >
@@ -75,14 +77,13 @@
               class="figure"
               data-testid="allocation-figure"
               [class.live-figure]="realMoney()"
-              >{{
-              allocationText(a)
-            }}</span>
+              >{{ allocationText(a) }}</span
+            >
             @if (a.amount === null) {
               <p class="warn-text">
-              Nothing opens in this account until you set an amount. At the Real money stages this
-              is the most real money Stonks may hold here.
-            </p>
+                Nothing opens in this account until you set an amount. At the Real money stages this
+                is the most real money Stonks may hold here.
+              </p>
             } @else {
               <p class="muted">
                 The most Stonks may hold here. Changed

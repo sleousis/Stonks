@@ -1,12 +1,5 @@
 import { DOCUMENT } from '@angular/common';
-import {
-  DestroyRef,
-  Injectable,
-  InjectionToken,
-  computed,
-  inject,
-  signal,
-} from '@angular/core';
+import { DestroyRef, Injectable, InjectionToken, computed, inject, signal } from '@angular/core';
 
 import { OrderDraftsService } from '../../api/order-drafts.service';
 import { TicketsService } from '../../api/tickets.service';

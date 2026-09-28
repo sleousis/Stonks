@@ -475,7 +475,7 @@ Tickers open `/data?instrument=<id>`.
 
 | Page | Route | What it does |
 |---|---|---|
-| Halts | `/ops/halts` | Active and past halts, the kill switch (global or one portfolio, reason, buys only), Resume and Clear |
+| Halts | `/ops/halts` | Active and past halts, Stop trading (the same sheet as the strip), Resume and Clear |
 | Schedule and backups | `/ops/schedule` | Jobs with next and last run, recent runs and Run now. Every backup on disk with its size, Back up now, Verify and a staged Restore (admins) |
 | Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
 | Universes | `/universes`, `/universes/:id` | List, create and edit each kind, index history import, members on a date, membership history, Refresh, Fetch missing data and Delete (see Universes below) |
@@ -485,6 +485,14 @@ Tickers open `/data?instrument=<id>`.
   while a kill switch is on and amber for a breaker or operational halt.
   `HaltStateService` (`core/halts/`) reads active halts every minute and
   right after any halt action.
+- **One Stop trading pattern (M7).** The kill switch is called "Stop
+  trading" everywhere. The strip's button, the command palette and the
+  Halts page's "Stop trading…" button all open the one `<app-kill-sheet>`
+  through `StopTradingService`. The sheet starts on the portfolio on screen,
+  fills in a reason you can edit, and is itself the ticket (scope, what
+  stops, what still goes out, reason, PAPER or LIVE stamp). It says that
+  approved tickets not yet sent are held and orders still working at the
+  broker are cancelled. Halts has no form of its own.
 - Server-paged tables pass the API page's offset: `[total]="p.total"
   [offset]="p.offset"`. The table is re-created after each load, and the
   offset keeps the pager on the right page.
@@ -541,16 +549,16 @@ Tickers open `/data?instrument=<id>`.
 | Page | Route | What it does |
 |---|---|---|
 | Notifications | `/notifications` | The in-app feed, unread first marks, Mark read and Mark all read, deep links, and "Your devices" (push devices, Remove) |
-| Broker connections | `/connections`, `/connections/:id`, `/connections/callback` | Provider cards, connect by keys or the provider's sign-in page, accounts, Link to a portfolio, Sync now, Disconnect |
-| Trade costs | `/trades`, `/trades/orders/:clientId` | Totals and shortfall by strategy, ticker or portfolio, the trade journal, and each order as a ticket with notes |
+| Broker connections | `/connections`, `/connections/:id`, `/connections/callback` | Provider cards (reads only, or reads and trades when you allow it), "When Stonks trades", connect by keys or the provider's sign-in page, accounts, Link to a portfolio, Sync now, Disconnect |
+| Trade costs | `/trades`, `/trades/orders/:clientId` | A tab of Orders (the page keeps the Orders title): totals and shortfall by strategy, ticker or portfolio, the trade journal, and each order as a ticket with notes |
 | Sweep, Signal IC | `/lab/sweeps`, `/lab/signal-ic` | See Lab form above |
 | Glossary | `/help/glossary` | Every term the help tips explain |
 
-## Approvals (19.8)
+## Approvals (19.8, F9)
 
 | Page | Route | What it does |
 |---|---|---|
-| Approvals | `/tickets` | Orders your live books decided after the close that wait for you, one order ticket each, grouped by portfolio and run, with Approve, Reject and Approve all. History lists every ticket and what became of it |
+| Approvals | `/tickets` | The one inbox for orders that wait for you. **From strategies you follow**: the orders a book at a broker decided after the close, one order ticket each, grouped by portfolio and run, with Approve, Reject and Approve all. **Suggested orders**: orders the assistant proposed. Two tabs, Waiting for you and History. The old `/orders/drafts` redirects here |
 
 - **Approve each trade** is the optional mode between Paper trading and
   Auto on Today's mode switch. Turning it on asks for a fresh code, then a
@@ -568,11 +576,18 @@ Tickers open `/data?instrument=<id>`.
 - The push that tickets wait is high urgency and names only the count and
   the portfolio. It opens `/tickets`. Approvals sits in the main menu for
   traders. It has no `g` shortcut because every letter is taken.
-- The Approvals item shows a badge with the tickets that wait
-  (`TicketCountService` in `core/tickets/`, read quietly from
-  `/api/tickets/summary` every minute while the tab is visible). The page
-  updates it after each decision. The number is hidden from screen readers
-  and the link's label says it, for example "Approvals, 3 tickets waiting".
+- The Approvals item shows a badge with everything that waits: strategy
+  tickets plus suggested orders (`TicketCountService` in `core/tickets/`,
+  read quietly from `/api/tickets/summary` and
+  `/api/orders/drafts?status=pending&limit=1` every minute while the tab is
+  visible). The page updates it after each decision. The number is hidden
+  from screen readers and the link's label says it, for example
+  "Approvals, 3 tickets waiting".
+- **Suggested orders** (`pages/tickets/suggested-orders.ts`) show each as a
+  ticket with "Suggested by the assistant". **Approve** asks for a fresh
+  code, shows the order ticket (the ticker typed for real money), then
+  places it as a manual order through every halt and risk rule. A refused
+  approval shows its reason on the card. **Reject** takes an optional note.
 
 - **Notifications.** `NotificationFeedService` (`core/notify/`) keeps the
   unread count, read quietly every minute while the tab is visible and after
@@ -580,7 +595,15 @@ Tickers open `/data?instrument=<id>`.
   `<app-alerts-panel>` shows recent system alerts on Health. Alert settings
   in Settings also take a webhook address (write-only, shown as scheme and
   host after saving).
-- **Connections.** Key fields are password inputs, cleared when the form
+- **Connections.** Each provider card says what Stonks may do there:
+  "Reads only. It never places an order there." or "Reads, and places
+  orders when you allow it." (`providerReach()`, from the provider's
+  `can_trade`). "When Stonks trades" spells it out: a broker that can trade
+  (Interactive Brokers) gets orders only in the portfolio linked to it, and
+  only for follows set to Approve each trade (after each ticket) or
+  Automatic, for orders placed by hand there and for suggested orders you
+  approve, at the portfolio's stage. Alerts only and Paper follows never
+  place an order at the broker. Key fields are password inputs, cleared when the form
   closes and never shown again. Portal providers leave through the
   `BROWSER_REDIRECT` seam and come back to `/connections/callback`, which
   calls the callback route once. Link sends a new broker portfolio by
@@ -588,6 +611,8 @@ Tickers open `/data?instrument=<id>`.
   `portfolio.manage`.
 - **Trade costs.** Shortfall is the gap between the price when the order was
   decided and the price paid, fees included. Positive figures are costs.
+  The featured Total cost tile spans two columns so its figure is never
+  smaller than its neighbours'.
   Orders and fills link to the order ticket. Notes need `portfolio.manage`.
 - **Order tickets.** `ConfirmService.confirm({ ticket: { lines, side, live } })`
   shows a confirmation as an order ticket: `<app-side-tag>` (solid B, outlined
@@ -689,24 +714,57 @@ flowchart LR
 
 | Page | Route | What it does |
 |---|---|---|
-| Live settings | `/profile/live/:id` | A live portfolio's stage, allocation and account profile, which live safeguards and account rules act on it, and its options state ("Options live: off" by default) with the options approval level |
+| Going live | `/going-live?portfolio=` | The checklist of every step from paper to real money for one portfolio, in order, each done or not with a link (F52) |
+| Real-money settings | `/profile/live/:id` | A broker portfolio's stage, allocation and account profile, which safeguards and account rules act on it, the dry-run preview, and its options state ("Options live: off" by default) with the options approval level |
 | Broker gateways | `/health` (a panel) | Each IB Gateway: connected or down, the last good check, the fault, and the auto strategies it paused |
 
 ```mermaid
 flowchart LR
-  P[Profile: your portfolios] -->|LIVE only| L[Live settings]
+  G[Going live checklist] --> S1[1 Server gateway]
+  S1 --> S2[2 Broker connected]
+  S2 --> S3[3 Portfolio stage]
+  S3 --> S4[4 Allocation]
+  S4 --> S5[5 Account profile]
+  S5 --> S6[6 Safeguards]
+  S6 --> S7[7 Preview]
+  S7 --> S8[8 Approve each trade or Automatic]
+  P[Profile: your portfolios] -->|broker portfolios| L[Real-money settings]
   L --> A[Allocation: set by hand, reason, fresh code]
   L --> C[Account profile: US, EU or UK, cash or margin, retail or professional]
-  L --> R[Live safeguards and account rules, read only]
+  L --> R[Safeguards and account rules, read only]
 ```
 
-- **Getting there.** Profile lists "Live settings" next to each LIVE
-  portfolio. A paper portfolio has none, and the page says so.
-- **Allocation.** The one brass figure on the page, in a `.live-frame`
-  panel. Unset reads "Not set" and "Nothing opens". A note says there are no
+- **Going live checklist** (`pages/going-live/`). One page walks the whole
+  path for the portfolio on screen, or `?portfolio=`, with a picker when
+  there are several: (1) the server's IB Gateway lists and connects this
+  portfolio (`GET /api/brokers/gateways`), (2) the portfolio is linked to a
+  broker connection that can trade, (3) its stage (done at a Real money
+  stage; otherwise the checks still missing for the next stage), (4) the
+  allocation, (5) the account profile, (6) every safeguard on, (7) a dry-run
+  preview ran on this device, (8) a follow here set to Approve each trade or
+  Automatic. Each step reads Done, Not yet, Waiting for your admin or Needs
+  an earlier step, with one sentence and a link to where it is done; the
+  first step still yours is the primary button. The page only reads. Brass
+  and LIVE show only once the portfolio is at a Real money stage. The logic
+  is `goingLiveSteps()` in `going-live-steps.ts`; the preview date is kept in
+  the browser (`preview-memory.ts`). Real-money settings and Broker
+  connections link to it.
+- **Stage words** (`shared/live-stages.ts`, docs/design/vocabulary.md):
+  Simulated, Broker paper, Real money, small, Real money, full. The typed
+  confirmation to move up is the next stage's name ("Broker paper"). Server
+  sentences with stage ids go through `stageText()`.
+- **Getting there.** Profile lists "Real-money settings" next to each broker
+  portfolio. A paper portfolio has none, and the page says so and links the
+  checklist.
+- **Brass only for real money.** The page reads the stage from the stage
+  card (`(stageChange)`). The header stamp, the brass allocation frame and
+  red buttons show only at Real money, small or Real money, full. At
+  Simulated or Broker paper the stamp is PAPER and the tickets are PAPER.
+- **Allocation.** The page's one brass figure at a Real money stage, in a
+  `.live-frame` panel. Unset reads "Not set" and "Nothing opens". A note says there are no
   automatic steps: Stonks never raises or lowers the amount, and a bad week
   only alerts. Set allocation needs an amount, a currency and a reason, then
-  the order ticket (LIVE) and a fresh code (`StepUpService.ensure()`, and
+  the order ticket and a fresh code (`StepUpService.ensure()`, and
   the interceptor on 403 `step_up_required`). `PUT
   /api/portfolios/{id}/live/allocation`, permission `live.manage`.
 - **Account profile.** Three `<app-segmented>` choices, with one line each
@@ -714,13 +772,16 @@ flowchart LR
   Save profile keeps the stored currency, currency policy and wash sale
   mode, and turns shorts off on a cash account. A missing profile is a 404
   from the API, which the page reads as "Not set".
-- **Live rules, read only.** `GET /api/portfolios/{id}/live/rules` lists
-  each live safeguard with On or Off from the policy the book follows, and
+- **Safeguards and account rules, read only.** `GET /api/portfolios/{id}/live/rules` lists
+  each safeguard with On or Off from the policy the book follows, and
   each account rule with whether it applies to the profile. Words for every
   rule live in `shared/live-rules.ts`.
 - **Options** (roadmap 17.8, `live-options-card.ts`). A lamp reads
   "Options live: off" until the admin's switch, a `live_small` stage and an
-  approval level all hold, and the card lists every missing one. The owner
+  approval level all hold, and the card lists every missing one. While
+  the server's switch is off the card shows one line, "Not available on
+  this server yet", with the rest folded under "Why, and the approval
+  level" (F58). The owner
   picks the level (None, Covered, Spreads, Naked) with a reason, then the
   order ticket (LIVE) and a fresh code. `GET` and `PUT
   /api/portfolios/{id}/live/options[/approval]`, permission `live.manage`
@@ -924,7 +985,7 @@ flowchart LR
 | Page | Route | What it does |
 |---|---|---|
 | New order | `/orders/new` | The order ticket: check an order, place it, and change or cancel your working orders by hand |
-| Drafts | `/orders/drafts` | Orders the assistant proposed, each a ticket to approve (fresh code) or reject |
+| Suggested orders | `/tickets` (the old `/orders/drafts` redirects) | Orders the assistant proposed, in the Approvals inbox, each a ticket to approve (fresh code) or reject |
 | Price alerts | `/notifications/price-alerts` | Make, switch off, change and delete price alerts, and see when they fired |
 | Telegram | Settings, Your account | Link status, a one-time link code, and Unlink |
 
@@ -939,11 +1000,11 @@ flowchart LR
   T --> P[Place order] --> W[Your orders by hand: Change, Cancel]
 ```
 
-- **Order ticket.** `pages/orders/manual-ticket.page.ts`. Ticker, side, quantity, market or limit, and a reason (kept with the order). **Check order** calls `POST /api/orders/manual/preview`: every halt and risk rule runs and nothing is placed. The ticket then shows the last close, the value and any cut. **Place order** checks again, asks with the order ticket (`ConfirmService`, `ticket`), then places it. A real-money book asks for a fresh code first (`StepUpService.ensure()`) and the ticker typed on the ticket. `?ticker=&side=` prefill it.
+- **Order ticket.** `pages/orders/manual-ticket.page.ts`. Ticker, side, quantity, market or limit, and a reason (kept with the order). Side and order type use `<app-segmented emphasis="strong">`: the picked option is a solid block, and a line under Side says "You are buying" or "You are selling" with the side tag (M13). **Check order** calls `POST /api/orders/manual/preview`: every halt and risk rule runs and nothing is placed. The ticket then shows the last close, the value and any cut. **Place order** checks again, asks with the order ticket (`ConfirmService`, `ticket`), then places it. A real-money book asks for a fresh code first (`StepUpService.ensure()`) and the ticker typed on the ticket. `?ticker=&side=` prefill it.
 - **Refusals.** A 409 `order_refused` carries `risk_adjustments`. `refusalOf()` (`pages/orders/order-refusal.ts`) reads them from `ApiError.problem`, the whole problem body. `<app-order-refusal>` lists each rule with what it did ("Cuts 100 to 40", "Drops the order") and, when the rules allow a smaller order, offers **Accept a smaller order**, which sends `allow_reduce` and checks again. Preview, place and change are silent: the ticket shows the failure, so no toast repeats it.
 - **Idempotency.** The ticket sends its own `client_id`. A new key is made when the order changes and after it is placed, so a retry of the same order never places it twice.
 - **Change and cancel.** "Your orders by hand" lists `GET /api/orders?origin=manual`. A working order (pending, submitted, partly filled) has **Change** (`<app-order-change-sheet>`: new quantity or limit and a reason, the same refusal panel) and **Cancel** (a reason, `<app-status-change-dialog>`).
-- **Drafts.** `pages/orders/order-drafts.page.ts` reads `GET /api/orders/drafts?status=` (Waiting, Placed, Rejected, Expired, All). **Approve and place** asks for a fresh code, shows the order ticket (the ticker typed for real money), then calls `.../approve`. A refused approval shows its reason on the draft, and the draft turns rejected. **Reject** takes an optional note.
+- **Suggested orders.** The Approvals page reads `GET /api/orders/drafts` once: pending ones under Waiting for you, the rest under History. `pages/tickets/suggested-orders.ts` shows them. **Approve** asks for a fresh code, shows the order ticket (the ticker typed for real money), then calls `.../approve`. A refused approval shows its reason on the card, and the order turns rejected. **Reject** takes an optional note.
 - **Price alerts.** `<app-notifications-tabs>` links the feed and Price alerts. The editor watches one ticker or a watchlist and fires when the price rises above or falls below a level, or moves by a percent either way over some days (`pct` is in percent, 8 means 8%). Changing an alert keeps its target and condition and starts it fresh. Firings are a server-paged table filtered by alert, with the ticker linking to its chart.
 - **Telegram.** `<app-telegram-link>` (`pages/settings/telegram-link.ts`) reads `GET /api/telegram/link`. **Get a link code** shows `/link CODE` once in `<app-one-time-secret>`, with the bot's `t.me` link and the time it runs out. **Check the link** reads the status again. **Unlink** asks first. Without a bot on the server the panel says so and offers nothing.
 - The alert settings table scrolls inside its own box on phones, now that Telegram adds a channel.
@@ -1062,7 +1123,8 @@ flowchart LR
 | `<app-account-menu>` | `shell/` | Profile, Settings, Broker connections, Get set up, Glossary, Sign out |
 | `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few: a radio group with arrow keys, 44px on phones |
 | `<app-no-book>`, `bookState()` | `shared/ui/no-book.ts` | A money page for someone with no portfolio |
-| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Orders, Fills, Trading runs and Trade costs, one tap apart |
+| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Orders, New order, Fills, Trading runs and Trade costs, one tap apart. On phones a cut tab fades at the edge |
+| `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few. `emphasis="strong"` fills the picked option solid, for Buy or Sell and the order type on the manual ticket |
 | `<app-copy-button>`, `copyText()`, `downloadText()` | `shared/ui/copy-button.ts` | Copy with a visible message when the clipboard is blocked |
 | `JobResult`, `<app-job-progress [result]>` | `shared/ui/job-progress.ts` | A job's result read with an inline error and Try again |
 | `<app-tick-mode>` | `pages/orders/tick-mode.ts` | "Dry run" or the PAPER or LIVE stamp for a trading run |
@@ -1148,7 +1210,7 @@ about the same thing.
 | Strategies | `/api/strategies` | `stonks registry` | `*_strategy`, `list_strategies` |
 | Follow a strategy | `POST /api/subscriptions` | none | `subscribe` |
 | Trade costs | `/api/tca` | `stonks tca` | `get_tca_summary`, `list_trade_journal`, `get_order_tca` |
-| Stop trading (kill switch), "Stop new buys only" | `POST /api/halts/kill`, `buys_only` | `halts kill --buys-only` | `engage_kill_switch` (`buys_only`) |
+| Stop trading (the kill switch), "Stop new buys only" | `POST /api/halts/kill`, `buys_only` | `halts kill --buys-only` | `engage_kill_switch` (`buys_only`) |
 | Update data, Data updates | `/api/ingest/*`, `ingest_runs` | `stonks ingest` | `run_ingest` |
 | Go-live suite | preset `promotion` | `--preset promotion` | `run_lab` (`preset`) |
 | Signals only, Paper trading, Approve each trade, Auto (modes) | `notify`, `paper`, `approve`, `auto` | none | `subscribe` (`mode`) |
@@ -1164,14 +1226,15 @@ about the same thing.
 | Compare tickers, rolling Sharpe and drawdown | `/api/charts/compare` | none | `compare_tickers` |
 | Leaderboard, tear sheet | `/api/strategies/leaderboard`, `.../tearsheet` | none | `get_leaderboard`, `get_tear_sheet` |
 | Your risk limits | `/api/risk/limits` | none | `get_my_risk_limits` |
-| Live settings (allocation, account profile, live safeguards, account rules) | `/api/portfolios/{id}/live/*` | none | none |
+| Real-money settings (allocation, account profile, safeguards, account rules) | `/api/portfolios/{id}/live/*` | none | none |
+| Going live checklist | the reads above, `/api/brokers/gateways`, `/api/connections`, `/api/subscriptions` | none | none |
 | Broker gateways (Health) | `/api/brokers/gateways` | none | none |
 | Live engine | `/api/stream/status` | none | `get_stream_status` |
 | Download CSV | `/api/exports/*` | none | none |
 | Tax files: gains, dividends, open lots | `/api/tax/exports/*` | `stonks tax gains`, `dividends`, `lots` | none |
 | Download PDF (tear sheet) | browser print, no route | `stonks report --backtest` (HTML) | none |
 | New order, orders by hand | `/api/orders/manual`, `origin=manual` | `stonks orders` | `place_order`, `change_order`, `cancel_order` |
-| Drafts (to approve) | `/api/orders/drafts` | none | `draft_order`, `list_order_drafts` |
+| Suggested orders (to approve in Approvals) | `/api/orders/drafts` | none | `draft_order`, `list_order_drafts` |
 | Price alerts | `/api/price-alerts` | `stonks price-alerts` | `list_price_alerts`, `create_price_alert`, `update_price_alert`, `delete_price_alert`, `list_price_alert_events` |
 | Telegram link | `/api/telegram/link` | `stonks telegram` | none |
 | Calendar, News | `/api/calendars`, `/api/calendars/news` | `stonks calendars` | `get_calendar`, `get_news`, `get_earnings_warnings`, `list_event_alert_kinds` |
@@ -1282,14 +1345,16 @@ always, "Every portfolio" with `killswitch.global`), All new orders or
 Stop new buys only, a reason filled in and editable, and the stamp. After
 it the strip is red at once and the button becomes Resume, which leads to
 the halts page (Resume keeps the typed RESUME TRADING and a fresh code).
-The palette's "Stop trading" opens the same sheet (`StopTradingService`).
-Viewers never see it.
+The palette's "Stop trading" and the Halts page's "Stop trading…" open
+the same sheet (`StopTradingService`). Viewers never see it.
 
 **Every real-money moment is a ticket.** Go live (`goLiveTicket()`:
 strategy, following portfolios, broker, PAPER or LIVE, and the name typed
 when real money moves), turning auto on or back on (step-up first, then
-the ticket), a trading run from the runner or Schedule (`tickTicket()`),
-the kill switch and Resume (`killTicket()`, `ConfirmTicket.kind`), and
+the ticket), a trading run from the runner or Schedule (`tickTicket()`:
+a paper run is worded as a paper run, with the primary button, and only a
+real-money run is red), Stop trading and Resume (`killTicket()`,
+`ConfirmTicket.kind`), and
 disconnecting a broker (each linked portfolio with its mode, the provider
 typed).
 

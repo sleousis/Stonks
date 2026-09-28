@@ -11,6 +11,7 @@ with a fresh trader and a paper portfolio of their own.
 
 from __future__ import annotations
 
+import re
 import uuid
 
 import pyotp
@@ -76,7 +77,7 @@ def test_a_trader_places_an_order_by_hand(browse, stack, viewport):
     v.guard.assert_clean()
 
 
-def test_a_trader_approves_an_order_draft(browse, stack, viewport):
+def test_a_trader_approves_a_suggested_order(browse, stack, viewport):
     v = _trader(browse, stack, "drafts", viewport)
     page = v.page
     made = v.api(
@@ -92,13 +93,17 @@ def test_a_trader_approves_an_order_draft(browse, stack, viewport):
     )
     assert made.status == 201, made.text()
 
+    # F9: the old Drafts address lands on the one Approvals inbox.
     v.go("/orders/drafts")
-    card = page.locator("article.ticket", has_text="Buy 2 AAA.US")
-    expect(card).to_contain_text("e2e draft")
+    expect(page).to_have_url(re.compile(r"/tickets$"))
+    expect(page.get_by_role("heading", level=1)).to_have_text("Approvals")
+    card = page.locator("app-suggested-orders article.ticket", has_text="e2e draft")
+    expect(card).to_contain_text("AAA.US")
+    expect(card).to_contain_text("Suggested by")
     expect(card).to_contain_text("Waiting for you")
-    v.check_page("order-drafts")
+    v.check_page("approvals-suggested")
 
-    card.get_by_role("button", name="Approve and place").click()
+    card.get_by_role("button", name="Approve the suggested order for AAA.US").click()
     code_box = page.get_by_role("textbox", name="Code")
     dialog = page.get_by_role("dialog")
     # A fresh sign-in counts as a fresh code; ask again only when it is stale.
@@ -107,10 +112,11 @@ def test_a_trader_approves_an_order_draft(browse, stack, viewport):
         page.get_by_role("button", name="Confirm").click()
     expect(dialog).to_contain_text("Buy 2 AAA.US?")
     dialog.get_by_role("button", name="Approve and place").click()
-    expect(page.get_by_text("Nothing waiting for you")).to_be_visible()
+    expect(page.get_by_text("Nothing waits for you")).to_be_visible()
 
-    page.get_by_role("radio", name="Placed").click()
-    expect(page.locator("article.ticket", has_text="Buy 2 AAA.US")).to_contain_text("Placed")
+    page.get_by_role("tab", name="History").click()
+    placed = page.locator("app-suggested-orders article.ticket", has_text="e2e draft")
+    expect(placed).to_contain_text("Placed")
     v.guard.assert_clean()
 
 
