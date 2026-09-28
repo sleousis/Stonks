@@ -239,6 +239,22 @@ describe('SystemSettings', () => {
     expect(saveButton().disabled).toBe(true);
   });
 
+  it('saves once when Save is pressed twice during the code check', async () => {
+    await render();
+    let pass!: (ok: boolean) => void;
+    ensure.mockReturnValue(new Promise<boolean>((resolve) => (pass = resolve)));
+    type(input(MAX_WEIGHT.key), '0.2');
+    type(el.querySelector<HTMLInputElement>('#ops-settings-reason')!, 'Retail defaults');
+    saveButton().click();
+    saveButton().click();
+    pass(true);
+    await settle();
+    const puts = http.match(`/api/settings/system/${MAX_WEIGHT.key}`);
+    expect(puts.length).toBe(1);
+    puts.forEach((r) => r.flush({ ...MAX_WEIGHT, value: 0.2, overridden: true }));
+    await settle();
+  });
+
   it('sends nothing when the second factor is cancelled', async () => {
     await render();
     ensure.mockResolvedValue(false);

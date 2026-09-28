@@ -495,6 +495,7 @@ export class SystemSettings {
 
   /** One PUT per changed setting, with the shared reason, after the second factor. */
   async save(): Promise<void> {
+    if (this.saving()) return;
     this.submitted.set(true);
     const { values, errors } = this.changes();
     if (Object.keys(errors).length || this.reasonError()) {
@@ -503,8 +504,12 @@ export class SystemSettings {
     }
     const keys = Object.keys(values);
     if (!keys.length) return;
-    if (!(await this.stepUp.ensure('Change system settings'))) return;
+    // Busy from here: a second Save during the code check sends nothing twice.
     this.saving.set(true);
+    if (!(await this.stepUp.ensure('Change system settings'))) {
+      this.saving.set(false);
+      return;
+    }
     this.formError.set(null);
     const reason = this.reason().trim();
     const failed: Record<string, string> = {};
@@ -537,13 +542,17 @@ export class SystemSettings {
 
   /** Drop the override, so the TOML value applies again. Needs the reason too. */
   async reset(f: SystemSettingView): Promise<void> {
+    if (this.saving()) return;
     this.submitted.set(true);
     if (this.reasonError()) {
       this.formError.set('Say why in the reason field, then try again.');
       return;
     }
-    if (!(await this.stepUp.ensure('Change system settings'))) return;
     this.saving.set(true);
+    if (!(await this.stepUp.ensure('Change system settings'))) {
+      this.saving.set(false);
+      return;
+    }
     this.formError.set(null);
     try {
       this.keepSaved(await this.api.resetSetting(f.key, { reason: this.reason().trim() }));
