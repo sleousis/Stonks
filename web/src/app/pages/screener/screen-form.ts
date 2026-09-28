@@ -116,10 +116,10 @@ export function toSpec(form: ScreenForm, metrics: readonly MetricView[]): SpecRe
   const exchanges = list(form.exchanges, true);
   if (exchanges.length) spec.exchanges = exchanges;
   const minPrice = positive(form.minPrice);
-  if (minPrice === 'bad') errors.push('Minimum price must be a number, zero or more.');
+  if (minPrice === 'bad') errors.push('Lowest price must be a number, zero or more.');
   else if (minPrice !== null) spec.min_price = minPrice;
   const minAdv = positive(form.minAdv);
-  if (minAdv === 'bad') errors.push('Minimum daily dollar volume must be a number, zero or more.');
+  if (minAdv === 'bad') errors.push('Lowest daily dollar volume must be a number, zero or more.');
   else if (minAdv !== null) spec.min_adv = minAdv;
 
   const filters: NonNullable<ScreenSpec['filters']> = [];

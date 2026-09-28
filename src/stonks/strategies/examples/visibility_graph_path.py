@@ -37,6 +37,8 @@ from stonks.strategies.examples._nt888_base import SingleTickerLongFlat, common_
 
 class VisibilityGraphPathStrategy(SingleTickerLongFlat):
     id = "visibility_graph_path"
+    title = "Smooth rise"
+    summary = "Buys when recent prices rise smoothly rather than in choppy jumps. Weak evidence."
     hypothesis = (
         "The visibility graph of recent closes tells a smooth rise from a "
         "choppy one. A rise that is easier to see through tends to go on. "

@@ -84,6 +84,8 @@ class RuleStrategy(BaseStrategy):
     ranking, sizing) defined by a validated JSON spec."""
 
     id = "rule_based"
+    title = "Studio rules"
+    summary = "Buy and sell rules you build in the Studio, without code."
     # The instance narrows this to the spec's asset classes (the Ranker
     # reads it off the instance).
     applicable_asset_classes: ClassVar[tuple[AssetClass, ...]] = _ALL_ASSET_CLASSES

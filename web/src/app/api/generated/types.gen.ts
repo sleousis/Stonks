@@ -1637,6 +1637,32 @@ export type CoverageRow = {
 };
 
 /**
+ * DataCoverage
+ *
+ * Which kinds of data the lake holds at all. Calendars, news,
+ * fundamentals and option chains need a paid data plan, so an empty page
+ * can say "needs a data plan" instead of looking broken (audit F49).
+ */
+export type DataCoverage = {
+    /**
+     * Calendars
+     */
+    calendars: boolean;
+    /**
+     * Fundamentals
+     */
+    fundamentals: boolean;
+    /**
+     * News
+     */
+    news: boolean;
+    /**
+     * Options
+     */
+    options: boolean;
+};
+
+/**
  * DataSourceInfo
  */
 export type DataSourceInfo = {
@@ -12007,6 +12033,10 @@ export type StopGuardSettings = {
  */
 export type StrategyClassInfo = {
     /**
+     * Alpha Family
+     */
+    alpha_family?: string;
+    /**
      * Applicable Asset Classes
      */
     applicable_asset_classes: Array<string>;
@@ -12019,6 +12049,10 @@ export type StrategyClassInfo = {
      */
     description: string;
     /**
+     * Is Wrapper
+     */
+    is_wrapper?: boolean;
+    /**
      * Name
      */
     name: string;
@@ -12030,6 +12064,10 @@ export type StrategyClassInfo = {
      * Source
      */
     source: string;
+    /**
+     * Title
+     */
+    title?: string;
 };
 
 /**
@@ -20283,6 +20321,47 @@ export type ListCoverageResponses = {
 };
 
 export type ListCoverageResponse = ListCoverageResponses[keyof ListCoverageResponses];
+
+export type GetDataCoverageData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/market/data-coverage';
+};
+
+export type GetDataCoverageErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetDataCoverageError = GetDataCoverageErrors[keyof GetDataCoverageErrors];
+
+export type GetDataCoverageResponses = {
+    /**
+     * Successful Response
+     */
+    200: DataCoverage;
+};
+
+export type GetDataCoverageResponse = GetDataCoverageResponses[keyof GetDataCoverageResponses];
 
 export type ListInstrumentsData = {
     body?: never;

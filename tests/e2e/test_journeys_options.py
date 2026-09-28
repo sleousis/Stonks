@@ -36,7 +36,7 @@ def test_a_trader_researches_options(browse, stack, viewport):
     expect(page.get_by_role("heading", level=1)).to_have_text("Options research")
     note = page.get_by_role("note").first
     expect(note).to_contain_text("Research only, nothing on this page trades options.")
-    expect(note).to_contain_text("Options live is off by default")
+    expect(note).to_contain_text("Trading options with real")
     expect(page.get_by_label("Underlying", exact=True)).to_have_value("AAA.US")
     expect(page.get_by_text("Generated chains, not market quotes")).to_be_visible()
     expect(page.get_by_text(re.compile(r"Expiry \d{4}-\d{2}-\d{2}, \d+ days out"))).to_be_visible()
@@ -60,7 +60,7 @@ def test_a_trader_researches_options(browse, stack, viewport):
     page.get_by_label("Strategy", exact=True).select_option("vertical_spread")
     page.get_by_label("Run the validation checks").uncheck()
     page.get_by_role("button", name="Run backtest").click()
-    expect(page.get_by_role("heading", name="vertical_spread on AAA.US")).to_be_visible(
+    expect(page.get_by_role("heading", name="Vertical spread on AAA.US")).to_be_visible(
         timeout=90_000
     )
     expect(page.get_by_text("never evidence for the strategy")).to_be_visible()

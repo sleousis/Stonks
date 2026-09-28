@@ -34,6 +34,8 @@ from stonks.strategies.base import BaseStrategy
 
 class Momentum(BaseStrategy):
     id = "momentum"
+    title = "Momentum"
+    summary = "Holds the stocks that rose most over the last six months, skipping the latest month."
     hypothesis = (
         "Stocks that rose most over the last six months, skipping the last "
         "month, keep rising for a few months: investors under-react to news "

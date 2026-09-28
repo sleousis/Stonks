@@ -16,7 +16,16 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { OptionsBacktest } from './options-backtest';
-import { type ChainSide, chainColumns, paramLabel, structureLabel } from './options-view';
+import {
+  type ChainSide,
+  chainColumns,
+  optionsStrategyName,
+  paramLabel,
+  pricingModelsText,
+  structureLabel,
+} from './options-view';
+import { SessionService } from '../../core/auth/session.service';
+import { DataPlanNote } from '../../shared/ui/data-plan-note';
 import { PayoffDiagram } from './payoff-diagram';
 
 const SIDES: SegmentOption<ChainSide>[] = [
@@ -48,6 +57,7 @@ const DEFAULTS: Record<string, number> = {
   selector: 'app-options-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    DataPlanNote,
     PageHeader,
     Segmented,
     DataTable,
@@ -66,6 +76,10 @@ export class OptionsPage {
   protected readonly sides = SIDES;
   protected readonly paramLabel = paramLabel;
   protected readonly structureLabel = structureLabel;
+  protected readonly strategyName = optionsStrategyName;
+  protected readonly modelsText = pricingModelsText;
+  private readonly session = inject(SessionService);
+  protected readonly isAdmin = computed(() => this.session.can('operations.run'));
 
   protected readonly underlyings = resource({ loader: () => this.api.underlyings() });
   protected readonly strategies = resource({ loader: () => this.api.strategies() });

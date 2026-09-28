@@ -253,6 +253,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/market/bars` | Get Bars | sign-in |  | [BarSeries](#barseries) |
 | GET | `/api/market/coverage` | List Coverage | sign-in |  | [Page_CoverageRow_](#page_coveragerow_) |
+| GET | `/api/market/data-coverage` | Get Data Coverage | sign-in |  | [DataCoverage](#datacoverage) |
 | GET | `/api/market/instruments` | List Instruments | sign-in |  | [Page_InstrumentView_](#page_instrumentview_) |
 
 ## model-versions endpoints
@@ -1168,6 +1169,17 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 | `last_bar` | date-time | yes |  |
 | `rows` | integer | yes |  |
 | `ticker` | string | yes |  |
+
+### DataCoverage
+
+Which kinds of data the lake holds at all. Calendars, news, fundamentals and option chains need a paid data plan, so an empty page can say "needs a data plan" instead of looking broken (audit F49).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `calendars` | boolean | yes |  |
+| `fundamentals` | boolean | yes |  |
+| `news` | boolean | yes |  |
+| `options` | boolean | yes |  |
 
 ### DataSourceInfo
 
@@ -5016,12 +5028,15 @@ One audited status change or intervention (BL-24).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `alpha_family` | string | no |  |
 | `applicable_asset_classes` | list[string] | yes |  |
 | `class_path` | string | yes |  |
 | `description` | string | yes |  |
+| `is_wrapper` | boolean | no |  |
 | `name` | string | yes |  |
 | `parameters` | list[[ParameterInfo](#parameterinfo)] | yes |  |
 | `source` | string | yes |  |
+| `title` | string | no |  |
 
 ### StrategyDetail
 

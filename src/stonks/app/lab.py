@@ -159,8 +159,8 @@ _OBJECTIVES: dict[str, Callable[[], Objective]] = {
 _COST_MODELS: dict[str, tuple[str, Callable[[], CostModelSettings]]] = {
     "zero": ("No fees, spread or impact.", CostModelSettings),
     "realistic": (
-        "Typical retail broker fees and spreads for each asset class, plus market impact"
-        " that grows with order size.",
+        "Fees and spreads like a retail broker's for each asset class, plus the price "
+        "impact of large orders.",
         CostModelSettings.realistic,
     ),
 }

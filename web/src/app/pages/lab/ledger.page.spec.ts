@@ -6,7 +6,7 @@ import { nextRequest, tick } from '../../../testing/http';
 import { CATALOG, MOMENTUM } from '../../../testing/lab-fixtures';
 import type { LedgerRunDetail, LedgerRunView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
-import { LedgerRunPage, paramsText } from './ledger-run.page';
+import { LedgerRunPage, paramsText, searchName } from './ledger-run.page';
 import { LedgerPage, className, scoreText } from './ledger.page';
 
 function run(i: number, over: Partial<LedgerRunView> = {}): LedgerRunView {
@@ -42,8 +42,10 @@ describe('ledger helpers', () => {
     expect(className('a.b.momentum:Momentum')).toBe('Momentum');
     expect(scoreText(null)).toBe('n/a');
     expect(scoreText(0.8123)).toBe('0.81');
-    expect(paramsText({ lookback_days: 20, mode: 'fast' })).toBe('lookback_days 20, mode "fast"');
-    expect(paramsText({})).toBe('No parameters');
+    expect(paramsText({ lookback_days: 20, mode: 'fast' })).toBe('Lookback days 20, mode "fast"');
+    expect(paramsText({})).toBe('No settings');
+    expect(searchName('random')).toBe('Random');
+    expect(searchName('optuna')).toBe('Bayesian');
   });
 });
 
@@ -132,6 +134,7 @@ describe('LedgerRunPage', () => {
       ],
     };
     (await nextRequest(http, '/api/lab/ledger/lab_1')).flush(detail);
+    (await nextRequest(http, '/api/catalog/strategies')).flush(CATALOG);
     for (let i = 0; i < 3; i++) {
       await tick();
       fixture.detectChanges();
@@ -139,7 +142,14 @@ describe('LedgerRunPage', () => {
     const el: HTMLElement = fixture.nativeElement;
     expect(el.textContent).toContain('Momentum has had 140 trials across every run');
     expect(el.textContent).toContain('the sp500 universe (500 tickers), 2025-10-01 to 2026-04-01');
-    expect(el.textContent).toContain('lookback_days 60');
+    expect(el.textContent).toContain('Lookback days 60');
+    // Trials are settings that ran, and the verdict is about the robustness tests.
+    const pills = [...el.querySelectorAll('tbody app-status-pill')].map((p) =>
+      p.textContent!.trim(),
+    );
+    expect(pills).toEqual(['Done', 'Error']);
+    expect(el.textContent).toContain('a run can fail with every trial done');
+    expect(el.textContent).toContain('Random search, up to 20 trials');
     expect(el.textContent).toContain('It stops working when trends vanish.');
     expect(el.querySelector('a.back')?.getAttribute('href')).toBe('/lab/ledger');
     http.verify();

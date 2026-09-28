@@ -28,6 +28,11 @@ from stonks.strategies.examples._intraday import (
 
 class VwapReversion(IntradayStrategy):
     id = "intraday_vwap_reversion"
+    title = "Back to the day's average"
+    summary = (
+        "Buys a liquid stock that falls well below its average traded price of the day and "
+        "sells as it comes back."
+    )
     applicable_asset_classes = ("equity",)
     hypothesis = (
         "Large orders worked through the day push a liquid stock away from "

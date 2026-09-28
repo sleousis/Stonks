@@ -31,6 +31,10 @@ from stonks.strategies.examples._nt888_base import SingleTickerLongFlat, common_
 
 class MACrossoverStrategy(SingleTickerLongFlat):
     id = "ma_crossover"
+    title = "Moving average crossover"
+    summary = (
+        "Buys when a fast moving average crosses above a slow one and sells when it crosses back."
+    )
     hypothesis = (
         "A fast average above a slow one marks a trend that tends to "
         "persist, since investors adjust slowly to news. Fails in "

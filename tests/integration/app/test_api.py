@@ -172,6 +172,8 @@ def test_market_routes(client):
     )
     cov = client.get("/api/market/coverage").json()
     assert cov["total"] == 3
+    kinds = client.get("/api/market/data-coverage").json()
+    assert kinds == {"fundamentals": False, "calendars": False, "news": False, "options": False}
 
 
 def test_orders_ticks_routes(client, seeded):

@@ -130,15 +130,14 @@ export const SUITES: readonly SuiteInfo[] = [
   {
     id: 'quick',
     label: 'Quick',
-    description:
-      'The everyday check: does it hold up on held-out data and in each sub-period? Fast.',
+    description: 'The everyday check: does it hold up on unseen data and in each sub-period? Fast.',
     tests: ['oos', 'period_stability'],
   },
   {
     id: 'standard',
     label: 'Standard',
     description:
-      'Adds noise, walk-forward, the deflated Sharpe and cost stress. A few minutes on a small universe.',
+      'Adds noisy prices, walk-forward, luck after many tries, higher costs and the signal ranking. A few minutes on a small universe.',
     tests: [
       'oos',
       'period_stability',
@@ -146,13 +145,14 @@ export const SUITES: readonly SuiteInfo[] = [
       'walk_forward',
       'deflated_sharpe',
       'cost_stress',
+      'signal_ic',
     ],
   },
   {
     id: 'promotion',
-    label: 'Go-live',
+    label: 'Full',
     description:
-      'Everything the go-live check asks a strategy to pass, including overfitting, Monte Carlo, other tickers, the benchmark and a 200-shuffle permutation test. Slow.',
+      'Every test the approval check asks for: overfitting, shuffled trades and prices, nearby settings, other tickers, the benchmark, random data and past crises. Slow.',
     tests: [
       'oos',
       'walk_forward',
@@ -164,6 +164,10 @@ export const SUITES: readonly SuiteInfo[] = [
       'cross_instrument',
       'benchmark_relative',
       'mcpt',
+      'event_study',
+      'vs_random',
+      'cpcv',
+      'crisis',
     ],
   },
   {
@@ -305,7 +309,7 @@ function benchmarkErrors(f: BenchmarkForm): FormErrors {
 
 export function windowErrors(f: WindowForm): FormErrors {
   const e: FormErrors = {};
-  if (!f.classPath) e['strategy'] = 'Pick a strategy class.';
+  if (!f.classPath) e['strategy'] = 'Pick a strategy.';
   if (parseTickers(f.tickers).length === 0) e['tickers'] = 'Enter at least one ticker.';
   if (!f.start) e['start'] = 'Pick a start date.';
   if (!f.end) e['end'] = 'Pick an end date.';
@@ -390,7 +394,7 @@ export function labRunErrors(
       e['heatmapGrid'] = `Between ${HEATMAP_GRID_MIN} and ${HEATMAP_GRID_MAX}.`;
     if (f.heatmapX && f.heatmapX === f.heatmapY) e['heatmapY'] = 'Pick a different parameter.';
   }
-  if (tests.length === 0) e['tests'] = 'Pick at least one survival test.';
+  if (tests.length === 0) e['tests'] = 'Pick at least one robustness test.';
   if (tests.includes('walk_forward')) {
     if (f.wfSplits !== null && (!isInt(f.wfSplits) || f.wfSplits < 2))
       e['wfSplits'] = 'Leave blank or enter 2 or more.';
@@ -409,7 +413,7 @@ export function labRunErrors(
       e['mcptMaxP'] = 'Above 0 and at most 1.';
   }
   if (f.register && !f.hypothesis.trim())
-    e['hypothesis'] = 'Say why it should make money before it starts paper trading.';
+    e['hypothesis'] = 'Say why it should make money before it goes on trial.';
   if (f.hypothesis.length > 4000) e['hypothesis'] = 'At most 4000 characters.';
   if (f.premortem.length > 4000) e['premortem'] = 'At most 4000 characters.';
   for (const [key, msg] of Object.entries(testOptionErrors(tests, f.testOptions, catalog))) {
@@ -632,10 +636,29 @@ export function formFromRequest(
   return f;
 }
 
-/** Catalog grouped for the picker: by source package, then name. */
+/** Catalog grouped for the picker: by what kind of idea it is, then name. */
 export interface StrategyGroup {
   label: string;
   classes: StrategyClassInfo[];
+}
+
+/** A strategy's plain name: its title, or its id in words. */
+export function strategyTitle(c: Pick<StrategyClassInfo, 'title' | 'name'>): string {
+  if (c.title?.trim()) return c.title.trim();
+  const words = c.name.replace(/[_-]+/g, ' ').trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : c.name;
+}
+
+const ASSET_WORDS: Readonly<Record<string, string>> = {
+  equity: 'Stocks',
+  crypto: 'Crypto',
+  commodity: 'Commodities',
+  bond: 'Bonds',
+};
+
+/** `['equity', 'crypto']` -> "Stocks, Crypto". */
+export function assetClassWords(classes: readonly string[]): string {
+  return classes.map((c) => ASSET_WORDS[c] ?? c).join(', ');
 }
 
 export function groupStrategies(
@@ -645,26 +668,63 @@ export function groupStrategies(
   const q = query.trim().toLowerCase();
   const groups = new Map<string, StrategyClassInfo[]>();
   for (const c of classes) {
-    if (q && !`${c.name} ${c.description} ${c.class_path}`.toLowerCase().includes(q)) continue;
+    const haystack = `${strategyTitle(c)} ${c.name} ${c.description}`.toLowerCase();
+    if (q && !haystack.includes(q)) continue;
     const label = groupLabel(c);
     const list = groups.get(label) ?? [];
     list.push(c);
     groups.set(label, list);
   }
+  const order = (label: string) => {
+    const i = GROUP_ORDER.indexOf(label);
+    return i < 0 ? GROUP_ORDER.length : i;
+  };
   return [...groups.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => order(a) - order(b) || a.localeCompare(b))
     .map(([label, list]) => ({
       label,
-      classes: list.sort((a, b) => a.name.localeCompare(b.name)),
+      classes: list.sort((a, b) => strategyTitle(a).localeCompare(strategyTitle(b))),
     }));
 }
 
+/** Plain group names for each alpha family. */
+const FAMILY_GROUPS: Readonly<Record<string, string>> = {
+  benchmark: 'Yardsticks',
+  trend: 'Trend following',
+  reversion: 'Buying dips',
+  value: 'Value and quality',
+  quality: 'Value and quality',
+  growth: 'Growth',
+  carry: 'Carry',
+  sentiment: 'Sentiment',
+  data_driven: 'Patterns and models',
+};
+const WRAPPERS = 'Add-ons for another strategy';
+const STUDIO = 'Built in the Studio';
+const GROUP_ORDER: readonly string[] = [
+  'Yardsticks',
+  'Trend following',
+  'Buying dips',
+  'Value and quality',
+  'Growth',
+  'Carry',
+  'Sentiment',
+  'Patterns and models',
+  'Other ideas',
+  STUDIO,
+  WRAPPERS,
+];
+
 /**
- * `stonks.strategies.examples.momentum:Momentum` → "Examples"; a class at the
- * package root (`stonks.strategies.macro_regime:X`) → "Strategies"; classes
- * from another source are grouped under the source name.
+ * The picker group: add-ons that wrap another strategy, Studio rules, or
+ * the kind of idea (trend, value, ...). A catalog without families (an
+ * older server) falls back to the package: `...examples.momentum:Momentum`
+ * gives "Examples".
  */
 export function groupLabel(c: StrategyClassInfo): string {
+  if (c.is_wrapper) return WRAPPERS;
+  if (c.source === 'studio') return STUDIO;
+  if (c.alpha_family) return FAMILY_GROUPS[c.alpha_family] ?? 'Other ideas';
   const modules = c.class_path.split(':')[0].split('.');
   const i = modules.indexOf('strategies');
   if (i >= 0) {

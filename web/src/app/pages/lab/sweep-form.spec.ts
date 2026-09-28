@@ -63,7 +63,7 @@ describe('SweepFormView', () => {
     expect([...suite.options].map((o) => o.textContent!.trim())).toEqual([
       'Quick',
       'Standard',
-      'Go-live',
+      'Full',
     ]);
     type('#sw-suite', 'promotion', 'change');
     const box = [...el.querySelectorAll<HTMLLabelElement>('details label.check')]

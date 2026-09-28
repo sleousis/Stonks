@@ -62,6 +62,11 @@ def parse_pairs(spec: str) -> list[tuple[str, str]]:
 
 class PairsReversion(BaseStrategy):
     id = "pairs_reversion"
+    title = "Pairs trading"
+    summary = (
+        "When two closely linked stocks drift apart, buys the cheap one, shorts the dear one "
+        "and waits for the gap to close."
+    )
     hypothesis = (
         "Two close economic substitutes share a common price driver, so when "
         "their spread stretches it tends to come back: liquidity demanders "

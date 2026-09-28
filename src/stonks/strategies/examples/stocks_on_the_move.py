@@ -83,6 +83,11 @@ class _Evaluation:
 
 class StocksOnTheMove(BaseStrategy):
     id = "stocks_on_the_move"
+    title = "Stocks on the move"
+    summary = (
+        "Holds the strongest smooth uptrends with equal risk in each, buying only while the "
+        "market rises."
+    )
     hypothesis = (
         "Stocks in steady, low-noise uptrends keep rising for weeks because "
         "investors underreact and institutions buy gradually; holding the "

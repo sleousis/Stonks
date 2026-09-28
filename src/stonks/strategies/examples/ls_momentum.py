@@ -66,6 +66,8 @@ def select_legs(returns: Mapping[str, float], quantile: float) -> tuple[list[str
 
 class LongShortMomentum(BaseStrategy):
     id = "ls_momentum"
+    title = "Long-short momentum"
+    summary = "Buys the past year's winners and, where shorting is allowed, sells the losers short."
     hypothesis = (
         "Past 12-1 month winners keep beating past losers for months: "
         "investors underreact to news and then chase it (Jegadeesh and "

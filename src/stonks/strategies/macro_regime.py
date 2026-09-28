@@ -57,6 +57,11 @@ class _LakeState:
 
 class MacroRegimeFilter(InnerStrategyWrapper):
     id = "macro_regime_filter"
+    title = "Economy filter"
+    summary = (
+        "Wraps another strategy and stands aside when economic data such as unemployment "
+        "turns down."
+    )
     id_suffix = "macro"
     hypothesis = (
         "Risk assets do badly when the economy turns down, and macro "

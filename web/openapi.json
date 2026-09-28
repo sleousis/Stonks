@@ -2980,6 +2980,35 @@
         "title": "CoverageRow",
         "type": "object"
       },
+      "DataCoverage": {
+        "description": "Which kinds of data the lake holds at all. Calendars, news,\nfundamentals and option chains need a paid data plan, so an empty page\ncan say \"needs a data plan\" instead of looking broken (audit F49).",
+        "properties": {
+          "calendars": {
+            "title": "Calendars",
+            "type": "boolean"
+          },
+          "fundamentals": {
+            "title": "Fundamentals",
+            "type": "boolean"
+          },
+          "news": {
+            "title": "News",
+            "type": "boolean"
+          },
+          "options": {
+            "title": "Options",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "fundamentals",
+          "calendars",
+          "news",
+          "options"
+        ],
+        "title": "DataCoverage",
+        "type": "object"
+      },
       "DataSourceInfo": {
         "properties": {
           "configured": {
@@ -22233,6 +22262,11 @@
       },
       "StrategyClassInfo": {
         "properties": {
+          "alpha_family": {
+            "default": "other",
+            "title": "Alpha Family",
+            "type": "string"
+          },
           "applicable_asset_classes": {
             "items": {
               "type": "string"
@@ -22248,6 +22282,11 @@
             "title": "Description",
             "type": "string"
           },
+          "is_wrapper": {
+            "default": false,
+            "title": "Is Wrapper",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -22261,6 +22300,11 @@
           },
           "source": {
             "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
             "type": "string"
           }
         },
@@ -38749,6 +38793,83 @@
           }
         ],
         "summary": "List Coverage",
+        "tags": [
+          "market"
+        ]
+      }
+    },
+    "/api/market/data-coverage": {
+      "get": {
+        "description": "Which kinds of data are stored at all: fundamentals, calendars, news\nand option chains (each needs a data plan that includes it).",
+        "operationId": "getDataCoverage",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataCoverage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Data Coverage",
         "tags": [
           "market"
         ]

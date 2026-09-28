@@ -1,4 +1,4 @@
-import { CATALOG, MOMENTUM } from '../../../testing/lab-fixtures';
+import { CATALOG, MACRO, MOMENTUM } from '../../../testing/lab-fixtures';
 import { defaultParamValues } from '../../shared/ui/param-form/param-spec';
 import { SURVIVAL_TEST_CATALOG } from './lab-test-fixtures';
 import { optionCatalog } from './test-options';
@@ -13,7 +13,9 @@ import {
   defaultWindow,
   formFromRequest,
   benchmarkValue,
+  assetClassWords,
   groupStrategies,
+  strategyTitle,
   labRunErrors,
   parseTickers,
   SUITES,
@@ -112,7 +114,7 @@ describe('lab requests', () => {
         'param.lookback_days': 'At least 5.',
       });
       expect(backtestErrors(backtestForm({ classPath: '' }), null)['strategy']).toBe(
-        'Pick a strategy class.',
+        'Pick a strategy.',
       );
       expect(backtestErrors(backtestForm(), MOMENTUM)).toEqual({});
     });
@@ -207,7 +209,7 @@ describe('lab requests', () => {
       expect(always.register_if_passes).toBeUndefined();
 
       expect(labRunErrors(labForm({ register: true }))['hypothesis']).toBe(
-        'Say why it should make money before it starts paper trading.',
+        'Say why it should make money before it goes on trial.',
       );
       expect(labRunErrors(labForm({ register: false }))['hypothesis']).toBeUndefined();
     });
@@ -307,7 +309,7 @@ describe('lab requests', () => {
         ].sort(),
       );
       expect(labRunErrors(labForm({ suite: 'custom', tests: [] }))['tests']).toBe(
-        'Pick at least one survival test.',
+        'Pick at least one robustness test.',
       );
       expect(labRunErrors(labForm())).toEqual({});
     });
@@ -487,11 +489,27 @@ describe('lab requests', () => {
     });
   });
 
-  it('groups and filters the catalog', () => {
+  it('groups the catalog by the kind of idea and filters by plain words', () => {
     expect(groupStrategies(CATALOG).map((g) => [g.label, g.classes.map((c) => c.name)])).toEqual([
-      ['Examples', ['buy_and_hold', 'momentum']],
-      ['Strategies', ['macro_regime']],
+      ['Yardsticks', ['buy_and_hold']],
+      ['Trend following', ['momentum']],
+      ['Add-ons for another strategy', ['macro_regime']],
     ]);
     expect(groupStrategies(CATALOG, 'trailing').flatMap((g) => g.classes)).toEqual([MOMENTUM]);
+    expect(groupStrategies(CATALOG, 'economy').flatMap((g) => g.classes)).toEqual([MACRO]);
+    // Code words never match: the class path is not searched.
+    expect(groupStrategies(CATALOG, 'examples')).toEqual([]);
+  });
+
+  it('falls back to the package for a catalog without families (an older server)', () => {
+    const old = CATALOG.map((c) => ({
+      ...c,
+      title: undefined,
+      alpha_family: undefined,
+      is_wrapper: undefined,
+    }));
+    expect(groupStrategies(old).map((g) => g.label)).toEqual(['Examples', 'Strategies']);
+    expect(strategyTitle({ name: 'buy_and_hold' })).toBe('Buy and hold');
+    expect(assetClassWords(['equity', 'crypto'])).toBe('Stocks, Crypto');
   });
 });

@@ -120,6 +120,11 @@ def rolling_loglog_prediction(close: pd.Series, tvl: pd.Series, window: int) -> 
 
 class TVLDeviationStrategy(SingleTickerLongFlat):
     id = "tvl_deviation"
+    title = "Token value gap"
+    summary = (
+        "Buys a token priced below what its chain's locked value implies and waits for the "
+        "gap to close."
+    )
     hypothesis = (
         "A token's price tends to return to the level its chain's locked "
         "value implies, since that value is what the token is used for. "

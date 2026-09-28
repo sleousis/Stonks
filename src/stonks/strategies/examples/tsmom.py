@@ -52,6 +52,11 @@ LOOKBACK_SETS = ["125,250", "63,125,250", "21,63,125,250", "250", "125"]
 
 class TimeSeriesMomentum(ForecastTrendStrategy):
     id = "tsmom"
+    title = "Trend over the past year"
+    summary = (
+        "Holds markets whose own return over the past 6 to 12 months is positive and stays "
+        "out of the rest."
+    )
     hypothesis = (
         "An instrument's own past 6-12 month return predicts its next month's "
         "return across equities, commodities and crypto: news diffuses slowly "

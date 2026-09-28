@@ -51,7 +51,7 @@ describe('SignalIcFormView', () => {
   it('asks for a strategy and tickers first', () => {
     submit();
     expect(emitted).toEqual([]);
-    expect(el.textContent).toContain('Pick a strategy class.');
+    expect(el.textContent).toContain('Pick a strategy.');
     expect(el.textContent).toContain('Enter at least one ticker.');
   });
 

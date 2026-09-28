@@ -8,6 +8,8 @@
 // an entry below (the compiler insists), and any labels or API keys it
 // appears under as `aliases`.
 
+import { RESEARCH_GLOSSARY, RESEARCH_KEYS, type ResearchKey } from './research-glossary';
+
 /** The in-app glossary page. Each term has an anchor named after its key. */
 export const GLOSSARY_PATH = '/help/glossary';
 
@@ -141,7 +143,6 @@ export const PRODUCT_KEYS = [
   'go_live_check',
   'strategy_review',
   'trial_results',
-  'robustness_tests',
   'verdict',
   'portfolio_stage',
   'simulated',
@@ -151,18 +152,18 @@ export const PRODUCT_KEYS = [
   'strategy_part',
   'signal',
   'watchlist',
-  'screener',
   'trade_costs',
 ] as const;
 
 export type ProductKey = (typeof PRODUCT_KEYS)[number];
-export type GlossaryKey = MetricKey | TradingKey | ProductKey;
+export type GlossaryKey = MetricKey | TradingKey | ProductKey | ResearchKey;
 
-/** Every key: product words, then trading words, then figures. */
+/** Every key: product words, trading words, figures, then research words. */
 export const GLOSSARY_KEYS: readonly GlossaryKey[] = [
   ...PRODUCT_KEYS,
   ...TRADING_KEYS,
   ...METRIC_KEYS,
+  ...RESEARCH_KEYS,
 ];
 
 /** The glossary page's sections, in order. */
@@ -170,6 +171,7 @@ export const GLOSSARY_GROUPS: readonly { title: string; keys: readonly GlossaryK
   { title: 'How Stonks works', keys: PRODUCT_KEYS },
   { title: 'Trading words', keys: TRADING_KEYS },
   { title: 'Figures', keys: METRIC_KEYS },
+  { title: 'Research words', keys: RESEARCH_KEYS },
 ];
 
 export interface GlossaryEntry {
@@ -340,12 +342,6 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     term: 'Trial results',
     short: 'How strategies do on their own test books, next to your portfolio over the same days.',
   },
-  robustness_tests: {
-    term: 'Robustness tests',
-    short:
-      'Checks that a backtest was not luck: other periods, other tickers, higher costs and shuffled data. Also called survival tests.',
-    aliases: ['Robustness', 'Robustness test', 'Survival tests', 'Full robustness tests'],
-  },
   verdict: {
     term: 'Verdict',
     short:
@@ -394,11 +390,6 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     term: 'Watchlist',
     short: 'Your own list of tickers to keep an eye on. Today and the calendar can show only them.',
     aliases: ['Watchlists'],
-  },
-  screener: {
-    term: 'Screener',
-    short: 'Filters every ticker by price, returns, size or value and lists the ones that pass.',
-    aliases: ['Screen', 'Saved screen'],
   },
   trade_costs: {
     term: 'Trade costs',
@@ -567,7 +558,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   },
   best_score: {
     term: 'Best score',
-    short: 'The best objective value the tuner found (for example Sharpe), before survival tests.',
+    short: 'The best score the search found (for example Sharpe), before the robustness tests.',
   },
   out_of_sample: {
     term: 'Out of sample (OOS)',
@@ -763,6 +754,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
       'The yearly rate your money earned, counting when you added or took it out. Also called XIRR.',
     aliases: ['MWR', 'XIRR', 'Money-weighted, per year'],
   },
+  ...RESEARCH_GLOSSARY,
 };
 
 export interface GlossaryMatch {

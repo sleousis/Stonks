@@ -83,6 +83,15 @@ cli = "stonks db info"
 mcp = "get_coverage"
 
 [[capability]]
+id = "market.data_coverage"
+domain = "data"
+title = "Which paid data kinds are stored (fundamentals, calendars, news, option chains)"
+routes = ["GET /api/market/data-coverage"]
+console = "getDataCoverage"
+cli = "stonks db info"
+mcp = { limited = "the console's empty pages say when a data plan is missing; MCP reads the data itself" }
+
+[[capability]]
 id = "catalog"
 domain = "data"
 title = "Strategy classes, intervals and asset classes"

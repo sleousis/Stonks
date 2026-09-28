@@ -28,6 +28,8 @@ from stonks.strategies.examples._intraday import (
 
 class IntradayMomentum(IntradayStrategy):
     id = "intraday_momentum"
+    title = "Intraday momentum"
+    summary = "Buys near the close after a strong first half hour, expecting the move to carry on."
     applicable_asset_classes = ("equity", "commodity")
     needs_previous_session = True
     hypothesis = (

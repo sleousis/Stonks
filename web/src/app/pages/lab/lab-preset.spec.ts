@@ -116,6 +116,6 @@ describe('LabPage with ?strategy=', () => {
 
   it('says when the strategy id is unknown', async () => {
     await open('ghost');
-    expect(el.querySelector('.preset')?.textContent).toContain('Could not load strategy “ghost”');
+    expect(el.querySelector('.preset')?.textContent).toContain('Could not load that strategy');
   });
 });

@@ -311,16 +311,41 @@ panels both use them.
 The API sends non-finite figures (a Sharpe with no variance, a payoff ratio
 with no losing trades) as `null`. Show them as **n/a**, never 0 or a dash:
 `formatMetric(key, value)` and `metricLabel(key)` in `shared/metrics.ts` do
-this for survival-report metrics, and `pctOrNa` / `numOrNa` for fixed
+this for robustness-test metrics, and `pctOrNa` / `numOrNa` for fixed
 fields. Lab results group figures with `<app-figure-grid>`: risk (Sortino,
 Calmar, Ulcer, VaR/ES, longest drawdown), trades (count, win rate,
 expectancy, payoff, holding time, turnover, cost drag), the benchmark
 (excess CAGR, alpha, beta, IR, capture ratios) and trial counts. Each
-survival test shows its deciding figures first (`KEY_METRICS`: DSR, PBO,
+robustness test shows its deciding figures first (`KEY_METRICS`: DSR, PBO,
 the Monte Carlo drawdown band, cost stress, walk-forward efficiency…) and
 folds the rest into "All figures".
 
 ### Lab form
+
+The Lab opens on a **simple test** (`pages/lab/simple-test-form.ts`):
+three plain steps, then a strategy, what to trade (typed tickers or a saved
+list) and two dates. **Test it** sends a lab run on the Standard suite with
+every other setting at its default (`simpleTestRequest`): daily bars, never
+on trial. The result shows the plain verdict (below). **Advanced** in the
+panel head swaps to every setting: the Backtest and Lab run tabs. The
+choice is kept in this browser only (`stonks.lab.view`). A saved strategy
+(`?strategy=`), a suite (`?preset=`) or a prefilled re-run opens Advanced.
+
+```mermaid
+flowchart LR
+  L[Lab] --> S[Simple: strategy, what to trade, dates]
+  L --> A[Advanced: Backtest or Lab run, every setting]
+  S -->|Standard suite| R[Result: plain verdict, then the tests]
+  A --> R
+```
+
+The strategy picker (`strategy-picker.ts`) never shows code. Each strategy
+shows its plain name and one line on what it does, from the catalog's
+`title` and `description` (the class `summary` in Python, else the first
+sentence of its hypothesis, never a docstring). Groups follow the kind of
+idea (`alpha_family`: Yardsticks, Trend following, Value and quality,
+Patterns and models...), with add-ons that wrap another strategy last
+(`is_wrapper`). Search matches the name and the description only.
 
 The lab-run form sends a named suite (`preset`: quick, standard,
 promotion) unless the trader picks custom tests (`survival_tests`). The
@@ -332,20 +357,20 @@ data first" sends `ensure_data`: the server fetches the missing prices in
 a data job before tuning, and the result says so when `ensure_job_id` is
 set.
 The form shows only what a first run needs: strategy, tickers or
-universe, window, suite, hypothesis ("Why it should work") and "Start
-paper trading if it passes" (`register_if_passes`, with the Go-live suite
-and a required hypothesis). Everything else (search space and method,
+universe, window, suite, hypothesis ("Why it should work") and "Put it on
+trial if it passes" (`register_if_passes`, with the Full suite and a
+required hypothesis). Everything else (search space and method,
 objective, trials, seed, tuning share, embargo, benchmark, walk-forward
-and MCPT options, pass rules, premortem, and "Start paper trading whatever
+and MCPT options, pass rules, premortem, and "Put it on trial whatever
 the verdict", which sends `register_strategy`) sits in one closed
 **Advanced** fold that opens itself when one of its fields is wrong. The
-`promotion` preset is called the **Go-live suite** everywhere. `/lab?preset=`
-picks a suite, with `?strategy=` and `?tickers=`, so a failing go-live check
-links straight to a prefilled run. `/lab?universe=` opens the lab run form
+`promotion` preset is called the **Full** suite everywhere. `/lab?preset=`
+picks a suite, with `?strategy=` and `?tickers=`, so a failing approval
+check links straight to a prefilled run. `/lab?universe=` opens both forms
 with that stored universe picked. A universe's page (Test in the lab) and a
 screen saved as a universe link there. A backtest or plain lab run starts with
-no confirm; a run that may start paper trading asks once, plainly. A
-finished run shows a next step: Start paper trading (a prefilled re-run),
+no confirm; a run that may put a strategy on trial asks once, plainly. A
+finished run shows a next step: Put it on trial (a prefilled re-run),
 what failed and "Change and run again", or Open strategy and Follow. Costs
 use the shared `<app-cost-field>` (`pages/lab/cost-field.ts`), and
 Studio's backtests default to the configured costs and run the same suites. Walk-forward,
@@ -356,6 +381,26 @@ options schema gives labels, defaults, bounds and choices
 (`pages/lab/test-options.ts`), so a new backend option needs no console
 change. Field errors show next to the field, and the advanced panel opens
 when one of its fields is wrong.
+
+### Robustness tests and the verdict
+
+People read "robustness tests" (the code says survival tests). The console
+names all 22 the engine runs in `shared/lab-results/survival-tests.ts`:
+a plain label ("Higher costs", "Nearby settings", "Many splits (CPCV)") and
+one line on what it guards against. The custom suite lists them all, slow
+ones marked, and Signal ranking (IC) says it never fails a run.
+`production/golive.py` names them the same way for the approval check.
+
+A lab run's result opens with the **Robustness verdict** tile and one
+sentence (`verdictSentence`): "It held up: it passed all 7 robustness
+tests..." or "It did not hold up: it failed 2 of 7 robustness tests
+(Higher costs, Nearby settings)...". A second line says why a run can fail
+with every trial done: trials are the settings the search tried, and a
+trial only says a setting ran. The trial ledger uses the same split:
+trials read **Done** or **Error**, the run reads Passed or Failed under
+"Robustness verdict". Each test card repeats what it guards against, and
+quant words (deflated Sharpe, PBO, CPCV, MCPT, IC, walk-forward, purged
+folds) carry a tip from the glossary's Research words.
 
 The search settings in the Advanced fold include the Optuna tuner. Pick it
 and the form shows its sampler (TPE, NSGA-II or random) and "Stop weak
@@ -368,24 +413,27 @@ high and red for low. The tuned cell is outlined and the plateau
 neighbourhood is bordered, with the plateau verdict above. On phones the
 table scrolls inside its own labelled box.
 
-The Lab has six screens, linked at the top of each: Backtest and lab run
-(`/lab`), Sweep (`/lab/sweeps`), Signal IC (`/lab/signal-ic`), Trial
-ledger (`/lab/ledger`), Factors (`/lab/factors`) and Research sessions
+The Lab's screens sit in one row of underline tabs (`pages/lab/lab-nav.ts`)
+that scrolls sideways on phones: Test a strategy (`/lab`) and Trial ledger
+(`/lab/ledger`), then **More tools**: Sweep (`/lab/sweeps`), Signal IC
+(`/lab/signal-ic`), Factors (`/lab/factors`) and Research sessions
 (`/lab/research`). A sweep
 runs every strategy, or the ones picked, on typed tickers or a saved
 universe, and `<app-sweep-result>` ranks the rows best first. Signal IC
 shows how well a strategy's scores ranked the moves that followed, per
 look-ahead (`<app-signal-ic-result>`). Both follow the job with
 `<app-job-progress>` and show a failed result load inline with Retry
-(`pages/lab/job-follower.ts`). The Lab history lists and opens them too.
+(`pages/lab/job-follower.ts`). The Lab history lists and opens them too,
+by the strategy's plain name.
 
 The trial ledger lists every recorded lab run from `GET /api/lab/ledger`
 (server-paged, filtered by `?strategy=`): strategy, hypothesis, trials run
-and failed, best score and verdict. `/lab/ledger/:runId` shows one run from
-`GET /api/lab/ledger/{run_id}`: the hypothesis and premortem, the data,
-every trial, and the strategy's trial count across all runs, with one line
-on why it matters (more trials make a good result more likely to be luck).
-A lab run's result links to it.
+and errors, best score and robustness verdict. `/lab/ledger/:runId` shows
+one run from `GET /api/lab/ledger/{run_id}`: the hypothesis and premortem,
+the data, the search in words, every trial with its settings, and the
+strategy's trial count across all runs, with one line on why it matters
+(more trials make a good result more likely to be luck). A lab run's
+result links to it.
 
 Factors (`pages/lab/factors/`, `api/factors.service.ts`):
 
@@ -452,6 +500,10 @@ from it. Tips close when the page scrolls.
 - New metric: add a key to `METRIC_KEYS`, an entry (the compiler insists) and
   its labels or API keys as `aliases`, and add the label to `LABELS_SHOWN` in
   `glossary.spec.ts`. Keep `short` to one sentence a trader understands.
+- Research words (backtest, lab run, robustness tests, verdict, trial ledger,
+  CPCV, factor, tear sheet, point in time, survivorship bias, EPS, the
+  Greeks...) live in `core/help/research-glossary.ts` and show under their
+  own heading on the glossary page.
 
 ### Command palette and shortcuts
 
@@ -1081,11 +1133,12 @@ flowchart LR
   F --> V[Save screen] & U[Save as a universe: rule or snapshot]
 ```
 
+- **Needs a data plan.** Calendars, news, fundamentals and option chains come with a paid data plan. `GET /api/market/data-coverage` says which kinds the lake holds at all, and `<app-data-plan-note kind="...">` (`shared/ui/data-plan-note.ts`) says plainly when one is missing, instead of an empty page that looks broken. Traders read who can fix it; admins read what to do and get a link (Data, or the schedule for the calendar update). It renders nothing while the data is stored or unknown. The Calendar, the News tab, the screener's filters, the factor library and Options research show it. `provideFakeDataCoverage()` (`src/testing/fake-data-coverage.ts`) keeps specs free of the call.
 - **Calendar.** `pages/calendar/calendar.page.ts`. "Whose events" picks the scope. Watchlists offers one list or all of them, and Tickers waits until you name some. From and To span at most 120 days, checked before any call. The tabs count each calendar. Countries shows on the Economic tab only. A cut read says so. `?ticker=&date=` opens one ticker from that day, which is where the event alerts link. `?country=&date=` opens the Economic tab for one country, where the economic release alerts link. The Economic tab shows each release's importance. Pure helpers live in `calendar-view.ts`.
 - **News.** `<app-news-panel>` (`pages/calendar/news-panel.ts`) takes the scope as `query`. Everything has no news, so the panel asks for a narrower scope and calls nothing. Each ticker gets a mood card (the 30-day score weighted by articles, in words, a shape and a signed number). Articles link out only over http or https, in a new tab.
 - **Ticket warning.** `<app-earnings-warning>` (`pages/orders/earnings-warning.ts`) sits under the ticker on the order ticket. For a full ticker it calls `GET /api/calendars/earnings-warnings` silently and shows one warning line when the report falls before the next open, with a link to the calendar. A failed check shows nothing and never blocks the ticket.
 - **Event alerts.** `<app-event-alert-kinds>` in the alert settings lists each upcoming-event alert and how far ahead it looks. They are sent as Signals, so the Signals row decides where they reach you. There is no switch per kind yet: the server has no preference for it.
-- **Screener.** `pages/screener/`. Where to look (a universe, a date, asset classes, sectors, exchanges, lowest price and dollar volume), metric filters from `GET /api/screener/metrics` grouped by price and fundamentals, then sort, rows and extra columns. Percent metrics are typed in percent (8 means 8%) and sent as fractions. `screen-form.ts` turns the form into a spec and back, and says what is wrong in words before anything is sent. Results link each ticker to its chart and format each column by the metric's unit.
+- **Screener.** `pages/screener/`. Where to look (a universe, a date, asset classes, sectors, exchanges, lowest price and dollar volume, the same words the universe editor uses), metric filters from `GET /api/screener/metrics` grouped by price and fundamentals, then sort, rows and extra columns. Percent metrics are typed in percent (8 means 8%) and sent as fractions. `screen-form.ts` turns the form into a spec and back, and says what is wrong in words before anything is sent. Results link each ticker to its chart and format each column by the metric's unit.
 - **Saved screens.** Your screens list sits beside the form. Open reads the screen by id and fills the form. Save changes stays off until something changed. Delete asks first.
 - **Save as a universe.** `<app-save-universe-sheet>` asks for a name and a short name (the universe id), then the members: Re-run the screen (rule mode, from a start date, weekly, monthly or quarterly) or Today's matches (snapshot mode, with the survivorship warning). An unchanged saved screen goes by its id, so the universe follows it. The call is silent and a refusal shows in the sheet. The page then shows the saved universe and the server's warnings.
 - `TableColumn.display` gives a column its own text (a unit per column) while sorting still uses `value`.
@@ -1105,7 +1158,8 @@ flowchart LR
   B[Backtest form] --> J[POST /api/options/backtests] --> R[Equity, figures, checks]
 ```
 
-- **Research note.** The page opens with "Research only, nothing trades options." No order, paper book or live book uses anything on it.
+- **Research note.** The page opens with "Research only, nothing trades options." No order, paper portfolio or real-money portfolio uses anything on it. With no chains stored it shows the data-plan note.
+- **Plain names.** Options strategies show their names in words (`optionsStrategyName`), pricing models by name ("Barone-Adesi Whaley (American)", `pricingModelName`), and chain columns keep short forms in capitals ("Call IV"). IV, delta, gamma, theta, vega and open interest carry glossary tips.
 - **Chain.** `pages/options/options.page.ts`. Underlying, date (empty means the latest stored day), expiry and a Show switch for both sides, calls or puts. The table is `<app-data-table>` with the strike as the card title on phones. With both sides, phone cards keep bid, ask and delta of each. A hint names the units: theta per share per day, vega per share per vol point. Generated chains carry a tag, "Generated chains, not market quotes".
 - **Payoff.** Pick a structure from `GET /api/options/structures`. Its fields follow the parameters it reads (days to expiry, delta, long leg, short leg or wing delta). `<app-payoff-diagram>` (`payoff-diagram.ts`) draws the profit at expiry in SVG: the line, gain and loss shaded on either side of zero, today's price dashed. The cost, max loss, max gain ("Unlimited" when there is no bound) and breakevens sit above it and the legs below. The SVG has `role="img"` and a one sentence summary. A payoff the chain cannot supply shows inline with Retry.
 - **Strategies.** Each options strategy with its structures and hypothesis.

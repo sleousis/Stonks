@@ -81,6 +81,7 @@ describe('LabPage', () => {
   }
 
   beforeEach(async () => {
+    localStorage.removeItem('stonks.lab.view');
     created = false;
     posted = [];
     confirmed = [];
@@ -176,13 +177,24 @@ describe('LabPage', () => {
     fixture.detectChanges();
   }
 
-  it('lists strategy classes grouped with descriptions and the recent lab jobs', async () => {
+  /** Switch the form panel to Advanced (every setting). */
+  function advanced(): void {
+    el.querySelector<HTMLButtonElement>('#lab-view-advanced')!.click();
+    fixture.detectChanges();
+  }
+
+  it('lists strategies grouped by idea with plain descriptions and the recent lab jobs', async () => {
     await settle();
     const groups = [...el.querySelectorAll('#lab-panel-backtest .group-label')].map((g) =>
       g.textContent!.trim(),
     );
-    expect(groups).toEqual(['Examples', 'Strategies']);
+    expect(groups).toEqual(['Yardsticks', 'Trend following', 'Add-ons for another strategy']);
     expect(el.textContent).toContain('Buys the strongest trailing returns.');
+    // Plain names, never class names or ids.
+    const names = [...el.querySelectorAll('#lab-simple .option .name')].map((n) =>
+      n.textContent!.trim(),
+    );
+    expect(names).toEqual(['Buy and hold', 'Momentum', 'Economy filter']);
 
     const rows = [...el.querySelectorAll('app-data-table tbody tr')];
     expect(rows.map((r) => r.textContent)).toEqual([
@@ -195,8 +207,57 @@ describe('LabPage', () => {
     expect(rows[1].textContent).not.toContain('Cancel');
   });
 
+  it('opens on the simple test: three plain steps and one button', async () => {
+    await settle();
+    expect(el.querySelector('#lab-simple')!.hasAttribute('hidden')).toBe(false);
+    expect(el.querySelector('#lab-advanced')!.hasAttribute('hidden')).toBe(true);
+    expect(el.querySelector('#lab-view-simple')!.getAttribute('aria-pressed')).toBe('true');
+    const simple = el.querySelector('#lab-simple')!;
+    expect(simple.querySelectorAll('.steps li')).toHaveLength(3);
+    expect(simple.textContent).toContain('Nothing trades and nothing goes on trial.');
+    // No quant settings in the simple view.
+    for (const id of ['#st-interval', '#lr-seed', '#lr-tuner', '#bt-tickers'])
+      expect(simple.querySelector(id)).toBeNull();
+  });
+
+  it('a simple test runs the Standard tests with default settings and never goes on trial', async () => {
+    await settle();
+    const simple = el.querySelector('#lab-simple')!;
+    simple.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    await settle(2);
+    expect(posted).toEqual([]);
+    expect(simple.textContent).toContain('Pick a strategy.');
+    expect(simple.textContent).toContain('Enter at least one ticker.');
+
+    simple.querySelector<HTMLInputElement>(`input[value="${MOMENTUM.class_path}"]`)!.click();
+    input('#st-tickers', 'spy.us');
+    jobStatus['new-lr'] = job({ id: 'new-lr', kind: 'lab_run', status: 'succeeded' });
+    simple.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    await settle(12);
+    expect(confirmed).toEqual([]);
+    expect(posted[0]).toMatchObject({
+      url: '/api/lab/runs',
+      body: { preset: 'standard', universe: ['SPY.US'], interval: '1d', tuner: 'random' },
+    });
+    const body = posted[0].body as Record<string, unknown>;
+    expect(body['register_if_passes']).toBeUndefined();
+    expect(body['register_strategy']).toBeUndefined();
+    // A plain verdict under the result.
+    expect(el.querySelector('app-lab-run-result .plain')!.textContent).toContain(
+      'It did not hold up',
+    );
+  });
+
+  it('remembers Advanced in this browser', async () => {
+    await settle();
+    advanced();
+    expect(el.querySelector('#lab-advanced')!.hasAttribute('hidden')).toBe(false);
+    expect(localStorage.getItem('stonks.lab.view')).toBe('advanced');
+  });
+
   it('startBacktest calls the API without ConfirmService, follows it and renders the result (UX-29)', async () => {
     await settle();
+    advanced();
     const radio = el.querySelector<HTMLInputElement>(
       `#lab-panel-backtest input[value="${MOMENTUM.class_path}"]`,
     )!;
@@ -228,10 +289,11 @@ describe('LabPage', () => {
 
   it('blocks an incomplete backtest and says what to fix', async () => {
     await settle();
+    advanced();
     el.querySelector<HTMLButtonElement>('#lab-panel-backtest button[type="submit"]')!.click();
     await settle(2);
     expect(posted).toEqual([]);
-    expect(el.textContent).toContain('Pick a strategy class.');
+    expect(el.querySelector('#lab-panel-backtest')!.textContent).toContain('Pick a strategy.');
     expect(el.textContent).toContain('Enter at least one ticker.');
   });
 
@@ -245,6 +307,7 @@ describe('LabPage', () => {
 
   async function openLabRunForm(): Promise<void> {
     await settle();
+    advanced();
     el.querySelector<HTMLButtonElement>('#lab-tab-lab_run')!.click();
     fixture.detectChanges();
     el.querySelector<HTMLInputElement>(
@@ -296,23 +359,21 @@ describe('LabPage', () => {
     expect(el.querySelectorAll('app-lab-run-result .test').length).toBe(3);
   });
 
-  it('starts paper trading only if the run passes, and asks for a hypothesis first', async () => {
+  it('puts it on trial only if the run passes, and asks for a hypothesis first', async () => {
     await openLabRunForm();
     const register = el.querySelector<HTMLInputElement>('#lr-register')!;
-    expect(register.closest('label')!.textContent).toContain('Start paper trading if it passes');
+    expect(register.closest('label')!.textContent).toContain('Put it on trial if it passes');
     register.click();
     fixture.detectChanges();
     // Registering switches the quick suite to promotion, as the API does.
     expect(el.querySelector('#lab-panel-lab_run .suite.chosen .suite-name')?.textContent).toContain(
-      'Go-live',
+      'Full',
     );
 
     submitLabRun();
     await settle(2);
     expect(posted).toEqual([]);
-    expect(el.textContent).toContain(
-      'Say why it should make money before it starts paper trading.',
-    );
+    expect(el.textContent).toContain('Say why it should make money before it goes on trial.');
 
     const hypothesis = el.querySelector<HTMLTextAreaElement>('#lr-hypothesis')!;
     hypothesis.value = 'Slow money chases recent winners for months.';
@@ -322,8 +383,8 @@ describe('LabPage', () => {
     submitLabRun();
     await settle(12);
 
-    // A plain confirmation: paper trading places no real orders, so no typed words.
-    expect(confirmed).toEqual(['Start paper trading Momentum if it passes?']);
+    // A plain confirmation: a trial places no real orders, so no typed words.
+    expect(confirmed).toEqual(['Put Momentum on trial if it passes?']);
     expect(confirmOptions[0].typedConfirmation).toBeUndefined();
     expect(posted[0].body).toMatchObject({
       preset: 'promotion',
@@ -356,7 +417,7 @@ describe('LabPage', () => {
       const next = el.querySelector('.next-step')!;
       expect(next.textContent).toContain('It passed.');
       const start = [...next.querySelectorAll<HTMLButtonElement>('button')].find(
-        (b) => b.textContent!.trim() === 'Start paper trading',
+        (b) => b.textContent!.trim() === 'Put it on trial',
       )!;
       // Somewhere else first, to see the re-run switch back to the lab run form.
       el.querySelector<HTMLButtonElement>('#lab-tab-backtest')!.click();
@@ -376,8 +437,7 @@ describe('LabPage', () => {
     it('a failed run says what failed and offers a prefilled re-run', async () => {
       await finishRun(LAB_RUN_VIEW);
       const next = el.querySelector('.next-step')!;
-      expect(next.textContent).toContain('It failed 1 of 3 tests');
-      expect(next.textContent).toContain('Walk-forward');
+      expect(next.textContent).toContain('It failed 1 of 3 robustness tests: Walk-forward.');
       [...next.querySelectorAll<HTMLButtonElement>('button')]
         .find((b) => b.textContent!.includes('Change and run again'))!
         .click();
@@ -388,6 +448,7 @@ describe('LabPage', () => {
 
     it('a run that started paper trading links to the strategy and to Follow', async () => {
       await finishRun({ ...LAB_RUN_VIEW, verdict: 'pass', registered_strategy_id: 'mom-7' });
+      expect(el.querySelector('.next-step')!.textContent).toContain('It passed and is on trial');
       const links = [...el.querySelectorAll<HTMLAnchorElement>('.next-step a')];
       expect(links.map((a) => a.textContent!.trim())).toEqual(['Open strategy', 'Follow']);
       expect(links[0].getAttribute('href')).toBe('/strategies/mom-7');
@@ -398,6 +459,7 @@ describe('LabPage', () => {
   it('opens the lab run form on the suite from ?preset=promotion (UX-28)', async () => {
     await create(TRADER, { preset: 'promotion' });
     await settle();
+    expect(el.querySelector('#lab-advanced')!.hasAttribute('hidden')).toBe(false);
     expect(el.querySelector('#lab-panel-lab_run')!.hasAttribute('hidden')).toBe(false);
     expect(
       el.querySelector<HTMLInputElement>(
@@ -413,6 +475,10 @@ describe('LabPage', () => {
     ];
     await create(TRADER, { universe: 'us-big' });
     await settle();
+    // The simple test starts on it too.
+    expect(el.querySelector<HTMLSelectElement>('#lab-simple select#st-universe')!.value).toBe(
+      'us-big',
+    );
     expect(el.querySelector('#lab-panel-lab_run')!.hasAttribute('hidden')).toBe(false);
     const picker = el.querySelector<HTMLSelectElement>('#lab-panel-lab_run select#lr-universe')!;
     expect(picker.value).toBe('us-big');
@@ -474,7 +540,7 @@ describe('LabPage', () => {
     const names = [...el.querySelectorAll('app-sweep-result tbody tr .name')].map((n) =>
       n.textContent!.trim(),
     );
-    expect(names).toEqual(['momentum', 'buy_and_hold', 'macro_regime']);
+    expect(names).toEqual(['Momentum', 'Buy and hold', 'Economy filter']);
     expect(el.querySelector('app-sweep-result')!.textContent).toContain('n/a');
   });
 
@@ -497,6 +563,15 @@ describe('LabPage', () => {
     expect(canCancel('backtest', 'queued')).toBe(true);
     expect(canCancel('lab_run', 'succeeded')).toBe(false);
     expect(jobStrategy({ params: { strategy: { strategy_id: 'mom-3' } } })).toBe('mom-3');
+    expect(jobStrategy({ params: { strategy: { strategy_id: 'momentum_3fa9c21b' } } })).toBe(
+      'Momentum 3fa9',
+    );
+    expect(
+      jobStrategy(
+        { params: { strategy: { class_path: 'a.b:EWMACTrend' } } },
+        new Map([['a.b:EWMACTrend', 'Moving average trend']]),
+      ),
+    ).toBe('Moving average trend');
     expect(jobStrategy({ params: {} })).toBe('–');
     expect(jobStrategy({ params: { start: 'x', strategies: ['a:B', 'c:D'] } })).toBe(
       '2 strategies',

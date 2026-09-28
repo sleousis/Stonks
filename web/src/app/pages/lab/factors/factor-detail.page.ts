@@ -158,7 +158,7 @@ import { FormulaEditor } from './formula-editor';
           <p class="lead">
             A lab run of the factor strategy: it holds the top slice of the names by this factor,
             equal weight, rebalanced on month ends. The lab tunes the slice and runs the checks you
-            pick. It never starts paper trading from here.
+            pick. Nothing goes on trial from here.
           </p>
           <app-factor-lab-run
             [factor]="s"
