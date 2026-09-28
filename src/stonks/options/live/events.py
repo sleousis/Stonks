@@ -187,7 +187,8 @@ def book_events(
                     iso_now(clock),
                 ],
             )
-        book_executions(state, [e for _, e in legs], portfolio_id=portfolio_id, clock=clock)
+            # in the same transaction: an event marked known always has its fills
+            book_executions(state, [e for _, e in legs], portfolio_id=portfolio_id, clock=clock)
         _log.info(
             "options.event.booked",
             portfolio_id=portfolio_id,
