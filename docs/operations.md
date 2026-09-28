@@ -452,6 +452,23 @@ uv run stonks orders list --manual --user you@example.com
 - Each order is recorded with `origin = manual`, no strategy, who placed it and why, and an `audit_log` row. An order is refused while a tick runs.
 - The tick never trades a manual holding. Strategies decide and size without it, and the snapshot keeps it.
 
+### Trade plan and discipline
+
+The ticket takes an optional plan: a stop and a target. The stop sits below a buy and above a short sale, the target on the other side. The entry is your limit, else the latest close. The plan is kept on the order.
+
+- **Size from risk.** `POST /api/orders/manual/plan` (the ticket's Work out size) takes the risk you accept, as a percent of the book or an amount, and returns the whole shares whose loss at the stop fits it. A buy is also cut to the cash on hand. It places nothing.
+- **Protective stop.** In a book at a broker, a filled entry with a stop gets one good till cancelled stop order for the filled quantity, id `<entry>:stop`. It is placed right away when the entry fills at once, else at the next manual order of the book or the next `live_stops` run. A later manual exit of the same ticker joins its OCA group, so the broker never sells twice. The stop is yours: the strategy stop sync leaves it alone, and you cancel it like any working order. A simulated book keeps the plan on the order only.
+- **Discipline rules.** `[production.risk.rules.manual_discipline]`, off by default, tighten only per portfolio. They refuse new manual entries, never exits:
+
+```toml
+[production.risk.rules.manual_discipline]
+enabled = true
+require_stop_live = true     # a real-money entry needs a stop
+cooldown_minutes = 60        # no entry for an hour after a losing manual exit
+max_entries_per_day = 5      # manual entries a day (UTC)
+max_daily_loss = 500.0       # stop entries once today's manual exits lost this much
+```
+
 ## Live trading
 
 Phase 19 is built up to 19.18: the IBKR adapter (`execution/brokers/ibkr/`), the `ibkr` connection, the gateway deployment, the safeguards and account rules, tickets and approve mode, reconciliation, stages and gates, and protective stops. Only 19.12 (running the stages with real money) and 19.13 (margin accounts) remain. `[brokers] kind = "ibkr"` trades the default portfolio through the gateway that lists it, and a broker portfolio trades through its `ibkr` connection. Real money waits for each stage gate (see [Stages, gates and the preview](#stages-gates-and-the-preview)). Design: `docs/design/live-trading.md`.

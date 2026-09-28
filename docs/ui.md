@@ -653,6 +653,7 @@ Tickers open `/data?instrument=<id>`.
 | Page | Route | What it does |
 |---|---|---|
 | Insights | `/insights` | The picked portfolio's value, beta, exposure and largest holding, where the money sits (asset class, sector, currency or holding), returns over periods, a monthly returns heatmap, risk, which strategies agree with each holding, and the snapshot history |
+| Behaviour | `/insights/behaviour` | How you trade by hand: manual and synced broker trades as round trips, P&L by holding time and weekday, win rate, the disposition effect, busy days, revenge trades after a loss, and what trading against the active strategies cost |
 | Risk | `/insights/risk` | Each measure against its limit, today's VaR and ES with how often the model missed, each strategy sleeve with its alpha-decay check, and the daily history as a chart and a table |
 
 ```mermaid
