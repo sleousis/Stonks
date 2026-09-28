@@ -268,7 +268,7 @@ flowchart LR
 - `place_order` never fills. The order waits for the next bar of its ticker. A bar that began before the decision bar closed is never used (P21).
 - Each bar close runs every working order through `MinuteFillModel`. Cash, margin, short rules and the cost model come from a wrapped `SimulatedBroker`, and the cost model's fee is the execution's commission.
 - The session of a bar comes from the ticker's exchange calendar (`calendar_session_key`). A day order whose next bar is in a later session expires. `expire_open()` ends every working order at the close.
-- `on_quote` keeps the last recorded quote per ticker. Only a quote from before the fill bar's open is used.
+- `on_quote` keeps the last few bars of recorded quotes per ticker. The fill uses the last quote from before the fill bar's open, even when later quotes arrived while that bar formed.
 
 **Minute fills** (`backtest/fills.py`, `MinuteFillModel` and `MinuteFillSettings`). The daily `BarFillModel` is unchanged. The minute model uses it for order types and the participation cap, then adds:
 
