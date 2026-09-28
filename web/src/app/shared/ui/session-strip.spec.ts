@@ -274,7 +274,7 @@ describe('SessionStrip', () => {
     const el = await renderEl();
     const strip = el.querySelector('.strip')!;
     expect(strip.getAttribute('data-tone')).toBe('kill');
-    expect(strip.textContent).toContain('Kill switch on.');
+    expect(strip.textContent).toContain('Trading stopped.');
     expect(strip.textContent).toContain('Every portfolio');
     expect(strip.querySelector('a.strip-link')!.getAttribute('href')).toBe('/ops/halts');
   });
@@ -354,7 +354,7 @@ describe('SessionStrip', () => {
       expect(picked.value).toBe('portfolio');
       expect(picked.closest('label')!.textContent).toContain('Main book');
       // The ticket: scope, what stops, reason and the stamp.
-      const ticket = el.querySelector('[aria-label="Kill switch"]')!;
+      const ticket = el.querySelector('[aria-label="Stop trading ticket"]')!;
       expect(ticket.textContent).toContain('Portfolio Main book');
       expect(ticket.textContent).toContain('All new orders');
       expect(ticket.textContent).toContain(DEFAULT_KILL_REASON);
@@ -422,7 +422,7 @@ describe('SessionStrip', () => {
       reason.value = 'Fed day';
       reason.dispatchEvent(new Event('input'));
       fixture.detectChanges();
-      const ticket = el.querySelector('[aria-label="Kill switch"]')!;
+      const ticket = el.querySelector('[aria-label="Stop trading ticket"]')!;
       expect(ticket.textContent).toContain('Your portfolios');
       expect(ticket.textContent).toContain('New buys');
       expect(ticket.textContent).toContain('Sells and exits');
@@ -446,7 +446,7 @@ describe('SessionStrip', () => {
       expect(stop.classList).toContain('live');
       stop.click();
       fixture.detectChanges();
-      expect(el.querySelector('[aria-label="Kill switch"] .stamp')!.textContent).toContain('LIVE');
+      expect(el.querySelector('[aria-label="Stop trading ticket"] .stamp')!.textContent).toContain('LIVE');
     });
 
     it('lets admins stop every portfolio; viewers never see the control', async () => {

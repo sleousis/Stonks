@@ -60,7 +60,7 @@ export function haltSummary(
   if (kills.length) {
     return {
       tone: 'kill',
-      title: 'Kill switch on.',
+      title: 'Trading stopped.',
       text: `${scopes}. ${what} until someone resumes trading.`,
     };
   }

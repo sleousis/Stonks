@@ -8,7 +8,7 @@ describe('killTicket', () => {
       reason: ' Market is wild ',
       live: true,
     });
-    expect(t.kind).toBe('Kill switch');
+    expect(t.kind).toBe('Stop trading');
     expect(t.live).toBe(true);
     expect(t.lines).toEqual([
       { label: 'Scope', value: 'Portfolio Main' },

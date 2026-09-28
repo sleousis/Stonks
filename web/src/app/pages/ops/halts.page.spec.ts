@@ -9,7 +9,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { HaltStateService } from '../../core/halts/halt-state.service';
-import { ToastService } from '../../core/notify/toast.service';
+import { StopTradingService } from '../../core/halts/stop-trading.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
@@ -136,8 +136,8 @@ describe('HaltsPage', () => {
 
     it('lists active halts with their way out, and past halts below', () => {
       const active = el.querySelector('[aria-labelledby="active-title"]')!;
-      expect(active.textContent).toContain('Kill switch on');
-      expect(active.textContent).toContain('Kill switch');
+      expect(active.textContent).toContain('Trading stopped');
+      expect(active.textContent).toContain('Stop trading');
       expect(active.textContent).toContain('Broker outage');
       // No portfolio names known to an admin here: still no ids (UX-17).
       expect(active.textContent).toContain('One portfolio');
@@ -154,59 +154,14 @@ describe('HaltsPage', () => {
       expect(past.textContent).toContain('health passed');
     });
 
-    it('asks for a reason before engaging, then sends scope, portfolio and buys only', async () => {
-      const success = vi.spyOn(TestBed.inject(ToastService), 'success');
-      button('Engage kill switch')!.click();
-      await settle();
-      expect(el.textContent).toContain('Say why');
-      expect(confirm).not.toHaveBeenCalled();
-
-      el.querySelector<HTMLInputElement>('input[value="portfolio"]')!.click();
-      fixture.detectChanges();
-      const reason = el.querySelector<HTMLTextAreaElement>('#kill-reason')!;
-      reason.value = 'Odd fills';
-      reason.dispatchEvent(new Event('input'));
-      const buysOnly = el.querySelector<HTMLInputElement>('.kill input[type="checkbox"]')!;
-      buysOnly.click();
-      fixture.detectChanges();
-
-      button('Engage kill switch')!.click();
-      const post = await nextRequest(http, '/api/halts/kill', 'POST');
-      expect(post.request.body).toEqual({
-        scope: 'portfolio',
-        reason: 'Odd fills',
-        buys_only: true,
-        portfolio_id: 'pf_default',
-      });
-      post.flush(halt({ id: 9, scope: 'portfolio', portfolio_id: 'pf_default', halt: 'buys' }));
-      await flushAll([KILL, BREAKER, OLD]);
-      expect(success).toHaveBeenCalledWith('Engaged the kill switch: One portfolio.');
-    });
-
-    it('engage confirm shows scope and Stops lines as a ticket (UX-51)', async () => {
-      const reason = el.querySelector<HTMLTextAreaElement>('#kill-reason')!;
-      reason.value = 'Odd fills';
-      reason.dispatchEvent(new Event('input'));
-      fixture.detectChanges();
-      confirm.mockResolvedValue(false);
-      button('Engage kill switch')!.click();
-      await settle();
-      expect(confirm).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tone: 'danger',
-          confirmLabel: 'Engage kill switch',
-          ticket: {
-            kind: 'Kill switch',
-            live: false,
-            lines: [
-              { label: 'Scope', value: 'Every portfolio' },
-              { label: 'Stops', value: 'All new orders' },
-              { label: 'Still goes out', value: 'Nothing new' },
-              { label: 'Reason', value: 'Odd fills' },
-            ],
-          },
-        }),
-      );
+    it('opens the one Stop trading sheet, never an inline form (M7)', () => {
+      const open = TestBed.inject(StopTradingService).open;
+      expect(el.querySelector('#kill-reason')).toBeNull();
+      expect(button('Engage kill switch')).toBeUndefined();
+      const stop = button('Stop trading…')!;
+      expect(stop.classList).toContain('btn-danger');
+      stop.click();
+      expect(open()).toBe(true);
       expect(http.match('/api/halts/kill')).toEqual([]);
     });
 
@@ -278,33 +233,13 @@ describe('HaltsPage', () => {
 
     beforeEach(() => setup(TRADER, BOOKS));
 
-    it('offers one portfolio by name, never every portfolio', async () => {
-      expect(el.querySelector('input[value="global"]')).toBeNull();
-      expect(el.querySelector<HTMLInputElement>('input[value="portfolio"]')!.checked).toBe(true);
-      expect(el.textContent).toContain('Only admins can stop every portfolio at once.');
-      const select = el.querySelector<HTMLSelectElement>('#kill-portfolio')!;
-      expect([...select.options].map((o) => o.textContent?.trim())).toEqual([
-        'Main book',
-        'Crypto book',
-      ]);
+    it('says the sheet starts on the portfolio on screen, and names portfolios', () => {
+      const panel = el.querySelector('[aria-labelledby="kill-title"]')!;
+      expect(panel.textContent).toContain('Main book');
       // Scope column names the portfolio, not its id.
       const active = el.querySelector('[aria-labelledby="active-title"]')!;
       expect(active.textContent).toContain('Portfolio Main book');
       expect(active.textContent).not.toContain('pf_default');
-
-      select.value = 'pf_2';
-      select.dispatchEvent(new Event('change'));
-      const reason = el.querySelector<HTMLTextAreaElement>('#kill-reason')!;
-      reason.value = 'Odd fills';
-      reason.dispatchEvent(new Event('input'));
-      fixture.detectChanges();
-      button('Engage kill switch')!.click();
-      const post = await nextRequest(http, '/api/halts/kill', 'POST');
-      expect(post.request.body).toEqual(
-        expect.objectContaining({ scope: 'portfolio', portfolio_id: 'pf_2' }),
-      );
-      post.flush(halt({ id: 9, scope: 'portfolio', portfolio_id: 'pf_2' }));
-      await flushAll([KILL, BREAKER, OLD]);
     });
 
     it('cannot resume a global kill switch but can clear its own breaker', () => {
@@ -313,7 +248,7 @@ describe('HaltsPage', () => {
       expect(resume.parentElement!.textContent).toContain('Admins only.');
       expect(button('Clear')!.disabled).toBe(false);
       expect(el.querySelector('[aria-labelledby="active-title"]')!.textContent).toContain(
-        'Kill switch on',
+        'Trading stopped',
       );
     });
   });
@@ -321,8 +256,8 @@ describe('HaltsPage', () => {
   describe('as a viewer', () => {
     beforeEach(() => setup({ ...TRADER, role: 'viewer', scopes: ['read'] }));
 
-    it('sees why the kill switch and Clear are off', () => {
-      const engage = button('Engage kill switch')!;
+    it('sees why Stop trading and Clear are off', () => {
+      const engage = button('Stop trading…')!;
       expect(engage.disabled).toBe(true);
       expect(engage.parentElement!.textContent).toContain('Traders and admins only.');
       expect(button('Clear')!.disabled).toBe(true);

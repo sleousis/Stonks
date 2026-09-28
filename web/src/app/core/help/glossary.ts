@@ -108,6 +108,9 @@ export const TRADING_KEYS = [
   'signals_only',
   'auto',
   'approve',
+  'suggested_order',
+  'signal_score',
+  'portfolio_stage',
   'kill_switch',
   'buys_only',
   'circuit_breaker',
@@ -171,11 +174,29 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
       'Real orders wait for you as tickets after each trading run. You approve each one with a code before the open.',
     aliases: ['Approve mode', 'Approve', 'Approvals', 'Order ticket', 'Order tickets'],
   },
-  kill_switch: {
-    term: 'Kill switch',
+  suggested_order: {
+    term: 'Suggested order',
     short:
-      'Stops new orders at once, for one portfolio, all yours or everyone. No position is closed. Also called a halt.',
-    aliases: ['Stop trading', 'Halt', 'Halts'],
+      'An order the assistant proposed. It waits in Approvals and nothing is placed until you approve it with a code.',
+    aliases: ['Suggested orders', 'Order draft', 'Order drafts'],
+  },
+  signal_score: {
+    term: 'Signal score',
+    short:
+      "The strategy's score for this ticker when it decided. Higher means a stronger case; the scale depends on the strategy.",
+    aliases: ['Signal strength'],
+  },
+  portfolio_stage: {
+    term: 'Portfolio stage',
+    short:
+      'How close a portfolio is to real money: Simulated, Broker paper, Real money, small, then Real money, full.',
+    aliases: ['Live stage', 'Simulated', 'Broker paper', 'Real money, small', 'Real money, full'],
+  },
+  kill_switch: {
+    term: 'Stop trading',
+    short:
+      'Stops new orders at once, for one portfolio, all yours or everyone. No position is closed. Also called the kill switch or a halt.',
+    aliases: ['Kill switch', 'Halt', 'Halts'],
   },
   buys_only: {
     term: 'Stop new buys only',
