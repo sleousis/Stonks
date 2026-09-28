@@ -1323,7 +1323,7 @@ flowchart LR
 | `haltScopeText()` | `core/halts/halt-view.ts` | "Every portfolio", "Your portfolios", a portfolio's name, never an id |
 | `<app-account-menu>` | `shell/` | Profile, Settings, Broker connections, Get set up, Help, Sign out |
 | `<app-page-tabs>` | `shared/ui/page-tabs.ts` | The one tab style (M4): links when each view has its address, a tablist when sections share a page; underline, 44px on phones, a fading edge when the tabs scroll |
-| `<app-follow-mode>` | `shared/ui/follow-mode.ts` | How you follow a strategy, one compact select with locked modes shown |
+| `<app-follow-control>` | `shared/follow/follow-control.ts` | How you follow a strategy: the switch, the four modes, why the gated ones are closed, the same on Today and the strategy page |
 | `dayChangeLine()`, `sessionLabel()` | `core/format/day-change.ts` | The day's change, the same on Today, Dashboard and Insights |
 | `RUN_WORDS`, `runWords()` | `shared/status-words.ts` | Done, Partly done, Failed for a trading run |
 | `FeatureFlagsService` | `core/features/` | Hide a page whose feature is off (the assistant) |
@@ -1828,13 +1828,14 @@ flowchart LR
   only the orders and fills in the reader's own portfolios, as the API
   scopes them (`ownRunCounts()`). When the counts are null it says only
   "Trading run finished". Its status reads Done, Partly done or Failed
-  (`shared/status-words.ts`). My strategies: an on/off switch and one
-  compact follow-mode control (`<app-follow-mode>`: Alerts only, Paper,
-  Approve each trade, Automatic) per follow, the portfolio it trades when
+  (`shared/status-words.ts`). My strategies: one `<app-follow-control>` per
+  follow (the on/off switch and Alerts only, Paper, Approve each trade,
+  Automatic), the same control as the strategy page, the portfolio it trades when
   there are several, and "Paper days: 4 of 20". The unlock rule is said
-  once above the list. The two real-money modes stay locked until the
+  once above the list. Approve each trade and Automatic stay locked until the
   paper days and the server's other checks pass, then ask for the step-up
-  and a ticket. The left column flows on its own (the last grid row is
+  and a ticket. Automatic asks for the strategy's name as shown, never its
+  id. The left column flows on its own (the last grid row is
   flexible), so a tall strategies list never leaves a gap beside it.
 - **Follow** (`pages/strategies/follow-panel.ts`): the strategy page of a
   strategy on trial or approved has a Follow panel. Pick "Alerts only"

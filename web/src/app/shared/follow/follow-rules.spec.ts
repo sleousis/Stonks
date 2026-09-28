@@ -1,5 +1,5 @@
 import { sub } from '../../../testing/home-fixtures';
-import { autoBlockedReason, paperProgress, unlockRule } from './strategy-modes';
+import { autoBlockedReason, paperProgress, unlockRule } from './follow-rules';
 
 describe('autoBlockedReason', () => {
   it('is null once the gate passes', () => {
@@ -7,14 +7,18 @@ describe('autoBlockedReason', () => {
   });
 
   it('counts paper days first, without repeating the server line', () => {
-    expect(
-      autoBlockedReason(
-        sub({
-          paper_days_completed: 12,
-          auto_blockers: ['12 of 20 paper trading days', 'the portfolio is not a broker portfolio'],
-        }),
-      ),
-    ).toBe('Paper days: 12 of 20. The portfolio is not a broker portfolio.');
+    const waiting = sub({
+      paper_days_completed: 12,
+      auto_blockers: ['12 of 20 paper trading days', 'the portfolio is not a broker portfolio'],
+    });
+    expect(autoBlockedReason(waiting)).toBe(
+      'Approve each trade and Automatic open after 20 trading days on Paper. 12 of 20 done. ' +
+        'The portfolio is not a broker portfolio.',
+    );
+    // Under a list that says the rule once (Today), only the progress.
+    expect(autoBlockedReason(waiting, { compact: true })).toBe(
+      'Paper days: 12 of 20. The portfolio is not a broker portfolio.',
+    );
   });
 
   it('says the unlock rule once, in the vocabulary words (M8)', () => {

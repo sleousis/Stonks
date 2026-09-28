@@ -42,26 +42,31 @@ describe('StrategiesCard', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  /** The follow-mode control of the first row (M8: one compact select). */
-  function modeSelect(el: HTMLElement) {
-    return el.querySelector<HTMLSelectElement>('app-follow-mode select')!;
+  /** The first row's checked follow mode (M8: the shared follow control). */
+  function modeValue(el: HTMLElement): string | null {
+    return (
+      el.querySelector<HTMLInputElement>('app-follow-control input[type="radio"]:checked')
+        ?.value ?? null
+    );
   }
 
   function option(el: HTMLElement, value: string) {
-    return el.querySelector<HTMLOptionElement>(`app-follow-mode option[value="${value}"]`)!;
+    return el.querySelector<HTMLInputElement>(
+      `app-follow-control input[type="radio"][value="${value}"]`,
+    )!;
   }
 
   function pick(el: HTMLElement, value: string) {
-    const select = modeSelect(el);
-    select.value = value;
-    select.dispatchEvent(new Event('change'));
+    const radio = option(el, value);
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change'));
   }
 
   it('shows each strategy with its switch and mode', async () => {
     const el = await render([sub({ paper_days_completed: 12 })]);
     expect(el.textContent).toContain('momentum-v3');
     expect(el.querySelector('[role="switch"]')!.getAttribute('aria-checked')).toBe('true');
-    expect(modeSelect(el).value).toBe('paper');
+    expect(modeValue(el)).toBe('paper');
   });
 
   it('keeps Automatic locked, says the rule once and the count per row (M8, F4)', async () => {
@@ -121,7 +126,17 @@ describe('StrategiesCard', () => {
     await tick();
     fixture.detectChanges();
     controller.expectNone('/api/subscriptions/sub_1');
-    expect(modeSelect(el).value).toBe('paper');
+    expect(modeValue(el)).toBe('paper');
+  });
+
+  it('asks for the name as shown, never the id, before auto', async () => {
+    vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockResolvedValue(true);
+    const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(false);
+    const el = await render([sub({ strategy_id: 'value_1a2b3c4d' })]);
+    pick(el, 'auto');
+    await tick();
+    expect(confirm.mock.calls[0][0].typedConfirmation).toBe('Value 1a2b');
+    controller.expectNone('/api/subscriptions/sub_1');
   });
 
   it('auto confirm passes ticket.live true (UX-14)', async () => {
@@ -132,7 +147,7 @@ describe('StrategiesCard', () => {
     await tick();
     const options = confirm.mock.calls[0][0];
     expect(options.ticket?.live).toBe(true);
-    expect(options.ticket?.lines.map((l) => l.label)).toEqual(['Strategy', 'Portfolio', 'Mode']);
+    expect(options.ticket?.lines.map((l) => l.label)).toEqual(['Strategy', 'Portfolio', 'Follow']);
     expect(options.ticket?.lines[2].value).toBe('Automatic');
     controller.expectNone('/api/subscriptions/sub_1');
   });
@@ -140,8 +155,8 @@ describe('StrategiesCard', () => {
   it('keeps approve each trade locked with auto until the gate passes (19.8)', async () => {
     const el = await render([sub({ paper_days_completed: 12 })]);
     expect(option(el, 'approve').disabled).toBe(true);
-    expect(modeSelect(el).getAttribute('aria-describedby')).toBe('mode-help-sub_1');
-    expect(el.querySelector('#mode-help-sub_1')!.textContent).toContain('Paper days: 12 of 20.');
+    const why = option(el, 'approve').getAttribute('aria-describedby')!;
+    expect(el.querySelector(`[id="${why}"]`)!.textContent).toContain('Paper days: 12 of 20.');
   });
 
   it('turns on approve each trade after a step-up and a ticket, no typed name', async () => {
@@ -159,7 +174,7 @@ describe('StrategiesCard', () => {
     req.flush(sub({ mode: 'approve' }));
     await tick();
     fixture.detectChanges();
-    expect(modeSelect(el).value).toBe('approve');
+    expect(modeValue(el)).toBe('approve');
     expect(el.textContent).toContain('Each trade waits for your approval');
   });
 
@@ -242,8 +257,8 @@ describe('StrategiesCard', () => {
     expect(el.querySelector('.name a')!.textContent!.trim()).toBe('Value 1a2b');
     expect(el.textContent).toContain('On trial');
     expect(el.textContent).not.toMatch(/shadow/i);
-    const labels = [...el.querySelectorAll('app-follow-mode option')].map((o) =>
-      o.textContent!.replace(' (locked)', '').trim(),
+    const labels = [...el.querySelectorAll('app-follow-control .mode')].map((m) =>
+      m.textContent!.trim(),
     );
     expect(labels).toEqual(MODES.map((m) => m.label));
     expect(labels).toEqual(['Alerts only', 'Paper', 'Approve each trade', 'Automatic']);
@@ -276,7 +291,9 @@ describe('StrategiesCard', () => {
     await loading;
     const el = await render([sub()]);
     expect(el.querySelector<HTMLButtonElement>('[role="switch"]')!.disabled).toBe(true);
-    expect(modeSelect(el).disabled).toBe(true);
+    expect(el.querySelector<HTMLFieldSetElement>('app-follow-control fieldset')!.disabled).toBe(
+      true,
+    );
     expect(el.textContent).toContain('Traders and admins only.');
   });
 });

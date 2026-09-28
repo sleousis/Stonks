@@ -244,6 +244,11 @@ export class FollowControl {
   readonly strategyName = input<string | null>(null);
   /** One line on what the current mode does, with its glossary tip. */
   readonly showHelp = input(true);
+  /**
+   * In a list that says the unlock rule once above it (Today): the closed
+   * modes' line says only how far this follow has come ("Paper days: 4 of 20.").
+   */
+  readonly compact = input(false);
   /** Each change the server accepted, with the updated follow. */
   readonly changed = output<SubscriptionView>();
 
@@ -269,7 +274,9 @@ export class FollowControl {
   protected readonly name = computed(
     () => this.strategyName()?.trim() || strategyDisplayName(this.current().strategy_id),
   );
-  protected readonly blocked = computed(() => autoBlockedReason(this.current()));
+  protected readonly blocked = computed(() =>
+    autoBlockedReason(this.current(), { compact: this.compact() }),
+  );
   protected readonly modeWord = computed(() => modeLabel(this.current().mode));
   protected readonly help = computed(
     () => MODES.find((m) => m.value === this.current().mode)?.help ?? '',
