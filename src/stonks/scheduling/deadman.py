@@ -115,16 +115,26 @@ def missed_deadlines(
     now: datetime,
     *,
     not_before: datetime | None = None,
+    new_jobs_since: datetime | None = None,
 ) -> list[MissedRun]:
     """Jobs whose latest fire with a passed deadline has no ``succeeded``
     or ``skipped`` run. Fires before ``not_before`` (the scheduler's first
-    ever start) are ignored, so a fresh install doesn't alert on history."""
+    ever start) are ignored, so a fresh install doesn't alert on history.
+    For a job with no scheduled run yet (just added or switched on), fires
+    before ``new_jobs_since`` (this scheduler's start) are ignored too: the
+    catch-up never runs them either."""
     out = []
     for spec in specs:
         if spec.deadline is None:
             continue
         fire = spec.trigger.last_fire_at_or_before(now - spec.deadline, WATCHDOG_LOOKBACK)
         if fire is None or (not_before is not None and fire.scheduled_for < not_before):
+            continue
+        if (
+            new_jobs_since is not None
+            and fire.scheduled_for < new_jobs_since
+            and store.last_scheduled_for(spec.name) is None
+        ):
             continue
         run = store.get(spec.name, fire.key)
         if run is not None and run.status in DONE_STATUSES:
@@ -183,7 +193,11 @@ class DeadlineWatchdog:
     def _check_deadlines(self, now: datetime) -> list[MissedRun]:
         alerted: list[MissedRun] = []
         not_before = self._store.first_started_at()
-        for miss in missed_deadlines(self._specs, self._store, now, not_before=not_before):
+        latest = self._store.latest_instance()
+        since = latest["started_at"] if latest else None
+        for miss in missed_deadlines(
+            self._specs, self._store, now, not_before=not_before, new_jobs_since=since
+        ):
             if not self._store.mark_deadline_alerted(miss.job_name, miss.fire.key, now=now):
                 continue
             _log.error(

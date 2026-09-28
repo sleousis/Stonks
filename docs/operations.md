@@ -168,7 +168,7 @@ A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_r
 
 ### Dead-man checks
 
-- **Deadlines.** A watchdog checks every `watchdog_seconds` that each job with `deadline_minutes` succeeded (or was skipped) in time. A miss sends one error alert, recorded in `scheduler_deadline_alerts` so restarts don't repeat it.
+- **Deadlines.** A watchdog checks every `watchdog_seconds` that each job with `deadline_minutes` succeeded (or was skipped) in time. A miss sends one error alert, recorded in `scheduler_deadline_alerts` so restarts don't repeat it. A job that has never run (just added or switched on) is only watched from the scheduler's start.
 - **Pings.** With `ping_url_env`, a job POSTs `<url>/start`, then `<url>` or `<url>/fail`. The external monitor alerts when pings stop, which also covers a dead scheduler or server. Logs show only `scheme://host/***`.
 - **Engine dead-man.** The same watchdog checks each live intraday engine. When no bar close was dispatched for `[streaming.monitor] deadman_minutes` (5) while the engine's market is open, it sends one error alert per silent stretch. Silence counts from the last bar close, the engine's start or today's open, whichever is latest. A stopped engine or a closed market never alerts. The alert is recorded in `scheduler_deadline_alerts` as job `engine:<id>`, so restarts don't repeat it. `python -m stonks.scheduling check` runs it once too.
 

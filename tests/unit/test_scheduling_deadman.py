@@ -178,3 +178,26 @@ def test_watchdog_includes_the_engine_deadman_from_settings(tmp_path):
     dead = engine_deadman_from_settings(settings, store, Recorder())
     assert isinstance(dead, EngineDeadman)
     assert dead.minutes == settings.streaming.monitor.deadman_minutes
+
+
+def test_a_newly_enabled_job_does_not_alert_for_fires_before_the_restart(tmp_path):
+    """A job switched on (or added) and the scheduler restarted: fires
+    before this start were never its to run, like the catch-up says, so
+    they raise no alarm. Its first fire after the start is watched."""
+    from stonks.scheduling.triggers import DailyTrigger
+
+    store = RunStore(tmp_path / "state.sqlite")
+    store.migrate()
+    store.register_instance("old", host="h", pid=1, now=_utc(2026, 8, 1))
+    store.register_instance("new", host="h", pid=2, now=_utc(2026, 9, 25, 10))
+    backup = JobSpec(
+        "backup",
+        "backup",
+        DailyTrigger(datetime.min.time().replace(hour=5)),
+        deadline=timedelta(minutes=120),
+    )
+    notifier = Recorder()
+    dog = DeadlineWatchdog([backup], store, notifier)
+    assert dog.check(_utc(2026, 9, 25, 10, 1)) == []
+    [miss] = dog.check(_utc(2026, 9, 26, 7, 1))
+    assert miss.fire.key == "2026-09-26"

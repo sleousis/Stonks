@@ -180,7 +180,14 @@ def _cmd_check(ld: _Loaded, now: datetime) -> int:
 
     store = _store(ld.settings)
     _watchdog(ld, store, notifier_from_settings(ld.settings)).check(now)
-    misses = missed_deadlines(ld.specs, store, now, not_before=store.first_started_at())
+    latest = store.latest_instance()
+    misses = missed_deadlines(
+        ld.specs,
+        store,
+        now,
+        not_before=store.first_started_at(),
+        new_jobs_since=latest["started_at"] if latest else None,
+    )
     for m in misses:
         print(f"MISSED {m.job_name} {m.fire.key}: {m.reason}")
     return EXIT_UNHEALTHY if misses else EXIT_OK
