@@ -256,5 +256,6 @@ def test_loss_breaker_merges_tighter():
     tight = tighter_rule_settings(base, {"losing_lock": {"max_loss_pct": 0.05}})
     assert tight.losing_lock.max_loss_pct == 0.05
     assert tighter_rule_settings(tight, {"losing_lock": {"max_loss_pct": 0.2}}) == tight
+    # a longer window can hide a recent loss behind old gains: kept from the base
     longer = tighter_rule_settings(tight, {"losing_lock": {"loss_window_days": 365}})
-    assert longer.losing_lock.loss_window_days == 365
+    assert longer.losing_lock.loss_window_days == tight.losing_lock.loss_window_days

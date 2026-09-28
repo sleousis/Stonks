@@ -450,7 +450,9 @@ def test_overrides_only_tighten_the_short_rules() -> None:
     assert merged.margin_call.enabled and merged.margin_call.buffer == 0.1
     assert merged.margin_call.margin == MarginSettings(model="reg_t")
     assert merged.borrow_check.enabled
-    assert merged.squeeze_guard.spike_bars == 10
+    # the rise is measured from exactly N bars back, so a longer window is
+    # not tighter: the base window is kept
+    assert merged.squeeze_guard.spike_bars == base.squeeze_guard.spike_bars
 
 
 # ---- properties -------------------------------------------------------------------------------

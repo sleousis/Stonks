@@ -219,7 +219,9 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "max_month_loss": _min_optional,
         "max_week_loss": _min_optional,
         "max_drawdown_halt": _min_optional,
-        "week_sessions": max,
+        # the loss is measured to the value exactly N sessions back, so a
+        # longer window is not tighter: it can start from a lower value
+        "week_sessions": _keep_base,
         "cooldown": _stricter_cooldown,
     },
     "operational_halt": {"max_bar_age_days": _min_optional},
@@ -237,7 +239,8 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "max_adverse_pct": _min_optional,
         "atr_multiple": _min_optional,
         "spike_pct": _min_optional,
-        "spike_bars": max,
+        # the rise is measured from the close N bars back: not monotone in N
+        "spike_bars": _keep_base,
         "borrow": _keep_base,
     },
     "gross_exposure": {"max_gross": _min_optional},
@@ -296,7 +299,8 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "max_consecutive_losses": _min_optional,
         "lock_days": max,
         "max_loss_pct": _min_optional,
-        "loss_window_days": max,
+        # a longer window can add old gains that hide a recent loss
+        "loss_window_days": _keep_base,
     },
     "style_exposure": {"max_abs_exposure": _min_optional, "styles": union_styles},
     "protective_stops": {
