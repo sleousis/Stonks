@@ -14,15 +14,23 @@
 } @else if (!status.value().enabled) {
   <section class="panel off" aria-labelledby="off-title">
     <div class="panel-body">
-      <h2 id="off-title" class="off-title">The assistant is off</h2>
+      <span class="off-mark" aria-hidden="true">◌</span>
+      <h2 id="off-title" class="off-title">The assistant is not set up on this server</h2>
       <p>
-        It talks to a model server that your admin runs, such as Ollama, and no server is set up
-        yet.
+        Nothing is wrong, and the rest of Stonks works without it. The assistant needs a model
+        server that your admin runs on your own hardware, such as Ollama, so nothing you type ever
+        leaves your server.
       </p>
-      <p class="muted">
-        Admins: set the model server's address in the server settings and restart the server. The
-        operations guide has the steps.
-      </p>
+      @if (isAdmin()) {
+        <p class="muted">
+          For admins: start a model server, put its address in the server settings and restart the
+          server. The operations guide has the steps. This page and its menu item appear for
+          everyone once it answers.
+        </p>
+      } @else {
+        <p class="muted">If you would like to use it, ask your admin to set it up.</p>
+      }
+      <a class="btn" routerLink="/">Back to Today</a>
     </div>
   </section>
 } @else {

@@ -67,10 +67,12 @@ describe('AssistantPage', () => {
   };
   let confirm: ReturnType<typeof vi.fn>;
   let allowed: boolean;
+  let admin: boolean;
 
   beforeEach(() => {
     status = ON;
     allowed = true;
+    admin = false;
     confirm = vi.fn().mockResolvedValue(true);
     api = {
       status: vi.fn(async () => status),
@@ -93,7 +95,10 @@ describe('AssistantPage', () => {
         provideRouter([{ path: 'assistant', children: [] }]),
         { provide: AssistantService, useValue: api },
         { provide: ConfirmService, useValue: { confirm } },
-        { provide: SessionService, useValue: { can: () => allowed, whyNot: () => null } },
+        {
+          provide: SessionService,
+          useValue: { can: () => allowed, whyNot: () => null, isAdmin: () => admin },
+        },
       ],
     });
   });
@@ -131,7 +136,12 @@ describe('AssistantPage', () => {
   it('says clearly when the assistant is off, with no chat', async () => {
     status = { ...ON, enabled: false, model: null };
     await render();
-    expect(el.textContent).toContain('The assistant is off');
+    // A calm state, not an error: what it needs, who sets it up, and a way on.
+    expect(el.querySelector('h2')?.textContent).toContain('not set up on this server');
+    expect(el.textContent).toContain('Nothing is wrong');
+    expect(el.querySelector('app-error-state')).toBeNull();
+    expect(el.querySelector('a[href="/"]')?.textContent?.trim()).toBe('Back to Today');
+    expect(button('New conversation')).toBeUndefined();
     expect(el.querySelector('#assistant-message')).toBeNull();
     expect(api.conversations).not.toHaveBeenCalled();
   });
