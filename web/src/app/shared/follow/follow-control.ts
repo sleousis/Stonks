@@ -69,7 +69,11 @@ let nextId = 0;
     <fieldset class="modes" [disabled]="!current().enabled || !canManage()">
       <legend class="visually-hidden">How you follow {{ name() }}</legend>
       @for (m of modes; track m.value) {
-        <label class="mode" [class.on]="current().mode === m.value" [class.locked]="locked(m.value)">
+        <label
+          class="mode"
+          [class.on]="current().mode === m.value"
+          [class.locked]="locked(m.value)"
+        >
           <input
             type="radio"
             [name]="id + '-mode'"

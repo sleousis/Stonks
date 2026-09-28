@@ -379,9 +379,9 @@ describe('StrategyDetailPage', () => {
     await openTab('Results');
     const tiles = [...el.querySelectorAll('app-stat-tile')].map((t) => t.textContent ?? '');
     expect(tiles.join(' ')).toContain('Days on trial');
-    expect(
-      el.querySelector('a[href="/strategies/momentum-v3/tearsheet"]')?.textContent,
-    ).toContain('Printable tear sheet');
+    expect(el.querySelector('a[href="/strategies/momentum-v3/tearsheet"]')?.textContent).toContain(
+      'Printable tear sheet',
+    );
     expect(el.textContent).toContain('No real money');
   });
 
@@ -691,6 +691,10 @@ describe('strategy page helpers', () => {
 
   it('computes performance from the P&L rows', () => {
     expect(paperPerformance([])).toBeNull();
-    expect(paperPerformance(PNL)).toMatchObject({ totalReturn: 0.08, maxDrawdown: -0.05, days: 21 });
+    expect(paperPerformance(PNL)).toMatchObject({
+      totalReturn: 0.08,
+      maxDrawdown: -0.05,
+      days: 21,
+    });
   });
 });

@@ -153,7 +153,11 @@ export function checkFix(c: GoLiveCheckView, strategyId: string): CheckFix | nul
       return { text: 'Keep it on trial and watch it, or retire it if it keeps falling behind.' };
     case 'survival':
     case 'promotion_preset':
-      return labFix(strategyId, 'Run the full robustness tests in Lab.', 'Run the full tests in Lab');
+      return labFix(
+        strategyId,
+        'Run the full robustness tests in Lab.',
+        'Run the full tests in Lab',
+      );
     case 'nonzero_costs':
       return labFix(
         strategyId,

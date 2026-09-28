@@ -76,13 +76,16 @@ import { latestRealRunDay } from './tick-mode';
         </p>
 
         @if (!dryRun()) {
-          <div class="alert" role="note">
+          <div class="alert" [class.paper]="broker.hasValue() && !live()" role="note">
             @if (broker.error()) {
               Could not read the broker. A real run is blocked until it loads.
             } @else if (broker.hasValue()) {
-              Real run on the <strong>{{ brokerText() }}</strong> broker.
+              <!-- The words follow the stamp (B2): "real" only for real money. -->
               @if (live()) {
-                This account trades real money.
+                Real run on the <strong>{{ brokerText() }}</strong> broker. This account trades real
+                money.
+              } @else {
+                Paper run on the <strong>{{ brokerText() }}</strong> broker, with paper money.
               }
               You will be asked to type <strong>{{ brokerText() }}</strong> to confirm.
             } @else {
@@ -128,8 +131,8 @@ import { latestRealRunDay } from './tick-mode';
           <button
             type="submit"
             class="btn"
-            [class.btn-primary]="dryRun()"
-            [class.btn-danger]="!dryRun()"
+            [class.btn-primary]="dryRun() || !live()"
+            [class.btn-danger]="!dryRun() && live()"
             [disabled]="!canRun()"
             [attr.aria-busy]="running()"
           >
@@ -221,6 +224,10 @@ import { latestRealRunDay } from './tick-mode';
       background: var(--color-warn-soft);
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
+    }
+    .alert.paper {
+      border-left-color: var(--color-info);
+      background: var(--color-info-soft);
     }
     .actions {
       display: flex;

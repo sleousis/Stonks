@@ -79,7 +79,9 @@ describe('FollowPanel', () => {
     await tick();
     fixture.detectChanges();
     expect(el.textContent).toContain('You follow mom');
-    expect(el.querySelector<HTMLInputElement>('app-follow-control input[value="notify"]')!.checked).toBe(true);
+    expect(
+      el.querySelector<HTMLInputElement>('app-follow-control input[value="notify"]')!.checked,
+    ).toBe(true);
   });
 
   it('paper trades in the portfolio you pick', async () => {

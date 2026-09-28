@@ -75,7 +75,9 @@ export const FOLLOW_MODES = MODES.filter(
             @for (s of mine(); track s.id) {
               <li>
                 <app-follow-control [sub]="s" [strategyName]="name()" (changed)="replace($event)">
-                  <span>{{ s.portfolio_id ? 'In ' + portfolioName(s.portfolio_id) : 'Alerts' }}</span>
+                  <span>{{
+                    s.portfolio_id ? 'In ' + portfolioName(s.portfolio_id) : 'Alerts'
+                  }}</span>
                 </app-follow-control>
               </li>
             }

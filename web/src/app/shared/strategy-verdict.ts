@@ -154,10 +154,7 @@ export function strategyVerdict(input: VerdictInput): Verdict {
     ]);
   }
   if (input.golivePassed === true && !lost) {
-    return verdict('worth', [
-      'It passed the go-live check.',
-      ...(trial ? [trialLine(trial)] : []),
-    ]);
+    return verdict('worth', ['It passed the go-live check.', ...(trial ? [trialLine(trial)] : [])]);
   }
   const reasons: string[] = [];
   if (trial) reasons.push(lost ? `${trialLine(trial)} Give it more time.` : trialLine(trial));

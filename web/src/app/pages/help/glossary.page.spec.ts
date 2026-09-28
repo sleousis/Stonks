@@ -28,7 +28,7 @@ describe('GlossaryPage', () => {
   it('opens with the trading words, then the figures (UX-42)', () => {
     const { el } = render();
     const headings = [...el.querySelectorAll('section.group h2')].map((h) => h.textContent);
-    expect(headings).toEqual(['Trading words', 'Figures']);
+    expect(headings).toEqual(['Trading words', 'Product words', 'Figures']);
     const trading = el.querySelector('section.group')!;
     expect(trading.querySelector('#kill_switch')!.textContent).toContain('Kill switch');
     expect(trading.querySelector('#dry_run')).not.toBeNull();

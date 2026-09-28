@@ -116,7 +116,7 @@ describe('StrategiesCard', () => {
     const options = confirm.mock.calls[0][0];
     expect(options.ticket?.live).toBe(true);
     expect(options.ticket?.lines.map((l) => l.label)).toEqual(['Strategy', 'Portfolio', 'Mode']);
-    expect(options.ticket?.lines[2].value).toBe('Auto');
+    expect(options.ticket?.lines[2].value).toBe('Automatic');
     controller.expectNone('/api/subscriptions/sub_1');
   });
 
@@ -142,7 +142,7 @@ describe('StrategiesCard', () => {
     await tick();
     fixture.detectChanges();
     expect(radio(el, 'approve').checked).toBe(true);
-    expect(el.textContent).toContain('Each waits for your approval');
+    expect(el.textContent).toContain('waits for your approval');
   });
 
   it('from approve, auto is open once the gate passed', async () => {
@@ -222,7 +222,7 @@ describe('StrategiesCard', () => {
   it('names strategies and modes in trader words (UX-27, UX-31)', async () => {
     const el = await render([sub({ strategy_id: 'value_1a2b3c4d', strategy_status: 'shadow' })]);
     expect(el.querySelector('.name a')!.textContent!.trim()).toBe('Value 1a2b');
-    expect(el.textContent).toContain('Paper trading');
+    expect(el.textContent).toContain('On trial');
     expect(el.textContent).not.toMatch(/shadow/i);
     const labels = [...el.querySelectorAll('.mode')].map((m) => m.textContent!.trim());
     expect(labels).toEqual(MODES.map((m) => m.label));

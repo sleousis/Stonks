@@ -36,7 +36,9 @@ const BOARD: LeaderboardView = {
 describe('leaderboard labels', () => {
   it('names the status in ladder words, never Live (B1)', () => {
     expect(stageLabel({ status: 'shadow' })).toBe('On trial');
-    expect(rowVerdict(row('a', 1, { golive_passed: true, survival_passed: 4 })).label).toBe('Worth following');
+    expect(rowVerdict(row('a', 1, { golive_passed: true, survival_passed: 4 })).label).toBe(
+      'Worth following',
+    );
     expect(stageLabel({ status: 'active' })).toBe('Approved');
     expect(stageLabel({ status: 'retired' })).toBe('Retired');
     expect(rowVerdict(row('b', 1)).label).toBe('Not good enough yet');

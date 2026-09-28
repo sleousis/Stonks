@@ -2,43 +2,56 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   input,
-  linkedSignal,
   resource,
 } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
-import type { StrategySummary } from '../../api/models';
+import type { LeaderboardRow } from '../../api/models';
 import { StrategiesService } from '../../api/strategies.service';
 import { SystemService } from '../../api/system.service';
-import { formatMoney, formatPercent } from '../../core/format/format';
-import { type CheckRow, checkRow, checklistItems } from '../../shared/golive-checks';
-import { isRealMoneyBroker } from '../../shared/governance';
-import { LIFECYCLE } from '../../shared/governance-labels';
-import { HelpTip } from '../../shared/ui/help-tip';
+import { brokerName, isRealMoneyBroker } from '../../shared/governance';
+import { strategyDisplayName, strategyKindName } from '../../shared/strategy-names';
+import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { strategyDisplayName, strategyKindName } from '../strategies/strategy-format';
+import { StrategyVerdict } from '../../shared/ui/strategy-verdict';
+import { goliveLabel, rowVerdict, stageLabel } from '../strategies/leaderboard.page';
 
-export { CHECK_MEASURES, checkRow, type CheckRow } from '../../shared/golive-checks';
+const STATUS_ORDER: Record<string, number> = { shadow: 0, active: 1, retired: 2 };
 
-const STATUS_ORDER: Record<StrategySummary['status'], number> = {
-  shadow: 0,
-  active: 1,
-  retired: 2,
-};
+/** On trial and ready first (the ones to decide), then on trial, then approved. */
+export function reviewOrder(rows: readonly LeaderboardRow[]): LeaderboardRow[] {
+  const ready = (r: LeaderboardRow) => (r.status === 'shadow' && r.golive_passed ? 0 : 1);
+  return [...rows].sort(
+    (a, b) =>
+      ready(a) - ready(b) ||
+      (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3) ||
+      a.strategy_id.localeCompare(b.strategy_id),
+  );
+}
 
+/**
+ * Strategy review (`/go-live`, F54): the admin's queue of strategies on
+ * trial, each with its verdict and go-live check, and the broker an
+ * approval would send followers' orders to. Judging and approving happen on
+ * the strategy page's Review tab, so there is one place to judge a strategy
+ * (F27). An old `?strategy=<id>` link opens that tab.
+ */
 @Component({
   selector: 'app-go-live-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     RouterLink,
-    HelpTip,
     PageHeader,
+    DataTable,
+    TableCell,
     StatusPill,
+    StrategyVerdict,
     ModeStamp,
     LoadingState,
     EmptyState,
@@ -51,100 +64,70 @@ export class GoLivePage {
   private readonly strategiesApi = inject(StrategiesService);
   private readonly systemApi = inject(SystemService);
   private readonly router = inject(Router);
-  private readonly route = inject(ActivatedRoute);
 
-  /** Query param `?strategy=<id>`, so Strategies can link straight to a check. */
+  /** Query param `?strategy=<id>` from older links: opens that strategy's Review tab. */
   readonly strategy = input<string | undefined>();
-  protected readonly selectedId = linkedSignal(() => this.strategy() ?? '');
 
-  protected readonly strategies = resource({
-    loader: () => this.strategiesApi.list({ limit: 500 }),
+  constructor() {
+    effect(() => {
+      const id = this.strategy();
+      if (id) {
+        void this.router.navigate(['/strategies', id], {
+          queryParams: { tab: 'review' },
+          replaceUrl: true,
+        });
+      }
+    });
+  }
+
+  protected readonly board = resource({
+    loader: () => this.strategiesApi.leaderboard({ sort: 'return', include_retired: false }),
   });
   protected readonly broker = resource({ loader: () => this.systemApi.broker() });
-  protected readonly risk = resource({ loader: () => this.systemApi.riskPolicy() });
 
-  /** The gate's report for the selected (registered) strategy. */
-  protected readonly report = resource({
-    params: () => {
-      const s = this.selected();
-      return s ? { id: s.id } : undefined;
-    },
-    loader: ({ params }) => this.strategiesApi.golive(params.id),
-  });
-
-  protected readonly rows = computed<CheckRow[]>(() => {
-    if (!this.report.hasValue()) return [];
-    const r = this.report.value();
-    return r.checks.map((c) => checkRow(c, r.strategy_id));
-  });
-
-  protected readonly failedCount = computed(() => this.rows().filter((r) => !r.passed).length);
-
-  /** What a reviewer reads before going live; it never changes the verdict. */
-  protected readonly checklist = computed(() =>
-    this.report.hasValue() ? checklistItems(this.report.value().checklist) : [],
+  protected readonly rows = computed(() =>
+    this.board.hasValue() ? reviewOrder(this.board.value().rows) : [],
+  );
+  protected readonly readyCount = computed(
+    () => this.rows().filter((r) => r.status === 'shadow' && r.golive_passed).length,
+  );
+  protected readonly onTrial = computed(
+    () => this.rows().filter((r) => r.status === 'shadow').length,
   );
 
-  /** Paper trading first (the usual candidates), then live, then stopped. */
-  protected readonly groups = computed(() => {
-    if (!this.strategies.hasValue()) return [];
-    const items = [...this.strategies.value().items].sort(
-      (a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.id.localeCompare(b.id),
-    );
-    const labels = { shadow: 'Paper trading', active: 'Live', retired: 'Stopped' } as const;
-    return (['shadow', 'active', 'retired'] as const)
-      .map((status) => ({ label: labels[status], items: items.filter((s) => s.status === status) }))
-      .filter((g) => g.items.length > 0);
-  });
+  protected readonly columns: TableColumn<LeaderboardRow>[] = [
+    { key: 'strategy_id', label: 'Strategy', mobile: 'title', sortable: false },
+    { key: 'status', label: 'Status', value: (r) => stageLabel(r), sortable: false },
+    { key: 'verdict', label: 'Verdict', value: (r) => rowVerdict(r).label, sortable: false },
+    {
+      key: 'golive',
+      label: 'Go-live check',
+      value: (r) => goliveLabel(r.golive_passed),
+      sortable: false,
+      help: false,
+    },
+    {
+      key: 'days',
+      label: 'Days on trial',
+      value: (r) => r.paper.days,
+      format: 'number',
+      help: false,
+    },
+    {
+      key: 'return',
+      label: 'Trial return',
+      value: (r) => r.paper.total_return,
+      format: 'signedPercent',
+      tone: true,
+      mobile: 'hide',
+    },
+    { key: 'review', label: 'Review', sortable: false, align: 'end' },
+  ];
+  protected readonly rowKey = (r: LeaderboardRow) => r.strategy_id;
 
-  protected readonly selected = computed<StrategySummary | null>(() => {
-    const id = this.selectedId();
-    if (!id || !this.strategies.hasValue()) return null;
-    return this.strategies.value().items.find((s) => s.id === id) ?? null;
-  });
-
-  /** Selected id that is not in the registry (a stale link). */
-  protected readonly unknownId = computed(() => {
-    const id = this.selectedId();
-    return id && this.strategies.hasValue() && !this.selected() ? id : null;
-  });
-
-  protected readonly goLiveLabel = LIFECYCLE.live.label;
-  protected readonly kindName = strategyKindName;
-  protected readonly displayName = strategyDisplayName;
+  protected readonly name = strategyDisplayName;
+  protected readonly kind = strategyKindName;
+  protected readonly verdict = rowVerdict;
   protected readonly realMoney = isRealMoneyBroker;
-
-  protected readonly riskRows = computed(() => {
-    if (!this.risk.hasValue()) return [];
-    const r = this.risk.value();
-    const rows = [
-      { label: 'Enforced', value: r.enabled === false ? 'No' : 'Yes' },
-      {
-        label: 'Max weight per ticker',
-        value: formatPercent(r.max_weight_per_ticker, { digits: 1 }),
-      },
-      {
-        label: 'Max open positions',
-        value: r.max_open_positions == null ? 'No limit' : String(r.max_open_positions),
-      },
-      { label: 'Cash buffer', value: formatPercent(r.cash_buffer_fraction, { digits: 1 }) },
-      { label: 'Min order', value: formatMoney(r.min_order_notional) },
-    ];
-    for (const [cls, w] of Object.entries(r.max_weight_per_asset_class ?? {})) {
-      rows.push({ label: `Max weight, ${cls}`, value: formatPercent(w, { digits: 1 }) });
-    }
-    return rows;
-  });
-
-  protected onSelect(event: Event): void {
-    const id = (event.target as HTMLSelectElement).value;
-    this.selectedId.set(id);
-    this.router
-      .navigate([], {
-        relativeTo: this.route,
-        queryParams: { strategy: id || null },
-        replaceUrl: true,
-      })
-      .catch(() => undefined);
-  }
+  protected readonly brokerName = brokerName;
 }

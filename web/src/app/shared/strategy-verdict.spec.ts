@@ -78,12 +78,12 @@ describe('strategyVerdict (F33)', () => {
   });
 
   it('falls back to the robustness tests without a go-live report', () => {
-    expect(strategyVerdict({ status: 'retired', golive: null, tests: { passed: 3, total: 4 } }).level).toBe(
-      'not_yet',
-    );
-    expect(strategyVerdict({ status: 'shadow', golive: null, golivePassed: true, trial }).level).toBe(
-      'worth',
-    );
+    expect(
+      strategyVerdict({ status: 'retired', golive: null, tests: { passed: 3, total: 4 } }).level,
+    ).toBe('not_yet');
+    expect(
+      strategyVerdict({ status: 'shadow', golive: null, golivePassed: true, trial }).level,
+    ).toBe('worth');
     const none = strategyVerdict({ status: 'shadow', golive: null });
     expect(none.level).toBe('promising');
     expect(none.reasons).toContain('It has no trial record yet.');

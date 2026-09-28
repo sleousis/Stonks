@@ -263,7 +263,9 @@ export class StageBar {
   protected readonly next = computed<NextStep>(() => {
     switch (this.current()) {
       case 'retired':
-        return { text: `Retired: it no longer decides. Use ${LIFECYCLE.paper.label} to test it again.` };
+        return {
+          text: `Retired: it no longer decides. Use ${LIFECYCLE.paper.label} to test it again.`,
+        };
       case 'draft':
         return {
           text: `A draft. Use ${LIFECYCLE.paper.label} to have the system test it on real data.`,

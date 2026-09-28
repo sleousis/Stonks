@@ -141,7 +141,9 @@ describe('TearsheetPage', () => {
     expect(el.querySelector('h1')?.textContent).toContain('mom_v2');
     expect(el.textContent).toContain('Momentum. On trial.');
     // Only trial days are short: promising, not yet judged (F33).
-    expect(el.querySelector('app-strategy-verdict')?.textContent).toContain('Promising, needs more data');
+    expect(el.querySelector('app-strategy-verdict')?.textContent).toContain(
+      'Promising, needs more data',
+    );
     expect(el.textContent).toContain('Sharpe');
     expect(el.textContent).toContain('Failed');
     expect(el.textContent).toContain('first paper run');

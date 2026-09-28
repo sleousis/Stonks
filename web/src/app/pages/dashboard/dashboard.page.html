@@ -62,8 +62,8 @@
     <app-stat-tile
       label="Strategies"
       [loading]="strategyCounts.isLoading() && !strategyCounts.hasValue()"
-      [value]="strategyCounts.hasValue() ? strategyCounts.value().active + ' live' : '–'"
-      [detail]="strategyCounts.hasValue() ? strategyCounts.value().shadow + ' paper trading' : null"
+      [value]="strategyCounts.hasValue() ? strategyCounts.value().active + ' approved' : '–'"
+      [detail]="strategyCounts.hasValue() ? strategyCounts.value().shadow + ' on trial' : null"
     />
   </section>
 }

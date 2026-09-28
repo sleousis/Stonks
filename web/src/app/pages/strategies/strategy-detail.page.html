@@ -248,9 +248,7 @@
                       } @else {
                         <span class="kind">{{ h.kind }}</span>
                       }
-                      <time class="num muted" [attr.datetime]="h.when">{{
-                        dateTime(h.when)
-                      }}</time>
+                      <time class="num muted" [attr.datetime]="h.when">{{ dateTime(h.when) }}</time>
                     </p>
                     <p class="reason">{{ h.reason || 'No reason given.' }}</p>
                     <p class="entry-meta">
@@ -355,7 +353,9 @@
               title="No robustness tests yet"
               message="Results are saved when a Lab run tests this strategy (out of sample, period stability, perturbation, drift). Test it again in Lab to add them."
             >
-              <a routerLink="/lab" [queryParams]="{ strategy: s.id }" class="btn">Test again in Lab</a>
+              <a routerLink="/lab" [queryParams]="{ strategy: s.id }" class="btn"
+                >Test again in Lab</a
+              >
             </app-empty-state>
           } @else {
             <ul class="reports">
@@ -551,7 +551,9 @@
             </div>
             <div>
               <dt>Kind</dt>
-              <dd><span class="class-name">{{ kindName() }}</span></dd>
+              <dd>
+                <span class="class-name">{{ kindName() }}</span>
+              </dd>
             </div>
             <div>
               <dt>Trades</dt>

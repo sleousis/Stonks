@@ -131,7 +131,9 @@ describe('ModelVersionsPanel', () => {
     post.flush({ ...CANDIDATE_V2, status: 'live' });
     await reloads([modelArchived(), { ...CANDIDATE_V2, status: 'live' }]);
     await settle();
-    expect(success).toHaveBeenCalledWith(expect.stringContaining('in use from the next trading run'));
+    expect(success).toHaveBeenCalledWith(
+      expect.stringContaining('in use from the next trading run'),
+    );
   });
 
   it('asks for an override with a 20 character reason when the check fails', async () => {
