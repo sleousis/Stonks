@@ -283,6 +283,13 @@ class DataEnsurer:
     ) -> _Plan:
         tickers = list(dict.fromkeys(tickers))
         plan = _Plan()
+        if not interval.is_intraday and interval != Interval.DAY_1:
+            # sources serve daily and native intraday bars; coarser ones are
+            # aggregated from them (``stonks ingest aggregate``)
+            plan.warnings.append(
+                f"{interval.code} bars are not fetched: ensure 1d bars and aggregate them"
+            )
+            return plan
         if interval.is_intraday and not self._limits.intraday:
             plan.warnings.append(
                 f"the {self._source.source_id} plan serves no intraday bars: nothing fetched"

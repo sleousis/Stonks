@@ -587,3 +587,16 @@ def test_a_mid_session_intraday_ensure_leaves_no_hole():
         assert pd.to_datetime(stored["timestamp"]).dt.hour.tolist() == list(range(14, 20))
     finally:
         lake.close()
+
+
+def test_a_coarser_than_daily_interval_is_refused_with_a_warning(lake):
+    # vendors serve daily and native intraday bars only: a weekly ensure
+    # must not ask the intraday endpoint (EODHD raises ValueError there)
+    from stonks.ingest.sources.eodhd import EodhdDataSource
+
+    source = EodhdDataSource(api_key="test-key")
+    report = DataEnsurer(lake, source, EnsureSettings(), today=TODAY).ensure(
+        ["A.US"], date(2025, 6, 2), date(2025, 6, 30), Interval.WEEK_1
+    )
+    assert report.run_id is None and report.gaps == 0
+    assert any("1w" in w for w in report.warnings)
