@@ -187,7 +187,12 @@
   @if (showSystem()) {
     <section class="column group span-6" aria-labelledby="system-group">
       <h2 id="system-group" class="group-title">System</h2>
-      <p class="group-note">Only admins see this. Changes are made on the server.</p>
+      <p class="group-note">
+        Only admins see this. The broker, data keys and the data plan are set on the server.
+      </p>
+
+      <!-- Editable operational settings: shows only when the server offers them. -->
+      <app-system-settings />
 
       <!-- Broker ---------------------------------------------------------------->
       <section class="panel" aria-labelledby="broker-title">

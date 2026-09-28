@@ -22,6 +22,7 @@ import { type ThemeMode, ThemeService } from '../../core/theme/theme.service';
 import { DisplayPrefs } from '../../shared/ui/display-prefs';
 import { NotificationPrefs } from '../../shared/ui/notification-prefs';
 import { TelegramLink } from './telegram-link';
+import { SystemSettings } from './system-settings';
 import { NotificationSettings } from '../../shared/ui/notification-settings';
 import { RiskLimitsPanel } from '../../shared/ui/risk-limits-panel';
 import { PageHeader } from '../../shared/ui/page-header';
@@ -46,6 +47,7 @@ interface CostRow {
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    SystemSettings,
     DisplayPrefs,
     RiskLimitsPanel,
     NotificationPrefs,
