@@ -85,8 +85,9 @@ class PortfolioHookContext:
     tick_id: str
     as_of: date
     portfolio_id: str
-    #: The book after this tick's orders (simulated fills applied; for an
-    #: external broker, the account as fetched after placing).
+    #: The book's own positions after this tick's orders (simulated fills
+    #: applied; for an external broker, the account as fetched after
+    #: placing), without the owner's manual or external holdings.
     portfolio: Portfolio
     prices: Mapping[str, float]
     pipeline: PipelineResult | None

@@ -1724,7 +1724,14 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             if financing is not None:
                 record_accrual(state, portfolio_id, as_of, financing, tick_id=tick_id)
             _snapshot_portfolio(state, tick_id, after, marks, as_of, portfolio_id=scope)
-            hook_summary = hooks(after, marks)
+            # attribution counts the book's own shares, never the owner's
+            if connection:
+                own_after = Portfolio(cash=after.cash, positions=own_view(after))
+            elif manual_holdings:
+                own_after = strip_holdings(after, manual_holdings)[0]
+            else:
+                own_after = after
+            hook_summary = hooks(own_after, marks)
     elif not dry_run:
         with state.transaction():
             record_open_fills(state, paper, portfolio_id=scope)
@@ -1750,7 +1757,8 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             )
             whole = merge_holdings(portfolio, manual_holdings) if manual_holdings else portfolio
             _snapshot_portfolio(state, tick_id, whole, prices, as_of, portfolio_id=scope)
-            hook_summary = hooks(whole, prices)
+            # attribution counts the book's own shares, never the owner's
+            hook_summary = hooks(portfolio, prices)
 
     rejected = [order.ticker for order, st, _ in outcomes if st == "rejected"]
     if rejected:
