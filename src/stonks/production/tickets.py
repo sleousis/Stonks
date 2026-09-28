@@ -19,7 +19,7 @@ awaiting_approval --approve (step-up)--> approved --submit--> submitted --> fill
   subscription (``hold = approve_mode``), every close of a runaway run,
   even in auto (``hold = runaway``), and every short opening order for a
   hard to borrow name, even in auto (``hold = hard_to_borrow``, roadmap
-  19.16).
+  19.16), and every live option order (``hold = options``, roadmap 17.8).
 - A ticket carries its order's client id, so it becomes that order at the
   broker and is idempotent like any order. One ticket per client id: a
   same-day re-run of the tick leaves the first ticket as it is.
@@ -58,8 +58,9 @@ TicketStatus = Literal[
     "cancelled",
     "failed",
 ]
-#: Why a ticket waits for a person.
-Hold = Literal["approve_mode", "runaway", "hard_to_borrow"]
+#: Why a ticket waits for a person. ``options``: every live option order
+#: waits by default (roadmap 17.8, migration 046).
+Hold = Literal["approve_mode", "runaway", "hard_to_borrow", "options"]
 
 TICKET_STATUSES: tuple[str, ...] = get_args(TicketStatus)
 #: Tickets nothing has been sent for yet.

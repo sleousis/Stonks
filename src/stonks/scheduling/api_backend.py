@@ -492,6 +492,14 @@ def api_live_submit(ctx: RunContext) -> JobOutcome:
     return live_submit_action(ctx)
 
 
+@API_ACTIONS.register("options_live")
+def api_options_live(ctx: RunContext) -> JobOutcome:
+    """Live options read the state DB and the broker only (roadmap 17.8)."""
+    from stonks.scheduling.local import options_live_action
+
+    return options_live_action(ctx)
+
+
 @API_ACTIONS.register("live_stops")
 def api_live_stops(ctx: RunContext) -> JobOutcome:
     """Protective stops live in the state DB and at the broker, so every
