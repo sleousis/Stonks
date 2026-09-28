@@ -77,7 +77,8 @@ def test_tick_fills_through_the_configured_cost_model(tmp_path, lake_trending):
         tmp_path, lake_trending, BuyAndHold({"ticker": "UP.US", "allocation": 0.5})
     )
     settings = Settings(
-        production={"slippage_bps": 50.0, "fee_per_trade": 9.0}, backtest={"costs": MODEL}
+        production={"slippage_bps": 50.0, "fee_per_trade": 9.0, "paper_fills": "close"},
+        backtest={"costs": MODEL},
     )
     run_tick(state, lake_trending, registry, build_tick_settings(settings, ["UP.US"]), as_of=AS_OF)
 
@@ -111,12 +112,53 @@ def test_legacy_production_costs_apply_when_backtest_costs_are_unset(tmp_path, l
     state, registry = _env(
         tmp_path, lake_trending, BuyAndHold({"ticker": "UP.US", "allocation": 0.5})
     )
-    settings = Settings(production={"slippage_bps": 50.0, "fee_per_trade": 9.0})
+    settings = Settings(
+        production={"slippage_bps": 50.0, "fee_per_trade": 9.0, "paper_fills": "close"}
+    )
     run_tick(state, lake_trending, registry, build_tick_settings(settings, ["UP.US"]), as_of=AS_OF)
 
     fill = _fill(state)
     assert fill["price"] == pytest.approx(_close(AS_OF) * 1.005)
     assert fill["fee"] == pytest.approx(9.0)
+    state.close()
+
+
+def test_the_configured_paper_book_fills_at_the_next_open(tmp_path, lake_trending):
+    """P21: by default a paper order decided at a close stays working and
+    the next tick fills it at the next session's open."""
+    state, registry = _env(
+        tmp_path, lake_trending, BuyAndHold({"ticker": "UP.US", "allocation": 0.5})
+    )
+    settings = build_tick_settings(Settings(backtest={"costs": MODEL}), ["UP.US"])
+    assert settings.paper_fills == "next_open"
+    run_tick(state, lake_trending, registry, settings, as_of=AS_OF)
+    assert state.sql("SELECT COUNT(*) AS n FROM fills")[0]["n"] == 0
+    [order] = state.sql("SELECT status, state FROM orders")
+    assert (order["status"], order["state"]) == ("pending", "accepted")
+
+    monday = date(2026, 3, 23)
+    run_tick(state, lake_trending, registry, settings, as_of=monday)
+    [fill] = state.sql("SELECT price, filled_at, arrival_price FROM fills")
+    assert fill["filled_at"].startswith("2026-03-23")
+    assert fill["arrival_price"] == pytest.approx(_close(monday))  # the open (= close here)
+    assert fill["price"] > _close(monday)  # the buy paid the modelled costs on top
+    state.close()
+
+
+def test_a_kill_switch_cancels_a_working_paper_order(tmp_path, lake_trending):
+    from stonks.production.halts import trip_halt
+
+    state, registry = _env(
+        tmp_path, lake_trending, BuyAndHold({"ticker": "UP.US", "allocation": 0.5})
+    )
+    settings = build_tick_settings(Settings(), ["UP.US"])
+    run_tick(state, lake_trending, registry, settings, as_of=AS_OF)
+    trip_halt(state, "kill", reason="stop", actor="user:usr_owner", scope="global", halt="all")
+    run_tick(state, lake_trending, registry, settings, as_of=date(2026, 3, 23))
+    assert state.sql("SELECT COUNT(*) AS n FROM fills")[0]["n"] == 0
+    [order] = state.sql("SELECT status, status_reason FROM orders")
+    assert order["status"] == "cancelled"
+    assert order["status_reason"] == "cancelled by a halt (all)"
     state.close()
 
 

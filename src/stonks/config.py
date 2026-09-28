@@ -267,6 +267,11 @@ class ProductionConfig(BaseModel):
     # Which strategies keep a model book: "shadow" (only shadow strategies)
     # or "all" non-retired ones (design section 5).
     model_books: Literal["shadow", "all"] = "shadow"
+    # How paper books and model books fill (P21): "next_open" keeps an order
+    # working and fills it at the next session's open through
+    # [backtest.execution] and [backtest.costs], as a backtest does.
+    # "close" fills at once at the latest close (the old convention).
+    paper_fills: Literal["next_open", "close"] = "next_open"
     # Trade one book per portfolio from its paper/auto subscriptions (and
     # record notify signals). pf_default follows every active strategy: a
     # promotion subscribes it (accounts.default_book), so it trades like

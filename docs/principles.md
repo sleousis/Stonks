@@ -94,7 +94,7 @@ Enforced: today impact is `impact_bps·sqrt(q/volume)` with no volatility term a
 
 **P21. The backtest fills orders the way we trade live.**
 Why: a backtest filled at the open and a live order filled at some intraday price measure different things (Johnson).
-Enforced: the backtest and the simulated tick share one cost model. The one convention gap left is the fill price: the backtest fills at the next bar's open, and the simulated tick fills at the latest close (the tick's broker factory in `production/tick.py`). BL-32 records that gap in TCA. Alpaca auction orders are deferred because the owner does not want Alpaca yet.
+Enforced: the backtest, paper books and model books fill the same way. An order decided at a close stays working and fills at the next session's open, through the same `SimulatedBroker`, fill model (`[backtest.execution]`: participation cap, gap guard, limit orders) and cost model (`[backtest.costs]`). The next decision replaces what did not fill, as a backtest replaces its queue (`production/paper_fills.py`, `[production] paper_fills = "next_open"`). `tests/integration/test_paper_fill_parity.py` checks that one strategy gets the same fills in the paper tick and in a backtest, for the paper book and the model book. TCA's `convention` cost is zero for paper books. Live books send before the next open (tickets and the submit window). Manual paper orders still fill at the latest close: they have no backtest to match and stay out of every strategy's record.
 
 **P22. Every order records what it was supposed to cost and what it did cost.**
 Why: you can't calibrate a cost model you never measure (Kissell; Bacidore; Perold's implementation shortfall).

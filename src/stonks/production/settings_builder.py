@@ -126,6 +126,8 @@ def build_tick_settings(
         parallel_min_estimates=p.parallel_min_estimates,
         universe_id=p.universe if isinstance(p.universe, str) and not scoped else None,
         live=p.live,
+        paper_fills=p.paper_fills,
+        execution=settings.backtest.execution,
     )
 
 

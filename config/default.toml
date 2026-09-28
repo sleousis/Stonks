@@ -36,6 +36,11 @@ dividend_withholding_rate = 0.0
 # Which strategies keep a model book each tick: "shadow" (shadow strategies
 # only) or "all" non-retired strategies.
 model_books = "shadow"
+# How paper and model books fill (principle P21). "next_open": an order
+# decided at the close stays working and fills at the next session's open
+# through [backtest.execution] and [backtest.costs], as a backtest does. The
+# next tick books it. "close": fill at once at the latest close (old).
+paper_fills = "next_open"
 # true: trade one book per portfolio from its paper/auto subscriptions (and
 # record notify-mode signals). A promotion subscribes pf_default to the
 # strategy, so the default book still trades every active strategy.

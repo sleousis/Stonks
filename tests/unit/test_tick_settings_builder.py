@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from stonks.backtest.costs import CostModelSettings
+from stonks.backtest.fills import ExecutionSettings, FillModelSettings
 from stonks.config import Settings
 from stonks.lab.parallel import default_max_workers
 from stonks.notify import CompositeNotifier
@@ -42,7 +43,18 @@ def test_build_tick_settings_maps_every_production_field():
         shadow_enabled=False,
         broker_kind="simulated",
         scoring_workers=default_max_workers(),  # scoring_workers = 0: every core
+        paper_fills="next_open",
+        execution=settings.backtest.execution,
     )
+
+
+def test_paper_fills_and_the_execution_settings_reach_the_tick_settings():
+    settings = _settings()
+    settings.production.paper_fills = "close"
+    settings.backtest.execution = ExecutionSettings(fill=FillModelSettings(max_participation=0.2))
+    built = build_tick_settings(settings, ["A.US"])
+    assert built.paper_fills == "close"
+    assert built.execution == settings.backtest.execution
 
 
 def test_scoring_workers_reach_the_tick_settings():

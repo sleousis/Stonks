@@ -23,7 +23,9 @@ The unfilled part of an order costs ``opportunity = s (C - D) u``, with
 ``C`` the close of the session after the decision and ``u`` the unfilled
 quantity. ``convention = s (A - B) q``, with ``B`` the next session's open
 (the price a backtest fills at), measures how far the live fill convention
-sits from the backtest's (P21): positive means live paid more.
+sits from the backtest's (P21): positive means live paid more. A paper
+book fills at that open (``production.paper_fills``) and records it as the
+arrival, so its convention cost is zero.
 
 Positive numbers are costs; a favourable move is negative. Aggregates
 (:func:`summarize`) add currency and divide by the summed notional, so
