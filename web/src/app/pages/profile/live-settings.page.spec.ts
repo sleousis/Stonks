@@ -279,6 +279,13 @@ describe('LiveSettingsPage', () => {
     expect(el.querySelector('[data-testid="allocation-figure"]')?.textContent).toContain('2,500');
   });
 
+  it('names the allocation reason apart from the options level reason', async () => {
+    const el = await render();
+    expect(el.querySelector('label[for="allocation-reason"]')?.textContent?.trim()).toBe(
+      'Reason for the allocation',
+    );
+  });
+
   it('needs a reason before anything is sent', async () => {
     const el = await render();
     type(el, '#allocation-amount', '100');

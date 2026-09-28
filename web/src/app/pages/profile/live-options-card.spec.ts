@@ -113,6 +113,13 @@ describe('LiveOptionsCard', () => {
     expect(el.querySelector('[data-testid="options-level"]')?.textContent).toContain('Covered');
   });
 
+  it('names its reason apart from the allocation reason', async () => {
+    const el = await render();
+    expect(el.querySelector('label[for="options-level-reason"]')?.textContent?.trim()).toBe(
+      'Reason for the options level',
+    );
+  });
+
   it('needs a reason and a change before it asks', async () => {
     const el = await render();
     radio(el, 'Spreads').click();
