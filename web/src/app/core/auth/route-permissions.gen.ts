@@ -108,6 +108,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'POST /api/lab/runs': 'lab.run',
   'POST /api/lab/signal-ic': 'lab.run',
   'POST /api/lab/sweeps': 'lab.run',
+  'POST /api/lab/verify': 'lab.run',
   'POST /api/lab/worker/claim': 'lab.worker',
   'POST /api/lab/worker/jobs/{job_id}/complete': 'lab.worker',
   'POST /api/lab/worker/jobs/{job_id}/heartbeat': 'lab.worker',

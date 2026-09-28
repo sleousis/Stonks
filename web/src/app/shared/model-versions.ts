@@ -1,4 +1,5 @@
 import type {
+  CalibrationView,
   ModelVersionView,
   SwapCheckView,
   SwapReportView,
@@ -83,6 +84,31 @@ export function swapCheckRow(c: SwapCheckView): SwapCheckRow {
     value,
     limit,
     detail: c.detail,
+  };
+}
+
+/** One version's live calibration, formatted (roadmap 23.9). */
+export interface CalibrationRow {
+  version: number;
+  resolved: string;
+  brier: string;
+  baseRate: string;
+  skill: string;
+  ece: string;
+  /** Beats always forecasting the base rate (null until resolved). */
+  beatsBaseRate: boolean | null;
+}
+
+export function calibrationRow(c: CalibrationView): CalibrationRow {
+  const num = (v: number | null, digits = 3) => (v == null ? MISSING : formatNumber(v, { digits }));
+  return {
+    version: c.version,
+    resolved: `${formatNumber(c.n_resolved, { digits: 0 })} of ${formatNumber(c.n_forecasts, { digits: 0 })}`,
+    brier: num(c.brier),
+    baseRate: num(c.brier_base_rate),
+    skill: num(c.skill, 2),
+    ece: num(c.ece),
+    beatsBaseRate: c.skill == null ? null : c.skill > 0,
   };
 }
 

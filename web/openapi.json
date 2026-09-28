@@ -1805,6 +1805,115 @@
         "title": "CalendarView",
         "type": "object"
       },
+      "CalibrationView": {
+        "description": "Live calibration of a classifier version's probability forecasts\n(roadmap 23.9): Brier score against always forecasting the base rate,\nthe reliability table and the expected calibration error. Empty for a\nmodel that forecasts no probabilities.",
+        "properties": {
+          "base_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Rate"
+          },
+          "bins": {
+            "items": {
+              "$ref": "#/components/schemas/ReliabilityBinView"
+            },
+            "title": "Bins",
+            "type": "array"
+          },
+          "brier": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brier"
+          },
+          "brier_base_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brier Base Rate"
+          },
+          "ece": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ece"
+          },
+          "mean_forecast": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Forecast"
+          },
+          "n_forecasts": {
+            "title": "N Forecasts",
+            "type": "integer"
+          },
+          "n_resolved": {
+            "title": "N Resolved",
+            "type": "integer"
+          },
+          "skill": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill"
+          },
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "version",
+          "n_forecasts",
+          "n_resolved",
+          "brier",
+          "brier_base_rate",
+          "skill",
+          "base_rate",
+          "mean_forecast",
+          "ece",
+          "bins"
+        ],
+        "title": "CalibrationView",
+        "type": "object"
+      },
       "CapitalRampSettings": {
         "additionalProperties": false,
         "properties": {
@@ -3607,6 +3716,7 @@
                     "cpcv",
                     "crisis",
                     "cross_instrument",
+                    "data_snooping",
                     "deflated_sharpe",
                     "drift",
                     "event_study",
@@ -3651,6 +3761,7 @@
                     "cpcv",
                     "crisis",
                     "cross_instrument",
+                    "data_snooping",
                     "deflated_sharpe",
                     "drift",
                     "event_study",
@@ -8681,6 +8792,7 @@
                     "cpcv",
                     "crisis",
                     "cross_instrument",
+                    "data_snooping",
                     "deflated_sharpe",
                     "drift",
                     "event_study",
@@ -8725,6 +8837,7 @@
                     "cpcv",
                     "crisis",
                     "cross_instrument",
+                    "data_snooping",
                     "deflated_sharpe",
                     "drift",
                     "event_study",
@@ -17770,6 +17883,53 @@
         "title": "RecoveryCodesView",
         "type": "object"
       },
+      "ReliabilityBinView": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "lower": {
+            "title": "Lower",
+            "type": "number"
+          },
+          "mean_forecast": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Forecast"
+          },
+          "observed_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed Rate"
+          },
+          "upper": {
+            "title": "Upper",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lower",
+          "upper",
+          "count",
+          "mean_forecast",
+          "observed_rate"
+        ],
+        "title": "ReliabilityBinView",
+        "type": "object"
+      },
       "ResearchProposalView": {
         "properties": {
           "arguments": {
@@ -23084,6 +23244,7 @@
                     "cpcv",
                     "crisis",
                     "cross_instrument",
+                    "data_snooping",
                     "deflated_sharpe",
                     "drift",
                     "event_study",
@@ -23128,6 +23289,7 @@
                     "cpcv",
                     "crisis",
                     "cross_instrument",
+                    "data_snooping",
                     "deflated_sharpe",
                     "drift",
                     "event_study",
@@ -25898,6 +26060,228 @@
           "public_key"
         ],
         "title": "VapidKeyView",
+        "type": "object"
+      },
+      "VerifyReportView": {
+        "properties": {
+          "changed_tickers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Tickers",
+            "type": "array"
+          },
+          "class_path": {
+            "title": "Class Path",
+            "type": "string"
+          },
+          "code_changed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Changed"
+          },
+          "config_changed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Config Changed"
+          },
+          "current_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Score"
+          },
+          "data_changed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Changed"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "moved": {
+            "title": "Moved",
+            "type": "boolean"
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective"
+          },
+          "restated_tickers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Restated Tickers",
+            "type": "array"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "score_delta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Delta"
+          },
+          "stored_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stored Score"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "tolerance": {
+            "title": "Tolerance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "target",
+          "kind",
+          "class_path",
+          "run_id",
+          "objective",
+          "tolerance",
+          "stored_score",
+          "current_score",
+          "score_delta",
+          "moved",
+          "data_changed",
+          "changed_tickers",
+          "config_changed",
+          "code_changed",
+          "error"
+        ],
+        "title": "VerifyReportView",
+        "type": "object"
+      },
+      "VerifyRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "alert": {
+            "default": false,
+            "title": "Alert",
+            "type": "boolean"
+          },
+          "targets": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Targets",
+            "type": "array"
+          },
+          "tolerance": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tolerance"
+          }
+        },
+        "title": "VerifyRequest",
+        "type": "object"
+      },
+      "VerifyResultView": {
+        "properties": {
+          "alerted": {
+            "default": false,
+            "title": "Alerted",
+            "type": "boolean"
+          },
+          "checked": {
+            "title": "Checked",
+            "type": "integer"
+          },
+          "moved": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Moved",
+            "type": "array"
+          },
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/VerifyReportView"
+            },
+            "title": "Reports",
+            "type": "array"
+          }
+        },
+        "required": [
+          "checked",
+          "moved",
+          "reports"
+        ],
+        "title": "VerifyResultView",
         "type": "object"
       },
       "VerifyView": {
@@ -37255,6 +37639,189 @@
           }
         ],
         "summary": "Get Sweep Result",
+        "tags": [
+          "lab"
+        ]
+      }
+    },
+    "/api/lab/verify": {
+      "post": {
+        "description": "Queue a rerun of lab runs or strategies from their stored manifests\n(every strategy of ``[lab.verify].statuses`` when ``targets`` is empty).\nFetch the result from ``GET /api/lab/verify/jobs/{job_id}/result``.",
+        "operationId": "startLabVerify",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/VerifyRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start Verify",
+        "tags": [
+          "lab"
+        ],
+        "x-permission": "lab.run"
+      }
+    },
+    "/api/lab/verify/jobs/{job_id}/result": {
+      "get": {
+        "description": "The result of a succeeded verify job (409 until it has succeeded):\nper target, the stored and rerun score, whether it moved, and the\ntickers whose data changed.",
+        "operationId": "getLabVerifyResult",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyResultView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Verify Result",
         "tags": [
           "lab"
         ]
@@ -48824,6 +49391,105 @@
           }
         ],
         "summary": "Version History",
+        "tags": [
+          "model-versions"
+        ]
+      }
+    },
+    "/api/strategies/{strategy_id}/versions/{version}/calibration": {
+      "get": {
+        "description": "Live calibration of a classifier version's forecasts (roadmap 23.9):\nBrier score, base rate and reliability table.",
+        "operationId": "getModelCalibration",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "strategy_id",
+            "required": true,
+            "schema": {
+              "title": "Strategy Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "maximum": 1000000,
+              "minimum": 1,
+              "title": "Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalibrationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Model Calibration",
         "tags": [
           "model-versions"
         ]

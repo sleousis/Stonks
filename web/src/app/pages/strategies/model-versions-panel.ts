@@ -20,6 +20,7 @@ import { formatDateTime, formatPercent } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import {
   SWAP_OVERRIDE_MIN_REASON,
+  calibrationRow,
   compareBooks,
   eventWords,
   newestFirst,
@@ -177,6 +178,38 @@ import { StatusPill } from '../../shared/ui/status-pill';
                   }
                 </ul>
               </div>
+
+              @if (calibrationRows().length) {
+                <div class="calibration" aria-labelledby="calibration-title">
+                  <h4 id="calibration-title">Forecast calibration</h4>
+                  <p class="muted">
+                    How well each model's win probabilities matched what happened. A lower Brier
+                    score is better. Skill above 0 beats always guessing the base rate.
+                  </p>
+                  <ul class="checks" aria-label="Forecast calibration">
+                    @for (row of calibrationRows(); track row.version) {
+                      <li>
+                        <app-status-pill
+                          [status]="
+                            row.beatsBaseRate === null
+                              ? 'pending'
+                              : row.beatsBaseRate
+                                ? 'pass'
+                                : 'fail'
+                          "
+                          [label]="'v' + row.version"
+                        />
+                        <span class="check-label">{{ row.resolved }} resolved</span>
+                        <span class="num check-value">Brier {{ row.brier }}</span>
+                        <span class="num muted">base rate {{ row.baseRate }}</span>
+                        <span class="check-detail">
+                          Skill {{ row.skill }}, calibration error {{ row.ece }}
+                        </span>
+                      </li>
+                    }
+                  </ul>
+                </div>
+              }
 
               <div class="actions">
                 <button
@@ -396,9 +429,14 @@ import { StatusPill } from '../../shared/ui/status-pill';
     .loss {
       color: var(--color-loss);
     }
-    .swap-check {
+    .swap-check,
+    .calibration {
       display: grid;
       gap: var(--space-2);
+    }
+    .calibration h4,
+    .calibration p {
+      margin: 0;
     }
     .checks {
       display: grid;
@@ -524,6 +562,24 @@ export class ModelVersionsPanel {
     this.check.hasValue() ? this.check.value().checks.map(swapCheckRow) : [],
   );
   protected readonly passedCount = computed(() => this.checkRows().filter((c) => c.passed).length);
+
+  /** Live calibration of the live and candidate models (roadmap 23.9). */
+  protected readonly calibration = resource({
+    params: () => {
+      const c = this.candidate();
+      if (!c || !this.versions.hasValue()) return undefined;
+      const live = this.versions.value().find((v) => v.status === 'live');
+      const ids = live ? [live.version, c.version] : [c.version];
+      return { id: c.strategy_id, versions: ids };
+    },
+    loader: ({ params }) =>
+      Promise.all(params.versions.map((v) => this.api.calibration(params.id, v))),
+  });
+  protected readonly calibrationRows = computed(() => {
+    if (!this.calibration.hasValue()) return [];
+    const views = this.calibration.value();
+    return views.some((c) => c.n_forecasts > 0) ? views.map(calibrationRow) : [];
+  });
 
   protected readonly canPromote = computed(() => this.session.can('strategy.promote'));
   protected readonly busy = signal<'swap' | 'reject' | null>(null);

@@ -92,7 +92,52 @@ describe('ModelVersionsPanel', () => {
     })();
   }
 
-  afterEach(() => http.verify());
+  function calibration(version: number, resolved = 0) {
+    return {
+      strategy_id: MODEL_ID,
+      version,
+      n_forecasts: resolved ? resolved + 2 : 0,
+      n_resolved: resolved,
+      brier: resolved ? 0.18 : null,
+      brier_base_rate: resolved ? 0.25 : null,
+      skill: resolved ? 0.28 : null,
+      base_rate: resolved ? 0.5 : null,
+      mean_forecast: resolved ? 0.6 : null,
+      ece: resolved ? 0.05 : null,
+      bins: [],
+    };
+  }
+
+  /** Answer the calibration reads (roadmap 23.9) that are still open. */
+  function flushCalibration(resolved = 0) {
+    for (const req of http.match((r) => r.url.endsWith('/calibration'))) {
+      const version = Number(req.request.url.split('/').at(-2));
+      req.flush(calibration(version, resolved));
+    }
+  }
+
+  afterEach(() => {
+    flushCalibration();
+    http.verify();
+  });
+
+  it('shows how well each model forecast when it forecasts probabilities', async () => {
+    await render([LIVE_V1, CANDIDATE_V2], swapReport(true));
+    flushCalibration(20);
+    await settle();
+    const block = el.querySelector('.calibration')!;
+    expect(block.textContent).toContain('Forecast calibration');
+    expect(block.querySelectorAll('li').length).toBe(2);
+    expect(block.textContent).toContain('20 of 22 resolved');
+    expect(block.textContent).toContain('Brier 0.18');
+  });
+
+  it('hides calibration for a model without forecasts', async () => {
+    await render([LIVE_V1, CANDIDATE_V2], swapReport(true));
+    flushCalibration(0);
+    await settle();
+    expect(el.querySelector('.calibration')).toBeNull();
+  });
 
   it('lists every version and the log, newest first', async () => {
     await render([LIVE_V1]);
