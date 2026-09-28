@@ -9,7 +9,7 @@ import {
 } from '@angular/core';
 
 import { DecisionsService } from '../../api/decisions.service';
-import type { TradeDecisionView } from '../../api/generated/types.gen';
+import type { TradeDecisionView } from '../../api/models';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { EmptyState, ErrorState, LoadingState } from './states';
 
@@ -64,13 +64,17 @@ export function decisionDetail(d: TradeDecisionView): string {
           }
         </form>
         @if (rows.error(); as err) {
-          <app-error-state title="Could not load the decisions" [error]="err" (retry)="rows.reload()" />
+          <app-error-state
+            title="Could not load the decisions"
+            [error]="err"
+            (retry)="rows.reload()"
+          />
         } @else if (!rows.hasValue()) {
           <app-loading-state label="Loading the decisions" [rows]="3" />
         } @else if (rows.value().items.length === 0) {
           <app-empty-state
             title="Nothing recorded yet"
-            message="Each real tick records why a ticker did or did not trade."
+            message="Each trading run records why a ticker did or did not trade."
           />
         } @else {
           <ul class="rows">

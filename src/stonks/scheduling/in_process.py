@@ -40,6 +40,7 @@ from stonks.scheduling.jobs import (
     JobOutcome,
     RunContext,
     borrow_markets,
+    briefing_outcome,
     build_job_specs,
     closed_day_outcome,
     job_is_scoped,
@@ -296,6 +297,17 @@ def in_process_price_alerts(ctx: RunContext) -> JobOutcome:
     """Every person's price alert rules against the latest closes."""
     out = _executor(ctx).services.price_alerts.evaluate(as_of=ctx.fire.as_of)
     return JobOutcome("succeeded", out.as_dict())
+
+
+@IN_PROCESS_ACTIONS.register("briefings")
+def in_process_briefings(ctx: RunContext) -> JobOutcome:
+    """Research-only briefings through the server's own app (roadmap 23.8)."""
+    import anyio
+
+    services = _executor(ctx).services
+    kind = str(ctx.params.get("kind", "pre_open"))
+    view = anyio.run(services.briefings.run, services.asgi_app, kind, ctx.fire.as_of)
+    return briefing_outcome(view.model_dump(mode="json"))
 
 
 @IN_PROCESS_ACTIONS.register("model_retrain")

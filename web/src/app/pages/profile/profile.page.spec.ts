@@ -142,12 +142,42 @@ describe('ProfilePage', () => {
     type(el, '#token-name', 'ci');
     el.querySelector('#token-name')!.closest('form')!.dispatchEvent(new Event('submit'));
     const req = await nextRequest(controller, '/api/auth/tokens', 'POST');
-    expect(req.request.body).toEqual({ name: 'ci', scopes: ['read'], expires_in_days: 90 });
+    expect(req.request.body).toEqual({
+      name: 'ci',
+      scopes: ['read'],
+      expires_in_days: 90,
+      toolsets: null,
+    });
     req.flush({ token: 'stk_new_secret', info: { ...TOKEN, id: 'tok_2', name: 'ci' } });
     (await nextRequest(controller, '/api/auth/tokens')).flush(page([TOKEN]));
     await tick();
     fixture.detectChanges();
     expect(el.querySelector('.single')?.textContent).toBe('stk_new_secret');
+  });
+
+  it('limits a token to the MCP tool groups you pick', async () => {
+    const el = await render();
+    type(el, '#token-name', 'mcp');
+    const details = el.querySelector('details.toolsets') as HTMLDetailsElement;
+    details.open = true;
+    details.dispatchEvent(new Event('toggle'));
+    (await nextRequest(controller, '/api/auth/toolsets')).flush(
+      page([
+        { name: 'risk', about: 'Live risk monitoring tools.' },
+        { name: 'decisions', about: "Why did or didn't we trade." },
+      ]),
+    );
+    await tick();
+    fixture.detectChanges();
+    const boxes = details.querySelectorAll<HTMLInputElement>('input[type=checkbox]');
+    boxes[1].checked = true;
+    boxes[1].dispatchEvent(new Event('change'));
+    el.querySelector('#token-name')!.closest('form')!.dispatchEvent(new Event('submit'));
+    const req = await nextRequest(controller, '/api/auth/tokens', 'POST');
+    expect(req.request.body.toolsets).toEqual(['decisions']);
+    req.flush({ token: 'stk_x', info: { ...TOKEN, id: 'tok_3', name: 'mcp' } });
+    (await nextRequest(controller, '/api/auth/tokens')).flush(page([TOKEN]));
+    await tick();
   });
 
   it('asks for at least one scope', async () => {

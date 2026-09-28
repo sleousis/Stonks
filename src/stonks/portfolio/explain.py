@@ -51,7 +51,7 @@ STEP_TEXT: dict[str, str] = {
     "buffer": "inside the no-trade buffer, or the trade was too small",
     "stale_price": "no fresh price, so the buy was dropped",
     "risk_rule": "a risk rule changed the order",
-    "scope": "outside this tick's tickers",
+    "scope": "outside this run's tickers",
     "external": "the trade would cross a holding outside Stonks",
     "halt": "a halt blocked new positions",
     "held": "held, no trade needed",

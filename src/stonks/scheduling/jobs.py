@@ -387,3 +387,12 @@ def _validate_calendar(trigger: Trigger) -> None:
     name = getattr(trigger, "calendar", None)
     if name:
         get_calendar(name)
+
+
+def briefing_outcome(view: dict[str, Any]) -> JobOutcome:
+    """A briefings run as a job outcome: skipped while briefings are off."""
+    keys = ("kind", "as_of", "skipped", "people", "sent", "failed")
+    detail = {k: view.get(k) for k in keys}
+    if view.get("skipped"):
+        return JobOutcome("skipped", {"reason": view["skipped"], **detail})
+    return JobOutcome("succeeded", detail)

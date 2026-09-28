@@ -1538,6 +1538,125 @@
         "title": "BorrowSettings",
         "type": "object"
       },
+      "BriefingPrefsUpdate": {
+        "properties": {
+          "post_close": {
+            "title": "Post Close",
+            "type": "boolean"
+          },
+          "pre_open": {
+            "title": "Pre Open",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "pre_open",
+          "post_close"
+        ],
+        "title": "BriefingPrefsUpdate",
+        "type": "object"
+      },
+      "BriefingPrefsView": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "post_close": {
+            "title": "Post Close",
+            "type": "boolean"
+          },
+          "pre_open": {
+            "title": "Pre Open",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available",
+          "pre_open",
+          "post_close"
+        ],
+        "title": "BriefingPrefsView",
+        "type": "object"
+      },
+      "BriefingRunRequest": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "kind": {
+            "enum": [
+              "pre_open",
+              "post_close"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BriefingRunRequest",
+        "type": "object"
+      },
+      "BriefingRunView": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "pre_open",
+              "post_close"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "people": {
+            "default": 0,
+            "title": "People",
+            "type": "integer"
+          },
+          "sent": {
+            "default": 0,
+            "title": "Sent",
+            "type": "integer"
+          },
+          "skipped": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skipped"
+          }
+        },
+        "required": [
+          "kind",
+          "as_of"
+        ],
+        "title": "BriefingRunView",
+        "type": "object"
+      },
       "BrokerInfo": {
         "properties": {
           "allow_live": {
@@ -11184,6 +11303,20 @@
             "title": "Scopes",
             "type": "array"
           },
+          "toolsets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Toolsets"
+          },
           "user_id": {
             "title": "User Id",
             "type": "string"
@@ -14734,6 +14867,37 @@
           "offset"
         ],
         "title": "Page[TokenView]",
+        "type": "object"
+      },
+      "Page_ToolsetView_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ToolsetView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[ToolsetView]",
         "type": "object"
       },
       "Page_TradeDecisionView_": {
@@ -24963,6 +25127,22 @@
             "minItems": 1,
             "title": "Scopes",
             "type": "array"
+          },
+          "toolsets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 64,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Toolsets"
           }
         },
         "required": [
@@ -25042,6 +25222,20 @@
             },
             "title": "Scopes",
             "type": "array"
+          },
+          "toolsets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Toolsets"
           }
         },
         "required": [
@@ -25078,6 +25272,25 @@
           "arguments"
         ],
         "title": "ToolCallView",
+        "type": "object"
+      },
+      "ToolsetView": {
+        "description": "One MCP tool group a token can be limited to.",
+        "properties": {
+          "about": {
+            "title": "About",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "about"
+        ],
+        "title": "ToolsetView",
         "type": "object"
       },
       "TradeDecisionView": {
@@ -26909,6 +27122,257 @@
         "tags": [
           "alerts"
         ]
+      }
+    },
+    "/api/assistant/briefings/prefs": {
+      "get": {
+        "description": "Your research-only briefings before the open and after the close,\nand whether this install sends them at all.",
+        "operationId": "getBriefingPrefs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefingPrefsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Briefing Prefs",
+        "tags": [
+          "assistant"
+        ]
+      },
+      "put": {
+        "description": "Turn your briefings on or off. They come through your notification\nchannels (the feed, push, email, Telegram).",
+        "operationId": "setBriefingPrefs",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefingPrefsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefingPrefsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set Briefing Prefs",
+        "tags": [
+          "assistant"
+        ],
+        "x-permission": "notifications.manage"
+      }
+    },
+    "/api/assistant/briefings/run": {
+      "post": {
+        "description": "Send one kind of briefing to everyone who turned it on now (the\nscheduler runs this before the open and after the close). Research\nonly: each briefing runs with read tools only.",
+        "operationId": "runBriefings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefingRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefingRunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Briefings",
+        "tags": [
+          "assistant"
+        ],
+        "x-permission": "operations.run"
       }
     },
     "/api/assistant/conversations": {
@@ -29283,6 +29747,135 @@
           "auth"
         ],
         "x-permission": "tokens.revoke"
+      }
+    },
+    "/api/auth/toolsets": {
+      "get": {
+        "description": "The MCP tool groups a token can be limited to, in the order the MCP\nserver registers them. A limited token keeps ``whoami`` too.",
+        "operationId": "listMcpToolsets",
+        "parameters": [
+          {
+            "description": "page size",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "page size",
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_ToolsetView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Toolsets",
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/api/auth/users": {

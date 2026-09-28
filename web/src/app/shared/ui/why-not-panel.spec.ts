@@ -1,4 +1,4 @@
-import type { TradeDecisionView } from '../../api/generated/types.gen';
+import type { TradeDecisionView } from '../../api/models';
 import { OUTCOME_LABELS, decisionDetail } from './why-not-panel';
 
 function row(step: string, detail: Record<string, unknown>): TradeDecisionView {

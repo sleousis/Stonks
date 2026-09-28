@@ -79,6 +79,11 @@ describe('SettingsPage', () => {
       timezone: 'UTC',
       webhook: null,
     });
+    (await nextRequest(http, '/api/assistant/briefings/prefs')).flush({
+      available: false,
+      pre_open: false,
+      post_close: false,
+    });
     (await nextRequest(http, '/api/telegram/link')).flush({
       bot_configured: false,
       bot_enabled: false,

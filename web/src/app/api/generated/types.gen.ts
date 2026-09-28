@@ -855,6 +855,82 @@ export type BorrowSettings = {
 };
 
 /**
+ * BriefingPrefsUpdate
+ */
+export type BriefingPrefsUpdate = {
+    /**
+     * Post Close
+     */
+    post_close: boolean;
+    /**
+     * Pre Open
+     */
+    pre_open: boolean;
+};
+
+/**
+ * BriefingPrefsView
+ */
+export type BriefingPrefsView = {
+    /**
+     * Available
+     */
+    available: boolean;
+    /**
+     * Post Close
+     */
+    post_close: boolean;
+    /**
+     * Pre Open
+     */
+    pre_open: boolean;
+};
+
+/**
+ * BriefingRunRequest
+ */
+export type BriefingRunRequest = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+    /**
+     * Kind
+     */
+    kind: 'pre_open' | 'post_close';
+};
+
+/**
+ * BriefingRunView
+ */
+export type BriefingRunView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Failed
+     */
+    failed?: number;
+    /**
+     * Kind
+     */
+    kind: 'pre_open' | 'post_close';
+    /**
+     * People
+     */
+    people?: number;
+    /**
+     * Sent
+     */
+    sent?: number;
+    /**
+     * Skipped
+     */
+    skipped?: string | null;
+};
+
+/**
  * BrokerInfo
  */
 export type BrokerInfo = {
@@ -5961,6 +6037,10 @@ export type MeView = {
      */
     scopes: Array<ApiScope>;
     /**
+     * Toolsets
+     */
+    toolsets?: Array<string> | null;
+    /**
      * User Id
      */
     user_id: string;
@@ -8055,6 +8135,28 @@ export type PageTokenView = {
      * Items
      */
     items: Array<TokenView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[ToolsetView]
+ */
+export type PageToolsetView = {
+    /**
+     * Items
+     */
+    items: Array<ToolsetView>;
     /**
      * Limit
      */
@@ -13400,6 +13502,10 @@ export type TokenCreateRequest = {
      * Scopes
      */
     scopes: Array<ApiScope>;
+    /**
+     * Toolsets
+     */
+    toolsets?: Array<string> | null;
 };
 
 /**
@@ -13445,6 +13551,10 @@ export type TokenView = {
      * Scopes
      */
     scopes: Array<ApiScope>;
+    /**
+     * Toolsets
+     */
+    toolsets?: Array<string> | null;
 };
 
 /**
@@ -13461,6 +13571,22 @@ export type ToolCallView = {
      * Id
      */
     id: string;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * ToolsetView
+ *
+ * One MCP tool group a token can be limited to.
+ */
+export type ToolsetView = {
+    /**
+     * About
+     */
+    about: string;
     /**
      * Name
      */
@@ -14529,6 +14655,129 @@ export type ListAlertsResponses = {
 };
 
 export type ListAlertsResponse = ListAlertsResponses[keyof ListAlertsResponses];
+
+export type GetBriefingPrefsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/assistant/briefings/prefs';
+};
+
+export type GetBriefingPrefsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetBriefingPrefsError = GetBriefingPrefsErrors[keyof GetBriefingPrefsErrors];
+
+export type GetBriefingPrefsResponses = {
+    /**
+     * Successful Response
+     */
+    200: BriefingPrefsView;
+};
+
+export type GetBriefingPrefsResponse = GetBriefingPrefsResponses[keyof GetBriefingPrefsResponses];
+
+export type SetBriefingPrefsData = {
+    body: BriefingPrefsUpdate;
+    path?: never;
+    query?: never;
+    url: '/api/assistant/briefings/prefs';
+};
+
+export type SetBriefingPrefsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetBriefingPrefsError = SetBriefingPrefsErrors[keyof SetBriefingPrefsErrors];
+
+export type SetBriefingPrefsResponses = {
+    /**
+     * Successful Response
+     */
+    200: BriefingPrefsView;
+};
+
+export type SetBriefingPrefsResponse = SetBriefingPrefsResponses[keyof SetBriefingPrefsResponses];
+
+export type RunBriefingsData = {
+    body: BriefingRunRequest;
+    path?: never;
+    query?: never;
+    url: '/api/assistant/briefings/run';
+};
+
+export type RunBriefingsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RunBriefingsError = RunBriefingsErrors[keyof RunBriefingsErrors];
+
+export type RunBriefingsResponses = {
+    /**
+     * Successful Response
+     */
+    200: BriefingRunView;
+};
+
+export type RunBriefingsResponse = RunBriefingsResponses[keyof RunBriefingsResponses];
 
 export type ListAssistantConversationsData = {
     body?: never;
@@ -15688,6 +15937,66 @@ export type RevokeApiTokenResponses = {
 };
 
 export type RevokeApiTokenResponse = RevokeApiTokenResponses[keyof RevokeApiTokenResponses];
+
+export type ListMcpToolsetsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/auth/toolsets';
+};
+
+export type ListMcpToolsetsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListMcpToolsetsError = ListMcpToolsetsErrors[keyof ListMcpToolsetsErrors];
+
+export type ListMcpToolsetsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageToolsetView;
+};
+
+export type ListMcpToolsetsResponse = ListMcpToolsetsResponses[keyof ListMcpToolsetsResponses];
 
 export type ListUsersData = {
     body?: never;

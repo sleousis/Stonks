@@ -93,6 +93,7 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.services = svc
+    svc.asgi_app = app
     app.state.sse_poll_seconds = sse_poll_seconds
     app.state.metrics_access = MetricsAccessConfig()
 
