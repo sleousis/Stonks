@@ -69,6 +69,22 @@ def test_connect_ibkr_wires_the_gateway_settings(state):
     assert isinstance(memory.resolver.cache, MemoryContractCache)
 
 
+def test_the_journal_records_each_gateway_and_role_apart(tmp_path):
+    from stonks.execution.brokers.ibkr.journal import JournalingIbClient
+
+    config = CONFIG.model_copy(update={"journal": {"enabled": True, "dir": tmp_path}}, deep=True)
+    config = type(CONFIG).model_validate(config.model_dump())
+    broker = connect_ibkr(
+        config, gateway="paper", role="sync", client_factory=lambda e: FakeIbGateway()
+    )
+    assert isinstance(broker.client, JournalingIbClient)
+    broker.ensure_ready()
+    files = list((tmp_path / "paper" / "sync").glob("*.jsonl"))
+    assert len(files) == 1 and files[0].read_text(encoding="utf-8").strip()
+    off = connect_ibkr(CONFIG, gateway="paper", client_factory=lambda e: FakeIbGateway())
+    assert not isinstance(off.client, JournalingIbClient)
+
+
 def test_order_ref_lookup(state):
     state.execute(
         "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status, broker_ref,"

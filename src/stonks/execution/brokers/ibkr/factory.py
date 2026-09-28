@@ -17,7 +17,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import timedelta
-from typing import Literal
+from typing import Literal, cast
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock
 from stonks.execution.borrow import BorrowSource
@@ -148,11 +148,18 @@ def connect_ibkr(
     (``[production.options] live``, its stage and its approval level).
     Without them no option order may open. ``option_event_reader`` adds
     the Flex statement's assignments, exercises and expiries."""
-    _, gw = pick_gateway(config, gateway=gateway, portfolio_id=portfolio_id)
+    gateway_name, gw = pick_gateway(config, gateway=gateway, portfolio_id=portfolio_id)
     kind: AccountType = account_type or gw.account_type
     served = portfolio_id or (gw.portfolios[0] if len(gw.portfolios) == 1 else None)
     endpoint = endpoint_for(config, gw, role)
     client = client_factory(endpoint)
+    if config.journal.enabled:
+        from stonks.execution.brokers.ibkr.journal import FileJournal, JournalingIbClient
+
+        folder = config.journal.dir / gateway_name / role
+        client = cast(
+            IbClient, JournalingIbClient(client, FileJournal(folder, clock=clock), clock=clock)
+        )
     cache = SqliteContractCache(state) if state is not None else MemoryContractCache()
     resolver = ContractResolver(
         client,

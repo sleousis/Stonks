@@ -120,6 +120,40 @@ def reconcile_cmd(
         raise typer.Exit(code=1)
 
 
+@app.command("journal")
+def journal_cmd(
+    paths: list[Path] = typer.Argument(..., help="journal files (.jsonl) or folders"),
+    kind: list[str] = typer.Option(
+        [], "--kind", help="only these kinds: call, order_status, execution, error"
+    ),
+    as_json: bool = typer.Option(False, "--json", help="print the events as JSON lines"),
+) -> None:
+    """Read the broker event journal ([brokers.ibkr.journal], roadmap 23.15):
+    each gateway call in order, with order status, executions and errors.
+    Replay a journal in a test with ``ReplayIbClient.from_files``."""
+    from stonks.execution.brokers.ibkr.journal import journal_summary, read_journal
+
+    files: list[Path] = []
+    for path in paths:
+        files.extend(sorted(path.rglob("*.jsonl")) if path.is_dir() else [path])
+    missing = [str(f) for f in files if not f.is_file()]
+    if missing or not files:
+        raise typer.BadParameter(f"no journal file at {', '.join(missing) or 'those paths'}")
+    events = read_journal(files)
+    if kind:
+        events = [e for e in events if e.kind in set(kind)]
+    if as_json:
+        for e in events:
+            typer.echo(json.dumps(e.as_dict(), default=str))
+        return
+    table = Table("seq", "at", "kind", "call", "detail")
+    for row in journal_summary(events):
+        table.add_row(str(row["seq"]), row["at"], row["kind"], row["method"], row["detail"])
+    console.print(table)
+    errors = sum(1 for e in events if e.kind == "error")
+    console.print(f"{len(events)} events, {errors} errors")
+
+
 def _bps(value: float | None) -> str:
     return "-" if value is None else f"{value:.1f} bps"
 

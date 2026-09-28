@@ -850,6 +850,15 @@ cli = "stonks live reconcile"
 mcp = { limited = "runbook step run from the server shell" }
 
 [[capability]]
+id = "live.journal"
+domain = "risk"
+title = "Read the broker event journal (raw gateway calls, order status, executions, errors)"
+routes = []
+console = { limited = "incident tool read from the server shell" }
+cli = "stonks live journal"
+mcp = { limited = "incident tool read from the server shell" }
+
+[[capability]]
 id = "risk.policy"
 domain = "risk"
 title = "Risk policy"
