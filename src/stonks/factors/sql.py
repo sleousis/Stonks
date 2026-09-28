@@ -169,7 +169,9 @@ def _rolling(node: Call, a: list[str]) -> str:
     if op == "Slope":
         return _full(x, n, f"REGR_SLOPE({x}, {t}) OVER {w}")
     if op == "Rsquare":
-        return _full(x, n, f"REGR_R2({x}, {t}) OVER {w}")
+        # REGR_R2 is 1.0 for a flat window; the R-squared is undefined there
+        r2 = f"(CASE WHEN VAR_POP({x}) OVER {w} > 0 THEN REGR_R2({x}, {t}) OVER {w} END)"
+        return _full(x, n, r2)
     if op == "Resi":
         fit = f"(REGR_INTERCEPT({x}, {t}) OVER {w} + REGR_SLOPE({x}, {t}) OVER {w} * {t})"
         return _full(x, n, f"({x} - {fit})")
@@ -184,7 +186,10 @@ def _rolling(node: Call, a: list[str]) -> str:
         return _full(x, n, f"CAST(LIST_POSITION({values}, {pick}({values})) AS DOUBLE)")
     if op == "Corr":
         y = a[1]
-        return _full(f"({x} + {y})", n, f"CORR({x}, {y}) OVER {w}")
+        # CORR is NaN (not NULL) when a side is constant: keep the rule that a
+        # non-finite value is empty, or it ranks first and passes comparisons
+        corr = f"CORR({x}, {y}) OVER {w}"
+        return _full(f"({x} + {y})", n, f"(CASE WHEN isfinite({corr}) THEN {corr} END)")
     raise AssertionError(f"no SQL for rolling {op}")  # pragma: no cover
 
 

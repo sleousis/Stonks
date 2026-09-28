@@ -250,7 +250,9 @@ class ForecastSkillTest:
 
         l_model = loss(r_model)
         mse = {name: float(np.mean((y - pred) ** 2)) for name, pred in stat.items()}
-        best = min(mse, key=lambda k: mse[k])
+        # a baseline with a NaN forecast has a NaN MSE; ``min`` would keep it
+        # when it comes first, and judge the model against the weaker one
+        best = min(mse, key=lambda k: mse[k] if math.isfinite(mse[k]) else math.inf)
         dm_rw = diebold_mariano(loss(r_rw), l_model, horizon=h)
         dm_stat = diebold_mariano(loss(stat[best]), l_model, horizon=h)
         mase_model = mase(y - r_model, o.scale)

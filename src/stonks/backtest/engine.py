@@ -961,8 +961,8 @@ class Backtester:
         for col in ("open", "high", "low", "close", "adj_close"):
             if col in out:
                 out[col] = out[col] * factor
-        if "volume" in out:
-            out["volume"] = out["volume"] / factor
+        # volume stays as loaded: ``load_history`` never adjusts it, so it
+        # is already in the raw shares the tick reads
         return out
 
 

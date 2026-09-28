@@ -178,13 +178,14 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
     alpha_family = "data_driven"
     premise = "trend"
     label_horizon_bars = 12
-    required_history_bars = 169
+    #: ``feature_tail + 1`` with the defaults: open_trade needs that many.
+    required_history_bars = 505
 
     def param_metadata(self) -> dict[str, int]:
         p = self.params
         return {
             "label_horizon_bars": int(p["hold_period"]),
-            "required_history_bars": max(int(p["lookback"]), int(p["atr_lookback"])) + 1,
+            "required_history_bars": 3 * max(int(p["lookback"]), int(p["atr_lookback"])) + 1,
         }
 
     applicable_asset_classes = ("crypto", "equity")

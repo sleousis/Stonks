@@ -345,3 +345,40 @@ def test_stale_exit_evaluation_never_leaks_into_decide():
     assert s.estimate_return("H", as_of, SampleLake({})) is None
     port = Portfolio(cash=0.0, positions={"H": 1.0})
     assert s.decide([], port, _prices(H=30), as_of) == []
+
+
+class _SplitLake(SampleLake):
+    def __init__(self, frames, splits):
+        super().__init__(frames)
+        self._splits = splits
+
+    def get_corporate_actions(self, tickers):
+        rows = [
+            {"ticker": t, "ex_date": d, "kind": "split", "value": r, "declaration_date": None}
+            for t, d, r in self._splits
+            if t in tickers
+        ]
+        return pd.DataFrame(
+            rows, columns=["ticker", "ex_date", "kind", "value", "declaration_date"]
+        )
+
+
+def test_a_split_is_not_read_as_a_crash_by_the_price_exits():
+    """The entry price is kept in raw terms from the buy day and decide
+    gets raw prices: after a 2:1 split the close halves with no loss."""
+    closes = [5.0] * 5 + [22.0] * 5 + [11.0] * 3
+    frame = _frame(closes)
+    frame["adj_close"] = [c / 2 if i < 10 else c for i, c in enumerate(closes)]
+    split_day = frame["timestamp"].iloc[10].date()
+    lake = _SplitLake({"H": frame}, [("H", split_day, 2.0)])
+    s = RuleStrategy({"spec": _spec(risk={"stop_loss_pct": 0.1, "take_profit_pct": 0.5})})
+    entry_bar = _ts(frame, 5)
+    assert s.estimate_return("H", entry_bar, lake) is not None
+    (buy,) = s.decide([(1.0, "H")], Portfolio(cash=100.0), _prices(H=22), entry_bar)
+    now = _ts(frame, 11)
+    score = s.estimate_return("H", now, lake)
+    held = Portfolio(cash=0.0, positions={"H": buy.quantity * 2})
+    assert s.decide([(score or 1.0, "H")], held, _prices(H=11), now) == []
+    # a real 10% fall after the split still stops out
+    orders = s.decide([(score or 1.0, "H")], held, _prices(H=9.8), _ts(frame, 12))
+    assert [(o.side, o.ticker) for o in orders] == [("sell", "H")]

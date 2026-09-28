@@ -42,7 +42,8 @@ def trailing_stop_levels(closes: np.ndarray, atrs: np.ndarray, k: float) -> np.n
     first bar with a valid ATR)."""
     closes = np.asarray(closes, dtype=float)
     atrs = np.asarray(atrs, dtype=float)
-    candidates = np.maximum.accumulate(closes) - k * atrs
+    # fmax skips a missing close; maximum would spread it and freeze the stop
+    candidates = np.fmax.accumulate(closes) - k * atrs
     candidates = np.where(np.isfinite(candidates), candidates, -np.inf)
     levels = np.maximum.accumulate(candidates)
     return np.where(np.isneginf(levels), np.nan, levels)

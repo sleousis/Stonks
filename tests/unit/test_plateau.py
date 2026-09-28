@@ -165,3 +165,24 @@ def test_optional_robustness_gate(ds):
 def test_without_a_run_it_falls_back_to_sharpe(ds):
     report = PlateauTest(max_workers=1).run(SurfaceStrategy({"a": 10, "b": 0.5}), ds)
     assert "objective=sharpe" in report.notes
+
+
+def test_a_neighbour_with_a_nan_score_counts_as_failed_not_as_a_pass(ds, monkeypatch):
+    """A NaN objective score (a CV objective with no finite fold) must not
+    turn the neighbour median into NaN, which no ``<`` gate ever catches."""
+    import math
+
+    from stonks.lab.survival import plateau as plateau_mod
+    from stonks.lab.survival._reruns import RerunResult
+
+    def fake_reruns(strategy, context, reruns, **kw):
+        scores = [1.0, 0.1, 0.1, 0.1, math.nan]
+        assert len(reruns) == len(scores)
+        return [RerunResult(sharpe=1.0, n_round_trips=5, objective_score=s) for s in scores]
+
+    monkeypatch.setattr(plateau_mod, "run_reruns", fake_reruns)
+    test = _test(min_neighbours=2)
+    report = test.run(SurfaceStrategy({"a": 10, "b": 0.5}), ds)
+    assert not report.passed
+    assert report.metrics["n_failed_neighbours"] == 1
+    assert math.isfinite(report.metrics["neighbour_train_median"])

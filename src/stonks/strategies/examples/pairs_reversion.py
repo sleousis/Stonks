@@ -32,6 +32,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
 import numpy as np
+import pandas as pd
 
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
@@ -164,10 +165,20 @@ class PairsReversion(BaseStrategy):
         cache = self._bar_caches.for_lake(lake)
         if not (is_fresh(cache, a, cutoff) and is_fresh(cache, b, cutoff)):
             return None
-        ca = cache.last_n_closes(a, Interval.DAY_1, cutoff, n)
-        cb = cache.last_n_closes(b, Interval.DAY_1, cutoff, n)
-        if len(ca) < n or len(cb) < n:
+        bars_a = cache.last_n_bars(a, Interval.DAY_1, cutoff, n)
+        bars_b = cache.last_n_bars(b, Interval.DAY_1, cutoff, n)
+        if len(bars_a) < n or len(bars_b) < n:
             return None
+        # pair the legs by date: a bar one leg lacks (its exchange's holiday,
+        # a data gap) must not shift the other leg's older closes
+        joined = pd.merge(
+            bars_a[["timestamp", "close"]],
+            bars_b[["timestamp", "close"]],
+            on="timestamp",
+            suffixes=("_a", "_b"),
+        )
+        ca = joined["close_a"].to_numpy(dtype=float)
+        cb = joined["close_b"].to_numpy(dtype=float)
         ok = np.isfinite(ca) & np.isfinite(cb) & (ca > 0) & (cb > 0)
         if ok.sum() < max(10, n // 2):
             return None

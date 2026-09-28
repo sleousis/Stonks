@@ -123,7 +123,10 @@ def triple_barrier(
     log_close = np.log(close.to_numpy(dtype=float))
     log_high = np.log(high.to_numpy(dtype=float)) if high is not None else log_close
     log_low = np.log(low.to_numpy(dtype=float)) if low is not None else log_close
-    sigma = (vol if vol is not None else ewma_vol(close, vol_span)).to_numpy(dtype=float)
+    # a passed vol is aligned by date: read by position, a shorter series
+    # would give an event a later bar's width (look-ahead)
+    width_of = ewma_vol(close, vol_span) if vol is None else vol.reindex(close.index)
+    sigma = width_of.to_numpy(dtype=float)
     n = len(log_close)
     rows: list[dict[str, Any]] = []
     index: list[Any] = []

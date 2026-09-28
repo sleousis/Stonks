@@ -288,3 +288,33 @@ def test_risk_sizing_is_the_same_with_and_without_a_future_split(tmp_path):
         lake.close()
     assert quantities[0], "the risk rule must still let a buy through"
     assert quantities[1] == quantities[0]
+
+
+def test_liquidity_cap_is_the_same_with_and_without_a_future_split(tmp_path):
+    """The lake's volume is raw, like the history the tick reads, so the
+    rebase must not scale it: a later split would shrink the dollar volume
+    the liquidity rule sees (look-ahead) and cut every buy."""
+    from stonks.production.rules.liquidity import LiquiditySettings
+    from stonks.production.rules.settings import RuleSettings
+
+    risk = RiskPolicy(rules=RuleSettings(liquidity=LiquiditySettings(max_pct_adv=1e-6)))
+    quantities = []
+    for future in (False, True):
+        lake = _split_lake(tmp_path / f"liq{future}.duckdb", future_split=future)
+        broker = SimulatedBroker(Portfolio(cash=10_000.0))
+        Backtester(
+            strategies=[_Window("X.US", date(2026, 1, 5), date(2026, 3, 20))],
+            broker=broker,
+            lake=lake,
+            config=BacktestConfig(
+                start=date(2026, 1, 5),
+                end=date(2026, 3, 20),
+                universe=["X.US"],
+                construction="equal_weight_top_n",
+                risk=risk,
+            ),
+        ).run()
+        quantities.append([round(f.quantity, 6) for f in broker.fills])
+        lake.close()
+    assert quantities[0], "the liquidity rule must still let a buy through"
+    assert quantities[1] == quantities[0]

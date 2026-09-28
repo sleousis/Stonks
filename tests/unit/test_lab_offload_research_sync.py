@@ -151,3 +151,43 @@ def test_files_no_row_claims_are_dropped(server, tmp_path):
     )
     assert applied.files == 0
     assert not (artifacts / "x").exists()
+
+
+def test_a_new_strategy_cannot_claim_another_strategys_bundle(server):
+    """An upload's new strategy row names its own bundle folder: pointing it
+    at an existing strategy's folder would let the upload overwrite that
+    strategy's files (its fitted model among them)."""
+    state, artifacts = server
+    before = (artifacts / "bah_active" / "params.json").read_bytes()
+    row = {
+        "id": "intruder",
+        "class_path": "stonks.strategies.examples.buy_and_hold:BuyAndHold",
+        "params_json": "{}",
+        "artifact_path": "bah_active",
+        "status": "shadow",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+    }
+    with pytest.raises(ValidationError):
+        apply_rows(
+            state,
+            artifacts,
+            ResearchRows(strategies=[row], files=[_file("bah_active/params.json")]),
+        )
+    assert (artifacts / "bah_active" / "params.json").read_bytes() == before
+    assert not state.sql("SELECT 1 FROM strategies WHERE id = 'intruder'")
+
+
+def test_an_upload_cannot_replace_a_known_runs_trial_matrix(server):
+    """A run already in the ledger is skipped, and so is its matrix file:
+    the deflated Sharpe and PBO of that run must not change under it."""
+    state, artifacts = server
+    run = dict(state.sql("SELECT * FROM lab_runs")[0])
+    matrix = artifacts / "_trials" / f"{run['id']}.npz"
+    applied = apply_rows(
+        state,
+        artifacts,
+        ResearchRows(lab_runs=[run], files=[_file(f"_trials/{run['id']}.npz")]),
+    )
+    assert applied.files == 0
+    assert not matrix.exists() or matrix.read_bytes() != b"x"

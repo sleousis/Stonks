@@ -43,12 +43,15 @@ import math
 import weakref
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date
 from typing import Any, ClassVar
 
+from stonks.core.corporate_actions import Split
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec, Params, ParamSpace
 from stonks.core.types import AssetClass, Order, Portfolio
 from stonks.features.volatility import periods_per_year
+from stonks.store.corporate_actions import LakeCorporateActions
 from stonks.strategies._common import LakeBarCaches, as_datetime, iso
 from stonks.strategies.base import BaseStrategy
 from stonks.strategies.rules.interpreter import evaluate, snapshot, stop_width, window_size
@@ -123,6 +126,8 @@ class RuleStrategy(BaseStrategy):
         self._entry_refs: dict[str, float] = {}
         #: ticker -> [high-water mark since entry, trailing stop level]
         self._trails: dict[str, list[float]] = {}
+        #: ticker -> the day the entry reference and trail are priced in
+        self._ref_days: dict[str, date] = {}
         #: The last lake ``estimate_return`` read (``decide`` gets none).
         self._last_lake: weakref.ref | None = None
 
@@ -189,12 +194,13 @@ class RuleStrategy(BaseStrategy):
         evals = self._evals if self._evals_as_of == self._key(as_of) else {}
         picked = {t for _, t in my_picks}
         held = {t: q for t, q in portfolio.positions.items() if q > 0}
-        for refs in (self._entry_refs, self._trails):
+        for refs in (self._entry_refs, self._trails, self._ref_days):
             for ticker in list(refs):
                 if ticker not in held:
                     del refs[ticker]
 
         if self.spec.risk.has_price_exit:
+            self._follow_splits(as_of)
             for ticker in held:
                 if ticker not in self._entry_refs:
                     self._restore_entry(ticker, as_of)
@@ -226,6 +232,7 @@ class RuleStrategy(BaseStrategy):
             orders.append(self._order("buy", ticker, spend / price, as_of))
             self._entry_refs[ticker] = float(price)
             self._trails[ticker] = [float(price), -math.inf]
+            self._ref_days[ticker] = as_datetime(as_of).date()
             cash -= spend
             slots -= 1
         return orders
@@ -265,6 +272,28 @@ class RuleStrategy(BaseStrategy):
         if self._trailing_stop_hit(ticker, float(price), ev):
             return True
         return risk.take_profit_pct is not None and price >= ref * (1.0 + risk.take_profit_pct)
+
+    def _follow_splits(self, as_of: Any) -> None:
+        """Re-express each entry reference and trail in the shares of
+        ``as_of``: ``decide`` gets raw prices, so a split since the
+        reference was taken would read as a crash (or a jump)."""
+        lake = self._last_lake() if self._last_lake is not None else None
+        if lake is None or not self._ref_days:
+            return
+        today = as_datetime(as_of).date()
+        actions = LakeCorporateActions(lake).load(sorted(self._ref_days))
+        for ticker, since in list(self._ref_days.items()):
+            factor = 1.0
+            for event in actions.for_ticker(ticker):
+                if isinstance(event, Split) and since < event.ex_date <= today:
+                    factor *= event.ratio
+            if factor != 1.0:
+                if ticker in self._entry_refs:
+                    self._entry_refs[ticker] /= factor
+                trail = self._trails.get(ticker)
+                if trail is not None:
+                    self._trails[ticker] = [v / factor for v in trail]
+            self._ref_days[ticker] = today
 
     def _trailing_stop_hit(self, ticker: str, price: float, ev: _Evaluation | None) -> bool:
         """Raise the high-water mark and the (never lowered) stop level,
@@ -322,6 +351,8 @@ class RuleStrategy(BaseStrategy):
                 if width is not None:
                     trail[1] = max(trail[1], trail[0] - width)
         self._trails[ticker] = trail
+        # the bars are adjusted as of their last one: priced in today's shares
+        self._ref_days[ticker] = as_datetime(as_of).date()
 
     def _in_universe(self, ticker: str, lake: Any) -> bool:
         if self._tickers and ticker not in self._tickers:

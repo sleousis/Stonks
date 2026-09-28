@@ -44,6 +44,10 @@ __all__ = [
 
 _log = get_logger("stonks.factors.cache")
 
+#: Bumped when the factor SQL changes what a panel holds (2: a NaN
+#: correlation and the R-squared of a flat window are empty).
+ENGINE_VERSION = 2
+
 
 def _digest(payload: Any) -> str:
     text = json.dumps(payload, sort_keys=True, default=str, separators=(",", ":"))
@@ -63,8 +67,11 @@ def slot_of(
     interval: str,
     extra: Any = None,
 ) -> str:
-    """The slot of a panel: everything that defines it except the data."""
-    return _digest([token, list(universe), [str(window[0]), str(window[1])], interval, extra])
+    """The slot of a panel: everything that defines it except the data,
+    plus :data:`ENGINE_VERSION`, so a panel computed by older SQL is never
+    served again."""
+    window_ = [str(window[0]), str(window[1])]
+    return _digest([token, list(universe), window_, interval, extra, ENGINE_VERSION])
 
 
 def data_fingerprint(

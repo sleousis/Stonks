@@ -208,8 +208,10 @@ def apply_rows(
     runs = trials = 0
     with state.transaction():
         for run in rows.lab_runs:
-            runs += _insert(state, "lab_runs", run, or_ignore=True)
-            allowed.add((TRIALS_SUBDIR, f"{run['id']}.npz"))
+            if _insert(state, "lab_runs", run, or_ignore=True):
+                # only a run this upload adds may bring its trial matrix
+                runs += 1
+                allowed.add((TRIALS_SUBDIR, f"{run['id']}.npz"))
         for trial in rows.lab_trials:
             trials += _insert(state, "lab_trials", trial, or_ignore=True)
         for strategy in rows.strategies:
@@ -225,8 +227,10 @@ def apply_rows(
             stored = row.get("artifact_path")
             if stored:
                 bundle = _safe_relative(str(stored)).parts
-                if bundle[0] == TRIALS_SUBDIR:
-                    raise ValidationError(f"strategy {sid!r} has a reserved artifact path")
+                if bundle != (sid,):
+                    # a bundle is the strategy's own folder, never another
+                    # strategy's (or the trial matrices)
+                    raise ValidationError(f"strategy {sid!r} has artifact path {stored!r}")
                 allowed.add(bundle)
             _insert(state, "strategies", row, or_ignore=False)
             written.append(sid)
