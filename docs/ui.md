@@ -975,6 +975,18 @@ flowchart LR
 - `TableColumn.display` gives a column its own text (a unit per column) while sorting still uses `value`.
 - `provideFakeCalendars()` (`src/testing/fake-calendars.ts`) keeps specs of pages that embed a calendar piece free of calendar calls.
 
+## Smaller comforts (23.17)
+
+| Page | Route | What it does |
+|---|---|---|
+| Demo portfolio | `/demo` | Open, look around in and remove a sample book of made-up holdings and prices |
+| Import a CSV statement | `/connections/import` | Map a broker's CSV onto trades, dividends and cash flows, preview, import and undo |
+
+- **Privacy mode.** `PrivacyService` (`core/privacy/`) holds one switch per device (localStorage). While on, `formatMoney` returns a mask, so the money pipe, tables, tiles and chart axes hide amounts. Percentages, counts and dates stay. `html[data-privacy="on"]` is there for a figure a page formats itself. The eye button in the top bar and the sidebar, the palette, `h` and Alt+Shift+H (always on) toggle it, and Settings has a check box.
+- **Demo portfolio.** `pages/demo/demo.page.ts`. Every view says Sample data in a note above the tiles. The instruments end in `.DEMO`. The welcome page and the setup card link to it.
+- **Screen alerts.** `<app-screen-alerts>` (`pages/screener/screen-alerts.ts`) sits under Your screens. A When select per screen turns an alert on (Daily, or Weekly on a weekday), Remove asks first, and the newest finds list below. The Screen alerts row in the notification settings decides where alerts reach you.
+- **CSV import.** `pages/connections/statement-import.page.ts`, linked from Broker connections. The first Preview sends no mapping and fills the column selects from the server's guess. Preview and import are silent calls, and a refusal shows under the buttons. Pure helpers live in `statement-mapping.ts`.
+
 ## Options research (17.6)
 
 | Page | Route | What it does |

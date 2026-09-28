@@ -46,6 +46,7 @@ uv run stonks universe ensure ID --start ... --end ... [--interval 1d --source e
 # Screener and calendars (docs/universes.md#screener, docs/calendars.md)
 uv run stonks screener metrics | run --spec JSON [--as-of ...] | save NAME --spec JSON | list | delete ID
 uv run stonks screener universe ID (--spec JSON|--screen ID) [--mode rule|snapshot]   # a screen as a universe
+uv run stonks screener alert ID [--weekly fri] | alerts | alert-events | alert-delete ID | alerts-run   # screen alerts (23.17)
 uv run stonks calendars show|news [--scope holdings|watchlists|tickers|all] | earnings-check TICKERS
 uv run stonks calendars refresh [--source eodhd] [--no-alerts]   # also the daily calendars_refresh job
 
@@ -97,6 +98,7 @@ uv run stonks tax gains|dividends --year Y [--portfolio ID] | lots [--as-of D] |
 uv run stonks ingest fx --pairs EURUSD,GBPUSD [--since ...]   # FX rates into the lake
 uv run stonks ingest borrow [--markets usa,uk]   # IBKR short stock files into borrow_rates
 uv run stonks cash-flows record|list --user E --portfolio ID   # deposits and withdrawals (TWR, MWR)
+uv run stonks imports preview|commit FILE (--new NAME|--portfolio ID) [--mapping JSON] | list | undo ID   # CSV statements (23.17)
 uv run stonks assistant eval [--base-url URL --model M]   # the assistant's eval set
 
 # Servers
@@ -233,6 +235,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - 045: `margin_checks (portfolio_id, checked_at, source, currency, equity, initial_margin, maintenance_margin, excess_liquidity, available_funds, buying_power, cushion, level, reported_type)`: each read of a margin account's cushion by the tick or the `live_margin` job, level in {ok, warn, reduce, call} (roadmap 19.13, margin accounts, off by default).
 - 046: `option_approvals` (per-portfolio options approval level), `option_events` (assignments, exercises, expiries, append only), and `order_tickets.hold` also takes `options` (roadmap 17.8).
 - 047: `shadow_decisions` and `model_version_decisions` statuses gain `working` and `expired`, plus `filled_on` (paper and model books fill at the next open).
+- 049 smaller comforts (roadmap 23.17): notification category `screen_alert` (alerts, outbox, deliveries and prefs rebuilt, ids and counters kept), `screen_alerts`, `screen_alert_matches`, `screen_alert_events`, `demo_portfolios (user_id, seed)` (the only row of the sample book), `statement_imports` and `broker_activities.import_id` (CSV statements with undo).
 
 ## Conventions to match
 

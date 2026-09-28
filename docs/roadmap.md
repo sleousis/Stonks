@@ -556,7 +556,7 @@ From a second study of the top GitHub projects for "stocks", "algotrade", "algot
 | 23.14 Fund look-through and breadth | ETF holdings so insights and the sector cap see concentration inside funds, and a market breadth card on Today. | planned |
 | 23.15 Live safety extras | Checks before resuming after the kill switch, a replay of recent days before a book starts or moves up a stage, a per-ticker loss breaker, and a broker event journal with replay. | planned |
 | 23.16 Execution algorithms and planner | IBKR Adaptive, TWAP and VWAP behind one seam, and a rebalancing planner that shows the trades to reach target weights before sending. | planned |
-| 23.17 Smaller comforts | Privacy mode that hides money, a demo portfolio, scheduled screen alerts, and CSV statement import. | planned |
+| 23.17 Smaller comforts | Done. Privacy mode hides every money amount with one switch per device (`h`, Alt+Shift+H, the eye button, Settings), percentages stay. A demo portfolio from synthetic bars, labelled Sample data, never in real books or the lake (`/demo`, `/api/demo`). Screen alerts: a saved screen runs daily or weekly after the price update and notifies about names that newly match, in its own `screen_alert` category (the `screen_alerts` job, `stonks screener alert`, MCP). CSV statement import for brokers without an API into `broker_activities` and a sync snapshot, with a preview, duplicate protection and undo (`/connections/import`, `stonks imports`). SQLite `049_smaller_comforts`. | done |
 
 ## Execution order
 

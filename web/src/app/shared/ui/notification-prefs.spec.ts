@@ -110,6 +110,7 @@ describe('NotificationPrefs', () => {
       'Signals',
       'Price alerts',
       'Upcoming events',
+      'Screen alerts',
       'Orders and fills',
       'Risk alerts',
       'System',

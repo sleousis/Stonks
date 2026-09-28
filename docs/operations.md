@@ -70,6 +70,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `ingest_prices`: last 7 days of daily bars for `[production].universe` | close + 30 min | 60 min |
 | `ingest_borrow`: IBKR's short stock files into `borrow_rates` (`[sources.ibkr_borrow] markets`) | close + 35 min | none |
 | `price_alerts`: every person's price alerts against the new closes | close + 40 min | none |
+| `screen_alerts`: every due saved-screen alert on the new closes | close + 42 min | none |
 | `tick` | close + 45 min | 60 min |
 | `report`: `reports/latest.html` next to the state DB | close + 90 min | none |
 | `health`: checks, and opens or clears the operational halt | every 4 hours | none |
@@ -330,6 +331,37 @@ uv run stonks price-alerts create --user you@example.com --ticker AAPL.US --cond
 uv run stonks price-alerts create --user you@example.com --watchlist wl_... --condition moves_pct --pct 8 --window-days 5
 uv run stonks price-alerts list|events --user you@example.com
 uv run stonks price-alerts run [--as-of YYYY-MM-DD]    # what the job does, for every person
+```
+
+## Screen alerts
+
+A saved screen can alert its owner when names start to match it (roadmap 23.17). Notify only: nothing trades.
+
+- The `screen_alerts` job runs after the price update. A `daily` alert runs on every run, a `weekly` one on its weekday. Each alert runs at most once a day, so a rerun sends nothing twice.
+- The first run stores the matches and sends nothing. Later runs send the names that were not in the last run's matches. Names that stop matching drop out, so they alert again if they come back.
+- Alerts go to the owner through the notification router in the `screen_alert` category, with its own switch per channel in Settings.
+- A screen that fails (over the candidate cap, a deleted universe) records the error on the alert, and the other alerts still run.
+
+```bash
+uv run stonks screener alert SCREEN_ID [--weekly fri] [--off] [--user you@example.com]
+uv run stonks screener alerts | alert-events | alert-delete SCREEN_ID
+uv run stonks screener alerts-run [--as-of YYYY-MM-DD]    # what the job does, for every person
+```
+
+## CSV statement imports
+
+For a broker with no connection, bring its history in from the CSV file it exports (roadmap 23.17).
+
+- Map the columns onto trades, dividends and cash flows. A guess from the headers comes first. Type values (`BUY=trade, DIV=dividend`) map the broker's words to kinds, and sale values make the quantity negative.
+- The preview writes nothing. It shows each row as new, already imported or skipped, with the reason.
+- Rows land in `broker_activities` on one CSV connection per person that never syncs, plus a `sync` snapshot of the holdings the trades add up to. Insights, cash flows and tax reports read them like a synced account.
+- Each row has a stable id, so importing the same file twice adds nothing. Two identical fills in one file stay two rows.
+- Undo removes exactly the rows one import added and rebuilds the holdings.
+
+```bash
+uv run stonks imports preview FILE --new "Old broker" [--mapping JSON] [--currency EUR]
+uv run stonks imports commit FILE --portfolio PF_ID [--mapping JSON]
+uv run stonks imports list | undo IMPORT_ID
 ```
 
 ## Telegram
