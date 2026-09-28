@@ -2,6 +2,8 @@
 .worktrees/
 /data/
 .env
+.env.*
+!.env.example
 __pycache__/
 *.pyc
 *.pyo
@@ -30,3 +32,7 @@ test-results/
 deploy/ibkr/secrets/*
 !deploy/ibkr/secrets/.gitignore
 !deploy/ibkr/secrets/README.md
+
+# Local tool state (Angular cache, browser automation snapshots of the console)
+.angular/
+.playwright-mcp/
