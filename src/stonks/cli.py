@@ -116,13 +116,20 @@ console = Console()
 # ---- helpers ----------------------------------------------------------------
 
 
-def _settings() -> Settings:
+def _settings(*, require_config: bool = False) -> Settings:
     # CLI is the right place to materialize .env into the process env;
     # load_settings itself stays pure so tests can monkeypatch freely.
     from dotenv import load_dotenv
 
+    from stonks.config import ConfigFileMissing
+
     load_dotenv(override=False)
-    settings = load_settings()
+    try:
+        # serve and tick refuse to run on the looser code defaults
+        settings = load_settings(required=require_config)
+    except ConfigFileMissing as exc:
+        console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(code=2) from None
     configure_logging(level=settings.logging.level)
     # the admin's console overrides (stonks.config_overrides) on top of TOML
     from stonks.config_overrides import with_overrides
@@ -1115,7 +1122,7 @@ def tick(
     from stonks.app.errors import ConflictError, ValidationError
     from stonks.app.ticks import TickRequest, execute_tick
 
-    settings = _settings()
+    settings = _settings(require_config=True)
     configured = settings.production.universe
     if not _parse_tickers(tickers) and not configured:
         raise typer.BadParameter(
@@ -1292,7 +1299,7 @@ def serve(
     """
     import uvicorn
 
-    settings = _settings()
+    settings = _settings(require_config=True)
     bind_host = host or settings.api.host
     bind_port = port or settings.api.port
     if settings.api.open_reads_on_loopback:

@@ -8,6 +8,7 @@ so the config surface stays small and discoverable.
 from __future__ import annotations
 
 import ipaddress
+import logging
 import os
 import tomllib
 from collections.abc import Mapping
@@ -53,7 +54,36 @@ from stonks.streaming.settings import StreamingSettings
 from stonks.tax.settings import TaxConfig
 from stonks.telegram.settings import TelegramConfig
 
+#: The shipped config, relative to the working folder. Callers that need the
+#: file itself use :func:`resolve_default_config_path`.
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
+
+#: ``src/stonks/config.py`` sits two folders below the project root.
+_PROJECT_CONFIG_PATH = Path(__file__).resolve().parents[2] / DEFAULT_CONFIG_PATH
+
+
+def resolve_default_config_path() -> Path:
+    """The config file to load when none is named, as an absolute path.
+
+    ``config/default.toml`` under the working folder wins (the Docker image
+    runs from ``/app``, and an operator may keep a local copy), then the one
+    in the project that holds this source tree. So running from another
+    folder no longer drops the shipped risk limits for the looser code
+    defaults. When neither exists the working folder's path comes back and
+    :func:`load_settings` warns or fails.
+    """
+    local = (Path.cwd() / DEFAULT_CONFIG_PATH).resolve()
+    if local.is_file():
+        return local
+    if _PROJECT_CONFIG_PATH.is_file():
+        return _PROJECT_CONFIG_PATH
+    return local
+
+
+class ConfigFileMissing(FileNotFoundError):
+    """The config file is missing where the caller needs it (serve, tick,
+    the scheduler): the code defaults would drop every shipped risk limit."""
+
 
 #: Same as ``stonks.universes.base.UNIVERSE_ID_PATTERN`` (importing the
 #: universes package here would be an import cycle; a test keeps them equal).
@@ -715,21 +745,36 @@ def configured_secrets(
     return out
 
 
-def load_settings(config_path: Path | None = None) -> Settings:
+def load_settings(config_path: Path | None = None, *, required: bool = False) -> Settings:
     """Load settings from TOML + environment (env wins for mapped keys).
 
     This reads from the *current* process environment only. Callers that
     want ``.env`` loaded first (CLI entry points, live tests) should do
     that themselves before calling this — keeps ``load_settings`` pure
     and test-monkeypatchable.
+
+    A missing config file logs a warning, because the code defaults are
+    looser than the shipped policy. With ``required`` it raises
+    :class:`ConfigFileMissing` instead (serve, tick and the scheduler).
     """
     if config_path is None:
-        config_path = DEFAULT_CONFIG_PATH
+        config_path = resolve_default_config_path()
 
     data: dict = {}
-    if config_path is not None and Path(config_path).exists():
+    if Path(config_path).is_file():
         with open(config_path, "rb") as f:
             data = tomllib.load(f)
+    elif required:
+        raise ConfigFileMissing(
+            f"config file not found: {Path(config_path).resolve()} "
+            "(without it the code defaults drop every shipped risk limit)"
+        )
+    else:
+        logging.getLogger("stonks.config").warning(
+            "config file not found: %s; using the code defaults, which are looser "
+            "than the shipped risk policy",
+            Path(config_path).resolve(),
+        )
 
     _overlay_env(data)
     return Settings(**data)

@@ -55,7 +55,8 @@ def _load(config_path: Path | None, transport: Any = None) -> _Loaded:
     load_dotenv(override=False)
     from stonks.config_overrides import with_overrides
 
-    base = load_settings(config_path)
+    # the scheduler runs the tick: never on the looser code defaults
+    base = load_settings(config_path, required=True)
     settings = with_overrides(base)
     configure_logging(level=settings.logging.level)
     config = scheduler_config_from(settings, config_path)
