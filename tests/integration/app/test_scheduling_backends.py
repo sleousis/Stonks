@@ -190,3 +190,23 @@ def test_disabled_in_process_scheduler_does_not_start(settings, services):
         start_in_process_scheduler(services, settings, config=SchedulerConfig(enabled=False))
         is None
     )
+
+
+def test_the_hosted_scheduler_runs_jobs_with_the_current_overrides(settings, services, tmp_path):
+    """A console override written after the server started reaches the
+    next scheduled job (``next_run``), not only after a restart."""
+    from stonks.config_overrides import OverrideStore
+
+    config = SchedulerConfig(lock_path=tmp_path / "s.lock", poll_seconds=3600, jobs=[])
+    handle = start_in_process_scheduler(services, settings, config=config, notifier=Recorder())
+    assert handle is not None
+    try:
+        with SqliteState(settings.state.path) as state:
+            OverrideStore(state).set(
+                "production.universe", ["NEW.US"], actor="user:ada", reason="new universe"
+            )
+        services.context.invalidate_settings()
+        current = handle.scheduler._current_settings(None)
+        assert current.production.universe == ["NEW.US"]
+    finally:
+        handle.stop(timeout=10)

@@ -248,6 +248,79 @@ def test_behaviour_report_of_manual_trades(client, people, settings, alice_book)
     assert bob.status_code == 404
 
 
+def test_behaviour_since_pairs_exits_with_entries_made_before_it(
+    client, people, settings, alice_book
+):
+    """``since`` picks the trades entered on or after it. A sell of shares
+    bought before it closes that older lot: it opens no short, and the
+    buy back after it is a new long, not the cover of a phantom short."""
+    path = settings.state.path
+    _manual_fill(path, alice_book, "manual:s:1", "buy", 10, 100.0, "2026-01-05T15:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:s:2", "sell", 10, 110.0, "2026-02-02T15:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:s:3", "buy", 10, 105.0, "2026-02-10T15:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:s:4", "sell", 10, 120.0, "2026-02-20T15:00:00+00:00")
+    body = client.get(
+        "/api/insights/behaviour",
+        params={"portfolio_id": alice_book, "since": "2026-02-01"},
+        headers=people["alice"]["headers"],
+    ).json()
+    assert body["trades"] == 1
+    assert body["total_pnl"] == pytest.approx(150.0)
+    assert body["open_positions"] == 0
+
+
+def test_behaviour_reads_the_lake_splits(client, people, settings, alice_book):
+    """A 2:1 split between entry and exit (from the lake's stock_splits)
+    makes one winning trip of 20 shares, not a loss and a phantom short."""
+    import pandas as pd
+
+    path = settings.state.path
+    _manual_fill(path, alice_book, "manual:x:1", "buy", 10, 100.0, "2026-01-05T15:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:x:2", "sell", 20, 55.0, "2026-01-20T15:00:00+00:00")
+    with client.app.state.services.context.lake() as lake:
+        lake.upsert_stock_splits(
+            pd.DataFrame(
+                {"ticker": ["UP.US"], "date": [pd.Timestamp("2026-01-12")], "ratio": [2.0]}
+            )
+        )
+    body = client.get(
+        "/api/insights/behaviour",
+        params={"portfolio_id": alice_book},
+        headers=people["alice"]["headers"],
+    ).json()
+    assert body["trades"] == 1 and body["open_positions"] == 0
+    assert body["total_pnl"] == pytest.approx(100.0)
+
+
+def test_behaviour_counts_an_option_contract_multiplier(client, people, settings, alice_book):
+    """An option fill's price is per share: one contract bought at 2.00 and
+    sold at 3.00 makes 100, not 1."""
+    contract = "UP.US:2026-06-19:C:100"
+    with SqliteState(settings.state.path) as state:
+        for cid, side, price, at in (
+            ("manual:o:1", "buy", 2.0, "2026-01-05T15:00:00+00:00"),
+            ("manual:o:2", "sell", 3.0, "2026-01-20T15:00:00+00:00"),
+        ):
+            state.execute(
+                "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status,"
+                " created_at, updated_at, portfolio_id, origin) VALUES (?, ?, ?, 1, 'limit',"
+                " 'filled', ?, ?, ?, 'manual')",
+                [cid, contract, side, at, at, alice_book],
+            )
+            state.execute(
+                "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at,"
+                " portfolio_id) VALUES (?, ?, 1, ?, 0, ?, ?)",
+                [cid, contract, price, at, alice_book],
+            )
+    body = client.get(
+        "/api/insights/behaviour",
+        params={"portfolio_id": alice_book},
+        headers=people["alice"]["headers"],
+    ).json()
+    assert body["trades"] == 1
+    assert body["total_pnl"] == pytest.approx(100.0)
+
+
 def test_dashboard_and_insights_share_one_day_change(client, people, alice_book):
     """Visual audit M2: the P&L series (Dashboard, Today) and Insights read
     the headline value and day change from one service, so they agree."""

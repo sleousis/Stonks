@@ -85,6 +85,12 @@ class InProcessExecutor(JobExecutor):
         """A stored universe's members on ``day`` (``job_universe`` resolver)."""
         return self.services.universes.members(universe_id, day).tickers
 
+    def open_lake(self) -> Any:
+        """The server's own lake connection (a context manager): the jobs
+        that run their action in this process read the lake through it,
+        since the process holding the lake cannot open it again read only."""
+        return self.services.context.lake()
+
     def asset_classes(self, universe: list[str]) -> dict[str, str]:
         with self.services.context.lake() as lake:
             return lake.get_asset_classes(universe)
@@ -262,6 +268,7 @@ def start_in_process_scheduler(
         config=config,
         pinger=HttpPinger(timeout_seconds=config.ping_timeout_seconds),
         executor=executor,
+        settings_provider=_context_settings(services),
     )
     thread = threading.Thread(
         target=scheduler.run_forever,
@@ -280,6 +287,15 @@ def start_in_process_scheduler(
     from stonks.scheduling.delivery import start_delivery_worker
 
     return SchedulerHandle(scheduler, thread, lock, delivery=start_delivery_worker(settings))
+
+
+def _context_settings(services: Any) -> Any:
+    """The server's effective settings (console overrides re-read every
+    few seconds), or ``None`` for a container without an app context."""
+    context = getattr(services, "context", None)
+    if context is None:
+        return None
+    return lambda: context.settings
 
 
 @IN_PROCESS_ACTIONS.register("backup")

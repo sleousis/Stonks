@@ -128,6 +128,22 @@ def test_a_tick_job_with_its_own_tickers_runs_scoped(settings, monkeypatch, para
     assert seen == [scoped]
 
 
+def test_a_tick_that_fails_before_it_starts_is_not_taken_as_alerted(settings, monkeypatch):
+    """Only a failure inside ``run_tick`` was alerted by the tick. When the
+    book plan cannot even be built, the scheduler must alert, so the
+    action raises instead of returning ``alerted=True``."""
+    from stonks.production import settings_builder
+
+    def broken(self, state, *, dry_run=False):
+        raise RuntimeError("subscriptions unreadable")
+
+    monkeypatch.setattr(settings_builder.TickRuntime, "plan_for", broken)
+    ctx, _ = _ctx(settings, "tick", date(2026, 9, 25))
+    with pytest.raises(RuntimeError, match="subscriptions unreadable"):
+        get_action("tick")(ctx)
+    assert _tick_rows(settings) == []
+
+
 def test_tick_skip_can_be_disabled(settings):
     # Thanksgiving 2025: a closed day in the past (a future tick is refused)
     ctx, _ = _ctx(settings, "tick", date(2025, 11, 27), skip_closed_days=False)
@@ -189,3 +205,38 @@ def test_report_writes_html(settings, tmp_path):
     out = get_action("report")(ctx)
     assert out.status == "succeeded"
     assert out_path.read_text(encoding="utf-8").lstrip().lower().startswith("<!doctype html")
+
+
+def test_in_process_live_jobs_read_the_lake_the_server_holds(settings):
+    """Inside ``stonks serve`` the lake is open read-write in the same
+    process, so a separate read-only open is refused. The live reconcile
+    must still see the splits (and the stops their ATR) through the
+    server's own lake, not fall back to raw fills."""
+    from contextlib import contextmanager
+
+    import pandas as pd
+
+    from stonks.scheduling.in_process import InProcessExecutor
+
+    held = DuckDBLake(settings.lake.path)  # the server's connection
+    try:
+        held.upsert_stock_splits(
+            pd.DataFrame(
+                {"ticker": ["AAPL.US"], "date": [pd.Timestamp("2026-06-01")], "ratio": [4.0]}
+            )
+        )
+
+        class Context:
+            @contextmanager
+            def lake(self):
+                yield DuckDBLake(settings.lake.path)
+
+        class Services:
+            context = Context()
+
+        ctx, _ = _ctx(settings, "live_reconcile", date(2026, 9, 25))
+        ctx = RunContext(**{**ctx.__dict__, "executor": InProcessExecutor(Services())})
+        actions = jobs_mod._lake_actions(ctx)(["AAPL.US"])
+        assert actions is not None and actions.for_ticker("AAPL.US")
+    finally:
+        held.close()

@@ -16,10 +16,11 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from stonks.accounts import NotFound, Scope, owned_portfolio
+from stonks.accounts import NotFound, Role, Scope, owned_portfolio
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError, ValidationError
 from stonks.app.pagination import Page
+from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.production.tca import (
@@ -203,6 +204,15 @@ class TcaSummaryView(BaseModel):
 # ---- the service -----------------------------------------------------------------
 
 
+def _check_write(who: Who) -> None:
+    """``portfolio.manage`` for a signed-in person; the shell acting as a
+    person (``--user``) gets that person's rights."""
+    if isinstance(who, Principal):
+        require(who, Permission.PORTFOLIO_MANAGE)
+    elif not (who.is_service or Role(who.role).can_trade):
+        raise PermissionDenied("writing notes needs a role that can trade")
+
+
 class TcaService:
     def __init__(self, context: AppContext) -> None:
         self._context = context
@@ -342,8 +352,7 @@ class TcaService:
     def add_note(self, who: Who, client_id: str, request: NoteRequest) -> JournalNoteView:
         """Add a note to one of the caller's orders."""
         scope = _scope(who)
-        if isinstance(who, Principal):
-            require(who, Permission.PORTFOLIO_MANAGE)
+        _check_write(who)
         with self._context.state() as state:
             portfolio_id = self._order_portfolio(state, scope, client_id)
             try:
@@ -359,8 +368,7 @@ class TcaService:
     def update_note(self, who: Who, note_id: int, request: NoteRequest) -> JournalNoteView:
         """Replace the text of a note the caller wrote."""
         scope = _scope(who)
-        if isinstance(who, Principal):
-            require(who, Permission.PORTFOLIO_MANAGE)
+        _check_write(who)
         with self._context.state() as state:
             rows = state.sql("SELECT portfolio_id FROM journal_notes WHERE id = ?", [note_id])
             if not rows:

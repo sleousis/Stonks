@@ -560,7 +560,9 @@ def run_backup(
     now: datetime | None = None,
 ) -> BackupRunResult:
     """Create, verify and store one backup, then prune by ``retention``
-    (``None`` keeps everything). What a scheduled backup job calls."""
+    (``None`` keeps everything). What a scheduled backup job calls. A
+    backup without the state DB or the lake is refused (and nothing is
+    pruned): a restore needs both."""
     staging = target.staging_dir()
     tmp = None
     if staging is None:
@@ -572,6 +574,15 @@ def run_backup(
         if not report.ok:
             shutil.rmtree(local, ignore_errors=True)
             raise BackupError("new backup failed verification: " + "; ".join(report.problems))
+        missing = _missing_stores(local, paths)
+        if missing:
+            # Stored, a backup of nothing would push the good backups out
+            # of the retention buckets, one day at a time.
+            shutil.rmtree(local, ignore_errors=True)
+            raise BackupError(
+                "nothing to back up: no " + " and no ".join(missing) + ". Check the data paths "
+                "(STONKS_DATA_DIR); older backups were kept."
+            )
         ref = target.put(local)
     finally:
         if tmp is not None:
@@ -585,6 +596,18 @@ def run_backup(
             pruned.append(old.id)
     _log.info("backup.stored", backup_id=ref.id, pruned=pruned)
     return BackupRunResult(ref=ref, pruned=pruned)
+
+
+def _missing_stores(backup: Path, paths: DataPaths) -> list[str]:
+    """The stores a backup lacks that a restore needs (the state DB and the
+    lake), as text for the error."""
+    manifest = read_manifest(backup)
+    out = []
+    if not manifest.get("state"):
+        out.append(f"state DB at {paths.state}")
+    if not manifest.get("lake"):
+        out.append(f"lake at {paths.lake}")
+    return out
 
 
 def configured_target(settings: Any, dest: str | Path | None = None) -> LocalFilesystemTarget:

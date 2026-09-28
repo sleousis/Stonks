@@ -19,7 +19,7 @@ from stonks.accounts import AccountsError, NotFound, PortfolioRepository, owned_
 from stonks.accounts import Portfolio as AccountPortfolio
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.app.context import AppContext
-from stonks.app.cost_basis import FillLot, average_costs
+from stonks.app.cost_basis import FillLot, SplitEvent, average_costs
 from stonks.app.errors import NotFoundError, ValidationError
 from stonks.app.pagination import Page
 from stonks.app.serialize import finite
@@ -556,21 +556,36 @@ class PortfolioService:
             where, params = ledger_filter(state, "fills", portfolio_id, alias="f")
             rows = state.sql(
                 f"""
-                SELECT f.ticker, f.quantity, f.price, f.fee, o.side
+                SELECT f.ticker, f.quantity, f.price, f.fee, f.filled_at, o.side
                   FROM fills f JOIN orders o ON o.client_id = f.order_client_id
                  WHERE {where}
                  ORDER BY f.filled_at, f.id
                 """,
                 params,
             )
-        return average_costs(
-            FillLot(
-                ticker=r["ticker"],
-                quantity=float(r["quantity"]) * (1 if r["side"] == "buy" else -1),
-                price=float(r["price"]),
-                fee=float(r["fee"] or 0.0),
+            # the splits the book went through, so the average follows the shares
+            split_rows = state.sql(
+                "SELECT ticker, ex_date, value FROM corporate_action_ledger"
+                " WHERE portfolio_id = ? AND kind = 'split' ORDER BY ex_date",
+                [portfolio_id],
             )
-            for r in rows
+        return average_costs(
+            (
+                FillLot(
+                    ticker=r["ticker"],
+                    quantity=float(r["quantity"]) * (1 if r["side"] == "buy" else -1),
+                    price=float(r["price"]),
+                    fee=float(r["fee"] or 0.0),
+                    day=datetime.fromisoformat(str(r["filled_at"])).date(),
+                )
+                for r in rows
+            ),
+            [
+                SplitEvent(
+                    r["ticker"], date.fromisoformat(str(r["ex_date"])[:10]), float(r["value"])
+                )
+                for r in split_rows
+            ],
         )
 
     def _currencies(self, tickers: list[str]) -> dict[str, str]:

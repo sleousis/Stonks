@@ -106,12 +106,14 @@ def _split(
     for d in disposals:
         gain, disallowed = d.gain, d.wash_sale_disallowed
         if to_base is not None:
-            g = to_base(gain, d.currency, d.disposed)
+            # like the gains export: each amount at the rate of its own day
+            p = to_base(d.proceeds, d.currency, d.sale_day)
+            c = to_base(d.cost_basis, d.currency, d.purchase_day)
             w = to_base(disallowed, d.currency, d.disposed)
-            if g is None or w is None:
+            if p is None or c is None or w is None:
                 missing += 1
                 continue
-            gain, disallowed = g, w
+            gain, disallowed = p - c + w, w
         n += 1
         wash += disallowed
         if d.holding_period == "long":

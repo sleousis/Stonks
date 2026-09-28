@@ -15,10 +15,11 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from stonks.accounts import Scope
+from stonks.accounts import Role, Scope
 from stonks.accounts.audit import AuditLog
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, ValidationError
+from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.fx import FxRates, load_fx_rates
@@ -171,6 +172,9 @@ def _actor(who: Who) -> str:
 def _check_write(who: Who) -> None:
     if isinstance(who, Principal):
         require(who, Permission.PORTFOLIO_MANAGE)
+    elif not (who.is_service or Role(who.role).can_trade):
+        # the shell acting as a person (--user) gets that person's rights
+        raise PermissionDenied("changing tax settings needs a role that can trade")
 
 
 class TaxService:
@@ -335,7 +339,7 @@ class TaxService:
             ticker=ticker,
             side=side,
             quantity=quantity,
-            price=price,
+            price=price * _multiplier(ticker),
             when=when,
             currency=currency,
             past_picks=inputs.picks,
@@ -500,7 +504,9 @@ class TaxService:
                 ticker=r["ticker"],
                 side=r["side"],
                 quantity=float(r["quantity"]),
-                price=float(r["price"]),
+                # an option fill's price is per share of the deliverable:
+                # the lot counts it per contract
+                price=float(r["price"]) * _multiplier(r["ticker"]),
                 fee=fee_of(r),
                 filled_at=_utc(r["filled_at"]),
                 currency=currencies.get(r["ticker"]),
@@ -668,3 +674,11 @@ def _settings_view(state: SqliteState, portfolio_id: str) -> TaxSettingsView:
         updated_at=datetime.fromisoformat(r["updated_at"]),
         locked=locked,
     )
+
+
+def _multiplier(ticker: str) -> float:
+    """Money per unit of price for one unit held: an option contract's
+    multiplier, 1 for anything else."""
+    from stonks.core.instruments import InstrumentBook
+
+    return InstrumentBook().multiplier(ticker)

@@ -168,7 +168,7 @@ A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_r
 
 ### Dead-man checks
 
-- **Deadlines.** A watchdog checks every `watchdog_seconds` that each job with `deadline_minutes` succeeded (or was skipped) in time. A miss sends one error alert, recorded in `scheduler_deadline_alerts` so restarts don't repeat it.
+- **Deadlines.** A watchdog checks every `watchdog_seconds` that each job with `deadline_minutes` succeeded (or was skipped) in time. A miss sends one error alert, recorded in `scheduler_deadline_alerts` so restarts don't repeat it. A job that has never run (just added or switched on) is only watched from the scheduler's start.
 - **Pings.** With `ping_url_env`, a job POSTs `<url>/start`, then `<url>` or `<url>/fail`. The external monitor alerts when pings stop, which also covers a dead scheduler or server. Logs show only `scheme://host/***`.
 - **Engine dead-man.** The same watchdog checks each live intraday engine. When no bar close was dispatched for `[streaming.monitor] deadman_minutes` (5) while the engine's market is open, it sends one error alert per silent stretch. Silence counts from the last bar close, the engine's start or today's open, whichever is latest. A stopped engine or a closed market never alerts. The alert is recorded in `scheduler_deadline_alerts` as job `engine:<id>`, so restarts don't repeat it. `python -m stonks.scheduling check` runs it once too.
 
@@ -278,7 +278,7 @@ uv run stonks backup prune
 
 `python -m stonks.ops <command>` is the same tool without the rest of the CLI. It also has `restore-snapshot` and `check-restore`, which the off-server restore scripts use.
 
-A backup is one folder `stonks-<UTC time>Z` with the state DB, the lake, Parquet bars (hard-linked), artifacts and a `manifest.json` of hashes and row counts. It goes to `[backup].dir`, or `backups/` next to the lake. Pruning keeps the newest backup of each of the last 7 days, 4 weeks and 12 months.
+A backup is one folder `stonks-<UTC time>Z` with the state DB, the lake, Parquet bars (hard-linked), artifacts and a `manifest.json` of hashes and row counts. It goes to `[backup].dir`, or `backups/` next to the lake. Pruning keeps the newest backup of each of the last 7 days, 4 weeks and 12 months. A backup that finds no state DB or no lake (wrong data paths) fails, and nothing is pruned.
 
 The lake must not be held by another writer: stop `stonks serve` or back up from the server's own copy. `[backup]` in the config sets the folder and the retention. Off-server encrypted copies (restic) are covered in [deploy.md](deploy.md#6-backups). Full steps: [runbooks/restore.md](runbooks/restore.md).
 

@@ -2,8 +2,9 @@
 withholding (roadmap 20.5), and the open lots on a day (roadmap 13.12), in
 the trade currency and the base currency.
 
-Base amounts: the cost at the acquired day's FX rate, the proceeds at the
-disposed day's rate, dividends at the ex-date's rate, and an open lot's
+Base amounts: the cost at the purchase day's FX rate, the proceeds at the
+sale day's rate (for a short the sale opens the lot and the purchase
+covers it), dividends at the ex-date's rate, and an open lot's
 market value at the report day's rate. An amount whose
 currency has no stored rate is left empty (never guessed)."""
 
@@ -115,10 +116,8 @@ def gains_rows(
         if d.disposed.year != year:
             continue
         ccy = d.currency or base
-        proceeds_base = fx.convert(d.proceeds, ccy, base, d.disposed)
-        # a short's cost is paid at the cover, a long's at the purchase
-        cost_day = d.disposed if d.kind == "short" else d.acquired
-        cost_base = fx.convert(d.cost_basis, ccy, base, cost_day)
+        proceeds_base = fx.convert(d.proceeds, ccy, base, d.sale_day)
+        cost_base = fx.convert(d.cost_basis, ccy, base, d.purchase_day)
         wash_base = fx.convert(d.wash_sale_disallowed, ccy, base, d.disposed)
         gain_base = (
             None
