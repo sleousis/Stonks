@@ -131,6 +131,7 @@ from stonks.production.corporate_actions import (
     working_orders,
 )
 from stonks.production.decay import DecaySettings
+from stonks.production.feature_drift_settings import FeatureDriftSettings
 from stonks.production.financing import (
     broker_borrow_source,
     last_accrual,
@@ -296,6 +297,8 @@ class TickSettings:
     #: ``risk_monitor`` tick hook.
     risk_monitor: RiskMonitorSettings = field(default_factory=RiskMonitorSettings)
     decay: DecaySettings = field(default_factory=DecaySettings)
+    #: ``[production.feature_drift]``: read by the ``feature_drift`` tick hook.
+    feature_drift: FeatureDriftSettings = field(default_factory=FeatureDriftSettings)
     #: A scoped tick (explicit tickers, e.g. a crypto-only job) trades only
     #: tickers of ``universe``: holdings outside it are marked but never
     #: traded, not even sold (TO-04). The full tick over the configured

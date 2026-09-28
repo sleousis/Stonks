@@ -77,7 +77,7 @@ class FeatureProfile:
     n_train: int
 
     @classmethod
-    def build(cls, x: np.ndarray, names: Sequence[str], bins: int = 10) -> FeatureProfile:
+    def build(cls, x: np.ndarray, names: Sequence[str], bins: int = 5) -> FeatureProfile:
         """Profile the training matrix ``x`` (one column per name). Non-finite
         values are skipped."""
         if bins < 2:

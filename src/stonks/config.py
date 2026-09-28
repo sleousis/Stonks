@@ -34,6 +34,7 @@ from stonks.ops.config import BackupConfig
 from stonks.options.live.settings import OptionsLiveSettings
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.decay import DecaySettings
+from stonks.production.feature_drift_settings import FeatureDriftSettings
 from stonks.production.intraday_pnl_settings import IntradayPnlSettings
 from stonks.production.live.settings import LiveSettings
 from stonks.production.monitor_settings import RiskMonitorSettings
@@ -293,6 +294,9 @@ class ProductionConfig(BaseModel):
     risk_monitor: RiskMonitorSettings = RiskMonitorSettings()
     # ``[production.decay]``: the alpha-decay check per strategy sleeve.
     decay: DecaySettings = DecaySettings()
+    # ``[production.feature_drift]`` (roadmap 23.10): PSI of model
+    # strategies' live features against their training profile, warn only.
+    feature_drift: FeatureDriftSettings = FeatureDriftSettings()
     # ``[production.live]``: live trading at a real broker (roadmap 19).
     live: LiveSettings = LiveSettings()
     # ``[production.options]``: live options at a real broker (roadmap
