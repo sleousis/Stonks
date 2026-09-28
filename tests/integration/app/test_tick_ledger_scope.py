@@ -132,8 +132,9 @@ def test_a_trader_sees_only_their_own_slice_of_a_multi_book_tick(client, auth, w
         assert world["pf_b"] not in text
     assert set(detail["summary"]["portfolios"]) == {world["pf_a"]}
     assert [o["ticker"] for o in detail["orders"]] == ["UP.US"]
-    # the global outcome stays
-    assert detail["summary"]["orders_placed"] == 2
+    # counts are the reader's own books, never the whole tick (M15)
+    assert detail["summary"]["orders_placed"] == 1
+    assert detail["summary"]["fills"] == 0
 
 
 def test_the_owner_sees_their_clipped_orders_and_stale_buys(client, auth, world):
@@ -152,7 +153,9 @@ def test_another_users_single_book_tick_shows_the_global_outcome_only(client, au
     assert SECRET not in text and "pf_default" not in text and "kill" not in text
     assert detail["orders"] == []
     assert detail["summary"]["winner_strategy_id"] == "bah_active"
-    assert detail["summary"]["orders_placed"] == 1
+    # no counts from a book the reader does not own (M15)
+    assert detail["summary"]["orders_placed"] is None
+    assert detail["summary"]["fills"] is None
 
 
 def test_the_default_books_owner_sees_its_single_book_tick(client, auth, world):
@@ -166,6 +169,33 @@ def test_admins_see_other_traders_slices_no_more_than_anyone(client, auth, world
     token = _token(auth, DEFAULT_OWNER_ID, Role.ADMIN)
     detail = _get(client, f"/api/ticks/{MULTI}", token)
     assert SECRET not in json.dumps(detail) and world["pf_b"] not in json.dumps(detail)
+
+
+def test_a_trader_with_no_book_in_any_run_sees_no_order_or_fill_counts(
+    client, auth, settings, world
+):
+    """M15: a trader who follows nothing must not see the admin's or another
+    trader's order and fill counts on Today, in the list or the detail."""
+    c = add_user(settings.state.path, "c@example.com", Role.TRADER)
+    token = _token(auth, c, Role.TRADER)
+    listed = _get(client, "/api/ticks", token)["items"]
+    assert {MULTI, SINGLE} <= {t["id"] for t in listed}
+    for tick in listed:
+        assert tick["summary"]["orders_placed"] is None
+        assert tick["summary"]["fills"] is None
+        assert not tick["summary"].get("portfolios")
+    for tick_id in (MULTI, SINGLE):
+        detail = _get(client, f"/api/ticks/{tick_id}", token)
+        assert detail["orders"] == []
+        assert detail["summary"]["orders_placed"] is None
+
+
+def test_an_admin_sees_their_own_counts_not_the_ticks_total(client, auth, world):
+    token = _token(auth, DEFAULT_OWNER_ID, Role.ADMIN)
+    multi = _get(client, f"/api/ticks/{MULTI}", token)
+    assert multi["summary"]["orders_placed"] is None  # no admin book in it
+    single = _get(client, f"/api/ticks/{SINGLE}", token)
+    assert single["summary"]["orders_placed"] == 1  # pf_default is theirs
 
 
 def test_asking_for_another_users_portfolio_is_a_404(client, auth, world):

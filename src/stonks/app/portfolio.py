@@ -110,6 +110,16 @@ class SnapshotView(BaseModel):
     total_value: float
 
 
+class LastRunTotalsView(BaseModel):
+    """Counts of one trading run over every book, for admins only."""
+
+    tick_id: str
+    status: str
+    finished_at: str | None
+    orders_placed: int | None = Field(description="Null when the totals are suppressed.")
+    fills: int | None = Field(description="Null when the totals are suppressed.")
+
+
 class PortfolioTotalsView(BaseModel):
     """Sums over every active portfolio's latest snapshot, for admins. No
     tickers and no per-person numbers (decision 2026-09-26)."""
@@ -122,6 +132,12 @@ class PortfolioTotalsView(BaseModel):
         default=False,
         description="True when too few other people own books for the sums to hide anyone's "
         "numbers: cash and value then read 0.",
+    )
+    last_run: LastRunTotalsView | None = Field(
+        default=None,
+        description="The latest finished trading run's order and fill counts across every "
+        "book (null before the first run). Traders see only their own books' counts on "
+        "the runs list; this is the one place with the whole run.",
     )
 
 
@@ -136,6 +152,23 @@ TOTALS_PORTFOLIOS_SQL = (
     " AND EXISTS (SELECT 1 FROM portfolio_snapshots s WHERE s.portfolio_id = p.id)"
     " ORDER BY p.id"
 )
+
+
+def _last_run(row: Any, hidden: bool) -> LastRunTotalsView:
+    """The run's whole-tick counts (``None`` each while ``hidden``)."""
+    summary = json.loads(row["summary_json"]) if row["summary_json"] else {}
+
+    def count(key: str) -> int | None:
+        value = summary.get(key)
+        return None if hidden or value is None else int(value)
+
+    return LastRunTotalsView(
+        tick_id=row["id"],
+        status=row["status"],
+        finished_at=row["finished_at"],
+        orders_placed=count("orders_placed"),
+        fills=count("fills"),
+    )
 
 
 def totals_suppressed(owner_ids: set[str], viewer_id: str) -> bool:
@@ -341,6 +374,10 @@ class PortfolioService:
                  WHERE p.status = 'active' AND p.paper_of IS NULL
                 """
             )[0]
+            runs = state.sql(
+                "SELECT id, status, finished_at, summary_json FROM tick_runs"
+                " WHERE finished_at IS NOT NULL ORDER BY finished_at DESC, rowid DESC LIMIT 1"
+            )
         owners = {str(r["owner_id"]) for r in books}
         hidden = totals_suppressed(owners, principal.user_id)
         return PortfolioTotalsView(
@@ -349,6 +386,7 @@ class PortfolioService:
             cash=0.0 if hidden else float(row["cash"]),
             total_value=0.0 if hidden else float(row["total"]),
             suppressed=hidden,
+            last_run=_last_run(runs[0], hidden) if runs else None,
         )
 
     def current(self, portfolio_id: str = DEFAULT_PORTFOLIO_ID) -> PortfolioView:

@@ -304,8 +304,10 @@ def _order_books(state: Any, tick_id: str) -> list[str]:
 
 
 #: Summary keys about the whole tick, which every reader sees (AS-02):
-#: status and counts, the winner, the shadow outcomes, the quit rule, and
-#: how the tick ran (a dry run or not, and whose money it traded).
+#: status, the winner, the shadow outcomes, the quit rule, and how the tick
+#: ran (a dry run or not, and whose money it traded). Order and fill counts
+#: are not global: a reader sees the counts of their own books only (M15),
+#: and admins get cross-book totals from the totals services, never here.
 GLOBAL_SUMMARY_KEYS = frozenset(
     {
         "reason",
@@ -314,8 +316,6 @@ GLOBAL_SUMMARY_KEYS = frozenset(
         "winner_strategy_id",
         "exit_strategy_id",
         "winner_expected_return",
-        "orders_placed",
-        "fills",
         "shadow",
         "shadow_error",
         "quit_rule",
@@ -328,15 +328,21 @@ GLOBAL_SUMMARY_KEYS = frozenset(
 def scope_summary(summary: dict[str, Any], visible: set[str] | None) -> dict[str, Any]:
     """``summary`` as a reader who owns the portfolios ``visible`` may see
     it (``None``: a service, everything). A multi-book tick keeps only the
-    reader's books under ``portfolios``. A single-book tick names its
-    portfolio in ``portfolio_id`` (rows written before it: the default
-    portfolio): its owner sees all of it, anyone else the global keys."""
+    reader's books under ``portfolios``, and its ``orders_placed`` and
+    ``fills`` are the sums over those books (absent when none took part).
+    A single-book tick names its portfolio in ``portfolio_id`` (rows written
+    before it: the default portfolio): its owner sees all of it, anyone
+    else the global keys and no counts."""
     if visible is None:
         return summary
     shown = {k: v for k, v in summary.items() if k in GLOBAL_SUMMARY_KEYS}
     books = summary.get("portfolios")
     if isinstance(books, dict):
-        shown["portfolios"] = {pid: v for pid, v in books.items() if pid in visible}
+        mine = {pid: v for pid, v in books.items() if pid in visible}
+        shown["portfolios"] = mine
+        if mine:
+            for key in ("orders_placed", "fills"):
+                shown[key] = sum(int(b.get(key) or 0) for b in mine.values())
         return shown
     if summary.get("portfolio_id", DEFAULT_PORTFOLIO_ID) in visible:
         return summary
