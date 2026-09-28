@@ -23,6 +23,12 @@ describe('autoBlockedReason', () => {
     expect(paperProgress(sub({ paper_days_completed: 20 }))).toBeNull();
   });
 
+  it('names the mode as the vocabulary does', () => {
+    expect(autoBlockedReason(sub({ auto_blockers: ['auto mode needs a broker portfolio'] }))).toBe(
+      'Automatic needs a broker portfolio.',
+    );
+  });
+
   it('shows other blockers as sentences', () => {
     expect(autoBlockedReason(sub({ auto_blockers: ['the portfolio is paused'] }))).toBe(
       'The portfolio is paused.',

@@ -160,8 +160,14 @@
     display: grid;
     grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
     min-height: 100dvh;
-    // Keep the sidebar colour running the full page height.
-    background: linear-gradient(to right, var(--color-rail) var(--sidebar-w), transparent 0);
+    // Keep the sidebar colour running the full page height, with a hairline
+    // at its edge where rail and page are close in tone (dark theme, m7).
+    background: linear-gradient(
+      to right,
+      var(--color-rail) calc(var(--sidebar-w) - 1px),
+      color-mix(in srgb, var(--color-rail) 84%, var(--color-rail-ink)) 0 var(--sidebar-w),
+      transparent 0
+    );
   }
 }
 
@@ -179,8 +185,8 @@
     padding: var(--space-4) var(--space-3) var(--space-3);
     padding-left: calc(var(--space-3) + env(safe-area-inset-left));
     @include rail-scope;
-    // A hairline keeps the frame's edge where rail and page are close in tone (dark theme).
-    border-right: 1px solid color-mix(in srgb, var(--color-rail-ink) 14%, transparent);
+    // The same hairline as the frame below it (m7).
+    box-shadow: inset -1px 0 0 color-mix(in srgb, var(--color-rail) 84%, var(--color-rail-ink));
 
     > .sidebar-head > .brand {
       padding: var(--space-1) var(--space-3) var(--space-2);

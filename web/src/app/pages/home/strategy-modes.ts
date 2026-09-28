@@ -23,7 +23,7 @@ export function paperProgress(sub: SubscriptionView): string | null {
 export function otherBlockers(sub: SubscriptionView): string[] {
   return sub.auto_blockers
     .filter((b) => !/paper trading day/i.test(b))
-    .map((b) => sentence(toTraderWords(b)));
+    .map((b) => sentence(toTraderWords(b).replace(/\bauto mode\b/gi, 'Automatic')));
 }
 
 /**
