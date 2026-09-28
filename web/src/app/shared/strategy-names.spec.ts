@@ -1,4 +1,4 @@
-import { strategyDisplayName, strategyKindName } from './strategy-names';
+import { rowStrategyName, strategyDisplayName, strategyKindName } from './strategy-names';
 
 describe('strategyDisplayName (UX-27)', () => {
   it('prefers the draft name', () => {
@@ -15,6 +15,23 @@ describe('strategyDisplayName (UX-27)', () => {
     expect(strategyDisplayName('starter_buy_and_hold', { starter: null })).toBe(
       'starter_buy_and_hold',
     );
+  });
+
+  it("shows the API's strategy_name as the title", () => {
+    expect(strategyDisplayName('starter_trend', { name: 'Starter: trend following' })).toBe(
+      'Starter: trend following',
+    );
+    expect(strategyDisplayName('momentum_0a1b2c3d', { name: null })).toBe('Momentum 0a1b');
+  });
+
+  it('names a row from its strategy_id and strategy_name', () => {
+    expect(rowStrategyName({ strategy_id: 'starter_trend', strategy_name: 'Starter: trend' })).toBe(
+      'Starter: trend',
+    );
+    expect(rowStrategyName({ strategy_id: 'momentum_0a1b2c3d', strategy_name: null })).toBe(
+      'Momentum 0a1b',
+    );
+    expect(rowStrategyName({ strategy_id: null, strategy_name: null })).toBeNull();
   });
 
   it('turns a registered id into a name with a short suffix', () => {

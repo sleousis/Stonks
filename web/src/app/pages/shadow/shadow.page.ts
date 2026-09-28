@@ -18,7 +18,7 @@ import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
-import { strategyDisplayName } from '../../shared/strategy-names';
+import { rowStrategyName, strategyDisplayName } from '../../shared/strategy-names';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { SideTag } from '../../shared/ui/side-tag';
 import { PageHeader } from '../../shared/ui/page-header';
@@ -107,7 +107,18 @@ export class ShadowPage {
   private readonly portfolioCtx = inject(PortfolioContextService);
   /** Your portfolio trades real money: its line is brass and its stamp says LIVE. */
   protected readonly live = this.portfolioCtx.live;
-  protected readonly name = strategyDisplayName;
+  /** Titles the API sends as `strategy_name`, by strategy id. */
+  private readonly titles = computed(
+    () =>
+      new Map(
+        this.summaries.hasValue()
+          ? this.summaries.value().items.map((s) => [s.strategy_id, s.strategy_name] as const)
+          : [],
+      ),
+  );
+  /** A strategy's display name, its title first (UX-27). */
+  protected readonly name = (id: string) =>
+    strategyDisplayName(id, { name: this.titles().get(id) });
   protected readonly date = formatDate;
   protected readonly real = resource({
     params: () => ({ portfolio: this.portfolioCtx.selectedId() }),
@@ -143,7 +154,7 @@ export class ShadowPage {
   protected readonly failedSeries = computed(() => this.seriesShown()?.failed ?? []);
   protected readonly failedNames = computed(() =>
     this.failedSeries()
-      .map((id) => strategyDisplayName(id))
+      .map((id) => this.name(id))
       .join(', '),
   );
   protected readonly hiddenCount = computed(() =>
@@ -168,7 +179,7 @@ export class ShadowPage {
       const rows = byId.get(s.strategy_id);
       return {
         ...s,
-        name: strategyDisplayName(s.strategy_id),
+        name: this.name(s.strategy_id),
         comparison: rows?.length ? compareToReal(s.strategy_id, rows, real) : null,
       };
     });
@@ -217,7 +228,7 @@ export class ShadowPage {
       },
       ...input.shadows.map<ChartSeries>((s) => ({
         id: `shadow:${s.id}`,
-        label: strategyDisplayName(s.id),
+        label: this.name(s.id),
         kind: 'line',
         color: style(s.id).color,
         dashed: style(s.id).dashed,
@@ -230,7 +241,7 @@ export class ShadowPage {
       const rows = this.shadowSeries().find((s) => s.id === focus)?.rows ?? [];
       series.push({
         id: 'drawdown',
-        label: `${strategyDisplayName(focus)} drawdown`,
+        label: `${this.name(focus)} drawdown`,
         kind: 'area',
         color: 'loss',
         pane: 1,
@@ -246,7 +257,7 @@ export class ShadowPage {
     if (!input.baseDay) return null;
     const end = (points: { value: number }[]) =>
       formatNumber(points.at(-1)?.value ?? null, { digits: 1 });
-    const parts = input.shadows.map((s) => `${strategyDisplayName(s.id)} ${end(s.points)}`);
+    const parts = input.shadows.map((s) => `${this.name(s.id)} ${end(s.points)}`);
     return (
       `Your portfolio starts at 100 on ${formatDate(input.baseDay)} and ends at ` +
       `${end(input.real)}. Each strategy starts on its own first day: ${parts.join(', ')}.`
@@ -337,7 +348,7 @@ export class ShadowPage {
 
   protected readonly decisionColumns: TableColumn<ShadowDecisionView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
-    { key: 'strategy_id', label: 'Strategy', value: (d) => strategyDisplayName(d.strategy_id) },
+    { key: 'strategy_id', label: 'Strategy', value: (d) => rowStrategyName(d) },
     { key: 'side', label: 'Side' },
     { key: 'quantity', label: 'Qty', format: 'number' },
     { key: 'price', label: 'Price', format: 'money' },

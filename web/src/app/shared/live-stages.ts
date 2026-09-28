@@ -41,6 +41,28 @@ export const STAGE_WORDS: Record<LiveStage, StageWords> = {
   },
 };
 
+/**
+ * A portfolio linked to a real broker, at any stage: the only kind that can
+ * reach real money. Whether it trades real money now is `trading`.
+ */
+export function atBroker(p: { kind: string; trading: string }): boolean {
+  return p.kind === 'broker' || p.trading === 'live';
+}
+
+/**
+ * The paper stamp's word for a portfolio stage: "BROKER PAPER" at the
+ * broker's paper account, else "PAPER". Real money is always "LIVE".
+ */
+export function paperStampLabel(stage: string | null | undefined): string {
+  return stage === 'broker_paper' ? 'BROKER PAPER' : 'PAPER';
+}
+
+/** How a portfolio reads next to its name in a list: "live", "broker paper" or nothing. */
+export function portfolioModeNote(p: { trading: string; live_stage?: string | null }): string {
+  if (p.trading === 'live') return ' (live)';
+  return p.live_stage === 'broker_paper' ? ' (broker paper)' : '';
+}
+
 export function stageWords(stage: string): StageWords {
   return STAGE_WORDS[stage as LiveStage] ?? { label: stage, means: '', live: false };
 }

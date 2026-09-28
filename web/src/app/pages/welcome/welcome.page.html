@@ -121,7 +121,7 @@
                               (change)="portfolios.select(p.id)"
                             />
                             <span class="book-name">{{ p.name }}</span>
-                            <app-mode-stamp [live]="p.trading === 'live'" />
+                            <app-mode-stamp [live]="p.trading === 'live'" [stage]="p.live_stage" />
                           </label>
                         </li>
                       }

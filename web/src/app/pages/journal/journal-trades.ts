@@ -124,7 +124,7 @@ export class JournalTrades {
     {
       key: 'sleeve',
       label: 'Strategy',
-      value: (t) => sleeveLabel(t.sleeve),
+      value: (t) => sleeveLabel(t.sleeve, t.sleeve_name),
     },
     { key: 'entry_at', label: 'Entered', format: 'date', mobile: 'hide' },
     {

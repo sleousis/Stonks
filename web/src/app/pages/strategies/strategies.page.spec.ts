@@ -42,6 +42,7 @@ function page<T = StrategySummary>(items: T[]): Page<T> {
 const PAPER: ShadowPnlSummary[] = [
   {
     strategy_id: 'buyhold-spy',
+    strategy_name: null,
     status: 'shadow',
     days: 23,
     first_day: '2026-09-01',

@@ -122,11 +122,11 @@ def test_kill_needs_the_typed_confirmation(client, people, app, books, settings)
     api.push(1, "kill all please")
     bot.poll_once(timeout=0)
     assert "Type KILL ALL" in api.replies(1)[-2]
-    assert api.replies(1)[-1] == "Kill switch cancelled."
+    assert api.replies(1)[-1] == "Stop trading cancelled."
     api.push(1, "/kill")
     api.push(1, KILL_PHRASE)
     bot.poll_once(timeout=0)
-    assert api.replies(1)[-1].startswith("Kill switch on")
+    assert api.replies(1)[-1].startswith("Trading stopped (halt #")
     with SqliteState(settings.state.path) as state:
         rows = state.sql("SELECT scope, user_id, kind, halt FROM risk_halts")
     assert [tuple(r) for r in rows] == [("user", people["alice"]["id"], "kill", "all")]
@@ -143,7 +143,7 @@ def test_viewer_kill_is_refused(client, people, app, auth, settings):
     api.push(9, "/kill")
     api.push(9, KILL_PHRASE)
     bot.poll_once(timeout=0)
-    assert api.replies(9)[1] == "Your role cannot use the kill switch."
+    assert api.replies(9)[1] == "Your role cannot use Stop trading."
     with SqliteState(settings.state.path) as state:
         assert state.sql("SELECT COUNT(*) FROM risk_halts")[0][0] == 0
 

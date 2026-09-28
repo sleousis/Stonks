@@ -68,7 +68,7 @@ def soak_report_cmd(
     days: int = typer.Option(20, "--days", min=1, help="trading days to look back"),
     end: str | None = typer.Option(None, "--end", help="last day (YYYY-MM-DD), default today"),
     model: str | None = typer.Option(
-        None, "--model", help="model book portfolio id (default: the paper twin)"
+        None, "--model", help="test book portfolio id (default: the paper twin)"
     ),
     as_json: bool = typer.Option(False, "--json", help="print JSON"),
     strict: bool = typer.Option(False, "--strict", help="exit 1 when the soak is not clean"),
@@ -178,7 +178,7 @@ def _print_soak(report: Any) -> None:
     ]  # fmt: skip
     vs = report.vs_model
     if vs is None:
-        rows.append(("model book", "none"))
+        rows.append(("test book", "none"))
     else:
         rows.append(
             (
@@ -240,7 +240,7 @@ def register(halts_app: typer.Typer) -> None:
         )
         if json_out:
             Path(json_out).write_text(json.dumps(report.to_dict(), indent=2, default=str))
-        table = Table(title=f"kill switch drill ({report.broker} broker, scratch state)")
+        table = Table(title=f"Stop trading drill ({report.broker} broker, scratch state)")
         for col in ("step", "result", "detail", "ms"):
             table.add_column(col)
         for s in report.steps:

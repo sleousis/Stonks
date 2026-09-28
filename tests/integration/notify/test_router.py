@@ -311,11 +311,11 @@ def test_notify_signal_is_minimal_and_idempotent_per_as_of(state, users, router)
     assert len(next_day.notification_ids) == 1
 
 
-def test_notify_signal_labels_incubating_strategies(state, users, router):
+def test_notify_signal_labels_strategies_on_trial(state, users, router):
     _strategy_with_subscriber(state, users["alice"].id, status="shadow")
     notify_signal(router, strategy_id="mom", ticker="MSFT.US", kind="exit", as_of="2026-01-05")
     [row] = state.sql("SELECT body FROM notification_outbox")
-    assert "incubating" in row["body"]
+    assert "(on trial)" in row["body"] and "incubating" not in row["body"]
 
 
 def test_notify_signals_batches_in_one_transaction(state, users, router):

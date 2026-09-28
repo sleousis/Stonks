@@ -22,7 +22,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { TicketCountService } from '../../core/tickets/ticket-count.service';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
-import { strategyDisplayName } from '../../shared/strategy-names';
+import { rowStrategyName } from '../../shared/strategy-names';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
@@ -46,6 +46,8 @@ interface Group {
   asOf: string;
   expiresAt: string;
   live: boolean;
+  /** The portfolio's stage, for the stamp's words (BROKER PAPER). */
+  stage: string | null;
   tickets: TicketView[];
   notional: number;
 }
@@ -171,7 +173,7 @@ interface Group {
                               <span class="num">{{ qty(t.quantity) }}</span>
                               <strong class="num">{{ t.ticker }}</strong>
                             </span>
-                            <app-mode-stamp [live]="group.live" />
+                            <app-mode-stamp [live]="group.live" [stage]="group.stage" />
                           </p>
                           @if (hold(t); as why) {
                             <p class="hold" [class.alarm]="t.hold === 'runaway'">{{ why }}</p>
@@ -196,7 +198,7 @@ interface Group {
                             @if (t.strategy_id) {
                               <div>
                                 <dt>Strategy</dt>
-                                <dd>{{ strategyName(t.strategy_id) }}</dd>
+                                <dd>{{ strategyName(t) }}</dd>
                               </div>
                             }
                             @if (scoreText(t); as s) {
@@ -514,6 +516,7 @@ export class TicketsPage {
           asOf: t.as_of,
           expiresAt: t.expires_at,
           live: this.isLive(t.portfolio_id),
+          stage: this.stageOf(t.portfolio_id),
           tickets: [],
           notional: 0,
         };
@@ -538,7 +541,7 @@ export class TicketsPage {
   protected readonly look = ticketStatusLook;
   protected readonly hold = (t: TicketView) => holdWords(t.hold);
   protected readonly rules = ruleLines;
-  protected readonly strategyName = (id: string) => strategyDisplayName(id);
+  protected readonly strategyName = (t: TicketView) => rowStrategyName(t);
   protected readonly money = (v: number | null | undefined) => formatMoney(v);
   protected readonly qty = (v: number) => formatNumber(v);
   protected readonly date = formatDate;
@@ -628,6 +631,10 @@ export class TicketsPage {
     } finally {
       this.mark([ticket.id], false);
     }
+  }
+
+  private stageOf(portfolioId: string): string | null {
+    return this.portfolios.options().find((p) => p.id === portfolioId)?.live_stage ?? null;
   }
 
   private isLive(portfolioId: string): boolean {

@@ -11,6 +11,7 @@ import {
 import { DecisionsService } from '../../api/decisions.service';
 import type { TradeDecisionView } from '../../api/models';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { strategyDisplayName } from '../strategy-names';
 import { EmptyState, ErrorState, LoadingState } from './states';
 
 /** Short labels for the outcome chip. */
@@ -86,7 +87,7 @@ export function decisionDetail(d: TradeDecisionView): string {
                   <span class="muted">
                     {{ d.as_of }}
                     @if (d.strategy_id) {
-                      · {{ d.strategy_id }}
+                      · {{ strategyName(d.strategy_id) }}
                     }
                     @if (detail(d); as extra) {
                       · {{ extra }}
@@ -182,6 +183,8 @@ export class WhyNotPanel {
   protected label(outcome: string): string {
     return OUTCOME_LABELS[outcome] ?? outcome;
   }
+
+  protected readonly strategyName = (id: string) => strategyDisplayName(id);
 
   protected detail(d: TradeDecisionView): string {
     return decisionDetail(d);

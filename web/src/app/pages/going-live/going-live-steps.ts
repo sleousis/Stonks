@@ -11,7 +11,7 @@ import type {
 } from '../../api/models';
 import type { PortfolioRef } from '../../api/portfolios.service';
 import { formatDate, formatMoney } from '../../core/format/format';
-import { checkLabel, stageWords } from '../../shared/live-stages';
+import { atBroker, checkLabel, stageWords } from '../../shared/live-stages';
 
 /**
  * Done, still yours to do, waiting for your admin, or waiting on an earlier
@@ -71,10 +71,7 @@ const checking = (key: GoingLiveStep['key'], title: string): GoingLiveStep => ({
   link: null,
 });
 
-/** A portfolio linked to a real broker: the only kind that can reach real money. */
-export function atBroker(p: PortfolioRef): boolean {
-  return p.trading === 'live';
-}
+export { atBroker };
 
 /**
  * The whole path to real money for one portfolio, in order (F52): the

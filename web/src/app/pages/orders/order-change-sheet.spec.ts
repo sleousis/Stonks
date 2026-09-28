@@ -17,6 +17,7 @@ const ORDER: OrderView = {
   limit_price: null,
   broker_order_id: null,
   strategy_id: null,
+  strategy_name: null,
   tick_id: null,
   created_at: '2026-09-25T20:45:00Z',
   updated_at: '2026-09-25T20:45:00Z',

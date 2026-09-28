@@ -26,6 +26,7 @@ function order(over: Partial<OrderView> = {}): OrderView {
     limit_price: 24,
     broker_order_id: null,
     strategy_id: null,
+    strategy_name: null,
     tick_id: null,
     origin: 'manual',
     created_at: '2026-09-25T20:45:00Z',

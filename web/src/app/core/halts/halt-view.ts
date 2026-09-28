@@ -1,7 +1,7 @@
 import type { HaltView } from '../../api/models';
 
 const KIND_TEXT: Record<HaltView['kind'], string> = {
-  kill: 'kill switch',
+  kill: 'Stop trading',
   month_loss: 'monthly loss breaker',
   week_loss: 'weekly loss breaker',
   drawdown: 'drawdown breaker',

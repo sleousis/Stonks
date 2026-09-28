@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 
 import type { TcaGroupView } from '../../api/models';
+import { strategyDisplayName } from '../../shared/strategy-names';
 import { TcaService } from '../../api/tca.service';
 import { formatMoney, formatNumber, formatPercent } from '../../core/format/format';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
@@ -184,7 +185,9 @@ export class TcaSummary {
         label: KEY_LABELS[by],
         mobile: 'title',
         value: (g) =>
-          (by === 'portfolio' ? portfolioName(g.key, options) : null) ?? (g.key || 'None recorded'),
+          (by === 'portfolio' ? portfolioName(g.key, options) : null) ??
+          (by === 'strategy' && g.key ? strategyDisplayName(g.key) : null) ??
+          (g.key || 'None recorded'),
       },
       { key: 'orders', label: 'Orders', format: 'number' },
       { key: 'filled_orders', label: 'Filled', format: 'number', mobile: 'hide' },

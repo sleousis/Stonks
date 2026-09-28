@@ -54,11 +54,41 @@ def test_trading_modes_say_paper_or_live_per_portfolio(client, settings, people)
     by_id = {m["portfolio_id"]: m for m in modes.json()["items"]}
     assert set(by_id) == {sim, mirror}
     assert (by_id[sim]["trading"], by_id[sim]["broker"]) == ("paper", "simulated")
-    assert (by_id[mirror]["trading"], by_id[mirror]["broker"]) == ("live", "connection")
+    # Real money follows the portfolio stage only: a broker portfolio at
+    # Simulated or Broker paper is paper (docs/design/vocabulary.md).
+    assert (by_id[mirror]["trading"], by_id[mirror]["broker"]) == ("paper", "connection")
+    assert by_id[mirror]["live_stage"] == "sim_paper"
     default = client.get("/api/portfolios/trading-modes", headers=AUTH).json()["items"]
     assert [(m["portfolio_id"], m["trading"], m["broker"]) for m in default] == [
         (DEFAULT_PORTFOLIO_ID, "paper", "simulated")
     ]
+
+
+@pytest.mark.parametrize(
+    ("stages", "trading"),
+    [
+        (("broker_paper",), "paper"),
+        (("broker_paper", "live_small"), "live"),
+        (("broker_paper", "live_small", "live_scale"), "live"),
+    ],
+)
+def test_a_broker_portfolio_is_live_only_at_a_real_money_stage(
+    client, settings, people, stages, trading
+):
+    from stonks.production.live.stages import change_stage
+
+    mirror = _portfolio(settings, people["alice"], "Mirror", kind="broker")
+    with SqliteState(settings.state.path) as state:
+        for stage in stages:
+            change_stage(
+                state, mirror, stage, actor="t", reason="setup",
+                gate_report={"target": stage, "passed": True},
+            )  # fmt: skip
+    headers = people["alice"]["headers"]
+    [mode] = client.get("/api/portfolios/trading-modes", headers=headers).json()["items"]
+    assert (mode["trading"], mode["live_stage"]) == (trading, stages[-1])
+    [book] = client.get("/api/portfolios", headers=headers).json()["items"]
+    assert (book["trading"], book["live_stage"]) == (trading, stages[-1])
 
 
 @pytest.mark.parametrize(

@@ -7,7 +7,18 @@ describe('tickOutcome', () => {
       kind: 'winner',
       text: 'momentum-v3',
       strategyId: 'momentum-v3',
+      strategyName: 'momentum-v3',
     });
+  });
+
+  it("names the winner by its title, never the starter's id", () => {
+    const outcome = tickOutcome({
+      winner_strategy_id: 'starter_trend',
+      winner_strategy_name: 'Starter: trend following',
+    });
+    expect(outcome.text).toBe('Starter: trend following');
+    expect(outcome.strategyId).toBe('starter_trend');
+    expect(tickOutcome({ winner_strategy_id: 'momentum_0a1b2c3d' }).text).toBe('Momentum 0a1b');
   });
 
   it('names the exit strategy when no candidate qualified', () => {
@@ -20,6 +31,7 @@ describe('tickOutcome', () => {
       kind: 'exit',
       text: 'Exit value-v1',
       strategyId: 'value-v1',
+      strategyName: 'value-v1',
     });
   });
 

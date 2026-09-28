@@ -120,7 +120,7 @@ def evaluate_swap(
             passed=len(candidate_rows) >= policy.min_days,
             value=float(len(candidate_rows)),
             limit=float(policy.min_days),
-            detail=f"{len(candidate_rows)} model book day(s), need >= {policy.min_days}",
+            detail=f"{len(candidate_rows)} test book day(s), need >= {policy.min_days}",
         ),
         SwapCheck(
             name="max_drawdown",
@@ -128,7 +128,7 @@ def evaluate_swap(
             value=drawdown,
             limit=policy.max_drawdown,
             detail=(
-                "no model book snapshots"
+                "no test book snapshots"
                 if drawdown is None
                 else f"max drawdown {drawdown:.2%}, limit {policy.max_drawdown:.2%}"
             ),
@@ -181,7 +181,7 @@ def _vs_live_check(
             passed=False,
             value=None,
             limit=limit,
-            detail=f"{len(gaps)} paired day(s) with the live v{live_version} model book",
+            detail=f"{len(gaps)} paired day(s) with the test book of the live v{live_version}",
         )
         return check, None
     test = hac_mean_test(np.asarray(gaps))

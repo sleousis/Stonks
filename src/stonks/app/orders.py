@@ -8,10 +8,11 @@ from pydantic import BaseModel
 
 from stonks.app.context import AppContext
 from stonks.app.pagination import Page
+from stonks.app.strategy_names import StrategyNamed
 from stonks.production.ledger import ledger_filter
 
 
-class OrderView(BaseModel):
+class OrderView(StrategyNamed):
     client_id: str
     tick_id: str | None
     strategy_id: str | None

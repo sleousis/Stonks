@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import { RouterLink } from '@angular/router';
 
 import { type PortfolioRef, PortfoliosService } from '../../api/portfolios.service';
+import { atBroker } from '../../shared/live-stages';
 import { SessionService } from '../../core/auth/session.service';
 import { formatMoney } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
@@ -47,12 +48,12 @@ const NAME_MAX = 80;
               @for (p of books(); track p.id) {
                 <li>
                   <span class="name">{{ p.name }}</span>
-                  <app-mode-stamp [live]="p.trading === 'live'" />
+                  <app-mode-stamp [live]="p.trading === 'live'" [stage]="p.live_stage" />
                   @if (p.is_default) {
                     <span class="muted default">Default</span>
                   }
                   <span class="book-actions">
-                    @if (p.trading === 'live') {
+                    @if (atBroker(p)) {
                       <a
                         class="btn"
                         [routerLink]="['/profile/live', p.id]"
@@ -233,6 +234,7 @@ export class PortfoliosPanel {
   private readonly toasts = inject(ToastService);
 
   protected readonly nameMax = NAME_MAX;
+  protected readonly atBroker = atBroker;
   protected readonly books = this.ctx.options;
   protected readonly loadError = new Error(
     'Check your connection and try again. It also tries again on its own.',

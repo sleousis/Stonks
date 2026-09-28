@@ -35,11 +35,12 @@ const CHECK_LABEL: Record<string, string> = {
 };
 
 /**
- * Resuming after a kill switch, as a ticket (UX-51): what starts again and
+ * Resuming after Stop trading, as a ticket (UX-51): what starts again and
  * for whom, with the PAPER or LIVE stamp, a reason for the audit log and
  * the typed words RESUME TRADING. Above the phrase it shows the resume
  * checks (roadmap 23.15): the gateway, the last reconcile, the account and
- * the equity cover. A failed check needs a ticked override. The page hosts
+ * the equity cover. A failed check needs a ticked override. The confirm
+ * button is red only at a real money stage, the primary button on paper. The page hosts
  * one, calls `open()` and then `setChecks()`. `open()` resolves to the
  * answer, or null when cancelled.
  */
@@ -73,7 +74,7 @@ const CHECK_LABEL: Record<string, string> = {
             </dl>
           </div>
           <p id="resume-message" class="sheet-message">
-            Turns off the kill switch. Orders go out again from the next trading run.
+            Ends Stop trading. Orders go out again from the next trading run.
           </p>
           <section class="checks" aria-labelledby="resume-checks-title">
             <h3 id="resume-checks-title">Checks before resuming</h3>
@@ -141,7 +142,14 @@ const CHECK_LABEL: Record<string, string> = {
           <app-typed-confirm inputId="resume-typed" [phrase]="phrase" [(value)]="typed" />
           <div class="sheet-actions">
             <button type="button" class="btn" (click)="answer(false)">Cancel</button>
-            <button type="submit" class="btn btn-danger" [disabled]="!canConfirm()">
+            <!-- Red only when real money moves again; paper resumes with the primary button. -->
+            <button
+              type="submit"
+              class="btn"
+              [class.btn-danger]="req.live"
+              [class.btn-primary]="!req.live"
+              [disabled]="!canConfirm()"
+            >
               Resume trading
             </button>
           </div>

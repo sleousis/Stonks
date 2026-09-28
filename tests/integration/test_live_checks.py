@@ -139,7 +139,7 @@ def test_drift_opens_the_halt_pauses_auto_and_alerts(state, sent):
     assert report.id in halt.reason
     assert report.paused == ("sub_1",)
     assert paused_reason(state).startswith("broker_drift: ") and report.id in paused_reason(state)
-    assert [e.title for e in sent] == ["Trading halted: broker drift"]
+    assert [e.title for e in sent] == ["Trading stopped: broker drift"]
 
     # a second check finds the same halt open and pauses nothing new
     again = check(state, broker, "eod", sent=sent)

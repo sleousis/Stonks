@@ -15,6 +15,7 @@ from stonks.app.errors import NotFoundError
 from stonks.app.pagination import Page
 from stonks.app.portfolio import DayChangeView
 from stonks.app.serialize import finite
+from stonks.app.strategy_names import StrategyNamed
 from stonks.config import HealthConfig, RiskPolicy
 from stonks.insights.flows import flows_or_missing, lake_fx_loader
 from stonks.insights.returns import mwr, net_flows, twr
@@ -62,7 +63,7 @@ class PnlSeries(BaseModel):
     day_change: DayChangeView | None = None
 
 
-class ShadowPnlSummary(BaseModel):
+class ShadowPnlSummary(StrategyNamed):
     strategy_id: str
     #: Registry status now (a promoted strategy keeps its shadow history).
     status: str | None
@@ -74,7 +75,7 @@ class ShadowPnlSummary(BaseModel):
     max_drawdown: float | None
 
 
-class ShadowDecisionView(BaseModel):
+class ShadowDecisionView(StrategyNamed):
     id: int
     tick_id: str
     strategy_id: str

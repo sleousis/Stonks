@@ -20,6 +20,7 @@ from stonks.accounts import NotFound, Role, Scope, owned_portfolio
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError, ValidationError
 from stonks.app.pagination import Page
+from stonks.app.strategy_names import StrategyNamed
 from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
@@ -107,7 +108,7 @@ class JournalNoteView(BaseModel):
         return cls(**n.__dict__)
 
 
-class JournalEntryView(BaseModel):
+class JournalEntryView(StrategyNamed):
     """One order: why it was placed, the signal context, the outcome and the
     notes people added."""
 

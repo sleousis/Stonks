@@ -146,7 +146,7 @@ class PlanRequest(BaseModel):
 
     portfolio_id: str = Field(pattern=_ID)
     source: Literal["strategy", "targets"] = Field(
-        description="strategy: the strategy's latest model book weights; targets: your list."
+        description="strategy: the weights of the strategy's test book; targets: your list."
     )
     strategy_id: Annotated[str, Field(pattern=_ID)] | None = None
     targets: list[PlanTarget] = Field(default_factory=list, max_length=500)
@@ -447,7 +447,7 @@ class ExecutionService:
             [body.strategy_id, body.strategy_id],
         )
         if not rows:
-            raise ValidationError(f"strategy {body.strategy_id} has no model book weights yet")
+            raise ValidationError(f"strategy {body.strategy_id} has no test book weights yet")
         return {r["ticker"]: max(0.0, float(r["model_weight"])) for r in rows}
 
     def _market(self, tickers: list[str], day: date) -> tuple[dict[str, float], dict[str, str]]:

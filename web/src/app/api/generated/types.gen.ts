@@ -5690,6 +5690,12 @@ export type JournalEntryView = {
      */
     strategy_id: string | null;
     /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
+    /**
      * Ticker
      */
     ticker: string;
@@ -5799,6 +5805,12 @@ export type JournalTradeDetailView = {
      * Sleeve
      */
     sleeve: string;
+    /**
+     * Sleeve Name
+     *
+     * The sleeve strategy's plain title (a starter's), or null.
+     */
+    sleeve_name?: string | null;
     /**
      * Tags
      */
@@ -5952,6 +5964,12 @@ export type JournalTradeView = {
      * Sleeve
      */
     sleeve: string;
+    /**
+     * Sleeve Name
+     *
+     * The sleeve strategy's plain title (a starter's), or null.
+     */
+    sleeve_name?: string | null;
     /**
      * Stop Price
      */
@@ -6286,6 +6304,12 @@ export type LeaderboardRow = {
      * Strategy Id
      */
     strategy_id: string;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
     /**
      * Survival Passed
      */
@@ -8945,6 +8969,12 @@ export type OrderView = {
      */
     strategy_id: string | null;
     /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
+    /**
      * Tick Id
      */
     tick_id: string | null;
@@ -10601,7 +10631,7 @@ export type PlanConfirm = {
     /**
      * Source
      *
-     * strategy: the strategy's latest model book weights; targets: your list.
+     * strategy: the weights of the strategy's test book; targets: your list.
      */
     source: 'strategy' | 'targets';
     /**
@@ -10717,7 +10747,7 @@ export type PlanRequest = {
     /**
      * Source
      *
-     * strategy: the strategy's latest model book weights; targets: your list.
+     * strategy: the weights of the strategy's test book; targets: your list.
      */
     source: 'strategy' | 'targets';
     /**
@@ -11115,6 +11145,10 @@ export type PortfolioSummaryView = {
      * Kind
      */
     kind: 'simulated' | 'broker';
+    /**
+     * Live Stage
+     */
+    live_stage?: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale';
     /**
      * Name
      */
@@ -14044,6 +14078,12 @@ export type ShadowDecisionView = {
      */
     strategy_id: string;
     /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
+    /**
      * Tick Id
      */
     tick_id: string;
@@ -14079,6 +14119,12 @@ export type ShadowOutcomeView = {
      * Strategy Id
      */
     strategy_id: string;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
     /**
      * Total Value
      */
@@ -14117,6 +14163,12 @@ export type ShadowPnlSummary = {
      * Strategy Id
      */
     strategy_id: string;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
     /**
      * Total Value
      */
@@ -16547,6 +16599,10 @@ export type TickResultView = {
      * Winner Strategy Id
      */
     winner_strategy_id: string | null;
+    /**
+     * Winner Strategy Name
+     */
+    winner_strategy_name?: string | null;
 };
 
 /**
@@ -16642,6 +16698,10 @@ export type TickSummary = {
      */
     exit_strategy_id?: string | null;
     /**
+     * Exit Strategy Name
+     */
+    exit_strategy_name?: string | null;
+    /**
      * Fills
      */
     fills?: number | null;
@@ -16685,6 +16745,10 @@ export type TickSummary = {
      * Winner Strategy Id
      */
     winner_strategy_id?: string | null;
+    /**
+     * Winner Strategy Name
+     */
+    winner_strategy_name?: string | null;
     [key: string]: unknown;
 };
 
@@ -16881,6 +16945,12 @@ export type TicketView = {
      * Strategy Id
      */
     strategy_id: string | null;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
     /**
      * Submit After
      */
@@ -17334,6 +17404,12 @@ export type TradingModeView = {
      * Detail
      */
     detail: string;
+    /**
+     * Live Stage
+     *
+     * Where the portfolio stands on the way to real money. A broker portfolio trades real money only at live_small or live_scale.
+     */
+    live_stage?: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale';
     /**
      * Name
      */

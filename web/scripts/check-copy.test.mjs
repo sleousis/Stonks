@@ -48,3 +48,28 @@ test('honours the allowlist', () => {
   const src = "const d = 'Also called a tick.';";
   assert.deepEqual(wordProblems('src/app/core/help/glossary.ts', src), []);
 });
+
+test('flags model book, kill switch, incubating and go live (vocabulary.md)', () => {
+  assert.match(
+    wordProblems('src/app/x.html', '<p>The model book bought it</p>').join(),
+    /Test book/,
+  );
+  assert.match(
+    wordProblems('src/app/x.ts', "const m = 'Turn off the kill switch';").join(),
+    /Stop trading/,
+  );
+  assert.match(
+    wordProblems('src/app/x.ts', "const m = 'An incubating strategy';").join(),
+    /On trial/,
+  );
+  assert.match(wordProblems('src/app/x.html', '<button>Go live</button>').join(), /Approve/);
+  assert.match(
+    wordProblems('src/app/x.html', '<p>3 paper trading strategies</p>').join(),
+    /on trial/,
+  );
+  // The go-live check keeps its name, and "Going live" is the checklist page.
+  assert.deepEqual(
+    wordProblems('src/app/x.html', '<p>Go-live check. Going live checklist</p>'),
+    [],
+  );
+});

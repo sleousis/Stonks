@@ -10,6 +10,7 @@ import {
 import { RouterLink } from '@angular/router';
 
 import type { JournalEntryView, JournalNoteView } from '../../api/models';
+import { rowStrategyName } from '../../shared/strategy-names';
 import { TcaService } from '../../api/tca.service';
 import { SessionService } from '../../core/auth/session.service';
 import { formatMoney, formatNumber } from '../../core/format/format';
@@ -70,6 +71,7 @@ export class TradeOrderPage {
   protected readonly session = inject(SessionService);
 
   protected readonly noteMax = NOTE_MAX;
+  protected readonly strategyName = rowStrategyName;
 
   protected readonly order = resource({
     params: () => ({ id: this.clientId() }),

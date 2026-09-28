@@ -30,6 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from stonks.accounts import Scope
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
+from stonks.app.strategy_names import StrategyNamed
 from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import POLICY, Permission, require
 from stonks.auth.principal import Principal
@@ -77,7 +78,7 @@ def _scope(who: Who) -> Scope:
     return who.scope if isinstance(who, Principal) else who
 
 
-class TicketView(BaseModel):
+class TicketView(StrategyNamed):
     """One order ticket: the order a live book decided, why, and what
     became of it."""
 

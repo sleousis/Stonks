@@ -173,8 +173,7 @@ export const CHECKS: Readonly<Record<string, CheckInfo>> = {
   },
   risk_halts: {
     title: 'Trading stops',
-    meaning:
-      'Whether a stop on trading is in force: a kill switch, a loss limit or a data problem.',
+    meaning: 'Whether a stop on trading is in force: Stop trading, a loss limit or a data problem.',
   },
 };
 

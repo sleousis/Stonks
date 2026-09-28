@@ -1,10 +1,13 @@
 import type { TickSummary } from '../../api/models';
+import { strategyDisplayName } from '../../shared/strategy-names';
 
 export interface TickOutcome {
   kind: 'winner' | 'exit' | 'error' | 'none';
   /** One line for tables and cards. */
   text: string;
   strategyId: string | null;
+  /** The strategy's display name (never the raw id), or null. */
+  strategyName: string | null;
 }
 
 /**
@@ -12,23 +15,30 @@ export interface TickOutcome {
  * strategy whose positions it exited when no candidate qualified.
  */
 export function tickOutcome(summary: TickSummary | null | undefined): TickOutcome {
-  if (!summary) return { kind: 'none', text: '–', strategyId: null };
+  if (!summary) return { kind: 'none', text: '–', strategyId: null, strategyName: null };
   if (summary.error) {
-    return { kind: 'error', text: summary.error_type ?? 'Error', strategyId: null };
-  }
-  if (summary.winner_strategy_id) {
     return {
-      kind: 'winner',
-      text: summary.winner_strategy_id,
-      strategyId: summary.winner_strategy_id,
+      kind: 'error',
+      text: summary.error_type ?? 'Error',
+      strategyId: null,
+      strategyName: null,
     };
   }
+  const winner = summary.winner_strategy_id;
+  if (winner) {
+    const name = strategyDisplayName(winner, { name: summary.winner_strategy_name });
+    return { kind: 'winner', text: name, strategyId: winner, strategyName: name };
+  }
   const exit = summary.exit_strategy_id;
-  if (exit) return { kind: 'exit', text: `Exit ${exit}`, strategyId: exit };
+  if (exit) {
+    const name = strategyDisplayName(exit, { name: summary.exit_strategy_name });
+    return { kind: 'exit', text: `Exit ${name}`, strategyId: exit, strategyName: name };
+  }
   return {
     kind: 'none',
     text: summary.reason ? humanize(summary.reason) : 'No winner',
     strategyId: null,
+    strategyName: null,
   };
 }
 

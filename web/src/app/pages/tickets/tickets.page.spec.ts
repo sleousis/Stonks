@@ -24,6 +24,7 @@ function ticket(over: Partial<TicketView> = {}): TicketView {
     as_of: '2026-03-17',
     client_id: '2026-03-17:pf_live:momentum_1a2b3c4d:AAPL.US:buy',
     strategy_id: 'momentum_1a2b3c4d',
+    strategy_name: null,
     ticker: 'AAPL.US',
     side: 'buy',
     quantity: 5,
