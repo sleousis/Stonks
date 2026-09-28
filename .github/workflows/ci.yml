@@ -171,8 +171,16 @@ jobs:
         working-directory: deploy
         run: |
           cp .env.example .env
+          # Placeholder IBKR secret files, so the gateway profiles resolve.
+          mkdir -p ibkr/secrets
+          touch ibkr/secrets/{paper,live}_{username,password}.txt
           docker compose config --quiet
-          docker compose --profile backup config --quiet
+          for profile in scheduler lab-worker backup ibkr-paper ibkr-live ai; do
+            echo "profile $profile"
+            docker compose --profile "$profile" config --quiet
+          done
+          COMPOSE_PROFILES=scheduler,lab-worker,backup,ibkr-paper,ibkr-live,ai \
+            docker compose -f compose.yaml -f compose.tailscale.yaml config --quiet
       - name: Shell scripts pass shellcheck
         run: shellcheck -x deploy/scripts/*.sh deploy/backup/*.sh deploy/monitor/*.sh
       - uses: hashicorp/setup-terraform@v3
