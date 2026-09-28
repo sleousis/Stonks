@@ -23,7 +23,7 @@ import {
   NAV_GROUPS_OPEN_BY_DEFAULT,
   NAV_ITEMS,
   type NavItem,
-  groupForUrl,
+  groupsForUrl,
   navItemVisible,
   navViewer,
 } from './nav-items';
@@ -64,9 +64,8 @@ export class NavGroupsState {
   }
 
   private reveal(url: string): void {
-    const group = groupForUrl(url);
-    if (group && (NAV_GROUPS as readonly string[]).includes(group)) {
-      this.set(group as FoldingGroup, true);
+    for (const group of groupsForUrl(url)) {
+      if ((NAV_GROUPS as readonly string[]).includes(group)) this.set(group as FoldingGroup, true);
     }
   }
 }

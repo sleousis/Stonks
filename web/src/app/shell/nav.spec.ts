@@ -82,6 +82,7 @@ describe('Nav', () => {
       'Notifications',
     ]);
     expect(group(el, 'More')).toEqual([
+      'Going live',
       'Watchlists',
       'Calendar',
       'Screener',
@@ -90,13 +91,13 @@ describe('Nav', () => {
       'Trade costs',
       'Assistant',
     ]);
-    expect(group(el, 'Advanced')).toEqual(['Studio', 'Lab', 'Options', 'Strategy review']);
+    expect(group(el, 'Advanced')).toEqual(['Studio', 'Lab', 'Options', 'Strategy review', 'Halts']);
     expect(group(el, 'System')).toEqual([]);
   });
 
   it('never links a trader to an admin page (F11)', () => {
     const hrefs = [...render(TRADER).querySelectorAll('a')].map((a) => a.getAttribute('href'));
-    for (const path of ['/ops/halts', '/ops/schedule', '/universes', '/data', '/health']) {
+    for (const path of ['/ops/schedule', '/universes', '/data', '/health']) {
       expect(hrefs).not.toContain(path);
     }
   });
@@ -145,6 +146,9 @@ describe('Nav', () => {
       'Users',
     ]);
     expect(labels(el)).not.toContain('Overview');
+    // Halts sits in System for admins, once.
+    expect(labels(el).filter((l) => l === 'Halts')).toHaveLength(1);
+    expect(group(el, 'Advanced')).not.toContain('Halts');
   });
 
   it('keeps account pages out of the main nav (they sit in the account menu)', () => {

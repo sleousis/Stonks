@@ -21,6 +21,8 @@ export interface NavItem {
   permission?: Permission;
   /** Shown to admins only (the route or the API still checks). */
   adminOnly?: boolean;
+  /** Hidden from admins, who reach the same page from the System group. */
+  notForAdmins?: boolean;
   /** Hidden while the server has this feature off (F42). */
   feature?: Feature;
   /** Extra words that find it in the command palette. */
@@ -53,6 +55,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/charts', label: 'Charts', key: 'z', group: 'Main', keywords: ['price'] },
   { path: '/notifications', label: 'Notifications', key: 'n', group: 'Main', keywords: ['alerts'] },
 
+  {
+    path: '/going-live',
+    label: 'Going live',
+    group: 'More',
+    keywords: ['real money', 'broker', 'checklist', 'stage'],
+  },
   { path: '/watchlists', label: 'Watchlists', key: 'x', group: 'More', keywords: ['tickers'] },
   {
     path: '/calendar',
@@ -119,6 +127,16 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: 'g',
     group: 'Advanced',
     keywords: ['checks', 'approve', 'go-live check'],
+  },
+  {
+    // A trader's kill switches and breakers (F11): the page shows only their own.
+    path: '/ops/halts',
+    label: 'Halts',
+    key: 'k',
+    group: 'Advanced',
+    permission: 'killswitch.user',
+    notForAdmins: true,
+    keywords: ['kill switch', 'stop trading', 'resume', 'breaker'],
   },
 
   {
@@ -263,19 +281,36 @@ export function navViewer(
 /** May this user see the item? Reads signals, so it is reactive inside `computed()`. */
 export function navItemVisible(item: NavItem, viewer: NavViewer): boolean {
   if (item.adminOnly && !viewer.isAdmin()) return false;
+  if (item.notForAdmins && viewer.isAdmin()) return false;
   if (item.permission && !viewer.can(item.permission)) return false;
   if (item.feature && viewer.hasFeature && !viewer.hasFeature(item.feature)) return false;
   return true;
 }
 
-/** The folding group whose item matches `url` best (the longest path that prefixes it). */
-export function groupForUrl(url: string, items: readonly NavItem[] = NAV_ITEMS): NavGroup | null {
+/**
+ * The groups whose item matches `url` best (the longest path that prefixes
+ * it). A page listed twice (Halts: Advanced for traders, System for admins)
+ * gives both groups; each viewer only sees one of them.
+ */
+export function groupsForUrl(url: string, items: readonly NavItem[] = NAV_ITEMS): NavGroup[] {
   const path = url.split(/[?#]/)[0] || '/';
-  let best: NavItem | null = null;
+  let best = -1;
+  let groups: NavGroup[] = [];
   for (const item of items) {
     const hit =
       item.path === '/' ? path === '/' : path === item.path || path.startsWith(item.path + '/');
-    if (hit && (!best || item.path.length > best.path.length)) best = item;
+    if (!hit) continue;
+    if (item.path.length > best) {
+      best = item.path.length;
+      groups = [item.group];
+    } else if (item.path.length === best && !groups.includes(item.group)) {
+      groups.push(item.group);
+    }
   }
-  return best?.group ?? null;
+  return groups;
+}
+
+/** The first group whose item matches `url` best, or null. */
+export function groupForUrl(url: string, items: readonly NavItem[] = NAV_ITEMS): NavGroup | null {
+  return groupsForUrl(url, items)[0] ?? null;
 }

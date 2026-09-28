@@ -1510,15 +1510,15 @@ flowchart LR
   | Group | Pages | Who |
   |---|---|---|
   | (top) | Today, Strategies, Orders, Approvals, Insights, Charts, Notifications | everyone signed in (Approvals needs `portfolio.trade`) |
-  | More | Watchlists, Calendar, Screener, Trial results (`/paper`), Leaderboard, Trade costs (`/trades`), Assistant | everyone; the Assistant only while it is on |
-  | Advanced | Studio, Lab, Options, Strategy review (`/go-live`) | Studio and Lab need `lab.run` |
+  | More | Going live (`/going-live`), Watchlists, Calendar, Screener, Trial results (`/paper`), Leaderboard, Trade costs (`/trades`), Assistant | everyone; the Assistant only while it is on |
+  | Advanced | Studio, Lab, Options, Strategy review (`/go-live`), Halts (traders: their own halts) | Studio and Lab need `lab.run`, Halts `killswitch.user` |
   | System | Dashboard (`/dashboard`), Health, Live engine, Schedule, Data, Data quality, Universes, Model versions, Halts, Users | admins |
   | Account menu (pinned below the nav) | Profile, Settings, Broker connections, Get set up, Help, Sign out | everyone signed in |
 
   The nav scrolls between the search box and the account menu, with a
   shadow at an edge while there is more to scroll to, so the account menu
-  never falls below the fold. A trader never gets a link to an admin page:
-  the session strip's next run opens Today (admins: the schedule), and a
+  never falls below the fold. A trader never gets a link to an admin-only
+  page: the session strip's next run opens Today (admins: the schedule), and a
   trader resumes their own kill switch or clears their own breaker from the
   strip (`<app-strip-halt-actions>`), with the same ticket, typed words and
   code as the Halts page. A halt only an admin may end says so. The palette
