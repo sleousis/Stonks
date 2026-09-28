@@ -352,7 +352,7 @@ class ManualOrdersService:
         if self._brokers is not None:
             return self._brokers(account)
         if account.kind == "broker":
-            return _connection_trader(self._ctx, account)
+            return connection_trader(self._ctx, account)
         from stonks.core.types import Portfolio
         from stonks.execution.brokers import make_broker
 
@@ -401,7 +401,7 @@ def _closing(broker: object | None) -> Iterator[None]:
         close_broker(broker)
 
 
-def _connection_trader(context: AppContext, account: AccountPortfolio) -> Broker:
+def connection_trader(context: AppContext, account: AccountPortfolio) -> Broker:
     """The linked connection's trading adapter, opened as the scheduler
     does for auto books (the owner check was done by the caller)."""
     from stonks.connections.service import ConnectionService

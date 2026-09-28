@@ -25,6 +25,7 @@ from stonks.app.insights import InsightsService
 from stonks.app.jobs import Job, JobRunner, JobStore
 from stonks.app.lab import LabService
 from stonks.app.lab_workers import LabWorkerService
+from stonks.app.live import LiveService
 from stonks.app.manual_orders import ManualOrdersService
 from stonks.app.market import MarketDataService
 from stonks.app.model_versions import ModelVersionService
@@ -189,6 +190,7 @@ class Services:
     market: MarketDataService
     orders: OrdersService
     manual_orders: ManualOrdersService
+    live: LiveService
     order_drafts: OrderDraftService
     tickets: TicketService
     price_alerts: PriceAlertService
@@ -265,6 +267,7 @@ class Services:
             market=MarketDataService(context),
             orders=orders,
             manual_orders=manual_orders,
+            live=LiveService(context),
             order_drafts=OrderDraftService(context, manual_orders),
             tickets=TicketService(context),
             price_alerts=PriceAlertService(context),

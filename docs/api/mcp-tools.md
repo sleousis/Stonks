@@ -53,6 +53,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_ledger_run`](#get_ledger_run) | read | no |
 | [`get_live_allocation`](#get_live_allocation) | read | no |
 | [`get_live_gate_report`](#get_live_gate_report) | read | no |
+| [`get_live_margin`](#get_live_margin) | read | no |
 | [`get_live_risk`](#get_live_risk) | read | no |
 | [`get_live_rules`](#get_live_rules) | read | no |
 | [`get_live_stage`](#get_live_stage) | read | no |
@@ -495,6 +496,21 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 What a promotion to the next stage needs, checked now. A check
 with passed = null has no data yet and does not block. Promoting is
 done in the web app with a fresh second factor, never here.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  | a portfolio id of yours (pf_...) |
+
+### `get_live_margin`
+
+Buying power and margin use of a live portfolio, read from the
+broker now: equity, available funds, initial and maintenance margin,
+the margin cushion and its level (ok, warn, reduce, call), the
+safety buffer, and whether the pattern day trader rule binds. A
+margin account is chosen in the web app with a fresh second factor,
+never here.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
