@@ -59,6 +59,35 @@ def test_positions_carry_cost_basis_and_unrealized_pnl(client, settings, seeded)
     assert body["cost_basis"] == pytest.approx(pos["cost_basis"])
 
 
+def test_average_cost_follows_a_split_the_book_went_through(client, settings, seeded):
+    """After a 2:1 split the book holds twice the shares at half the cost
+    each. The average cost replayed from the fills must say so, or the
+    position shows a loss of half its value."""
+    with SqliteState(settings.state.path) as state:
+        [fill] = state.sql("SELECT quantity, price, fee FROM fills")
+        [snap] = state.sql(
+            "SELECT cash, positions_json FROM portfolio_snapshots ORDER BY id DESC LIMIT 1"
+        )
+        held = float(fill["quantity"])
+        state.execute(
+            "INSERT INTO corporate_action_ledger (portfolio_id, ticker, ex_date, kind, value,"
+            " quantity_before, quantity_after, cash_delta, applied_at) VALUES"
+            " ('pf_default', 'UP.US', '2026-03-25', 'split', 2.0, ?, ?, 0, '2026-03-25')",
+            [held, held * 2],
+        )
+        state.execute(
+            "INSERT INTO portfolio_snapshots (taken_at, as_of, cash, positions_json, total_value,"
+            " portfolio_id, source) VALUES ('2026-03-25T21:00:00+00:00', '2026-03-25', ?, ?,"
+            " 0, 'pf_default', 'tick')",
+            [snap["cash"], json.dumps({"UP.US": held * 2})],
+        )
+    avg = (fill["quantity"] * fill["price"] + fill["fee"]) / fill["quantity"]
+    [pos] = client.get("/api/portfolio", headers=AUTH).json()["positions"]
+    assert pos["quantity"] == pytest.approx(held * 2)
+    assert pos["avg_cost"] == pytest.approx(avg / 2)
+    assert pos["cost_basis"] == pytest.approx(avg * held)
+
+
 def test_portfolio_currency_follows_the_instruments(client, settings):
     from stonks.store.lake import DuckDBLake
 
