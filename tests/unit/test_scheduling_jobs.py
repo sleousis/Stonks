@@ -30,6 +30,7 @@ BUILTIN = {
     "report",
     "universes_refresh",
     "price_alerts",
+    "screen_alerts",
     "calendars_refresh",
 }
 
@@ -47,6 +48,7 @@ def test_default_jobs_build():
         "universes_refresh",
         "ingest_metadata",
         "price_alerts",
+        "screen_alerts",
         "broker_health",
         "ibkr_reauth_reminder",
         "live_sod_check",
@@ -96,6 +98,8 @@ def test_default_jobs_build():
     assert by_name["ingest_metadata"].trigger.offset < tick.trigger.offset
     # price alerts check the closes the ingest just stored (roadmap 20.2)
     assert ingest_at < by_name["price_alerts"].trigger.offset
+    # screen alerts run the saved screens on the same closes (roadmap 23.17)
+    assert ingest_at < by_name["screen_alerts"].trigger.offset < tick.trigger.offset
     # reconciliation (roadmap 19.5): before the open, and after the close
     # but before the tick decides
     sod = by_name["live_sod_check"].trigger

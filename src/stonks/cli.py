@@ -2567,6 +2567,12 @@ from stonks.cli_cash_flows import app as cash_flows_app  # noqa: E402
 
 app.add_typer(cash_flows_app, name="cash-flows")
 
+# ---- CSV statement imports (roadmap 23.17) --------------------------------------
+
+from stonks.cli_statement_imports import app as statement_imports_app  # noqa: E402
+
+app.add_typer(statement_imports_app, name="imports")
+
 # ---- model versions (roadmap 22.6) ---------------------------------------------
 
 from stonks.cli_model_versions import register as _register_model_versions  # noqa: E402

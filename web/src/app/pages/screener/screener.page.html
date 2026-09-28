@@ -312,6 +312,9 @@
       </ul>
     }
   </section>
+  @if (screens.hasValue()) {
+    <app-screen-alerts class="alerts-panel" [screens]="screens.value()" />
+  }
 </div>
 
 @if (savedUniverse(); as u) {

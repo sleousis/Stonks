@@ -23,6 +23,7 @@ const CATEGORIES: readonly { value: Category; label: string }[] = [
   { value: 'signal', label: 'Signals' },
   { value: 'price_alert', label: 'Price alerts' },
   { value: 'event_alert', label: 'Upcoming events' },
+  { value: 'screen_alert', label: 'Screen alerts' },
   { value: 'order', label: 'Orders and fills' },
   { value: 'risk', label: 'Risk alerts' },
   { value: 'system', label: 'System' },

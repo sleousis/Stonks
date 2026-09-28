@@ -194,6 +194,8 @@ READ_TOOLS = {
     "run_screen",
     "list_screens",
     "get_screen",
+    "list_screen_alerts",
+    "list_screen_alert_events",
     "list_model_versions",
     "get_model_version_history",
     "list_model_candidates",
@@ -240,6 +242,7 @@ EDIT_TOOLS = {
     "update_watchlist",
     "update_price_alert",
     "update_screen",
+    "set_screen_alert",
 }
 GUARDED_TOOLS = {
     "create_universe",
@@ -267,6 +270,7 @@ GUARDED_TOOLS = {
     "set_event_alerts",
     "save_screen_as_universe",
     "delete_screen",
+    "delete_screen_alert",
     "swap_model_version",
     "reject_model_version",
 }

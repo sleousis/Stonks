@@ -94,3 +94,28 @@ def test_universe_from_a_screen(runner, workdir):
     # no metric filter: every listed name today, stored as a fixed list
     assert snap.exit_code == 0, snap.output
     assert "survivorship" in snap.output
+
+
+def test_screen_alerts_from_the_shell(runner, workdir):
+    """Roadmap 23.17: alert on a saved screen, run it twice, read the event."""
+    spec = json.dumps({"filters": [{"metric": "price", "min": 19.5}]})
+    saved = runner.invoke(app, ["screener", "save", "Pricey", "--spec", spec])
+    assert saved.exit_code == 0, saved.output
+    sid = saved.output.split()[1]
+    bad = runner.invoke(app, ["screener", "alert", sid, "--weekly", "someday"])
+    assert bad.exit_code != 0
+    on = runner.invoke(app, ["screener", "alert", sid, "--weekly", "fri"])
+    assert on.exit_code == 0 and "weekly on fri, on" in on.output, on.output
+    on = runner.invoke(app, ["screener", "alert", sid])
+    assert "daily, on" in on.output
+    listed = runner.invoke(app, ["screener", "alerts"])
+    assert "Pricey" in listed.output and "daily" in listed.output
+    first = runner.invoke(app, ["screener", "alerts-run", "--as-of", "2024-02-01"])
+    assert "1 baselines" in first.output, first.output
+    second = runner.invoke(app, ["screener", "alerts-run", "--as-of", AS_OF])
+    assert "1 found new names" in second.output, second.output
+    events = runner.invoke(app, ["screener", "alert-events"])
+    assert "AAA.US" in events.output and "Pricey" in events.output
+    gone = runner.invoke(app, ["screener", "alert-delete", sid])
+    assert gone.exit_code == 0
+    assert "no screen alerts" in runner.invoke(app, ["screener", "alerts"]).output

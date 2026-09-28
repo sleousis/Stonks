@@ -214,3 +214,43 @@ def test_price_alerts_run_on_every_backend(settings):
     assert api.status == "succeeded" and api.detail["fired"] == 1
     assert seen[0][:2] == ("POST", "/api/price-alerts/evaluate")
     assert json.loads(seen[0][2]) == {"as_of": AS_OF.isoformat()}
+
+
+# ---- screen alerts (roadmap 23.17) -----------------------------------------------------
+
+
+def test_screen_alerts_run_on_every_backend(settings):
+    local = LOCAL_ACTIONS.get("screen_alerts")(_ctx(settings, "screen_alerts"))
+    assert local.status == "succeeded" and local.detail["alerts"] == 0
+    services = Services.create(AppContext(settings))
+    services.start()
+    try:
+        ex = InProcessExecutor(services, timeout_seconds=60)
+        out = IN_PROCESS_ACTIONS.get("screen_alerts")(_ctx(settings, "screen_alerts", ex))
+        assert out.status == "succeeded" and out.detail["ran"] == 0
+    finally:
+        services.shutdown()
+    seen: list[tuple[str, str, bytes]] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        seen.append((request.method, request.url.path, request.content))
+        return httpx2.Response(
+            200,
+            json={
+                "as_of": "2026-09-25",
+                "alerts": 2,
+                "ran": 2,
+                "baselines": 1,
+                "fired": 1,
+                "published": 1,
+                "failed": 0,
+            },
+        )
+
+    client = SchedulerApiClient(
+        "http://127.0.0.1:8000", token="t", transport=httpx2.MockTransport(handler)
+    )
+    api = API_ACTIONS.get("screen_alerts")(_ctx(settings, "screen_alerts", ApiExecutor(client)))
+    assert api.status == "succeeded" and api.detail["fired"] == 1
+    assert seen[0][:2] == ("POST", "/api/screener/alerts/evaluate")
+    assert json.loads(seen[0][2]) == {"as_of": AS_OF.isoformat()}

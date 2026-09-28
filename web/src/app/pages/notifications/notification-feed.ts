@@ -29,6 +29,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   signal: 'Signal',
   price_alert: 'Price alert',
   event_alert: 'Upcoming event',
+  screen_alert: 'Screen alert',
   order: 'Order',
   risk: 'Risk',
   system: 'System',

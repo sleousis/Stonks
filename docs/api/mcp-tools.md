@@ -23,6 +23,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`delete_draft`](#delete_draft) | guarded | yes |
 | [`delete_price_alert`](#delete_price_alert) | guarded | yes |
 | [`delete_screen`](#delete_screen) | guarded | yes |
+| [`delete_screen_alert`](#delete_screen_alert) | guarded | yes |
 | [`delete_universe`](#delete_universe) | guarded | yes |
 | [`disable_draft`](#disable_draft) | guarded | yes |
 | [`draft_order`](#draft_order) | job | no |
@@ -127,6 +128,8 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_research_sessions`](#list_research_sessions) | read | no |
 | [`list_risk_snapshots`](#list_risk_snapshots) | read | no |
 | [`list_round_trips`](#list_round_trips) | read | no |
+| [`list_screen_alert_events`](#list_screen_alert_events) | read | no |
+| [`list_screen_alerts`](#list_screen_alerts) | read | no |
 | [`list_screen_metrics`](#list_screen_metrics) | read | no |
 | [`list_screens`](#list_screens) | read | no |
 | [`list_shadow_decisions`](#list_shadow_decisions) | read | no |
@@ -171,6 +174,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`save_screen_as_universe`](#save_screen_as_universe) | guarded | yes |
 | [`search_instruments`](#search_instruments) | read | no |
 | [`set_event_alerts`](#set_event_alerts) | guarded | yes |
+| [`set_screen_alert`](#set_screen_alert) | job | no |
 | [`shadow_strategy`](#shadow_strategy) | guarded | yes |
 | [`start_research`](#start_research) | job | no |
 | [`subscribe`](#subscribe) | guarded | yes |
@@ -1388,6 +1392,30 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` |  |
 | `offset` | integer | no | `0` |  |
 
+### `list_screen_alert_events`
+
+When your screens found names that newly match, newest first.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `screen_id` | string \| null | no | `null` |  |
+| `limit` | integer | no | `50` | page size |
+| `offset` | integer | no | `0` | rows to skip |
+
+### `list_screen_alerts`
+
+Your screen alerts: which saved screens alert, daily or weekly,
+the last day each ran and how many names it matched.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `limit` | integer | no | `100` | page size |
+| `offset` | integer | no | `0` | rows to skip |
+
 ### `list_screen_metrics`
 
 Every metric a screen may filter or sort on: id, group (price or
@@ -2045,6 +2073,22 @@ Safety: writes, non-destructive, not idempotent, closed world. Needs confirm: no
 | `hypothesis` | string \| null | no | `null` | the edge and who pays for it; recorded before tuning (trial ledger) |
 | `premortem` | string \| null | no | `null` | how the strategy is expected to fail; recorded |
 
+### `set_screen_alert`
+
+Turn on (or change) the alert of a saved screen. It runs after
+each data refresh and notifies you about names that newly match,
+through your notification channels. Notify only: nothing trades.
+The first run stores the matches and sends nothing.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `screen_id` | string | yes |  | one of your saved screens |
+| `cadence` | "daily" \| "weekly" | no | `"daily"` | run on every trading day, or weekly |
+| `weekday` | integer \| null | no | `null` | weekly: the day it runs, 0 = Monday |
+| `enabled` | boolean | no | `true` |  |
+
 ### `start_research`
 
 Start an AI research session: the assistant's model proposes lab
@@ -2217,6 +2261,18 @@ Delete one of your saved screens. Universes made from it stay.
 Without confirm=true returns a preview.
 
 Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `screen_id` | string | yes |  |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `delete_screen_alert`
+
+Remove the alert from one of your saved screens (the screen
+stays). Without confirm=true returns the alert and removes nothing.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|

@@ -18,6 +18,8 @@ The actions call the same services as the CLI:
 - ``backup``: ``run_configured_backup`` (``[backup]`` target and retention);
 - ``price_alerts``: every person's price alert rules checked against the
   latest closes (roadmap 20.2);
+- ``screen_alerts``: every due saved-screen alert run on the day's data,
+  names that newly match sent to their owner (roadmap 23.17);
 - ``connections_sync``: every due broker connection synced as
   ``service:scheduler`` (state DB only, so every backend runs it here);
 - ``broker_health``: probes each IB Gateway, stores its status, alerts and
@@ -330,6 +332,17 @@ def price_alerts_action(ctx: RunContext) -> JobOutcome:
             )
     finally:
         state.close()
+    return JobOutcome("succeeded", out.as_dict())
+
+
+@register_action("screen_alerts")
+def screen_alerts_action(ctx: RunContext) -> JobOutcome:
+    """Every due screen alert of every person, run in this process on the
+    lake, sent through the notification router (roadmap 23.17)."""
+    from stonks.app.context import AppContext
+    from stonks.app.screen_alerts import ScreenAlertService
+
+    out = ScreenAlertService(AppContext(ctx.settings)).evaluate(as_of=ctx.fire.as_of)
     return JobOutcome("succeeded", out.as_dict())
 
 

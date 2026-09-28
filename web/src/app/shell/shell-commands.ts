@@ -11,6 +11,7 @@ import { StopTradingService } from '../core/halts/stop-trading.service';
 import { GLOSSARY_PATH } from '../core/help/glossary';
 import { JobsService } from '../core/jobs/jobs.service';
 import { ToastService } from '../core/notify/toast.service';
+import { PrivacyService } from '../core/privacy/privacy.service';
 import { ThemeService } from '../core/theme/theme.service';
 import { type NavItem, NAV_ITEMS, navItemVisible, navViewer } from './nav-items';
 
@@ -48,6 +49,7 @@ export function registerShellCommands(): void {
   const confirm = inject(ConfirmService);
   const toasts = inject(ToastService);
   const theme = inject(ThemeService);
+  const privacy = inject(PrivacyService);
   const viewer = navViewer(inject(SessionService));
   const stopTrading = inject(StopTradingService);
   const destroyRef = inject(DestroyRef);
@@ -131,6 +133,14 @@ export function registerShellCommands(): void {
       group: 'Actions',
       keywords: ['theme', 'dark', 'light', 'appearance'],
       run: () => theme.toggle(),
+    },
+    {
+      id: 'action.privacy',
+      label: 'Hide or show money amounts',
+      group: 'Actions',
+      keywords: ['privacy', 'hide', 'amounts', 'money', 'screen share'],
+      hint: 'h',
+      run: () => privacy.toggle(),
     },
     {
       id: 'action.shortcuts',

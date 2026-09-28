@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [journal](#journal-endpoints) · [lab](#lab-endpoints) · [lab-worker](#lab-worker-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [demo](#demo-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [journal](#journal-endpoints) · [lab](#lab-endpoints) · [lab-worker](#lab-worker-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statement-imports](#statement-imports-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -123,6 +123,14 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/connections/{connection_id}/accounts` | List Accounts | sign-in |  | [Page_BrokerAccountView_](#page_brokeraccountview_) |
 | POST | `/api/connections/{connection_id}/link` | Link Account | `portfolio.manage` | [LinkAccountRequest](#linkaccountrequest) | [LinkResultView](#linkresultview) |
 | POST | `/api/connections/{connection_id}/sync` | Sync Connection | `portfolio.manage` |  | [SyncResultView](#syncresultview) |
+
+## demo endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/demo` | Get Demo | sign-in |  | [DemoPortfolioView](#demoportfolioview) |
+| POST | `/api/demo` | Open Demo | `data.read` |  | [DemoPortfolioView](#demoportfolioview) |
+| DELETE | `/api/demo` | Remove Demo | `data.read` |  |  |
 
 ## exports endpoints
 
@@ -409,6 +417,9 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/screener/alerts` | List Screen Alerts | sign-in |  | [Page_ScreenAlertView_](#page_screenalertview_) |
+| POST | `/api/screener/alerts/evaluate` | Evaluate Screen Alerts | `operations.run` | [ScreenAlertRunRequest](#screenalertrunrequest) \| null | [ScreenAlertRunView](#screenalertrunview) |
+| GET | `/api/screener/alerts/events` | List Screen Alert Events | sign-in |  | [Page_ScreenAlertEventView_](#page_screenalerteventview_) |
 | POST | `/api/screener/jobs` | Submit Screen Job | `data.read` | [ScreenRunRequest](#screenrunrequest) | [Job](#job) |
 | GET | `/api/screener/jobs/{job_id}/result` | Get Screen Job Result | `data.read` |  | [ScreenResult](#screenresult) |
 | GET | `/api/screener/metrics` | List Metrics | sign-in |  | list[[MetricView](#metricview)] |
@@ -418,6 +429,9 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/screener/screens/{screen_id}` | Get Screen | sign-in |  | [SavedScreenView](#savedscreenview) |
 | PATCH | `/api/screener/screens/{screen_id}` | Update Screen | `portfolio.manage` | [SavedScreenUpdate](#savedscreenupdate) | [SavedScreenView](#savedscreenview) |
 | DELETE | `/api/screener/screens/{screen_id}` | Delete Screen | `portfolio.manage` |  |  |
+| GET | `/api/screener/screens/{screen_id}/alert` | Get Screen Alert | sign-in |  | [ScreenAlertView](#screenalertview) |
+| PUT | `/api/screener/screens/{screen_id}/alert` | Set Screen Alert | `notifications.manage` | [ScreenAlertSet](#screenalertset) | [ScreenAlertView](#screenalertview) |
+| DELETE | `/api/screener/screens/{screen_id}/alert` | Delete Screen Alert | `notifications.manage` |  |  |
 | POST | `/api/screener/size` | Size Screen | `data.read` | [ScreenRunRequest](#screenrunrequest) | [ScreenSize](#screensize) |
 | POST | `/api/screener/universes` | Save As Universe | `lab.run` | [ScreenUniverseRequest](#screenuniverserequest) | [ScreenUniverseView](#screenuniverseview) |
 
@@ -434,6 +448,15 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
 | GET | `/api/sources` | List Sources | sign-in |  | list[[DataSourceInfo](#datasourceinfo)] |
+
+## statement-imports endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/statement-imports` | List Statement Imports | sign-in |  | [Page_StatementImportView_](#page_statementimportview_) |
+| POST | `/api/statement-imports` | Commit Statement Import | `portfolio.manage` | [StatementImportRequest](#statementimportrequest) | [StatementImportView](#statementimportview) |
+| POST | `/api/statement-imports/preview` | Preview Statement Import | `portfolio.manage` | [StatementImportRequest](#statementimportrequest) | [StatementPreview](#statementpreview) |
+| POST | `/api/statement-imports/{import_id}/undo` | Undo Statement Import | `portfolio.manage` |  | [StatementImportView](#statementimportview) |
 
 ## statements endpoints
 
@@ -1121,6 +1144,28 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 |-------|------|----------|-------------|
 | `reason` | string | yes |  |
 
+### ColumnMapping
+
+Which CSV column holds which field. Only ``date`` is required, plus either a ``type`` column (with ``types`` mapping its values to kinds) or one fixed ``kind`` for every row.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | string \| null | no |  |
+| `currency` | string \| null | no |  |
+| `date` | string | yes |  |
+| `date_format` | string \| null | no |  |
+| `default_currency` | string | no |  |
+| `description` | string \| null | no |  |
+| `exchange` | string \| null | no |  |
+| `fee` | string \| null | no |  |
+| `kind` | "trade" \| "dividend" \| "interest" \| "fee" \| "deposit" \| "withdrawal" \| "split" \| "other" \| null | no |  |
+| `price` | string \| null | no |  |
+| `quantity` | string \| null | no |  |
+| `sell_values` | list[string] | no |  |
+| `symbol` | string \| null | no |  |
+| `type` | string \| null | no |  |
+| `types` | dict[str, "trade" \| "dividend" \| "interest" \| "fee" \| "deposit" \| "withdrawal" \| "split" \| "other"] | no |  |
+
 ### CommissionSettings
 
 ``[backtest.costs.commissions]``: the rates of every schedule. An asset class picks its schedule with ``commission``.
@@ -1285,6 +1330,48 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 | `default` | boolean | yes |  |
 | `detail` | string \| null | no |  |
 | `id` | "eodhd" \| "yahoo" \| "defillama" | yes |  |
+
+### DemoPointView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `day` | date | yes |  |
+| `value` | number | yes |  |
+
+### DemoPortfolioView
+
+Your demo portfolio. ``exists`` is false until you open one: then the other fields are empty.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+| `cash` | number \| null | no |  |
+| `created_at` | date-time \| null | no |  |
+| `currency` | string | no |  |
+| `curve` | list[[DemoPointView](#demopointview)] | no |  |
+| `day_change` | number \| null | no |  |
+| `exists` | boolean | yes |  |
+| `label` | string | no |  |
+| `name` | string \| null | no |  |
+| `positions` | list[[DemoPositionView](#demopositionview)] | no |  |
+| `start_value` | number \| null | no |  |
+| `total_return` | number \| null | no |  |
+| `total_value` | number \| null | no |  |
+
+### DemoPositionView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cost` | number | yes |  |
+| `name` | string | yes |  |
+| `pnl` | number | yes |  |
+| `pnl_pct` | number | yes |  |
+| `price` | number | yes |  |
+| `quantity` | number | yes |  |
+| `sector` | string | yes |  |
+| `ticker` | string | yes |  |
+| `value` | number | yes |  |
+| `weight` | number | yes |  |
 
 ### DisconnectView
 
@@ -3791,6 +3878,24 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_ScreenAlertEventView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[ScreenAlertEventView](#screenalerteventview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_ScreenAlertView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[ScreenAlertView](#screenalertview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_ShadowDecisionView_
 
 | Field | Type | Required | Description |
@@ -3823,6 +3928,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[StatementFlagView](#statementflagview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_StatementImportView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[StatementImportView](#statementimportview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -4249,7 +4363,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers and n
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `category` | "signal" \| "order" \| "risk" \| "system" \| "price_alert" \| "event_alert" | yes |  |
+| `category` | "signal" \| "order" \| "risk" \| "system" \| "price_alert" \| "event_alert" \| "screen_alert" | yes |  |
 | `channel` | string | yes |  |
 | `enabled` | boolean | yes |  |
 | `strategy_id` | string \| null | no |  |
@@ -4941,6 +5055,61 @@ Rename, replace the spec, or both. Unset fields stay.
 | `started_at` | date-time | yes |  |
 | `status` | string | yes |  |
 
+### ScreenAlertEventView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `created_at` | date-time | yes |  |
+| `id` | integer | yes |  |
+| `matched` | integer | yes |  |
+| `screen_id` | string | yes |  |
+| `screen_name` | string \| null | yes |  |
+| `tickers` | list[string] | yes |  |
+
+### ScreenAlertRunRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+
+### ScreenAlertRunView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alerts` | integer | yes |  |
+| `as_of` | date | yes |  |
+| `baselines` | integer | yes |  |
+| `failed` | integer | yes |  |
+| `fired` | integer | yes |  |
+| `published` | integer | yes |  |
+| `ran` | integer | yes |  |
+
+### ScreenAlertSet
+
+Turn an alert on for one of your saved screens, or change it.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cadence` | "daily" \| "weekly" | no |  |
+| `enabled` | boolean | no |  |
+| `weekday` | integer \| null | no | Weekly: the day it runs, 0 = Monday. |
+
+### ScreenAlertView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cadence` | "daily" \| "weekly" | yes |  |
+| `created_at` | date-time | yes |  |
+| `enabled` | boolean | yes |  |
+| `last_as_of` | date \| null | yes |  |
+| `last_error` | string \| null | yes |  |
+| `matched` | integer | yes |  |
+| `screen_id` | string | yes |  |
+| `screen_name` | string | yes |  |
+| `updated_at` | date-time | yes |  |
+| `weekday` | integer \| null | yes |  |
+
 ### ScreenResult
 
 | Field | Type | Required | Description |
@@ -5268,6 +5437,69 @@ A lake snapshot by folder name; fetch it from ``GET /api/lab/worker/snapshots/{n
 | `period_end` | date | yes |  |
 | `severity` | "error" \| "warning" | yes |  |
 | `ticker` | string | yes |  |
+
+### StatementImportRequest
+
+A CSV to preview or import, into ``portfolio_id`` (a broker portfolio of yours) or into a new portfolio named ``new_portfolio``.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `content` | string | yes | The CSV text. |
+| `currency` | string | no |  |
+| `filename` | string \| null | no |  |
+| `mapping` | [ColumnMapping](#columnmapping) \| null | no | Column mapping; blank guesses it from the headers. |
+| `new_portfolio` | string \| null | no |  |
+| `portfolio_id` | string \| null | no |  |
+
+### StatementImportView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | date-time | yes |  |
+| `filename` | string \| null | yes |  |
+| `first_date` | date \| null | yes |  |
+| `id` | string | yes |  |
+| `last_date` | date \| null | yes |  |
+| `portfolio_id` | string | yes |  |
+| `portfolio_name` | string \| null | yes |  |
+| `rows_added` | integer | yes |  |
+| `rows_duplicate` | integer | yes |  |
+| `rows_skipped` | integer | yes |  |
+| `rows_total` | integer | yes |  |
+| `undone_at` | date-time \| null | yes |  |
+
+### StatementPreview
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `duplicate` | integer | yes |  |
+| `first_date` | date \| null | yes |  |
+| `guessed` | boolean | yes |  |
+| `headers` | list[string] | yes |  |
+| `last_date` | date \| null | yes |  |
+| `mapping` | [ColumnMapping](#columnmapping) | yes |  |
+| `new` | integer | yes |  |
+| `rows` | list[[StatementRowView](#statementrowview)] | yes |  |
+| `skipped` | integer | yes |  |
+| `total` | integer | yes |  |
+| `unmapped` | list[string] | yes |  |
+
+### StatementRowView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | number \| null | no |  |
+| `currency` | string \| null | no |  |
+| `day` | date \| null | no |  |
+| `fee` | number \| null | no |  |
+| `kind` | string \| null | no |  |
+| `line` | integer | yes |  |
+| `price` | number \| null | no |  |
+| `quantity` | number \| null | no |  |
+| `reason` | string \| null | no |  |
+| `status` | "new" \| "duplicate" \| "skipped" | yes |  |
+| `symbol` | string \| null | no |  |
+| `ticker` | string \| null | no |  |
 
 ### StatusChangeRequest
 

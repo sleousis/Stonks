@@ -342,6 +342,17 @@ def api_price_alerts(ctx: RunContext) -> JobOutcome:
     return JobOutcome("succeeded", {k: view.get(k) for k in keys})
 
 
+@API_ACTIONS.register("screen_alerts")
+def api_screen_alerts(ctx: RunContext) -> JobOutcome:
+    """The server holds the lake, so it runs the screens
+    (``POST /api/screener/alerts/evaluate``)."""
+    view = _executor(ctx).client.post(
+        "/api/screener/alerts/evaluate", {"as_of": ctx.fire.as_of.isoformat()}
+    )
+    keys = ("alerts", "ran", "baselines", "fired", "published", "failed")
+    return JobOutcome("succeeded", {k: view.get(k) for k in keys})
+
+
 @API_ACTIONS.register("model_retrain")
 def api_model_retrain(ctx: RunContext) -> JobOutcome:
     """The server holds the lake, so it refits (``POST /api/model-versions/retrain``)."""

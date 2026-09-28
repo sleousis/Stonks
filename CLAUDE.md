@@ -47,6 +47,7 @@ uv run stonks universe ensure ID --start ... --end ... [--interval 1d --source e
 # Screener and calendars (docs/universes.md#screener, docs/calendars.md)
 uv run stonks screener metrics | run --spec JSON [--as-of ...] | save NAME --spec JSON | list | delete ID
 uv run stonks screener universe ID (--spec JSON|--screen ID) [--mode rule|snapshot]   # a screen as a universe
+uv run stonks screener alert ID [--weekly fri] | alerts | alert-events | alert-delete ID | alerts-run   # screen alerts (23.17)
 uv run stonks calendars show|news [--scope holdings|watchlists|tickers|all] | earnings-check TICKERS
 uv run stonks calendars refresh [--source eodhd] [--no-alerts]   # also the daily calendars_refresh job
 
@@ -100,6 +101,7 @@ uv run stonks ingest fx --pairs EURUSD,GBPUSD [--since ...]   # FX rates into th
 uv run stonks ingest borrow [--markets usa,uk]   # IBKR short stock files into borrow_rates
 uv run stonks ingest funds --tickers SPY.US,QQQ.US   # ETF holdings into fund_holdings (look-through, docs/look-through.md)
 uv run stonks cash-flows record|list --user E --portfolio ID   # deposits and withdrawals (TWR, MWR)
+uv run stonks imports preview|commit FILE (--new NAME|--portfolio ID) [--mapping JSON] | list | undo ID   # CSV statements (23.17)
 uv run stonks assistant eval [--base-url URL --model M]   # the assistant's eval set
 
 # Servers
@@ -199,7 +201,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - `instrument_sector_versions (ticker, sector, gic_sector, known_at)` (022): every sector label an instrument has had, with the time Stonks first saw it. Factor attribution reads the label known on each day (`factors.style.sector_labels`).
 - `fund_holdings (fund, holding, as_of, source, weight, name, sector, country, known_at; PK (fund, holding, as_of, source))` (025): what each ETF holds, weights as fractions, read point in time by `known_at` (`stonks.funds`). Insights look-through and the sector cap's `look_through` read it.
 
-**State (SQLite, migrations 001-049):**
+**State (SQLite, migrations 001-050):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -239,6 +241,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - 047: `shadow_decisions` and `model_version_decisions` statuses gain `working` and `expired`, plus `filled_on` (paper and model books fill at the next open).
 - 048: `model_feature_values (strategy_id, profile_id, as_of, ticker, values_json, recorded_at)`: the live input rows of model strategies, read by the warn-only `feature_drift` tick hook (PSI against the training profile, roadmap 23.10).
 - 049: `journal_playbooks`, `trade_annotations (portfolio_id, trade_id = opening fill id, playbook_id, followed_plan, review)` and `trade_labels` (tags and mistakes): the round-trip journal (roadmap 23.3, `journal/`, `docs/journal.md`).
+- 050 smaller comforts (roadmap 23.17): notification category `screen_alert` (alerts, outbox, deliveries and prefs rebuilt, ids and counters kept), `screen_alerts`, `screen_alert_matches`, `screen_alert_events`, `demo_portfolios (user_id, seed)` (the only row of the sample book), `statement_imports` and `broker_activities.import_id` (CSV statements with undo).
 
 ## Conventions to match
 

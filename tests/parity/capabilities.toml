@@ -1923,3 +1923,65 @@ routes = ["POST /api/screener/universes"]
 console = "saveScreenAsUniverse"
 cli = "stonks screener universe"
 mcp = "save_screen_as_universe"
+
+# ---- smaller comforts (roadmap 23.17) ------------------------------------------------
+
+[[capability]]
+id = "screener.alerts"
+domain = "notifications"
+title = "Screen alerts: a saved screen that notifies you about names that newly match"
+routes = [
+  "GET /api/screener/alerts",
+  "GET /api/screener/screens/{screen_id}/alert",
+  "PUT /api/screener/screens/{screen_id}/alert",
+  "DELETE /api/screener/screens/{screen_id}/alert",
+]
+console = ["listScreenAlerts", "setScreenAlert", "deleteScreenAlert"]
+cli = ["stonks screener alerts", "stonks screener alert", "stonks screener alert-delete"]
+mcp = ["list_screen_alerts", "set_screen_alert", "delete_screen_alert"]
+
+[[capability]]
+id = "screener.alert_events"
+domain = "notifications"
+title = "When your screens found new names"
+routes = ["GET /api/screener/alerts/events"]
+console = "listScreenAlertEvents"
+cli = "stonks screener alert-events"
+mcp = "list_screen_alert_events"
+
+[[capability]]
+id = "screener.alerts_run"
+domain = "operations"
+title = "Run every due screen alert now (the scheduler's screen_alerts job)"
+routes = ["POST /api/screener/alerts/evaluate"]
+console = { limited = "an operator job the scheduler runs after each price update" }
+cli = "stonks screener alerts-run"
+mcp = { limited = "an operator job the scheduler runs after each price update" }
+
+[[capability]]
+id = "demo.portfolio"
+domain = "accounts"
+title = "The demo portfolio: open, read and remove sample data that never touches real books"
+routes = ["GET /api/demo", "POST /api/demo", "DELETE /api/demo"]
+console = ["getDemoPortfolio", "openDemoPortfolio", "removeDemoPortfolio"]
+cli = { limited = "a guided tour for new people in the console" }
+mcp = { limited = "made-up figures would only mislead an assistant or a script" }
+
+[[capability]]
+id = "statements.import"
+domain = "portfolio"
+title = "CSV statement imports: preview, import, list and undo, for brokers without an API"
+routes = [
+  "GET /api/statement-imports",
+  "POST /api/statement-imports/preview",
+  "POST /api/statement-imports",
+  "POST /api/statement-imports/{import_id}/undo",
+]
+console = [
+  "listStatementImports",
+  "previewStatementImport",
+  "commitStatementImport",
+  "undoStatementImport",
+]
+cli = ["stonks imports preview", "stonks imports commit", "stonks imports list", "stonks imports undo"]
+mcp = { limited = "a person maps and checks the columns of their own file in the console or CLI" }

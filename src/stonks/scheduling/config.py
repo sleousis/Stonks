@@ -74,7 +74,8 @@ class JobConfig(BaseModel):
     name: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_.-]+$")
     #: A registered job action (``ingest_prices``, ``tick``, ``health``,
     #: ``report``, ``universes_refresh``, ``backup``, ``connections_sync``,
-    #: ``price_alerts``, ``calendars_refresh``, ``model_retrain``).
+    #: ``price_alerts``, ``screen_alerts``, ``calendars_refresh``,
+    #: ``model_retrain``).
     action: str
     trigger: TriggerConfig
     params: dict[str, Any] = Field(default_factory=dict)
@@ -150,6 +151,12 @@ def default_jobs() -> list[JobConfig]:
             name="price_alerts",
             action="price_alerts",
             trigger=SessionTriggerConfig(offset_minutes=40),
+        ),
+        # Saved screens with an alert, on the same closes (roadmap 23.17).
+        JobConfig(
+            name="screen_alerts",
+            action="screen_alerts",
+            trigger=SessionTriggerConfig(offset_minutes=42),
         ),
         JobConfig(
             name="tick",

@@ -456,6 +456,19 @@ CASES: dict[str, Case] = {
         "/api/screener/screens/{screen_id}",
         lambda i: {"screen_id": i["screen"], "confirm": True},
     ),
+    # screen alerts (roadmap 23.17)
+    "list_screen_alerts": _c("GET", "/api/screener/alerts"),
+    "list_screen_alert_events": _c("GET", "/api/screener/alerts/events"),
+    "set_screen_alert": _c(
+        "PUT",
+        "/api/screener/screens/{screen_id}/alert",
+        lambda i: {"screen_id": i["screen"], "cadence": "daily"},
+    ),
+    "delete_screen_alert": _c(
+        "DELETE",
+        "/api/screener/screens/{screen_id}/alert",
+        lambda i: {"screen_id": i["screen"], "confirm": True},
+    ),
     "save_screen_as_universe": _c(
         "POST",
         "/api/screener/universes",

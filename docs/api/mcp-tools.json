@@ -892,6 +892,36 @@
     {
       "annotations": {
         "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Remove the alert from one of your saved screens (the screen\nstays). Without confirm=true returns the alert and removes nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "screen_id": {
+            "title": "Screen Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "screen_id"
+        ],
+        "title": "delete_screen_alertArguments",
+        "type": "object"
+      },
+      "name": "delete_screen_alert",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
         "idempotent": false,
         "open_world": false,
         "read_only": false
@@ -5270,6 +5300,82 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "When your screens found names that newly match, newest first.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "screen_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Screen Id"
+          }
+        },
+        "title": "list_screen_alert_eventsArguments",
+        "type": "object"
+      },
+      "name": "list_screen_alert_events",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your screen alerts: which saved screens alert, daily or weekly,\nthe last day each ran and how many names it matched.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 100,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "title": "list_screen_alertsArguments",
+        "type": "object"
+      },
+      "name": "list_screen_alerts",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Every metric a screen may filter or sort on: id, group (price or\nfundamental), unit and what it measures.",
       "input_schema": {
         "properties": {},
@@ -8750,6 +8856,61 @@
       },
       "name": "set_event_alerts",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Turn on (or change) the alert of a saved screen. It runs after\neach data refresh and notifies you about names that newly match,\nthrough your notification channels. Notify only: nothing trades.\nThe first run stores the matches and sends nothing.",
+      "input_schema": {
+        "properties": {
+          "cadence": {
+            "default": "daily",
+            "description": "run on every trading day, or weekly",
+            "enum": [
+              "daily",
+              "weekly"
+            ],
+            "title": "Cadence",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "screen_id": {
+            "description": "one of your saved screens",
+            "title": "Screen Id",
+            "type": "string"
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "maximum": 6,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "weekly: the day it runs, 0 = Monday",
+            "title": "Weekday"
+          }
+        },
+        "required": [
+          "screen_id"
+        ],
+        "title": "set_screen_alertArguments",
+        "type": "object"
+      },
+      "name": "set_screen_alert",
+      "needs_confirm": false
     },
     {
       "annotations": {

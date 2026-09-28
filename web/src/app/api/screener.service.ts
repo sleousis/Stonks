@@ -5,12 +5,16 @@ import { allItems, unwrap } from './api-call';
 import {
   createScreen,
   deleteScreen,
+  deleteScreenAlert,
   getScreen,
   getScreenJobResult,
+  listScreenAlertEvents,
+  listScreenAlerts,
   listScreenMetrics,
   listScreens,
   runScreen,
   saveScreenAsUniverse,
+  setScreenAlert,
   sizeScreen,
   submitScreenJob,
   updateScreen,
@@ -18,6 +22,7 @@ import {
 import type {
   SavedScreenCreate,
   SavedScreenUpdate,
+  ScreenAlertSet,
   ScreenRunRequest,
   ScreenUniverseRequest,
 } from './models';
@@ -75,5 +80,25 @@ export class ScreenerService {
    */
   saveAsUniverse(body: ScreenUniverseRequest) {
     return unwrap(saveScreenAsUniverse({ body, headers: SILENT_HEADERS }));
+  }
+
+  /** Your screen alerts: which saved screens notify you about new names. */
+  alerts() {
+    return allItems((query) => unwrap(listScreenAlerts({ query })));
+  }
+
+  /** Turn on or change the alert of a saved screen. */
+  setAlert(screenId: string, body: ScreenAlertSet) {
+    return unwrap(setScreenAlert({ path: { screen_id: screenId }, body }));
+  }
+
+  /** Remove the alert (the screen stays). */
+  deleteAlert(screenId: string) {
+    return unwrap(deleteScreenAlert({ path: { screen_id: screenId } }));
+  }
+
+  /** When your screens found new names, newest first. */
+  alertEvents(query: { limit?: number; offset?: number; screen_id?: string | null } = {}) {
+    return unwrap(listScreenAlertEvents({ query }));
   }
 }

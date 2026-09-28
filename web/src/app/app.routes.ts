@@ -22,6 +22,8 @@ export const routes: Routes = [
   { path: 'insights', loadChildren: () => import('./pages/insights/insights.routes') },
   // 13: the first-run guide, watchlists and price charts
   { path: 'welcome', loadChildren: () => import('./pages/welcome/welcome.routes') },
+  // 23.17: the demo portfolio (sample data, never a real book)
+  { path: 'demo', loadChildren: () => import('./pages/demo/demo.routes') },
   { path: 'watchlists', loadChildren: () => import('./pages/watchlists/watchlists.routes') },
   { path: 'charts', loadChildren: () => import('./pages/charts/charts.routes') },
   {

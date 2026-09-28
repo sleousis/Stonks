@@ -220,6 +220,14 @@ uv run stonks screener universe ID (--spec JSON | --screen ID) [--mode rule|snap
 
 Running a screen, as a job too, needs `data.read`. Saving one needs `portfolio.manage`. Saving it as a universe needs `lab.run`.
 
+### Screen alerts
+
+A saved screen can run daily or weekly after the price update and notify you about names that newly match (roadmap 23.17). The first run only notes the matches. See [operations](operations.md#screen-alerts).
+
+- API: `GET /api/screener/alerts`, `GET /api/screener/alerts/events`, `GET|PUT|DELETE /api/screener/screens/{id}/alert`, and `POST /api/screener/alerts/evaluate` for the operator.
+- MCP: `list_screen_alerts`, `list_screen_alert_events`, `set_screen_alert` and the guarded `delete_screen_alert`.
+- Changing an alert needs `notifications.manage`.
+
 ## Adding a kind or an index source
 
 A new kind is one module in `universes/providers/` with a `UniverseProvider` subclass. A new index adapter is one module in `universes/index_sources/` with an `IndexSource` subclass. Both registries find them. Vendor parsing stays in the adapter.
