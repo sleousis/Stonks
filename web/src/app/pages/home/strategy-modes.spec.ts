@@ -1,5 +1,5 @@
 import { sub } from '../../../testing/home-fixtures';
-import { autoBlockedReason } from './strategy-modes';
+import { autoBlockedReason, paperProgress, unlockRule } from './strategy-modes';
 
 describe('autoBlockedReason', () => {
   it('is null once the gate passes', () => {
@@ -14,8 +14,18 @@ describe('autoBlockedReason', () => {
           auto_blockers: ['12 of 20 paper trading days', 'the portfolio is not a broker portfolio'],
         }),
       ),
-    ).toBe(
-      'Approve each trade and Auto unlock after 20 paper trading days. 12 of 20 done. The portfolio is not a broker portfolio.',
+    ).toBe('Paper days: 12 of 20. The portfolio is not a broker portfolio.');
+  });
+
+  it('says the unlock rule once, in the vocabulary words (M8)', () => {
+    expect(unlockRule(20)).toBe('Approve each trade and Automatic unlock after 20 paper days.');
+    expect(paperProgress(sub({ paper_days_completed: 4 }))).toBe('Paper days: 4 of 20.');
+    expect(paperProgress(sub({ paper_days_completed: 20 }))).toBeNull();
+  });
+
+  it('names the mode as the vocabulary does', () => {
+    expect(autoBlockedReason(sub({ auto_blockers: ['auto mode needs a broker portfolio'] }))).toBe(
+      'Automatic needs a broker portfolio.',
     );
   });
 

@@ -17,6 +17,12 @@ describe('GlossaryPage', () => {
     return { fixture, el: fixture.nativeElement as HTMLElement };
   }
 
+  it('opens with the product in five sentences (F21)', () => {
+    const { el } = render();
+    expect(el.querySelector('h1')?.textContent).toContain('Help');
+    expect(el.querySelectorAll('.steps li').length).toBe(5);
+  });
+
   it('lists every glossary term with an anchor named after its key', () => {
     const { el } = render();
     expect(el.querySelectorAll('.term').length).toBe(GLOSSARY_KEYS.length);
@@ -25,11 +31,13 @@ describe('GlossaryPage', () => {
     expect(sharpe.textContent).toContain(GLOSSARY.sharpe.short);
   });
 
-  it('opens with the trading words, then the figures (UX-42)', () => {
+  it('opens with how Stonks works, then the trading words and the figures (F5)', () => {
     const { el } = render();
     const headings = [...el.querySelectorAll('section.group h2')].map((h) => h.textContent);
-    expect(headings).toEqual(['Trading words', 'Figures']);
-    const trading = el.querySelector('section.group')!;
+    expect(headings).toEqual(['How Stonks works', 'Trading words', 'Figures']);
+    expect(el.querySelector('#on_trial')!.textContent).toContain('On trial');
+    expect(el.querySelector('#test_book')!.textContent).toContain('Test book');
+    const trading = el.querySelectorAll('section.group')[1];
     expect(trading.querySelector('#kill_switch')!.textContent).toContain('Kill switch');
     expect(trading.querySelector('#dry_run')).not.toBeNull();
   });

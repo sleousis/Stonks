@@ -6,14 +6,8 @@ import type { PositionView, TickRun } from '../../api/models';
 import { PortfolioService } from '../../api/portfolio.service';
 import { StrategiesService } from '../../api/strategies.service';
 import { TicksService } from '../../api/ticks.service';
-import {
-  formatDate,
-  formatDateTime,
-  formatDuration,
-  formatMoney,
-  formatPercent,
-  toneClass,
-} from '../../core/format/format';
+import { formatDateTime, formatMoney, formatPercent, toneClass } from '../../core/format/format';
+import { dayChangeLine } from '../../core/format/day-change';
 import type { ChartSeries } from '../../shared/chart/chart-engine';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
@@ -26,6 +20,7 @@ import { StatTile } from '../../shared/ui/stat-tile';
 import { NoBook, bookState } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { runWords } from '../../shared/status-words';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 
 const RECENT_TICKS = 8;
@@ -40,11 +35,14 @@ export function checkTitle(name: string): string {
 }
 
 /**
- * Reference page: read-only overview built from GET routes. Each panel owns
- * one `resource()` and renders loading / error / empty / data on its own, so
- * one failing route never blanks the whole page. Everything reloads every
- * minute while the tab is visible, and right after a trading run this tab
- * followed ends.
+ * The admin's Dashboard (the menu and the title both say Dashboard): the
+ * picked portfolio next to system health and the latest trading runs.
+ * Read only, built from GET routes. Each panel owns one `resource()` and
+ * renders loading / error / empty / data on its own, so one failing route
+ * never blanks the whole page. Everything reloads every minute while the
+ * tab is visible, and right after a trading run this tab followed ends.
+ * Tables keep to the columns that fit their panel (M10): the full detail
+ * lives on Insights and on each trading run's page.
  */
 @Component({
   selector: 'app-dashboard-page',
@@ -103,15 +101,6 @@ export class DashboardPage {
     { triggers: [this.ticksApi.finished] },
   );
 
-  protected readonly refreshing = computed(
-    () =>
-      this.portfolio.isLoading() ||
-      this.pnl.isLoading() ||
-      this.ticks.isLoading() ||
-      this.health.isLoading() ||
-      this.strategyCounts.isLoading(),
-  );
-
   // Summary tiles -----------------------------------------------------------
   protected readonly asOf = computed(() => {
     if (!this.portfolio.hasValue()) return 'Portfolio, performance and system status.';
@@ -127,7 +116,7 @@ export class DashboardPage {
   protected readonly dayChange = computed(() => {
     const row = this.latest();
     if (!row || row.daily_change == null) return null;
-    return `${formatMoney(row.daily_change, { signed: true, currency: this.currency() })} (${formatPercent(row.daily_return, { signed: true })}) on ${formatDate(row.day)}`;
+    return dayChangeLine(row.daily_change, row.daily_return, row.day, this.currency());
   });
   protected readonly dayTone = computed(() => toneClass(this.latest()?.daily_change));
 
@@ -208,15 +197,6 @@ export class DashboardPage {
   protected readonly positionColumns: TableColumn<PositionView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
     { key: 'quantity', label: 'Quantity', format: 'number' },
-    {
-      key: 'avg_cost',
-      label: 'Avg cost',
-      format: 'money',
-      currency: (p) => p.currency,
-      mobile: 'hide',
-    },
-    { key: 'price', label: 'Price', format: 'money', currency: (p) => p.currency },
-    { key: 'price_date', label: 'Priced', format: 'date', mobile: 'hide' },
     { key: 'market_value', label: 'Value', format: 'money', currency: (p) => p.currency },
     {
       key: 'unrealized_pnl',
@@ -224,13 +204,6 @@ export class DashboardPage {
       format: 'signedMoney',
       tone: true,
       currency: (p) => p.currency,
-    },
-    {
-      key: 'unrealized_pnl_pct',
-      label: 'P&L %',
-      format: 'signedPercent',
-      tone: true,
-      mobile: 'hide',
     },
     { key: 'weight', label: 'Weight', format: 'percent' },
   ];
@@ -246,21 +219,9 @@ export class DashboardPage {
       value: (t) => t.summary?.orders_placed ?? null,
     },
     { key: 'fills', label: 'Fills', format: 'number', value: (t) => t.summary?.fills ?? null },
-    {
-      key: 'winner',
-      label: 'Winner',
-      value: (t) => t.summary?.winner_strategy_id ?? null,
-      mobile: 'hide',
-    },
-    {
-      key: 'duration',
-      label: 'Took',
-      sortable: false,
-      value: (t) => formatDuration(t.started_at, t.finished_at),
-      align: 'end',
-      mobile: 'hide',
-    },
   ];
+  /** Done, Partly done, Failed: the vocabulary's words, not the API's (M5). */
+  protected readonly runWords = runWords;
   protected readonly tickKey = (t: TickRun) => t.id;
   protected readonly checkTitle = checkTitle;
 
@@ -268,8 +229,4 @@ export class DashboardPage {
   protected readonly failingChecks = computed(() =>
     this.health.hasValue() ? this.health.value().checks.filter((c) => !c.ok).length : 0,
   );
-
-  protected refresh(): void {
-    this.auto.refresh();
-  }
 }

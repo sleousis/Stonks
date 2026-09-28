@@ -9,7 +9,7 @@ import type { TickRun } from '../../api/models';
 import { formatWeekday } from '../../core/format/format';
 import { NotificationFeedService } from '../../core/notify/notification-feed.service';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
-import { SignalsCard, runDetail, todaysRuns, todaysSignals } from './signals-card';
+import { SignalsCard, ownRunCounts, runDetail, todaysRuns, todaysSignals } from './signals-card';
 
 function run(overrides: Partial<TickRun>): TickRun {
   return {
@@ -17,7 +17,7 @@ function run(overrides: Partial<TickRun>): TickRun {
     started_at: new Date(Date.now() - 60_000).toISOString(),
     finished_at: new Date().toISOString(),
     status: 'ok',
-    summary: { orders_placed: 3, fills: 1 },
+    summary: { orders_placed: 3, fills: 1, portfolio_id: 'pf_mine' },
     ...overrides,
   };
 }
@@ -51,6 +51,27 @@ describe('todaysSignals', () => {
 });
 
 describe('trading runs on the blotter', () => {
+  it("counts only the reader's own portfolios, never another book's orders (M15)", () => {
+    // Someone else's one-book run: the API keeps only the global totals.
+    expect(runDetail(run({ summary: { orders_placed: 1, fills: 0 } }))).toBe(
+      'None of your portfolios traded in this run.',
+    );
+    // A many-book run: only the reader's books are under `portfolios`.
+    const many = run({
+      summary: {
+        orders_placed: 9,
+        fills: 9,
+        portfolios: { pf_a: { orders_placed: 2, fills: 1 }, pf_b: { orders_placed: 1, fills: 1 } },
+      } as TickRun['summary'],
+    });
+    expect(ownRunCounts(many)).toEqual({ orders: 3, fills: 2 });
+    expect(runDetail(many)).toBe('3 orders, 2 fills in your portfolios.');
+    const none = run({
+      summary: { orders_placed: 4, fills: 4, portfolios: {} } as TickRun['summary'],
+    });
+    expect(ownRunCounts(none)).toBeNull();
+  });
+
   it('keeps runs from the last 24 hours and says what they did', () => {
     const now = new Date('2026-09-26T12:00:00Z');
     const runs = [
@@ -58,7 +79,7 @@ describe('trading runs on the blotter', () => {
       run({ id: 'b', started_at: '2026-09-24T11:00:00Z' }),
     ];
     expect(todaysRuns(runs, now).map((r) => r.id)).toEqual(['a']);
-    expect(runDetail(run({}))).toBe('3 orders, 1 fill.');
+    expect(runDetail(run({}))).toBe('3 orders, 1 fill in your portfolios.');
     expect(runDetail(run({ status: 'running' }))).toContain('now');
     expect(runDetail(run({ status: 'error', summary: { error: 'Broker down' } }))).toBe(
       'Broker down',
@@ -211,7 +232,8 @@ describe('SignalsCard', () => {
     const rows = [...el.querySelectorAll('li.row')];
     expect(rows.map((r) => r.getAttribute('data-kind'))).toEqual(['run', 'signal']);
     expect(rows[0].querySelector('a.title')?.getAttribute('href')).toBe('/orders/ticks/tk9');
-    expect(rows[0].querySelector('app-status-pill')?.textContent).toContain('succeeded');
-    expect(rows[0].textContent).toContain('3 orders, 1 fill.');
+    // One word per state from the vocabulary: Done, not "succeeded" or "ok" (M5).
+    expect(rows[0].querySelector('app-status-pill')?.textContent?.trim()).toBe('Done');
+    expect(rows[0].textContent).toContain('3 orders, 1 fill in your portfolios.');
   });
 });

@@ -119,13 +119,46 @@ export const TRADING_KEYS = [
 ] as const;
 
 export type TradingKey = (typeof TRADING_KEYS)[number];
-export type GlossaryKey = MetricKey | TradingKey;
 
-/** Every key, trading words first. */
-export const GLOSSARY_KEYS: readonly GlossaryKey[] = [...TRADING_KEYS, ...METRIC_KEYS];
+/**
+ * The product itself (F5): what a strategy, a follow and a portfolio are,
+ * and the three ladders of docs/design/vocabulary.md, one set of words each.
+ */
+export const PRODUCT_KEYS = [
+  'strategy',
+  'follow',
+  'portfolio',
+  'draft',
+  'on_trial',
+  'approved',
+  'retired',
+  'test_book',
+  'strategy_review',
+  'robustness_tests',
+  'portfolio_stage',
+  'simulated',
+  'broker_paper',
+  'real_money_small',
+  'real_money_full',
+  'signal',
+  'watchlist',
+  'screener',
+  'trade_costs',
+] as const;
+
+export type ProductKey = (typeof PRODUCT_KEYS)[number];
+export type GlossaryKey = MetricKey | TradingKey | ProductKey;
+
+/** Every key: product words, then trading words, then figures. */
+export const GLOSSARY_KEYS: readonly GlossaryKey[] = [
+  ...PRODUCT_KEYS,
+  ...TRADING_KEYS,
+  ...METRIC_KEYS,
+];
 
 /** The glossary page's sections, in order. */
 export const GLOSSARY_GROUPS: readonly { title: string; keys: readonly GlossaryKey[] }[] = [
+  { title: 'How Stonks works', keys: PRODUCT_KEYS },
   { title: 'Trading words', keys: TRADING_KEYS },
   { title: 'Figures', keys: METRIC_KEYS },
 ];
@@ -142,33 +175,33 @@ export interface GlossaryEntry {
 export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   // Trading words ------------------------------------------------------------
   paper_trading: {
-    term: 'Paper trading',
+    term: 'Paper',
     short:
-      'Trading with pretend money on real prices, to see how a strategy does before real money. Also called shadow.',
-    aliases: ['Paper', 'Shadow', 'Paper mode'],
+      'A way to follow a strategy: it trades your paper portfolio with pretend money on real prices. No real money moves.',
+    aliases: ['Paper trading', 'Paper mode', 'Paper portfolio', 'Paper days'],
   },
   live: {
-    term: 'Live',
+    term: 'Real money',
     short:
-      'Real money: orders go to your broker and fill for real. A strategy goes live after it passes the checks.',
-    aliases: ['Go live', 'Real money'],
+      'Orders go to your broker and fill for real. Only a portfolio at a real-money stage trades real money. Also called live.',
+    aliases: ['Live', 'Go live'],
   },
   signals_only: {
-    term: 'Signals only',
+    term: 'Alerts only',
     short:
-      'You get a notification for each trade a strategy wants and place the order yourself. Also called notify.',
-    aliases: ['Notify', 'Signals only mode'],
+      'A way to follow a strategy: you get an alert for each trade it wants and nothing trades. Also called notify.',
+    aliases: ['Signals only', 'Notify', 'Signals only mode'],
   },
   auto: {
-    term: 'Auto',
+    term: 'Automatic',
     short:
-      'Orders go to your broker by themselves at each trading run. It opens after enough paper trading days.',
-    aliases: ['Auto mode', 'Automatic'],
+      'A way to follow a strategy: its trades go to your broker without asking. It unlocks after enough paper days.',
+    aliases: ['Auto', 'Auto mode'],
   },
   approve: {
     term: 'Approve each trade',
     short:
-      'Real orders wait for you as tickets after each trading run. You approve each one with a code before the open.',
+      'A way to follow a strategy: each trade waits for you as a ticket after the trading run. You approve it with a code before the open.',
     aliases: ['Approve mode', 'Approve', 'Approvals', 'Order ticket', 'Order tickets'],
   },
   kill_switch: {
@@ -216,6 +249,112 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     short:
       'A one-time code that signs you in if you lose your authenticator app. Keep them somewhere safe.',
     aliases: ['Recovery codes'],
+  },
+  // How Stonks works -----------------------------------------------------------
+  strategy: {
+    term: 'Strategy',
+    short: 'A set of rules that looks at prices after each close and decides what to buy and sell.',
+    aliases: ['Strategies'],
+  },
+  follow: {
+    term: 'Follow',
+    short:
+      'Linking a strategy to one of your portfolios: Alerts only, Paper, Approve each trade or Automatic. Also called a subscription.',
+    aliases: ['Following', 'Follows', 'Subscription', 'Follow mode'],
+  },
+  portfolio: {
+    term: 'Portfolio',
+    short:
+      'Your cash and holdings in one place: a paper portfolio in Stonks or an account at your broker.',
+    aliases: ['Portfolios'],
+  },
+  draft: {
+    term: 'Draft',
+    short: 'A strategy being built in the Studio. The system has not tested it yet.',
+    aliases: ['Drafts'],
+  },
+  on_trial: {
+    term: 'On trial',
+    short:
+      'A strategy status: the system trades it on its own test book every run, with no real orders. Also called shadow.',
+    aliases: ['Shadow', 'Trial', 'Trial results'],
+  },
+  approved: {
+    term: 'Approved',
+    short:
+      'A strategy status: it passed the go-live check, so people can follow it. Also called active.',
+    aliases: ['Active', 'Approve a strategy'],
+  },
+  retired: {
+    term: 'Retired',
+    short: 'A strategy status: it no longer decides anything. Its history stays.',
+    aliases: ['Retire'],
+  },
+  test_book: {
+    term: 'Test book',
+    short:
+      "A strategy's own practice portfolio, run by the system while it is on trial. Also called a model book or shadow book.",
+    aliases: ['Model book', 'Shadow book', 'Test books'],
+  },
+  strategy_review: {
+    term: 'Strategy review',
+    short:
+      'The go-live check an admin reads before approving a strategy: enough trial days, results that hold up, costs it can bear.',
+    aliases: ['Go-live check', 'Go-live review'],
+  },
+  robustness_tests: {
+    term: 'Robustness tests',
+    short:
+      'Checks that a backtest was not luck: other periods, other tickers, higher costs and shuffled data. Also called survival tests.',
+    aliases: ['Robustness', 'Survival tests'],
+  },
+  portfolio_stage: {
+    term: 'Portfolio stage',
+    short:
+      'How far a portfolio is on the way to real money, from Simulated to Real money, full. Only the stage decides if real money moves.',
+    aliases: ['Stage', 'Live stage'],
+  },
+  simulated: {
+    term: 'Simulated',
+    short: 'A portfolio stage: fills are simulated by Stonks. No real money.',
+    aliases: ['Simulated paper'],
+  },
+  broker_paper: {
+    term: 'Broker paper',
+    short: "A portfolio stage: orders go to the broker's paper account. No real money.",
+  },
+  real_money_small: {
+    term: 'Real money, small',
+    short:
+      'A portfolio stage: real money, with the allocation you set and tight caps on each order.',
+    aliases: ['Live small'],
+  },
+  real_money_full: {
+    term: 'Real money, full',
+    short: 'A portfolio stage: real money at your full allocation.',
+    aliases: ['Live scaled', 'Live scale'],
+  },
+  signal: {
+    term: 'Signal',
+    short:
+      'What a strategy wants after a close: buy, sell or hold a ticker, with how strongly it thinks so.',
+    aliases: ['Signals', 'Signal score'],
+  },
+  watchlist: {
+    term: 'Watchlist',
+    short: 'Your own list of tickers to keep an eye on. Today and the calendar can show only them.',
+    aliases: ['Watchlists'],
+  },
+  screener: {
+    term: 'Screener',
+    short: 'Filters every ticker by price, returns, size or value and lists the ones that pass.',
+    aliases: ['Screen', 'Saved screen'],
+  },
+  trade_costs: {
+    term: 'Trade costs',
+    short:
+      'What trading really cost: fees, the spread and how far the fill price moved from the decision price.',
+    aliases: ['Trade cost', 'Shortfall'],
   },
   // Figures ------------------------------------------------------------------
   total_return: {

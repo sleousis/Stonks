@@ -439,7 +439,7 @@ Research sessions (`pages/lab/research/`, `api/research.service.ts`):
 ### Metric help
 
 Every metric shows a "?" tip with one plain sentence and a link to the
-in-app glossary (`/help/glossary#<key>`, account menu, Glossary). The text
+in-app glossary (`/help/glossary#<key>`, account menu, Help). The text
 lives in one file, `core/help/glossary.ts`, and the glossary page is built
 from it. Tips close when the page scrolls.
 
@@ -544,7 +544,7 @@ Tickers open `/data?instrument=<id>`.
 | Broker connections | `/connections`, `/connections/:id`, `/connections/callback` | Provider cards, connect by keys or the provider's sign-in page, accounts, Link to a portfolio, Sync now, Disconnect |
 | Trade costs | `/trades`, `/trades/orders/:clientId` | Totals and shortfall by strategy, ticker or portfolio, the trade journal, and each order as a ticket with notes |
 | Sweep, Signal IC | `/lab/sweeps`, `/lab/signal-ic` | See Lab form above |
-| Glossary | `/help/glossary` | Every term the help tips explain |
+| Help | `/help/glossary` | How Stonks works in five sentences, then every term the help tips explain |
 
 ## Approvals (19.8)
 
@@ -601,8 +601,13 @@ Tickers open `/data?instrument=<id>`.
   (`app-hold-button`); an override still needs the typed word.
 - **Dialogs** are built on `app-sheet` (`shared/ui/sheet.ts`) with
   `app-typed-confirm`.
-- **Settings** has "Your account" for everyone and "System" (broker, risk
-  policy, data sources, cost models) for admins only. Alert settings have
+- **Settings** shows one section at a time (M14), picked with
+  `<app-page-tabs>` and kept in the address (`/settings?tab=alerts`):
+  Account (sign-in and security, the For scripts fold), Alerts (devices and
+  push, Telegram, the alert table; the feed and price alerts stay on
+  Notifications), Display (theme, numbers and dates, keyboard), Risk limits,
+  and System for admins (broker, risk policy, data sources, cost models,
+  and how to turn the assistant on while it is off). Alert settings have
   **Send a test notification** (`POST /api/notifications/test`): it goes to
   every channel you turned on, skips quiet hours, and the toast says how
   many deliveries went out and on which channels.
@@ -1059,7 +1064,12 @@ flowchart LR
 | `TradingDayService.runsPassed`, `loaded`, `hasTradingRun` | `core/schedule/` | Reloading after a trading run, telling "nothing scheduled" from "not read yet" |
 | `<app-kill-sheet>`, `StopTradingService`, `killTicket()` | `shared/ui/`, `core/halts/` | Stop trading from anywhere |
 | `haltScopeText()` | `core/halts/halt-view.ts` | "Every portfolio", "Your portfolios", a portfolio's name, never an id |
-| `<app-account-menu>` | `shell/` | Profile, Settings, Broker connections, Get set up, Glossary, Sign out |
+| `<app-account-menu>` | `shell/` | Profile, Settings, Broker connections, Get set up, Help, Sign out |
+| `<app-page-tabs>` | `shared/ui/page-tabs.ts` | The one tab style (M4): links when each view has its address, a tablist when sections share a page; underline, 44px on phones, a fading edge when the tabs scroll |
+| `<app-follow-mode>` | `shared/ui/follow-mode.ts` | How you follow a strategy, one compact select with locked modes shown |
+| `dayChangeLine()`, `sessionLabel()` | `core/format/day-change.ts` | The day's change, the same on Today, Dashboard and Insights |
+| `RUN_WORDS`, `runWords()` | `shared/status-words.ts` | Done, Partly done, Failed for a trading run |
+| `FeatureFlagsService` | `core/features/` | Hide a page whose feature is off (the assistant) |
 | `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few: a radio group with arrow keys, 44px on phones |
 | `<app-no-book>`, `bookState()` | `shared/ui/no-book.ts` | A money page for someone with no portfolio |
 | `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Orders, Fills, Trading runs and Trade costs, one tap apart |
@@ -1070,7 +1080,7 @@ flowchart LR
 | `strategyDisplayName()`, `strategyKindName()` | `shared/strategy-names.ts` | Names, not ids |
 | `goLiveTicket()`, `demoteOptions()`, `checkFix()` | `shared/governance.ts`, `shared/golive-checks.ts` | Go live, Back to paper trading, Stop, and the fix for a failing check |
 | `<app-stage-bar compact>` | `pages/strategies/stage-bar.ts` | The lifecycle steps, framed on the strategy page, bare in Studio |
-| Trading words | `core/help/glossary.ts` (`TRADING_KEYS`, `GLOSSARY_GROUPS`) | Help tips for Paper trading, Auto, Kill switch, Dry run, Trading run, ... |
+| Trading words | `core/help/glossary.ts` (`PRODUCT_KEYS`, `TRADING_KEYS`, `GLOSSARY_GROUPS`) | Help tips for the product words and ladders (On trial, Test book, Portfolio stage, ...), the modes, Kill switch, Dry run, Trading run, ... |
 
 ## Permissions
 
@@ -1129,8 +1139,8 @@ turns `stocks_on_the_move_3fa9c21b` into "Stocks on the move 3fa9" (a
 draft's own name wins), with the id under "Technical details".
 `<app-status-pill>` writes strategy statuses as Paper trading, Live and
 Stopped and outcomes as Passed and Failed on its own. One `MODES` list
-(`shared/governance-labels.ts`) names Signals only, Paper trading and
-Auto, and `toTraderWords()` rewrites the server's gate details.
+(`shared/governance-labels.ts`) names Alerts only, Paper, Approve each trade and
+Automatic (docs/design/vocabulary.md), and `toTraderWords()` rewrites the server's gate details.
 
 ### Words across surfaces
 
@@ -1151,7 +1161,7 @@ about the same thing.
 | Stop trading (kill switch), "Stop new buys only" | `POST /api/halts/kill`, `buys_only` | `halts kill --buys-only` | `engage_kill_switch` (`buys_only`) |
 | Update data, Data updates | `/api/ingest/*`, `ingest_runs` | `stonks ingest` | `run_ingest` |
 | Go-live suite | preset `promotion` | `--preset promotion` | `run_lab` (`preset`) |
-| Signals only, Paper trading, Approve each trade, Auto (modes) | `notify`, `paper`, `approve`, `auto` | none | `subscribe` (`mode`) |
+| Alerts only, Paper, Approve each trade, Automatic (follow modes) | `notify`, `paper`, `approve`, `auto` | none | `subscribe` (`mode`) |
 | Approvals, order tickets | `/api/tickets` | `stonks tickets` | `list_tickets`, `get_ticket` |
 | Model versions, candidate, Swap in, Retrain | `/api/strategies/{id}/versions`, `/api/model-versions` | `registry versions`, `swap`, `reject`, `retrain` | `list_model_versions`, `swap_model_version`, `retrain_models` |
 | Signal IC | `/api/lab/signal-ic` | `stonks lab ic` | `run_signal_ic` |
@@ -1420,7 +1430,8 @@ automate it.
   live headline figure can be text. Text fields use `--color-control-border` (at least 3:1); buttons are
   identified by their label, so they keep `--color-border-strong`.
 - Targets: 44px on phones and coarse pointers, at least 24px elsewhere (WCAG
-  2.2, 2.5.8), including the help tip. On phones the sticky top bar never
+  2.2, 2.5.8), including the help tip, whose button itself grows to 44px
+  there (negative margins keep the line height). On phones the sticky top bar never
   hides the focused element (`scroll-padding-top`, 2.4.11), and fields use
   16px text so iOS does not zoom.
 - Motion is limited to the drawer slide, toast rise, the loading mark, the
@@ -1487,17 +1498,34 @@ flowchart LR
 - **Routes.** `app.config.ts` wraps `app.routes.ts` with `protectRoutes()`, so
   every page gets `authGuard` unless it has `data: { public: true }`.
   `data: { bare: true }` shows a page without the app frame (sign-in).
-  `/admin/users` also has `adminGuard`. Home is `/`.
-- **Nav** (UX-10), no folds:
+  `/admin/users` and `/dashboard` also have `adminGuard`: anyone else sees
+  the one **No access** page at the address they asked for (`/no-access`,
+  kept out of the address bar). Home is `/`.
+- **Nav** (M1, `shell/nav-items.ts`): seven pages on top, the rest in
+  folding groups. Each group is a disclosure that remembers whether it is
+  open (`localStorage`, `stonks.nav.groups`), and the group that holds the
+  current page opens by itself. More starts open, Advanced and System start
+  folded, so the rail fits a laptop screen.
 
   | Group | Pages | Who |
   |---|---|---|
-  | (top) | Today, Strategies, Orders (tabs: Orders, Fills, Trading runs, Trade costs), Charts, Watchlists, Insights, Notifications | everyone signed in |
-  | Research | Paper trading, Leaderboard, Studio, Lab, Go live, Assistant | Studio and Lab need `lab.run`, the rest are for all |
-  | System | Overview (`/dashboard`), Health, Live engine, Schedule, Data, Data quality, Universes, Halts, Users | admins |
-  | Account menu (by your name) | Profile, Settings, Broker connections, Get set up, Glossary, Sign out | everyone signed in |
+  | (top) | Today, Strategies, Orders, Approvals, Insights, Charts, Notifications | everyone signed in (Approvals needs `portfolio.trade`) |
+  | More | Going live (`/going-live`), Watchlists, Calendar, Screener, Trial results (`/paper`), Leaderboard, Trade costs (`/trades`), Assistant | everyone; the Assistant only while it is on |
+  | Advanced | Studio, Lab, Options, Strategy review (`/go-live`), Halts (traders: their own halts) | Studio and Lab need `lab.run`, Halts `killswitch.user` |
+  | System | Dashboard (`/dashboard`), Health, Live engine, Schedule, Data, Data quality, Universes, Model versions, Halts, Users | admins |
+  | Account menu (pinned below the nav) | Profile, Settings, Broker connections, Get set up, Help, Sign out | everyone signed in |
 
-  With open reads and nobody signed in (dev) everything shows.
+  The nav scrolls between the search box and the account menu, with a
+  shadow at an edge while there is more to scroll to, so the account menu
+  never falls below the fold. A trader never gets a link to an admin-only
+  page: the session strip's next run opens Today (admins: the schedule), and a
+  trader resumes their own kill switch or clears their own breaker from the
+  strip (`<app-strip-halt-actions>`), with the same ticket, typed words and
+  code as the Halts page. A halt only an admin may end says so. The palette
+  opens a ticker on its chart. Features that are off leave the nav
+  (`FeatureFlagsService`, today the assistant): Settings, System tells
+  admins how to turn it on. With open reads and nobody signed in (dev)
+  everything shows.
 - **Signing out** (and a different user signing in on the same tab) loads
   `/login` afresh through `HARD_NAVIGATE` (`core/auth/hard-navigate.ts`),
   so no store keeps the last user's portfolios, stamp or halts. Only a 401
@@ -1530,18 +1558,26 @@ flowchart LR
   a Copy button (`<app-copy-button>`, which says so when the clipboard is
   blocked). Recovery codes also offer "Download .txt". The alerts step
   moves on only once push is really on, and says why otherwise.
-- **Today** (`pages/home/`): my portfolio (value, today's change, biggest
-  holdings; admins get totals across traders instead, never holdings), a
-  tape of the latest session's fills, today's signals and trading runs in
-  one time line with the next run on top (the feed's `signal` items and the
-  runs from the last 24 hours), and my
-  strategies with an on/off switch and a notify, paper or auto switch. Auto
-  stays disabled with the reason until 20 paper days and the server's other
-  checks pass, then asks for the step-up and a typed confirm. "Follow a
-  strategy" leads to the strategy list.
+- **Today** (`pages/home/`): my portfolio for everyone (value, the day's
+  change, biggest holdings). Admins get the totals across traders under it,
+  never holdings, or one quiet line while there are too few traders with
+  real money to sum. A tape of the latest session's fills, today's signals
+  and trading runs in one time line with the next run on top (the feed's
+  `signal` items and the runs from the last 24 hours). A run line counts
+  only the orders and fills in the reader's own portfolios
+  (`ownRunCounts()`), and says "None of your portfolios traded in this run"
+  otherwise; its status reads Done, Partly done or Failed
+  (`shared/status-words.ts`). My strategies: an on/off switch and one
+  compact follow-mode control (`<app-follow-mode>`: Alerts only, Paper,
+  Approve each trade, Automatic) per follow, the portfolio it trades when
+  there are several, and "Paper days: 4 of 20". The unlock rule is said
+  once above the list. The two real-money modes stay locked until the
+  paper days and the server's other checks pass, then ask for the step-up
+  and a ticket. The left column flows on its own (the last grid row is
+  flexible), so a tall strategies list never leaves a gap beside it.
 - **Follow** (`pages/strategies/follow-panel.ts`): the strategy page of a
-  live or paper strategy has a Follow panel. Pick "Signals only" (notify) or
-  "Paper trading" in one of your portfolios, then `POST /api/subscriptions`
+  live or paper strategy has a Follow panel. Pick "Alerts only" (notify) or
+  "Paper" in one of your portfolios, then `POST /api/subscriptions`
   (`portfolio.trade`). Auto is never offered: it is switched on later from
   Today. Once you follow it, the panel says how and links to Today.
   The server routes exist now: `GET /api/subscriptions` (each row has

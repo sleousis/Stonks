@@ -192,11 +192,20 @@
                         <button type="submit" class="btn btn-primary" [disabled]="!!busy()">
                           Save watchlist
                         </button>
-                        <a routerLink="/universes" class="btn btn-ghost">Use a universe instead</a>
+                        <!-- Universes is an admin page: traders keep to their watchlists (F11). -->
+                        @if (session.isAdmin()) {
+                          <a routerLink="/universes" class="btn btn-ghost"
+                            >Use a universe instead</a
+                          >
+                        }
                       </div>
                     </form>
                   } @else {
-                    <a routerLink="/universes" class="btn">See the universes</a>
+                    @if (session.isAdmin()) {
+                      <a routerLink="/universes" class="btn">See the universes</a>
+                    } @else {
+                      <a routerLink="/watchlists" class="btn">See the watchlists</a>
+                    }
                   }
                 }
                 @case ('follow') {
@@ -217,7 +226,9 @@
                           <option value="" [selected]="!followStrategy()">Pick one</option>
                           @for (st of strategies.value() ?? []; track st.id) {
                             <option [value]="st.id" [selected]="followStrategy() === st.id">
-                              {{ st.id }} ({{ st.status === 'active' ? 'live' : 'paper' }})
+                              {{ displayName(st.id) }} ({{
+                                st.status === 'active' ? 'approved' : 'on trial'
+                              }})
                             </option>
                           }
                         </select>
@@ -232,7 +243,7 @@
                             [checked]="followMode() === 'notify'"
                             (change)="followMode.set('notify')"
                           />
-                          Signals only
+                          Alerts only
                         </label>
                         <label class="mode">
                           <input
@@ -242,7 +253,7 @@
                             [checked]="followMode() === 'paper'"
                             (change)="followMode.set('paper')"
                           />
-                          Paper trading
+                          Paper
                         </label>
                       </fieldset>
                       @if (followMode() === 'paper' && portfolios.options().length > 1) {

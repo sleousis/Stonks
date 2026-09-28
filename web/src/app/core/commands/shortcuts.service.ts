@@ -42,6 +42,15 @@ export class ShortcutsService {
 
   private sequences: readonly KeySequence[] = [];
   private pending: { prefix: string; at: number } | null = null;
+  /** Keys typed after the palette was asked for, before its input could take them (p5). */
+  private typeahead = '';
+
+  /** The keys typed while the palette was opening, once: the palette starts its query with them. */
+  takeTypeahead(): string {
+    const text = this.typeahead;
+    this.typeahead = '';
+    return text;
+  }
 
   /** Set by the shell: the page and action sequences it knows about. */
   setSequences(sequences: readonly KeySequence[]): void {
@@ -55,6 +64,7 @@ export class ShortcutsService {
 
   openPalette(): void {
     this.helpOpen.set(false);
+    if (!this.paletteOpen()) this.typeahead = '';
     this.paletteOpen.set(true);
   }
 
@@ -88,6 +98,12 @@ export class ShortcutsService {
     }
 
     if (event.ctrlKey || event.metaKey || event.altKey) return false;
+    // The palette is on its way but not on screen yet: keep what is typed for it.
+    if (this.paletteOpen() && key.length === 1 && !isTyping(event.target) && !this.paletteShown()) {
+      event.preventDefault();
+      this.typeahead += key;
+      return true;
+    }
     if (!this.singleKeys() || isTyping(event.target) || this.anyDialogOpen()) {
       this.pending = null;
       return false;
@@ -134,6 +150,10 @@ export class ShortcutsService {
 
   private anyDialogOpen(): boolean {
     return !!this.doc.querySelector('dialog[open]');
+  }
+
+  private paletteShown(): boolean {
+    return !!this.doc.querySelector('dialog[data-palette][open]');
   }
 
   private otherDialogOpen(): boolean {

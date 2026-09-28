@@ -99,21 +99,17 @@ export interface ModeOption {
 
 /**
  * How a trader follows a strategy, in one set of words for Today's switch
- * and the strategy page's Follow panel (UX-31).
+ * and the strategy page's Follow panel (UX-31, docs/design/vocabulary.md).
  */
 export const MODES: readonly ModeOption[] = [
-  { value: 'notify', label: 'Signals only', help: 'You get its signals. Nothing trades.' },
-  {
-    value: 'paper',
-    label: 'Paper trading',
-    help: 'It trades simulated money in one of your portfolios.',
-  },
+  { value: 'notify', label: 'Alerts only', help: 'You get its signals. Nothing trades.' },
+  { value: 'paper', label: 'Paper', help: 'It trades your paper portfolio. No real money.' },
   {
     value: 'approve',
     label: 'Approve each trade',
-    help: 'It proposes real orders. Each waits for your approval before it goes to your broker.',
+    help: 'Each trade waits for your approval as a ticket before it goes to your broker.',
   },
-  { value: 'auto', label: 'Auto', help: 'It places real orders with your broker.' },
+  { value: 'auto', label: 'Automatic', help: 'Trades go to your broker without asking.' },
 ];
 
 /** The words for a mode, or the raw value for one this console does not know. */

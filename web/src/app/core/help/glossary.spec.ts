@@ -189,7 +189,12 @@ describe('glossary', () => {
     expect(findGlossary('Kill switch')!.key).toBe('kill_switch');
     // The system's name is given too, so operators and traders meet in the middle.
     expect(findGlossary('Trading run')!.entry.short).toContain('Also called a tick');
-    expect(findGlossary('Paper trading')!.entry.short).toContain('Also called shadow');
+    // Vocabulary: shadow is a strategy on trial, never a way to follow one.
+    expect(findGlossary('Shadow')!.key).toBe('on_trial');
+    expect(findGlossary('Shadow')!.entry.short).toContain('Also called shadow');
+    expect(findGlossary('Paper trading')!.key).toBe('paper_trading');
+    expect(findGlossary('Model book')!.key).toBe('test_book');
+    expect(findGlossary('Live')!.entry.term).toBe('Real money');
   });
 
   it('links to the in-app glossary, never an outside wiki (UI-13)', () => {

@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  ElementRef,
   computed,
   inject,
   linkedSignal,
@@ -27,27 +26,41 @@ import { HelpTip } from '../../shared/ui/help-tip';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { MODES, autoBlockedReason } from './strategy-modes';
+import { FollowMode } from '../../shared/ui/follow-mode';
+import { MODES, autoBlockedReason, unlockRule } from './strategy-modes';
 
 interface Row {
   sub: SubscriptionView;
   name: string;
-  modeLabel: string;
+  /** The portfolio it trades, when the follows sit in more than one. */
+  portfolio: string | null;
   autoReason: string | null;
+  /** The real-money modes the auto gate keeps closed for this row. */
+  locked: readonly SubscriptionMode[];
   help: string;
 }
 
 /**
- * My strategies: an on/off switch and a mode switch (Signals only, Paper
- * trading, Approve each trade, Auto) for each strategy the trader follows.
- * The two live modes stay disabled with their reason until the auto gate
- * passes. Turning one on, or switching an auto strategy back on, asks for a
- * fresh code and an order ticket.
+ * My strategies: an on/off switch and one compact mode control (Alerts
+ * only, Paper, Approve each trade, Automatic) for each strategy the trader
+ * follows (M8). The unlock rule is said once above the list; each row says
+ * only how far it has come ("Paper days: 4 of 20"). The two real-money
+ * modes stay locked until the auto gate passes. Turning one on, or
+ * switching an automatic follow back on, asks for a fresh code and a ticket.
  */
 @Component({
   selector: 'app-strategies-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatusPill, HelpTip, LoadingState, EmptyState, ErrorState, PermissionNote],
+  imports: [
+    RouterLink,
+    StatusPill,
+    HelpTip,
+    FollowMode,
+    LoadingState,
+    EmptyState,
+    ErrorState,
+    PermissionNote,
+  ],
   template: `
     <section class="panel" aria-labelledby="home-strategies">
       <div class="panel-head">
@@ -65,11 +78,14 @@ interface Row {
       } @else if (rows().length === 0) {
         <app-empty-state
           title="You follow no strategies yet"
-          message="Open a strategy and press Follow to get its signals here, or paper trade it."
+          message="Open a strategy and press Follow to get its signals here, or trade it on paper."
         >
           <a routerLink="/strategies" class="btn btn-primary">Follow a strategy</a>
         </app-empty-state>
       } @else {
+        @if (rule(); as r) {
+          <p class="rule">{{ r }} <app-help-tip term="Approve each trade" /></p>
+        }
         <ul class="list">
           @for (row of rows(); track row.sub.id) {
             <li>
@@ -78,6 +94,9 @@ interface Row {
                   <a [routerLink]="['/strategies', row.sub.strategy_id]">{{ row.name }}</a>
                   @if (row.sub.strategy_status !== 'active') {
                     <app-status-pill [status]="row.sub.strategy_status" />
+                  }
+                  @if (row.portfolio) {
+                    <span class="where">in {{ row.portfolio }}</span>
                   }
                 </div>
                 <button
@@ -94,40 +113,23 @@ interface Row {
                 </button>
               </div>
 
-              <fieldset class="modes" [disabled]="!row.sub.enabled || !canTrade()">
-                <legend class="visually-hidden">Mode for {{ row.name }}</legend>
-                @for (m of modes; track m.value) {
-                  <label
-                    class="mode"
-                    [class.on]="row.sub.mode === m.value"
-                    [class.locked]="locked(row, m.value)"
-                  >
-                    <input
-                      type="radio"
-                      [name]="'mode-' + row.sub.id"
-                      [value]="m.value"
-                      [checked]="row.sub.mode === m.value"
-                      [disabled]="
-                        busy().has(row.sub.id) ||
-                        (isLive(m.value) && !canAuto()) ||
-                        locked(row, m.value)
-                      "
-                      [attr.aria-describedby]="
-                        isLive(m.value) && row.autoReason ? 'auto-why-' + row.sub.id : null
-                      "
-                      (change)="setMode(row.sub, m.value)"
-                    />
-                    {{ m.label }}
-                  </label>
+              <app-follow-mode
+                class="mode"
+                [value]="row.sub.mode"
+                [label]="'Mode for ' + row.name"
+                [locked]="row.locked"
+                [disabled]="!row.sub.enabled || !canTrade() || busy().has(row.sub.id)"
+                [describedBy]="'mode-help-' + row.sub.id"
+                (changed)="setMode(row.sub, $event)"
+              />
+              <p class="help" [id]="'mode-help-' + row.sub.id">
+                {{ row.help }}
+                @if (row.autoReason && row.sub.mode !== 'auto') {
+                  <span class="why">{{ row.autoReason }}</span>
                 }
-              </fieldset>
-
+              </p>
               @if (row.sub.paused_reason) {
-                <p class="note warn">Auto is paused. {{ row.sub.paused_reason }}</p>
-              }
-              <p class="help">{{ row.help }} <app-help-tip [term]="row.modeLabel" /></p>
-              @if (row.autoReason && row.sub.mode !== 'auto') {
-                <p class="why" [id]="'auto-why-' + row.sub.id">{{ row.autoReason }}</p>
+                <p class="note warn">Automatic is paused. {{ row.sub.paused_reason }}</p>
               }
             </li>
           }
@@ -229,65 +231,29 @@ interface Row {
     .state {
       min-width: 2em;
     }
-    /* Four modes: two by two on phones and in narrow cards, one row when
-       there is room. The 1px gap on a border-coloured ground draws the
-       dividers, so they stay right however the modes wrap. */
-    .modes {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(max(7.5rem, 45%), 1fr));
-      gap: 1px;
-      margin: 0;
-      padding: 0;
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-sm);
-      background: var(--color-border-strong);
-      overflow: hidden;
-    }
-    .modes:disabled {
-      opacity: 0.55;
-    }
     .mode {
-      position: relative;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: var(--touch-min);
-      padding: 0 var(--space-2);
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
-      text-align: center;
-      cursor: pointer;
-      background: var(--color-surface);
+      max-width: 18rem;
     }
-    .mode input {
-      position: absolute;
-      opacity: 0;
-      inset: 0;
-      margin: 0;
-      cursor: inherit;
-    }
-    .mode:has(input:focus-visible) {
-      outline: 2px solid var(--color-focus);
-      outline-offset: -2px;
-    }
-    .mode.on {
-      background: var(--color-primary);
-      color: var(--color-primary-ink);
-      font-weight: var(--weight-semibold);
-    }
-    .mode.locked {
+    .where {
+      font-size: var(--text-xs);
+      font-weight: var(--weight-regular);
       color: var(--color-ink-3);
-      cursor: not-allowed;
+    }
+    .rule {
+      margin: 0;
+      padding: var(--space-3) var(--space-4) 0;
+      font-size: var(--text-sm);
+      color: var(--color-ink-2);
     }
     .gate {
       padding: 0 var(--space-4);
     }
-    .help,
-    .why {
+    .help {
       font-size: var(--text-sm);
       color: var(--color-ink-2);
     }
     .why {
+      display: block;
       color: var(--color-ink-3);
     }
     .note {
@@ -305,9 +271,7 @@ export class StrategiesCard {
   private readonly stepUp = inject(StepUpService);
   private readonly confirm = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
-  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  protected readonly modes = MODES;
   /** Switching strategies on or off and changing modes. */
   protected readonly canTrade = computed(() => this.session.can('portfolio.manage'));
   /** Auto places real orders: its own permission. */
@@ -320,15 +284,30 @@ export class StrategiesCard {
 
   /** The list as shown, updated in place from each change's response. */
   private readonly items = linkedSignal(() => (this.subs.hasValue() ? this.subs.value() : []));
-  protected readonly rows = computed<Row[]>(() =>
-    this.items().map((sub) => ({
-      sub,
-      name: strategyDisplayName(sub.strategy_id),
-      modeLabel: modeLabel(sub.mode),
-      autoReason: autoBlockedReason(sub),
-      help: MODES.find((m) => m.value === sub.mode)?.help ?? '',
-    })),
-  );
+  protected readonly rows = computed<Row[]>(() => {
+    const books = this.portfolios.options();
+    const several = new Set(this.items().map((s) => s.portfolio_id)).size > 1;
+    return this.items().map((sub) => {
+      const autoReason = autoBlockedReason(sub);
+      const closed = !this.canAuto() || (!!autoReason && !this.isLive(sub.mode));
+      return {
+        sub,
+        name: strategyDisplayName(sub.strategy_id),
+        portfolio: several ? (books.find((p) => p.id === sub.portfolio_id)?.name ?? null) : null,
+        autoReason,
+        locked: closed ? (['approve', 'auto'] as const) : [],
+        help: MODES.find((m) => m.value === sub.mode)?.help ?? '',
+      };
+    });
+  });
+
+  /** The unlock rule once, while any follow still waits on its paper days (M8). */
+  protected readonly rule = computed(() => {
+    const waiting = this.items().filter(
+      (s) => s.paper_days_completed < s.paper_days_required && !this.isLive(s.mode),
+    );
+    return waiting.length ? unlockRule(waiting[0].paper_days_required) : null;
+  });
 
   protected async toggle(sub: SubscriptionView): Promise<void> {
     if (this.busy().has(sub.id)) return;
@@ -339,14 +318,9 @@ export class StrategiesCard {
     await this.change(sub, { enabled: on }, `${name} is ${on ? 'on' : 'off'}.`);
   }
 
-  /** Approve each trade and Auto send real orders: both pass the auto gate. */
+  /** Approve each trade and Automatic can send real orders: both pass the auto gate. */
   protected isLive(mode: string): boolean {
     return mode === 'approve' || mode === 'auto';
-  }
-
-  /** A live mode the gate still keeps closed for this row. */
-  protected locked(row: Row, mode: string): boolean {
-    return this.isLive(mode) && !!row.autoReason && !this.isLive(row.sub.mode);
   }
 
   protected async setMode(sub: SubscriptionView, mode: SubscriptionMode): Promise<void> {
@@ -357,12 +331,9 @@ export class StrategiesCard {
         : mode === 'approve'
           ? await this.confirmApprove(sub)
           : true;
-    if (!confirmed) {
-      this.revert(sub);
-      return;
-    }
+    if (!confirmed) return;
     const name = strategyDisplayName(sub.strategy_id);
-    await this.change(sub, { mode }, `${name} is now on ${modeLabel(mode).toLowerCase()}.`);
+    await this.change(sub, { mode }, `${name}: ${modeLabel(mode)}.`);
   }
 
   /**
@@ -371,16 +342,16 @@ export class StrategiesCard {
    */
   private async confirmAuto(sub: SubscriptionView, again: boolean): Promise<boolean> {
     const name = strategyDisplayName(sub.strategy_id);
-    const verb = again ? 'Turn auto back on' : 'Turn on auto';
+    const verb = again ? 'Turn Automatic back on' : 'Turn on Automatic';
     if (!(await this.stepUp.ensure(`${verb} for ${name}.`))) return false;
     const book = this.portfolios.options().find((p) => p.id === sub.portfolio_id) ?? null;
     return this.confirm.confirm({
       title: `${verb} for ${name}?`,
       message:
         'Stonks will place orders with your broker for this strategy on every trading run, ' +
-        'without asking each time. You can switch back to paper trading at any time.',
+        'without asking each time. You can switch back to Paper at any time.',
       confirmLabel: verb,
-      tone: 'danger',
+      tone: book && book.trading !== 'live' ? 'default' : 'danger',
       typedConfirmation: sub.strategy_id,
       ticket: {
         live: book ? book.trading === 'live' : true,
@@ -428,8 +399,7 @@ export class StrategiesCard {
       this.toasts.success(done);
     } catch {
       // The error interceptor already showed the API's message (a cancelled
-      // step-up included), so only the radio needs putting back.
-      this.revert(sub);
+      // step-up included). The mode control still shows the stored mode.
     } finally {
       this.busy.update((ids) => {
         const next = new Set(ids);
@@ -437,14 +407,5 @@ export class StrategiesCard {
         return next;
       });
     }
-  }
-
-  /** Re-check the stored mode's radio after a refusal (the browser moved it). */
-  private revert(sub: SubscriptionView): void {
-    const current = this.items().find((s) => s.id === sub.id)?.mode ?? sub.mode;
-    const radio = [
-      ...this.host.nativeElement.querySelectorAll<HTMLInputElement>('input[type="radio"]'),
-    ].find((r) => r.name === `mode-${sub.id}` && r.value === current);
-    if (radio) radio.checked = true;
   }
 }

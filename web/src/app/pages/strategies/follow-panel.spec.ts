@@ -79,7 +79,7 @@ describe('FollowPanel', () => {
     await tick();
     fixture.detectChanges();
     expect(el.textContent).toContain('You follow this strategy');
-    expect(el.textContent).toContain('Signals only');
+    expect(el.textContent).toContain('Alerts only');
   });
 
   it('paper trades in the portfolio you pick', async () => {
@@ -107,7 +107,7 @@ describe('FollowPanel', () => {
 
   it('says when you already follow it and points to Today', async () => {
     const el = await render([sub({ strategy_id: 'mom', portfolio_id: 'pf_1' })]);
-    expect(el.textContent).toContain('Paper trading');
+    expect(el.textContent).toContain('Paper');
     expect(el.textContent).toContain('on Main');
     expect(el.querySelector('a[href="/"]')?.textContent).toContain('Change it on Today');
     expect(button(el, 'Follow')).toBeUndefined();

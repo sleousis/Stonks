@@ -11,21 +11,17 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import type { MarketSessionsView, ScheduledJobView } from '../../api/models';
+import type { MarketSessionsView } from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { formatTime, formatWeekday } from '../../core/format/format';
 import { HaltStateService } from '../../core/halts/halt-state.service';
 import { StopTradingService } from '../../core/halts/stop-trading.service';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
-import {
-  TRADING_RUN_ACTION,
-  jobLabel,
-  nextJob,
-  nextTradingRun,
-} from '../../core/schedule/job-labels';
+import { jobLabel, nextTradingRun } from '../../core/schedule/job-labels';
 import { KillSheet } from './kill-sheet';
 import { PortfolioPicker } from './portfolio-picker';
+import { StripHaltActions } from './strip-halt-actions';
 
 /** How often the strip re-reads the schedule (the countdown ticks every second). */
 export const SCHEDULE_POLL_MS = new InjectionToken<number>('SCHEDULE_POLL_MS', {
@@ -151,7 +147,7 @@ function runTime(iso: string, now: number): string {
 @Component({
   selector: 'app-session-strip',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, PortfolioPicker, KillSheet],
+  imports: [RouterLink, PortfolioPicker, KillSheet, StripHaltActions],
   template: `
     @let halt = halted();
     @let day = phase();
@@ -164,7 +160,11 @@ function runTime(iso: string, now: number): string {
               <span class="text"
                 ><strong>{{ halt.title }}</strong> {{ halt.text }}</span
               >
-              <a class="strip-link" routerLink="/ops/halts">Review halts</a>
+              @if (isAdmin()) {
+                <a class="strip-link" routerLink="/ops/halts">Review halts</a>
+              } @else {
+                <app-strip-halt-actions />
+              }
             </p>
           }
           <div class="row">
@@ -199,7 +199,7 @@ function runTime(iso: string, now: number): string {
             @if (next(); as n) {
               <a
                 class="next"
-                routerLink="/ops/schedule"
+                [routerLink]="schedulePath()"
                 [attr.aria-label]="nextLabel()"
                 [attr.title]="n.trigger"
               >
@@ -208,28 +208,25 @@ function runTime(iso: string, now: number): string {
                 <span class="clock num" aria-hidden="true">{{ n.in }}</span>
               </a>
             } @else if (noRun()) {
-              <a class="next none muted" routerLink="/ops/schedule">No trading run scheduled</a>
+              <a class="next none muted" [routerLink]="schedulePath()">No trading run scheduled</a>
             } @else if (waiting()) {
               <span class="next hold" aria-hidden="true">
                 <span class="job">Trading run</span>
                 <span class="clock num">0h 00m</span>
               </span>
             }
-            @if (other(); as o) {
-              <a class="other muted" routerLink="/ops/schedule" [attr.aria-label]="o.aria">
-                Then {{ o.label }} <span class="num">{{ o.at }}</span>
-              </a>
-            }
             @if (canKill()) {
               @if (killOn()) {
-                <a
-                  class="stop resume"
-                  routerLink="/ops/halts"
-                  aria-label="Resume trading on the Halts page"
-                >
-                  <span class="stop-mark" aria-hidden="true"></span>
-                  Resume
-                </a>
+                @if (isAdmin()) {
+                  <a
+                    class="stop resume"
+                    routerLink="/ops/halts"
+                    aria-label="Resume trading on the Halts page"
+                  >
+                    <span class="stop-mark" aria-hidden="true"></span>
+                    Resume
+                  </a>
+                }
               } @else {
                 <button
                   type="button"
@@ -429,18 +426,6 @@ function runTime(iso: string, now: number): string {
       font-weight: var(--weight-semibold);
     }
     /* Admins: the next system job, quieter than the trading run. */
-    .other {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-1);
-      min-height: 32px;
-      color: var(--color-ink-3);
-      font-size: var(--text-xs);
-      text-decoration: none;
-    }
-    .other:hover {
-      text-decoration: underline;
-    }
 
     /* Stop trading: always one tap away. Red outline, a solid square mark,
        and the brass ring when the shown portfolio trades real money. */
@@ -540,8 +525,7 @@ function runTime(iso: string, now: number): string {
         margin-left: 0;
         border-top: 1px solid var(--color-border);
       }
-      .at,
-      .other {
+      .at {
         display: none;
       }
     }
@@ -589,28 +573,17 @@ export class SessionStrip {
   /** Signed in and the schedule not read yet: hold the strip's height. */
   protected readonly waiting = computed(() => this.session.canRead() && !this.day.settled());
 
-  /** Admins also see the next system job, quieter, before the trading run. */
-  protected readonly other = computed(() => {
-    if (!this.session.isAdmin()) return null;
-    const now = this.now();
-    const job = nextJob(this.systemJobs(), now);
-    if (!job?.next_run_at) return null;
-    // Only worth a line when it comes first; later jobs sit behind the schedule link.
-    const tradingAt = nextTradingRun(this.jobs(), now)?.next_run_at;
-    if (tradingAt && Date.parse(job.next_run_at) >= Date.parse(tradingAt)) return null;
-    const at = runTime(job.next_run_at, now);
-    const label = jobLabel(job);
-    return { label, at, aria: `Next system job: ${label} at ${at}. Open the schedule.` };
-  });
+  /** Traders and admins can stop trading; admins also reach the Halts and Schedule pages. */
+  protected readonly isAdmin = computed(() => this.session.isAdmin());
 
-  private readonly systemJobs = computed<readonly ScheduledJobView[]>(() =>
-    this.jobs().filter((j) => j.action !== TRADING_RUN_ACTION),
-  );
+  /** Admins open the schedule; everyone else opens Today, where the next run leads the day (F11). */
+  protected readonly schedulePath = computed(() => (this.isAdmin() ? '/ops/schedule' : '/'));
 
   /** Screen readers get a stable label; the ticking clock is hidden from them. */
   protected readonly nextLabel = computed(() => {
     const n = this.next();
-    return n ? `Next trading run at ${n.at}. Open the schedule.` : null;
+    if (!n) return null;
+    return `Next trading run at ${n.at}. ${this.isAdmin() ? 'Open the schedule.' : 'Open Today.'}`;
   });
 
   constructor() {

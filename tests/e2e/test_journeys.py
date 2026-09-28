@@ -391,7 +391,10 @@ def test_stop_trading_from_the_strip_halts_the_picked_portfolio(
 
     expect(strip).to_have_attribute("data-tone", "kill")
     expect(page.get_by_role("region", name="Trading halted")).to_contain_text("Trader paper book")
-    expect(strip.get_by_role("link", name="Resume trading on the Halts page")).to_be_visible()
+    # A trader resumes from the strip itself: the Halts page is an admin page (F11).
+    halted = page.get_by_role("region", name="Trading halted")
+    expect(halted.get_by_role("button", name="Resume")).to_be_visible()
+    expect(strip.locator('a[href="/ops/halts"]')).to_have_count(0)
     v.check_page("kill-strip")
 
     halts = v.api("GET", "/api/halts").json()
@@ -425,10 +428,9 @@ def test_trader_cannot_see_the_admins_portfolio(browse, stack, viewport):
     assert v.api("GET", "/api/portfolio").json()["cash"] == pytest.approx(stack_cash())
 
     # The admin's tick bought AAA.US and BBB.US; none of it shows to the trader.
+    # The Dashboard is an admin page: the trader gets the one No access page.
     page = v.go(f"/dashboard?portfolio_id={admin_pf}")
-    main = page.locator("main")
-    expect(main).to_contain_text("$4,321.00")
-    expect(main).to_contain_text("0 positions")
+    expect(page.get_by_role("heading", level=1)).to_have_text("No access")
     v.check_page("dashboard-trader")
     page = v.go("/orders")
     expect(page.locator("main")).to_contain_text("No orders yet")

@@ -99,7 +99,8 @@ describe('InsightsPage', () => {
     expect(text).toContain('70.0%');
     expect(text).toContain('Since the start');
     // Money changes carry their sign (UX-58).
-    expect(text).toContain('+$1,000.00 today');
+    // One day-change format on Today, Dashboard and Insights (M2).
+    expect(text).toMatch(/\+\$1,000\.00 \(\+[\d.]+%\) (today|on \w+|last session)/);
     expect(el.querySelector('.figures dd.gain')?.textContent).toContain('+$1,000.00');
     expect(text).toContain('n/a');
     expect(text).toContain('22.0%');

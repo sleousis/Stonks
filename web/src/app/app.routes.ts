@@ -36,7 +36,11 @@ export const routes: Routes = [
     loadChildren: () => import('./pages/admin-users/admin-users.routes'),
   },
   // ---------------------------------------------------------------------------
-  { path: 'dashboard', loadChildren: () => import('./pages/dashboard/dashboard.routes') },
+  {
+    path: 'dashboard',
+    canActivate: [adminGuard],
+    loadChildren: () => import('./pages/dashboard/dashboard.routes'),
+  },
   { path: 'strategies', loadChildren: () => import('./pages/strategies/strategies.routes') },
   { path: 'studio', loadChildren: () => import('./pages/studio/studio.routes') },
   { path: 'lab', loadChildren: () => import('./pages/lab/lab.routes') },
@@ -70,6 +74,11 @@ export const routes: Routes = [
   { path: 'screener', loadChildren: () => import('./pages/screener/screener.routes') },
   // 17.6: options research (nothing trades options)
   { path: 'options', loadChildren: () => import('./pages/options/options.routes') },
+  {
+    path: 'no-access',
+    title: 'No access',
+    loadComponent: () => import('./pages/no-access.page').then((m) => m.NoAccessPage),
+  },
   {
     path: '**',
     title: 'Not found',
