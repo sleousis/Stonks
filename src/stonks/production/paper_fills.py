@@ -342,9 +342,37 @@ def sweep_paper_orders(
     the outcomes with :func:`record_open_fills` in the transaction that
     writes the run's snapshot."""
     working = load_working_orders(state, portfolio_id)
+    outcomes = sweep_orders(
+        lake, portfolio, working, as_of=as_of, make_broker=make_broker, actions=actions
+    )
+    for o in outcomes:
+        _log.info(
+            "paper.open_fill",
+            portfolio_id=portfolio_id,
+            client_id=o.order.client_id,
+            status=o.status,
+            price=o.fill.price if o.fill else None,
+            quantity=o.fill.quantity if o.fill else 0.0,
+        )
+    return PaperSweep(outcomes=tuple(outcomes))
+
+
+def sweep_orders(
+    lake: DuckDBLake,
+    portfolio: Portfolio,
+    working: Sequence[WorkingOrder],
+    *,
+    as_of: date,
+    make_broker: Callable[[Portfolio], SimulatedBroker],
+    actions: CorporateActions | None = None,
+) -> list[OpenFill]:
+    """Fill ``working`` orders decided before ``as_of`` from the lake's
+    daily bars (:func:`fill_at_next_open`), on a broker around
+    ``portfolio``, which changes in place. Paper books and model books
+    both sweep through it."""
     due = [w for w in working if w.decided_on < as_of]
     if not due:
-        return PaperSweep()
+        return []
     from stonks.core.interval import Interval
     from stonks.production.tick import _asset_classes
 
@@ -361,17 +389,7 @@ def sweep_paper_orders(
         lookback_bars=spec.lookback_bars if spec is not None else 0,
         stats_spec=spec,
     )
-    outcomes = fill_at_next_open(broker, due, bars, as_of=as_of, actions=actions)
-    for o in outcomes:
-        _log.info(
-            "paper.open_fill",
-            portfolio_id=portfolio_id,
-            client_id=o.order.client_id,
-            status=o.status,
-            price=o.fill.price if o.fill else None,
-            quantity=o.fill.quantity if o.fill else 0.0,
-        )
-    return PaperSweep(outcomes=tuple(outcomes))
+    return fill_at_next_open(broker, due, bars, as_of=as_of, actions=actions)
 
 
 def record_open_fills(state: SqliteState, sweep: PaperSweep, *, portfolio_id: str | None) -> None:
@@ -425,5 +443,6 @@ __all__ = [
     "load_open_bars",
     "load_working_orders",
     "record_open_fills",
+    "sweep_orders",
     "sweep_paper_orders",
 ]

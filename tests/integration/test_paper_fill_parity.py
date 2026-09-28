@@ -174,3 +174,44 @@ def test_tca_arrival_is_the_open_and_the_convention_gap_is_gone(lake, tmp_path):
     for r in rows:
         assert r.shortfall.convention_bps == pytest.approx(0.0, abs=1e-9)
     state.close()
+
+
+def test_a_model_book_fills_like_the_backtest(lake, tmp_path):
+    """A shadow strategy's model book fills at the next open too."""
+    expected = _backtest_fills(lake)
+    state = SqliteState(tmp_path / "state.sqlite")
+    state.migrate()
+    registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts")
+    sid = registry.register(
+        _strategy(), reports=[SurvivalReport(test_id="oos", passed=True, metrics={})]
+    )
+    seed_status(registry, sid, "shadow")
+    settings = TickSettings(
+        universe=TICKERS,
+        initial_cash=10_000.0,
+        costs=CostModelSettings.realistic(),
+        risk=RISK,
+        execution=EXECUTION,
+        paper_fills="next_open",
+    )
+    for day in _days(lake):
+        run_tick(state, lake, registry, settings, as_of=day, plan=TickPlan.default(settings))
+    rows = state.sql(
+        "SELECT filled_on, ticker, side, quantity, price FROM shadow_decisions"
+        " WHERE status = 'filled' ORDER BY filled_on, id"
+    )
+    got = [
+        (
+            date.fromisoformat(r["filled_on"]),
+            r["ticker"],
+            r["side"],
+            round(r["quantity"], 6),
+            round(r["price"], 6),
+        )
+        for r in rows
+    ]
+    assert got == [row[:5] for row in expected]
+    last = _days(lake)[-1].isoformat()
+    working = state.sql("SELECT as_of FROM shadow_decisions WHERE status = 'working'")
+    assert all(r["as_of"] == last for r in working)
+    state.close()

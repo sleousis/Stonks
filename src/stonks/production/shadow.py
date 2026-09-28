@@ -8,6 +8,13 @@ orders pass through the same risk policy, are "filled" on an in-memory
 ``SimulatedBroker`` (always simulated, whatever broker the real tick uses),
 and are logged to ``shadow_decisions`` as promotion evidence.
 
+Fills follow the paper books (P21, ``production.paper_fills``). With
+``paper_fills = "next_open"`` (and a lake) a day's decisions are written as
+``working`` and fill at the next session's open: the next evaluation fills
+them through the backtest's fill and cost models before the book decides
+again, and marks each row ``filled`` (with ``filled_on``) or ``expired``.
+With ``close`` they fill at once at the latest close, as before.
+
 Isolation guarantees:
 
 - nothing here reads or writes ``orders`` / ``fills`` / ``portfolio_snapshots``;
@@ -47,7 +54,9 @@ from stonks.registry.store import StrategyRegistry
 from stonks.store.state import SqliteState
 
 if TYPE_CHECKING:
+    from stonks.production.paper_fills import OpenFill, WorkingOrder
     from stonks.production.tick import TickSettings
+    from stonks.store.lake import DuckDBLake
 
 ShadowStatus = Literal["evaluated", "already_evaluated", "out_of_order", "failed"]
 
@@ -89,6 +98,7 @@ def evaluate_shadow_strategies(
     strategies: Callable[[str], Strategy] | None = None,
     statuses: Sequence[str] = ("shadow",),
     risk_context: RiskContext | None = None,
+    lake: DuckDBLake | None = None,
 ) -> list[ShadowOutcome]:
     """``buyable`` restricts buys to tickers with a fresh close (default:
     any ticker in ``prices``). ``volumes`` (of each priced bar) feed the
@@ -115,6 +125,7 @@ def evaluate_shadow_strategies(
         corporate_actions=corporate_actions,
         strategies=strategies or registry.load,
         risk_context=risk_context,
+        lake=lake,
     )
 
 
@@ -133,6 +144,7 @@ def evaluate_books(
     volumes: Mapping[str, float] | None = None,
     corporate_actions: CorporateActions | None = None,
     risk_context: RiskContext | None = None,
+    lake: DuckDBLake | None = None,
 ) -> list[ShadowOutcome]:
     """Advance each model book in ``books`` (see the module doc).
     ``ranked`` and ``strategies`` are keyed by book id, and an outcome's
@@ -160,6 +172,7 @@ def evaluate_books(
                 corporate_actions or CorporateActions(),
                 strategies,
                 risk_context,
+                lake,
             )
         except Exception as exc:
             log.warning("shadow.failed", error=str(exc), error_type=type(exc).__name__)
@@ -186,6 +199,7 @@ def _evaluate_one(
     corporate_actions: CorporateActions,
     strategies: Callable[[str], Strategy],
     risk_context: RiskContext | None = None,
+    lake: DuckDBLake | None = None,
 ) -> ShadowOutcome:
     strategy_id = book.book_id
     latest = book.latest_from(state, as_of)
@@ -203,6 +217,23 @@ def _evaluate_one(
         as_of=as_of,
         withholding_rate=settings.dividend_withholding_rate,
     )
+    # P21: yesterday's working decisions fill at today's open first, as a
+    # backtest fills its queue before the next decision.
+    next_open = lake is not None and settings.paper_fills == "next_open"
+    settled: list[OpenFill] = []
+    if lake is not None and next_open:
+        from stonks.production.paper_fills import sweep_orders
+
+        settled = sweep_orders(
+            lake,
+            portfolio,
+            book.working(state),
+            as_of=as_of,
+            make_broker=lambda held: settings.simulated_costs.build_broker(
+                held, fill_model=settings.execution.fill_model()
+            ),
+            actions=corporate_actions,
+        )
     # Load even without picks: the Ranker silently skips a strategy that
     # fails to load, and that must surface as ``failed``, not ``evaluated``.
     strategy = strategies(strategy_id)
@@ -242,22 +273,39 @@ def _evaluate_one(
             for o in _one_per_side(risk_result.orders)
         ]
 
-    # Always an in-memory simulated broker: shadow must never reach a real
-    # one. Same costs, asset classes and volumes as the real simulated tick.
-    broker = settings.simulated_costs.build_broker(portfolio)
-    broker.set_asset_classes(asset_classes)  # type: ignore[arg-type]
-    broker.set_prices(prices, as_of=as_of, volumes=volumes)
-    results: list[tuple[Order, Fill | None]] = [(o, broker.place_order(o)) for o in orders]
+    results: list[tuple[Order, Fill | None]]
+    if next_open:
+        results = [(o, None) for o in orders]  # working until the next open
+    else:
+        # Always an in-memory simulated broker: shadow must never reach a
+        # real one. Same costs, asset classes and volumes as the real tick.
+        broker = settings.simulated_costs.build_broker(portfolio)
+        broker.set_asset_classes(asset_classes)  # type: ignore[arg-type]
+        broker.set_prices(prices, as_of=as_of, volumes=volumes)
+        results = [(o, broker.place_order(o)) for o in orders]
 
     total_value = portfolio.total_value(prices)
     now = _iso_now()
-    book.write(state, tick_id, as_of, results, portfolio, total_value, prices, now)
+    book.write(
+        state,
+        tick_id,
+        as_of,
+        results,
+        portfolio,
+        total_value,
+        prices,
+        now,
+        working=next_open,
+        settled=settled,
+    )
 
+    fills = sum(1 for o in settled if o.fill is not None)
+    fills += sum(1 for _, f in results if f is not None)
     return ShadowOutcome(
         strategy_id=strategy_id,
         status="evaluated",
         decisions=len(results),
-        fills=sum(1 for _, f in results if f is not None),
+        fills=fills,
         total_value=total_value,
     )
 
@@ -326,16 +374,69 @@ class BookStore:
         if not tickers:
             return []
         marks = ",".join("?" for _ in tickers)
+        day = "COALESCE(filled_on, as_of)" if self._has_filled_on(state) else "as_of"
         rows = state.sql(
-            f"SELECT ticker, side, quantity, as_of FROM {self.decisions}"
+            f"SELECT ticker, side, quantity, {day} AS as_of FROM {self.decisions}"
             f" WHERE {self._where} AND status = 'filled' AND ticker IN ({marks})"
-            " AND as_of <= ? ORDER BY as_of, id",
+            f" AND {day} <= ? ORDER BY {day}, id",
             [*self._args, *tickers, as_of.isoformat()],
         )
         return [
             (r["ticker"], r["side"], float(r["quantity"]), date.fromisoformat(r["as_of"]))
             for r in rows
         ]
+
+    def working(self, state: SqliteState) -> list[WorkingOrder]:
+        """The book's decisions still waiting for their next open, oldest
+        first (none before migration 047)."""
+        from stonks.production.paper_fills import WorkingOrder
+
+        if not self._has_filled_on(state):
+            return []
+        rows = state.sql(
+            f"SELECT as_of, ticker, side, quantity FROM {self.decisions}"
+            f" WHERE {self._where} AND status = 'working' ORDER BY as_of, id",
+            self._args,
+        )
+        return [
+            WorkingOrder(
+                order=Order(
+                    client_id=_decision_key(r["as_of"], r["ticker"], r["side"]),
+                    ticker=r["ticker"],
+                    side=r["side"],
+                    quantity=float(r["quantity"]),
+                    strategy_id=self.book_id,
+                ),
+                decided_on=date.fromisoformat(r["as_of"]),
+            )
+            for r in rows
+        ]
+
+    def _has_filled_on(self, state: SqliteState) -> bool:
+        """The decisions table has ``filled_on`` (migration 047)."""
+        rows = state.sql(f"SELECT name FROM pragma_table_info('{self.decisions}')")
+        return any(r["name"] == "filled_on" for r in rows)
+
+    def _settle(self, state: SqliteState, outcome: OpenFill) -> None:
+        """Mark one working decision filled at its open, or expired."""
+        day, ticker, side = outcome.order.client_id.split("|")
+        fill = outcome.fill
+        on = outcome.bar_day.isoformat() if fill is not None and outcome.bar_day else None
+        state.execute(
+            f"UPDATE {self.decisions} SET status = ?, quantity = ?, price = ?, filled_on = ?"
+            f" WHERE {self._where} AND as_of = ? AND ticker = ? AND side = ?"
+            " AND status = 'working'",
+            [
+                "filled" if fill else "expired",
+                fill.quantity if fill else outcome.order.quantity,
+                fill.price if fill else None,
+                on,
+                *self._args,
+                day,
+                ticker,
+                side,
+            ],
+        )
 
     def curve(self, state: SqliteState) -> list[tuple[date, float]]:
         """``(as_of, total_value)`` of every snapshot, oldest first."""
@@ -355,12 +456,20 @@ class BookStore:
         total_value: float,
         prices: Mapping[str, float],
         now: str,
+        *,
+        working: bool = False,
+        settled: Sequence[OpenFill] = (),
     ) -> None:
-        """The day's decisions and snapshot, in one transaction."""
+        """The day's decisions and snapshot, in one transaction. With
+        ``working`` the decisions wait for the next open. ``settled`` are
+        earlier working decisions this run filled or let lapse."""
         cols = [col for col, _ in self.key]
         key_cols = ", ".join(cols)
         key_marks = ", ".join("?" for _ in cols)
+        filled_on = self._has_filled_on(state)
         with state.transaction():
+            for outcome in settled:
+                self._settle(state, outcome)
             for order, fill in results:
                 state.execute(
                     f"""
@@ -378,10 +487,22 @@ class BookStore:
                         order.side,
                         fill.quantity if fill else order.quantity,
                         fill.price if fill else prices.get(order.ticker),
-                        "filled" if fill else "rejected",
+                        "working" if working else ("filled" if fill else "rejected"),
                         now,
                     ],
                 )
+                if fill is not None and filled_on:
+                    state.execute(
+                        f"UPDATE {self.decisions} SET filled_on = ? WHERE {self._where}"
+                        " AND as_of = ? AND ticker = ? AND side = ?",
+                        [
+                            as_of.isoformat(),
+                            *self._args,
+                            as_of.isoformat(),
+                            order.ticker,
+                            order.side,
+                        ],
+                    )
             state.execute(
                 f"""
                 INSERT INTO {self.snapshots}
@@ -398,6 +519,11 @@ class BookStore:
                     total_value,
                 ],
             )
+
+
+def _decision_key(as_of: str, ticker: str, side: str) -> str:
+    """A working decision's key: its day, ticker and side."""
+    return f"{as_of}|{ticker}|{side}"
 
 
 def shadow_book(strategy_id: str) -> BookStore:

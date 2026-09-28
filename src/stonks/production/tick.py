@@ -232,6 +232,8 @@ _BREACH_KINDS = frozenset({"month_loss", "week_loss", "drawdown"})
 
 #: Quantities closer than this are equal (a fill of the whole order).
 _QTY_EPSILON = 1e-9
+#: The default execution: every order in full at its price (no fill model).
+_IMMEDIATE_FILLS = ExecutionSettings.model_validate({})
 
 #: Bars of daily history the volatility-aware constructors read.
 _VOL_HISTORY_BARS = 260
@@ -323,7 +325,7 @@ class TickSettings:
     paper_fills: PaperFillMode = "close"
     #: ``[backtest.execution]``: the fill model paper books fill through
     #: at the next open, the one backtests use.
-    execution: ExecutionSettings = ExecutionSettings.model_validate({})
+    execution: ExecutionSettings = _IMMEDIATE_FILLS
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
@@ -2482,6 +2484,7 @@ def _shadow_phase(run: _TickRun) -> dict[str, Any]:
             strategies=run.pool.checkout,
             statuses=statuses,
             risk_context=base_context,
+            lake=lake,
         )
     except Exception as exc:
         log.error("tick.shadow_failed", error=str(exc), error_type=type(exc).__name__)
@@ -2535,6 +2538,7 @@ def _version_book_phase(
             volumes=book.volumes,
             corporate_actions=actions,
             risk_context=base_context,
+            lake=run.lake,
         )
     except Exception as exc:
         run.log.error("tick.version_books_failed", error=str(exc), error_type=type(exc).__name__)
