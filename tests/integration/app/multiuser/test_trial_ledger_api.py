@@ -72,5 +72,22 @@ def test_one_run_shows_every_trial_and_the_class_count(client, settings, people)
     assert missing.status_code == 404
 
 
+def test_a_run_says_its_robustness_apart_from_how_its_trials_ran(client, settings, people):
+    """Visual audit M5: a run whose trials all ran but whose strategy did not
+    survive the robustness tests reads "did not survive", with every trial
+    "ran", never a "failed" run over "passed" trials."""
+    run_id = _record(settings, "trend persists", [0.4, 0.5, math.nan])
+    passed = _record(settings, "it holds", [1.2], verdict="pass")
+    errored = _record(settings, "it broke", [math.nan], verdict="error")
+    alice = people["alice"]["headers"]
+    rows = {r["id"]: r for r in client.get("/api/lab/ledger", headers=alice).json()["items"]}
+    assert rows[run_id]["robustness"] == "did_not_survive"
+    assert (rows[run_id]["trials_ran"], rows[run_id]["trials_errored"]) == (2, 1)
+    assert rows[passed]["robustness"] == "survived"
+    assert rows[errored]["robustness"] == "error"
+    detail = client.get(f"/api/lab/ledger/{run_id}", headers=alice).json()
+    assert [t["outcome"] for t in detail["trials"]] == ["ran", "ran", "error"]
+
+
 def test_viewers_cannot_read_the_ledger(client, people):
     assert client.get("/api/lab/ledger", headers=people["vic"]["headers"]).status_code == 403

@@ -24,6 +24,30 @@ from stonks.auth.principal import Principal
 from stonks.lab.trials import TrialLedger
 
 
+#: The run's robustness outcome, apart from how its trials ran (visual audit
+#: M5): ``survived`` or ``did_not_survive`` the robustness tests, ``error``
+#: when the run crashed, ``running`` while it goes, ``stopped`` when it
+#: ended without a verdict. Show this as the run's status.
+Robustness = Literal["running", "survived", "did_not_survive", "error", "stopped"]
+
+#: How one trial ran: ``ran`` (a finite score) or ``error`` (no score). It
+#: says nothing about robustness.
+TrialOutcome = Literal["ran", "error"]
+
+_ROBUSTNESS: dict[str, Robustness] = {
+    "pass": "survived",
+    "fail": "did_not_survive",
+    "error": "error",
+}
+
+
+def robustness_of(verdict: str | None, finished: bool) -> Robustness:
+    """The run's :data:`Robustness` from its stored verdict."""
+    if verdict in _ROBUSTNESS:
+        return _ROBUSTNESS[verdict]
+    return "stopped" if finished else "running"
+
+
 class LedgerRunView(BaseModel):
     """One recorded lab run: what was tested, why, and how it came out."""
 
@@ -41,6 +65,12 @@ class LedgerRunView(BaseModel):
     verdict: Literal["pass", "fail", "error"] | None
     n_trials: int = Field(description="Trials this run evaluated.")
     n_failed: int = Field(description="Trials that failed (no finite score).")
+    robustness: Robustness = Field(
+        description="The run's status: did the strategy survive the robustness tests. "
+        "Independent of the trial counts."
+    )
+    trials_ran: int = Field(description="Trials that ran to a score.")
+    trials_errored: int = Field(description="Trials that ended with no score (same as n_failed).")
     best_score: float | None = Field(description="Best finite objective score, null if none.")
     universe_id: str | None = None
     tickers: int = Field(default=0, description="Tickers in the dataset.")
@@ -55,6 +85,9 @@ class LedgerTrialView(BaseModel):
     score: float | None = Field(description="Objective score, null for a failed trial.")
     n_bars: int | None
     status: Literal["ok", "failed"]
+    outcome: TrialOutcome = Field(
+        description="How the trial ran (ran or error); not a robustness verdict."
+    )
 
 
 class LedgerRunDetail(LedgerRunView):
@@ -129,6 +162,7 @@ class TrialLedgerService:
                     score=t.score if math.isfinite(t.score) else None,
                     n_bars=t.n_bars,
                     status=t.status,
+                    outcome="ran" if t.status == "ok" else "error",
                 )
                 for t in trials
             ],
@@ -140,6 +174,8 @@ def _run_view(row: dict[str, Any]) -> LedgerRunView:
     dataset = json.loads(row.get("dataset_json") or "{}")
     best = row.get("best_score")
     universe = dataset.get("universe") or []
+    n_trials = int(row.get("n_trials") or 0)
+    n_failed = int(row.get("n_failed") or 0)
     return LedgerRunView(
         id=row["id"],
         strategy_class=row["strategy_class"],
@@ -152,8 +188,11 @@ def _run_view(row: dict[str, Any]) -> LedgerRunView:
         started_at=row["started_at"],
         finished_at=row.get("finished_at"),
         verdict=row.get("verdict"),
-        n_trials=int(row.get("n_trials") or 0),
-        n_failed=int(row.get("n_failed") or 0),
+        n_trials=n_trials,
+        n_failed=n_failed,
+        robustness=robustness_of(row.get("verdict"), row.get("finished_at") is not None),
+        trials_ran=n_trials - n_failed,
+        trials_errored=n_failed,
         best_score=float(best) if best is not None and math.isfinite(best) else None,
         universe_id=dataset.get("universe_id"),
         tickers=len(universe) if isinstance(universe, list) else 0,
