@@ -72,7 +72,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -3441,7 +3443,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -6004,7 +6008,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -6159,7 +6165,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -6286,7 +6294,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -7049,7 +7059,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -7648,7 +7660,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },

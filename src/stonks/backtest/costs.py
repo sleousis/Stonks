@@ -46,6 +46,10 @@ Implementations
   The engine computes the lagged statistics only when a model asks for
   them (``market_stats_spec``), so the default settings behave exactly as
   before.
+  * per asset class, a broker ``commission`` schedule (``ibkr_fixed``,
+    ``ibkr_tiered``) and the US regulatory fees (``us_sell_fees``), added to
+    the fee (:mod:`stonks.backtest.commissions`, roadmap 23.2). Both are off
+    by default; ``CostModelSettings.ibkr()`` turns them on for equities.
 
 Contract: a model's fill price and fee must be non-decreasing in
 ``quantity`` on the adverse side. The broker relies on this to scale
@@ -58,8 +62,14 @@ import math
 from dataclasses import dataclass
 from typing import Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from stonks.backtest.commissions import (
+    COMMISSIONS,
+    CommissionSettings,
+    commission_fee,
+    regulatory_fee,
+)
 from stonks.backtest.fills import MarketStatsSpec
 from stonks.core.types import AssetClass, OrderSide
 
@@ -129,6 +139,17 @@ class AssetClassCosts(BaseModel):
     fee_flat: float = Field(0.0, ge=0.0)
     fee_bps: float = Field(0.0, ge=0.0)
     half_spread_bps: float = Field(0.0, ge=0.0)
+    #: Broker commission schedule (``stonks.backtest.commissions.COMMISSIONS``).
+    commission: str = "none"
+    #: Pay the US regulatory fees (SEC and FINRA TAF on sales, CAT on both).
+    us_sell_fees: bool = False
+
+    @field_validator("commission")
+    @classmethod
+    def _known_commission(cls, name: str) -> str:
+        if name not in COMMISSIONS:
+            raise ValueError(f"unknown commission {name!r}; choose from {sorted(COMMISSIONS)}")
+        return name
 
 
 class IStarSettings(BaseModel):
@@ -167,6 +188,8 @@ class CostModelSettings(BaseModel):
     #: ``sqrt_vol``: impact of trading one ADV, in daily sigmas.
     impact_gamma: float = Field(1.0, ge=0.0)
     istar: IStarSettings = IStarSettings()
+    #: Rates of the commission schedules and regulatory fees (23.2).
+    commissions: CommissionSettings = CommissionSettings()
     half_spread_model: HalfSpreadModel = "class"
     #: Cap on a per-ticker half-spread estimate, in bps.
     max_half_spread_bps: float = Field(200.0, ge=0.0)
@@ -235,6 +258,17 @@ class CostModelSettings(BaseModel):
             max_impact_bps=500.0,
         )
 
+    @classmethod
+    def ibkr(cls, schedule: Literal["tiered", "fixed"] = "tiered") -> CostModelSettings:
+        """``realistic()`` with IBKR Pro commissions and the US regulatory
+        fees on equities in place of the flat ``fee_bps`` (roadmap 23.2).
+        Other asset classes keep their ``realistic()`` fees."""
+        base = cls.realistic()
+        equity = base.for_asset_class("equity").model_copy(
+            update={"fee_bps": 0.0, "commission": f"ibkr_{schedule}", "us_sell_fees": True}
+        )
+        return base.model_copy(update={"asset_classes": {**base.asset_classes, "equity": equity}})
+
 
 class AssetClassCostModel:
     """Per-asset-class fee and half-spread (or a per-ticker estimate) plus
@@ -254,6 +288,11 @@ class AssetClassCostModel:
         adverse_bps = self._half_spread_bps(trade, costs) + temporary + permanent
         fill_price = _adverse(trade.price, trade.side, adverse_bps)
         fee = costs.fee_flat + costs.fee_bps / _BPS * fill_price * trade.quantity
+        rates = self._settings.commissions
+        if costs.commission != "none":
+            fee += commission_fee(costs.commission, trade, fill_price, rates)
+        if costs.us_sell_fees:
+            fee += regulatory_fee(trade, fill_price, rates.us_regulatory)
         return TradeCost(fill_price=fill_price, fee=fee)
 
     def impact_components(self, trade: Trade) -> tuple[float, float]:

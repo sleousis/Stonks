@@ -1478,7 +1478,7 @@ _LAB_OBJECTIVES = (
     "cv_cagr",
     "cv_final_return",
 )
-_LAB_COST_MODELS = ("config", "zero", "realistic")
+_LAB_COST_MODELS = ("config", "zero", "realistic", "ibkr_tiered", "ibkr_fixed")
 
 
 def _heatmap_option(spec: str | None, grid: int, full: bool) -> Any:

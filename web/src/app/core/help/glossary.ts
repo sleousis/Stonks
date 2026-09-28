@@ -43,6 +43,7 @@ export const METRIC_KEYS = [
   'exposure',
   'slippage',
   'basis_points',
+  'min_capital',
   // Benchmark-relative
   'alpha',
   'beta',
@@ -441,6 +442,12 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     term: 'Cost drag',
     short: 'Return lost to fees, spread and market impact each year.',
     aliases: ['cost_drag_annual', 'Cost drag per year', 'Costs'],
+  },
+  min_capital: {
+    term: 'Minimum capital',
+    short:
+      'The smallest account at which almost every buy is at least one whole share. Below it, orders get skipped or rounded away.',
+    aliases: ['Skipped by whole shares', 'lot_skipped_share'],
   },
   excess_cagr: {
     term: 'Excess CAGR',

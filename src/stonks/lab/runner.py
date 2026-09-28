@@ -73,7 +73,14 @@ def costs_are_zero(costs: Any) -> bool:
     if getattr(costs, "impact_bps", 0.0):
         return False
     classes = [costs.default, *getattr(costs, "asset_classes", {}).values()]
-    return not any(c.fee_flat or c.half_spread_bps or c.fee_bps for c in classes)
+    return not any(
+        c.fee_flat
+        or c.half_spread_bps
+        or c.fee_bps
+        or getattr(c, "commission", "none") != "none"
+        or getattr(c, "us_sell_fees", False)
+        for c in classes
+    )
 
 
 def with_strategy_references(

@@ -87,6 +87,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from stonks.backtest.fills import ExecutionSettings
     from stonks.backtest.report import BacktestReport
     from stonks.backtest.shorting import ShortingSettings
+    from stonks.portfolio.lots import LotSettings
     from stonks.portfolio.settings import ConstructionSettings
     from stonks.store.lake import DuckDBLake
 
@@ -183,6 +184,9 @@ class LabDataset:
     #: Short selling for every backtest on this dataset (roadmap 16.4): the
     #: margin model and borrow fees. ``None`` (the default): long-only.
     shorting: ShortingSettings | None = None
+    #: Lot sizing for every backtest (``[backtest.lots]``, roadmap 23.1).
+    #: ``None``: fractional orders.
+    lots: LotSettings | None = None
     #: Trading sessions of the universe (see the module doc). Empty: the
     #: windows split by calendar days.
     sessions: tuple[date, ...] = ()

@@ -686,9 +686,11 @@ Fee and spread for one asset class.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `commission` | string | no |  |
 | `fee_bps` | number | no |  |
 | `fee_flat` | number | no |  |
 | `half_spread_bps` | number | no |  |
+| `us_sell_fees` | boolean | no |  |
 
 ### AssistantEventView
 
@@ -727,7 +729,7 @@ Give ``universe`` (tickers) or ``universe_id``: a stored universe, every member 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `benchmark` | string \| null | no |  |
-| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
 | `fee_per_trade` | number | no |  |
 | `initial_cash` | number | no |  |
@@ -756,6 +758,7 @@ Give ``universe`` (tickers) or ``universe_id``: a stored universe, every member 
 | `fitness` | number \| null | no |  |
 | `interval` | string | yes |  |
 | `kurtosis` | number \| null | no |  |
+| `lots` | [LotView](#lotview) \| null | no |  |
 | `max_dd_duration_bars` | integer | no |  |
 | `max_drawdown` | number \| null | yes |  |
 | `profit_factor` | number \| null | yes |  |
@@ -1008,6 +1011,16 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 |-------|------|----------|-------------|
 | `reason` | string | yes |  |
 
+### CommissionSettings
+
+``[backtest.costs.commissions]``: the rates of every schedule. An asset class picks its schedule with ``commission``.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ibkr_fixed` | [IbkrFixedFees](#ibkrfixedfees) | no |  |
+| `ibkr_tiered` | [IbkrTieredFees](#ibkrtieredfees) | no |  |
+| `us_regulatory` | [UsRegulatoryFees](#usregulatoryfees) | no |  |
+
 ### ComparePoint
 
 | Field | Type | Required | Description |
@@ -1121,7 +1134,7 @@ Live shortfall of the strategy's real orders against the cost model's estimate (
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `description` | string | yes |  |
-| `name` | "zero" \| "realistic" | yes |  |
+| `name` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" | yes |  |
 | `settings` | [CostModelSettings](#costmodelsettings) | yes |  |
 
 ### CostModelSettings
@@ -1132,6 +1145,7 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 |-------|------|----------|-------------|
 | `adv_window` | integer | no |  |
 | `asset_classes` | dict[str, [AssetClassCosts](#assetclasscosts)] | no |  |
+| `commissions` | [CommissionSettings](#commissionsettings) | no |  |
 | `default` | [AssetClassCosts](#assetclasscosts) | no |  |
 | `half_spread_model` | "class" \| "corwin_schultz" \| "abdi_ranaldo" | no |  |
 | `impact_bps` | number | no |  |
@@ -1207,7 +1221,7 @@ A :class:`~stonks.app.lab.BacktestRequest` without the strategy (the draft is th
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `benchmark` | string \| null | no |  |
-| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
 | `fee_per_trade` | number | no |  |
 | `initial_cash` | number | no |  |
@@ -1235,7 +1249,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 |-------|------|----------|-------------|
 | `benchmark` | string \| null | no |  |
 | `budget` | integer | no |  |
-| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
 | `grid_size` | integer | no |  |
@@ -1971,6 +1985,29 @@ Kissell's I-Star parameters: ``I = a1 (Q/ADV)^a2 sigma^a3`` bps, with a temporar
 | `periods_per_year` | number | no |  |
 | `pov` | number | no |  |
 
+### IbkrFixedFees
+
+IBKR Pro Fixed, US stocks and ETFs. Source: interactivebrokers.com/en/pricing/commissions-stocks.php (Fixed: USD 0.005 per share, minimum USD 1.00, maximum 1% of trade value).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_fraction` | number | no |  |
+| `minimum` | number | no |  |
+| `per_share` | number | no |  |
+
+### IbkrTieredFees
+
+IBKR Pro Tiered, US stocks and ETFs. Source: the page above (minimum USD 0.35 per order, maximum 1% of trade value, plus exchange, clearing and pass-through fees).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `clearing_per_share` | number | no |  |
+| `exchange_per_share` | number | no |  |
+| `max_fraction` | number | no |  |
+| `minimum` | number | no |  |
+| `monthly_shares` | number | no |  |
+| `tiers` | list[list[any]] | no |  |
+
 ### IndexHistoryImport
 
 An index constituent history as CSV (``date,ticker,action`` with ``add``, ``remove`` or ``member``) or JSON (``as_of``, ``constituents``, ``changes``).
@@ -2232,7 +2269,7 @@ Tunes the class the ``strategy`` ref points at over its parameter space. The ref
 |-------|------|----------|-------------|
 | `benchmark` | string \| null | no |  |
 | `budget` | integer | no |  |
-| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
 | `ensure_data` | boolean | no |  |
@@ -2520,6 +2557,23 @@ The lots one sell fill closes. An empty list clears the picks.
 |-------|------|----------|-------------|
 | `picks` | list[[LotPick](#lotpick)] | no |  |
 | `sell_fill_id` | integer | yes |  |
+
+### LotView
+
+What lot rounding did in a backtest (roadmap 23.1).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_drift` | number \| null | no |  |
+| `mean_drift` | number \| null | no |  |
+| `min_capital` | number \| null | no |  |
+| `min_capital_profile` | string | no |  |
+| `orders` | integer | no |  |
+| `profile` | string | yes |  |
+| `rounded` | integer | no |  |
+| `skipped` | integer | no |  |
+| `skipped_notional` | number \| null | no |  |
+| `skipped_share` | number \| null | no |  |
 
 ### ManualOrderChange
 
@@ -4054,6 +4108,8 @@ What a reviewer reads before promoting; it doesn't change the verdict. ``None`` 
 | `dsr` | number \| null | no |  |
 | `excess_cagr` | number \| null | no |  |
 | `hypothesis` | string \| null | no |  |
+| `lot_skipped_share` | number \| null | no |  |
+| `min_capital` | number \| null | no |  |
 | `n_trials_class` | integer \| null | no |  |
 | `pbo` | number \| null | no |  |
 | `premortem` | string \| null | no |  |
@@ -5152,7 +5208,7 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 |-------|------|----------|-------------|
 | `benchmark` | string \| null | no |  |
 | `budget` | integer | no |  |
-| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
 | `exclude` | list[string] | no |  |
@@ -5638,6 +5694,17 @@ A universe's new definition. The members stay as they are until the next refresh
 | `refreshed_at` | date-time \| null | no |  |
 | `spec` | object | yes |  |
 | `updated_at` | date-time \| null | no |  |
+
+### UsRegulatoryFees
+
+US regulatory transaction fees, passed through by IBKR on either plan.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cat_per_share` | number | no |  |
+| `sec_rate_per_million` | number | no |  |
+| `taf_max` | number | no |  |
+| `taf_per_share` | number | no |  |
 
 ### UserCreateRequest
 

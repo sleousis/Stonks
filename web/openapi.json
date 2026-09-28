@@ -599,6 +599,11 @@
       "AssetClassCosts": {
         "description": "Fee and spread for one asset class.",
         "properties": {
+          "commission": {
+            "default": "none",
+            "title": "Commission",
+            "type": "string"
+          },
           "fee_bps": {
             "default": 0.0,
             "minimum": 0.0,
@@ -616,6 +621,11 @@
             "minimum": 0.0,
             "title": "Half Spread Bps",
             "type": "number"
+          },
+          "us_sell_fees": {
+            "default": false,
+            "title": "Us Sell Fees",
+            "type": "boolean"
           }
         },
         "title": "AssetClassCosts",
@@ -765,7 +775,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -960,6 +972,16 @@
               }
             ],
             "title": "Kurtosis"
+          },
+          "lots": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LotView"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "max_dd_duration_bars": {
             "default": 0,
@@ -2278,6 +2300,63 @@
         "title": "ClearHaltRequest",
         "type": "object"
       },
+      "CommissionSettings": {
+        "additionalProperties": false,
+        "description": "``[backtest.costs.commissions]``: the rates of every schedule. An\nasset class picks its schedule with ``commission``.",
+        "properties": {
+          "ibkr_fixed": {
+            "$ref": "#/components/schemas/IbkrFixedFees",
+            "default": {
+              "max_fraction": 0.01,
+              "minimum": 1.0,
+              "per_share": 0.005
+            }
+          },
+          "ibkr_tiered": {
+            "$ref": "#/components/schemas/IbkrTieredFees",
+            "default": {
+              "clearing_per_share": 0.0002,
+              "exchange_per_share": 0.003,
+              "max_fraction": 0.01,
+              "minimum": 0.35,
+              "monthly_shares": 0.0,
+              "tiers": [
+                [
+                  300000.0,
+                  0.0035
+                ],
+                [
+                  3000000.0,
+                  0.002
+                ],
+                [
+                  20000000.0,
+                  0.0015
+                ],
+                [
+                  100000000.0,
+                  0.001
+                ],
+                [
+                  null,
+                  0.0005
+                ]
+              ]
+            }
+          },
+          "us_regulatory": {
+            "$ref": "#/components/schemas/UsRegulatoryFees",
+            "default": {
+              "cat_per_share": 3.5e-05,
+              "sec_rate_per_million": 27.8,
+              "taf_max": 8.3,
+              "taf_per_share": 0.000166
+            }
+          }
+        },
+        "title": "CommissionSettings",
+        "type": "object"
+      },
       "ComparePoint": {
         "properties": {
           "time": {
@@ -2824,7 +2903,9 @@
           "name": {
             "enum": [
               "zero",
-              "realistic"
+              "realistic",
+              "ibkr_tiered",
+              "ibkr_fixed"
             ],
             "title": "Name",
             "type": "string"
@@ -2865,12 +2946,59 @@
             "title": "Asset Classes",
             "type": "object"
           },
+          "commissions": {
+            "$ref": "#/components/schemas/CommissionSettings",
+            "default": {
+              "ibkr_fixed": {
+                "max_fraction": 0.01,
+                "minimum": 1.0,
+                "per_share": 0.005
+              },
+              "ibkr_tiered": {
+                "clearing_per_share": 0.0002,
+                "exchange_per_share": 0.003,
+                "max_fraction": 0.01,
+                "minimum": 0.35,
+                "monthly_shares": 0.0,
+                "tiers": [
+                  [
+                    300000.0,
+                    0.0035
+                  ],
+                  [
+                    3000000.0,
+                    0.002
+                  ],
+                  [
+                    20000000.0,
+                    0.0015
+                  ],
+                  [
+                    100000000.0,
+                    0.001
+                  ],
+                  [
+                    null,
+                    0.0005
+                  ]
+                ]
+              },
+              "us_regulatory": {
+                "cat_per_share": 3.5e-05,
+                "sec_rate_per_million": 27.8,
+                "taf_max": 8.3,
+                "taf_per_share": 0.000166
+              }
+            }
+          },
           "default": {
             "$ref": "#/components/schemas/AssetClassCosts",
             "default": {
+              "commission": "none",
               "fee_bps": 0.0,
               "fee_flat": 0.0,
-              "half_spread_bps": 0.0
+              "half_spread_bps": 0.0,
+              "us_sell_fees": false
             }
           },
           "half_spread_model": {
@@ -3277,7 +3405,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -3420,7 +3550,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -7148,6 +7280,109 @@
         "title": "IStarSettings",
         "type": "object"
       },
+      "IbkrFixedFees": {
+        "additionalProperties": false,
+        "description": "IBKR Pro Fixed, US stocks and ETFs.\nSource: interactivebrokers.com/en/pricing/commissions-stocks.php\n(Fixed: USD 0.005 per share, minimum USD 1.00, maximum 1% of trade value).",
+        "properties": {
+          "max_fraction": {
+            "default": 0.01,
+            "exclusiveMinimum": 0.0,
+            "title": "Max Fraction",
+            "type": "number"
+          },
+          "minimum": {
+            "default": 1.0,
+            "minimum": 0.0,
+            "title": "Minimum",
+            "type": "number"
+          },
+          "per_share": {
+            "default": 0.005,
+            "minimum": 0.0,
+            "title": "Per Share",
+            "type": "number"
+          }
+        },
+        "title": "IbkrFixedFees",
+        "type": "object"
+      },
+      "IbkrTieredFees": {
+        "additionalProperties": false,
+        "description": "IBKR Pro Tiered, US stocks and ETFs. Source: the page above\n(minimum USD 0.35 per order, maximum 1% of trade value, plus exchange,\nclearing and pass-through fees).",
+        "properties": {
+          "clearing_per_share": {
+            "default": 0.0002,
+            "minimum": 0.0,
+            "title": "Clearing Per Share",
+            "type": "number"
+          },
+          "exchange_per_share": {
+            "default": 0.003,
+            "minimum": 0.0,
+            "title": "Exchange Per Share",
+            "type": "number"
+          },
+          "max_fraction": {
+            "default": 0.01,
+            "exclusiveMinimum": 0.0,
+            "title": "Max Fraction",
+            "type": "number"
+          },
+          "minimum": {
+            "default": 0.35,
+            "minimum": 0.0,
+            "title": "Minimum",
+            "type": "number"
+          },
+          "monthly_shares": {
+            "default": 0.0,
+            "minimum": 0.0,
+            "title": "Monthly Shares",
+            "type": "number"
+          },
+          "tiers": {
+            "default": [
+              [
+                300000,
+                0.0035
+              ],
+              [
+                3000000,
+                0.002
+              ],
+              [
+                20000000,
+                0.0015
+              ],
+              [
+                100000000,
+                0.001
+              ],
+              [
+                null,
+                0.0005
+              ]
+            ],
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            "title": "Tiers",
+            "type": "array"
+          }
+        },
+        "title": "IbkrTieredFees",
+        "type": "object"
+      },
       "IndexHistoryImport": {
         "description": "An index constituent history as CSV (``date,ticker,action`` with\n``add``, ``remove`` or ``member``) or JSON (``as_of``,\n``constituents``, ``changes``).",
         "properties": {
@@ -8488,7 +8723,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -10219,6 +10456,95 @@
           "sell_fill_id"
         ],
         "title": "LotPicksUpdate",
+        "type": "object"
+      },
+      "LotView": {
+        "description": "What lot rounding did in a backtest (roadmap 23.1).",
+        "properties": {
+          "max_drift": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Drift"
+          },
+          "mean_drift": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Drift"
+          },
+          "min_capital": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Capital"
+          },
+          "min_capital_profile": {
+            "default": "whole_shares",
+            "title": "Min Capital Profile",
+            "type": "string"
+          },
+          "orders": {
+            "default": 0,
+            "title": "Orders",
+            "type": "integer"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "rounded": {
+            "default": 0,
+            "title": "Rounded",
+            "type": "integer"
+          },
+          "skipped": {
+            "default": 0,
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "skipped_notional": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skipped Notional"
+          },
+          "skipped_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skipped Share"
+          }
+        },
+        "required": [
+          "profile"
+        ],
+        "title": "LotView",
         "type": "object"
       },
       "ManualOrderChange": {
@@ -17315,6 +17641,28 @@
             ],
             "title": "Hypothesis"
           },
+          "lot_skipped_share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Skipped Share"
+          },
+          "min_capital": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Capital"
+          },
           "n_trials_class": {
             "anyOf": [
               {
@@ -22878,7 +23226,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -25702,6 +26052,38 @@
           "spec"
         ],
         "title": "UniverseView",
+        "type": "object"
+      },
+      "UsRegulatoryFees": {
+        "additionalProperties": false,
+        "description": "US regulatory transaction fees, passed through by IBKR on either plan.",
+        "properties": {
+          "cat_per_share": {
+            "default": 3.5e-05,
+            "minimum": 0.0,
+            "title": "Cat Per Share",
+            "type": "number"
+          },
+          "sec_rate_per_million": {
+            "default": 27.8,
+            "minimum": 0.0,
+            "title": "Sec Rate Per Million",
+            "type": "number"
+          },
+          "taf_max": {
+            "default": 8.3,
+            "minimum": 0.0,
+            "title": "Taf Max",
+            "type": "number"
+          },
+          "taf_per_share": {
+            "default": 0.000166,
+            "minimum": 0.0,
+            "title": "Taf Per Share",
+            "type": "number"
+          }
+        },
+        "title": "UsRegulatoryFees",
         "type": "object"
       },
       "UserCreateRequest": {

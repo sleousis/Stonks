@@ -123,3 +123,14 @@ def test_build_manifest_is_json_serialisable():
 def test_build_manifest_tolerates_a_missing_or_odd_dataset(dataset):
     m = build_manifest(None, dataset, {})
     assert m["data_fingerprint"] is None
+
+
+def test_build_manifest_records_lots_only_when_they_round():
+    from stonks.portfolio.lots import LotSettings
+
+    window = {"universe": ["X.US"], "start": date(2024, 1, 1), "end": date(2024, 6, 1)}
+    plain = build_manifest(None, LabDataset(lake=None, lots=LotSettings(), **window), {})
+    assert "lots" not in plain
+    whole = LotSettings(profile="whole_shares")
+    m = build_manifest(None, LabDataset(lake=None, lots=whole, **window), {})
+    assert m["lots"]["profile"] == "whole_shares"

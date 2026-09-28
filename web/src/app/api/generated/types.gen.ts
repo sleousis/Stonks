@@ -374,6 +374,10 @@ export type ArtifactFile = {
  */
 export type AssetClassCosts = {
     /**
+     * Commission
+     */
+    commission?: string;
+    /**
      * Fee Bps
      */
     fee_bps?: number;
@@ -385,6 +389,10 @@ export type AssetClassCosts = {
      * Half Spread Bps
      */
     half_spread_bps?: number;
+    /**
+     * Us Sell Fees
+     */
+    us_sell_fees?: boolean;
 };
 
 /**
@@ -492,7 +500,7 @@ export type BacktestRequest = {
     /**
      * Cost Model
      */
-    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    cost_model?: 'zero' | 'realistic' | 'ibkr_tiered' | 'ibkr_fixed' | CostModelSettings | null;
     /**
      * End
      */
@@ -585,6 +593,7 @@ export type BacktestResult = {
      * Kurtosis
      */
     kurtosis?: number | null;
+    lots?: LotView | null;
     /**
      * Max Dd Duration Bars
      */
@@ -1252,6 +1261,18 @@ export type ClearHaltRequest = {
 };
 
 /**
+ * CommissionSettings
+ *
+ * ``[backtest.costs.commissions]``: the rates of every schedule. An
+ * asset class picks its schedule with ``commission``.
+ */
+export type CommissionSettings = {
+    ibkr_fixed?: IbkrFixedFees;
+    ibkr_tiered?: IbkrTieredFees;
+    us_regulatory?: UsRegulatoryFees;
+};
+
+/**
  * ComparePoint
  */
 export type ComparePoint = {
@@ -1553,7 +1574,7 @@ export type CostModelPreset = {
     /**
      * Name
      */
-    name: 'zero' | 'realistic';
+    name: 'zero' | 'realistic' | 'ibkr_tiered' | 'ibkr_fixed';
     settings: CostModelSettings;
 };
 
@@ -1574,6 +1595,7 @@ export type CostModelSettings = {
     asset_classes?: {
         [key: string]: AssetClassCosts;
     };
+    commissions?: CommissionSettings;
     default?: AssetClassCosts;
     /**
      * Half Spread Model
@@ -1784,7 +1806,7 @@ export type DraftBacktestRequest = {
     /**
      * Cost Model
      */
-    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    cost_model?: 'zero' | 'realistic' | 'ibkr_tiered' | 'ibkr_fixed' | CostModelSettings | null;
     /**
      * End
      */
@@ -1868,7 +1890,7 @@ export type DraftLabRunRequest = {
     /**
      * Cost Model
      */
-    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    cost_model?: 'zero' | 'realistic' | 'ibkr_tiered' | 'ibkr_fixed' | CostModelSettings | null;
     /**
      * Embargo Bars
      */
@@ -3874,6 +3896,65 @@ export type IStarSettings = {
 };
 
 /**
+ * IbkrFixedFees
+ *
+ * IBKR Pro Fixed, US stocks and ETFs.
+ * Source: interactivebrokers.com/en/pricing/commissions-stocks.php
+ * (Fixed: USD 0.005 per share, minimum USD 1.00, maximum 1% of trade value).
+ */
+export type IbkrFixedFees = {
+    /**
+     * Max Fraction
+     */
+    max_fraction?: number;
+    /**
+     * Minimum
+     */
+    minimum?: number;
+    /**
+     * Per Share
+     */
+    per_share?: number;
+};
+
+/**
+ * IbkrTieredFees
+ *
+ * IBKR Pro Tiered, US stocks and ETFs. Source: the page above
+ * (minimum USD 0.35 per order, maximum 1% of trade value, plus exchange,
+ * clearing and pass-through fees).
+ */
+export type IbkrTieredFees = {
+    /**
+     * Clearing Per Share
+     */
+    clearing_per_share?: number;
+    /**
+     * Exchange Per Share
+     */
+    exchange_per_share?: number;
+    /**
+     * Max Fraction
+     */
+    max_fraction?: number;
+    /**
+     * Minimum
+     */
+    minimum?: number;
+    /**
+     * Monthly Shares
+     */
+    monthly_shares?: number;
+    /**
+     * Tiers
+     */
+    tiers?: Array<[
+        number,
+        number
+    ]>;
+};
+
+/**
  * IndexHistoryImport
  *
  * An index constituent history as CSV (``date,ticker,action`` with
@@ -4617,7 +4698,7 @@ export type LabRunRequest = {
     /**
      * Cost Model
      */
-    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    cost_model?: 'zero' | 'realistic' | 'ibkr_tiered' | 'ibkr_fixed' | CostModelSettings | null;
     /**
      * Embargo Bars
      */
@@ -5435,6 +5516,54 @@ export type LotPicksUpdate = {
      * Sell Fill Id
      */
     sell_fill_id: number;
+};
+
+/**
+ * LotView
+ *
+ * What lot rounding did in a backtest (roadmap 23.1).
+ */
+export type LotView = {
+    /**
+     * Max Drift
+     */
+    max_drift?: number | null;
+    /**
+     * Mean Drift
+     */
+    mean_drift?: number | null;
+    /**
+     * Min Capital
+     */
+    min_capital?: number | null;
+    /**
+     * Min Capital Profile
+     */
+    min_capital_profile?: string;
+    /**
+     * Orders
+     */
+    orders?: number;
+    /**
+     * Profile
+     */
+    profile: string;
+    /**
+     * Rounded
+     */
+    rounded?: number;
+    /**
+     * Skipped
+     */
+    skipped?: number;
+    /**
+     * Skipped Notional
+     */
+    skipped_notional?: number | null;
+    /**
+     * Skipped Share
+     */
+    skipped_share?: number | null;
 };
 
 /**
@@ -9497,6 +9626,14 @@ export type PromotionChecklistView = {
      */
     hypothesis?: string | null;
     /**
+     * Lot Skipped Share
+     */
+    lot_skipped_share?: number | null;
+    /**
+     * Min Capital
+     */
+    min_capital?: number | null;
+    /**
      * N Trials Class
      */
     n_trials_class?: number | null;
@@ -12387,7 +12524,7 @@ export type SweepRequest = {
     /**
      * Cost Model
      */
-    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    cost_model?: 'zero' | 'realistic' | 'ibkr_tiered' | 'ibkr_fixed' | CostModelSettings | null;
     /**
      * Embargo Bars
      */
@@ -13796,6 +13933,30 @@ export type UniverseView = {
      * Updated At
      */
     updated_at?: string | null;
+};
+
+/**
+ * UsRegulatoryFees
+ *
+ * US regulatory transaction fees, passed through by IBKR on either plan.
+ */
+export type UsRegulatoryFees = {
+    /**
+     * Cat Per Share
+     */
+    cat_per_share?: number;
+    /**
+     * Sec Rate Per Million
+     */
+    sec_rate_per_million?: number;
+    /**
+     * Taf Max
+     */
+    taf_max?: number;
+    /**
+     * Taf Per Share
+     */
+    taf_per_share?: number;
 };
 
 /**

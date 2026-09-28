@@ -52,7 +52,9 @@ unchanged.
 
 Every check reports a value and a limit. :attr:`GoLiveReport.checklist`
 carries the promotion context (trial count, DSR, PBO, benchmark excess,
-premortem, hypothesis) for the reviewer; it doesn't change the verdict.
+premortem, hypothesis, and from roadmap 23.1 the minimum capital and the
+share of orders whole shares skipped in the out-of-sample backtest) for
+the reviewer; it doesn't change the verdict.
 
 The gate only reports. It never changes a strategy's status; promotion
 stays a human action (``stonks registry promote``).
@@ -333,8 +335,9 @@ def gate_checks(period: PaperPeriod, policy: GoLivePolicy) -> list[GoLiveCheck]:
 
 def promotion_checklist(period: PaperPeriod) -> dict[str, Any]:
     """What a reviewer reads before promoting: the trial count of the lab
-    run's class, deflated Sharpe, PBO, benchmark excess CAGR, premortem and
-    hypothesis. ``None`` for anything not recorded."""
+    run's class, deflated Sharpe, PBO, benchmark excess CAGR, premortem,
+    hypothesis, and the minimum capital with the share of orders lot
+    rounding skipped (23.1). ``None`` for anything not recorded."""
     n_trials = period.meta.get("n_trials_total")
     premortem = period.meta.get("premortem")
     return {
@@ -348,6 +351,8 @@ def promotion_checklist(period: PaperPeriod) -> dict[str, Any]:
         if isinstance(premortem, str) and premortem.strip()
         else None,
         "hypothesis": period.hypothesis or None,
+        "min_capital": period.metric("oos", "min_capital"),
+        "lot_skipped_share": period.metric("oos", "lot_skipped_share"),
     }
 
 
@@ -686,6 +691,8 @@ _COST_WORDS = {
     "fee_bps": "a fee",
     "half_spread_bps": "the spread",
     "impact_bps": "market impact",
+    "commission": "a broker commission",
+    "us_sell_fees": "US regulatory fees",
 }
 _NO_PAPER_RESULTS = "No paper trading results yet"
 
@@ -806,6 +813,12 @@ def _nonzero_cost_inputs(costs: Any) -> list[str]:
             if key in _COST_INPUTS:
                 number = _finite(value)
                 if number is not None and number > 0:
+                    found.append(key)
+            elif key == "commission":  # a broker schedule by name (23.2)
+                if isinstance(value, str) and value != "none":
+                    found.append(key)
+            elif key == "us_sell_fees":
+                if value is True:
                     found.append(key)
             else:
                 found.extend(_nonzero_cost_inputs(value))

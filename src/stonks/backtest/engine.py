@@ -130,6 +130,17 @@ agree) the engine:
   ``forced_orders``;
 - covers shorts of tickers that leave a point-in-time universe.
 
+Lots (roadmap 23.1)
+-------------------
+``BacktestConfig.lots`` (``[backtest.lots]``) sizes every decision's orders
+to tradable lots with :class:`~stonks.portfolio.lots.LotRule`: inside the
+construction pipeline when it runs, else right after the strategies decide
+(and after the membership rules). The default profile, ``fractional``,
+changes nothing. Either way the report's ``lots``
+(:class:`~stonks.portfolio.lots.LotReport`) counts the orders rounded and
+skipped, the weight lost to rounding, and the minimum capital measured
+against whole shares.
+
 Annualization
 -------------
 Sharpe uses ``periods_per_year(interval, asset_classes)`` over the asset
@@ -176,6 +187,7 @@ from stonks.core.timeutil import as_datetime, day_end, day_start
 from stonks.core.types import AssetClass, Order, Portfolio
 from stonks.execution.orders import SideToken, classify, classify_all
 from stonks.logging import get_logger
+from stonks.portfolio.lots import LotResult, LotSettings, LotStats
 from stonks.store.corporate_actions import LakeCorporateActions
 from stonks.store.lake import DuckDBLake
 from stonks.store.pit import PitSession
@@ -216,6 +228,8 @@ class BacktestConfig:
     #: The book may hold short positions (see the module doc). The broker
     #: must allow shorts too.
     allow_short: bool = False
+    #: ``[backtest.lots]``: round order sizes to lots (``None``: fractional).
+    lots: LotSettings | None = None
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.dividend_withholding_rate <= 1.0:
@@ -286,6 +300,10 @@ class Backtester:
         self.decision_prices: dict[str, float] = {}
         #: Orders the engine forced (margin calls, borrow recalls), in order.
         self.forced_orders: list[Order] = []
+        lots = config.lots or LotSettings()
+        self._lot_rule = lots.rule()
+        self._lot_stats = LotStats(lots)
+        self._pipeline_lots: LotResult | None = None
 
     def run(self) -> BacktestReport:
         self._decided_at, self._roots, self._parts = {}, {}, {}
@@ -294,6 +312,7 @@ class Backtester:
         self.target_books = {}
         self.decision_prices = {}
         self.forced_orders = []
+        self._lot_stats = LotStats(self._config.lots or LotSettings())
         broker_short = bool(getattr(self._broker, "allow_short", False))
         if broker_short != self._config.allow_short:
             raise ValueError(
@@ -377,6 +396,7 @@ class Backtester:
             corporate_actions=applied,
             sessions_per_year=calendar_for_universe(set(asset_classes.values())).sessions_per_year,
         )
+        report = replace(report, lots=self._lot_stats.report())
         if not self._config.allow_short:
             return report
         return replace(
@@ -611,11 +631,28 @@ class Backtester:
         self._view = self._pit.at(as_of, decision_interval=self._config.interval)
         members = self._members_on(as_of)
         tradable = [t for t in self._config.universe if members is None or t in members]
+        portfolio = self._broker.fetch_portfolio()
         if self._config.construction_settings is not None:
+            self._pipeline_lots = None
             orders = self._decide_with_pipeline(as_of, prices, tradable)
+            lots = self._pipeline_lots
+            if members is not None:
+                orders = self._enforce_membership(orders, members, as_of)
         else:
             orders = self._decide_per_strategy(as_of, prices, tradable)
-        return orders if members is None else self._enforce_membership(orders, members, as_of)
+            if members is not None:
+                orders = self._enforce_membership(orders, members, as_of)
+            lots = self._lot_rule.size(orders, portfolio.positions, prices, self._asset_classes)
+            orders = lots.orders
+        if lots is not None:
+            self._lot_stats.record(
+                lots.requested,
+                lots,
+                portfolio.positions,
+                self._asset_classes,
+                portfolio.total_value(prices),
+            )
+        return orders
 
     # ---- point-in-time membership (RS-05) -------------------------------------
 
@@ -832,6 +869,7 @@ class Backtester:
             prior_attribution=self._attribution,
             risk_context=context,
             allow_short=self._config.allow_short,
+            lots=self._lot_rule,
         )
 
         def client_id(strategy_id: str | None, ticker: str, side: SideToken) -> str:
@@ -846,6 +884,7 @@ class Backtester:
             client_id=client_id,
         )
         self.target_books[as_of] = result.target_book
+        self._pipeline_lots = result.lots
         self._attribution = {**self._attribution, **result.attribution}
         stamp = as_of.isoformat()
         return [
