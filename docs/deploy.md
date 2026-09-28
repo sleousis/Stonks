@@ -45,7 +45,7 @@ flowchart LR
 ```
 
 - **One image** (`Dockerfile`) holds the API, the built console and the scheduler. It runs as a non-root user (uid 10001).
-- **Compose** (`deploy/compose.yaml`) runs three services: `api`, `scheduler` and `caddy`, plus optional services behind profiles (see [Profiles](#profiles)). Everything the app writes lives on one volume, `/data`, which sits on an attached block volume on the host (`/srv/stonks/data`).
+- **Compose** (`deploy/compose.yaml`) runs `api` and `caddy`, plus `scheduler` and the optional services behind profiles (see [Profiles](#profiles)). Everything the app writes lives on one volume, `/data`, which sits on an attached block volume on the host (`/srv/stonks/data`).
 - **Private access** is the default: the server has no public port. Traders join the tailnet. Public HTTPS with Let's Encrypt is one setting away.
 
 | File | Purpose |
@@ -183,17 +183,17 @@ sequenceDiagram
   participant You
   participant GH as GitHub Actions
   participant VM as Server
-  You->>GH: git tag v0.1.0 && git push --tags
+  You->>GH: git tag v1.0.0 && git push --tags
   GH->>GH: Release: build amd64+arm64 image, SBOM, provenance
-  GH->>GH: GitHub release with changelog
+  GH->>GH: GitHub release with the CHANGELOG section
   GH->>VM: Deploy: rsync deploy/, docker login (job token)
-  GH->>VM: deploy.sh v0.1.0
+  GH->>VM: deploy.sh v1.0.0
   VM->>VM: pull, stop, snapshot, backup, db init, start
   VM-->>GH: healthy (or rolled back)
 ```
 
-1. Bump `version` in `pyproject.toml`, refresh the changelog (`git cliff --tag v0.1.0 -o CHANGELOG.md`), commit.
-2. `git tag v0.1.0 && git push origin v0.1.0`.
+1. Bump `version` in `pyproject.toml`, write its section in `CHANGELOG.md` (`git cliff --unreleased` lists the commits), commit.
+2. `git tag v1.0.0 && git push origin v1.0.0`.
 3. Watch **Release**, then **Deploy**, in the Actions tab.
 4. On the server, run `docker compose run --rm api stonks users bootstrap --email you@example.com` once. Then open `https://stonks.<tailnet>.ts.net`, sign in and set up the second factor. Every call needs a sign-in or a token. Behind Caddy the API trusts forwarded client IPs only from the Compose network (`STONKS_DOCKER_SUBNET`).
 
@@ -296,7 +296,7 @@ flowchart LR
    | `HC_PING_RESTORE_TEST` | monthly, 1st, 04:00 UTC | 1 day |
    | `HC_PING_INGEST`, `HC_PING_TICK`, `HC_PING_HEALTH` | weekdays after the close | 1 hour |
 
-   The first three are pinged by the scripts in `deploy/`. The last three are for the scheduler (see "Needs app support" below). Connect healthchecks.io to the same chat channel as `STONKS_NOTIFY_WEBHOOK_URL`.
+   The first three are pinged by the scripts in `deploy/`. The last three are pinged by the default `ingest_prices`, `tick` and `health` jobs through their `ping_url_env`. Leave one empty to turn it off. Connect healthchecks.io to the same chat channel as `STONKS_NOTIFY_WEBHOOK_URL`.
 
 2. **Uptime check.** Public mode: point an external monitor (healthchecks.io does not do this; use UptimeRobot, Better Stack or Uptime Kuma) at `https://<domain>/api/health`. Tailscale mode: nothing outside can reach the server, so `HC_PING_HOST` doubles as the uptime signal. If the server dies, the pings stop and you get an alert.
 
@@ -525,11 +525,7 @@ Caddy then gets a Let's Encrypt certificate by itself. Everyone on the internet 
 
 For a single-user setup on Windows, run `uv run stonks serve` as a service with [WinSW](https://github.com/winsw/winsw) or NSSM (working directory: the repo; environment: `.env`), and schedule the daily loop with Task Scheduler as in [operations.md](operations.md). Backups then use `stonks backup` (Phase 12.4) and any file-sync tool.
 
-## Needs app support
+## Known gaps
 
-These parts depend on code outside `deploy/`:
-
-- `python -m stonks.scheduling` (Phase 12.2) is the scheduler service's command. Until the image has it, leave `COMPOSE_PROFILES` empty in `.env` (the service then does not start and health checks do not expect it) and run the daily loop with the cron lines from [operations.md](operations.md), using `docker compose exec api stonks ...`.
-- Dead-man pings from the scheduler (`HC_PING_INGEST`, `HC_PING_TICK`, `HC_PING_HEALTH`).
-- `python -m stonks.ops backup` (Phase 12.4) for backups without downtime.
 - `[api]` host and allowed hosts cannot be set from the environment yet, so Caddy presents requests to the API as `localhost` (see `deploy/Caddyfile`).
+- A lab worker on another machine needs a queue over the API, which is not built (see [10. Lab offload](#10-lab-offload)).

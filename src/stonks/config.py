@@ -148,7 +148,8 @@ class BrokersConfig(BaseModel):
 
     # Which broker the production tick trades through. "simulated" (default)
     # needs no keys; "alpaca" is opt-in and needs ALPACA_API_KEY/SECRET_KEY.
-    # "ibkr" is the Interactive Brokers adapter (roadmap 19.2, not built yet).
+    # "ibkr" trades through the IB Gateway that lists the default portfolio
+    # (``[brokers.ibkr]``, roadmap 19.2).
     kind: Literal["simulated", "alpaca", "ibkr"] = "simulated"
     alpaca: AlpacaBrokerConfig = Field(default_factory=AlpacaBrokerConfig)
     # ``[brokers.ibkr]``: the IB Gateways Stonks can reach (roadmap 19.4).

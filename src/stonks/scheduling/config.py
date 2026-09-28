@@ -132,6 +132,7 @@ def default_jobs() -> list[JobConfig]:
             action="ingest_prices",
             trigger=SessionTriggerConfig(offset_minutes=30),
             deadline_minutes=60,
+            ping_url_env="HC_PING_INGEST",
         ),
         # IBKR's short stock files into borrow_rates, the fee a short book
         # at IBKR pays (roadmap 19.14). Skips while no gateway is set.
@@ -151,6 +152,7 @@ def default_jobs() -> list[JobConfig]:
             action="tick",
             trigger=SessionTriggerConfig(offset_minutes=45),
             deadline_minutes=60,
+            ping_url_env="HC_PING_TICK",
         ),
         JobConfig(
             name="report",
@@ -161,6 +163,7 @@ def default_jobs() -> list[JobConfig]:
             name="health",
             action="health",
             trigger=IntervalTriggerConfig(every_minutes=240),
+            ping_url_env="HC_PING_HEALTH",
         ),
         JobConfig(
             name="backup",

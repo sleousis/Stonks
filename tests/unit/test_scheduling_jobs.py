@@ -245,3 +245,12 @@ def test_job_universe_resolves_a_universe_id_through_the_backend():
     assert job_universe(_run_ctx(settings, tickers=["X.US"]), members) == ["X.US"]
     settings.production.universe = ["L.US"]
     assert job_universe(_run_ctx(settings), members) == ["L.US"]
+
+
+def test_default_jobs_ping_their_dead_man_urls():
+    from stonks.scheduling.config import SchedulerConfig
+
+    by_name = {j.name: j for j in SchedulerConfig().jobs}
+    assert by_name["ingest_prices"].ping_url_env == "HC_PING_INGEST"
+    assert by_name["tick"].ping_url_env == "HC_PING_TICK"
+    assert by_name["health"].ping_url_env == "HC_PING_HEALTH"
