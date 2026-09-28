@@ -1456,7 +1456,7 @@ def lab_ic(ctx: typer.Context) -> None:
 )
 def lab_importance(ctx: typer.Context) -> None:
     """Feature importance of a model strategy under purged CV (MDA, SFI,
-    clustered MDA, roadmap 23.10): --strategy ID --tickers A --start --end
+    clustered MDA): --strategy ID --tickers A --start --end
     [--train-end --params JSON --folds 5 --json F --html F];
     ``stonks lab importance --help`` for all options."""
     from stonks.lab import importance

@@ -47,7 +47,15 @@ class AssistantEnvelope(BaseModel):
 #: the permutation tests score folds across the whole window, which may lie
 #: before the cutoff, so they are left out.
 CUTOFF_SAFE_TESTS: frozenset[str] = frozenset(
-    {"oos", "deflated_sharpe", "pbo", "period_stability", "perturbation", "runs_test"}
+    {
+        "oos",
+        "deflated_sharpe",
+        "pbo",
+        "period_stability",
+        "perturbation",
+        "runs_test",
+        "forecast_skill",
+    }
 )
 
 

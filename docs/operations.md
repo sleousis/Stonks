@@ -390,7 +390,7 @@ Rules the code enforces, whatever the model says:
 
 - Every proposal is recorded with its hypothesis before it runs.
 - Models remember prices from before their training cutoff. So a trial runs only when its validation window starts after `model_cutoff`. Without a cutoff the loop is off.
-- The suite holds only tests that judge the validation window or the run's own trials (`oos`, `deflated_sharpe`, `pbo`, `period_stability`, `perturbation`, `runs_test`). Walk-forward and permutation tests score older folds, so they are left out.
+- The suite holds only tests that judge the validation window or the run's own trials (`oos`, `deflated_sharpe`, `pbo`, `period_stability`, `perturbation`, `runs_test`, `forecast_skill`). Walk-forward and permutation tests score older folds, so they are left out.
 - Every lab run is a normal ledgered run in the session's trial family. Deflated Sharpe counts the larger of the class's trials and the session's trials. A run stopped half way counts its whole budget as failed trials.
 - It never registers or promotes. A proposal that asks to is rejected. A person registers a result and promotes it through the go-live check as usual.
 - A frozen assistant starts no session, and a freeze stops a running one.
