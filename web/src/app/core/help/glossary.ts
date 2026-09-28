@@ -112,7 +112,6 @@ export const TRADING_KEYS = [
   'approve',
   'suggested_order',
   'signal_score',
-  'portfolio_stage',
   'kill_switch',
   'buys_only',
   'circuit_breaker',
@@ -253,12 +252,6 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     short:
       "The strategy's score for this ticker when it decided. Higher means a stronger case; the scale depends on the strategy.",
     aliases: ['Signal strength'],
-  },
-  portfolio_stage: {
-    term: 'Portfolio stage',
-    short:
-      'How close a portfolio is to real money: Simulated, Broker paper, Real money, small, then Real money, full.',
-    aliases: ['Live stage', 'Simulated', 'Broker paper', 'Real money, small', 'Real money, full'],
   },
   kill_switch: {
     term: 'Stop trading',
