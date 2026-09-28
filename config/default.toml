@@ -163,6 +163,16 @@ long_window = 120
 negative_days = 20
 min_fraction = 0.5
 
+[production.feature_drift]
+# Live feature drift of model strategies (roadmap 23.10): each real tick
+# stores the rows a model scores and, once the last window_days days hold
+# min_rows rows, compares them with the training profile stored with the
+# model (PSI per feature). Warn only: nothing is blocked.
+enabled = true
+window_days = 60
+min_rows = 50
+warn_psi = 0.25
+
 [production.intraday_pnl]
 # Live marks and intraday P&L of the engine's books (roadmap 21.3.3): one
 # intraday_snapshots row per portfolio and strategy sleeve every
