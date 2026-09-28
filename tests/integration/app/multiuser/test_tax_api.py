@@ -69,6 +69,7 @@ def test_settings_default_update_and_audit(client, people, book, settings):
         "lot_method": "fifo",
         "wash_sales": True,
         "updated_at": None,
+        "locked": False,
     }
     put = client.put(
         "/api/tax/settings",
@@ -99,6 +100,8 @@ def test_live_account_facts_are_locked_while_real_money_trades(client, people, b
                 state, book["pid"], stage, actor="u", reason="r",
                 gate_report={"target": stage, "passed": True},
             )  # fmt: skip
+    view = client.get("/api/tax/settings", params=q, headers=alice)
+    assert view.json()["locked"] is True
     for body in ({"jurisdiction": "eu"}, {"base_currency": "EUR"}):
         locked = client.put("/api/tax/settings", params=q, json=body, headers=alice)
         assert locked.status_code == 409, locked.text

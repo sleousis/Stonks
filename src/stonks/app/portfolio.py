@@ -105,6 +105,9 @@ class SnapshotView(BaseModel):
     id: int
     tick_id: str | None
     taken_at: datetime
+    as_of: date | None = Field(
+        default=None, description="The trading day the snapshot is for (null on old rows)."
+    )
     cash: float
     positions: dict[str, float]
     total_value: float
@@ -468,6 +471,7 @@ class PortfolioService:
                 id=r["id"],
                 tick_id=r["tick_id"],
                 taken_at=datetime.fromisoformat(r["taken_at"]),
+                as_of=_snapshot_day(r),
                 cash=float(r["cash"]),
                 positions=json.loads(r["positions_json"]),
                 total_value=float(r["total_value"]),
@@ -586,3 +590,14 @@ def _default_book_detail(settings: Any, trading: Trading) -> str:
             note = " (live trading not allowed)" if gw.mode == "live" and trading == "paper" else ""
             return f"orders go to the {gw.mode} IB Gateway {name!r}{note}"
     return "no IB Gateway lists the default portfolio"
+
+
+def _snapshot_day(row: Any) -> date | None:
+    """The trading day of a snapshot row (``as_of``, migration 004), or None."""
+    try:
+        raw = row["as_of"]
+    except (IndexError, KeyError):
+        return None
+    if not raw:
+        return None
+    return date.fromisoformat(str(raw)[:10])

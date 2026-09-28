@@ -11476,6 +11476,12 @@ export type SnapshotRef = {
  */
 export type SnapshotView = {
     /**
+     * As Of
+     *
+     * The trading day the snapshot is for (null on old rows).
+     */
+    as_of?: string | null;
+    /**
      * Cash
      */
     cash: number;
@@ -12671,6 +12677,12 @@ export type TaxSettingsView = {
      * us applies wash sales when switched on.
      */
     jurisdiction: 'us' | 'eu' | 'uk';
+    /**
+     * Locked
+     *
+     * True while the portfolio trades real money: the base currency and jurisdiction are the live account profile's too and cannot change.
+     */
+    locked?: boolean;
     /**
      * Lot Method
      *

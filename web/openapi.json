@@ -21303,6 +21303,19 @@
       },
       "SnapshotView": {
         "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trading day the snapshot is for (null on old rows).",
+            "title": "As Of"
+          },
           "cash": {
             "title": "Cash",
             "type": "number"
@@ -23528,6 +23541,12 @@
             ],
             "title": "Jurisdiction",
             "type": "string"
+          },
+          "locked": {
+            "default": false,
+            "description": "True while the portfolio trades real money: the base currency and jurisdiction are the live account profile's too and cannot change.",
+            "title": "Locked",
+            "type": "boolean"
           },
           "lot_method": {
             "description": "fifo, or specific: your picks first, then FIFO for the rest.",
