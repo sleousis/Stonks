@@ -226,7 +226,9 @@ def test_tick_evaluates_shadow_strategies(runner, seeded):
     _add_shadow_strategy(tmp_path)
     result = runner.invoke(app, ["tick", "--as-of", "2026-03-20"])
     assert result.exit_code == 0, result.output
-    assert _count(tmp_path, "shadow_portfolio_snapshots") == 1
+    # model_books = "all" (the shipped default): the approved strategy keeps
+    # a test book too, next to the one on trial.
+    assert _count(tmp_path, "shadow_portfolio_snapshots") == 2
 
 
 def test_tick_respects_shadow_disabled_in_config(runner, seeded):

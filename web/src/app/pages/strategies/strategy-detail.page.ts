@@ -323,7 +323,7 @@ export class StrategyDetailPage {
   private readonly status = computed(() => this.detail()?.status ?? null);
   /** A name to read, not the registry id (UX-27). The id sits under Technical details. */
   protected readonly displayName = computed(() =>
-    strategyDisplayName(this.detail()?.id ?? this.id()),
+    strategyDisplayName(this.detail()?.id ?? this.id(), { starter: this.detail()?.starter }),
   );
 
   /**

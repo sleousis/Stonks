@@ -24,8 +24,10 @@ const FETCH_LIMIT = 500;
 
 /** A registry row with its trial result, when it has a test book. */
 export interface StrategyRow extends StrategySummary {
-  /** The name to show (UX-27). */
+  /** The name to show (UX-27): a starter's title, else from the id. */
   name: string;
+  /** A starter strategy's one-line summary. */
+  summary: string | null;
   kind: string;
   paper_return: number | null;
   max_drawdown: number | null;
@@ -42,7 +44,8 @@ export function withPerformance(
     const p = byId.get(s.id);
     return {
       ...s,
-      name: strategyDisplayName(s.id),
+      name: strategyDisplayName(s.id, { starter: s.starter }),
+      summary: s.starter?.summary ?? null,
       kind: strategyKindName(s.class_path),
       paper_return: p?.cumulative_return ?? null,
       max_drawdown: p?.max_drawdown ?? null,
@@ -111,6 +114,7 @@ export class StrategiesPage {
       (s) =>
         s.id.toLowerCase().includes(q) ||
         s.name.toLowerCase().includes(q) ||
+        (s.summary ?? '').toLowerCase().includes(q) ||
         s.kind.toLowerCase().includes(q) ||
         s.class_path.toLowerCase().includes(q) ||
         s.applicable_asset_classes.some((a) => a.toLowerCase().includes(q)),

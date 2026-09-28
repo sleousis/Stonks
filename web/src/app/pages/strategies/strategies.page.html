@@ -99,6 +99,9 @@
     >
       <ng-template appCell="id" [appCellOf]="visible()" let-s>
         <a class="id-link" [routerLink]="['/strategies', s.id]">{{ s.name }}</a>
+        @if (s.summary) {
+          <span class="summary">{{ s.summary }}</span>
+        }
       </ng-template>
       <ng-template appCell="status" [appCellOf]="visible()" let-s>
         <app-status-pill [status]="s.status" />
