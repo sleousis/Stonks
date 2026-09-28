@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -241,6 +241,35 @@ def test_intraday_batches_are_validated(lake):
     assert list(q["interval"]) == ["1h"]
     stored = lake.get_bars("AAA.US", Interval.HOUR_1, t0, t0 + timedelta(days=1))
     assert len(stored) == 4
+
+
+def test_intraday_utc_aware_batch_over_stored_history(lake):
+    # Vendors send aware UTC stamps (EODHD's unix seconds). A second batch
+    # is checked against the stored (naive UTC) bars, which must not crash.
+    t0 = datetime(2025, 1, 2, 14, 30, tzinfo=UTC)
+
+    def rows(start, n):
+        return [
+            IntradayBar(
+                ticker="AAA.US",
+                timestamp=start + timedelta(minutes=i),
+                open=10.0 + i * 0.01,
+                high=10.1 + i * 0.01,
+                low=9.9 + i * 0.01,
+                close=10.0 + i * 0.01,
+                adj_close=10.0,
+                volume=5,
+            )
+            for i in range(n)
+        ]
+
+    for start in (t0, t0 + timedelta(minutes=30)):
+        src = _Source("fake", intraday={"AAA.US": rows(start, 30)})
+        result = IngestPipeline(src, lake).run_intraday_bars(["AAA.US"], Interval.MIN_1)
+        assert result.status == "ok"
+    stored = lake.get_bars("AAA.US", Interval.MIN_1, datetime(2025, 1, 2), datetime(2025, 1, 3))
+    assert len(stored) == 60
+    assert stored["timestamp"].iloc[0] == pd.Timestamp("2025-01-02 14:30")
 
 
 # ---- fallback -------------------------------------------------------------------
