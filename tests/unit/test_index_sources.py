@@ -83,6 +83,15 @@ def test_parse_list_csv_plain_and_dated():
     ]
 
 
+def test_parse_list_csv_keeps_an_end_date_without_a_start():
+    # a name that left keeps its exit even when its start is unknown
+    spec = parse_list_csv("ticker,start_date,end_date\nOLD.US,,2012-01-01\n")
+    assert spec.get("tickers", []) == []
+    assert spec["spans"] == [
+        {"ticker": "OLD.US", "start_date": "1900-01-01", "end_date": "2012-01-01"}
+    ]
+
+
 def test_parse_list_csv_without_header():
     assert parse_list_csv("A.US\nB.US\n") == {"tickers": ["A.US", "B.US"]}
 
