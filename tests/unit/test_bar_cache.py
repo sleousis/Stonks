@@ -218,3 +218,23 @@ def test_bar_strategies_read_each_series_once_per_instance(lake, make):
         strategy.estimate_return("X.US", as_of, counting)
         strategy.extract_features("X.US", as_of, counting)
     assert counting.calls == 1
+
+
+def test_a_fresh_point_in_time_session_sees_bars_written_since(lake):
+    """The live intraday engine opens a new PitSession on every bar close so
+    that new bars show up. The strategies' caches must follow the session,
+    not the raw lake, or they read the first decision's history all day."""
+    from stonks.store.pit import PitSession
+
+    caches = LakeBarCaches()
+    first_as_of = datetime(2026, 2, 27, 20)
+    v1 = PitSession(lake).at(first_as_of, decision_interval=Interval.HOUR_1)
+    assert caches.for_lake(v1).last_close("X.US", Interval.HOUR_1, first_as_of)[0] == first_as_of
+    new = _hourly("X.US", pd.bdate_range("2026-03-02", "2026-03-02")).iloc[:1]
+    new = new.assign(close=200.0, adj_close=200.0)
+    lake.upsert_bars(new, Interval.HOUR_1)
+    later = datetime(2026, 3, 2, 14)
+    v2 = PitSession(lake).at(later + pd.Timedelta(hours=1), decision_interval=Interval.HOUR_1)
+    stamp, close = caches.for_lake(v2).last_close("X.US", Interval.HOUR_1, later)
+    assert stamp == later
+    assert close == pytest.approx(200.0)
