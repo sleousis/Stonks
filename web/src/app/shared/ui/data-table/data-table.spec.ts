@@ -159,4 +159,32 @@ describe('DataTable', () => {
     const { el } = await render({ rows: [], emptyMessage: 'Nothing here.' });
     expect(el.querySelector('tbody')?.textContent).toContain('Nothing here.');
   });
+  it('stays on its page when a refresh brings the same rows again', async () => {
+    // Pages with autoRefresh() reload every minute: a trader on page 2 stays there.
+    const { fixture, el, firstCells } = await render({ pageSize: 2 });
+    const next = () =>
+      [...el.querySelectorAll<HTMLButtonElement>('.pager button')].find(
+        (b) => b.textContent?.trim() === 'Next',
+      )!;
+    next().click();
+    await fixture.whenStable();
+    expect(firstCells()).toEqual(['c']);
+    fixture.componentRef.setInput(
+      'rows',
+      ROWS.map((r) => ({ ...r })),
+    );
+    await fixture.whenStable();
+    expect(firstCells()).toEqual(['c']);
+  });
+
+  it('goes back to page one when different rows arrive', async () => {
+    const { fixture, el, firstCells } = await render({ pageSize: 2 });
+    [...el.querySelectorAll<HTMLButtonElement>('.pager button')]
+      .find((b) => b.textContent?.trim() === 'Next')!
+      .click();
+    await fixture.whenStable();
+    fixture.componentRef.setInput('rows', [...ROWS, { ticker: 'd', value: 1 }]);
+    await fixture.whenStable();
+    expect(firstCells()).toEqual(['b', 'a']);
+  });
 });

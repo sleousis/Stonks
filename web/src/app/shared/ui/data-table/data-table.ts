@@ -11,6 +11,7 @@ import {
   linkedSignal,
   output,
   signal,
+  untracked,
 } from '@angular/core';
 
 import {
@@ -158,10 +159,13 @@ export class DataTable<T extends object> {
   protected readonly sort = linkedSignal<SortState | null>(() => this.initialSort());
   protected readonly page = linkedSignal<{ rows: readonly T[]; offset: number | null }, number>({
     source: () => ({ rows: this.rows(), offset: this.offset() }),
-    // Client mode: new rows start from page one. Server mode: the page comes
-    // from the offset when given, else it stays where it was.
-    computation: ({ offset }, prev) => {
-      if (this.total() === null) return 0;
+    // Client mode: new rows start from page one, but a refresh that brings
+    // the same rows again (autoRefresh) keeps the page. Server mode: the page
+    // comes from the offset when given, else it stays where it was.
+    computation: ({ rows, offset }, prev) => {
+      if (this.total() === null) {
+        return prev && this.sameRows(prev.source.rows, rows) ? prev.value : 0;
+      }
       const size = this.pageSize();
       if (offset !== null && size > 0) return Math.floor(offset / size);
       return prev ? prev.value : 0;
@@ -281,6 +285,15 @@ export class DataTable<T extends object> {
   }
 
   protected trackRow = (index: number, row: T): unknown => this.rowKey()?.(row) ?? row;
+
+  /** The same rows reloaded: as many, with the same keys when rows have one. */
+  private sameRows(before: readonly T[], after: readonly T[]): boolean {
+    if (before.length !== after.length) return false;
+    const key = untracked(this.rowKey);
+    if (!key) return true;
+    const keys = new Set(before.map(key));
+    return after.every((row) => keys.has(key(row)));
+  }
 
   private raw(row: T, col: TableColumn<T>): CellValue {
     if (col.value) return col.value(row);
