@@ -298,7 +298,7 @@ def _intraday_interval(code: str) -> Any:
 
 
 _RECORDING = typer.Option(
-    None, "--recording", help="recorded stream folder; default: [streaming.record] dir"
+    None, "--recording", help="recorded stream folder; default: \\[streaming.record] dir"
 )
 _INTERVAL = typer.Option("1m", "--interval", help="the book's bar interval (intraday)")
 
@@ -422,7 +422,7 @@ def calibrate(
     as_json: bool = typer.Option(False, "--json", help="print the fit as JSON"),
 ) -> None:
     """Fit the cost model's spread and impact to recorded quotes and intraday
-    fills, and propose a [backtest.costs] block. Never applied: review it and
+    fills, and propose a \\[backtest.costs] block. Never applied: review it and
     copy it into your config by hand."""
     from stonks.production.intraday_tca import calibrate_minute_costs, lake_bar_reader
 
