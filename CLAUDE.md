@@ -96,6 +96,7 @@ uv run stonks telegram link-code|status|unlink --user E | poll [--once]
 uv run stonks tax gains|dividends --year Y [--portfolio ID] | lots [--as-of D] | settings   # tax CSVs, see docs/tax.md
 uv run stonks ingest fx --pairs EURUSD,GBPUSD [--since ...]   # FX rates into the lake
 uv run stonks ingest borrow [--markets usa,uk]   # IBKR short stock files into borrow_rates
+uv run stonks ingest funds --tickers SPY.US,QQQ.US   # ETF holdings into fund_holdings (look-through, docs/look-through.md)
 uv run stonks cash-flows record|list --user E --portfolio ID   # deposits and withdrawals (TWR, MWR)
 uv run stonks assistant eval [--base-url URL --model M]   # the assistant's eval set
 
@@ -194,6 +195,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - `earnings_calendar (ticker, period_end, report_date, before_after_market, eps_estimate, eps_actual, ...)`, `dividend_calendar (ticker, ex_date, amount, record_date, pay_date, ...)`, `economic_events (country, event_time, event_type, comparison, actual, previous, estimate, ...)` (020): event calendars, vendor neutral. See `docs/calendars.md`.
 - `borrow_rates (ticker, as_of, source, currency, isin, available_shares, fee_rate_annual, rebate_rate_annual; PK (ticker, as_of, source))` (021): daily stock borrow terms, rates as yearly fractions. Read through `execution.borrow.LakeBorrowSource`.
 - `instrument_sector_versions (ticker, sector, gic_sector, known_at)` (022): every sector label an instrument has had, with the time Stonks first saw it. Factor attribution reads the label known on each day (`factors.style.sector_labels`).
+- `fund_holdings (fund, holding, as_of, source, weight, name, sector, country, known_at; PK (fund, holding, as_of, source))` (025): what each ETF holds, weights as fractions, read point in time by `known_at` (`stonks.funds`). Insights look-through and the sector cap's `look_through` read it.
 
 **State (SQLite, migrations 001-047):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.

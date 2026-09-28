@@ -684,6 +684,16 @@ flowchart LR
   VaR and ES in pane 0, the day's loss in pane 1). The table below it is
   server paged.
 - New glossary terms: violation ratio, alpha decay and concentration.
+- **Inside your funds** (23.14, `pages/insights/look-through.ts`) reads
+  `GET /api/insights/look-through` and shows single names, sectors or
+  countries with each held fund split into what it owns. Each row says how
+  much is direct and how much comes through which funds. See
+  [look-through](look-through.md).
+- **Market breadth** on Today (23.14, `pages/home/breadth-card.ts`) reads
+  `GET /api/market/breadth`: up and down, the share above the 50 and 200
+  day averages, new highs and lows and distribution days, each with a plain
+  sentence and a dot whose colour is never the only signal. Display only.
+  See [breadth](breadth.md).
 
 ## Live trading screens (Phase 19 wave 1)
 
