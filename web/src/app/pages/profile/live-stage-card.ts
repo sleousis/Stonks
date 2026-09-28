@@ -2,9 +2,11 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   input,
   linkedSignal,
+  output,
   resource,
   signal,
 } from '@angular/core';
@@ -76,6 +78,8 @@ export class LiveStageCard {
 
   readonly portfolioId = input.required<string>();
   readonly portfolioName = input.required<string>();
+  /** The stage each time it loads or changes, so the page can show brass only for real money. */
+  readonly stageChange = output<LiveStage>();
 
   protected readonly canManage = computed(() => this.session.can('live.manage'));
   protected readonly canTrade = computed(() => this.session.can('portfolio.trade'));
@@ -100,6 +104,10 @@ export class LiveStageCard {
   protected readonly current = computed(() =>
     this.stage.hasValue() ? (this.stage.value().stage as LiveStage) : null,
   );
+  private readonly announce = effect(() => {
+    const s = this.current();
+    if (s) this.stageChange.emit(s);
+  });
   protected readonly currentIndex = computed(() => {
     const s = this.current();
     return s ? STAGES.indexOf(s) : -1;
@@ -146,7 +154,7 @@ export class LiveStageCard {
         : "Orders go to the broker's paper account from the next trading run.",
       confirmLabel: `Move to ${to.label}`,
       tone: to.live ? 'danger' : 'default',
-      typedConfirmation: target,
+      typedConfirmation: to.label,
       ticket: {
         kind: 'Stage change',
         live: to.live,

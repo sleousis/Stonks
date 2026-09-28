@@ -38,7 +38,7 @@ describe('GlossaryPage', () => {
     expect(el.querySelector('#on_trial')!.textContent).toContain('On trial');
     expect(el.querySelector('#test_book')!.textContent).toContain('Test book');
     const trading = el.querySelectorAll('section.group')[1];
-    expect(trading.querySelector('#kill_switch')!.textContent).toContain('Kill switch');
+    expect(trading.querySelector('#kill_switch')!.textContent).toContain('Stop trading');
     expect(trading.querySelector('#dry_run')).not.toBeNull();
   });
 

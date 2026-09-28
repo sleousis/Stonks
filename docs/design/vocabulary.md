@@ -58,6 +58,11 @@ Whether a trade uses real money depends only on the **portfolio stage**. The fol
 | Subscription, follow | Follow (the noun and the verb) |
 | Sleeve | The strategy's part of your portfolio |
 | Overview (the admin page) | Dashboard, in both the menu and the page title |
+| Order drafts, Drafts (orders the assistant proposed) | Suggested orders, in Approvals |
+| Live settings (a broker portfolio's settings page) | Real-money settings |
+| Live safeguards | Safeguards |
+| Kill switch (in what people read) | Stop trading |
+| The path to real money for one portfolio | Going live (the checklist page) |
 
 ## Status words
 

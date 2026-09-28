@@ -56,8 +56,8 @@ const NAME_MAX = 80;
                       <a
                         class="btn"
                         [routerLink]="['/profile/live', p.id]"
-                        [attr.aria-label]="'Live settings of ' + p.name"
-                        >Live settings</a
+                        [attr.aria-label]="'Real-money settings of ' + p.name"
+                        >Real-money settings</a
                       >
                     }
                     <button

@@ -119,3 +119,64 @@ ul {
     }
   }
 }
+
+// When Stonks trades (F53): two plain blocks side by side on wide screens.
+.when {
+  display: grid;
+  gap: var(--space-4);
+
+  @include bp.from-desktop {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+
+  h3 {
+    margin-bottom: var(--space-2);
+    font-size: var(--text-md);
+  }
+
+  p,
+  li {
+    font-size: var(--text-sm);
+    overflow-wrap: anywhere;
+  }
+
+  p + p,
+  ul + p,
+  dl + p {
+    margin-top: var(--space-2);
+  }
+
+  ul {
+    margin: var(--space-2) 0;
+    padding-left: var(--space-5);
+    list-style: disc;
+  }
+}
+
+.stages {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 0;
+
+  div {
+    display: grid;
+    grid-template-columns: minmax(8rem, 12rem) minmax(0, 1fr);
+    gap: var(--space-2);
+
+    @include bp.phone {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+    }
+  }
+
+  dt {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+  }
+
+  dd {
+    margin: 0;
+    color: var(--color-ink-2);
+    font-size: var(--text-sm);
+  }
+}

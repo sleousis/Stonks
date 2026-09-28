@@ -20,12 +20,20 @@ export interface SegmentOption<T extends string = string> {
  * touch screens.
  *
  *   <app-segmented label="Group costs" [options]="groupings" [(value)]="grouping" />
+ *
+ * `emphasis="strong"` fills the picked option solid, for choices that must
+ * not be misread (Buy or Sell on an order ticket).
  */
 @Component({
   selector: 'app-segmented',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="segmented" role="radiogroup" [attr.aria-label]="label()">
+    <div
+      class="segmented"
+      role="radiogroup"
+      [attr.aria-label]="label()"
+      [attr.data-emphasis]="emphasis()"
+    >
       @for (o of options(); track o.value; let i = $index) {
         <button
           type="button"
@@ -82,6 +90,13 @@ export interface SegmentOption<T extends string = string> {
       color: var(--color-ink);
       box-shadow: var(--shadow-1);
     }
+    /* Strong: the picked option is a solid block, like the B side tag (M13). */
+    .segmented[data-emphasis='strong'] .segment[aria-checked='true'] {
+      background: var(--color-ink);
+      color: var(--color-surface);
+      box-shadow: none;
+      font-weight: var(--weight-bold);
+    }
     .segment:focus-visible {
       outline: 2px solid var(--color-focus);
       outline-offset: 1px;
@@ -106,6 +121,8 @@ export class Segmented<T extends string = string> {
   readonly label = input.required<string>();
   readonly options = input.required<readonly SegmentOption<T>[]>();
   readonly value = model.required<T>();
+  /** `subtle` (default): a raised chip. `strong`: a solid block. */
+  readonly emphasis = input<'subtle' | 'strong'>('subtle');
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 

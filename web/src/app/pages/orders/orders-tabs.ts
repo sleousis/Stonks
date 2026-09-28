@@ -5,7 +5,6 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 export const ORDERS_TABS = [
   { path: '/orders', label: 'Orders', exact: true },
   { path: '/orders/new', label: 'New order', exact: true },
-  { path: '/orders/drafts', label: 'Drafts', exact: true },
   { path: '/orders/fills', label: 'Fills', exact: false },
   { path: '/orders/ticks', label: 'Trading runs', exact: false },
   { path: '/trades', label: 'Trade costs', exact: true },
@@ -72,6 +71,9 @@ export const ORDERS_TABS = [
     @include bp.phone {
       .tabs {
         gap: 0;
+        /* m9: a tab cut at the edge fades, so the row reads as one that scrolls. */
+        mask-image: linear-gradient(to right, #000 calc(100% - 1.5rem), transparent);
+        padding-right: 1.5rem;
       }
       .tabs a {
         flex: 1 1 auto;

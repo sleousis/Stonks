@@ -8,6 +8,7 @@ import { ToastService } from '../notify/toast.service';
 import { TICKET_POLL_MS, TicketCountService } from './ticket-count.service';
 
 const SUMMARY = '/api/tickets/summary';
+const DRAFTS = '/api/orders/drafts';
 
 function fakeDestroyRef() {
   const callbacks: (() => void)[] = [];
@@ -19,6 +20,8 @@ function setVisibility(state: DocumentVisibilityState) {
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
   document.dispatchEvent(new Event('visibilitychange'));
 }
+
+const drafts = (total: number) => ({ items: [], total, limit: 1, offset: 0 });
 
 describe('TicketCountService', () => {
   let http: HttpTestingController;
@@ -36,10 +39,18 @@ describe('TicketCountService', () => {
     count = TestBed.inject(TicketCountService);
   }
 
+  /** Answer one read: the ticket summary and the suggested orders count. */
+  async function answer(tickets: number, suggested = 0) {
+    (await nextRequest(http, SUMMARY)).flush({ awaiting_approval: tickets, by_portfolio: {} });
+    (await nextRequest(http, DRAFTS)).flush(drafts(suggested));
+    await tick();
+  }
+
   function flushAll(waiting: number) {
     for (const req of http.match((r) => r.url === SUMMARY)) {
       req.flush({ awaiting_approval: waiting, by_portfolio: {} });
     }
+    for (const req of http.match((r) => r.url === DRAFTS)) req.flush(drafts(0));
   }
 
   beforeEach(() => {
@@ -53,21 +64,32 @@ describe('TicketCountService', () => {
     setup(5);
     const { ref, destroy } = fakeDestroyRef();
     count.watch(ref);
-    (await nextRequest(http, SUMMARY)).flush({ awaiting_approval: 2, by_portfolio: {} });
-    await tick();
+    await answer(2);
     expect(count.waiting()).toBe(2);
-    (await nextRequest(http, SUMMARY)).flush({ awaiting_approval: 3, by_portfolio: {} });
-    await tick();
+    await answer(3);
     expect(count.waiting()).toBe(3);
     destroy();
     flushAll(3);
+  });
+
+  it('counts suggested orders with the tickets, one inbox (F9)', async () => {
+    setup(0);
+    const { ref, destroy } = fakeDestroyRef();
+    count.watch(ref);
+    const req = await nextRequest(http, DRAFTS);
+    expect(req.request.urlWithParams).toContain('status=pending');
+    (await nextRequest(http, SUMMARY)).flush({ awaiting_approval: 2, by_portfolio: {} });
+    req.flush(drafts(3));
+    await tick();
+    expect(count.waiting()).toBe(5);
+    destroy();
   });
 
   it('pauses while the tab is hidden', async () => {
     setup(5);
     const { ref, destroy } = fakeDestroyRef();
     count.watch(ref);
-    (await nextRequest(http, SUMMARY)).flush({ awaiting_approval: 1, by_portfolio: {} });
+    await answer(1);
     setVisibility('hidden');
     flushAll(1);
     await tick(30);
@@ -81,12 +103,12 @@ describe('TicketCountService', () => {
     setup(0);
     const { ref, destroy } = fakeDestroyRef();
     count.watch(ref);
-    (await nextRequest(http, SUMMARY)).flush({ awaiting_approval: 4, by_portfolio: {} });
-    await tick();
+    await answer(4, 1);
     const again = count.refresh();
     (await nextRequest(http, SUMMARY)).flush(null, { status: 500, statusText: 'Server Error' });
+    (await nextRequest(http, DRAFTS)).flush(null, { status: 500, statusText: 'Server Error' });
     await again;
-    expect(count.waiting()).toBe(4);
+    expect(count.waiting()).toBe(5);
     expect(TestBed.inject(ToastService).toasts()).toEqual([]);
     destroy();
   });
@@ -95,6 +117,8 @@ describe('TicketCountService', () => {
     setup(0);
     count.set(6);
     expect(count.waiting()).toBe(6);
+    count.set(2, 3);
+    expect(count.waiting()).toBe(5);
     count.set(-1);
     expect(count.waiting()).toBe(0);
   });

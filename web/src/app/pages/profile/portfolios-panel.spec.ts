@@ -70,7 +70,7 @@ describe('PortfoliosPanel', () => {
   it('links a live portfolio, and only a live one, to its live settings', async () => {
     const el = await render();
     const links = [...el.querySelectorAll<HTMLAnchorElement>('.books li a')];
-    expect(links.map((a) => a.textContent?.trim())).toEqual(['Live settings']);
+    expect(links.map((a) => a.textContent?.trim())).toEqual(['Real-money settings']);
     expect(links[0].getAttribute('href')).toBe('/profile/live/pf_2');
   });
 

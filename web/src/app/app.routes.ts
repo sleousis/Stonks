@@ -46,8 +46,10 @@ export const routes: Routes = [
   { path: 'lab', loadChildren: () => import('./pages/lab/lab.routes') },
   { path: 'data', loadChildren: () => import('./pages/data/data.routes') },
   { path: 'orders', loadChildren: () => import('./pages/orders/orders.routes') },
-  // 19.8: order tickets that wait for approval
+  // 19.8: order tickets and suggested orders that wait for approval (F9)
   { path: 'tickets', loadChildren: () => import('./pages/tickets/tickets.routes') },
+  // F52: the checklist of every step from paper to real money, per portfolio
+  { path: 'going-live', loadChildren: () => import('./pages/going-live/going-live.routes') },
   // The Paper trading page (UX-09). Old /shadow links land on it.
   { path: 'paper', loadChildren: () => import('./pages/shadow/shadow.routes') },
   { path: 'shadow', redirectTo: 'paper' },

@@ -273,10 +273,10 @@ def run_real_tick(v: Visit, as_of: str, ticker: str) -> None:
     page.get_by_label("Dry run").uncheck()
     page.get_by_label("As of").fill(as_of)
     page.get_by_role("textbox", name="Tickers", exact=True).fill(ticker)
-    page.get_by_role("button", name="Start trading run", exact=True).click()
+    page.get_by_role("button", name="Start paper run", exact=True).click()
     dialog = page.get_by_role("dialog", name="Trading run ticket")
     dialog.get_by_role("textbox").fill("simulated")
-    dialog.get_by_role("button", name="Start trading run").click()
+    dialog.get_by_role("button", name="Start paper run").click()
 
 
 def tick_result(v: Visit):
@@ -345,9 +345,13 @@ def test_kill_switch_blocks_orders_until_resumed_with_a_fresh_code(
     v = browse(stack.admin)
     page = v.go("/ops/halts")
     v.check_page("halts")
-    page.get_by_label("Reason").fill(f"e2e kill switch drill ({viewport})")
-    page.get_by_role("button", name="Engage kill switch").click()
-    page.locator("dialog[open]").get_by_role("button", name="Engage kill switch").click()
+    # M7: the Halts page opens the same Stop trading sheet as the strip.
+    page.get_by_role("button", name="Stop trading…").click()
+    sheet = page.get_by_role("dialog", name="Stop trading")
+    expect(sheet.get_by_role("group", name="Stop trading ticket")).to_be_visible()
+    sheet.get_by_role("radio", name="Every portfolio, for every trader").check()
+    sheet.get_by_label("Reason").fill(f"e2e kill switch drill ({viewport})")
+    sheet.get_by_role("button", name="Stop trading").click()
     strip = page.locator("app-session-strip .strip")
     expect(strip).not_to_have_attribute("data-tone", "calm")
     expect(page.get_by_role("region", name="Trading halted")).to_be_visible()
@@ -392,7 +396,7 @@ def test_stop_trading_from_the_strip_halts_the_picked_portfolio(
     expect(sheet).to_be_visible()
     expect(sheet.get_by_role("radio", name="Trader paper book")).to_be_checked()
     expect(sheet.get_by_role("radio", name="All new orders")).to_be_checked()
-    expect(sheet.get_by_role("group", name="Kill switch")).to_contain_text("PAPER")
+    expect(sheet.get_by_role("group", name="Stop trading ticket")).to_contain_text("PAPER")
     v.check_page("kill-sheet")
     sheet.get_by_label("Reason").fill(f"e2e stop from the strip ({viewport})")
     sheet.get_by_role("button", name="Stop trading").click()

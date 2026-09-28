@@ -42,7 +42,7 @@ export function holdWords(hold: TicketView['hold']): string | null {
 /** Who decided, in trader words: the system for auto books, else the person. */
 export function deciderWords(actor: string | null | undefined): string {
   if (!actor) return '–';
-  if (actor.startsWith('service:')) return 'Auto';
+  if (actor.startsWith('service:')) return 'Automatic';
   return 'You';
 }
 

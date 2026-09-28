@@ -29,15 +29,17 @@ export function tickConfirmOptions(dryRun: boolean, broker: BrokerInfo | null): 
   }
   if (!broker) throw new Error('Load the broker before a real trading run.');
   const label = brokerLabel(broker);
-  // The words and the button follow the stamp (B2): red only for real money.
   const live = isLiveBroker(broker);
+  // B2: the words follow the same PAPER or LIVE answer as the stamp.
   const where = live
-    ? `Real orders go to the ${label} broker and trade real money.`
-    : `Paper orders go to the ${label} broker and are recorded in the ledger, with paper money.`;
+    ? `Orders go to the ${label} broker and trade real money.`
+    : `A paper run: orders go to the ${label} broker and are recorded in the ledger. No real money moves.`;
   return {
-    title: `Start a trading run on the ${label} broker?`,
-    message: `${where} Strategies on trial are tested on their test books afterwards.`,
-    confirmLabel: 'Start trading run',
+    title: live
+      ? `Start a real-money trading run on the ${label} broker?`
+      : `Start a paper run on the ${label} broker?`,
+    message: `${where} Strategies on trial are checked afterwards.`,
+    confirmLabel: live ? 'Start trading run' : 'Start paper run',
     tone: live ? 'danger' : 'default',
     typedConfirmation: label,
   };

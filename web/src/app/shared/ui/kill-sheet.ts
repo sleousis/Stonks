@@ -46,7 +46,8 @@ export const DEFAULT_KILL_REASON = 'Stopped from the console.';
         <form class="sheet-form kill-form" novalidate (submit)="$event.preventDefault(); submit()">
           <h2 id="kill-sheet-title">Stop trading</h2>
           <p id="kill-sheet-message" class="sheet-message">
-            New orders stop at once. No position is closed. You can resume on the Halts page.
+            New orders stop at once. No position is closed. Approved tickets not yet sent are held,
+            and orders still working at your broker are cancelled. You can resume on the Halts page.
           </p>
 
           <fieldset class="choices">
@@ -133,9 +134,14 @@ export const DEFAULT_KILL_REASON = 'Stopped from the console.';
             }
           </div>
 
-          <div class="ticket" [class.live]="ticket().live" role="group" aria-label="Kill switch">
+          <div
+            class="ticket"
+            [class.live]="ticket().live"
+            role="group"
+            aria-label="Stop trading ticket"
+          >
             <p class="ticket-head">
-              <span class="ticket-kind">Kill switch</span>
+              <span class="ticket-kind">{{ ticket().kind }}</span>
               <app-mode-stamp [live]="ticket().live" />
             </p>
             <dl class="ticket-lines">
@@ -266,7 +272,7 @@ export class KillSheet {
       this.state.add(halt);
       this.toasts.success(
         body.buys_only ? `${target}: new buys are stopped.` : `${target}: new orders are stopped.`,
-        'Kill switch on',
+        'Trading stopped',
       );
       this.busy.set(false);
       this.open.set(false);

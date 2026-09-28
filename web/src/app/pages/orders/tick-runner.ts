@@ -19,6 +19,7 @@ import { ConfirmService } from '../../core/confirm/confirm.service';
 import { formatDate } from '../../core/format/format';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
+import { strategyDisplayName } from '../../shared/strategy-names';
 import { JobProgress, JobResult } from '../../shared/ui/job-progress';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PermissionNote } from '../../shared/ui/permission-note';
@@ -76,16 +77,14 @@ import { latestRealRunDay } from './tick-mode';
         </p>
 
         @if (!dryRun()) {
-          <div class="alert" [class.paper]="broker.hasValue() && !live()" role="note">
+          <div class="alert" role="note" [class.live]="live()">
             @if (broker.error()) {
-              Could not read the broker. A real run is blocked until it loads.
+              Could not read the broker. A run is blocked until it loads.
             } @else if (broker.hasValue()) {
-              <!-- The words follow the stamp (B2): "real" only for real money. -->
               @if (live()) {
-                Real run on the <strong>{{ brokerText() }}</strong> broker. This account trades real
-                money.
+                Real-money run on the <strong>{{ brokerText() }}</strong> broker.
               } @else {
-                Paper run on the <strong>{{ brokerText() }}</strong> broker, with paper money.
+                Paper run on the <strong>{{ brokerText() }}</strong> broker. No real money moves.
               }
               You will be asked to type <strong>{{ brokerText() }}</strong> to confirm.
             } @else {
@@ -136,7 +135,7 @@ import { latestRealRunDay } from './tick-mode';
             [disabled]="!canRun()"
             [attr.aria-busy]="running()"
           >
-            {{ running() ? 'Running…' : dryRun() ? 'Start dry run' : 'Start trading run' }}
+            {{ running() ? 'Running…' : startLabel() }}
           </button>
           <app-permission-note permission="operations.run" />
         </div>
@@ -174,8 +173,8 @@ import { latestRealRunDay } from './tick-mode';
               <dd class="num">{{ r.fills }}</dd>
             </div>
             <div class="wide">
-              <dt>Winner</dt>
-              <dd>{{ r.winner_strategy_id ?? 'None' }}</dd>
+              <dt>Top strategy</dt>
+              <dd>{{ r.winner_strategy_id ? strategyName(r.winner_strategy_id) : 'None' }}</dd>
             </div>
           </dl>
           <a class="btn" [routerLink]="['/orders/ticks', r.tick_id]">Open this run</a>
@@ -219,15 +218,16 @@ import { latestRealRunDay } from './tick-mode';
     }
     .alert {
       padding: var(--space-2) var(--space-3);
-      border-left: 3px solid var(--color-warn);
+      border-left: 3px solid var(--color-info);
       border-radius: var(--radius-sm);
-      background: var(--color-warn-soft);
+      background: var(--color-info-soft);
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
     }
-    .alert.paper {
-      border-left-color: var(--color-info);
-      background: var(--color-info-soft);
+    /* Brass only where real money moves. */
+    .alert.live {
+      border-left-color: var(--color-live);
+      background: var(--color-live-soft);
     }
     .actions {
       display: flex;
@@ -306,6 +306,11 @@ export class TickRunner {
   protected readonly live = computed(
     () => this.broker.hasValue() && isLiveBroker(this.broker.value()),
   );
+  protected readonly startLabel = computed(() => {
+    if (this.dryRun()) return 'Start dry run';
+    return this.live() ? 'Start trading run' : 'Start paper run';
+  });
+  protected readonly strategyName = (id: string) => strategyDisplayName(id);
   /** Recent runs, to know the last real run's date (admins only start runs). */
   private readonly recent = resource({
     params: () => (this.allowed() ? { limit: 20 } : undefined),

@@ -2,6 +2,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
+import type { OrderDraftView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import type { TicketView } from '../../api/tickets.service';
 import { SessionService } from '../../core/auth/session.service';
@@ -47,6 +48,31 @@ function ticket(over: Partial<TicketView> = {}): TicketView {
   };
 }
 
+function draft(over: Partial<OrderDraftView> = {}): OrderDraftView {
+  return {
+    id: 'od_1',
+    portfolio_id: 'pf_1',
+    ticker: 'AAA.US',
+    side: 'buy',
+    quantity: 5,
+    order_type: 'market',
+    limit_price: null,
+    reference_price: 25,
+    notional: 125,
+    reason: 'momentum turned up',
+    source: 'assistant',
+    status: 'pending',
+    client_id: null,
+    conversation_id: 'conv_1',
+    created_at: '2026-09-27T10:00:00Z',
+    expires_at: '2026-09-28T10:00:00Z',
+    decided_at: null,
+    decided_by: null,
+    decision_note: null,
+    ...over,
+  };
+}
+
 const MSFT = ticket({
   id: 'tkt_0000000000000002',
   ticker: 'MSFT.US',
@@ -71,10 +97,11 @@ describe('TicketsPage', () => {
 
   afterEach(() => controller.verify());
 
-  async function render(items: TicketView[]) {
+  async function render(items: TicketView[], drafts: OrderDraftView[] = []) {
     fixture = TestBed.createComponent(TicketsPage);
     fixture.detectChanges();
     (await nextRequest(controller, '/api/tickets')).flush(page(items));
+    (await nextRequest(controller, '/api/orders/drafts')).flush(page(drafts));
     await tick();
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
@@ -88,7 +115,8 @@ describe('TicketsPage', () => {
 
   it('shows each waiting order as a live ticket, grouped by run', async () => {
     const el = await render([ticket(), MSFT]);
-    expect(el.querySelector('h2')!.textContent).toContain('Growth');
+    expect(el.querySelector('.run h3')!.textContent).toContain('Growth');
+    expect(el.querySelector('h2')!.textContent).toContain('From strategies you follow');
     expect(el.textContent).toContain('2 orders wait for you');
     const cards = el.querySelectorAll('article.ticket');
     expect(cards.length).toBe(2);
@@ -195,10 +223,44 @@ describe('TicketsPage', () => {
       ticket({ status: 'filled', hold: null, decided_by: 'service:system' }),
       { ...MSFT, status: 'expired' },
     ]);
-    el.querySelector<HTMLButtonElement>('button[role="radio"]:not([aria-checked="true"])')!.click();
+    el.querySelector<HTMLButtonElement>('#tab-history')!.click();
     fixture.detectChanges();
+    expect(el.querySelector('#tab-history')!.getAttribute('aria-selected')).toBe('true');
     expect(el.textContent).toContain('Filled');
     expect(el.textContent).toContain('Expired');
     expect(el.textContent).toContain('Auto');
+  });
+
+  it('holds suggested orders in the same inbox, with one count (F9)', async () => {
+    const count = TestBed.inject(TicketCountService);
+    const el = await render([ticket()], [draft(), draft({ id: 'od_2', status: 'placed' })]);
+    expect(el.textContent).toContain('2 orders wait for you');
+    expect(el.querySelector('#tab-waiting .count')!.textContent!.trim()).toBe('2');
+    const headings = [...el.querySelectorAll('h2')].map((h) => h.textContent!.trim());
+    expect(headings.some((h) => h.startsWith('From strategies you follow'))).toBe(true);
+    expect(headings.some((h) => h.startsWith('Suggested orders'))).toBe(true);
+    expect(el.querySelector('app-suggested-orders')!.textContent).toContain('Suggested by');
+    expect(count.waiting()).toBe(2);
+    el.querySelector<HTMLButtonElement>('#tab-history')!.click();
+    fixture.detectChanges();
+    expect(el.querySelector('app-suggested-orders')!.textContent).toContain('Placed');
+  });
+
+  it('shows only suggested orders when no strategy ticket waits', async () => {
+    const el = await render([], [draft()]);
+    expect(el.textContent).toContain('1 order waits for you');
+    expect(el.textContent).not.toContain('Nothing waits for you');
+    expect(el.textContent).not.toContain('From strategies you follow');
+  });
+
+  it('moves between the tabs with the arrow keys', async () => {
+    const el = await render([]);
+    const waiting = el.querySelector<HTMLButtonElement>('#tab-waiting')!;
+    waiting.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    fixture.detectChanges();
+    expect(el.querySelector('#tab-history')!.getAttribute('aria-selected')).toBe('true');
+    expect(el.querySelector('[role="tabpanel"]')!.getAttribute('aria-labelledby')).toBe(
+      'tab-history',
+    );
   });
 });

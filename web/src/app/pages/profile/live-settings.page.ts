@@ -30,6 +30,7 @@ import {
   profileNotes,
   safeguardWords,
 } from '../../shared/live-rules';
+import { type LiveStage, stageWords } from '../../shared/live-stages';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
@@ -111,12 +112,13 @@ export function profileText(p: {
 }
 
 /**
- * Live settings of one real-money portfolio (`/profile/live/:id`): its
- * stage on the way to real money with what moving up needs (19.9), the
- * allocation the owner lets Stonks trade, set by hand only, the account
- * profile that picks the account rules, which live safeguards and account
- * rules act on it (read only), and the dry-run order preview. Every change
- * needs a fresh code and is audited, except moving down a stage.
+ * Real-money settings of one portfolio at a real broker
+ * (`/profile/live/:id`): its stage on the way to real money with what moving
+ * up needs (19.9), the allocation the owner lets Stonks trade, set by hand
+ * only, the account profile that picks the account rules, which safeguards
+ * and account rules act on it (read only), and the dry-run order preview.
+ * Every change needs a fresh code and is audited, except moving down a
+ * stage. Brass and the LIVE stamp show only at a Real money stage.
  */
 @Component({
   selector: 'app-live-settings-page',
@@ -153,6 +155,13 @@ export class LiveSettingsPage {
     () => this.ctx.options().find((p) => p.id === this.id()) ?? null,
   );
   protected readonly isLive = computed(() => this.portfolio()?.trading === 'live');
+  /** The portfolio's stage, from the stage card once it has loaded. */
+  protected readonly stage = signal<LiveStage | null>(null);
+  /** Real money moves at this stage: only then brass, the LIVE stamp and red buttons. */
+  protected readonly realMoney = computed(() => {
+    const s = this.stage();
+    return s ? stageWords(s).live : false;
+  });
   protected readonly canManage = computed(() => this.session.can('live.manage'));
   protected readonly reasonMax = REASON_MAX;
 
@@ -206,12 +215,12 @@ export class LiveSettingsPage {
     const ok = await this.confirm.confirm({
       title: `Set the allocation of ${p.name}?`,
       message:
-        'Stonks may hold up to this amount in this real-money account. It stays until you change it: there are no automatic steps.',
+        'At the Real money stages Stonks may hold up to this amount in this account. It stays until you change it: there are no automatic steps.',
       confirmLabel: 'Set allocation',
-      tone: 'danger',
+      tone: this.realMoney() ? 'danger' : 'default',
       ticket: {
         kind: 'Allocation',
-        live: true,
+        live: this.realMoney(),
         lines: [
           { label: 'Portfolio', value: p.name },
           { label: 'Now', value: before ? this.allocationText(before) : 'Not set' },
@@ -221,7 +230,7 @@ export class LiveSettingsPage {
       },
     });
     if (!ok) return;
-    if (!(await this.stepUp.ensure('Set the live allocation'))) return;
+    if (!(await this.stepUp.ensure('Set the allocation'))) return;
     this.savingAllocation.set(true);
     try {
       // A stale second factor comes back as 403 step_up_required: the session
@@ -298,10 +307,10 @@ export class LiveSettingsPage {
         ? 'The account rules of the next trading run follow this profile. Stonks checks with the broker that this is a margin account first.'
         : 'The account rules of the next trading run follow this profile.',
       confirmLabel: 'Save profile',
-      tone: 'danger',
+      tone: this.realMoney() ? 'danger' : 'default',
       ticket: {
         kind: 'Account profile',
-        live: true,
+        live: this.realMoney(),
         lines: [
           { label: 'Portfolio', value: p.name },
           { label: 'Now', value: current ? this.profileText(current) : 'Not set' },

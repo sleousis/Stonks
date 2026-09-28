@@ -36,14 +36,19 @@ describe('tick confirmation', () => {
     const opts = tickConfirmOptions(false, ALPACA_PAPER);
     expect(opts.title).toContain('alpaca paper');
     expect(opts.typedConfirmation).toBe('alpaca paper');
+    // B2: a paper run is a paper run in words and colour; red is for real money.
+    expect(opts.title).toContain('paper run');
     expect(opts.tone).toBe('default');
-    expect(tickConfirmOptions(false, ALPACA_LIVE).tone).toBe('danger');
-    expect(opts.confirmLabel).toBe('Start trading run');
+    expect(opts.confirmLabel).toBe('Start paper run');
+    const live = tickConfirmOptions(false, ALPACA_LIVE);
+    expect(live.tone).toBe('danger');
+    expect(live.confirmLabel).toBe('Start trading run');
+    expect(live.title).toContain('real-money');
   });
 
   it('warns about real money on a live broker', () => {
     expect(tickConfirmOptions(false, ALPACA_LIVE).message).toContain('real money');
-    expect(tickConfirmOptions(false, SIMULATED).message).not.toContain('real money');
+    expect(tickConfirmOptions(false, SIMULATED).message).toContain('No real money moves');
   });
 
   it('refuses a real run without broker information', () => {
@@ -54,9 +59,8 @@ describe('tick confirmation', () => {
     const paper = tickTicket(ALPACA_PAPER, { asOf: '', tickers: '' });
     expect(paper.ticket?.live).toBe(false);
     expect(paper.typedConfirmation).toBe('alpaca paper');
-    // B2: a paper run is never a red button.
     expect(paper.tone).toBe('default');
-    expect(paper.confirmLabel).toBe('Start trading run');
+    expect(paper.confirmLabel).toBe('Start paper run');
     expect(paper.cancelLabel).toBe('Keep editing');
     expect(paper.ticket?.lines.map((l) => [l.label, l.value])).toEqual([
       ['Broker', 'alpaca paper'],

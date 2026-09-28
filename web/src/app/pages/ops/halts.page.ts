@@ -3,7 +3,6 @@ import {
   Component,
   computed,
   inject,
-  linkedSignal,
   resource,
   signal,
   viewChild,
@@ -14,10 +13,9 @@ import type { HaltView, KillSwitchRequest } from '../../api/models';
 import type { Permission } from '../../core/auth/permissions';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
-import { ConfirmService } from '../../core/confirm/confirm.service';
 import { formatDateTime } from '../../core/format/format';
 import { HaltStateService } from '../../core/halts/halt-state.service';
-import { killTicket } from '../../core/halts/kill-ticket';
+import { StopTradingService } from '../../core/halts/stop-trading.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
@@ -35,10 +33,12 @@ type KillScope = KillSwitchRequest['scope'];
 
 /**
  * Halts stop new orders before they reach the broker. Shows the active
- * ones with their way out (resume a kill switch, clear the others), turns
- * the kill switch on, and lists past halts. Engaging and resuming confirm
- * as tickets with the PAPER or LIVE stamp (UX-51). The page refreshes
- * itself and follows the app-wide halt state (UX-45).
+ * ones with their way out (resume a kill switch, clear the others), opens
+ * the one Stop trading sheet (M7: the same sheet as the session strip, on
+ * the portfolio on screen, with a ticket and a reason), and lists past
+ * halts. Resuming confirms as a ticket with the PAPER or LIVE stamp
+ * (UX-51). The page refreshes itself and follows the app-wide halt state
+ * (UX-45).
  */
 @Component({
   selector: 'app-halts-page',
@@ -63,7 +63,7 @@ type KillScope = KillSwitchRequest['scope'];
 export class HaltsPage {
   private readonly api = inject(HaltsService);
   private readonly state = inject(HaltStateService);
-  private readonly confirm = inject(ConfirmService);
+  private readonly stopTrading = inject(StopTradingService);
   private readonly toasts = inject(ToastService);
   private readonly stepUp = inject(StepUpService);
   private readonly dialog = viewChild.required(StatusChangeDialog);
@@ -73,9 +73,7 @@ export class HaltsPage {
 
   /** Turning the kill switch on (one portfolio). */
   protected readonly canKill = computed(() => this.session.can('killswitch.user'));
-  /** Every portfolio at once: admins only. */
-  protected readonly canKillGlobal = computed(() => this.session.can('killswitch.global'));
-  /** The caller's portfolios, when the server lists them (else a typed id). */
+  /** The caller's portfolios. */
   protected readonly portfolioOptions = this.portfolios.options;
   /** Real money somewhere in the caller's portfolios: the kill button wears the brass ring. */
   protected readonly anyLive = computed(() =>
@@ -105,24 +103,9 @@ export class HaltsPage {
 
   protected readonly busyId = signal<number | null>(null);
 
-  // ---- kill switch form ---------------------------------------------------
-  /** Admins start on every portfolio; everyone else on one portfolio. */
-  protected readonly scope = linkedSignal<KillScope>(() =>
-    this.canKillGlobal() ? 'global' : 'portfolio',
-  );
-  protected readonly portfolioId = linkedSignal(
-    () => this.portfolios.current()?.id ?? 'pf_default',
-  );
-  protected readonly reason = signal('');
-  protected readonly buysOnly = signal(false);
-  protected readonly submitted = signal(false);
-  protected readonly engaging = signal(false);
-
-  protected readonly reasonError = computed(() =>
-    this.reason().trim() ? null : 'Say why, so others know when it is safe to resume.',
-  );
-  protected readonly portfolioError = computed(() =>
-    this.scope() === 'portfolio' && !this.portfolioId().trim() ? 'Pick a portfolio.' : null,
+  /** Where the Stop trading sheet starts: the portfolio on screen. */
+  protected readonly onScreen = computed(
+    () => this.portfolios.current()?.name ?? 'all your portfolios',
   );
 
   protected readonly kindLabel = HALT_KIND_LABEL;
@@ -177,46 +160,9 @@ export class HaltsPage {
     await this.state.refresh();
   }
 
-  async engage(): Promise<void> {
-    this.submitted.set(true);
-    if (!this.canKill() || this.reasonError() || this.portfolioError() || this.engaging()) return;
-    const scope = this.scope();
-    const portfolioId = scope === 'portfolio' ? this.portfolioId().trim() : null;
-    const target = this.scopeText({ scope, portfolio_id: portfolioId, user_id: null });
-    const ok = await this.confirm.confirm({
-      title: 'Turn on the kill switch?',
-      message: this.buysOnly()
-        ? 'New buys stop at once. Sells and exits still go out. No position is closed.'
-        : 'Every new order stops at once until someone resumes trading. No position is closed.',
-      confirmLabel: 'Engage kill switch',
-      tone: 'danger',
-      ticket: killTicket({
-        scopeText: target,
-        buysOnly: this.buysOnly(),
-        reason: this.reason(),
-        live: this.liveFor(scope, portfolioId),
-      }),
-    });
-    if (!ok) return;
-    const body: KillSwitchRequest = {
-      scope,
-      reason: this.reason().trim(),
-      buys_only: this.buysOnly(),
-      portfolio_id: portfolioId,
-    };
-    this.engaging.set(true);
-    try {
-      const halt = await this.api.kill(body);
-      this.state.add(halt);
-      this.toasts.success(`Engaged the kill switch: ${target}.`);
-      this.reason.set('');
-      this.submitted.set(false);
-      await this.reload();
-    } catch {
-      // The error interceptor already showed the API's message.
-    } finally {
-      this.engaging.set(false);
-    }
+  /** Open the Stop trading sheet, the same one the session strip opens. */
+  protected stop(): void {
+    this.stopTrading.open.set(true);
   }
 
   async resume(h: HaltView): Promise<void> {
