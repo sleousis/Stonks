@@ -553,7 +553,7 @@ fallback_pct = 0.10   # distance as a share of the entry when there is no ATR
 
 ### Intraday risk
 
-These risk rules act only on intraday books, on each event of the intraday engine (roadmap 21.3.2). A daily book never sees them. They never drop or shrink a closing order. All are off by default:
+These risk rules act only on intraday books, on each event of the intraday engine (roadmap 21.3.2). Engine books use `[production.risk]`, so the rules below apply to them once set. A daily book never sees them. They never drop or shrink a closing order. All are off by default:
 
 | Rule | Setting under `[production.risk.rules.*]` | Effect |
 |------|-------------------------------------------|--------|
@@ -563,7 +563,7 @@ These risk rules act only on intraday books, on each event of the intraday engin
 | `intraday_stale_data` | `max_bar_age_seconds` | No opening order when the latest bar of its ticker is older than the limit, or while the stream is stale or reconnecting. |
 
 - Overrides only tighten. A longer loss window is tighter, because it sees a higher peak.
-- The engine checks the halts on every event (`production.intraday_halts.event_verdict`), so a kill switch stops the next order, not the next day. A stop-all kill switch also tells the engine to cancel working orders.
+- The engine checks the halts on every event (`production.intraday_halts.event_verdict`), so a kill switch stops the next order, not the next day. A stop-all kill switch also cancels the book's working orders at the broker. The engine run summary counts halted orders, tripped halts and cancelled orders.
 - Clearing an `intraday_loss` halt needs a reason, like every halt.
 
 ### Order states
@@ -666,13 +666,13 @@ The portfolio owner gets a `risk` warning when the violation ratio leaves the ba
 
 ### Intraday P&L
 
-The intraday engine (Phase 21) keeps P&L during the session. It is off by default and builds nothing on a daily install.
+The intraday engine (Phase 21) keeps P&L during the session when `[production.intraday_pnl] enabled = true` (off by default, `snapshot_minutes` 5, `stale_mark_seconds` 120). It builds nothing on a daily install. The engine updates it after each bar's fills, for the portfolios of its books.
 
 - **Marks.** The latest price per ticker from the stream: a trade, the last trade or mid of a live quote, or a bar's close. A delayed quote never counts.
 - **P&L.** Per portfolio and per strategy sleeve. The day starts from the last tick's snapshot, priced at the prior close. Fills of the day book at average cost: realised P&L when a fill reduces a position, unrealised from the marks, fees apart. A manual fill counts only in the whole portfolio.
 - **Snapshots.** Every five minutes one `intraday_snapshots` row per book: the P&L split, the day's return, the drawdown from the day's high, gross and net exposure, and how many held names have a stale (older than two minutes) or missing mark. The day's high survives a restart.
 
-`GET /api/risk/intraday` pages one of your portfolios for a day, newest first (`?day=`, `?strategy_id=` for one sleeve, `?all_books=true` for every book). The MCP tool `list_intraday_snapshots` reads the same.
+`GET /api/risk/intraday` pages one of your portfolios for a day, newest first (`?day=`, `?strategy_id=` for one sleeve, `?all_books=true` for every book). The MCP tool `list_intraday_snapshots` reads the same, and the console's Live page shows each of your portfolios' latest row.
 
 In the lab, the `pool_correlation` survival test refuses a strategy whose validation returns correlate above 0.7 with any active strategy, unless its IR is at least 10% better. It is not in a preset yet; add it with `--tests`.
 

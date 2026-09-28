@@ -1,4 +1,4 @@
--- Intraday engine runs (roadmap 21.2.5, docs/design/intraday.md section 9).
+-- Intraday engine runs (roadmap 21.2.5, docs/design/intraday.md section 13).
 --
 -- One row per start of the engine process. The process writes its
 -- heartbeat and checkpoint here after every bar close it handled, so a

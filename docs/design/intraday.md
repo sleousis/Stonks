@@ -2,11 +2,7 @@
 
 Design for roadmap Phase 21. It takes Stonks from one decision a day to decisions on minute bars, with live prices, a live event engine, intraday strategies, and the risk and monitoring an always-on loop needs.
 
-Status: 21.1 (streaming data), 21.2.1 (event driver), 21.2.4 (session rules) and 21.3.1 (intraday strategies) built. The rest of 21.2 and 21.3 is planned and split into small work packages (section 9).
-
-Status: 21.1 (streaming data) and 21.2.3 (the intraday router and fills, section 9) built. The rest of 21.2 and 21.3 is planned and split into small work packages (section 10).
-
-Status: 21.1 (streaming data) and 21.2.5 (the engine process, section 9) built. The rest of 21.2 and 21.3 are split into small work packages (section 10).
+Status: all of Phase 21 is built (21.1, 21.2.1 to 21.2.5, 21.3.1 to 21.3.5) and off by default. Section 13 shows how the engine process connects the pieces. The work packages are in section 17.
 
 Owner decisions this page follows:
 
@@ -36,7 +32,7 @@ Non-goals for this phase: tick-level strategies (sub-minute decisions), market m
 | IBKR adapter (`execution/brokers/ibkr/`) | orders, executions, account, `QuoteSource` snapshots | A streaming source over its quotes (21.1), day orders during the session (21.2) |
 | Order state machine (`execution/order_state.py`) | `pending` to `filled`, `unknown` after a timeout, `require_reconciled` | Reused as is by the intraday router (21.2) |
 | Halts (`production/halts.py`) | kill switch, breakers, `operational`, `runaway`, `broker_drift` | An `intraday_loss` halt kind and a check on every event (21.3.2, built) |
-| Scheduler | session, daily and interval triggers | Start the engine before the open and stop it after the close (21.2) |
+| Scheduler | session, daily and interval triggers | Start the engine before the open and stop it after the close (21.2.5, built) |
 
 ## 3. The three work packages
 
@@ -74,7 +70,7 @@ flowchart LR
 - **`StreamRunner`**: the supervised loop. It reconnects with exponential backoff and jitter (reset once a connection delivers), never retries a refused login, and treats a silent stream during market hours as a disconnect. A gap (a disconnect, a silence, or the time since the open at startup) is backfilled through the REST intraday ingest `backfill_delay_seconds` after data flows again, so the vendor has finished the minute the stream came back in. The vendor's bars land after the stream's, and last write wins. Subscribers (the engine of 21.2, price alerts) get every event and every closed bar. One that raises is counted, never allowed to stop the stream. Health (state, connects, events per kind, bars written, late ticks, gaps, backfills, last error) renders as Prometheus families.
 - **Settings**: `[streaming]` in `config/default.toml`, `enabled = false`. Operator entry point: `python -m stonks.streaming sources|run|record|replay`.
 
-### 21.2 Live event engine (planned)
+### 21.2 Live event engine (built)
 
 The engine turns events into decisions and orders. It has one driver loop, shared by the backtest, replay, paper and live.
 
@@ -102,12 +98,13 @@ flowchart LR
 - **Decisions** happen on a bar close, through the existing `Strategy.decide` with a `PointInTimeLake` clamped to the decision bar (`visible_cutoff`, P12). The step builds orders through `portfolio.pipeline.build_orders`, the one pipeline the tick and the backtest share.
 - **The order state machine** (`execution/order_state.py`) is reused unchanged. Intraday orders move `pending`, `submitted`, `accepted`, `partially_filled`, `filled`, or end `cancelled`, `expired` or `rejected`. A submit with no answer is `unknown`, and nothing is sent for that ticker until reconciliation settles it. The engine runs `startup_reconcile` and `require_reconciled` before it trades after any restart.
 
-### 21.3 Intraday strategies, risk and monitoring (planned)
+### 21.3 Intraday strategies, risk and monitoring (built)
 
 - **Strategies** (21.3.1, built): `intraday_orb`, `intraday_vwap_reversion` and `intraday_momentum` in `strategies/examples/`, each with a hypothesis card (P1). They read the regular session from the exchange calendar, decide on closed minute bars only and are flat before every close. The lab splits an intraday dataset by whole sessions, with an embargo of whole sessions (P9), and walk-forward folds count sessions. See `docs/strategies/intraday.md`.
 - **Risk** (21.3.2, built): registered `RiskRule`s and halts for the intraday loop (section 6).
 - **Live marks and P&L** (21.3.3, built): the latest mark per ticker, intraday P&L per book and strategy sleeve, and intraday risk snapshots every few minutes.
 - **Monitoring** (21.3.4, built): stream and engine health on the metrics endpoint, a dead-man on bar closes, event-to-order latency, a live panel in the console, and alerts.
+- **Intraday TCA** (21.3.5, built): shortfall against the next minute and the recorded quotes, and a proposed cost model for minute trading.
 
 ## 4. Session rules
 
@@ -125,11 +122,11 @@ flowchart LR
 | Backtest and replay | A decision on the close of minute t fills at the open of minute t+1 (P21). A fill takes at most the participation cap of that minute's volume (P20). The rest stays working or expires, per order type. Limit and stop orders fill from the bar range, as `backtest/fills.py` does today. Recorded quotes add the half spread. |
 | Paper | The simulated broker with the same rules, fed by the live stream. |
 | Live | Marketable limit day orders at IBKR, collared by the price band (`price_band` rule), `tif = day`, never outside regular hours. Fills come from executions, as in Phase 19. |
-| TCA | Decision price is the bar close. Arrival price is the next minute's open (section 10). The gap between backtest and live is recorded per order (P22). |
+| TCA | Decision price is the bar close. Arrival price is the next minute's open (section 16). The gap between backtest and live is recorded per order (P22). |
 
 ## 6. Safety
 
-Built in 21.3.2. Every rule is off by default and set under `[production.risk.rules.*]`, where overrides only tighten.
+Built in 21.3.2 and run by the engine process on every bar close (section 13). Every rule is off by default and set under `[production.risk.rules.*]`, where overrides only tighten. Engine books use `[production.risk]`.
 
 ```mermaid
 flowchart LR
@@ -161,7 +158,8 @@ flowchart LR
 - `tests/fakes/eodhd_ws.py` is a scripted websocket server on loopback: login, subscribe, recorded messages, dropped connections and refused logins.
 - The IBKR source is tested against a fake `QuoteSource` and against `FakeIbGateway`.
 - Live contract tests (`tests/integration/live/test_eodhd_stream_live.py`) are marked `live` and need `STONKS_RUN_LIVE_TESTS=1` and `EODHD_API_KEY`.
-- 21.2 adds a parity test: one recording through the backtest path and the live path gives the same decisions and orders.
+- Parity: one recording through the backtest path and the engine's replay path gives the same orders and fills (`tests/unit/engine/test_process_parity.py`).
+- The engine's connections (monitor, halts on every event, the loss and runaway halts, intraday P&L, the decision interval) are tested on a replayed session in `tests/unit/engine/test_process_wiring.py`.
 
 ## 8. What 21.1 built
 
@@ -171,34 +169,62 @@ flowchart LR
 - No migration. Bars go to the existing `bars` store and recordings are Parquet files.
 - Tests: unit tests per module, `tests/fakes/eodhd_ws.py` (the fake server), EODHD message fixtures in `tests/fixtures/streaming/` shaped after the vendor's documented messages, end to end runner tests (drop, reconnect, backfill, record and replay into the same bars), and a live contract test.
 - The lake has one writer. `python -m stonks.streaming run` opens the lake itself, so it cannot run next to `stonks serve` on the DuckDB bar table. The Parquet bar store, or running the stream inside the process that owns the lake (21.2.5), avoids that.
-- Not yet: the quality checker on streamed bars (the REST ingest keeps it) and a scheduler job that starts the runner at the open (21.2.5). The stream health reaches the API metrics endpoint through the engine status row (21.3.4, section 10).
+- Not yet: the quality checker on streamed bars (the REST ingest keeps it). The `engine_start` job starts the runner inside the engine process (21.2.5), and the stream health reaches the API metrics endpoint through the engine status row (21.3.4, section 15).
 
-## 8a. What 21.2.4 built
+## 9. The event driver (21.2.1)
 
-`engine/sessions.py` holds the session rules as pure functions. It imports nothing from the driver, so the event driver, the intraday backtest and replay all call the same code.
+```mermaid
+flowchart LR
+  SRC[any StreamingSource<br/>live, replay, lake_bars] --> BB[BarBuilder<br/>ticks to bars]
+  BB --> P[pending closes<br/>grouped by close time]
+  P -->|close + settle passed| BC[BarClose<br/>bars sorted by ticker]
+  BC --> H1[handler, priority -10<br/>gates such as sessions]
+  BC --> H2[handler, priority 0<br/>decision step]
+```
 
-- `session_state(at, ticker, calendar=..., rules=..., halts=...)` returns a `SessionState`: the phase, the session, the halt if any, and `can_open`, `can_close`, `must_flatten`, `reason` and `minutes_to_close`.
-- Phases, first match wins:
+- **`engine/driver.py`**: `EventDriver(source, clock=..., interval=1m, settle=...)`.
+  - `run(tickers)` pulls the source until it ends or `stop()` is called. `on_event(event)` is public, so the driver can also be a `StreamRunner` subscriber.
+  - Every event goes through a `BarBuilder`. Ticks become bars, and a bar a source delivered passes through.
+  - Bars that close at the same moment make one `BarClose` (`at`, `interval`, `bars` sorted by ticker, `sequence`). It is dispatched once `at + settle` has passed (settle is the builder's grace, 2 seconds by default), so a slow ticker's bar for the same minute is still in it.
+  - A bar that closes at or before a moment already dispatched is late. It is dropped and counted.
+  - With a `FakeClock` the driver owns time. Event time moves the clock forward, never back. During a dispatch the clock reads `at + settle`, the moment a live run decides at. With any other clock (live) the driver only reads it.
+  - A finite source closes and dispatches every bar at its end. A live stream that ends or is stopped keeps the bar in progress. A disconnect propagates and keeps pending closes, so the next `run` carries on.
+- **The handler interface.** A handler is an object with `on_bar_close(event: BarClose)` (the `BarCloseHandler` protocol) or a plain callable. `register(handler, name=..., priority=0)` returns its unique name. Handlers run by `priority` (lower first), then registration order. Gates such as the session rules (21.2.4) register with a negative priority and the decision step (21.2.2) at 0. A handler that raises is logged and counted in `DriverStats.handler_errors` by name, and the others still run.
+- **`streaming/sources/lake_bars.py`**: `LakeBarSource(reader, start=, end=, interval=1m, clock=, chunk=1 day)`, registered as `lake_bars`. It reads the lake (anything with `get_bars`, such as `DuckDBLake`) one chunk at a time and yields `StreamBar` events by time, then ticker. A bar is yielded only once closed: the `FakeClock` is set to its close first, and a bar that closes after `end` is never read (P12). Rows that are not sound bars are skipped and counted. It has no settings, so the backtest builds it in code.
+- **Tests**: `tests/unit/engine/test_driver.py` (grouping, the clock at dispatch, ticks through the builder, the same input giving the same event sequence in any arrival order, handler order, a raising handler isolated and counted, late bars, live mode, stop and disconnect, and lake bars giving the same events as the same bars fed directly) and `tests/unit/streaming/test_lake_bars.py` (order, point in time, chunked reads, bad rows, a real lake).
+- No migration, no settings, no CLI. `engine/__init__.py` imports nothing.
 
-| Phase | When | Entries | Exits |
-|---|---|---|---|
-| `closed` | outside regular hours, holidays, unknown calendar | no | no |
-| `halted` | the ticker has an active trading halt | no | no |
-| `flatten` | last `flatten_minutes`, only with `flatten_at_close` | no | yes, and close everything |
-| `closing` | last `entry_cutoff_minutes` | no | yes |
-| `opening` | first `entry_delay_minutes` | no | yes |
-| `regular` | the rest of the session | yes | yes |
+## 10. The decision step (21.2.2)
 
-- `SessionRules` is a frozen pydantic model: `entry_delay_minutes` (5), `entry_cutoff_minutes` (10), `flatten_at_close` (off) and `flatten_minutes` (5). Zero minutes turns an edge off. It is not wired into `config.py` yet. The engine process (21.2.5) or the book settings will carry it.
-- Sessions come from `scheduling/calendar.py`. The edges are measured from each session's own open and close in UTC, so early closes and DST need no special case. A 24/7 calendar has no edges.
-- Trading halts are data. `TradingHalt(ticker, start, end, reason)` with reason `luld`, `exchange`, `regulatory`, `news`, `stale` or `other`, and `end = None` while it lasts. `HaltTable` is an immutable value with `active`, `add` and `resume`. A halted ticker gets no orders at all, exits included, because the exchange would not take them.
-- `SessionRulebook(rules, halts=...)` picks the calendar per ticker (by asset class, else by exchange suffix) and caches sessions per day. A ticker with no known calendar is `closed`.
-- `gate_orders(orders, positions, state_for)` classifies orders against positions (`execution.orders.classify_all`) and keeps what the session allows. An order that crosses zero is split, so its closing leg survives an entry block (P28).
-- `flatten_orders(positions, state_for, prices=..., collar_bps=...)` builds closing day orders in the flatten window: marketable limits when a price is known, else market orders. Client ids use the session date and the strategy id `flatten`, so a repeat on the next bar does not double up.
-- Tests (`tests/unit/test_engine_sessions.py`) cover every phase, the NYSE early close on 2026-11-27, the 2026-07-03 holiday, both 2026 DST changes, 24/7 crypto, halts with and without an end, and the order gate and flatten orders.
-- Not yet: feeding halts from a live source (LULD messages, the stale data gate of 21.3.2) and per-book settings.
+```mermaid
+flowchart LR
+  LB[LakeBarSource] --> DRV[EventDriver]
+  DRV -->|bar close| F[fills handler<br/>priority -10<br/>next bar open, marks, equity]
+  DRV -->|bar close| ST[DecisionStep<br/>priority 0]
+  ST --> PIT[PointInTimeLake<br/>bars closed by the event]
+  ST --> BO[build_orders per book]
+  BO --> G[session gate<br/>and flatten]
+  G -->|StepDecision| F
+```
 
-## 9. The intraday router (21.2.3, built)
+- **`engine/step.py`**: `DecisionStep(strategies, books, lake, universe=, portfolio=, on_decision=)`, a driver handler named `decision_step`.
+  - On each bar close it updates the marks (last close per ticker, carried forward) and opens a `PointInTimeLake` for the bar that just closed, with the driver's interval as the decision interval. A strategy sees only bars closed by the event time (P12).
+  - Strategies get `as_of` = the start of the decision bar in naive UTC, the same value the bar backtester passes. Session rules and `Order.decided_at` use the bar close in aware UTC.
+  - Every strategy scores every universe ticker once per bar (`estimate_return`), shared by all books. A book that cannot short drops negative scores.
+  - Per book (`StepBook`: construction, risk policy, strategy weights, `allow_short`, session rules) it runs `portfolio.pipeline.build_orders`. Client ids are `[<portfolio_id>:]<strategy>:<bar start>:<ticker>:<side>`, the bar backtester's format. Orders carry `portfolio_id`, `decided_at` and `decision_price`.
+  - A book with `sessions` (a `SessionRules`) is gated by `gate_orders` and gets `flatten_orders` in the flatten window, which replace other orders for those tickers. A book without session rules is not gated (research parity).
+  - `stale_after` blocks opening orders on a ticker without a recent bar. `fresh_reads` opens a new point-in-time session per bar, for a live lake that grows. `record_fill` tells the step who filled a holding, so its owner can exit it when nothing is picked.
+  - With a risk policy, the rules get a `RiskContext` whose `intraday` comes from the engine (section 13). Every order carries the decision bar in `decision_context.interval`, which intraday TCA selects orders by.
+  - The result is one `StepDecision` per book (orders, dropped orders with the reason, flattened tickers, the pipeline result), handed to `on_decision`.
+- **`backtest/intraday.py`**: `IntradayBacktester(strategies, broker, lake, IntradayBacktestConfig(...))`.
+  - `LakeBarSource` with a `FakeClock`, the `EventDriver`, a fills handler at priority -10 and the `DecisionStep` at 0. It is the loop a live run uses. Only the fills differ.
+  - The fills handler fills orders queued on the previous close at this bar's opens (P21), carries deferred remainders as `<root>~<n>`, accrues financing, marks at the closes and records equity. A new decision replaces what is still queued. This is the bar backtester's convention, kept exactly.
+  - The report is `compute_report` over the same equity points, so Sharpe and the other metrics match too.
+- **Tests**: `tests/unit/engine/test_step.py` (the view stops at the closed bar, one scoring per bar for all books, client ids and decision fields, carried marks, opening edge, halts, flatten, the closing bar, exit owners from fills, a constructor book, shorts dropped, stale tickers) and `tests/unit/engine/test_intraday_backtest.py` (fills, equity curve and Sharpe equal to `Backtester` on the same minute bars for `single_winner` and `equal_weight_top_n`, one decision per bar close, no look-ahead, changing later bars leaves earlier fills alone, two runs and shuffled lake rows give the same fills, next-bar fills, session edges and flatten). The helper `tests/unit/engine/minute_lake.py` builds minute bars on real NYSE sessions and a toy minute momentum strategy.
+- No migration, no settings, no CLI.
+- Not yet: corporate actions, point-in-time membership, lagged market statistics for fills and short books in the intraday backtest (the bar backtester keeps them). The router of 21.2.3 replaces the fills handler in the engine process.
+
+## 11. The intraday router (21.2.3)
 
 The router is the only part of the engine that talks to a broker. One router serves one book: one portfolio and its broker.
 
@@ -251,9 +277,34 @@ flowchart LR
 
 `BarQuote` gains four optional fields (`bid`, `ask`, `gap_bars`, `new_session`) that the daily model ignores.
 
-Not yet: the kill switch and halts on every event (21.3.2), the price band collar for intraday limits (the IBKR collar applies), flatten orders at the close through the router (the session rules build them, the engine process sends them, 21.2.5), and the parity test of one recording through the backtest and live paths (21.2.2 and 21.2.5).
+Not yet: the price band collar for intraday limits (the IBKR collar applies). The engine process checks the halts before it routes (section 13) and sends flatten orders through the router.
 
-## 9. The engine process (21.2.5)
+## 12. Session rules (21.2.4)
+
+`engine/sessions.py` holds the session rules as pure functions. It imports nothing from the driver, so the event driver, the intraday backtest and replay all call the same code.
+
+- `session_state(at, ticker, calendar=..., rules=..., halts=...)` returns a `SessionState`: the phase, the session, the halt if any, and `can_open`, `can_close`, `must_flatten`, `reason` and `minutes_to_close`.
+- Phases, first match wins:
+
+| Phase | When | Entries | Exits |
+|---|---|---|---|
+| `closed` | outside regular hours, holidays, unknown calendar | no | no |
+| `halted` | the ticker has an active trading halt | no | no |
+| `flatten` | last `flatten_minutes`, only with `flatten_at_close` | no | yes, and close everything |
+| `closing` | last `entry_cutoff_minutes` | no | yes |
+| `opening` | first `entry_delay_minutes` | no | yes |
+| `regular` | the rest of the session | yes | yes |
+
+- `SessionRules` is a frozen pydantic model: `entry_delay_minutes` (5), `entry_cutoff_minutes` (10), `flatten_at_close` (off) and `flatten_minutes` (5). Zero minutes turns an edge off. Each engine book carries its own (`[[engine.books]] sessions`).
+- Sessions come from `scheduling/calendar.py`. The edges are measured from each session's own open and close in UTC, so early closes and DST need no special case. A 24/7 calendar has no edges.
+- Trading halts are data. `TradingHalt(ticker, start, end, reason)` with reason `luld`, `exchange`, `regulatory`, `news`, `stale` or `other`, and `end = None` while it lasts. `HaltTable` is an immutable value with `active`, `add` and `resume`. A halted ticker gets no orders at all, exits included, because the exchange would not take them.
+- `SessionRulebook(rules, halts=...)` picks the calendar per ticker (by asset class, else by exchange suffix) and caches sessions per day. A ticker with no known calendar is `closed`.
+- `gate_orders(orders, positions, state_for)` classifies orders against positions (`execution.orders.classify_all`) and keeps what the session allows. An order that crosses zero is split, so its closing leg survives an entry block (P28).
+- `flatten_orders(positions, state_for, prices=..., collar_bps=...)` builds closing day orders in the flatten window: marketable limits when a price is known, else market orders. Client ids use the session date and the strategy id `flatten`, so a repeat on the next bar does not double up.
+- Tests (`tests/unit/test_engine_sessions.py`) cover every phase, the NYSE early close on 2026-11-27, the 2026-07-03 holiday, both 2026 DST changes, 24/7 crypto, halts with and without an end, and the order gate and flatten orders.
+- Not yet: feeding trading halts from a live source (LULD messages). The stale data gate of 21.3.2 blocks entries on a stale ticker meanwhile.
+
+## 13. The engine process (21.2.5)
 
 `engine/process.py` runs the intraday books in one always-on process. It is off by default (`[engine] enabled = false`).
 
@@ -265,8 +316,12 @@ flowchart LR
   DRV -->|bar close| H[engine handler]
   H --> W[write the bars<br/>live only]
   H --> R1[router: fills<br/>and reconcile]
-  H --> ST[DecisionStep<br/>gates, flatten]
-  ST --> R2[router: route]
+  H --> PNL[IntradayPnlTracker<br/>marks, P&L]
+  H --> RISK[marked value,<br/>loss halt, halts in force]
+  H --> ST[DecisionStep<br/>rules with ctx.intraday,<br/>gates, flatten]
+  ST --> G[runaway halt,<br/>gate_event_orders]
+  G --> R2[router: route]
+  R2 --> MON[EngineMonitor<br/>event to order]
   H --> CP[(engine_runs<br/>checkpoint)]
 ```
 
@@ -276,8 +331,15 @@ On each bar close the handler:
 2. writes the decision bars to the bar store in live mode, so the step reads them even before the runner's writer flushes,
 3. lets each book's router fill simulated orders and reconcile,
 4. tells the step about the new fills, so it knows who owns each holding,
-5. runs the decision step (signals, `build_orders`, session gates, flatten orders),
-6. routes each book's orders and writes the checkpoint and heartbeat.
+5. books intraday P&L (`IntradayPnlTracker`, with `[production.intraday_pnl] enabled`),
+6. marks each book (cash plus positions at the last closes), builds its `IntradayContext` (the session's marked values, the latest bar per ticker, the orders sent today, a stale stream), trips the `intraday_loss` halt on a breach (`trip_intraday_loss`) and reads the halts in force (`event_verdict`). A stop-all kill switch also cancels the book's working orders at the broker,
+7. runs the decision step (signals, `build_orders` with `RiskContext.intraday`, so the intraday rules act, session gates, flatten orders),
+8. trips the `runaway` halt when the order rate cap dropped an opening order (`trip_intraday_runaway`), then keeps only what the halts allow (`gate_event_orders`: closes only under a buys halt, nothing under stop-all),
+9. routes each book's orders, times each sent order from its bar close for the monitor, and writes the checkpoint and heartbeat.
+
+A failure in steps 5 and 6 is logged and the loop goes on. Halted orders, tripped halts and cancelled orders are counted in the run summary (`orders_halted`, `halts_tripped`, `orders_cancelled`).
+
+**Monitor.** The process attaches an `EngineMonitor` (section 15) to its driver, with an `EngineStatusStore` on the state DB, the runner's stream health and `[streaming.monitor] publish_seconds`. It starts with the run and marks the row stopped at the end.
 
 **Startup.** Before the first order the process:
 
@@ -305,88 +367,11 @@ On each bar close the handler:
 
 **Limits.**
 
-- The process opens the lake itself, like `python -m stonks.streaming run`. It cannot run beside `stonks serve` on a DuckDB lake. Running the engine inside the server is left to integration.
+- The process opens the lake itself, like `python -m stonks.streaming run`. It cannot run beside `stonks serve` on a DuckDB lake bar table. Use the Parquet bar store to run both.
 - Orders keep a strategy id in the ledger only for registered strategies. A catalog strategy or a flatten order is stored without one (`orders.strategy_id` references the registry). The process keeps the owner in memory.
 - A replay trades simulated books only.
 
-## 10. Work packages
-
-Shared files (`config.py`, `config/default.toml`, `cli.py`, router mounts, the MCP server, `pyproject.toml`, the docs) change only in the integration step after each wave.
-
-| WP | Scope | Owns |
-|----|-------|------|
-| 21.1 Streaming data | The `StreamingSource` seam and registry, EODHD websocket and IBKR sources, bar builder, writer, recorder, replayer and the supervised runner. | `core/stream.py`, `streaming/*` |
-| 21.2.1 Event driver (built) | `EventDriver` over any `StreamingSource`, the `FakeClock` hand-off, bar-close dispatch, and `LakeBarSource` that turns lake bars into `StreamBar` events. | `engine/driver.py`, `streaming/sources/lake_bars.py` |
-| 21.2.2 Decision step | Decide on a bar close through `Strategy.decide` and a minute `PointInTimeLake`, then `build_orders` per book. The intraday backtest runs on the driver. | `engine/step.py`, `backtest/intraday.py` |
-| 21.2.3 Intraday router and fills (done) | Orders through the state machine, next-bar fills with the participation cap and the half spread, day orders at IBKR, reconciliation of intraday fills. | `engine/router.py`, `engine/sim_broker.py`, `backtest/fills.py` (additions), `execution/brokers/ibkr/orders.py` (day orders) |
-| 21.2.4 Session rules | Regular hours only, no entries at the open and close edges, flatten before the close, per-ticker trading halts, early closes. | `engine/sessions.py` |
-| 21.2.5 Engine process | The always-on process, scheduler jobs to start before the open and stop after the close, startup reconcile, restart and state recovery, the runner inside it. | `engine/process.py`, `scheduling/jobs.py` (jobs) |
-| 21.3.1 Intraday strategies | Opening range breakout, VWAP reversion and intraday momentum with hypothesis cards, lab windows by session. | `strategies/examples/intraday_*.py`, `lab/dataset.py` (session windows) |
-| 21.3.2 Intraday risk | The per-minute loss limit and `intraday_loss` halt kind, intraday drawdown scaling, orders per minute cap, the stale data gate, the kill switch per event. | `production/rules/intraday_*.py`, `production/intraday_halts.py`, `production/halts.py`, SQLite migration 042 (built) |
-| 21.3.3 Live marks and P&L (built) | Minute marks from the stream, intraday P&L per book and strategy sleeve, intraday risk snapshots. | `production/intraday_pnl.py`, SQLite migration 043 |
-| 21.3.4 Monitoring | Stream and engine metrics on `/metrics`, the engine dead-man, latency from event to order, alerts, a live panel in the console. | `scheduling/metrics.py`, `api/routers/stream.py`, `web/src/app/pages/live/*` |
-| 21.3.5 Intraday TCA (built) | Spread from recorded quotes, arrival at the next minute, cost model calibration for minute trading (section 10). | `production/intraday_tca.py`, `backtest/cost_calibration.py` |
-
-Waves:
-
-1. 21.1 (done).
-2. 21.2.1, 21.2.4 and 21.3.1 in parallel.
-3. 21.2.2, 21.2.3 and 21.3.2.
-4. 21.2.5, 21.3.3, 21.3.4 and 21.3.5.
-
-## 10. What 21.2.1 built
-
-```mermaid
-flowchart LR
-  SRC[any StreamingSource<br/>live, replay, lake_bars] --> BB[BarBuilder<br/>ticks to bars]
-  BB --> P[pending closes<br/>grouped by close time]
-  P -->|close + settle passed| BC[BarClose<br/>bars sorted by ticker]
-  BC --> H1[handler, priority -10<br/>gates such as sessions]
-  BC --> H2[handler, priority 0<br/>decision step]
-```
-
-- **`engine/driver.py`**: `EventDriver(source, clock=..., interval=1m, settle=...)`.
-  - `run(tickers)` pulls the source until it ends or `stop()` is called. `on_event(event)` is public, so the driver can also be a `StreamRunner` subscriber.
-  - Every event goes through a `BarBuilder`. Ticks become bars, and a bar a source delivered passes through.
-  - Bars that close at the same moment make one `BarClose` (`at`, `interval`, `bars` sorted by ticker, `sequence`). It is dispatched once `at + settle` has passed (settle is the builder's grace, 2 seconds by default), so a slow ticker's bar for the same minute is still in it.
-  - A bar that closes at or before a moment already dispatched is late. It is dropped and counted.
-  - With a `FakeClock` the driver owns time. Event time moves the clock forward, never back. During a dispatch the clock reads `at + settle`, the moment a live run decides at. With any other clock (live) the driver only reads it.
-  - A finite source closes and dispatches every bar at its end. A live stream that ends or is stopped keeps the bar in progress. A disconnect propagates and keeps pending closes, so the next `run` carries on.
-- **The handler interface.** A handler is an object with `on_bar_close(event: BarClose)` (the `BarCloseHandler` protocol) or a plain callable. `register(handler, name=..., priority=0)` returns its unique name. Handlers run by `priority` (lower first), then registration order. Gates such as the session rules (21.2.4) register with a negative priority and the decision step (21.2.2) at 0. A handler that raises is logged and counted in `DriverStats.handler_errors` by name, and the others still run.
-- **`streaming/sources/lake_bars.py`**: `LakeBarSource(reader, start=, end=, interval=1m, clock=, chunk=1 day)`, registered as `lake_bars`. It reads the lake (anything with `get_bars`, such as `DuckDBLake`) one chunk at a time and yields `StreamBar` events by time, then ticker. A bar is yielded only once closed: the `FakeClock` is set to its close first, and a bar that closes after `end` is never read (P12). Rows that are not sound bars are skipped and counted. It has no settings, so the backtest builds it in code.
-- **Tests**: `tests/unit/engine/test_driver.py` (grouping, the clock at dispatch, ticks through the builder, the same input giving the same event sequence in any arrival order, handler order, a raising handler isolated and counted, late bars, live mode, stop and disconnect, and lake bars giving the same events as the same bars fed directly) and `tests/unit/streaming/test_lake_bars.py` (order, point in time, chunked reads, bad rows, a real lake).
-- No migration, no settings, no CLI. `engine/__init__.py` imports nothing.
-
-## 11. What 21.2.2 built
-
-```mermaid
-flowchart LR
-  LB[LakeBarSource] --> DRV[EventDriver]
-  DRV -->|bar close| F[fills handler<br/>priority -10<br/>next bar open, marks, equity]
-  DRV -->|bar close| ST[DecisionStep<br/>priority 0]
-  ST --> PIT[PointInTimeLake<br/>bars closed by the event]
-  ST --> BO[build_orders per book]
-  BO --> G[session gate<br/>and flatten]
-  G -->|StepDecision| F
-```
-
-- **`engine/step.py`**: `DecisionStep(strategies, books, lake, universe=, portfolio=, on_decision=)`, a driver handler named `decision_step`.
-  - On each bar close it updates the marks (last close per ticker, carried forward) and opens a `PointInTimeLake` for the bar that just closed, with the driver's interval as the decision interval. A strategy sees only bars closed by the event time (P12).
-  - Strategies get `as_of` = the start of the decision bar in naive UTC, the same value the bar backtester passes. Session rules and `Order.decided_at` use the bar close in aware UTC.
-  - Every strategy scores every universe ticker once per bar (`estimate_return`), shared by all books. A book that cannot short drops negative scores.
-  - Per book (`StepBook`: construction, risk policy, strategy weights, `allow_short`, session rules) it runs `portfolio.pipeline.build_orders`. Client ids are `[<portfolio_id>:]<strategy>:<bar start>:<ticker>:<side>`, the bar backtester's format. Orders carry `portfolio_id`, `decided_at` and `decision_price`.
-  - A book with `sessions` (a `SessionRules`) is gated by `gate_orders` and gets `flatten_orders` in the flatten window, which replace other orders for those tickers. A book without session rules is not gated (research parity).
-  - `stale_after` blocks opening orders on a ticker without a recent bar. `fresh_reads` opens a new point-in-time session per bar, for a live lake that grows. `record_fill` tells the step who filled a holding, so its owner can exit it when nothing is picked.
-  - The result is one `StepDecision` per book (orders, dropped orders with the reason, flattened tickers, the pipeline result), handed to `on_decision`.
-- **`backtest/intraday.py`**: `IntradayBacktester(strategies, broker, lake, IntradayBacktestConfig(...))`.
-  - `LakeBarSource` with a `FakeClock`, the `EventDriver`, a fills handler at priority -10 and the `DecisionStep` at 0. It is the loop a live run uses. Only the fills differ.
-  - The fills handler fills orders queued on the previous close at this bar's opens (P21), carries deferred remainders as `<root>~<n>`, accrues financing, marks at the closes and records equity. A new decision replaces what is still queued. This is the bar backtester's convention, kept exactly.
-  - The report is `compute_report` over the same equity points, so Sharpe and the other metrics match too.
-- **Tests**: `tests/unit/engine/test_step.py` (the view stops at the closed bar, one scoring per bar for all books, client ids and decision fields, carried marks, opening edge, halts, flatten, the closing bar, exit owners from fills, a constructor book, shorts dropped, stale tickers) and `tests/unit/engine/test_intraday_backtest.py` (fills, equity curve and Sharpe equal to `Backtester` on the same minute bars for `single_winner` and `equal_weight_top_n`, one decision per bar close, no look-ahead, changing later bars leaves earlier fills alone, two runs and shuffled lake rows give the same fills, next-bar fills, session edges and flatten). The helper `tests/unit/engine/minute_lake.py` builds minute bars on real NYSE sessions and a toy minute momentum strategy.
-- No migration, no settings, no CLI.
-- Not yet: corporate actions, point-in-time membership, lagged market statistics for fills and short books in the intraday backtest (the bar backtester keeps them). The router of 21.2.3 replaces the fills handler. History-aware risk rules get no daily history in the step yet, so they skip.
-
-## 10. What 21.3.3 built
+## 14. Live marks and P&L (21.3.3)
 
 ```mermaid
 flowchart LR
@@ -402,13 +387,14 @@ flowchart LR
   - `MarkBook`: the latest mark per ticker. A runner subscriber (call it with any event) and a driver handler. A trade sets the mark, a live quote its last trade or mid, a bar its close at the bar's end. A delayed quote and an older event never move it.
   - `PositionLedger`: one day of one book at average cost. Start positions are priced at the prior close (`lake_reference_prices` reads the lake), or at their first mark when there is none. A fill that reduces a position realises P&L, one that goes through zero opens the rest at the fill price. `realised + unrealised - fees` equals the change in value.
   - `IntradayPnlTracker`: a driver handler. On each bar close it marks the bars, books the day's fills whose time has come (so a replay never sees a later fill early, P12), and moves each book's high-water P&L. Every `snapshot_minutes` (5) and on `finish` it stores one row per book. A book is the whole portfolio or a strategy's sleeve (start positions from `position_attribution`, fills of the strategy's orders). The day's high is read back after a restart.
-  - `IntradayPnlSettings` (`enabled`, `snapshot_minutes`, `stale_mark_seconds`), to mount as `[production.intraday_pnl]` in the integration step.
+  - `IntradayPnlSettings` (`production/intraday_pnl_settings.py`: `enabled`, `snapshot_minutes`, `stale_mark_seconds`), mounted as `[production.intraday_pnl]`, off by default.
 - SQLite migration 043: `intraday_snapshots`, one row per book and moment, unique on `(portfolio_id, strategy_id, at)`.
 - `app/intraday_pnl.py` (`IntradayPnlService`), `GET /api/risk/intraday` (`data.read`, scoped to your portfolios, paged, `day`, `strategy_id`, `all_books`) and the MCP tool `list_intraday_snapshots`.
 - Tests: the ledger math, and replays of recorded streams through the `replay` source and the driver (marks, fills in time, snapshots every five minutes, the high-water mark, restart, stale marks).
-- Not yet: the engine process (21.2.5) that registers the tracker, and the console panel (21.3.4). The trading day is the UTC date of the bar close, which fits US and European sessions.
+- The engine process builds the tracker for its books' portfolios when `[production.intraday_pnl] enabled` and calls it after each bar's fills. The Live page shows each portfolio's latest row.
+- The trading day is the UTC date of the bar close, which fits US and European sessions.
 
-## 10. Monitoring (21.3.4)
+## 15. Monitoring (21.3.4)
 
 The engine runs in its own process, so the API cannot read its memory. It writes a status row, and everything else reads that row.
 
@@ -423,15 +409,15 @@ flowchart LR
   DOG -->|silent in market hours| NOT[Notifier<br/>one alert per stretch]
 ```
 
-- **`EngineMonitor`** (`engine/monitor.py`) registers two driver handlers. `monitor.dispatch` runs first on every bar close and records the dispatch lag, the clock time past the close plus settle (zero in a replay, by construction). `monitor.publish` runs last and writes the row, at most every `publish_seconds`. `record_order(event)` records event to order latency, from the dispatch of that bar close to the order. The decision step and the router call it. A failed write is logged and never reaches the engine.
+- **`EngineMonitor`** (`engine/monitor.py`) registers two driver handlers. `monitor.dispatch` runs first on every bar close and records the dispatch lag, the clock time past the close plus settle (zero in a replay, by construction). `monitor.publish` runs last and writes the row, at most every `publish_seconds`. `record_order(event)` records event to order latency, from the dispatch of that bar close to the order. The engine process calls it for each order the router sent. A failed write is logged and never reaches the engine.
 - **Latency** lives in `LatencyHistogram`: fixed buckets from 10 ms to 60 s that render as Prometheus histograms. The console shows upper estimates of the median and the 95th percentile.
 - **`engine_status`** (`engine/status.py`): one row per engine with its calendar, state, start, last update, stop, last dispatch and a JSON snapshot (stream health, driver counters, histograms). A row not updated for `stale_after_seconds` belongs to an engine that is not live, so its stream reports down too.
 - **Metrics**: `engine_metric_families` renders the stream families of 21.1 plus the last event age, and the engine families (up, last dispatch age, bar closes, late bars, handler errors, both histograms), merged so each name appears once. `GET /metrics` appends them.
 - **Dead-man** (`engine/deadman.py`): no bar close for `deadman_minutes` while the engine's market is open alerts the operator. It runs inside the scheduler's `DeadlineWatchdog` as an extra check and deduplicates in `scheduler_deadline_alerts`, like a missed deadline.
-- **Status route**: `GET /api/stream/status` (`data.read`) adds live or not, market open, the dead-man state and scrubbed stream errors. Intraday P&L per book comes with 21.3.3. Until then the route carries a note, and the console shows it.
+- **Status route**: `GET /api/stream/status` (`data.read`) adds live or not, market open, the dead-man state and scrubbed stream errors. Its `intraday_pnl` part says whether intraday P&L rows are kept (21.3.3). The console's Live page then reads each of your portfolios' latest row from `GET /api/risk/intraday`.
 - **Settings**: `[streaming.monitor]` with `deadman_minutes` (5), `stale_after_seconds` (120) and `publish_seconds` (15).
 
-## 10. Intraday TCA (21.3.5, built)
+## 16. Intraday TCA (21.3.5)
 
 The daily TCA prices an order against the next session. An intraday order lives for minutes, so `production/intraday_tca.py` prices it against minutes and against the recorded quotes.
 
@@ -448,7 +434,7 @@ flowchart LR
   FIT --> TOML[proposed backtest.costs block<br/>never applied]
 ```
 
-- **Which orders.** An order is intraday when its decision context names an intraday `interval`. Without one, an order placed outside a tick and not by a person counts, which is how the router records them.
+- **Which orders.** An order is intraday when its decision context names an intraday `interval`, which the decision step writes on every order. Without one, an order placed outside a tick and not by a person counts.
 - **Arrival** is the open of the first bar that starts at or after the decision, the price a backtest fills at (P21). Without that bar, the fills' recorded arrival price stands in, then the quote mid at that minute.
 - **Spread** is the last valid quote at or before the decision and at or before each fill. A quote older than 60 seconds, a crossed quote or a quote with one side missing is not used.
 - **Shortfall** uses the daily `compute_shortfall`, so the numbers compare. Impact splits into the quoted half spread paid (`spread`) and the rest (`residual`: slippage and impact beyond the spread). Opportunity cost uses the day's last minute close. The convention gap does not apply.
@@ -457,3 +443,28 @@ flowchart LR
 - **Point in time.** Quotes, bars, orders and fills after the end date are never read.
 - **Never applied.** The result is a `[backtest.costs]` block for a person to review. With recorded quotes the minute fill model already adds the quoted half spread, so books filled that way set `half_spread_bps` to 0.
 - No migration: it reads `orders`, `fills`, the `bars` store and the recordings.
+
+## 17. Work packages
+
+All built. Shared files (`config.py`, `config/default.toml`, `cli.py`, router mounts, the MCP server, `pyproject.toml`, the docs) changed only in the integration step after each wave.
+
+| WP | Scope | Owns | Status |
+|----|-------|------|--------|
+| 21.1 Streaming data | The `StreamingSource` seam and registry, EODHD websocket and IBKR sources, bar builder, writer, recorder, replayer and the supervised runner. | `core/stream.py`, `streaming/*` | done |
+| 21.2.1 Event driver | `EventDriver` over any `StreamingSource`, the `FakeClock` hand-off, bar-close dispatch, and `LakeBarSource` that turns lake bars into `StreamBar` events. | `engine/driver.py`, `streaming/sources/lake_bars.py` | done |
+| 21.2.2 Decision step | Decide on a bar close through `Strategy.decide` and a minute `PointInTimeLake`, then `build_orders` per book. The intraday backtest runs on the driver. | `engine/step.py`, `backtest/intraday.py` | done |
+| 21.2.3 Intraday router and fills | Orders through the state machine, next-bar fills with the participation cap and the half spread, day orders at IBKR, reconciliation of intraday fills. | `engine/router.py`, `engine/sim_broker.py`, `backtest/fills.py` (additions), `execution/brokers/ibkr/orders.py` (day orders) | done |
+| 21.2.4 Session rules | Regular hours only, no entries at the open and close edges, flatten before the close, per-ticker trading halts, early closes. | `engine/sessions.py` | done |
+| 21.2.5 Engine process | The always-on process, scheduler jobs to start before the open and stop after the close, startup reconcile, restart and state recovery, the runner inside it. | `engine/process.py`, `scheduling/jobs.py` (jobs), SQLite migration 041 | done |
+| 21.3.1 Intraday strategies | Opening range breakout, VWAP reversion and intraday momentum with hypothesis cards, lab windows by session. | `strategies/examples/intraday_*.py`, `lab/dataset.py` (session windows) | done |
+| 21.3.2 Intraday risk | The per-minute loss limit and `intraday_loss` halt kind, intraday drawdown scaling, orders per minute cap, the stale data gate, the kill switch per event. | `production/rules/intraday_*.py`, `production/intraday_halts.py`, `production/halts.py`, SQLite migration 042 | done |
+| 21.3.3 Live marks and P&L | Minute marks from the stream, intraday P&L per book and strategy sleeve, intraday risk snapshots. | `production/intraday_pnl.py`, SQLite migration 043 | done |
+| 21.3.4 Monitoring | Stream and engine metrics on `/metrics`, the engine dead-man, latency from event to order, alerts, a live panel in the console. | `scheduling/metrics.py`, `api/routers/stream.py`, `web/src/app/pages/live/*`, SQLite migration 044 | done |
+| 21.3.5 Intraday TCA | Spread from recorded quotes, arrival at the next minute, cost model calibration for minute trading (section 16). | `production/intraday_tca.py`, `backtest/cost_calibration.py` | done |
+
+Waves:
+
+1. 21.1.
+2. 21.2.1, 21.2.4 and 21.3.1 in parallel.
+3. 21.2.2, 21.2.3 and 21.3.2.
+4. 21.2.5, 21.3.3, 21.3.4 and 21.3.5.
