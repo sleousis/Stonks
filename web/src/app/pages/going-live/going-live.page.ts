@@ -104,6 +104,10 @@ import { lastPreview } from './preview-memory';
         </div>
       </div>
 
+      @if (readError(); as err) {
+        <app-error-state title="Could not check every step" [error]="err" (retry)="retryReads()" />
+      }
+
       <ol class="steps" [class.live]="realMoney()">
         @for (s of steps(); track s.key; let i = $index) {
           <li class="step" [attr.data-state]="s.state" [attr.data-step]="s.key">
@@ -316,6 +320,16 @@ export class GoingLivePage {
     params: () => (this.brokerId() ? { id: this.brokerId()! } : undefined),
     loader: ({ params }) => this.live.rules(params.id),
   });
+
+  /** The portfolio's own reads: a failed one would leave its step on Checking for good. */
+  private readonly bookReads = [this.stage, this.report, this.allocation, this.profile, this.rules];
+  protected readonly readError = computed(
+    () => this.bookReads.map((r) => r.error()).find((e) => e != null) ?? null,
+  );
+
+  protected retryReads(): void {
+    for (const r of this.bookReads) if (r.error()) r.reload();
+  }
 
   protected readonly steps = computed(() => {
     const p = this.picked();
