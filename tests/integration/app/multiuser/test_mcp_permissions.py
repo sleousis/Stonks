@@ -404,6 +404,9 @@ CASES: dict[str, Case] = {
         "/api/charts/{ticker}",
         lambda i: {"ticker": "UP.US", "portfolio_id": i["portfolio"]},
     ),
+    "compare_tickers": _c(
+        "GET", "/api/charts/compare", lambda i: {"tickers": ["UP.US", "DOWN.US"]}
+    ),
     "get_leaderboard": _c("GET", "/api/strategies/leaderboard"),
     "get_tear_sheet": _c(
         "GET", "/api/strategies/{strategy_id}/tearsheet", lambda i: {"strategy_id": "bah_active"}

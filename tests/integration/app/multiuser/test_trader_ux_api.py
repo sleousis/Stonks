@@ -175,6 +175,44 @@ def test_a_chart_has_bars_your_fills_and_signals(client, settings, people):
     assert empty["bars"] == [] and empty["fills"] == [] and empty["signals"] == []
 
 
+def test_compare_rebases_tickers_with_drawdown_and_rolling_sharpe(client, people):
+    alice = people["alice"]["headers"]
+    resp = client.get(
+        "/api/charts/compare",
+        params={"tickers": "up.us, DOWN.US,NOPE.US,UP.US", "window": 20},
+        headers=alice,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["window"] == 20 and body["missing"] == ["NOPE.US"]
+    up, down = body["series"]
+    assert (up["ticker"], down["ticker"]) == ("UP.US", "DOWN.US")
+    assert up["points"][0]["time"] == down["points"][0]["time"] == body["start"]
+    assert up["points"][0]["value"] == down["points"][0]["value"] == 100.0
+    assert up["total_return"] > 0 > down["total_return"]
+    assert up["max_drawdown"] == 0.0 and down["max_drawdown"] < 0
+    assert down["drawdown"][-1]["value"] == pytest.approx(down["total_return"])
+    assert up["rolling_sharpe"] and up["sharpe"] > 0 and down["sharpe"] < 0
+    assert up["periods_per_year"] == 252
+    # every bar is shown: the rolling Sharpe waits for a full window
+    assert len(up["rolling_sharpe"]) == len(up["points"]) - 20
+    # a shorter range reads the window's bars before it, so it starts on day one
+    short = client.get(
+        "/api/charts/compare", params={"tickers": "UP.US", "limit": 30}, headers=alice
+    ).json()
+    series = short["series"][0]
+    assert len(series["points"]) == 30
+    assert series["rolling_sharpe"][0]["time"] == short["start"]
+    assert len(series["rolling_sharpe"]) == 30
+
+    too_many = client.get("/api/charts/compare", params={"tickers": "A,B,C,D,E,F,G"}, headers=alice)
+    assert too_many.status_code == 422
+    blank = client.get("/api/charts/compare", params={"tickers": " , "}, headers=alice)
+    assert blank.status_code == 422
+    none = client.get("/api/charts/compare", params={"tickers": "NOPE.US"}, headers=alice).json()
+    assert none["series"] == [] and none["start"] is None and none["missing"] == ["NOPE.US"]
+
+
 # ---- leaderboard and tear sheets (13.6) ------------------------------------------
 
 

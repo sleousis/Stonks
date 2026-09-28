@@ -1316,6 +1316,15 @@ cli = { limited = "a chart is visual, research reads live in the console and MCP
 mcp = "get_chart"
 
 [[capability]]
+id = "charts.compare"
+domain = "data"
+title = "Compare tickers on one scale, with drawdown and rolling Sharpe"
+routes = ["GET /api/charts/compare"]
+console = "compareCharts"
+cli = { limited = "a chart is visual, research reads live in the console and MCP" }
+mcp = "compare_tickers"
+
+[[capability]]
 id = "strategies.leaderboard"
 domain = "strategies"
 title = "Strategy leaderboard ranked by risk-adjusted paper results"

@@ -1189,6 +1189,84 @@ export type ClearHaltRequest = {
 };
 
 /**
+ * ComparePoint
+ */
+export type ComparePoint = {
+    /**
+     * Time
+     */
+    time: string;
+    /**
+     * Value
+     */
+    value: number;
+};
+
+/**
+ * CompareSeriesView
+ */
+export type CompareSeriesView = {
+    /**
+     * Drawdown
+     */
+    drawdown: Array<ComparePoint>;
+    /**
+     * Max Drawdown
+     */
+    max_drawdown: number | null;
+    /**
+     * Periods Per Year
+     */
+    periods_per_year: number;
+    /**
+     * Points
+     */
+    points: Array<ComparePoint>;
+    /**
+     * Rolling Sharpe
+     */
+    rolling_sharpe: Array<ComparePoint>;
+    /**
+     * Sharpe
+     */
+    sharpe: number | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Total Return
+     */
+    total_return: number | null;
+};
+
+/**
+ * CompareView
+ */
+export type CompareView = {
+    /**
+     * End
+     */
+    end: string | null;
+    /**
+     * Missing
+     */
+    missing: Array<string>;
+    /**
+     * Series
+     */
+    series: Array<CompareSeriesView>;
+    /**
+     * Start
+     */
+    start: string | null;
+    /**
+     * Window
+     */
+    window: number;
+};
+
+/**
  * Concentration
  */
 export type Concentration = {
@@ -3925,6 +4003,12 @@ export type InsightsView = {
      */
     fx_missing?: Array<string>;
     /**
+     * Monthly Returns
+     *
+     * Time-weighted return of each month from the daily values, oldest first: deposits and withdrawals are left out. Empty when a flow has no FX rate.
+     */
+    monthly_returns?: Array<MonthlyReturn>;
+    /**
      * Mwr
      *
      * Money-weighted return since inception, annualized (XIRR of the start value, deposits, withdrawals and the latest value).
@@ -5875,6 +5959,8 @@ export type MonthlyIcView = {
 export type MonthlyReturn = {
     /**
      * Month
+     *
+     * YYYY-MM
      */
     month: string;
     /**
@@ -16126,6 +16212,72 @@ export type ListStrategyClassesResponses = {
 
 export type ListStrategyClassesResponse = ListStrategyClassesResponses[keyof ListStrategyClassesResponses];
 
+export type CompareChartsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Tickers
+         *
+         * comma-separated instrument ids, at most 6, e.g. AAPL.US,MSFT.US
+         */
+        tickers: string;
+        /**
+         * Start
+         */
+        start?: string | null;
+        /**
+         * End
+         */
+        end?: string | null;
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Window
+         *
+         * bars behind each rolling Sharpe point
+         */
+        window?: number;
+    };
+    url: '/api/charts/compare';
+};
+
+export type CompareChartsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CompareChartsError = CompareChartsErrors[keyof CompareChartsErrors];
+
+export type CompareChartsResponses = {
+    /**
+     * Successful Response
+     */
+    200: CompareView;
+};
+
+export type CompareChartsResponse = CompareChartsResponses[keyof CompareChartsResponses];
+
 export type GetChartData = {
     body?: never;
     path: {
@@ -25079,6 +25231,60 @@ export type ExportTaxGainsResponses = {
 };
 
 export type ExportTaxGainsResponse = ExportTaxGainsResponses[keyof ExportTaxGainsResponses];
+
+export type ExportTaxLotsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * As Of
+         *
+         * YYYY-MM-DD; default today
+         */
+        as_of?: string | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/tax/exports/lots';
+};
+
+export type ExportTaxLotsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ExportTaxLotsError = ExportTaxLotsErrors[keyof ExportTaxLotsErrors];
+
+export type ExportTaxLotsResponses = {
+    /**
+     * A CSV file with a header row
+     */
+    200: Blob | File;
+};
+
+export type ExportTaxLotsResponse = ExportTaxLotsResponses[keyof ExportTaxLotsResponses];
 
 export type ListTaxLotPicksData = {
     body?: never;

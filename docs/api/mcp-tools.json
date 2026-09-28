@@ -375,6 +375,77 @@
     {
       "annotations": {
         "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Several tickers on one scale: daily adjusted closes rebased to 100\non the first day they all have a price, each with its drawdown from\nthe running peak, its rolling Sharpe, total return and worst\ndrawdown. Tickers without prices come back in ``missing``.",
+      "input_schema": {
+        "properties": {
+          "end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "End"
+          },
+          "limit": {
+            "default": 750,
+            "maximum": 5000,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Start"
+          },
+          "tickers": {
+            "description": "instrument ids, e.g. AAPL.US",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Tickers",
+            "type": "array"
+          },
+          "window": {
+            "default": 63,
+            "description": "bars behind each rolling Sharpe point",
+            "maximum": 252,
+            "minimum": 5,
+            "title": "Window",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tickers"
+        ],
+        "title": "compare_tickersArguments",
+        "type": "object"
+      },
+      "name": "compare_tickers",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
         "idempotent": false,
         "open_world": false,
         "read_only": false
