@@ -39,6 +39,12 @@ export const LOT_METHODS: readonly SegmentOption<LotMethod>[] = [
   { value: 'specific', label: 'Specific lots' },
 ];
 
+/** `YYYY-MM-DD` of a date in the browser's time zone. */
+export function localDay(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /** The last few tax years, this one first. */
 export function taxYears(now = new Date(), count = 6): number[] {
   const year = now.getFullYear();
@@ -50,7 +56,8 @@ const CURRENCY = /^[A-Z]{3}$/;
 /**
  * Tax settings of the picked portfolio: base currency, where you file, how
  * sales pick their lots (oldest first or your picks), US wash sales, the
- * picks themselves, and the yearly CSVs (realized gains, dividends).
+ * picks themselves, the yearly CSVs (realized gains, dividends) and the open
+ * lots on a day.
  */
 @Component({
   selector: 'app-tax-page',
@@ -160,7 +167,7 @@ const CURRENCY = /^[A-Z]{3}$/;
 
         <section class="panel span-5" aria-labelledby="tax-files-title">
           <div class="panel-head">
-            <h2 id="tax-files-title">Yearly files</h2>
+            <h2 id="tax-files-title">Tax files</h2>
           </div>
           <div class="panel-body files">
             <div class="field">
@@ -199,6 +206,32 @@ const CURRENCY = /^[A-Z]{3}$/;
             <p class="hint">
               Gains list each lot sold in the year with its cost, proceeds and holding period.
               Dividends list gross, withholding and net. Amounts also come in the base currency.
+            </p>
+            <div class="field">
+              <label for="tax-lots-day">Open lots on</label>
+              <input
+                id="tax-lots-day"
+                class="input num"
+                type="date"
+                [max]="today"
+                [value]="lotsDay()"
+                (change)="lotsDay.set($any($event.target).value || today)"
+              />
+            </div>
+            <div class="downloads">
+              <button
+                type="button"
+                class="btn"
+                [disabled]="downloading() !== null"
+                [attr.aria-busy]="downloading() === 'lots'"
+                (click)="downloadLots()"
+              >
+                {{ downloading() === 'lots' ? 'Preparing file' : 'Open lots CSV' }}
+              </button>
+            </div>
+            <p class="hint">
+              Open lots list what you still hold, lot by lot: cost basis, days held, short or long
+              term and the day it turns long term, and the gain at the latest close.
             </p>
           </div>
         </section>
@@ -285,7 +318,10 @@ export class TaxPage {
   protected readonly methods = LOT_METHODS;
   protected readonly years = taxYears();
   protected readonly year = signal(this.years[0]);
-  protected readonly downloading = signal<'gains' | 'dividends' | null>(null);
+  protected readonly downloading = signal<'gains' | 'dividends' | 'lots' | null>(null);
+  /** Today as YYYY-MM-DD in local time: the open-lot report's default and latest day. */
+  protected readonly today = localDay(new Date());
+  protected readonly lotsDay = signal(this.today);
   protected readonly when = (at: string) => formatDateTime(at);
 
   protected async save(): Promise<void> {
@@ -312,12 +348,24 @@ export class TaxPage {
     }
   }
 
-  protected async download(kind: 'gains' | 'dividends'): Promise<void> {
+  protected download(kind: 'gains' | 'dividends'): Promise<void> {
     const year = this.year();
+    return this.save_(kind, `stonks-tax-${kind}-${year}.csv`, () => this.tax.download(kind, year));
+  }
+
+  protected downloadLots(): Promise<void> {
+    const day = this.lotsDay();
+    return this.save_('lots', `stonks-tax-lots-${day}.csv`, () => this.tax.openLots(day));
+  }
+
+  private async save_(
+    kind: 'gains' | 'dividends' | 'lots',
+    filename: string,
+    fetch: () => Promise<Blob>,
+  ): Promise<void> {
     this.downloading.set(kind);
     try {
-      const blob = await this.tax.download(kind, year);
-      saveFile(this.doc, { blob, filename: `stonks-tax-${kind}-${year}.csv` });
+      saveFile(this.doc, { blob: await fetch(), filename });
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'The file could not be made.';
       this.toasts.error(message, 'Download failed');

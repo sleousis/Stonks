@@ -11,7 +11,7 @@ import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { nextRequest, page, tick } from '../../../testing/http';
-import { TaxPage, taxYears } from './tax.page';
+import { TaxPage, localDay, taxYears } from './tax.page';
 
 const query = (req: TestRequest) => new URL(req.request.urlWithParams, 'http://x').searchParams;
 
@@ -163,6 +163,43 @@ describe('TaxPage', () => {
       revoke.mockRestore();
       click.mockRestore();
     }
+  });
+
+  it('downloads the open lots on the picked day (13.12)', async () => {
+    await render();
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const clicks: string[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      clicks.push(this.download);
+    });
+    try {
+      const day = el.querySelector<HTMLInputElement>('#tax-lots-day')!;
+      expect(day.value).toBe(localDay(new Date()));
+      expect(el.querySelector('label[for="tax-lots-day"]')?.textContent).toContain('Open lots on');
+      day.value = '2026-06-30';
+      day.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      [...el.querySelectorAll('button')]
+        .find((b) => b.textContent?.includes('Open lots CSV'))!
+        .click();
+      const req = await nextRequest(http, '/api/tax/exports/lots');
+      expect(query(req).get('as_of')).toBe('2026-06-30');
+      expect(query(req).get('portfolio_id')).toBe('pf_1');
+      req.flush(new Blob(['ticker\n'], { type: 'text/csv' }));
+      await tick(5);
+      expect(clicks).toEqual(['stonks-tax-lots-2026-06-30.csv']);
+    } finally {
+      create.mockRestore();
+      revoke.mockRestore();
+      click.mockRestore();
+    }
+  });
+
+  it('writes a local day as YYYY-MM-DD', () => {
+    expect(localDay(new Date(2026, 0, 5))).toBe('2026-01-05');
   });
 
   it('disables changes for people who may not manage the portfolio', async () => {

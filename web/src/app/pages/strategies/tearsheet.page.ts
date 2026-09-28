@@ -15,7 +15,9 @@ import { checkRow } from '../../shared/golive-checks';
 import { STATUS_WORDS } from '../../shared/governance-labels';
 import { splitMetrics } from '../../shared/metrics';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
+import { PrintService } from '../../shared/print.service';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { MonthlyReturns } from '../../shared/ui/monthly-returns';
 import { PageHeader } from '../../shared/ui/page-header';
 import { SideTag } from '../../shared/ui/side-tag';
 import { StatTile } from '../../shared/ui/stat-tile';
@@ -23,7 +25,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { className } from '../lab/ledger.page';
 import { goliveLabel } from './leaderboard.page';
-import { MONTHS, curveSeries, curveSummary, yearRows } from './tearsheet-data';
+import { curveSeries, curveSummary } from './tearsheet-data';
 import { testLabel } from '../../shared/lab-results/survival-tests';
 import { strategyDisplayName } from '../../shared/strategy-names';
 
@@ -33,6 +35,8 @@ const NA = 'n/a';
  * One strategy on one page: its paper result (figures, value curve and
  * drawdown, monthly returns), recent model-book trades, the survival
  * verdicts from its lab run, the go-live check and its status history.
+ * "Download PDF" prints it through the browser (Save as PDF) with the print
+ * stylesheet: content only, on white.
  */
 @Component({
   selector: 'app-tearsheet-page',
@@ -42,6 +46,7 @@ const NA = 'n/a';
     PageHeader,
     StatTile,
     TimeSeriesChart,
+    MonthlyReturns,
     DataTable,
     TableCell,
     SideTag,
@@ -57,13 +62,13 @@ export class TearsheetPage {
   /** Route param `/strategies/:id/tearsheet`. */
   readonly id = input.required<string>();
   private readonly api = inject(StrategiesService);
+  private readonly printer = inject(PrintService);
 
   protected readonly sheet = resource({
     params: () => ({ id: this.id() }),
     loader: ({ params }) => this.api.tearSheet(params.id),
   });
 
-  protected readonly months = MONTHS;
   protected readonly cls = computed(() =>
     this.sheet.hasValue() ? className(this.sheet.value().strategy.class_path) : '',
   );
@@ -98,9 +103,6 @@ export class TearsheetPage {
   protected readonly summary = computed(() =>
     this.sheet.hasValue() ? curveSummary(this.sheet.value().curve) : null,
   );
-  protected readonly years = computed(() =>
-    this.sheet.hasValue() ? yearRows(this.sheet.value().monthly_returns) : [],
-  );
   /** A name to read, not the registry id (UX-27). */
   protected readonly displayName = computed(() => strategyDisplayName(this.id()));
   protected readonly tests = computed(() =>
@@ -134,6 +136,14 @@ export class TearsheetPage {
     { key: 'status', label: 'Status', mobile: 'hide' },
   ];
   protected readonly tradeKey = (d: ShadowDecisionView) => String(d.id);
+
+  /** The day under the printed title. */
+  protected readonly printedOn = computed(() => formatDate(new Date().toISOString()));
+
+  /** "Download PDF": the browser's print dialog, where you pick Save as PDF. */
+  protected print(): void {
+    void this.printer.print();
+  }
 
   protected day(v: string | null | undefined): string {
     return formatDate(v);

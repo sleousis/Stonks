@@ -5,7 +5,19 @@
   <a actions class="btn btn-ghost" routerLink="/leaderboard">Leaderboard</a>
   <a actions class="btn btn-ghost" [routerLink]="['/strategies', id()]">Strategy page</a>
   <a actions class="btn" routerLink="/lab" [queryParams]="{ strategy: id() }">Backtest it</a>
+  <button
+    actions
+    type="button"
+    class="btn btn-ghost print-button"
+    [disabled]="!sheet.hasValue()"
+    (click)="print()"
+  >
+    Download PDF
+  </button>
 </app-page-header>
+<p class="print-only print-meta">
+  Stonks tear sheet of {{ displayName() }}, printed {{ printedOn() }}. Paper results, not advice.
+</p>
 
 @if (sheet.error(); as err) {
   <app-error-state title="Could not load the tear sheet" [error]="err" (retry)="sheet.reload()" />
@@ -49,36 +61,10 @@
       <div class="panel-head">
         <h2 id="months-title">Monthly returns</h2>
       </div>
-      @if (years().length === 0) {
+      @if (s.monthly_returns.length === 0) {
         <p class="panel-body muted">No full month on paper yet.</p>
       } @else {
-        <div class="months-scroll">
-          <table class="months">
-            <caption class="visually-hidden">
-              Paper return by month
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Year</th>
-                @for (m of months; track m) {
-                  <th scope="col">{{ m }}</th>
-                }
-                <th scope="col">Year</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (y of years(); track y.year) {
-                <tr>
-                  <th scope="row" class="num">{{ y.year }}</th>
-                  @for (c of y.cells; track c.month) {
-                    <td class="num cell" [attr.data-tone]="c.tone">{{ c.text }}</td>
-                  }
-                  <td class="num total" [attr.data-tone]="y.totalTone">{{ y.total }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
+        <app-monthly-returns caption="Paper return by month" [months]="s.monthly_returns" />
       }
     </section>
 

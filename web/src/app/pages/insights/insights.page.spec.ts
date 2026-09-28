@@ -119,6 +119,35 @@ describe('InsightsPage', () => {
     expect(el.textContent).not.toContain('Value in');
   });
 
+  it('lays out the time-weighted monthly returns as a heatmap (13.7)', async () => {
+    setup();
+    await flushAll();
+    const panel = el.querySelector('section[aria-labelledby="months-title"]')!;
+    expect(panel.querySelector('caption')?.textContent).toContain('deposits and withdrawals');
+    const cells = [...panel.querySelectorAll('tbody td')].map((c) => c.textContent?.trim());
+    expect(cells.slice(6, 9)).toEqual(['+1.2%', '-3.1%', '+0.4%']);
+    expect(cells.at(-1)).toBe('-1.5%'); // the year compounded
+    expect(panel.querySelector('td[data-tone="loss"]')?.getAttribute('data-strength')).toBe('2');
+  });
+
+  it('says how monthly returns fill in before the first month is measured', async () => {
+    setup();
+    for (let i = 0; i < 6; i++) {
+      http
+        .match(() => true)
+        .forEach((req) => {
+          if (new URL(req.request.url, 'http://localhost').pathname === '/api/insights') {
+            req.flush({ ...INSIGHTS, monthly_returns: [{ month: '2026-09', value: null }] });
+          } else respond(req);
+        });
+      await tick(5);
+      fixture.detectChanges();
+    }
+    const panel = el.querySelector('section[aria-labelledby="months-title"]')!;
+    expect(panel.querySelector('table')).toBeNull();
+    expect(panel.textContent).toContain('never count as return');
+  });
+
   it('shows the value in the base currency when it differs', async () => {
     base = 'EUR';
     setup();
