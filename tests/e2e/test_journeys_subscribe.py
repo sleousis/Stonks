@@ -37,21 +37,24 @@ def test_a_trader_opens_a_portfolio_and_follows_a_strategy(browse, stack, viewpo
     expect(panel.locator(".books li", has_text=name)).to_contain_text("PAPER")
     v.check_page("profile-portfolios")
 
-    # Follow a live strategy from its page.
+    # Follow an approved strategy from its page.
     sid = ACTIVE_IDS["AAA.US"]
     v.go(f"/strategies/{sid}")
     follow = page.locator("app-follow-panel")
     expect(follow.get_by_role("radio")).to_have_count(2)
-    follow.get_by_role("radio", name=re.compile("^Paper trading")).check()
+    follow.get_by_role("radio", name=re.compile("^Paper")).check()
     expect(follow.get_by_label("Portfolio", exact=True)).to_contain_text(name)
-    follow.get_by_role("radio", name=re.compile("^Signals only")).check()
+    follow.get_by_role("radio", name=re.compile("^Alerts only")).check()
     v.check_page("strategy-follow")
     follow.get_by_role("button", name="Follow").click()
-    expect(follow).to_contain_text("You follow this strategy")
-    expect(follow).to_contain_text("Signals only")
+    # Once followed, the same follow control as Today (M8).
+    control = follow.locator("app-follow-control")
+    expect(control).to_be_visible()
+    expect(control.get_by_role("radio", name="Alerts only")).to_be_checked()
+    expect(control.get_by_role("radio")).to_have_count(4)
 
     # Today lists it with its switches.
-    follow.get_by_role("link", name="Change it on Today").click()
+    v.go("/")
     card = page.locator("app-strategies-card")
     expect(card.get_by_role("link", name=sid)).to_be_visible()
     subs = v.api("GET", "/api/subscriptions").json()["items"]
