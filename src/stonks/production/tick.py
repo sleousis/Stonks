@@ -627,6 +627,9 @@ class _TickRun:
     active: frozenset[str] = frozenset()
     #: Every registered strategy's status right now.
     statuses: Mapping[str, str] = field(default_factory=dict)
+    #: Tickers the second-source price check held on this day (roadmap
+    #: 23.6): not buyable, closes still go out.
+    price_holds: frozenset[str] = frozenset()
     _shadow: SignalSet | None = None
     _shadow_error: Exception | None = None
     _vols: dict[str, float] | None = None
@@ -740,6 +743,7 @@ def _run_tick_body(
         pool=pool,
         statuses=(statuses := {h.id: h.status for h in registry.list_all()}),
         active=frozenset(sid for sid, st in statuses.items() if st == "active"),
+        price_holds=_price_holds(state, as_of),
     )
     _expect_consumers(run)
 
@@ -1250,7 +1254,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     market = MarketView(
         as_of=as_of,
         prices=prices,
-        buyable=_buyable(book_prices, settings.bars_due),
+        buyable=_buyable(book_prices, settings.bars_due) - run.price_holds,
         volumes=book_prices.volumes,
         asset_classes=asset_classes,
         vols_annual=({} if construction.is_single_winner else run.vols([*universe, *held])),
@@ -1718,6 +1722,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 else {}
             ),
             "stale_buys_dropped": pipeline.stale_buys,
+            **({"price_check_held": sorted(run.price_holds)} if run.price_holds else {}),
             **({"outside_universe_skipped": outside} if outside else {}),
             **({"external_holdings_skipped": external_skipped} if external_skipped else {}),
             **({"retired_exits": sorted(retired_owned)} if retired_owned else {}),
@@ -2441,6 +2446,21 @@ def _client_id_fn(as_of: date, portfolio_id: str) -> Callable[[str | None, str, 
         )
 
     return make
+
+
+def _price_holds(state: SqliteState, as_of: date) -> frozenset[str]:
+    """Roadmap 23.6: the tickers the day's price check held. A read that
+    fails holds nothing and is logged (the stale-price guard still runs)."""
+    from stonks.production.price_check import price_holds
+
+    try:
+        held = price_holds(state, as_of)
+    except Exception as exc:
+        _log.warning("tick.price_holds_unreadable", error=str(exc))
+        return frozenset()
+    if held:
+        _log.warning("tick.price_check_holds", tickers=sorted(held))
+    return held
 
 
 def _buyable(book: PriceBook, due: Mapping[str, date] | None) -> frozenset[str]:
