@@ -1,5 +1,12 @@
-"""Machine-learning seams: :class:`Classifier` and :class:`Clusterer`, plus
-bet sizing from a predicted probability (BL-45).
+"""Machine-learning seams: :class:`Classifier`, :class:`Regressor` and
+:class:`Clusterer`, plus bet sizing from a predicted probability (BL-45).
+
+Regressors (roadmap 23.12) are built by kind through :func:`make_regressor`.
+One kind exists today, ``hist_gbm``: scikit-learn's histogram gradient
+boosting. It takes missing values as they are and runs with early stopping
+off, so no unpurged random split ever picks the model. LightGBM is left out
+on purpose: its wheel needs ``libgomp``, which the slim Docker image lacks.
+A LightGBM kind would be one more subclass registered here.
 
 scikit-learn is the backend, but its types never leave this module: models
 take and return plain numpy arrays, and persistence is behind ``save`` /
@@ -44,9 +51,14 @@ __all__ = [
     "Clusterer",
     "Clustering",
     "ForestClassifier",
+    "GradientBoostingRegressor",
+    "Regressor",
     "SilhouetteKMeans",
     "bet_size",
     "break_even_probability",
+    "load_regressor",
+    "make_regressor",
+    "regressor_kinds",
 ]
 
 _MODEL_FILE = "model.joblib"
@@ -132,8 +144,6 @@ class ForestClassifier(Classifier):
     def save(self, path: Path) -> None:
         if not self.is_fitted:
             raise RuntimeError("cannot save an unfitted classifier")
-        import joblib
-
         path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
         meta: dict[str, object] = {
@@ -146,10 +156,7 @@ class ForestClassifier(Classifier):
             "sha256": None,
         }
         if self._model is not None:
-            blob = path / _MODEL_FILE
-            joblib.dump(self._model, blob)
-            meta["file"] = _MODEL_FILE
-            meta["sha256"] = _sha256(blob)
+            meta["file"], meta["sha256"] = _dump_blob(path, self._model)
         (path / _META_FILE).write_text(json.dumps(meta, indent=2, sort_keys=True), encoding="utf-8")
 
     @classmethod
@@ -164,23 +171,219 @@ class ForestClassifier(Classifier):
                 raise ValueError("model metadata has neither a model file nor a constant")
             instance._constant = float(meta["constant"])
             return instance
-        if meta["file"] != _MODEL_FILE:
-            raise ValueError(f"unexpected model file name {meta['file']!r}")
-        blob = path / _MODEL_FILE
-        if blob.is_symlink() or not blob.is_file():
-            raise ValueError(f"model file {blob} is missing or not a regular file")
-        if blob.resolve().parent != path.resolve():
-            raise ValueError(f"model file {blob} escapes {path}")
-        if _sha256(blob) != meta.get("sha256"):
-            raise ValueError(f"model file {blob} digest does not match its metadata")
-        import joblib
-
-        instance._model = joblib.load(blob)
+        instance._model = _load_blob(path, meta)
         return instance
 
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def _dump_blob(path: Path, model: Any) -> tuple[str, str]:
+    """Save ``model`` with joblib inside ``path``: ``(file name, digest)``."""
+    import joblib
+
+    blob = Path(path) / _MODEL_FILE
+    joblib.dump(model, blob)
+    return _MODEL_FILE, _sha256(blob)
+
+
+def _load_blob(path: Path, meta: dict[str, Any]) -> Any:
+    """The joblib model a sidecar ``meta`` names inside ``path``, after the
+    name, symlink, containment and digest checks of the module doc."""
+    path = Path(path)
+    if meta["file"] != _MODEL_FILE:
+        raise ValueError(f"unexpected model file name {meta['file']!r}")
+    blob = path / _MODEL_FILE
+    if blob.is_symlink() or not blob.is_file():
+        raise ValueError(f"model file {blob} is missing or not a regular file")
+    if blob.resolve().parent != path.resolve():
+        raise ValueError(f"model file {blob} escapes {path}")
+    if _sha256(blob) != meta.get("sha256"):
+        raise ValueError(f"model file {blob} digest does not match its metadata")
+    import joblib
+
+    return joblib.load(blob)
+
+
+# ---- regressor ----------------------------------------------------------------
+
+
+class Regressor(ABC):
+    """Regression over a numeric feature matrix (missing values allowed)."""
+
+    kind: str = ""
+
+    @abstractmethod
+    def fit(self, x: np.ndarray, y: np.ndarray, sample_weight: np.ndarray | None = None) -> None:
+        """Fit on ``x`` and ``y``. ``sample_weight`` weighs each row."""
+
+    @abstractmethod
+    def predict(self, x: np.ndarray) -> np.ndarray:
+        """One prediction per row, shape ``(n,)``."""
+
+    @abstractmethod
+    def hyperparameters(self) -> dict[str, Any]:
+        """The settings the model was built with, as plain JSON."""
+
+    @abstractmethod
+    def save(self, path: Path) -> None:
+        """Persist into directory ``path`` (created if missing)."""
+
+    @classmethod
+    @abstractmethod
+    def load(cls, path: Path) -> Regressor: ...
+
+
+class GradientBoostingRegressor(Regressor):
+    """Histogram gradient boosting (scikit-learn
+    ``HistGradientBoostingRegressor``) with a fixed seed and no early
+    stopping, so the same data always gives the same model."""
+
+    kind = "hist_gbm"
+
+    def __init__(
+        self,
+        max_iter: int = 200,
+        learning_rate: float = 0.05,
+        max_leaf_nodes: int = 15,
+        min_samples_leaf: int = 50,
+        l2_regularization: float = 1.0,
+        seed: int = 0,
+    ) -> None:
+        if int(max_iter) < 1:
+            raise ValueError(f"max_iter must be >= 1, got {max_iter}")
+        if not float(learning_rate) > 0:
+            raise ValueError(f"learning_rate must be positive, got {learning_rate}")
+        if int(max_leaf_nodes) < 2:
+            raise ValueError(f"max_leaf_nodes must be >= 2, got {max_leaf_nodes}")
+        if int(min_samples_leaf) < 1:
+            raise ValueError(f"min_samples_leaf must be >= 1, got {min_samples_leaf}")
+        if float(l2_regularization) < 0:
+            raise ValueError(f"l2_regularization must be >= 0, got {l2_regularization}")
+        self.max_iter = int(max_iter)
+        self.learning_rate = float(learning_rate)
+        self.max_leaf_nodes = int(max_leaf_nodes)
+        self.min_samples_leaf = int(min_samples_leaf)
+        self.l2_regularization = float(l2_regularization)
+        self.seed = int(seed)
+        self._model: Any = None
+        # a constant target: nothing to learn, so predict it
+        self._constant: float | None = None
+
+    @property
+    def is_fitted(self) -> bool:
+        return self._model is not None or self._constant is not None
+
+    def hyperparameters(self) -> dict[str, Any]:
+        return {
+            "max_iter": self.max_iter,
+            "learning_rate": self.learning_rate,
+            "max_leaf_nodes": self.max_leaf_nodes,
+            "min_samples_leaf": self.min_samples_leaf,
+            "l2_regularization": self.l2_regularization,
+            "seed": self.seed,
+        }
+
+    def fit(self, x: np.ndarray, y: np.ndarray, sample_weight: np.ndarray | None = None) -> None:
+        from sklearn.ensemble import HistGradientBoostingRegressor
+
+        x = np.asarray(x, dtype=float)
+        y = np.asarray(y, dtype=float)
+        if x.ndim != 2 or len(x) == 0 or len(x) != len(y):
+            raise ValueError("x must be a non-empty matrix with one target per row")
+        if not np.isfinite(y).all():
+            raise ValueError("targets must be finite")
+        weights = None if sample_weight is None else np.asarray(sample_weight, dtype=float)
+        if weights is not None and weights.shape != (len(y),):
+            raise ValueError("sample_weight must have one weight per row")
+        if np.ptp(y) == 0:
+            self._model, self._constant = None, float(y[0])
+            return
+        model = HistGradientBoostingRegressor(
+            loss="squared_error",
+            max_iter=self.max_iter,
+            learning_rate=self.learning_rate,
+            max_leaf_nodes=self.max_leaf_nodes,
+            min_samples_leaf=self.min_samples_leaf,
+            l2_regularization=self.l2_regularization,
+            early_stopping=False,
+            random_state=self.seed,
+        )
+        model.fit(x, y, sample_weight=weights)
+        self._model, self._constant = model, None
+
+    def predict(self, x: np.ndarray) -> np.ndarray:
+        if not self.is_fitted:
+            raise RuntimeError("regressor is not fitted")
+        x = np.atleast_2d(np.asarray(x, dtype=float))
+        if self._model is None:
+            return np.full(len(x), float(self._constant))
+        return np.asarray(self._model.predict(x), dtype=float)
+
+    def save(self, path: Path) -> None:
+        if not self.is_fitted:
+            raise RuntimeError("cannot save an unfitted regressor")
+        path = Path(path)
+        path.mkdir(parents=True, exist_ok=True)
+        meta: dict[str, object] = {
+            "kind": self.kind,
+            **self.hyperparameters(),
+            "constant": self._constant,
+            "file": None,
+            "sha256": None,
+        }
+        if self._model is not None:
+            meta["file"], meta["sha256"] = _dump_blob(path, self._model)
+        (path / _META_FILE).write_text(json.dumps(meta, indent=2, sort_keys=True), encoding="utf-8")
+
+    @classmethod
+    def load(cls, path: Path) -> GradientBoostingRegressor:
+        path = Path(path)
+        meta = json.loads((path / _META_FILE).read_text(encoding="utf-8"))
+        if meta.get("kind") != cls.kind:
+            raise ValueError(f"not a {cls.kind} model: {meta.get('kind')!r}")
+        instance = cls(
+            max_iter=meta["max_iter"],
+            learning_rate=meta["learning_rate"],
+            max_leaf_nodes=meta["max_leaf_nodes"],
+            min_samples_leaf=meta["min_samples_leaf"],
+            l2_regularization=meta["l2_regularization"],
+            seed=meta["seed"],
+        )
+        if meta.get("file") is None:
+            if meta.get("constant") is None:
+                raise ValueError("model metadata has neither a model file nor a constant")
+            instance._constant = float(meta["constant"])
+            return instance
+        instance._model = _load_blob(path, meta)
+        return instance
+
+
+_REGRESSORS: dict[str, type[Regressor]] = {
+    GradientBoostingRegressor.kind: GradientBoostingRegressor,
+}
+
+
+def regressor_kinds() -> list[str]:
+    """The regressor kinds :func:`make_regressor` builds."""
+    return sorted(_REGRESSORS)
+
+
+def make_regressor(kind: str, **hyperparameters: Any) -> Regressor:
+    """A new regressor of ``kind`` built with ``hyperparameters``."""
+    if kind not in _REGRESSORS:
+        raise ValueError(f"unknown regressor {kind!r}; choose one of {regressor_kinds()}")
+    return _REGRESSORS[kind](**hyperparameters)
+
+
+def load_regressor(path: Path) -> Regressor:
+    """The regressor saved in directory ``path``, whatever its kind."""
+    meta = json.loads((Path(path) / _META_FILE).read_text(encoding="utf-8"))
+    kind = meta.get("kind")
+    if kind not in _REGRESSORS:
+        raise ValueError(f"unknown regressor {kind!r} in {path}")
+    return _REGRESSORS[kind].load(Path(path))
 
 
 # ---- bet sizing ---------------------------------------------------------------
