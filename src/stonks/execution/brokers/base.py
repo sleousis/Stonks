@@ -222,6 +222,24 @@ class LiveAccountState:
     cash_by_currency: Mapping[str, float] = field(default_factory=dict[str, float])
     #: The broker's account id (never logged or labelled in metrics).
     account_id: str | None = None
+    #: The account type the broker itself reports (``None``: it did not
+    #: say). ``account_type`` is the one the adapter was set up with. A
+    #: margin profile needs the broker to report ``margin`` (roadmap 19.13).
+    reported_type: AccountType | None = None
+
+    @property
+    def cushion(self) -> float | None:
+        """Excess liquidity over equity: how far the account is from a
+        margin call (0 or less: the broker may liquidate). ``None`` when
+        either is unknown."""
+        if self.equity <= 0:
+            return None
+        excess = self.excess_liquidity
+        if excess is None:
+            if self.maintenance_margin <= 0:
+                return None
+            excess = self.equity - self.maintenance_margin
+        return excess / self.equity
 
     def cash_in(self, currency: str) -> float:
         """Cash held in ``currency``: the per-currency ledger when the broker

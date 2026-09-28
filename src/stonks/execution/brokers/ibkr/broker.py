@@ -829,7 +829,39 @@ def account_state(
         maintenance_margin=found.get("maintenance_margin", 0.0),
         cash_by_currency=by_currency,
         account_id=account_id,
+        reported_type=reported_account_type(values, account_id=account_id),
     )
+
+
+#: Account value tags that may name the margin type. IBKR sends
+#: ``TradingType-S`` (``STKMRGN``, ``STKCASH``) in the account updates, and
+#: ``AccountType`` sometimes names the type too. The live contract test
+#: records which one a real account sends (roadmap 19.13).
+_TYPE_TAGS = ("TradingType-S", "TradingType", "MarginType", "AccountType")
+_MARGIN_WORDS = ("MRGN", "MARGIN", "REGT", "REG T", "PMRGN")
+
+
+def reported_account_type(
+    values: Sequence[IbAccountValue], *, account_id: str
+) -> AccountType | None:
+    """The account type IBKR reports: ``margin`` when a type tag names a
+    margin account, ``cash`` when one names a cash account, ``None`` when
+    no tag says. A tag that says cash wins over one that says margin, so a
+    doubt never reads as margin."""
+    found: set[AccountType] = set()
+    for v in values:
+        if v.account and v.account != account_id:
+            continue
+        if v.tag not in _TYPE_TAGS or not v.value:
+            continue
+        text = v.value.strip().upper()
+        if "CASH" in text:
+            found.add("cash")
+        elif any(word in text for word in _MARGIN_WORDS):
+            found.add("margin")
+    if "cash" in found:
+        return "cash"
+    return "margin" if found else None
 
 
 def _parse(value: str) -> float | None:
