@@ -56,6 +56,9 @@ import { PageHeader } from '../../shared/ui/page-header';
                 <div class="term" [id]="e.key" tabindex="-1" [class.target]="e.key === target()">
                   <dt>{{ e.term }}</dt>
                   <dd>{{ e.short }}</dd>
+                  @if (e.example) {
+                    <dd class="example">For example: {{ e.example }}</dd>
+                  }
                   @if (e.aliases.length) {
                     <dd class="aliases muted">Also shown as {{ e.aliases.join(', ') }}</dd>
                   }
@@ -109,6 +112,9 @@ import { PageHeader } from '../../shared/ui/page-header';
     .aliases {
       font-size: var(--text-xs);
     }
+    .example {
+      font-size: var(--text-sm);
+    }
   `,
 })
 export class GlossaryPage {
@@ -125,6 +131,7 @@ export class GlossaryPage {
         key,
         term: GLOSSARY[key].term,
         short: GLOSSARY[key].short,
+        example: GLOSSARY[key].example ?? null,
         aliases: (GLOSSARY[key].aliases ?? []).filter((a) => /\s|[A-Z]/.test(a)),
       }))
       .sort((a, b) => a.term.localeCompare(b.term)),

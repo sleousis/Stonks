@@ -12,6 +12,23 @@ const LABELS_SHOWN = [
   'Largest holding',
   'Time-weighted return',
   'Money-weighted return',
+  'Gross exposure',
+  'Net exposure',
+  'Beta',
+  'Top 5 weight',
+  "Strategy's part",
+  'Strategy sleeves',
+  // Tax, cash flows and alerts
+  'Base currency',
+  'Lots',
+  'FIFO',
+  'Specific lots',
+  'Cost basis',
+  'Wash sale adjustment',
+  'Long term',
+  'Net deposits',
+  'Price alerts',
+  'Quiet hours',
   // Signal research
   'Mean IC',
   // Backtest and lab result tiles
@@ -195,5 +212,14 @@ describe('glossary', () => {
   it('links to the in-app glossary, never an outside wiki (UI-13)', () => {
     expect(glossaryUrl()).toBe('/help/glossary');
     expect(glossaryUrl('sharpe')).toBe('/help/glossary#sharpe');
+  });
+
+  it('explains TWR, MWR and exposure with a worked example (area 5)', () => {
+    for (const key of ['twr', 'mwr', 'gross_exposure', 'net_exposure'] as const) {
+      expect(GLOSSARY[key].example, key).toMatch(/\d/);
+    }
+    expect(findGlossary('Gross exposure')!.key).toBe('gross_exposure');
+    expect(findGlossary('Net exposure')!.key).toBe('net_exposure');
+    expect(findGlossary('Price alerts')!.entry.short).toContain('close');
   });
 });

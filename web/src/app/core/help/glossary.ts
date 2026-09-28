@@ -119,14 +119,42 @@ export const TRADING_KEYS = [
 ] as const;
 
 export type TradingKey = (typeof TRADING_KEYS)[number];
-export type GlossaryKey = MetricKey | TradingKey;
+
+/**
+ * The words of the money pages and alerts: exposure, tax lots, base
+ * currency, a strategy's part of a portfolio, price alerts and quiet hours.
+ */
+export const MONEY_KEYS = [
+  'gross_exposure',
+  'net_exposure',
+  'beta_coverage',
+  'strategy_part',
+  'base_currency',
+  'lot',
+  'fifo',
+  'specific_lots',
+  'cost_basis',
+  'wash_sale',
+  'long_term',
+  'cash_flow',
+  'price_alert',
+  'quiet_hours',
+] as const;
+
+export type MoneyKey = (typeof MONEY_KEYS)[number];
+export type GlossaryKey = MetricKey | TradingKey | MoneyKey;
 
 /** Every key, trading words first. */
-export const GLOSSARY_KEYS: readonly GlossaryKey[] = [...TRADING_KEYS, ...METRIC_KEYS];
+export const GLOSSARY_KEYS: readonly GlossaryKey[] = [
+  ...TRADING_KEYS,
+  ...MONEY_KEYS,
+  ...METRIC_KEYS,
+];
 
 /** The glossary page's sections, in order. */
 export const GLOSSARY_GROUPS: readonly { title: string; keys: readonly GlossaryKey[] }[] = [
   { title: 'Trading words', keys: TRADING_KEYS },
+  { title: 'Your money and alerts', keys: MONEY_KEYS },
   { title: 'Figures', keys: METRIC_KEYS },
 ];
 
@@ -137,6 +165,8 @@ export interface GlossaryEntry {
   short: string;
   /** Other labels or API keys this term appears under. Matched loosely. */
   aliases?: readonly string[];
+  /** A worked example in numbers, shown on the glossary page. */
+  example?: string;
 }
 
 export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
@@ -324,7 +354,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   exposure: {
     term: 'Exposure',
     short: 'Share of the account invested rather than held as cash.',
-    aliases: ['Gross exposure', 'Net exposure', 'time_in_market'],
+    aliases: ['time_in_market'],
   },
   slippage: {
     term: 'Slippage',
@@ -567,12 +597,93 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     short:
       'How the investments did, with deposits and withdrawals taken out, so adding money is never profit.',
     aliases: ['TWR', 'Return (time-weighted)'],
+    example:
+      'You start with 10,000. It rises 10%, you add 10,000, then it falls 10%. The time-weighted return is about -1%: up 10%, then down 10%.',
   },
   mwr: {
     term: 'Money-weighted return',
     short:
       'The yearly rate your money earned, counting when you added or took it out. Also called XIRR.',
     aliases: ['MWR', 'XIRR', 'Money-weighted, per year'],
+    example:
+      'Same start: more of your money was in during the 10% fall than during the 10% rise, so the money-weighted return is worse than -1%.',
+  },
+  // Your money and alerts ----------------------------------------------------
+  gross_exposure: {
+    term: 'Gross exposure',
+    short:
+      'Long plus short positions as a share of value. 100% is fully invested; above 100% means borrowing or shorts.',
+    example: 'Value 10,000 with 6,000 held long and 2,000 sold short: gross exposure is 80%.',
+  },
+  net_exposure: {
+    term: 'Net exposure',
+    short:
+      'Long minus short positions as a share of value: which way the portfolio leans, and how far.',
+    example: 'Value 10,000 with 6,000 held long and 2,000 sold short: net exposure is 40%.',
+  },
+  beta_coverage: {
+    term: 'Beta coverage',
+    short:
+      'The share of your holdings with enough price history to measure beta. The rest is left out of it.',
+  },
+  strategy_part: {
+    term: "Strategy's part",
+    short:
+      'The part of your portfolio one strategy holds. Each part gets its own value and risk readings.',
+    aliases: ['Sleeve', 'Sleeves', 'Strategy sleeve', 'Strategy sleeves', 'Strategy parts'],
+  },
+  base_currency: {
+    term: 'Base currency',
+    short:
+      'The currency your portfolio is valued in. Profit and loss and the tax files use it too.',
+  },
+  lot: {
+    term: 'Lot',
+    short:
+      'The shares one buy got you, with its own price and date. A sale closes one or more lots.',
+    aliases: ['Lots', 'Tax lot', 'Open lots'],
+  },
+  fifo: {
+    term: 'Oldest first (FIFO)',
+    short: 'A sale closes the oldest shares first: first in, first out.',
+    aliases: ['FIFO', 'First in, first out', 'Oldest first'],
+  },
+  specific_lots: {
+    term: 'Specific lots',
+    short:
+      'You pick which earlier buys each sale closes. Shares you do not pick close oldest first.',
+    aliases: ['Lot picks'],
+  },
+  cost_basis: {
+    term: 'Cost basis',
+    short: 'What a lot cost you, fees included. The gain is the sale price less the cost basis.',
+  },
+  wash_sale: {
+    term: 'Wash sale',
+    short:
+      'A US rule: a loss is put off when you buy the same ticker within 30 days before or after the sale.',
+    aliases: ['Wash sales', 'Wash sale adjustment'],
+  },
+  long_term: {
+    term: 'Long term',
+    short: 'A lot held more than one year before it is sold. Anything shorter is short term.',
+    aliases: ['Short term', 'Holding period'],
+  },
+  cash_flow: {
+    term: 'Cash flow',
+    short:
+      'Money you put in (a deposit) or took out (a withdrawal). Returns leave it out, so it is never profit.',
+    aliases: ['Cash flows', 'Net deposits'],
+  },
+  price_alert: {
+    term: 'Price alert',
+    short:
+      "A rule on a ticker's price. It checks each day's close after the evening data update, not live prices.",
+    aliases: ['Price alerts'],
+  },
+  quiet_hours: {
+    term: 'Quiet hours',
+    short: 'Hours when alerts wait for a morning summary. Risk alerts always come through.',
   },
 };
 
