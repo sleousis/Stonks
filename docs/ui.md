@@ -561,9 +561,12 @@ Tickers open `/data?instrument=<id>`.
 ### Operational settings (admins)
 
 `<app-system-settings>` (`pages/settings/system-settings.ts`) sits at the
-top of Settings, System. It reads `GET /api/admin/settings`
-(`api/admin-settings.service.ts`, silent) and hides itself on a 404, so
-it appears only once the server offers editable settings. The contract:
+top of Settings, System. Feature check: it asks for nothing until
+`PUT /api/admin/settings` is in `openapi.json` (through the generated
+`route-permissions.gen.ts`), so no page load ends in a 404. Once the
+route is in the contract it reads `GET /api/admin/settings`
+(`api/admin-settings.service.ts`, silent) and still hides itself if the
+server answers 404. The contract:
 
 - GET returns `{ groups: [{ id, label, description, fields: [...] }],
   updated_at, updated_by }`. A field has `key` (never shown), `label`,

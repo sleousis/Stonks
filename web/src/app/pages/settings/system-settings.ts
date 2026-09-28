@@ -337,7 +337,11 @@ export class SystemSettings {
   private readonly api = inject(AdminSettingsService);
   private readonly toasts = inject(ToastService);
 
-  protected readonly state = resource({ loader: () => this.api.load() });
+  /** Idle (nothing asked) until the route is in the API contract. */
+  protected readonly state = resource({
+    params: () => (this.api.inContract() ? {} : undefined),
+    loader: () => this.api.load(),
+  });
   /** Set after a save, so the form shows what the server kept. */
   private readonly saved = signal<AdminSettingsView | null>(null);
   protected readonly view = computed<AdminSettingsView | null>(() => {
@@ -347,9 +351,10 @@ export class SystemSettings {
     return s?.available ? s.view : null;
   });
   /** False only once the server said it has no editable settings. */
-  readonly available = computed(() =>
-    this.state.hasValue() ? this.state.value().available : true,
-  );
+  readonly available = computed(() => {
+    if (!this.api.inContract()) return false;
+    return this.state.hasValue() ? this.state.value().available : true;
+  });
 
   private readonly fields = computed(() => this.view()?.groups.flatMap((g) => g.fields) ?? []);
   private readonly edits = signal<Record<string, Raw>>({});

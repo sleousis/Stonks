@@ -954,7 +954,7 @@ watch_band = 0.01
 
 ## Settings in the console
 
-Settings, System shows admins the broker, risk policy, data sources and cost presets, read only. When the server offers editable operational settings (`GET` and `PUT /api/admin/settings`, grouped, non-secret, validated and audited), the same column shows an Operational settings form: each setting with its default, bounds checked before sending, a required reason for the audit log, and the server's per-setting errors. A server without that route answers 404 and the form stays hidden. Keys, tokens and passwords are never editable there; they stay in `.env`.
+Settings, System shows admins the broker, risk policy, data sources and cost presets, read only. When the server offers editable operational settings (`GET` and `PUT /api/admin/settings`, grouped, non-secret, validated and audited), the same column shows an Operational settings form: each setting with its default, bounds checked before sending, a required reason for the audit log, and the server's per-setting errors. Until the route is in the API contract the console asks for nothing, and a server that answers 404 keeps the form hidden too. Keys, tokens and passwords are never editable there; they stay in `.env`.
 
 ## Without the scheduler
 

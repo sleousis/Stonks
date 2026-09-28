@@ -70,11 +70,8 @@ describe('SettingsPage', () => {
       (await nextRequest(http, '/api/risk/policy')).flush(RISK);
       (await nextRequest(http, '/api/sources')).flush(SOURCES);
       (await nextRequest(http, '/api/lab/cost-models')).flush(COSTS);
-      // Editable settings: this server has none yet, so the form stays hidden.
-      (await nextRequest(http, '/api/admin/settings')).flush(
-        { title: 'Not Found', status: 404, detail: 'Not Found' },
-        { status: 404, statusText: 'Not Found' },
-      );
+      // Editable settings are not in the API contract yet: nothing is asked.
+      http.expectNone('/api/admin/settings');
     }
     (await nextRequest(http, '/api/notifications/preferences')).flush({
       channels: ['inapp'],

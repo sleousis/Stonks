@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 
+import { ROUTE_PERMISSIONS } from '../core/auth/route-permissions.gen';
 import { ApiError } from '../core/http/api-error';
 import { SILENT_HEADERS } from '../core/http/interceptors';
 import { unwrap } from './api-call';
@@ -11,9 +12,11 @@ import { client } from './generated/client.gen';
  * validation and an audit row, TOML staying the base.
  *
  * The route is not in `openapi.json` yet: this is the contract the console
- * builds against, GET and PUT of grouped settings. Until the server serves
- * it, GET answers 404 and the console hides the form (`available: false`).
- * When the route lands, move these types to the generated client.
+ * builds against, GET and PUT of grouped settings. The form asks only once
+ * `PUT /api/admin/settings` is in the generated permissions (`inContract`),
+ * and a server that still answers 404 hides it too (`available: false`).
+ * When the route lands, run `npm run api:generate` and move these types to
+ * the generated client.
  */
 export const ADMIN_SETTINGS_URL = '/api/admin/settings';
 
@@ -104,6 +107,15 @@ export function settingErrors(
 
 @Injectable({ providedIn: 'root' })
 export class AdminSettingsService {
+  /**
+   * The feature check: the route is in the API contract the console was
+   * built against (`openapi.json`, through the generated permissions). Until
+   * it is, nothing is asked for, so no page load ends in a 404.
+   */
+  inContract(): boolean {
+    return `PUT ${ADMIN_SETTINGS_URL}` in ROUTE_PERMISSIONS;
+  }
+
   /** Silent: a 404 only means the server does not offer editable settings yet. */
   async load(): Promise<AdminSettingsState> {
     try {

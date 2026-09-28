@@ -1,7 +1,11 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 
-import type { AdminSettingsView, SettingField } from '../../api/admin-settings.service';
+import {
+  type AdminSettingsView,
+  AdminSettingsService,
+  type SettingField,
+} from '../../api/admin-settings.service';
 import { settingErrors } from '../../api/admin-settings.service';
 import { provideApi } from '../../api/provide-api';
 import { ApiError } from '../../core/http/api-error';
@@ -113,6 +117,8 @@ describe('SystemSettings', () => {
   async function render(body: object, status = 200): Promise<void> {
     TestBed.configureTestingModule({ providers: [...provideApi(), provideHttpClientTesting()] });
     http = TestBed.inject(HttpTestingController);
+    // As if the route were in openapi.json (the server that serves it).
+    vi.spyOn(TestBed.inject(AdminSettingsService), 'inContract').mockReturnValue(true);
     fixture = TestBed.createComponent(SystemSettings);
     el = fixture.nativeElement;
     fixture.detectChanges();
@@ -144,6 +150,18 @@ describe('SystemSettings', () => {
   }
 
   afterEach(() => http.verify());
+
+  it('asks nothing and shows nothing while the route is not in the API contract', async () => {
+    TestBed.configureTestingModule({ providers: [...provideApi(), provideHttpClientTesting()] });
+    http = TestBed.inject(HttpTestingController);
+    fixture = TestBed.createComponent(SystemSettings);
+    el = fixture.nativeElement;
+    fixture.detectChanges();
+    await settle();
+    http.expectNone('/api/admin/settings');
+    expect(el.textContent?.trim()).toBe('');
+    expect(fixture.componentInstance.available()).toBe(false);
+  });
 
   it('stays hidden while the server has no editable settings', async () => {
     await render({ title: 'Not Found', status: 404, detail: 'Not Found' }, 404);
