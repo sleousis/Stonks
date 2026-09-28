@@ -155,8 +155,15 @@ export class LiveSettingsPage {
     () => this.ctx.options().find((p) => p.id === this.id()) ?? null,
   );
   protected readonly isLive = computed(() => this.portfolio()?.trading === 'live');
-  /** The portfolio's stage, from the stage card once it has loaded. */
-  protected readonly stage = signal<LiveStage | null>(null);
+  /**
+   * The portfolio's stage, from the stage card once it has loaded. Starts
+   * empty for each portfolio: the router reuses this page when `:id`
+   * changes, and the last portfolio's real-money stage must not carry over.
+   */
+  protected readonly stage = linkedSignal<string, LiveStage | null>({
+    source: this.id,
+    computation: () => null,
+  });
   /** Real money moves at this stage: only then brass, the LIVE stamp and red buttons. */
   protected readonly realMoney = computed(() => {
     const s = this.stage();
