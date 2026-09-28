@@ -1161,10 +1161,12 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         if external_holdings:
             log.info("tick.external_holdings", tickers=sorted(external_holdings))
     manual_holdings: dict[str, float] = {}
-    if scope is not None and not external and not connection:
-        # Roadmap 20.1: what a person bought by hand in a simulated book is
-        # theirs. Strategies decide and size without it and never trade it;
-        # the snapshot puts it back.
+    if scope is not None and not connection:
+        # Roadmap 20.1: what a person bought by hand is theirs, in a
+        # simulated book and in the default portfolio's account at an
+        # external broker alike. Strategies decide and size without it and
+        # never trade it; the snapshot puts it back (at a broker the
+        # snapshot is the whole account).
         manual = manual_positions(state, portfolio_id, actions)
         if manual:
             portfolio, manual_holdings = strip_holdings(account, manual)
