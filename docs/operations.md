@@ -63,10 +63,11 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `live_submit`: send approved order tickets (see Live trading) | open - 20 min | none |
 | `live_stops`: protective stops for the entries the opening auction filled (see Protective stops) | open + 30 min | none |
 | `live_gate_days`: the live stages' gate metrics for the session (see Live trading) | close + 75 min | none |
+| `live_margin`: the margin cushion of each margin account, with an alert when it is thin (see Margin accounts) | every 30 minutes | none |
 | `engine_start`: start the intraday engine process (see [intraday](design/intraday.md)) | open - 15 min | none |
 | `engine_stop`: ask the intraday engine to stop, and wait for it | close + 10 min | none |
 
-Session jobs run on NYSE trading days. The two engine jobs skip while `[engine] enabled = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
+Session jobs run on NYSE trading days. The two engine jobs skip while `[engine] enabled = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio, and `live_margin` while no portfolio has a margin profile). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 
 The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 
@@ -493,6 +494,18 @@ PUT /api/portfolios/{id}/live/account-profile   {"jurisdiction": "us", "account_
 - The account is shared with your own trading. Stonks only trades the positions it opened (`[production.live] allow_manual_trades = true`).
 - The profile is locked while the portfolio trades real money (`live_small` or up). Move it down to `broker_paper` to change it.
 
+### Margin accounts
+
+Off by default. The first live account is a cash account, long only. Margin (longs and shorts at IBKR, roadmap 19.13) comes after the cash account runs well.
+
+- **Turn it on.** Set `[production.risk.rules.account_rules] margin_accounts = true`, with `enabled = true` there and `[production.risk.rules.margin_call] enabled = true`. Set the gateway's `account_type = "margin"` under `[brokers.ibkr.gateways.<name>]`. A portfolio override can turn margin off, never on.
+- **Choose it.** In Live settings, pick Margin, read the risks and tick "I understand these risks", then save with a fresh code. Stonks asks IBKR first and saves only when IBKR reports a margin account. The audit row records its answer. While margin accounts are off, a margin book opens nothing new.
+- **Buying power.** Every new order (a buy or a short sale) goes through IBKR's what-if first. Its initial and maintenance margin after the order, with the run's other orders, must stay within `1 - margin_buffer` of equity (`margin_buffer = 0.10` by default). The order is cut to fit, or dropped. A what-if that fails or warns drops it.
+- **Short sales** need IBKR's locate for today. A name IBKR cannot lend is dropped, a short is cut to the shares on offer, and a hard to borrow name waits for a person as a ticket, even in auto.
+- **Pattern day trader.** A US margin account under 25,000 USD may make at most 3 day trades in 5 trading days (the stricter of our count and IBKR's).
+- **Margin monitoring.** The cushion is excess liquidity over equity, from IBKR. Below `warn_cushion` (15%) the owner gets an alert. Below `reduce_cushion` (10%) the alert is urgent and the next run of the book drops new positions and sells its own positions until the cushion is back at `restore_cushion` (20%), before IBKR liquidates. At 0 IBKR may already be selling. These sit under `[production.risk.rules.margin_call]`. The tick and the `live_margin` job (every 30 minutes, on the reconcile client id) each write a `margin_checks` row. Alerts go out once per level and day.
+- **See it.** Live settings shows buying power, margin use, the cushion and its level, the new margin still allowed, and the day trade state (`GET /api/portfolios/{id}/live/margin`, MCP `get_live_margin`).
+
 ### Stages, gates and the preview
 
 Every portfolio has a live stage (roadmap 19.9):
@@ -598,7 +611,7 @@ uv run stonks halts drill [--price 100] [--timeout 10] [--json-out drill.json]
 |------------|-------|
 | Every account | `restricted` (your list and names the broker refused), `short_permission`, `account_known` (no account state, nothing opens), `fx_funding` (spend only what a currency holds) |
 | Cash accounts | `settled_cash`: settled cash only. Sale proceeds wait for settlement (US T+1, EU and UK T+2), so nothing is bought with unsettled money. |
-| Margin accounts | `buying_power`: buys fit the available funds. |
+| Margin accounts | `margin_allowed` (margin accounts on, and the broker reports a margin account), `buying_power` (buys fit the available funds), `margin_what_if` (the broker's what-if margin of each new order leaves `margin_buffer` of equity unused) |
 | US | `pdt` (margin under 25,000 USD), `wash_sale` (warn or block), `reg_sho` (locate and the price test) |
 | EU and UK | `priips_kid` (retail clients cannot buy funds without a local document, most US ETFs), `short_disclosure` (stay under 0.1% of issued shares) |
 
@@ -744,6 +757,8 @@ flowchart LR
 A portfolio with `allow_short` trades on margin. Each tick its paper broker charges the borrow fee of every short and interest on negative cash for the calendar days since the last charge. The tick keeps that date in `financing_accruals` and each charge in `financing_charges`, both written with the snapshot. A book with no stored date starts from its latest snapshot. A dry run charges nothing.
 
 A short book at IBKR (a margin gateway) reads borrow from the broker instead of the settings. The short rules ask IBKR whether a name can be borrowed and how many shares are on offer, and take the fee from the lake's `borrow_rates`. The `ingest_borrow` job fills that table each trading day while a gateway is configured.
+
+IBKR debits the real borrow fee itself. So the book's P&L sees it the day it is owed, each tick of a short book at IBKR also books the fee of its own shorts at IBKR's rate (the live locate and the `borrow_rates` fee) into `financing_charges`, from the stored accrual date. Debit interest is left to the broker's statement.
 
 ## Model books (shadow mode)
 

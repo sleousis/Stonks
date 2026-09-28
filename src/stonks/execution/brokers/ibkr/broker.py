@@ -837,7 +837,7 @@ def account_state(
 #: ``TradingType-S`` (``STKMRGN``, ``STKCASH``) in the account updates, and
 #: ``AccountType`` sometimes names the type too. The live contract test
 #: records which one a real account sends (roadmap 19.13).
-_TYPE_TAGS = ("TradingType-S", "TradingType", "MarginType", "AccountType")
+MARGIN_TYPE_TAGS = ("TradingType-S", "TradingType", "MarginType", "AccountType")
 _MARGIN_WORDS = ("MRGN", "MARGIN", "REGT", "REG T", "PMRGN")
 
 
@@ -852,7 +852,7 @@ def reported_account_type(
     for v in values:
         if v.account and v.account != account_id:
             continue
-        if v.tag not in _TYPE_TAGS or not v.value:
+        if v.tag not in MARGIN_TYPE_TAGS or not v.value:
             continue
         text = v.value.strip().upper()
         if "CASH" in text:

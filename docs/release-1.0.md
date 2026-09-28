@@ -56,6 +56,12 @@ Docker is not installed on the machine that prepared the release, so `docker com
 7. **Market data plan.** The free EODHD plan gives end-of-day prices only, one year back. Fundamentals, calendars, news and the EODHD websockets for intraday need a paid plan (the planned choice is All-in-one). Quotes for the live preview, the pre-open gap check and the IBKR streaming source need IBKR market data subscriptions for each market you trade.
 8. **Wiki.** The docs workflow syncs the API and MCP references to the wiki on the merge. The guides and glossary on the wiki live outside this repository and still need a manual read against this release.
 9. **Real money** waits for each stage gate (`stonks live stage report`), roadmap 19.12.
+10. **Margin, later.** Margin accounts are off, and the first live account is a cash account. Once the cash account runs well, and only if you want longs and shorts on margin:
+    1. Ask IBKR to upgrade the account to Reg T margin, and allow short selling.
+    2. In the server settings, set `[production.risk.rules.account_rules] margin_accounts = true` (with `enabled = true`), `[production.risk.rules.margin_call] enabled = true`, and `account_type = "margin"` on the gateway under `[brokers.ibkr.gateways.<name>]`. Restart the API and the scheduler.
+    3. Run the live contract test on the paper account first, to see which account value IBKR sends for the margin type (`STONKS_RUN_LIVE_TESTS=1 uv run pytest -m live -k margin_type`).
+    4. In Live settings, set the account profile to Margin, tick the risks and save with a fresh code. Stonks refuses it unless IBKR reports a margin account.
+    5. Check the Buying power and margin panel, and that the `live_margin` job runs. See [operations.md](operations.md#margin-accounts).
 
 ## Could not be checked here
 

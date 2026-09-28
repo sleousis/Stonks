@@ -101,6 +101,20 @@ min_order_notional = 0.0
 # max_adverse_pct = 0.25           # cover 25 % above entry
 # spike_pct = 0.30                 # cover after a 30 % rise in spike_bars bars
 
+# Margin accounts at IBKR (roadmap 19.13), off by default: the first live
+# account is a cash account, long only. To turn margin on, set these, the
+# gateway's account_type = "margin", then pick Margin in Live settings.
+# See docs/operations.md, "Margin accounts".
+# [production.risk.rules.account_rules]
+# enabled = true
+# margin_accounts = true
+# margin_buffer = 0.10             # the what-if margin leaves 10 % of equity unused
+# [production.risk.rules.margin_call]
+# enabled = true
+# warn_cushion = 0.15              # alert below 15 % excess liquidity over equity
+# reduce_cushion = 0.10            # sell own positions below 10 % ...
+# restore_cushion = 0.20           # ... until the cushion is back at 20 %
+
 # Circuit breaker (BL-28): halts new buys after a loss. Off until a limit is
 # set. Recommended values below. A trip opens a risk_halts row the owner
 # sees and clears (`stonks halts list`, `stonks halts clear ID --reason ...`).
