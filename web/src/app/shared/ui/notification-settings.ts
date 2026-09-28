@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input } from '@angular/core';
 
 import { NotificationPermissionService } from '../../core/pwa/notification-permission.service';
 import { StatusPill } from './status-pill';
@@ -14,7 +14,7 @@ import { StatusPill } from './status-pill';
   template: `
     <section class="panel" aria-labelledby="notify-title">
       <div class="panel-head">
-        <h3 id="notify-title">Notifications</h3>
+        <h3 id="notify-title">{{ title() }}</h3>
         <app-status-pill [status]="pill().status" [tone]="pill().tone" [label]="pill().label" />
       </div>
       <div class="panel-body">
@@ -115,6 +115,8 @@ import { StatusPill } from './status-pill';
   `,
 })
 export class NotificationSettings implements OnInit {
+  /** The panel's title ("Notifications" in the setup guide, "Push on this device" on Alert settings). */
+  readonly title = input('Notifications');
   protected readonly svc = inject(NotificationPermissionService);
 
   protected readonly pill = computed(() => {

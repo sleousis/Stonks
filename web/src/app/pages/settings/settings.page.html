@@ -64,11 +64,19 @@
 
     <app-display-prefs />
 
-    <app-notification-settings />
-
-    <app-notification-prefs />
-
-    <app-telegram-link />
+    <!-- Alerts: every alert setting lives on one page (F39) --------------------->
+    <section class="panel" aria-labelledby="alerts-title">
+      <div class="panel-head">
+        <h3 id="alerts-title">Alerts</h3>
+      </div>
+      <div class="panel-body">
+        <p class="lead">
+          What reaches you and where: push on this device, email, Telegram, your webhook, quiet
+          hours, upcoming events and price alerts, all in one place.
+        </p>
+        <a class="btn" routerLink="/notifications/settings">Open alert settings</a>
+      </div>
+    </section>
 
     <app-risk-limits-panel />
 

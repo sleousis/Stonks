@@ -20,9 +20,6 @@ import { formatDateTime, formatMoney, formatNumber, formatPercent } from '../../
 import { ToastService } from '../../core/notify/toast.service';
 import { type ThemeMode, ThemeService } from '../../core/theme/theme.service';
 import { DisplayPrefs } from '../../shared/ui/display-prefs';
-import { NotificationPrefs } from '../../shared/ui/notification-prefs';
-import { TelegramLink } from './telegram-link';
-import { NotificationSettings } from '../../shared/ui/notification-settings';
 import { RiskLimitsPanel } from '../../shared/ui/risk-limits-panel';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -48,9 +45,6 @@ interface CostRow {
   imports: [
     DisplayPrefs,
     RiskLimitsPanel,
-    NotificationPrefs,
-    TelegramLink,
-    NotificationSettings,
     PageHeader,
     ReactiveFormsModule,
     RouterLink,

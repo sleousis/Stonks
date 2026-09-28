@@ -105,7 +105,9 @@ describe('NotificationPrefs', () => {
 
   it('gives price alerts and upcoming events their own rows, apart from signals', async () => {
     const el = await render();
-    const rows = [...el.querySelectorAll('tbody th')].map((th) => th.textContent?.trim());
+    const rows = [...el.querySelectorAll('tbody th')].map((th) =>
+      th.firstChild?.textContent?.trim(),
+    );
     expect(rows).toEqual([
       'Signals',
       'Price alerts',
@@ -121,6 +123,30 @@ describe('NotificationPrefs', () => {
     });
     req.flush(VIEW);
     await tick();
+  });
+
+  it('says in the Price alerts row that they check daily closes', async () => {
+    const el = await render();
+    const row = [...el.querySelectorAll('tbody th')].find((th) =>
+      th.textContent?.includes('Price alerts'),
+    )!;
+    expect(row.querySelector('.row-hint')?.textContent).toContain('daily closes');
+  });
+
+  it('shows one titled panel per part, or only the parts asked for', async () => {
+    const el = await render();
+    const titles = [...el.querySelectorAll('h3')].map((h) => h.textContent?.trim());
+    expect(titles).toEqual([
+      'Which alerts go where',
+      'Upcoming events',
+      'Quiet hours',
+      'Your webhook',
+    ]);
+    fixture.componentRef.setInput('only', ['webhook']);
+    fixture.detectChanges();
+    expect([...el.querySelectorAll('h3')].map((h) => h.textContent?.trim())).toEqual([
+      'Your webhook',
+    ]);
   });
 
   function kind(el: HTMLElement, label: string) {

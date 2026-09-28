@@ -71,19 +71,6 @@ describe('SettingsPage', () => {
       (await nextRequest(http, '/api/sources')).flush(SOURCES);
       (await nextRequest(http, '/api/lab/cost-models')).flush(COSTS);
     }
-    (await nextRequest(http, '/api/notifications/preferences')).flush({
-      channels: ['inapp'],
-      preferences: [],
-      quiet_start: null,
-      quiet_end: null,
-      timezone: 'UTC',
-      webhook: null,
-    });
-    (await nextRequest(http, '/api/telegram/link')).flush({
-      bot_configured: false,
-      bot_enabled: false,
-      linked: false,
-    });
     (await nextRequest(http, '/api/risk/limits')).flush(limitsView({}));
     await tick();
     fixture.detectChanges();
@@ -129,6 +116,15 @@ describe('SettingsPage', () => {
     sessionStorage.clear();
   });
 
+  it('sends alert settings to their one page instead of hosting them (F39)', async () => {
+    await setup(TRADER);
+    expect(el.querySelector('app-notification-prefs')).toBeNull();
+    expect(el.querySelector('app-telegram-link')).toBeNull();
+    const link = el.querySelector<HTMLAnchorElement>('a[href="/notifications/settings"]');
+    expect(link?.textContent?.trim()).toBe('Open alert settings');
+    http.verify();
+  });
+
   function headings(): string[] {
     return [...el.querySelectorAll('h2, h3')].map((h) => h.textContent?.trim() ?? '');
   }
@@ -139,7 +135,7 @@ describe('SettingsPage', () => {
     expect(h).toContain('Your account');
     expect(h).toContain('API token');
     expect(h).toContain('Theme');
-    expect(h).toContain('Telegram');
+    expect(h).toContain('Alerts');
     expect(h).not.toContain('System');
     expect(h).not.toContain('Broker');
     expect(h).not.toContain('Risk policy');

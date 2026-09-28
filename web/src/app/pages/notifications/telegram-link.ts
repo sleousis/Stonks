@@ -25,7 +25,7 @@ export function botLink(username: string | null | undefined): string | null {
 }
 
 /**
- * Settings, Telegram: whether your chat is linked, a one-time code to link
+ * Alert settings, Telegram: whether your chat is linked, a one-time code to link
  * it (shown once, sent to the bot as `/link CODE`), and unlinking. A linked
  * chat gets your notifications and can ask the bot for status, positions and
  * signals, and stop trading.
@@ -62,6 +62,13 @@ export function botLink(username: string | null | undefined): string | null {
               This server has no Telegram bot yet, so nothing can be sent there. An admin can add
               one.
             </p>
+            @if (isAdmin()) {
+              <p class="hint">
+                For admins: the Telegram section of the operations guide has the steps. You make a
+                bot with BotFather, put its token in the server's environment and restart the
+                server. Each person then links their own chat here.
+              </p>
+            }
           } @else if (l.linked) {
             <p class="lead">
               Your notifications also go to
@@ -178,6 +185,7 @@ export class TelegramLink {
   /** The code just made. Kept only while this panel lives. */
   protected readonly code = signal<TelegramLinkCodeView | null>(null);
   protected readonly busy = signal(false);
+  protected readonly isAdmin = computed(() => this.session.isAdmin());
   protected readonly canManage = computed(() => this.session.can('notifications.manage'));
 
   protected readonly botName = computed(() => {
