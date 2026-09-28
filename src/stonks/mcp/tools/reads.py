@@ -175,6 +175,14 @@ def register(t: ToolContext) -> None:
         )
 
     @server.tool(annotations=READ)
+    async def get_market_breadth(as_of: IsoDate | None = None) -> dict[str, Any]:
+        """Market breadth from the lake, display only: advances and declines,
+        the share of stocks above their 50 and 200 day averages, new one year
+        highs and lows, and distribution days on the index (falls of 0.2% or
+        more on higher volume), each with a plain sentence."""
+        return await t.get("/api/market/breadth", {"as_of": iso(as_of)})
+
+    @server.tool(annotations=READ)
     async def list_orders(
         portfolio_id: PortfolioId = None,
         tick_id: str | None = None,
