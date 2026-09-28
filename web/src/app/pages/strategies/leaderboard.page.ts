@@ -8,54 +8,79 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
-import type { GetLeaderboardData, LeaderboardRow } from '../../api/models';
+import type { GetLeaderboardData, LeaderboardRow, StrategyStatus } from '../../api/models';
 import { StrategiesService } from '../../api/strategies.service';
 import { formatDate } from '../../core/format/format';
-import { STATUS_WORDS, STAGES, stageOf } from '../../shared/governance-labels';
+import { STATUS_WORDS } from '../../shared/governance-labels';
+import { strategyDisplayName, strategyKindName } from '../../shared/strategy-names';
+import { type Verdict, strategyVerdict } from '../../shared/strategy-verdict';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
-import { className } from '../lab/ledger.page';
-import { strategyDisplayName } from '../../shared/strategy-names';
+import { StatusPill } from '../../shared/ui/status-pill';
+import { StrategyVerdict } from '../../shared/ui/strategy-verdict';
 
 type SortKey = NonNullable<NonNullable<GetLeaderboardData['query']>['sort']>;
 
 export const SORTS: readonly { id: SortKey; label: string }[] = [
-  { id: 'sharpe', label: 'Sharpe (risk-adjusted)' },
+  { id: 'sharpe', label: 'Return for the risk taken (Sharpe)' },
   { id: 'return', label: 'Total return' },
-  { id: 'drawdown', label: 'Smallest drawdown' },
+  { id: 'drawdown', label: 'Smallest drop' },
   { id: 'trades', label: 'Most trades' },
 ];
 
-/** Paper, Ready, Live or Stopped, from the status and the go-live verdict. */
-export function stageLabel(row: Pick<LeaderboardRow, 'status' | 'golive_passed'>): string {
-  if (row.status === 'retired') return STATUS_WORDS.retired;
-  const status = row.status as 'active' | 'shadow';
-  const stage = stageOf(status, row.golive_passed);
-  return STAGES.find((s) => s.id === stage)?.label ?? row.status;
+/** On trial, Approved or Retired: the status in the words people read. */
+export function stageLabel(row: Pick<LeaderboardRow, 'status'>): string {
+  return STATUS_WORDS[row.status as StrategyStatus] ?? row.status;
 }
 
-/** "Passed", "Not yet" or a dash when the gate did not run. */
+/** "Passed", "Failed" or "Not checked" for the go-live check (vocabulary status words). */
 export function goliveLabel(passed: boolean | null | undefined): string {
   if (passed === true) return 'Passed';
-  if (passed === false) return 'Not yet';
-  return '–';
+  if (passed === false) return 'Failed';
+  return 'Not checked';
+}
+
+/** The plain verdict for a row, from what the leaderboard knows. */
+export function rowVerdict(r: LeaderboardRow): Verdict {
+  return strategyVerdict({
+    status: r.status as StrategyStatus,
+    golive: null,
+    golivePassed: r.golive_passed,
+    trial: {
+      total_return: r.paper.total_return ?? null,
+      max_drawdown: r.paper.max_drawdown ?? null,
+      days: r.paper.days,
+    },
+    tests: r.survival_total ? { passed: r.survival_passed, total: r.survival_total } : null,
+  });
 }
 
 /**
- * Strategies side by side, ranked by their risk-adjusted paper result: the
- * model book the daily run keeps for each. Each row links to its tear sheet.
+ * The comparison view (F27): every strategy side by side, ranked by its
+ * trial result on its own test book, with one plain verdict each. Each row
+ * opens the strategy page, where one strategy is judged in full.
  */
 @Component({
   selector: 'app-leaderboard-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, PageHeader, DataTable, TableCell, LoadingState, EmptyState, ErrorState],
+  imports: [
+    RouterLink,
+    PageHeader,
+    DataTable,
+    TableCell,
+    StatusPill,
+    StrategyVerdict,
+    LoadingState,
+    EmptyState,
+    ErrorState,
+  ],
   template: `
     <app-page-header
       title="Leaderboard"
-      description="Every strategy ranked by its paper result, adjusted for risk. Open one for its tear sheet."
+      description="Every strategy side by side, ranked by its trial result. Open one to judge it in full."
     >
-      <a actions class="btn btn-ghost" routerLink="/strategies">All strategies</a>
+      <a actions class="related-link" routerLink="/strategies">All strategies</a>
     </app-page-header>
 
     <section class="panel" aria-labelledby="board-title">
@@ -77,7 +102,7 @@ export function goliveLabel(passed: boolean | null | undefined): string {
               [checked]="retired()"
               (change)="retired.set(!retired())"
             />
-            <span>Show stopped</span>
+            <span>Show retired</span>
           </label>
         </div>
       </div>
@@ -92,33 +117,36 @@ export function goliveLabel(passed: boolean | null | undefined): string {
       } @else if (board.value().rows.length === 0) {
         <app-empty-state
           title="No strategies yet"
-          message="Strategies show here once they pass their tests in Lab and trade on paper."
+          message="Strategies show here once they pass their tests in Lab and go on trial."
         >
-          <a routerLink="/lab" class="btn">Go to the lab</a>
+          <a routerLink="/lab" class="btn">Open Lab</a>
         </app-empty-state>
       } @else {
         @if (asOf(); as d) {
           <p class="as-of muted">
-            Paper results up to <span class="num">{{ d }}</span
-            >.
+            Trial results up to <span class="num">{{ d }}</span
+            >. Paper money on each strategy's own test book.
           </p>
         }
         <app-data-table
-          caption="Strategies ranked by paper result"
+          caption="Strategies ranked by trial result"
           [rows]="board.value().rows"
           [columns]="columns"
           [rowKey]="rowKey"
           [pageSize]="25"
         >
           <ng-template appCell="strategy_id" [appCellOf]="board.value().rows" let-r>
-            <a [routerLink]="['/strategies', r.strategy_id, 'tearsheet']" class="name">
+            <a [routerLink]="['/strategies', r.strategy_id]" class="name">
               <span class="num rank">{{ r.rank }}</span>
               <span class="id">{{ name(r.strategy_id) }}</span>
-              <span class="cls muted">{{ cls(r.class_path) }}</span>
+              <span class="cls muted">{{ kind(r.class_path) }}</span>
             </a>
           </ng-template>
           <ng-template appCell="stage" [appCellOf]="board.value().rows" let-r>
-            <span class="stage" [attr.data-status]="r.status">{{ stage(r) }}</span>
+            <app-status-pill [status]="r.status" />
+          </ng-template>
+          <ng-template appCell="verdict" [appCellOf]="board.value().rows" let-r>
+            <app-strategy-verdict compact [verdict]="verdict(r)" />
           </ng-template>
         </app-data-table>
       }
@@ -136,11 +164,19 @@ export function goliveLabel(passed: boolean | null | undefined): string {
       gap: var(--space-2) var(--space-4);
     }
     .field-inline {
-      white-space: nowrap;
       display: inline-flex;
       align-items: center;
       gap: var(--space-2);
-      min-height: var(--control-h);
+      min-height: var(--touch-min);
+      font-size: var(--text-sm);
+    }
+    .field-inline select {
+      max-width: 16rem;
+    }
+    .related-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--touch-min);
       font-size: var(--text-sm);
     }
     .as-of {
@@ -152,8 +188,8 @@ export function goliveLabel(passed: boolean | null | undefined): string {
       grid-template-columns: auto minmax(0, 1fr);
       column-gap: var(--space-2);
       align-items: baseline;
-      min-height: var(--touch-min);
       align-content: center;
+      min-height: var(--touch-min);
       text-decoration: none;
     }
     .rank {
@@ -168,23 +204,6 @@ export function goliveLabel(passed: boolean | null | undefined): string {
     }
     .cls {
       font-size: var(--text-xs);
-    }
-    .stage {
-      display: inline-block;
-      padding: 0 var(--space-2);
-      border: 1px solid var(--color-border-strong);
-      border-radius: var(--radius-pill);
-      font-size: var(--text-xs);
-      white-space: nowrap;
-    }
-    .stage[data-status='active'] {
-      border-color: var(--color-ink);
-      background: var(--color-ink);
-      color: var(--color-surface);
-    }
-    .stage[data-status='retired'] {
-      border-style: dashed;
-      color: var(--color-ink-3);
     }
   `,
 })
@@ -203,11 +222,15 @@ export class LeaderboardPage {
     const d = this.board.hasValue() ? this.board.value().as_of : null;
     return d ? formatDate(d) : null;
   });
+  private readonly verdicts = computed(() => {
+    const rows = this.board.hasValue() ? this.board.value().rows : [];
+    return new Map(rows.map((r) => [r.strategy_id, rowVerdict(r)]));
+  });
 
   protected readonly columns: TableColumn<LeaderboardRow>[] = [
     { key: 'strategy_id', label: 'Strategy', mobile: 'title', sortable: false },
-    { key: 'stage', label: 'Stage', value: (r) => stageLabel(r), sortable: false },
-    { key: 'sharpe', label: 'Sharpe', value: (r) => r.paper.sharpe, format: 'number' },
+    { key: 'verdict', label: 'Verdict', value: (r) => rowVerdict(r).label, sortable: false },
+    { key: 'stage', label: 'Status', value: (r) => stageLabel(r), sortable: false },
     {
       key: 'total_return',
       label: 'Return',
@@ -222,38 +245,37 @@ export class LeaderboardPage {
       value: (r) => r.paper.max_drawdown,
       format: 'percent',
     },
-    { key: 'days', label: 'Days', value: (r) => r.paper.days, format: 'number', mobile: 'hide' },
+    { key: 'sharpe', label: 'Sharpe', value: (r) => r.paper.sharpe, format: 'number' },
+    {
+      key: 'days',
+      label: 'Days on trial',
+      value: (r) => r.paper.days,
+      format: 'number',
+      mobile: 'hide',
+      help: false,
+    },
     {
       key: 'trades',
       label: 'Trades',
       value: (r) => r.paper.trades + r.book_trades,
       format: 'number',
+      mobile: 'hide',
       help: false,
     },
     {
       key: 'tests',
-      label: 'Tests passed',
+      label: 'Robustness tests',
       value: (r) => (r.survival_total ? `${r.survival_passed} of ${r.survival_total}` : '–'),
       sortable: false,
       mobile: 'hide',
       help: false,
     },
-    {
-      key: 'golive',
-      label: 'Go-live check',
-      value: (r) => goliveLabel(r.golive_passed),
-      sortable: false,
-      help: false,
-    },
   ];
   protected readonly rowKey = (r: LeaderboardRow) => r.strategy_id;
   protected readonly name = strategyDisplayName;
+  protected readonly kind = strategyKindName;
 
-  protected stage(r: LeaderboardRow): string {
-    return stageLabel(r);
-  }
-
-  protected cls(path: string): string {
-    return className(path);
+  protected verdict(r: LeaderboardRow): Verdict {
+    return this.verdicts().get(r.strategy_id) ?? rowVerdict(r);
   }
 }

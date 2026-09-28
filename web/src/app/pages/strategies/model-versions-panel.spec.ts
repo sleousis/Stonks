@@ -98,19 +98,19 @@ describe('ModelVersionsPanel', () => {
     await render([LIVE_V1]);
     const rows = el.querySelectorAll('app-data-table tbody tr');
     expect(rows.length).toBe(1);
-    expect(el.textContent).toContain('Live model');
+    expect(el.textContent).toContain('Model in use');
     const log = [...el.querySelectorAll('.timeline li')].map((li) => li.textContent);
     expect(log[0]).toContain('New fit saved as a candidate');
     expect(log[1]).toContain('First model recorded');
     expect(el.querySelector('.candidate')).toBeNull();
   });
 
-  it('shows the candidate against the live model and the passing swap check', async () => {
+  it('shows the candidate against the model in use and the passing swap check', async () => {
     await render([LIVE_V1, CANDIDATE_V2], swapReport(true));
     const card = el.querySelector('.candidate')!;
     expect(card.querySelector('h3')!.textContent).toContain('Candidate v2');
     expect(card.textContent).toContain('Over the same 24 days');
-    expect(card.textContent).toContain('Live v1');
+    expect(card.textContent).toContain('In use v1');
     expect(card.textContent).toContain('Swap check passed');
     expect(card.querySelectorAll('.checks li').length).toBe(4);
     expect(button('Swap in').disabled).toBe(false);
@@ -131,7 +131,7 @@ describe('ModelVersionsPanel', () => {
     post.flush({ ...CANDIDATE_V2, status: 'live' });
     await reloads([modelArchived(), { ...CANDIDATE_V2, status: 'live' }]);
     await settle();
-    expect(success).toHaveBeenCalledWith(expect.stringContaining('live from the next trading run'));
+    expect(success).toHaveBeenCalledWith(expect.stringContaining('in use from the next trading run'));
   });
 
   it('asks for an override with a 20 character reason when the check fails', async () => {

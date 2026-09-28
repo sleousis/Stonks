@@ -1,6 +1,6 @@
 <app-page-header
   title="Studio"
-  description="Build a strategy, test it, start paper trading it, then go live when it earns it."
+  description="Build a strategy, test it, put it on trial, then approve it when it earns it."
 >
   @if (!creating()) {
     <button
@@ -102,7 +102,7 @@
   } @else if (drafts.value().items.length === 0) {
     <app-empty-state
       title="No drafts yet"
-      message="A draft is a strategy you are building. Start from a template such as RSI mean reversion, test it, then start paper trading it."
+      message="A draft is a strategy you are building. Start from a template such as RSI mean reversion, test it, then put it on trial."
     >
       @if (!creating()) {
         <button type="button" class="btn btn-primary" [disabled]="!canLab()" (click)="openCreate()">

@@ -37,8 +37,8 @@ import { StatusPill } from '../../shared/ui/status-pill';
 
 /**
  * The Versions tab of a strategy (roadmap 22.6, docs/model-lifecycle.md):
- * every fit of its model, the candidate's model book against the live
- * model over the same days, the swap check, and Swap in or Reject. A swap
+ * every fit of its model, the candidate's test book against the model in use
+ * over the same days, the swap check, and Swap in or Reject. A swap
  * asks for a fresh code, then a reason. A failing check needs an override
  * with a reason of at least 20 characters. Admins only (`strategy.promote`).
  */
@@ -65,8 +65,8 @@ import { StatusPill } from '../../shared/ui/status-pill';
         }
       </div>
       <p class="lead panel-body">
-        A strategy that learns from data refits its model every week. Each new fit runs as a model
-        book next to the live model. It trades only after someone swaps it in.
+        A strategy that learns from data refits its model every week. Each new fit runs on its own
+        test book next to the model in use. It trades only after someone swaps it in.
       </p>
 
       @if (versions.error(); as err) {
@@ -103,10 +103,10 @@ import { StatusPill } from '../../shared/ui/status-pill';
               @let r = check.value();
               @let b = comparison()!;
               <div class="books" role="group" aria-labelledby="books-title">
-                <h4 id="books-title">Model book against the live model</h4>
+                <h4 id="books-title">Test book against the model in use</h4>
                 @if (b.days === 0) {
                   <p class="muted">
-                    No model book days yet. Both books get a value after the next trading run.
+                    No test book days yet. Both get a value after the next trading run.
                   </p>
                 } @else {
                   <p class="muted">Over the same {{ b.days }} days, from the same cash.</p>
@@ -125,7 +125,7 @@ import { StatusPill } from '../../shared/ui/status-pill';
                     </dd>
                   </div>
                   <div class="bar-row">
-                    <dt>Live v{{ r.live_version }}</dt>
+                    <dt>In use v{{ r.live_version }}</dt>
                     <dd>
                       <span
                         class="bar live"
@@ -558,7 +558,7 @@ export class ModelVersionsPanel {
         ? `Swap in model v${c.version} of ${name}?`
         : `Override the swap check for v${c.version}?`,
       message: passed
-        ? 'The next trading run trades the new model. The live model is archived.'
+        ? 'The next trading run trades the new model. The model in use is archived.'
         : 'The swap check did not pass. The override and your reason go into the version log. The next trading run trades the new model.',
       confirmLabel: passed ? 'Swap in' : 'Override and swap in',
       minReason: passed ? 1 : SWAP_OVERRIDE_MIN_REASON,
@@ -569,10 +569,10 @@ export class ModelVersionsPanel {
         live: null,
         lines: [
           { label: 'Strategy', value: name },
-          { label: 'From', value: `Live v${report.live_version}` },
+          { label: 'From', value: `In use v${report.live_version}` },
           { label: 'To', value: `Candidate v${c.version}` },
           { label: 'Trained on', value: trainWindow(c) },
-          { label: 'Model book days', value: String(report.days) },
+          { label: 'Test book days', value: String(report.days) },
         ],
       },
     });
@@ -584,7 +584,7 @@ export class ModelVersionsPanel {
         reason: body.reason,
         override: !!body.override,
       });
-      this.toasts.success(`Model v${c.version} of ${name} is live from the next trading run.`);
+      this.toasts.success(`Model v${c.version} of ${name} is in use from the next trading run.`);
       this.reloadAll();
     } catch {
       // The error interceptor showed the API's message (a failing check, a retired strategy).
@@ -599,7 +599,7 @@ export class ModelVersionsPanel {
     const name = strategyDisplayName(c.strategy_id);
     const body = await this.dialog().open({
       title: `Reject model v${c.version} of ${name}?`,
-      message: 'Its model book stops. The live model keeps trading.',
+      message: 'Its test book stops. The model in use keeps trading.',
       confirmLabel: 'Reject',
       tone: 'danger',
       minReason: 1,

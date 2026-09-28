@@ -3,7 +3,14 @@ import { RouterLink } from '@angular/router';
 
 import type { GoLiveReport, StrategyStatus } from '../../api/models';
 import { type CheckRow, checkRow } from '../../shared/golive-checks';
-import { LIFECYCLE, STAGES, type Stage, stageOf, stageState } from '../../shared/governance-labels';
+import {
+  LIFECYCLE,
+  STAGES,
+  type Stage,
+  readyToApprove,
+  stageOf,
+  stageState,
+} from '../../shared/governance-labels';
 import { StatusPill } from '../../shared/ui/status-pill';
 
 interface NextStep {
@@ -13,11 +20,11 @@ interface NextStep {
 }
 
 /**
- * Where a strategy is on its way to live trading (Draft, Paper, Ready, Live),
- * the next step, and the go-live check folded underneath with a fix for each
- * failing check (UX-23, UX-28). `golivePassed` is the go-live verdict for a
- * paper strategy (null while unknown). The Go live button itself sits in the
- * page header, only at the Ready stage.
+ * A strategy's status ladder (Draft, On trial, Approved, Retired), the next
+ * step, and the go-live check folded underneath with a fix for each failing
+ * check (UX-23, UX-28) when a `report` is given. `golivePassed` is the
+ * go-live verdict of a strategy on trial (null while unknown): a pass marks
+ * it ready to approve. The Approve button itself sits in the page header.
  *
  * `compact` draws the steps alone, without a frame, next step or checks
  * (Studio's ship panel).
@@ -32,17 +39,17 @@ interface NextStep {
   host: { '[class.compact]': 'compact()' },
   template: `
     <section [class.panel]="!compact()" class="stage-bar" aria-labelledby="stage-title">
-      <h2 id="stage-title" class="visually-hidden">Stage</h2>
-      <ol class="stages" aria-label="Stages to live trading">
+      <h2 id="stage-title" class="visually-hidden">Status</h2>
+      <ol class="stages" aria-label="Status ladder">
         @for (s of stages; track s.id) {
           <li
-            [attr.data-state]="stopped() ? 'todo' : state(s.id)"
-            [attr.aria-current]="!stopped() && state(s.id) === 'current' ? 'step' : null"
+            [attr.data-state]="state(s.id)"
+            [attr.aria-current]="state(s.id) === 'current' ? 'step' : null"
           >
             <span class="dot" aria-hidden="true"></span>
             <span class="stage-text">
               <span class="stage-label">{{ s.label }}</span>
-              <span class="stage-detail">{{ s.detail }}</span>
+              <span class="stage-detail">{{ detailOf(s.id, s.detail) }}</span>
             </span>
           </li>
         }
@@ -227,7 +234,8 @@ export class StageBar {
 
   protected readonly stages = STAGES;
   protected readonly stopped = computed(() => this.status() === 'retired');
-  protected readonly current = computed<Stage>(() => stageOf(this.status(), this.golivePassed()));
+  protected readonly current = computed<Stage>(() => stageOf(this.status()));
+  protected readonly ready = computed(() => readyToApprove(this.status(), this.golivePassed()));
 
   protected readonly checks = computed<CheckRow[]>(() => {
     const r = this.report();
@@ -236,37 +244,48 @@ export class StageBar {
   });
   protected readonly failing = computed(() => this.checks().filter((c) => !c.passed));
 
+  /** A retired strategy lights only its own step: the ladder does not say how far it got. */
   protected state(id: Stage) {
+    if (this.stopped()) return id === 'retired' ? 'current' : 'todo';
     return stageState(id, this.current());
   }
 
+  /** On trial with a passing check says it is ready to approve. */
+  protected detailOf(id: Stage, detail: string): string {
+    return id === 'trial' && this.ready() ? 'Passed the go-live check: ready to approve' : detail;
+  }
+
+  /** The strategy page's Review tab, where the go-live check lives. */
+  private review(label: string): NextStep['link'] {
+    return { label, commands: ['/strategies', this.strategyId()], query: { tab: 'review' } };
+  }
+
   protected readonly next = computed<NextStep>(() => {
-    const id = this.strategyId();
-    if (this.stopped()) {
-      return { text: `Stopped. Use ${LIFECYCLE.paper.label} to run it on paper again.` };
-    }
     switch (this.current()) {
+      case 'retired':
+        return { text: `Retired: it no longer decides. Use ${LIFECYCLE.paper.label} to test it again.` };
       case 'draft':
-        return { text: `A draft. Use ${LIFECYCLE.paper.label} to watch it on real data.` };
-      case 'live':
         return {
-          text: 'Live: it places orders on every run. Watch what it trades.',
-          link: { label: 'See its orders', commands: ['/orders'] },
+          text: `A draft. Use ${LIFECYCLE.paper.label} to have the system test it on real data.`,
         };
-      case 'ready':
+      case 'approved':
         return {
-          text: `It passed the go-live check. Read the evidence, then use ${LIFECYCLE.live.label} when you are sure.`,
-          link: { label: 'Read the evidence', commands: ['/go-live'], query: { strategy: id } },
+          text:
+            'Approved: people can follow it. Real money moves only in a portfolio at a ' +
+            'real-money stage, never because of this status.',
         };
       default:
-        return {
-          text: 'Paper trading. Next: pass the go-live check with enough paper days and trades.',
-          link: {
-            label: 'Open the go-live check',
-            commands: ['/go-live'],
-            query: { strategy: id },
-          },
-        };
+        return this.ready()
+          ? {
+              text: `It passed the go-live check. Read the evidence, then use ${LIFECYCLE.live.label} when you are sure.`,
+              link: this.review('Read the evidence'),
+            }
+          : {
+              text:
+                'On trial: the system paper-tests it on its own test book every run. Next: pass ' +
+                'the go-live check with enough trial days and trades.',
+              link: this.review('See the go-live check'),
+            };
     }
   });
 }

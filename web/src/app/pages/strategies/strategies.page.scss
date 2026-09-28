@@ -97,3 +97,11 @@
 .paper-note {
   padding: 0 var(--space-4) var(--space-2);
 }
+
+// A link in the header reads as a link, not a button (m2).
+.related-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  font-size: var(--text-sm);
+}

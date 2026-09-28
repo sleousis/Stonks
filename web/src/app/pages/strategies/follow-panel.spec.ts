@@ -53,7 +53,7 @@ describe('FollowPanel', () => {
     fixture.detectChanges();
   }
 
-  it('offers signals only or paper trading, never auto', async () => {
+  it('offers Alerts only or Paper, never the gated modes', async () => {
     const el = await render();
     const values = [...el.querySelectorAll<HTMLInputElement>('input[type=radio]')].map(
       (r) => r.value,
@@ -64,10 +64,10 @@ describe('FollowPanel', () => {
     expect(labels).toEqual(
       MODES.filter((m) => m.value === 'notify' || m.value === 'paper').map((m) => m.label),
     );
-    expect(el.textContent).not.toContain('Auto');
+    expect(el.querySelector('input[value="auto"], input[value="approve"]')).toBeNull();
   });
 
-  it('follows for signals only', async () => {
+  it('follows for alerts only', async () => {
     const el = await render();
     button(el, 'Follow').click();
     const req = await nextRequest(controller, '/api/subscriptions', 'POST');
@@ -78,8 +78,8 @@ describe('FollowPanel', () => {
     );
     await tick();
     fixture.detectChanges();
-    expect(el.textContent).toContain('You follow this strategy');
-    expect(el.textContent).toContain('Signals only');
+    expect(el.textContent).toContain('You follow mom');
+    expect(el.querySelector<HTMLInputElement>('app-follow-control input[value="notify"]')!.checked).toBe(true);
   });
 
   it('paper trades in the portfolio you pick', async () => {
@@ -105,12 +105,28 @@ describe('FollowPanel', () => {
     expect(button(el, 'Follow').disabled).toBe(true);
   });
 
-  it('says when you already follow it and points to Today', async () => {
+  it('shows the same follow control as Today once you follow it (M8)', async () => {
     const el = await render([sub({ strategy_id: 'mom', portfolio_id: 'pf_1' })]);
-    expect(el.textContent).toContain('Paper trading');
-    expect(el.textContent).toContain('on Main');
-    expect(el.querySelector('a[href="/"]')?.textContent).toContain('Change it on Today');
+    const control = el.querySelector('app-follow-control')!;
+    expect(control.textContent).toContain('In Main');
+    expect(control.querySelector<HTMLInputElement>('input[value="paper"]')!.checked).toBe(true);
+    const labels = [...control.querySelectorAll('.mode')].map((m) => m.textContent!.trim());
+    expect(labels).toEqual(MODES.map((m) => m.label));
     expect(button(el, 'Follow')).toBeUndefined();
+  });
+
+  it('says a strategy on trial trades for you only once approved', async () => {
+    fixture = TestBed.createComponent(FollowPanel);
+    fixture.componentRef.setInput('strategyId', 'mom');
+    fixture.componentRef.setInput('status', 'shadow');
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/portfolios')).flush(page([MAIN]));
+    (await nextRequest(controller, '/api/subscriptions')).flush(page([]));
+    await tick();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'trades for you only once it is',
+    );
   });
 
   it('locks following without portfolio.trade', async () => {

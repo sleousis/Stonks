@@ -117,9 +117,9 @@ describe('StrategiesPage', () => {
     await settle();
 
     const headers = Array.from(el.querySelectorAll('thead th')).map((th) => th.textContent ?? '');
-    expect(headers.join('|')).toContain('Paper return');
+    expect(headers.join('|')).toContain('Trial return');
     expect(headers.join('|')).toContain('Max drawdown');
-    expect(headers.join('|')).toContain('Days on paper');
+    expect(headers.join('|')).toContain('Days on trial');
 
     const row = Array.from(el.querySelectorAll('tbody tr')).find((tr) =>
       tr.textContent?.includes('buyhold-spy'),
@@ -135,7 +135,7 @@ describe('StrategiesPage', () => {
     await settle();
     paperFails = false;
     expect(rowIds().length).toBe(3);
-    expect(el.textContent).toContain('Paper results could not be loaded');
+    expect(el.textContent).toContain('Trial results could not be loaded');
   });
 
   it('does not send traders to the command line when empty', async () => {
@@ -151,7 +151,7 @@ describe('StrategiesPage', () => {
     await settle();
 
     const shadow = Array.from(el.querySelectorAll<HTMLLabelElement>('.segment')).find(
-      (l) => l.textContent?.trim() === 'Paper trading',
+      (l) => l.textContent?.trim() === 'On trial',
     );
     shadow?.querySelector('input')?.dispatchEvent(new Event('change'));
     fixture.detectChanges();
@@ -196,7 +196,7 @@ describe('StrategiesPage', () => {
     await tick(5);
     for (const req of controller.match(() => true)) req.flush(page([]));
     await settle();
-    expect(el.textContent).toContain('Nothing is stopped');
+    expect(el.textContent).toContain('Nothing is retired');
     expect(el.textContent).toContain('Show all statuses');
   });
 
@@ -204,11 +204,11 @@ describe('StrategiesPage', () => {
     (await nextRequest(controller, '/api/strategies')).flush(page(ALL));
     await settle();
     const filters = [...el.querySelectorAll('.segment')].map((l) => l.textContent?.trim());
-    expect(filters).toEqual(['All', 'Live', 'Paper trading', 'Stopped']);
+    expect(filters).toEqual(['All', 'Approved', 'On trial', 'Retired']);
     const pills = [...el.querySelectorAll('app-status-pill')].map((p) => p.textContent?.trim());
     expect(pills.length).toBeGreaterThan(0);
-    for (const pill of pills) expect(['Live', 'Paper trading', 'Stopped']).toContain(pill);
-    expect(el.textContent).not.toMatch(/shadow|promot|regist|retire/i);
+    for (const pill of pills) expect(['Approved', 'On trial', 'Retired']).toContain(pill);
+    expect(el.textContent).not.toMatch(/shadow|promot|regist|\bLive\b/);
   });
 
   it('shows the API message when the list fails', async () => {
