@@ -117,7 +117,7 @@ Optional Compose profiles need memory on top of the rows above ([deploy.md](depl
 ## Limits
 
 - **DuckDB has one writer.** Only the API process opens the lake read-write. Ingests and data fetches share one lane and run one at a time. Other processes read copies: the lab worker reads a snapshot, and CLI writes go through the API. More API processes would need a different lake, so grow the VM before adding processes.
-- **SQLite in WAL mode** has one writer at a time and many readers. Writes wait up to 10 s for the lock. That is plenty for 20 traders, but the state DB must sit on a local disk, so the lab worker runs on the same host as the API. A worker on another machine needs a queue over the API, which is not built yet.
+- **SQLite in WAL mode** has one writer at a time and many readers. Writes wait up to 10 s for the lock. That is plenty for 20 traders, but the state DB must sit on a local disk, so the `lab-worker` service runs on the same host as the API. A worker on another machine pulls jobs through the API instead ([deploy.md](deploy.md#a-worker-on-another-machine)).
 - **One API process.** `stonks serve` runs one process with a small job pool. Heavy reads from many clients at once queue behind each other. Measure with `tools/api_load.py --clients 20` before you grow past 20 traders.
 - **The EODHD plan.** The free tier gives end-of-day prices only, for one year, with a small daily call limit. A paid end-of-day plan (about 20 USD a month) covers daily prices for a few thousand tickers. Fundamentals need a more expensive plan (about 60 to 100 USD a month), and each fundamentals call counts as several calls. Check the current plan page.
 - **Disk alerts.** `deploy/monitor/check-host.sh` warns when the disk passes 80 % (roadmap 14.6).
