@@ -543,6 +543,7 @@ Tickers open `/data?instrument=<id>`.
 | Notifications | `/notifications` | The in-app feed, unread first marks, Mark read and Mark all read, deep links, and "Your devices" (push devices, Remove) |
 | Broker connections | `/connections`, `/connections/:id`, `/connections/callback` | Provider cards, connect by keys or the provider's sign-in page, accounts, Link to a portfolio, Sync now, Disconnect |
 | Trade costs | `/trades`, `/trades/orders/:clientId` | Totals and shortfall by strategy, ticker or portfolio, the trade journal, and each order as a ticket with notes |
+| Journal | `/journal`, `/journal/trades/:tradeId` | Round trips from fills with excursions, R and exit efficiency, the P&L calendar, results by plan, tag, mistake, playbook, strategy or exit, playbooks, and a review per trade |
 | Sweep, Signal IC | `/lab/sweeps`, `/lab/signal-ic` | See Lab form above |
 | Glossary | `/help/glossary` | Every term the help tips explain |
 
@@ -589,6 +590,12 @@ Tickers open `/data?instrument=<id>`.
 - **Trade costs.** Shortfall is the gap between the price when the order was
   decided and the price paid, fees included. Positive figures are costs.
   Orders and fills link to the order ticket. Notes need `portfolio.manage`.
+- **Journal.** A trade runs from the fill that opened it to the fill that
+  closed it, and a partial exit is its own line. Views: Trades, Calendar,
+  Results and Playbooks. The calendar is a month grid, Monday first, with the
+  week's total at the end of each row. A review (tags, mistakes, playbook,
+  followed or broke the plan, a note) needs `portfolio.manage`. See
+  [the journal](journal.md).
 - **Order tickets.** `ConfirmService.confirm({ ticket: { lines, side, live } })`
   shows a confirmation as an order ticket: `<app-side-tag>` (solid B, outlined
   S), mono figures and `<app-mode-stamp>` (grey PAPER, brass LIVE). A real
@@ -1062,7 +1069,7 @@ flowchart LR
 | `<app-account-menu>` | `shell/` | Profile, Settings, Broker connections, Get set up, Glossary, Sign out |
 | `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few: a radio group with arrow keys, 44px on phones |
 | `<app-no-book>`, `bookState()` | `shared/ui/no-book.ts` | A money page for someone with no portfolio |
-| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Orders, Fills, Trading runs and Trade costs, one tap apart |
+| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Orders, Fills, Trading runs, Trade costs and Journal, one tap apart |
 | `<app-copy-button>`, `copyText()`, `downloadText()` | `shared/ui/copy-button.ts` | Copy with a visible message when the clipboard is blocked |
 | `JobResult`, `<app-job-progress [result]>` | `shared/ui/job-progress.ts` | A job's result read with an inline error and Try again |
 | `<app-tick-mode>` | `pages/orders/tick-mode.ts` | "Dry run" or the PAPER or LIVE stamp for a trading run |
@@ -1148,6 +1155,7 @@ about the same thing.
 | Strategies | `/api/strategies` | `stonks registry` | `*_strategy`, `list_strategies` |
 | Follow a strategy | `POST /api/subscriptions` | none | `subscribe` |
 | Trade costs | `/api/tca` | `stonks tca` | `get_tca_summary`, `list_trade_journal`, `get_order_tca` |
+| Journal | `/api/journal` | `stonks journal` | `list_round_trips`, `get_round_trip`, `get_pnl_calendar`, `get_journal_breakdown`, `list_playbooks` |
 | Stop trading (kill switch), "Stop new buys only" | `POST /api/halts/kill`, `buys_only` | `halts kill --buys-only` | `engage_kill_switch` (`buys_only`) |
 | Update data, Data updates | `/api/ingest/*`, `ingest_runs` | `stonks ingest` | `run_ingest` |
 | Go-live suite | preset `promotion` | `--preset promotion` | `run_lab` (`preset`) |
@@ -1492,7 +1500,7 @@ flowchart LR
 
   | Group | Pages | Who |
   |---|---|---|
-  | (top) | Today, Strategies, Orders (tabs: Orders, Fills, Trading runs, Trade costs), Charts, Watchlists, Insights, Notifications | everyone signed in |
+  | (top) | Today, Strategies, Orders (tabs: Orders, Fills, Trading runs, Trade costs, Journal), Charts, Watchlists, Insights, Notifications | everyone signed in |
   | Research | Paper trading, Leaderboard, Studio, Lab, Go live, Assistant | Studio and Lab need `lab.run`, the rest are for all |
   | System | Overview (`/dashboard`), Health, Live engine, Schedule, Data, Data quality, Universes, Halts, Users | admins |
   | Account menu (by your name) | Profile, Settings, Broker connections, Get set up, Glossary, Sign out | everyone signed in |

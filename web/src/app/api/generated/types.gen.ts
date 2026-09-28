@@ -347,6 +347,72 @@ export type AlphaBetaView = {
 };
 
 /**
+ * AnnotationRequest
+ *
+ * A trade's review. Replaces what was there.
+ */
+export type AnnotationRequest = {
+    /**
+     * Followed Plan
+     */
+    followed_plan?: boolean | null;
+    /**
+     * Mistakes
+     */
+    mistakes?: Array<string>;
+    /**
+     * Playbook Id
+     */
+    playbook_id?: string | null;
+    /**
+     * Review
+     */
+    review?: string | null;
+    /**
+     * Tags
+     */
+    tags?: Array<string>;
+};
+
+/**
+ * AnnotationView
+ */
+export type AnnotationView = {
+    /**
+     * Followed Plan
+     */
+    followed_plan: boolean | null;
+    /**
+     * Mistakes
+     */
+    mistakes: Array<string>;
+    /**
+     * Playbook Id
+     */
+    playbook_id: string | null;
+    /**
+     * Review
+     */
+    review: string | null;
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
+     * Trade Id
+     */
+    trade_id: number;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Updated By
+     */
+    updated_by: string;
+};
+
+/**
  * ApiScope
  *
  * What a credential may do. A token never exceeds its user's role.
@@ -852,6 +918,44 @@ export type BorrowSettings = {
 };
 
 /**
+ * BreakdownView
+ */
+export type BreakdownView = {
+    /**
+     * Base Currency
+     */
+    base_currency: string;
+    /**
+     * By
+     */
+    by: 'all' | 'sleeve' | 'origin' | 'ticker' | 'side' | 'exit_trigger' | 'tag' | 'mistake' | 'playbook' | 'plan';
+    /**
+     * Fx Missing
+     */
+    fx_missing: Array<string>;
+    /**
+     * Groups
+     */
+    groups: Array<GroupStatsView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Since
+     */
+    since: string | null;
+    /**
+     * Unconverted
+     */
+    unconverted: number;
+    /**
+     * Until
+     */
+    until: string | null;
+};
+
+/**
  * BrokerInfo
  */
 export type BrokerInfo = {
@@ -871,6 +975,36 @@ export type BrokerInfo = {
      * Paper
      */
     paper: boolean;
+};
+
+/**
+ * CalendarBucketView
+ */
+export type CalendarBucketView = {
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * Trades
+     */
+    trades: number;
+    /**
+     * Wins
+     */
+    wins: number;
 };
 
 /**
@@ -3448,6 +3582,74 @@ export type GroupIcView = {
 };
 
 /**
+ * GroupStatsView
+ *
+ * Results of one group of closed legs, money in the base currency.
+ */
+export type GroupStatsView = {
+    /**
+     * Avg Exit Efficiency
+     */
+    avg_exit_efficiency: number | null;
+    /**
+     * Avg Holding Days
+     */
+    avg_holding_days: number | null;
+    /**
+     * Avg Loss
+     */
+    avg_loss: number | null;
+    /**
+     * Avg Pnl
+     */
+    avg_pnl: number | null;
+    /**
+     * Avg R
+     */
+    avg_r: number | null;
+    /**
+     * Avg Win
+     */
+    avg_win: number | null;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Losses
+     */
+    losses: number;
+    /**
+     * Open
+     */
+    open: number;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Profit Factor
+     */
+    profit_factor: number | null;
+    /**
+     * R Trades
+     */
+    r_trades: number;
+    /**
+     * Trades
+     */
+    trades: number;
+    /**
+     * Win Rate
+     */
+    win_rate: number | null;
+    /**
+     * Wins
+     */
+    wins: number;
+};
+
+/**
  * HaltView
  */
 export type HaltView = {
@@ -4533,6 +4735,22 @@ export type JournalEntryView = {
 };
 
 /**
+ * JournalLabelsView
+ *
+ * Tags and mistakes already used in the portfolio, for suggestions.
+ */
+export type JournalLabelsView = {
+    /**
+     * Mistakes
+     */
+    mistakes: Array<string>;
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+};
+
+/**
  * JournalNoteView
  */
 export type JournalNoteView = {
@@ -4560,6 +4778,239 @@ export type JournalNoteView = {
      * Updated At
      */
     updated_at: string;
+};
+
+/**
+ * JournalTradeDetailView
+ *
+ * A whole trade: every leg and its review.
+ */
+export type JournalTradeDetailView = {
+    /**
+     * Followed Plan
+     */
+    followed_plan: boolean | null;
+    /**
+     * Legs
+     */
+    legs: Array<JournalTradeView>;
+    /**
+     * Mistakes
+     */
+    mistakes: Array<string>;
+    /**
+     * Origin
+     */
+    origin: 'strategy' | 'manual';
+    /**
+     * Playbook Id
+     */
+    playbook_id: string | null;
+    /**
+     * Playbook Name
+     */
+    playbook_name: string | null;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Pnl Base
+     */
+    pnl_base: number | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Review
+     */
+    review: string | null;
+    /**
+     * Side
+     */
+    side: 'long' | 'short';
+    /**
+     * Sleeve
+     */
+    sleeve: string;
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Trade Id
+     */
+    trade_id: number;
+    /**
+     * Updated At
+     */
+    updated_at: string | null;
+    /**
+     * Updated By
+     */
+    updated_by: string | null;
+};
+
+/**
+ * JournalTradeView
+ *
+ * One leg of a trade. Money is in the instrument's currency, and
+ * ``pnl_base`` in the portfolio's base currency (null with no FX rate).
+ */
+export type JournalTradeView = {
+    /**
+     * Currency
+     */
+    currency: string;
+    /**
+     * Dividends
+     */
+    dividends: number;
+    /**
+     * Entry At
+     */
+    entry_at: string;
+    /**
+     * Entry Client Id
+     */
+    entry_client_id: string;
+    /**
+     * Entry Price
+     */
+    entry_price: number;
+    /**
+     * Exit At
+     */
+    exit_at: string | null;
+    /**
+     * Exit Client Id
+     */
+    exit_client_id: string | null;
+    /**
+     * Exit Efficiency
+     */
+    exit_efficiency: number | null;
+    /**
+     * Exit Price
+     */
+    exit_price: number;
+    /**
+     * Exit Trigger
+     */
+    exit_trigger: string | null;
+    /**
+     * Fees
+     */
+    fees: number;
+    /**
+     * Followed Plan
+     */
+    followed_plan: boolean | null;
+    /**
+     * Holding Days
+     */
+    holding_days: number;
+    /**
+     * Is Open
+     */
+    is_open: boolean;
+    /**
+     * Leg Id
+     */
+    leg_id: string;
+    /**
+     * Mae Pct
+     */
+    mae_pct: number | null;
+    /**
+     * Mae R
+     */
+    mae_r: number | null;
+    /**
+     * Mfe Pct
+     */
+    mfe_pct: number | null;
+    /**
+     * Mistakes
+     */
+    mistakes: Array<string>;
+    /**
+     * Origin
+     */
+    origin: 'strategy' | 'manual';
+    /**
+     * Playbook Id
+     */
+    playbook_id: string | null;
+    /**
+     * Playbook Name
+     */
+    playbook_name: string | null;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Pnl Base
+     */
+    pnl_base: number | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * R Multiple
+     */
+    r_multiple: number | null;
+    /**
+     * Return Pct
+     */
+    return_pct: number;
+    /**
+     * Review
+     */
+    review: string | null;
+    /**
+     * Risk Amount
+     */
+    risk_amount: number | null;
+    /**
+     * Side
+     */
+    side: 'long' | 'short';
+    /**
+     * Sleeve
+     */
+    sleeve: string;
+    /**
+     * Stop Price
+     */
+    stop_price: number | null;
+    /**
+     * Stop Source
+     */
+    stop_source: string | null;
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
+     * Target Price
+     */
+    target_price: number | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Trade Id
+     */
+    trade_id: number;
 };
 
 /**
@@ -7517,6 +7968,28 @@ export type PageJournalEntryView = {
 };
 
 /**
+ * Page[JournalTradeView]
+ */
+export type PageJournalTradeView = {
+    /**
+     * Items
+     */
+    items: Array<JournalTradeView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[LedgerRunView]
  */
 export type PageLedgerRunView = {
@@ -8520,6 +8993,128 @@ export type PlateauOverlayView = {
      * Y Range
      */
     y_range?: Array<number> | null;
+};
+
+/**
+ * PlaybookCreate
+ */
+export type PlaybookCreate = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * PlaybookUpdate
+ */
+export type PlaybookUpdate = {
+    /**
+     * Archived
+     */
+    archived?: boolean | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+};
+
+/**
+ * PlaybookView
+ */
+export type PlaybookView = {
+    /**
+     * Archived
+     */
+    archived: boolean;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Description
+     */
+    description: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
+ * PnlCalendarView
+ *
+ * Realised P&L of closed legs by exit day, ISO week and month.
+ */
+export type PnlCalendarView = {
+    /**
+     * Base Currency
+     */
+    base_currency: string;
+    /**
+     * Best Day
+     */
+    best_day: string | null;
+    /**
+     * Days
+     */
+    days: Array<CalendarBucketView>;
+    /**
+     * Fx Missing
+     */
+    fx_missing: Array<string>;
+    /**
+     * Months
+     */
+    months: Array<CalendarBucketView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Since
+     */
+    since: string | null;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Trades
+     */
+    trades: number;
+    /**
+     * Unconverted
+     */
+    unconverted: number;
+    /**
+     * Until
+     */
+    until: string | null;
+    /**
+     * Weeks
+     */
+    weeks: Array<CalendarBucketView>;
+    /**
+     * Worst Day
+     */
+    worst_day: string | null;
 };
 
 /**
@@ -18894,6 +19489,559 @@ export type CreateStreamTokenResponses = {
 };
 
 export type CreateStreamTokenResponse = CreateStreamTokenResponses[keyof CreateStreamTokenResponses];
+
+export type GetJournalBreakdownData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * By
+         *
+         * sleeve, origin, ticker, side, exit_trigger, tag, mistake, playbook, plan
+         */
+        by?: 'all' | 'sleeve' | 'origin' | 'ticker' | 'side' | 'exit_trigger' | 'tag' | 'mistake' | 'playbook' | 'plan';
+        /**
+         * Since
+         *
+         * closed on or after this day (open: entered)
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * closed on or before this day (open: entered)
+         */
+        until?: string | null;
+        /**
+         * Sleeve
+         *
+         * one strategy id, or manual
+         */
+        sleeve?: string | null;
+        /**
+         * Origin
+         *
+         * strategy or manual orders
+         */
+        origin?: 'strategy' | 'manual' | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/journal/breakdown';
+};
+
+export type GetJournalBreakdownErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetJournalBreakdownError = GetJournalBreakdownErrors[keyof GetJournalBreakdownErrors];
+
+export type GetJournalBreakdownResponses = {
+    /**
+     * Successful Response
+     */
+    200: BreakdownView;
+};
+
+export type GetJournalBreakdownResponse = GetJournalBreakdownResponses[keyof GetJournalBreakdownResponses];
+
+export type GetPnlCalendarData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Since
+         *
+         * closed on or after this day (open: entered)
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * closed on or before this day (open: entered)
+         */
+        until?: string | null;
+        /**
+         * Sleeve
+         *
+         * one strategy id, or manual
+         */
+        sleeve?: string | null;
+        /**
+         * Origin
+         *
+         * strategy or manual orders
+         */
+        origin?: 'strategy' | 'manual' | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/journal/calendar';
+};
+
+export type GetPnlCalendarErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetPnlCalendarError = GetPnlCalendarErrors[keyof GetPnlCalendarErrors];
+
+export type GetPnlCalendarResponses = {
+    /**
+     * Successful Response
+     */
+    200: PnlCalendarView;
+};
+
+export type GetPnlCalendarResponse = GetPnlCalendarResponses[keyof GetPnlCalendarResponses];
+
+export type ListJournalLabelsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/journal/labels';
+};
+
+export type ListJournalLabelsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListJournalLabelsError = ListJournalLabelsErrors[keyof ListJournalLabelsErrors];
+
+export type ListJournalLabelsResponses = {
+    /**
+     * Successful Response
+     */
+    200: JournalLabelsView;
+};
+
+export type ListJournalLabelsResponse = ListJournalLabelsResponses[keyof ListJournalLabelsResponses];
+
+export type ListPlaybooksData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Include Archived
+         */
+        include_archived?: boolean;
+    };
+    url: '/api/journal/playbooks';
+};
+
+export type ListPlaybooksErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListPlaybooksError = ListPlaybooksErrors[keyof ListPlaybooksErrors];
+
+export type ListPlaybooksResponses = {
+    /**
+     * Response Listplaybooks
+     *
+     * Successful Response
+     */
+    200: Array<PlaybookView>;
+};
+
+export type ListPlaybooksResponse = ListPlaybooksResponses[keyof ListPlaybooksResponses];
+
+export type CreatePlaybookData = {
+    body: PlaybookCreate;
+    path?: never;
+    query?: never;
+    url: '/api/journal/playbooks';
+};
+
+export type CreatePlaybookErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CreatePlaybookError = CreatePlaybookErrors[keyof CreatePlaybookErrors];
+
+export type CreatePlaybookResponses = {
+    /**
+     * Successful Response
+     */
+    201: PlaybookView;
+};
+
+export type CreatePlaybookResponse = CreatePlaybookResponses[keyof CreatePlaybookResponses];
+
+export type UpdatePlaybookData = {
+    body: PlaybookUpdate;
+    path: {
+        /**
+         * Playbook Id
+         */
+        playbook_id: string;
+    };
+    query?: never;
+    url: '/api/journal/playbooks/{playbook_id}';
+};
+
+export type UpdatePlaybookErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdatePlaybookError = UpdatePlaybookErrors[keyof UpdatePlaybookErrors];
+
+export type UpdatePlaybookResponses = {
+    /**
+     * Successful Response
+     */
+    200: PlaybookView;
+};
+
+export type UpdatePlaybookResponse = UpdatePlaybookResponses[keyof UpdatePlaybookResponses];
+
+export type ListJournalTradesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Status
+         *
+         * all, open or closed
+         */
+        status?: 'all' | 'open' | 'closed';
+        /**
+         * Sleeve
+         *
+         * one strategy id, or manual
+         */
+        sleeve?: string | null;
+        /**
+         * Origin
+         *
+         * strategy or manual orders
+         */
+        origin?: 'strategy' | 'manual' | null;
+        /**
+         * Ticker
+         */
+        ticker?: string | null;
+        /**
+         * Since
+         *
+         * closed on or after this day (open: entered)
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * closed on or before this day (open: entered)
+         */
+        until?: string | null;
+        /**
+         * Tag
+         */
+        tag?: string | null;
+        /**
+         * Mistake
+         */
+        mistake?: string | null;
+        /**
+         * Playbook Id
+         */
+        playbook_id?: string | null;
+        /**
+         * Plan
+         *
+         * followed, broke or not_said
+         */
+        plan?: 'followed' | 'broke' | 'not_said' | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/journal/trades';
+};
+
+export type ListJournalTradesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListJournalTradesError = ListJournalTradesErrors[keyof ListJournalTradesErrors];
+
+export type ListJournalTradesResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageJournalTradeView;
+};
+
+export type ListJournalTradesResponse = ListJournalTradesResponses[keyof ListJournalTradesResponses];
+
+export type GetJournalTradeData = {
+    body?: never;
+    path: {
+        /**
+         * Trade Id
+         *
+         * the id of the fill that opened the trade
+         */
+        trade_id: number;
+    };
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/journal/trades/{trade_id}';
+};
+
+export type GetJournalTradeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetJournalTradeError = GetJournalTradeErrors[keyof GetJournalTradeErrors];
+
+export type GetJournalTradeResponses = {
+    /**
+     * Successful Response
+     */
+    200: JournalTradeDetailView;
+};
+
+export type GetJournalTradeResponse = GetJournalTradeResponses[keyof GetJournalTradeResponses];
+
+export type ReviewJournalTradeData = {
+    body: AnnotationRequest;
+    path: {
+        /**
+         * Trade Id
+         *
+         * the id of the fill that opened the trade
+         */
+        trade_id: number;
+    };
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/journal/trades/{trade_id}/review';
+};
+
+export type ReviewJournalTradeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ReviewJournalTradeError = ReviewJournalTradeErrors[keyof ReviewJournalTradeErrors];
+
+export type ReviewJournalTradeResponses = {
+    /**
+     * Successful Response
+     */
+    200: AnnotationView;
+};
+
+export type ReviewJournalTradeResponse = ReviewJournalTradeResponses[keyof ReviewJournalTradeResponses];
 
 export type StartBacktestData = {
     body: BacktestRequest;

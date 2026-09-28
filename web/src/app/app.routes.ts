@@ -63,6 +63,7 @@ export const routes: Routes = [
     loadChildren: () => import('./pages/notifications/notifications.routes'),
   },
   { path: 'trades', loadChildren: () => import('./pages/trades/trades.routes') },
+  { path: 'journal', loadChildren: () => import('./pages/journal/journal.routes') },
   // 20: the AI assistant
   { path: 'assistant', loadChildren: () => import('./pages/assistant/assistant.routes') },
   // 20.7 and 20.8: event calendars and news, the screener

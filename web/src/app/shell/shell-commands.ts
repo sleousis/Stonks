@@ -22,7 +22,12 @@ import { type NavItem, NAV_ITEMS, navItemVisible, navViewer } from './nav-items'
 const SUB_PAGES: readonly (Omit<NavItem, 'group'> & { keywords: readonly string[] })[] = [
   { path: '/orders/ticks', label: 'Trading runs', keywords: ['runs', 'history', 'orders'] },
   { path: '/orders/fills', label: 'Fills', keywords: ['executions', 'trades'] },
-  { path: '/trades', label: 'Trade costs', key: 't', keywords: ['costs', 'journal', 'slippage'] },
+  { path: '/trades', label: 'Trade costs', key: 't', keywords: ['costs', 'slippage'] },
+  {
+    path: '/journal',
+    label: 'Journal',
+    keywords: ['round trips', 'calendar', 'playbooks', 'review'],
+  },
 ];
 
 export const DRY_RUN_TICK = 'action.dry-run-tick';
