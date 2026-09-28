@@ -24,7 +24,10 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from stonks.core.corporate_actions import Split
 
 __all__ = [
     "BehaviourFill",
@@ -149,11 +152,26 @@ class _Lot:
     at: datetime
 
 
-def round_trips(fills: Iterable[BehaviourFill]) -> tuple[list[RoundTrip], int]:
-    """Closed round trips FIFO per ticker, and the count of open lots."""
+def round_trips(
+    fills: Iterable[BehaviourFill], splits: Iterable[Split] = ()
+) -> tuple[list[RoundTrip], int]:
+    """Closed round trips FIFO per ticker, and the count of open lots. A
+    split rescales the ticker's open lots (quantity times the ratio, prices
+    over it) before the first fill on or after its ex-date, so fills keep
+    their own share count."""
     lots: dict[str, list[_Lot]] = {}
     out: list[RoundTrip] = []
+    due: dict[str, list[Split]] = {}
+    for sp in sorted(splits, key=lambda x: x.ex_date):
+        due.setdefault(sp.ticker, []).append(sp)
     for f in sorted(fills, key=lambda x: (x.filled_at, x.id)):
+        waiting = due.get(f.ticker)
+        while waiting and waiting[0].ex_date <= f.filled_at.date():
+            ratio = waiting.pop(0).ratio
+            for held in lots.get(f.ticker, []):
+                held.quantity *= ratio
+                held.price /= ratio
+                held.fee_per_share /= ratio
         if f.quantity <= _EPS:
             continue
         direction = 1 if f.side == "buy" else -1
@@ -208,12 +226,13 @@ def behaviour_report(
     *,
     stance: StanceFn | None = None,
     since: date | None = None,
+    splits: Iterable[Split] = (),
 ) -> BehaviourReport:
     """The behaviour report of ``fills`` (see the module doc). With
     ``since``, the trips entered on or after it: the pairing still runs
     over every fill, so an exit of an older lot never opens a short."""
     cfg = settings or BehaviourSettings()
-    trips, still_open = round_trips(fills)
+    trips, still_open = round_trips(fills, splits)
     if since is not None:
         trips = [t for t in trips if t.entry_at.date() >= since]
         fills = [f for f in fills if f.filled_at.date() >= since]

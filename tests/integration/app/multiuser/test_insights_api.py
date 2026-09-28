@@ -269,6 +269,29 @@ def test_behaviour_since_pairs_exits_with_entries_made_before_it(
     assert body["open_positions"] == 0
 
 
+def test_behaviour_reads_the_lake_splits(client, people, settings, alice_book):
+    """A 2:1 split between entry and exit (from the lake's stock_splits)
+    makes one winning trip of 20 shares, not a loss and a phantom short."""
+    import pandas as pd
+
+    path = settings.state.path
+    _manual_fill(path, alice_book, "manual:x:1", "buy", 10, 100.0, "2026-01-05T15:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:x:2", "sell", 20, 55.0, "2026-01-20T15:00:00+00:00")
+    with client.app.state.services.context.lake() as lake:
+        lake.upsert_stock_splits(
+            pd.DataFrame(
+                {"ticker": ["UP.US"], "date": [pd.Timestamp("2026-01-12")], "ratio": [2.0]}
+            )
+        )
+    body = client.get(
+        "/api/insights/behaviour",
+        params={"portfolio_id": alice_book},
+        headers=people["alice"]["headers"],
+    ).json()
+    assert body["trades"] == 1 and body["open_positions"] == 0
+    assert body["total_pnl"] == pytest.approx(100.0)
+
+
 def test_dashboard_and_insights_share_one_day_change(client, people, alice_book):
     """Visual audit M2: the P&L series (Dashboard, Today) and Insights read
     the headline value and day change from one service, so they agree."""

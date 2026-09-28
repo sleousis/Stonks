@@ -402,7 +402,9 @@ class InsightsService:
         # every fill, so a lot opened before ``since`` still pairs with its exit
         fills = self._behaviour_fills(portfolio_id)
         stance = self._stance_at_entry(sorted({f.ticker for f in fills}))
-        report = behaviour_report(fills, stance=stance, since=since)
+        report = behaviour_report(
+            fills, stance=stance, since=since, splits=self._splits({f.ticker for f in fills})
+        )
 
         def bucket(b: Any) -> BehaviourBucketView:
             return BehaviourBucketView(
@@ -427,6 +429,17 @@ class InsightsService:
             against_strategies_cost=report.against_strategies_cost,
             sources=report.sources,
         )
+
+    def _splits(self, tickers: set[str]) -> list[Any]:
+        """The lake's stock splits of ``tickers``, for pairing trades."""
+        from stonks.core.corporate_actions import Split
+        from stonks.store.corporate_actions import LakeCorporateActions
+
+        if not tickers:
+            return []
+        with self._ctx.lake() as lake:
+            actions = LakeCorporateActions(lake).load(sorted(tickers))
+        return [e for t in sorted(tickers) for e in actions.for_ticker(t) if isinstance(e, Split)]
 
     def _behaviour_fills(self, portfolio_id: str) -> list[BehaviourFill]:
         """Manual fills, plus synced broker trades that no Stonks fill of the
