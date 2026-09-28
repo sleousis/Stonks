@@ -178,3 +178,27 @@ def test_noise_bars_share_one_draw_across_tickers():
         {"X": (one, n_before), "Y": (other, n_before)}, ts[39].date(), block=5, seed=9
     )
     np.testing.assert_allclose(out["Y"]["close"].to_numpy(), 2 * out["X"]["close"].to_numpy())
+
+
+def test_a_real_tune_where_every_trial_failed_is_a_failed_tune(edge_lake, monkeypatch):
+    """The tuners report score 0.0 when no trial scored. That is no score:
+    against noise bests below zero it would pass the best-score gate."""
+    import math
+
+    from stonks.core.protocols import TunerResult
+    from stonks.lab.survival import vs_random as mod
+
+    calls = {"n": 0}
+
+    def fake_tune(strategy_cls, dataset, setup, fixed=None):
+        calls["n"] += 1
+        strategy = strategy_cls({"weekday": 2})
+        if calls["n"] == 1:  # the real run: every trial raised
+            return strategy, TunerResult({}, 0.0, history=[({}, math.nan), ({}, math.nan)])
+        return strategy, TunerResult({}, -1.0, history=[({}, -1.0)])
+
+    monkeypatch.setattr(mod, "tune_and_fit", fake_tune)
+    report = _test().run(WeekdaySignal({"weekday": 2}), dataset_for(edge_lake, TICKERS))
+    assert not report.passed
+    assert math.isnan(report.metrics["real_best"])
+    assert "the real tune failed" in report.notes
