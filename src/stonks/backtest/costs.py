@@ -46,6 +46,12 @@ Implementations
   The engine computes the lagged statistics only when a model asks for
   them (``market_stats_spec``), so the default settings behave exactly as
   before.
+  * the execution algo assumption (``exec_algo``, roadmap 23.16, off by
+    default): the half spread and the impact are scaled by the algo's
+    ``spread_factor`` and ``impact_factor`` and its ``timing_bps`` is added
+    (``stonks.execution.algos``). A book that trades with VWAP in
+    production backtests with the same assumption, and TCA by algo checks
+    it.
 
 Contract: a model's fill price and fee must be non-decreasing in
 ``quantity`` on the adverse side. The broker relies on this to scale
@@ -56,12 +62,15 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from stonks.backtest.fills import MarketStatsSpec
 from stonks.core.types import AssetClass, OrderSide
+
+if TYPE_CHECKING:
+    from stonks.execution.algos import AlgoCostAssumption
 
 _BPS = 10_000.0
 
@@ -151,6 +160,22 @@ class IStarSettings(BaseModel):
     periods_per_year: float = Field(252.0, gt=0.0)
 
 
+class ExecAlgoAssumption(BaseModel):
+    """``[backtest.costs.exec_algo]``: the execution algo the fills assume."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    name: str
+    params: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _known(self) -> ExecAlgoAssumption:
+        from stonks.execution.algos import cost_assumption_of
+
+        cost_assumption_of(self.name, self.params)  # AlgoParamsError is a ValueError
+        return self
+
+
 class CostModelSettings(BaseModel):
     """Settings for ``AssetClassCostModel``. Zero costs by default;
     ``CostModelSettings.realistic()`` is a sensible starting point."""
@@ -174,6 +199,8 @@ class CostModelSettings(BaseModel):
     adv_window: int = Field(20, ge=1)
     vol_window: int = Field(20, ge=2)
     spread_window: int = Field(20, ge=1)
+    #: The execution algo the fills assume (``None``: plain orders).
+    exec_algo: ExecAlgoAssumption | None = None
 
     @model_validator(mode="after")
     def _sell_prices_stay_positive(self) -> CostModelSettings:
@@ -243,6 +270,7 @@ class AssetClassCostModel:
     def __init__(self, settings: CostModelSettings) -> None:
         self._settings = settings
         self._spec = settings.market_stats_spec()
+        self._algo = _algo_assumption(settings.exec_algo)
 
     @property
     def market_stats_spec(self) -> MarketStatsSpec | None:
@@ -251,7 +279,13 @@ class AssetClassCostModel:
     def cost(self, trade: Trade) -> TradeCost:
         costs = self._settings.for_asset_class(trade.asset_class)
         temporary, permanent = self.impact_components(trade)
-        adverse_bps = self._half_spread_bps(trade, costs) + temporary + permanent
+        spread = self._half_spread_bps(trade, costs)
+        impact = temporary + permanent
+        algo = self._algo
+        if algo is not None:
+            spread *= algo.spread_factor
+            impact *= algo.impact_factor
+        adverse_bps = spread + impact + (algo.timing_bps if algo is not None else 0.0)
         fill_price = _adverse(trade.price, trade.side, adverse_bps)
         fee = costs.fee_flat + costs.fee_bps / _BPS * fill_price * trade.quantity
         return TradeCost(fill_price=fill_price, fee=fee)
@@ -299,6 +333,14 @@ class AssetClassCostModel:
         if self._settings.half_spread_model == "class" or estimate is None:
             return floor
         return max(floor, min(estimate, self._settings.max_half_spread_bps))
+
+
+def _algo_assumption(spec: ExecAlgoAssumption | None) -> AlgoCostAssumption | None:
+    if spec is None:
+        return None
+    from stonks.execution.algos import cost_assumption_of
+
+    return cost_assumption_of(spec.name, spec.params)
 
 
 def _known(value: float | None) -> float | None:
