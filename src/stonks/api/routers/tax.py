@@ -1,5 +1,5 @@
-"""Tax settings, specific-lot picks and yearly tax exports per portfolio,
-and FX rate reads (roadmap 20.5). Every portfolio is one of yours (404
+"""Tax settings, specific-lot picks, yearly tax exports and the open-lot
+report per portfolio, and FX rate reads (roadmap 20.5, 13.12). Every portfolio is one of yours (404
 otherwise). CSV routes answer ``text/csv`` as an attachment."""
 
 from __future__ import annotations
@@ -139,6 +139,27 @@ def export_tax_dividends(
     """Every dividend with its ex-date in ``year``: gross, withholding, net."""
     body = _service(services).dividends_csv(portfolio_id, year)
     return _csv(body, f"dividends-{portfolio_id}-{year}.csv")
+
+
+@router.get(
+    "/exports/lots",
+    operation_id="exportTaxLots",
+    response_class=Response,
+    responses=_CSV,
+    summary="Open tax lots as CSV",
+)
+def export_tax_lots(
+    services: ServicesDep,
+    portfolio_id: PortfolioIdDep,
+    as_of: Annotated[date | None, Query(description="YYYY-MM-DD; default today")] = None,
+) -> Response:
+    """Every lot still open at the end of ``as_of``: quantity, acquired day,
+    cost basis (fee and wash sale basis in), days held, holding period, the
+    day it turns long term, and the value and unrealized gain at the latest
+    close. Your lot method decides which lots earlier sells closed."""
+    day = as_of or datetime.now(UTC).date()
+    body = _service(services).open_lots_csv(portfolio_id, day)
+    return _csv(body, f"tax-lots-{portfolio_id}-{day.isoformat()}.csv")
 
 
 class FxRateView(BaseModel):
