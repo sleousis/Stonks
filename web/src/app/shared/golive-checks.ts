@@ -7,14 +7,14 @@ export type GoLiveCheckName = GoLiveCheckView['name'];
 /** Plain names for the gate's checks (src/stonks/production/golive.py). */
 export const CHECK_LABELS: Record<GoLiveCheckName, string> = {
   status: 'Status',
-  min_days: 'Paper days',
-  max_drawdown: 'Paper drawdown',
+  min_days: 'Trial days',
+  max_drawdown: 'Trial drawdown',
   max_drift: 'Drift from backtest',
-  min_trades: 'Paper trades',
+  min_trades: 'Trial trades',
   survival: 'Robustness tests',
   within_mc_band: 'Inside Monte Carlo band',
   quit_rule: 'Quit rule',
-  promotion_preset: 'Full test suite',
+  promotion_preset: 'Full robustness tests',
   nonzero_costs: 'Realistic costs',
   hypothesis_recorded: 'Hypothesis',
   backtest_min_trades: 'Backtest trades',
@@ -22,15 +22,15 @@ export const CHECK_LABELS: Record<GoLiveCheckName, string> = {
 
 /** What each check measures, in one sentence. */
 export const CHECK_MEASURES: Record<GoLiveCheckName, string> = {
-  status: 'The strategy is paper trading or live, so it has a paper period.',
-  min_days: 'Distinct days with a paper snapshot.',
-  max_drawdown: 'Deepest peak-to-trough fall during the paper period.',
-  max_drift: 'Gap between the paper return and the return its out-of-sample backtest expects.',
-  min_trades: 'Filled trades during the paper period.',
+  status: 'The strategy is on trial or approved, so it has a trial record.',
+  min_days: 'Distinct days with a value on its test book.',
+  max_drawdown: 'Deepest fall from a high during the trial.',
+  max_drift: 'Gap between the trial return and the return its out-of-sample backtest expects.',
+  min_trades: 'Filled trades on its test book during the trial.',
   survival: 'Every stored robustness test passed.',
-  within_mc_band: 'Paper drawdown stays inside the Monte Carlo band from the backtest.',
+  within_mc_band: 'Trial drawdown stays inside the Monte Carlo band from the backtest.',
   quit_rule: 'Drawdown stays below 1.5x the backtest worst or the Monte Carlo limit.',
-  promotion_preset: 'The full robustness test suite has run.',
+  promotion_preset: 'The full robustness tests have run.',
   nonzero_costs: 'The backtest used realistic, non-zero trading costs.',
   hypothesis_recorded: 'A written hypothesis explains why the strategy should work.',
   backtest_min_trades: 'The backtest closed enough trades to trust its statistics.',
@@ -135,25 +135,25 @@ export function checkFix(c: GoLiveCheckView, strategyId: string): CheckFix | nul
   const short = c.value != null && c.limit != null ? Math.ceil(c.limit - c.value) : null;
   switch (c.name) {
     case 'status':
-      return { text: 'Start paper trading it first.' };
+      return { text: 'Put it on trial first.' };
     case 'min_days':
       return short && short > 0
-        ? { text: `About ${plural(short, 'more trading day', 'more trading days')} on paper.` }
-        : { text: 'Keep it paper trading for a few more trading days.' };
+        ? { text: `About ${plural(short, 'more trading day', 'more trading days')} on trial.` }
+        : { text: 'Keep it on trial for a few more trading days.' };
     case 'min_trades':
       return short && short > 0
         ? {
-            text: `${plural(short, 'more paper trade', 'more paper trades')} needed. Keep it paper trading.`,
+            text: `${plural(short, 'more trial trade', 'more trial trades')} needed. Keep it on trial.`,
           }
-        : { text: 'Keep it paper trading until it trades more.' };
+        : { text: 'Keep it on trial until it trades more.' };
     case 'max_drawdown':
     case 'within_mc_band':
     case 'quit_rule':
     case 'max_drift':
-      return { text: 'Keep it paper trading and watch it, or stop it if it keeps falling behind.' };
+      return { text: 'Keep it on trial and watch it, or retire it if it keeps falling behind.' };
     case 'survival':
     case 'promotion_preset':
-      return labFix(strategyId, 'Run the full test suite in Lab.', 'Run the full tests in Lab');
+      return labFix(strategyId, 'Run the full robustness tests in Lab.', 'Run the full tests in Lab');
     case 'nonzero_costs':
       return labFix(
         strategyId,
@@ -192,7 +192,7 @@ export interface ChecklistItem {
 }
 
 /**
- * The promotion checklist a reviewer reads before promoting (it never
+ * The checklist a reviewer reads before approving (it never
  * changes the verdict). Nothing recorded shows as "Not recorded".
  */
 export function checklistItems(c: PromotionChecklistView | undefined): ChecklistItem[] {

@@ -2,9 +2,11 @@ import type { StrategyStatus } from '../api/models';
 import type { SubscriptionMode } from '../api/subscriptions.service';
 
 /**
- * One vocabulary for a strategy's lifecycle, used by Studio and Strategies
- * alike. The API still says shadow, active and retired: traders see paper
- * trading, live and stopped.
+ * One vocabulary for a strategy's status, used by Studio, Strategies and
+ * every page that names a status (docs/design/vocabulary.md). The API still
+ * says shadow, active and retired: people see On trial, Approved and
+ * Retired. "Live" is never a strategy word: it only means real money at a
+ * broker, which is the portfolio's stage, not the strategy's.
  */
 export type LifecycleAction = 'paper' | 'live' | 'pause' | 'stop';
 
@@ -19,67 +21,81 @@ export interface LifecycleWords {
 
 export const LIFECYCLE: Readonly<Record<LifecycleAction, LifecycleWords>> = {
   paper: {
-    label: 'Start paper trading',
+    label: 'Put on trial',
     target: 'shadow',
-    done: (name) => `Started paper trading for ${name}.`,
+    done: (name) => `${name} is on trial. Its test book starts with the next trading run.`,
   },
   live: {
-    label: 'Go live',
+    label: 'Approve',
     target: 'active',
-    done: (name) => `${name} is live. It trades from the next run.`,
+    done: (name) => `${name} is approved. People can follow it.`,
   },
   pause: {
-    label: 'Back to paper trading',
+    label: 'Back on trial',
     target: 'shadow',
-    done: (name) => `${name} is back to paper trading.`,
+    done: (name) => `${name} is back on trial.`,
   },
   stop: {
-    label: 'Stop',
+    label: 'Retire',
     target: 'retired',
-    done: (name) => `Stopped ${name}.`,
+    done: (name) => `Retired ${name}. It no longer decides.`,
   },
 };
 
-/** The stages a strategy moves through, in order. */
-export type Stage = 'draft' | 'paper' | 'ready' | 'live';
+/** The steps of a strategy's status ladder, in order. */
+export type Stage = 'draft' | 'trial' | 'approved' | 'retired';
 
 export const STAGES: readonly { id: Stage; label: string; detail: string }[] = [
-  { id: 'draft', label: 'Draft', detail: 'Build and test freely' },
-  { id: 'paper', label: 'Paper', detail: 'Decides every run, no real orders' },
-  { id: 'ready', label: 'Ready', detail: 'Passed the go-live check' },
-  { id: 'live', label: 'Live', detail: 'Places orders from the next run' },
+  { id: 'draft', label: 'Draft', detail: 'Being built. Not tested by the system yet.' },
+  { id: 'trial', label: 'On trial', detail: 'Paper-tested on its own test book every run' },
+  { id: 'approved', label: 'Approved', detail: 'Passed the go-live check. People can follow it.' },
+  { id: 'retired', label: 'Retired', detail: 'It no longer decides.' },
 ];
 
-/** Trader words for an API status. */
+/** The words people see for an API status. */
 export const STATUS_WORDS: Readonly<Record<StrategyStatus, string>> = {
-  shadow: 'Paper trading',
-  active: 'Live',
-  retired: 'Stopped',
+  shadow: 'On trial',
+  active: 'Approved',
+  retired: 'Retired',
+};
+
+/** What each status means, in one plain sentence. */
+export const STATUS_MEANING: Readonly<Record<StrategyStatus, string>> = {
+  shadow: 'The system paper-tests it on its own test book every run.',
+  active: 'Approved: people can follow it.',
+  retired: 'It no longer decides.',
 };
 
 /**
  * Server lines (gate details, auto blockers) still name the API's status
- * keys. This puts them in the trader's words (UX-09).
+ * keys. This puts them in the words people read (UX-09).
  */
 export function toTraderWords(text: string): string {
   return text
-    .replace(/'?promotion'? (preset|suite)/gi, 'full test suite')
-    .replace(/\bpromotion\b/gi, 'going live')
+    .replace(/'?promotion'? (preset|suite)/gi, 'full robustness tests')
+    .replace(/\bpromotion\b/gi, 'approval')
     .replace(/\bsurvival (reports?|tests?)\b/gi, 'robustness tests')
-    .replace(/\bnot active\b/gi, 'not live yet')
-    .replace(/\bshadow\b/gi, 'paper trading')
-    .replace(/\bretired\b/gi, 'stopped');
+    .replace(/\bnot active\b/gi, 'not approved yet')
+    .replace(/\b(model|shadow|paper) book\b/gi, 'test book')
+    .replace(/\b(days?) of paper trading\b/gi, '$1 on trial')
+    .replace(/\bin shadow\b/gi, 'on trial')
+    .replace(/\bshadow\b/gi, 'on trial');
 }
 
-/**
- * The stage for a registered strategy. `golivePassed` is the go-live
- * verdict when known; a paper strategy that passed it is ready.
- */
-export function stageOf(status: StrategyStatus | 'draft', golivePassed?: boolean | null): Stage {
+/** The status ladder step for a strategy (a Studio draft is `draft`). */
+export function stageOf(status: StrategyStatus | 'draft'): Stage {
   if (status === 'draft') return 'draft';
-  if (status === 'active') return 'live';
-  if (status === 'shadow' && golivePassed) return 'ready';
-  return 'paper';
+  if (status === 'active') return 'approved';
+  if (status === 'retired') return 'retired';
+  return 'trial';
+}
+
+/** On trial with a passing go-live check: someone may approve it now. */
+export function readyToApprove(
+  status: StrategyStatus | 'draft',
+  golivePassed: boolean | null | undefined,
+): boolean {
+  return status === 'shadow' && golivePassed === true;
 }
 
 /** Done, current or still to come, for a stage bar. */
@@ -98,22 +114,19 @@ export interface ModeOption {
 }
 
 /**
- * How a trader follows a strategy, in one set of words for Today's switch
- * and the strategy page's Follow panel (UX-31).
+ * How a person follows a strategy, in one set of words for Today and the
+ * strategy page (UX-31, docs/design/vocabulary.md). Whether a trade uses
+ * real money depends on the portfolio's stage, never on the mode.
  */
 export const MODES: readonly ModeOption[] = [
-  { value: 'notify', label: 'Signals only', help: 'You get its signals. Nothing trades.' },
-  {
-    value: 'paper',
-    label: 'Paper trading',
-    help: 'It trades simulated money in one of your portfolios.',
-  },
+  { value: 'notify', label: 'Alerts only', help: 'You get its signals. Nothing trades.' },
+  { value: 'paper', label: 'Paper', help: 'It trades your paper portfolio. No real money.' },
   {
     value: 'approve',
     label: 'Approve each trade',
-    help: 'It proposes real orders. Each waits for your approval before it goes to your broker.',
+    help: 'Each trade waits for your approval as a ticket.',
   },
-  { value: 'auto', label: 'Auto', help: 'It places real orders with your broker.' },
+  { value: 'auto', label: 'Automatic', help: 'Trades go out without asking.' },
 ];
 
 /** The words for a mode, or the raw value for one this console does not know. */
