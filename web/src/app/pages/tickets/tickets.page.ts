@@ -11,6 +11,8 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import type { OrderDraftView } from '../../api/models';
+import { OrderDraftsService } from '../../api/order-drafts.service';
 import { type TicketView, TicketsService } from '../../api/tickets.service';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
@@ -19,17 +21,18 @@ import { formatDate, formatDateTime, formatMoney, formatNumber } from '../../cor
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { TicketCountService } from '../../core/tickets/ticket-count.service';
+import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
 import { strategyDisplayName } from '../../shared/strategy-names';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
-import { Segmented } from '../../shared/ui/segmented';
 import { SideTag } from '../../shared/ui/side-tag';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { RejectSheet } from './reject-sheet';
+import { SuggestedOrders } from './suggested-orders';
 import { deciderWords, holdWords, ruleLines, ticketStatusLook } from './ticket-words';
 
 type View = 'waiting' | 'history';
@@ -47,11 +50,13 @@ interface Group {
 }
 
 /**
- * Approvals (roadmap 19.8): the orders a live book decided after the close
- * that wait for the trader. Each is an order ticket (side, ticker, quantity,
- * limit, notional, why, the rules that touched it) with Approve and Reject.
- * Approve all takes one code for the whole run. History lists every ticket
- * and what became of it. Brass means real money.
+ * Approvals (roadmap 19.8, F9): the one inbox for orders that wait for the
+ * trader. Strategy tickets are the orders a book at a broker decided after
+ * the close, as order tickets (side, ticker, quantity, limit, notional, why,
+ * the rules that touched it) with Approve and Reject; Approve all takes one
+ * code for the whole run. Suggested orders are the assistant's proposals.
+ * History lists both and what became of them. Brass means real money.
+ * The old Orders > Drafts address redirects here.
  */
 @Component({
   selector: 'app-tickets-page',
@@ -59,7 +64,7 @@ interface Group {
   imports: [
     RouterLink,
     PageHeader,
-    Segmented,
+    UpdatedAgo,
     SideTag,
     ModeStamp,
     StatusPill,
@@ -71,184 +76,238 @@ interface Group {
     ErrorState,
     LoadingState,
     RejectSheet,
+    SuggestedOrders,
   ],
   template: `
     <app-page-header
       title="Approvals"
-      description="Orders your live books decided after the close. Approve each one before the next open, or reject it."
+      description="Orders waiting for your OK: trades from strategies you follow with Approve each trade, and orders the assistant suggested. Nothing goes out until you approve it."
     >
-      <app-segmented
-        actions
-        label="Show"
-        [options]="views"
-        [value]="view()"
-        (valueChange)="view.set($any($event))"
-      />
+      <app-updated-ago [at]="auto.updatedAt()" />
     </app-page-header>
 
-    @if (list.error(); as err) {
-      <app-error-state title="Could not load your tickets" [error]="err" (retry)="list.reload()" />
-    } @else if (!list.hasValue()) {
-      <app-loading-state label="Loading your tickets" [rows]="3" />
-    } @else if (view() === 'waiting') {
-      @if (groups().length === 0) {
-        <app-empty-state
-          title="Nothing waits for you"
-          message="Tickets appear here after a trading run when a strategy follows Approve each trade."
+    <div class="tabs" role="tablist" aria-label="Approvals views">
+      @for (v of views; track v.value) {
+        <button
+          type="button"
+          role="tab"
+          class="tab"
+          [id]="'tab-' + v.value"
+          [attr.aria-selected]="view() === v.value"
+          [attr.aria-controls]="'panel-' + v.value"
+          [tabIndex]="view() === v.value ? 0 : -1"
+          (click)="view.set(v.value)"
+          (keydown)="onTabKey($event)"
         >
-          <a routerLink="/" class="btn">Back to Today</a>
-        </app-empty-state>
-      } @else {
-        <p class="lead">
-          {{ waiting().length }} {{ waiting().length === 1 ? 'order waits' : 'orders wait' }} for
-          you. Approving asks for a code once, then each ticket goes to your broker in the window
-          before the open. <app-help-tip term="Approve each trade" />
-        </p>
-        @for (group of groups(); track group.key) {
-          <section class="run" [attr.aria-labelledby]="'run-' + group.key">
-            <div class="run-head">
-              <div class="run-title">
-                <h2 [id]="'run-' + group.key">{{ group.portfolioName }}</h2>
-                <p class="muted">
-                  Decided {{ date(group.asOf) }}. Send by
-                  <span class="num">{{ dateTime(group.expiresAt) }}</span
-                  >, unapproved tickets then expire.
-                </p>
-              </div>
-              @if (group.tickets.length > 1) {
-                <button
-                  type="button"
-                  class="btn btn-primary"
-                  [disabled]="!canApprove() || busyGroup() === group.key"
-                  (click)="approveAll(group)"
-                >
-                  Approve all {{ group.tickets.length }}
-                </button>
-              }
-            </div>
-            <ul class="tickets">
-              @for (t of group.tickets; track t.id) {
-                <li>
-                  <article
-                    class="ticket"
-                    [class.live]="group.live"
-                    [attr.aria-labelledby]="'ticket-' + t.id"
-                  >
-                    <p class="ticket-head">
-                      <app-side-tag [side]="t.side" />
-                      <span class="ticket-kind" [id]="'ticket-' + t.id">
-                        <span class="verb">{{ t.side === 'buy' ? 'Buy' : 'Sell' }}</span>
-                        <span class="num">{{ qty(t.quantity) }}</span>
-                        <strong class="num">{{ t.ticker }}</strong>
-                      </span>
-                      <app-mode-stamp [live]="group.live" />
-                    </p>
-                    @if (hold(t); as why) {
-                      <p class="hold" [class.alarm]="t.hold === 'runaway'">{{ why }}</p>
-                    }
-                    <dl class="ticket-lines">
-                      <div>
-                        <dt>Price</dt>
-                        <dd>
-                          {{ t.limit_price ? 'Limit ' + money(t.limit_price) : 'At the open' }}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Decided at</dt>
-                        <dd>{{ money(t.reference_price) }}</dd>
-                      </div>
-                      <div>
-                        <dt>About</dt>
-                        <dd>{{ money(t.notional) }}</dd>
-                      </div>
-                      @if (t.strategy_id) {
-                        <div>
-                          <dt>Strategy</dt>
-                          <dd>{{ strategyName(t.strategy_id) }}</dd>
-                        </div>
-                      }
-                      @if (score(t) !== null) {
-                        <div>
-                          <dt>Signal score</dt>
-                          <dd>{{ num(score(t)) }}</dd>
-                        </div>
-                      }
-                      @if (commission(t); as fee) {
-                        <div>
-                          <dt>Commission</dt>
-                          <dd>{{ money(fee) }}</dd>
-                        </div>
-                      }
-                    </dl>
-                    @if (rules(t); as lines) {
-                      @if (lines.length) {
-                        <details class="rules">
-                          <summary>
-                            Checked by {{ lines.length }} rule{{ lines.length === 1 ? '' : 's' }}
-                          </summary>
-                          <ul>
-                            @for (line of lines; track $index) {
-                              <li>{{ line }}</li>
-                            }
-                          </ul>
-                        </details>
-                      }
-                    }
-                    <div class="actions">
-                      <button
-                        type="button"
-                        class="btn"
-                        [disabled]="!canReject() || busy().has(t.id)"
-                        (click)="reject(t)"
-                      >
-                        Reject
-                      </button>
+          {{ v.label }}
+          @if (v.value === 'waiting' && waitingCount() > 0) {
+            <span class="count num">{{ waitingCount() }}</span>
+          }
+        </button>
+      }
+    </div>
+
+    <div
+      class="view"
+      role="tabpanel"
+      [id]="'panel-' + view()"
+      [attr.aria-labelledby]="'tab-' + view()"
+    >
+      @if (list.error(); as err) {
+        <app-error-state title="Could not load your tickets" [error]="err" (retry)="list.reload()" />
+      } @else if (!list.hasValue()) {
+        <app-loading-state label="Loading your tickets" [rows]="3" />
+      } @else if (view() === 'waiting') {
+        @if (waitingCount() === 0) {
+          <app-empty-state
+            title="Nothing waits for you"
+            message="Orders appear here after a trading run when a strategy you follow uses Approve each trade, and when the assistant suggests an order."
+          >
+            <a routerLink="/" class="btn">Back to Today</a>
+          </app-empty-state>
+        } @else {
+          <p class="lead">
+            {{ waitingCount() }} {{ waitingCount() === 1 ? 'order waits' : 'orders wait' }} for you.
+            Approving asks for a code from your authenticator app.
+            <app-help-tip term="Approve each trade" />
+          </p>
+          @if (groups().length) {
+            <section class="source-group" aria-labelledby="from-strategies">
+              <h2 id="from-strategies" class="source-title">
+                From strategies you follow
+                <span class="muted">{{ waiting().length }}</span>
+              </h2>
+              <p class="muted">Each ticket goes to your broker in the window before the next open.</p>
+              @for (group of groups(); track group.key) {
+                <section class="run" [attr.aria-labelledby]="'run-' + group.key">
+                  <div class="run-head">
+                    <div class="run-title">
+                      <h3 [id]="'run-' + group.key">{{ group.portfolioName }}</h3>
+                      <p class="muted">
+                        Decided {{ date(group.asOf) }}. Send by
+                        <span class="num">{{ dateTime(group.expiresAt) }}</span
+                        >, unapproved tickets then expire.
+                      </p>
+                    </div>
+                    @if (group.tickets.length > 1) {
                       <button
                         type="button"
                         class="btn btn-primary"
-                        [disabled]="!canApprove() || busy().has(t.id)"
-                        (click)="approve(group, [t])"
+                        [disabled]="!canApprove() || busyGroup() === group.key"
+                        (click)="approveAll(group)"
                       >
-                        Approve
+                        Approve all {{ group.tickets.length }}
                       </button>
-                    </div>
-                  </article>
-                </li>
+                    }
+                  </div>
+                  <ul class="tickets">
+                    @for (t of group.tickets; track t.id) {
+                      <li>
+                        <article
+                          class="ticket"
+                          [class.live]="group.live"
+                          [attr.aria-labelledby]="'ticket-' + t.id"
+                        >
+                          <p class="ticket-head">
+                            <app-side-tag [side]="t.side" />
+                            <span class="ticket-kind" [id]="'ticket-' + t.id">
+                              <span class="verb">{{ t.side === 'buy' ? 'Buy' : 'Sell' }}</span>
+                              <span class="num">{{ qty(t.quantity) }}</span>
+                              <strong class="num">{{ t.ticker }}</strong>
+                            </span>
+                            <app-mode-stamp [live]="group.live" />
+                          </p>
+                          @if (hold(t); as why) {
+                            <p class="hold" [class.alarm]="t.hold === 'runaway'">{{ why }}</p>
+                          }
+                          <dl class="ticket-lines">
+                            <div>
+                              <dt>Price</dt>
+                              <dd>
+                                {{ t.limit_price ? 'Limit ' + money(t.limit_price) : 'At the open' }}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>Decided at</dt>
+                              <dd>{{ money(t.reference_price) }}</dd>
+                            </div>
+                            <div>
+                              <dt>About</dt>
+                              <dd>{{ money(t.notional) }}</dd>
+                            </div>
+                            @if (t.strategy_id) {
+                              <div>
+                                <dt>Strategy</dt>
+                                <dd>{{ strategyName(t.strategy_id) }}</dd>
+                              </div>
+                            }
+                            @if (scoreText(t); as s) {
+                              <div>
+                                <dt>Signal score <app-help-tip term="Signal score" /></dt>
+                                <dd>{{ s }}</dd>
+                              </div>
+                            }
+                            @if (commission(t); as fee) {
+                              <div>
+                                <dt>Commission</dt>
+                                <dd>{{ money(fee) }}</dd>
+                              </div>
+                            }
+                          </dl>
+                          @if (rules(t); as lines) {
+                            @if (lines.length) {
+                              <details class="rules">
+                                <summary>
+                                  Checked by {{ lines.length }}
+                                  rule{{ lines.length === 1 ? '' : 's' }}
+                                </summary>
+                                <ul>
+                                  @for (line of lines; track $index) {
+                                    <li>{{ line }}</li>
+                                  }
+                                </ul>
+                              </details>
+                            }
+                          }
+                          <div class="actions">
+                            <button
+                              type="button"
+                              class="btn"
+                              [disabled]="!canReject() || busy().has(t.id)"
+                              (click)="reject(t)"
+                            >
+                              Reject
+                            </button>
+                            <button
+                              type="button"
+                              class="btn btn-primary"
+                              [disabled]="!canApprove() || busy().has(t.id)"
+                              (click)="approve(group, [t])"
+                            >
+                              Approve
+                            </button>
+                          </div>
+                        </article>
+                      </li>
+                    }
+                  </ul>
+                </section>
               }
-            </ul>
+            </section>
+          }
+          @if (pendingDrafts().length) {
+            <section class="source-group" aria-labelledby="suggested">
+              <h2 id="suggested" class="source-title">
+                Suggested orders <span class="muted">{{ pendingDrafts().length }}</span>
+              </h2>
+              <p class="muted">
+                Orders the assistant proposed. Approving places one through every check, like an
+                order you place by hand.
+              </p>
+              <app-suggested-orders [drafts]="pendingDrafts()" (changed)="drafts.reload()" />
+            </section>
+          }
+          <app-permission-note permission="orders.approve" />
+        }
+      } @else {
+        <section class="source-group" aria-labelledby="history-strategies">
+          <h2 id="history-strategies" class="source-title">From strategies you follow</h2>
+          @if (history().length === 0) {
+            <app-empty-state
+              title="No tickets yet"
+              message="Every order a strategy you follow with Approve each trade decides is kept here, with what became of it."
+            />
+          } @else {
+            <app-data-table
+              caption="Your order tickets, newest first"
+              [rows]="history()"
+              [columns]="columns"
+              [rowKey]="key"
+            >
+              <ng-template appCell="ticker" [appCellOf]="history()" let-t>
+                <span class="order"
+                  ><app-side-tag [side]="t.side" /> <span class="num">{{ t.ticker }}</span></span
+                >
+              </ng-template>
+              <ng-template appCell="status" [appCellOf]="history()" let-t>
+                <app-status-pill
+                  [status]="t.status"
+                  [label]="look(t.status).label"
+                  [tone]="look(t.status).tone"
+                  [form]="look(t.status).form"
+                />
+              </ng-template>
+            </app-data-table>
+          }
+        </section>
+        @if (pastDrafts().length) {
+          <section class="source-group" aria-labelledby="history-suggested">
+            <h2 id="history-suggested" class="source-title">Suggested orders</h2>
+            <app-suggested-orders [drafts]="pastDrafts()" (changed)="drafts.reload()" />
           </section>
         }
-        <app-permission-note permission="orders.approve" />
       }
-    } @else {
-      @if (history().length === 0) {
-        <app-empty-state
-          title="No tickets yet"
-          message="Every order a live book decides after the close is kept here, with what became of it."
-        />
-      } @else {
-        <app-data-table
-          caption="Your order tickets, newest first"
-          [rows]="history()"
-          [columns]="columns"
-          [rowKey]="key"
-        >
-          <ng-template appCell="ticker" [appCellOf]="history()" let-t>
-            <span class="order"
-              ><app-side-tag [side]="t.side" /> <span class="num">{{ t.ticker }}</span></span
-            >
-          </ng-template>
-          <ng-template appCell="status" [appCellOf]="history()" let-t>
-            <app-status-pill
-              [status]="t.status"
-              [label]="look(t.status).label"
-              [tone]="look(t.status).tone"
-              [form]="look(t.status).form"
-            />
-          </ng-template>
-        </app-data-table>
-      }
-    }
+    </div>
     <app-reject-sheet />
   `,
   styles: `
@@ -261,6 +320,83 @@ interface Group {
     }
     .lead {
       color: var(--color-ink-2);
+    }
+    .tabs {
+      display: flex;
+      gap: var(--space-1);
+      margin-top: calc(-1 * var(--space-2));
+      border-bottom: 1px solid var(--color-border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tab {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-height: 36px;
+      padding: 0 var(--space-3);
+      margin-bottom: -1px;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      color: var(--color-ink-2);
+      font: inherit;
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .tab:hover,
+    .tab[aria-selected='true'] {
+      color: var(--color-ink);
+    }
+    .tab[aria-selected='true'] {
+      border-bottom-color: var(--color-accent);
+    }
+    .tab:focus-visible {
+      outline: 2px solid var(--color-focus);
+      outline-offset: -2px;
+    }
+    .count {
+      min-width: 1.25rem;
+      padding: 0 var(--space-1);
+      border-radius: var(--radius-pill, 999px);
+      background: var(--color-ink);
+      color: var(--color-surface);
+      font-size: var(--text-xs);
+      text-align: center;
+    }
+    @include bp.phone {
+      .tab {
+        flex: 1 1 auto;
+        justify-content: center;
+        min-height: var(--touch-min);
+      }
+    }
+    @include bp.coarse {
+      .tab {
+        min-height: var(--touch-min);
+      }
+    }
+    .view {
+      display: grid;
+      gap: var(--space-5);
+      min-width: 0;
+    }
+    .source-group {
+      display: grid;
+      gap: var(--space-3);
+      min-width: 0;
+    }
+    .source-title {
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-2);
+      font-size: var(--text-lg);
+    }
+    .source-title .muted {
+      font-size: var(--text-sm);
+      font-weight: var(--weight-regular, 400);
     }
     .run {
       display: grid;
@@ -278,7 +414,7 @@ interface Group {
       min-width: 0;
       flex: 1 1 16rem;
     }
-    .run-title h2 {
+    .run-title h3 {
       font-size: var(--text-lg);
       overflow-wrap: anywhere;
     }
@@ -369,7 +505,9 @@ export class TicketsPage {
   private readonly rejectSheet = viewChild.required(RejectSheet);
   private readonly ticketCount = inject(TicketCountService);
 
-  protected readonly views = [
+  private readonly draftsApi = inject(OrderDraftsService);
+
+  protected readonly views: readonly { value: View; label: string }[] = [
     { value: 'waiting', label: 'Waiting for you' },
     { value: 'history', label: 'History' },
   ];
@@ -382,6 +520,18 @@ export class TicketsPage {
   protected readonly busyGroup = signal<string | null>(null);
 
   protected readonly list = resource({ loader: () => this.api.list() });
+  /** Suggested orders (every status): pending ones wait here, the rest are history. */
+  protected readonly drafts = resource({ loader: () => this.draftsApi.list() });
+  protected readonly auto = autoRefresh(() => [this.list, this.drafts]);
+  private readonly draftItems = computed<OrderDraftView[]>(() =>
+    this.drafts.hasValue() ? this.drafts.value() : [],
+  );
+  protected readonly pendingDrafts = computed(() =>
+    this.draftItems().filter((d) => d.status === 'pending'),
+  );
+  protected readonly pastDrafts = computed(() =>
+    this.draftItems().filter((d) => d.status !== 'pending'),
+  );
   /** The list as shown, updated in place from each decision's response. */
   private readonly items = linkedSignal(() => (this.list.hasValue() ? this.list.value() : []));
 
@@ -391,9 +541,15 @@ export class TicketsPage {
   protected readonly history = computed(() =>
     this.items().filter((t) => t.status !== 'awaiting_approval'),
   );
+  /** Strategy tickets and suggested orders that wait, together (F9). */
+  protected readonly waitingCount = computed(
+    () => this.waiting().length + this.pendingDrafts().length,
+  );
   /** The nav badge follows what this page shows (22.10). */
   private readonly badge = effect(() => {
-    if (this.list.hasValue()) this.ticketCount.set(this.waiting().length);
+    if (this.list.hasValue()) {
+      this.ticketCount.set(this.waiting().length, this.pendingDrafts().length);
+    }
   });
   protected readonly groups = computed<Group[]>(() => {
     const byKey = new Map<string, Group>();
@@ -434,7 +590,6 @@ export class TicketsPage {
   protected readonly rules = ruleLines;
   protected readonly strategyName = (id: string) => strategyDisplayName(id);
   protected readonly money = (v: number | null | undefined) => formatMoney(v);
-  protected readonly num = (v: number | null | undefined) => formatNumber(v, { digits: 3 });
   protected readonly qty = (v: number) => formatNumber(v);
   protected readonly date = formatDate;
   protected readonly dateTime = formatDateTime;
@@ -445,9 +600,26 @@ export class TicketsPage {
     return typeof value === 'number' ? value : null;
   }
 
-  protected score(t: TicketView): number | null {
+  /** The strategy's score for the ticker when it decided, two decimals. */
+  protected scoreText(t: TicketView): string | null {
     const value = t.reason['score'];
-    return typeof value === 'number' ? value : null;
+    return typeof value === 'number' ? formatNumber(value, { digits: 2 }) : null;
+  }
+
+  /** Arrow keys move between the two tabs (the WAI-ARIA tabs pattern). */
+  protected onTabKey(event: KeyboardEvent): void {
+    const order = this.views.map((v) => v.value);
+    const at = order.indexOf(this.view());
+    let next: number;
+    if (event.key === 'ArrowRight') next = (at + 1) % order.length;
+    else if (event.key === 'ArrowLeft') next = (at - 1 + order.length) % order.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = order.length - 1;
+    else return;
+    event.preventDefault();
+    this.view.set(order[next]);
+    const host = (event.currentTarget as HTMLElement).parentElement;
+    host?.querySelector<HTMLButtonElement>(`#tab-${order[next]}`)?.focus();
   }
 
   protected async approve(group: Group, tickets: readonly TicketView[]): Promise<void> {

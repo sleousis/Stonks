@@ -1,6 +1,14 @@
 import { DOCUMENT } from '@angular/common';
-import { DestroyRef, Injectable, InjectionToken, inject, signal } from '@angular/core';
+import {
+  DestroyRef,
+  Injectable,
+  InjectionToken,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 
+import { OrderDraftsService } from '../../api/order-drafts.service';
 import { TicketsService } from '../../api/tickets.service';
 
 /** How often the Approvals badge re-reads the waiting count while the tab is visible. 0 turns polling off. */
@@ -10,24 +18,27 @@ export const TICKET_POLL_MS = new InjectionToken<number>('TICKET_POLL_MS', {
 });
 
 /**
- * How many order tickets wait for the signed-in person's approval, for
- * the badge on the Approvals nav item (roadmap 22.10). Reads the ticket
- * summary quietly (no error toasts) while the tab is visible, pauses while
- * it is hidden, and takes the count the approvals page already knows.
+ * How many orders wait for the signed-in person's approval, for the badge
+ * on the Approvals nav item (roadmap 22.10, F9): strategy tickets plus
+ * suggested orders, the two kinds the one Approvals inbox holds. Reads both
+ * quietly (no error toasts) while the tab is visible, pauses while it is
+ * hidden, and takes the counts the approvals page already knows.
  */
 @Injectable({ providedIn: 'root' })
 export class TicketCountService {
   private readonly api = inject(TicketsService);
+  private readonly drafts = inject(OrderDraftsService);
   private readonly doc = inject(DOCUMENT);
   private readonly pollMs = inject(TICKET_POLL_MS);
 
-  private readonly count = signal(0);
+  private readonly tickets = signal(0);
+  private readonly suggested = signal(0);
   private watchers = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly onVisibility = () => this.sync(true);
 
-  /** Tickets awaiting approval, from the last read. */
-  readonly waiting = this.count.asReadonly();
+  /** Tickets and suggested orders awaiting approval, from the last read. */
+  readonly waiting = computed(() => this.tickets() + this.suggested());
 
   /** Keep the count fresh until `destroyRef` goes. Watchers share one poll. */
   watch(destroyRef: DestroyRef): void {
@@ -44,18 +55,24 @@ export class TicketCountService {
     });
   }
 
-  /** Re-read the count. A failed read keeps the last known count. */
+  /** Re-read both counts. A failed read keeps that part's last known count. */
   async refresh(): Promise<void> {
-    try {
-      this.count.set((await this.api.summary(true)).awaiting_approval);
-    } catch {
-      // Offline or signed out: keep what we had, say nothing.
-    }
+    const [tickets, suggested] = await Promise.allSettled([
+      this.api.summary(true),
+      this.drafts.pendingCount(),
+    ]);
+    // Offline or signed out: keep what we had, say nothing.
+    if (tickets.status === 'fulfilled') this.tickets.set(tickets.value.awaiting_approval);
+    if (suggested.status === 'fulfilled') this.suggested.set(suggested.value);
   }
 
-  /** The approvals page listed or decided tickets: take its count. */
-  set(waiting: number): void {
-    this.count.set(Math.max(0, waiting));
+  /**
+   * The approvals page listed or decided orders: take its counts. One
+   * argument is the whole count (older callers); two split it.
+   */
+  set(tickets: number, suggested = 0): void {
+    this.tickets.set(Math.max(0, tickets));
+    this.suggested.set(Math.max(0, suggested));
   }
 
   private sync(readNow: boolean): void {
