@@ -22,7 +22,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { TicketCountService } from '../../core/tickets/ticket-count.service';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
-import { strategyDisplayName } from '../../shared/strategy-names';
+import { rowStrategyName } from '../../shared/strategy-names';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
@@ -196,7 +196,7 @@ interface Group {
                             @if (t.strategy_id) {
                               <div>
                                 <dt>Strategy</dt>
-                                <dd>{{ strategyName(t.strategy_id) }}</dd>
+                                <dd>{{ strategyName(t) }}</dd>
                               </div>
                             }
                             @if (scoreText(t); as s) {
@@ -538,7 +538,7 @@ export class TicketsPage {
   protected readonly look = ticketStatusLook;
   protected readonly hold = (t: TicketView) => holdWords(t.hold);
   protected readonly rules = ruleLines;
-  protected readonly strategyName = (id: string) => strategyDisplayName(id);
+  protected readonly strategyName = (t: TicketView) => rowStrategyName(t);
   protected readonly money = (v: number | null | undefined) => formatMoney(v);
   protected readonly qty = (v: number) => formatNumber(v);
   protected readonly date = formatDate;

@@ -28,6 +28,7 @@ from stonks.app.golive import GoLiveReport, GoLiveService
 from stonks.app.operations import PnlRowView, ShadowDecisionView
 from stonks.app.serialize import finite
 from stonks.app.strategies import StatusChangeView, StrategyDetail, StrategyService
+from stonks.app.strategy_names import StrategyNamed
 from stonks.backtest import metrics
 from stonks.insights.models import MonthlyReturn
 from stonks.logging import get_logger
@@ -58,7 +59,7 @@ class PaperFigures(BaseModel):
     trades: int
 
 
-class LeaderboardRow(BaseModel):
+class LeaderboardRow(StrategyNamed):
     rank: int
     strategy_id: str
     class_path: str

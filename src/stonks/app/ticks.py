@@ -8,7 +8,7 @@ import re
 from datetime import UTC, date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from stonks.accounts import PortfolioRepository, Scope
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
@@ -17,6 +17,7 @@ from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.orders import OrdersService, OrderView
 from stonks.app.pagination import Page
+from stonks.app.strategy_names import strategy_title
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.core.types import AssetClass
@@ -94,6 +95,8 @@ class TickResultView(BaseModel):
     tick_id: str
     status: str
     winner_strategy_id: str | None
+    #: The winner's plain title (a starter's), or null; derived from the id.
+    winner_strategy_name: str | None = None
     orders_placed: int
     fills: int
     dry_run: bool
@@ -104,6 +107,11 @@ class TickResultView(BaseModel):
             " paper account, or a live (real money) account."
         ),
     )
+
+    @model_validator(mode="after")
+    def _derive_winner_name(self) -> TickResultView:
+        self.winner_strategy_name = strategy_title(self.winner_strategy_id)
+        return self
 
 
 class TickService:

@@ -5690,6 +5690,12 @@ export type JournalEntryView = {
      */
     strategy_id: string | null;
     /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
+    /**
      * Ticker
      */
     ticker: string;
@@ -5799,6 +5805,12 @@ export type JournalTradeDetailView = {
      * Sleeve
      */
     sleeve: string;
+    /**
+     * Sleeve Name
+     *
+     * The sleeve strategy's plain title (a starter's), or null.
+     */
+    sleeve_name?: string | null;
     /**
      * Tags
      */
@@ -5952,6 +5964,12 @@ export type JournalTradeView = {
      * Sleeve
      */
     sleeve: string;
+    /**
+     * Sleeve Name
+     *
+     * The sleeve strategy's plain title (a starter's), or null.
+     */
+    sleeve_name?: string | null;
     /**
      * Stop Price
      */
@@ -6286,6 +6304,12 @@ export type LeaderboardRow = {
      * Strategy Id
      */
     strategy_id: string;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
     /**
      * Survival Passed
      */
@@ -8944,6 +8968,12 @@ export type OrderView = {
      * Strategy Id
      */
     strategy_id: string | null;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
     /**
      * Tick Id
      */
@@ -14044,6 +14074,12 @@ export type ShadowDecisionView = {
      */
     strategy_id: string;
     /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
+    /**
      * Tick Id
      */
     tick_id: string;
@@ -14079,6 +14115,12 @@ export type ShadowOutcomeView = {
      * Strategy Id
      */
     strategy_id: string;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
     /**
      * Total Value
      */
@@ -14117,6 +14159,12 @@ export type ShadowPnlSummary = {
      * Strategy Id
      */
     strategy_id: string;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
     /**
      * Total Value
      */
@@ -16642,6 +16690,10 @@ export type TickSummary = {
      */
     exit_strategy_id?: string | null;
     /**
+     * Exit Strategy Name
+     */
+    exit_strategy_name?: string | null;
+    /**
      * Fills
      */
     fills?: number | null;
@@ -16685,6 +16737,10 @@ export type TickSummary = {
      * Winner Strategy Id
      */
     winner_strategy_id?: string | null;
+    /**
+     * Winner Strategy Name
+     */
+    winner_strategy_name?: string | null;
     [key: string]: unknown;
 };
 
@@ -16881,6 +16937,12 @@ export type TicketView = {
      * Strategy Id
      */
     strategy_id: string | null;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
     /**
      * Submit After
      */

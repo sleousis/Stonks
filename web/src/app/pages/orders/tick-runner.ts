@@ -174,7 +174,13 @@ import { latestRealRunDay } from './tick-mode';
             </div>
             <div class="wide">
               <dt>Top strategy</dt>
-              <dd>{{ r.winner_strategy_id ? strategyName(r.winner_strategy_id) : 'None' }}</dd>
+              <dd>
+                {{
+                  r.winner_strategy_id
+                    ? strategyName(r.winner_strategy_id, r.winner_strategy_name)
+                    : 'None'
+                }}
+              </dd>
             </div>
           </dl>
           <a class="btn" [routerLink]="['/orders/ticks', r.tick_id]">Open this run</a>
@@ -310,7 +316,8 @@ export class TickRunner {
     if (this.dryRun()) return 'Start dry run';
     return this.live() ? 'Start trading run' : 'Start paper run';
   });
-  protected readonly strategyName = (id: string) => strategyDisplayName(id);
+  protected readonly strategyName = (id: string, name?: string | null) =>
+    strategyDisplayName(id, { name });
   /** Recent runs, to know the last real run's date (admins only start runs). */
   private readonly recent = resource({
     params: () => (this.allowed() ? { limit: 20 } : undefined),

@@ -109,7 +109,7 @@
         </div>
         <div>
           <dt>Strategy</dt>
-          <dd>{{ e.strategy_id ?? 'None' }}</dd>
+          <dd>{{ strategyName(e) ?? 'None' }}</dd>
         </div>
         @if (portfolio(); as name) {
           <div>

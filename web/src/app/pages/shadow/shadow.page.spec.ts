@@ -43,6 +43,7 @@ const SUMMARIES: Page<ShadowPnlSummary> = {
   items: [
     {
       strategy_id: 'value-v1',
+      strategy_name: null,
       days: 2,
       first_day: '2026-09-02',
       latest_day: '2026-09-03',
@@ -68,6 +69,7 @@ const DECISIONS: Page<ShadowDecisionView> = {
       side: 'buy',
       status: 'filled',
       strategy_id: 'value-v1',
+      strategy_name: null,
       tick_id: 't3',
       ticker: 'AAPL.US',
     },

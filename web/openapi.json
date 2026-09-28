@@ -10468,6 +10468,18 @@
             ],
             "title": "Strategy Id"
           },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
+          },
           "ticker": {
             "title": "Ticker",
             "type": "string"
@@ -10667,6 +10679,18 @@
           "sleeve": {
             "title": "Sleeve",
             "type": "string"
+          },
+          "sleeve_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The sleeve strategy's plain title (a starter's), or null.",
+            "title": "Sleeve Name"
           },
           "tags": {
             "items": {
@@ -10965,6 +10989,18 @@
           "sleeve": {
             "title": "Sleeve",
             "type": "string"
+          },
+          "sleeve_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The sleeve strategy's plain title (a starter's), or null.",
+            "title": "Sleeve Name"
           },
           "stop_price": {
             "anyOf": [
@@ -11765,6 +11801,18 @@
           "strategy_id": {
             "title": "Strategy Id",
             "type": "string"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           },
           "survival_passed": {
             "title": "Survival Passed",
@@ -16705,6 +16753,18 @@
               }
             ],
             "title": "Strategy Id"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           },
           "tick_id": {
             "anyOf": [
@@ -25840,6 +25900,18 @@
             "title": "Strategy Id",
             "type": "string"
           },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
+          },
           "tick_id": {
             "title": "Tick Id",
             "type": "string"
@@ -25895,6 +25967,18 @@
           "strategy_id": {
             "title": "Strategy Id",
             "type": "string"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           },
           "total_value": {
             "anyOf": [
@@ -25981,6 +26065,18 @@
           "strategy_id": {
             "title": "Strategy Id",
             "type": "string"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           },
           "total_value": {
             "anyOf": [
@@ -30687,6 +30783,17 @@
             ],
             "title": "Exit Strategy Id"
           },
+          "exit_strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Strategy Name"
+          },
           "fills": {
             "anyOf": [
               {
@@ -30795,6 +30902,17 @@
               }
             ],
             "title": "Winner Strategy Id"
+          },
+          "winner_strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner Strategy Name"
           }
         },
         "title": "TickSummary",
@@ -31116,6 +31234,18 @@
               }
             ],
             "title": "Strategy Id"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           },
           "submit_after": {
             "format": "date-time",

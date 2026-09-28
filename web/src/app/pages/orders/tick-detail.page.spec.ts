@@ -18,6 +18,7 @@ const ORDER: OrderView = {
   side: 'buy',
   status: 'rejected',
   strategy_id: 'momentum-v3',
+  strategy_name: null,
   tick_id: 't1',
   ticker: 'AAPL.US',
 };
@@ -46,12 +47,13 @@ const TICK: TickRunWithOrders = {
     shadow: [
       {
         strategy_id: 'value-v1',
+        strategy_name: null,
         status: 'evaluated',
         decisions: 3,
         fills: 2,
         total_value: 101_000,
       },
-      { strategy_id: 'broken-v0', status: 'failed', error: 'KeyError: close' },
+      { strategy_id: 'broken-v0', strategy_name: null, status: 'failed', error: 'KeyError: close' },
     ],
   },
 };

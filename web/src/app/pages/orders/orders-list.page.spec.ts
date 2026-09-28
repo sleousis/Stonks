@@ -19,6 +19,7 @@ function order(i: number): OrderView {
     limit_price: null,
     broker_order_id: null,
     strategy_id: 'momentum-v3',
+    strategy_name: null,
     tick_id: 't1',
     created_at: '2026-09-25T20:45:00Z',
     updated_at: '2026-09-25T20:45:00Z',
@@ -50,6 +51,17 @@ describe('OrdersListPage', () => {
     }
     return { fixture, el: fixture.nativeElement as HTMLElement };
   }
+
+  it('names the strategy by its title or a readable name, never the raw id', async () => {
+    const { el } = await render([
+      { ...order(1), strategy_id: 'starter_trend', strategy_name: 'Starter: trend following' },
+      { ...order(2), strategy_id: 'breakout_1a2b3c4d' },
+    ]);
+    expect(el.textContent).toContain('Starter: trend following');
+    expect(el.textContent).toContain('Breakout 1a2b');
+    expect(el.textContent).not.toContain('starter_trend');
+    expect(el.textContent).not.toContain('breakout_1a2b3c4d');
+  });
 
   it('Next twice loads offset 50 then 100 and the range reads 101–150', async () => {
     const run = await pageThrough(OrdersListPage, '/api/orders', 50, order);

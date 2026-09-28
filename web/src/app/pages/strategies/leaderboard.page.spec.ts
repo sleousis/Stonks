@@ -12,6 +12,7 @@ function row(id: string, rank: number, extra: Partial<LeaderboardRow> = {}): Lea
   return {
     rank,
     strategy_id: id,
+    strategy_name: null,
     class_path: 'stonks.strategies.examples.momentum:Momentum',
     status: 'shadow',
     paper: paper(),
@@ -59,6 +60,20 @@ describe('LeaderboardPage', () => {
   });
 
   afterEach(() => http.verify());
+
+  it("shows a starter's title, never its id", async () => {
+    const fixture = TestBed.createComponent(LeaderboardPage);
+    fixture.detectChanges();
+    (await nextRequest(http, '/api/strategies/leaderboard')).flush({
+      ...BOARD,
+      rows: [row('starter_trend', 1, { strategy_name: 'Starter: trend following' })],
+    });
+    await tick();
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('a.name .id')?.textContent?.trim()).toBe('Starter: trend following');
+    expect(el.textContent).not.toContain('starter_trend');
+  });
 
   it('ranks strategies and links each to its strategy page (F27)', async () => {
     const fixture = TestBed.createComponent(LeaderboardPage);

@@ -129,6 +129,7 @@ const ORDER: OrderView = {
   client_id: 'c1',
   tick_id: 't1',
   strategy_id: 'momentum-v3',
+  strategy_name: null,
   ticker: 'AAPL.US',
   side: 'buy',
   quantity: 12,

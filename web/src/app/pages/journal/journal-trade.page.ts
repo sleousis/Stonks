@@ -85,7 +85,7 @@ const STOP_SOURCES: Record<string, string> = {
             <li class="leg">
               <p class="leg-head">
                 <strong>{{ l.quantity | num }} {{ t.ticker }}</strong>
-                <span class="muted">{{ sleeve(t.sleeve) }}, {{ t.side }}</span>
+                <span class="muted">{{ sleeve(t.sleeve, t.sleeve_name) }}, {{ t.side }}</span>
               </p>
               <dl class="facts">
                 <div>
@@ -337,8 +337,8 @@ export class JournalTradePage {
     return exitLabel(l.exit_trigger, l.is_open);
   }
 
-  protected sleeve(s: string): string {
-    return sleeveLabel(s);
+  protected sleeve(s: string, name?: string | null): string {
+    return sleeveLabel(s, name);
   }
 
   protected stopSource(source: string | null | undefined): string {

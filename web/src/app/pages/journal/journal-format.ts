@@ -1,3 +1,4 @@
+import { strategyDisplayName } from '../../shared/strategy-names';
 import { formatNumber, formatPercent } from '../../core/format/format';
 
 /** An R multiple ("+2.0R"), or "n/a" when no stop is known. */
@@ -38,11 +39,14 @@ export function exitLabel(trigger: string | null | undefined, open: boolean): st
   return EXITS[trigger] ?? trigger.replace(/_/g, ' ');
 }
 
-/** The sleeve's name: a strategy id, or "By hand" for manual trades. */
-export function sleeveLabel(sleeve: string): string {
+/**
+ * The sleeve's name: the strategy's display name (its title when the API
+ * sends one as `sleeve_name`), or "By hand" for manual trades.
+ */
+export function sleeveLabel(sleeve: string, name?: string | null): string {
   if (sleeve === 'manual') return 'By hand';
   if (sleeve === 'unattributed') return 'No strategy';
-  return sleeve;
+  return strategyDisplayName(sleeve, { name });
 }
 
 export function planLabel(followed: boolean | null | undefined): string {

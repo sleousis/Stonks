@@ -21,6 +21,7 @@ import { PriceChart } from '../../shared/chart/price-chart';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
+import { strategyDisplayName } from '../../shared/strategy-names';
 import { SideTag } from '../../shared/ui/side-tag';
 import { NoBook } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -205,7 +206,12 @@ export class ChartPage {
     { key: 'side', label: 'Side', sortable: false },
     { key: 'quantity', label: 'Qty', value: (f) => Math.abs(f.quantity), format: 'number' },
     { key: 'price', label: 'Price', format: 'money' },
-    { key: 'strategy_id', label: 'Strategy', value: (f) => f.strategy_id ?? '', mobile: 'hide' },
+    {
+      key: 'strategy_id',
+      label: 'Strategy',
+      value: (f) => (f.strategy_id ? strategyDisplayName(f.strategy_id) : ''),
+      mobile: 'hide',
+    },
   ];
   protected readonly signalColumns: TableColumn<ChartSignalView>[] = [
     { key: 'as_of', label: 'Date', format: 'date', mobile: 'title' },

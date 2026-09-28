@@ -2697,6 +2697,7 @@ One order: why it was placed, the signal context, the outcome and the notes peop
 | `status` | string | yes |  |
 | `status_reason` | string \| null | yes |  |
 | `strategy_id` | string \| null | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 | `ticker` | string | yes |  |
 | `trigger` | string \| null | yes |  |
 
@@ -2738,6 +2739,7 @@ A whole trade: every leg and its review.
 | `review` | string \| null | yes |  |
 | `side` | "long" \| "short" | yes |  |
 | `sleeve` | string | yes |  |
+| `sleeve_name` | string \| null | no | The sleeve strategy's plain title (a starter's), or null. |
 | `tags` | list[string] | yes |  |
 | `ticker` | string | yes |  |
 | `trade_id` | integer | yes |  |
@@ -2781,6 +2783,7 @@ One leg of a trade. Money is in the instrument's currency, and ``pnl_base`` in t
 | `risk_amount` | number \| null | yes |  |
 | `side` | "long" \| "short" | yes |  |
 | `sleeve` | string | yes |  |
+| `sleeve_name` | string \| null | no | The sleeve strategy's plain title (a starter's), or null. |
 | `stop_price` | number \| null | yes |  |
 | `stop_source` | string \| null | yes |  |
 | `tags` | list[string] | yes |  |
@@ -2889,6 +2892,7 @@ Counts of one trading run over every book, for admins only.
 | `rank` | integer | yes |  |
 | `status` | string | yes |  |
 | `strategy_id` | string | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 | `survival_passed` | integer | yes |  |
 | `survival_total` | integer | yes |  |
 
@@ -3856,6 +3860,7 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `status_reason` | string \| null | no |  |
 | `stop_price` | number \| null | no |  |
 | `strategy_id` | string \| null | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 | `tick_id` | string \| null | yes |  |
 | `ticker` | string | yes |  |
 | `time_in_force` | string \| null | no |  |
@@ -5780,6 +5785,7 @@ Store a screen (``spec`` or ``screen_id``) as a universe.
 | `side` | string | yes |  |
 | `status` | string | yes |  |
 | `strategy_id` | string | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 | `tick_id` | string | yes |  |
 | `ticker` | string | yes |  |
 
@@ -5794,6 +5800,7 @@ How one shadow strategy was evaluated during the tick.
 | `fills` | integer | no |  |
 | `status` | string | yes |  |
 | `strategy_id` | string | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 | `total_value` | number \| null | no |  |
 
 ### ShadowPnlSummary
@@ -5807,6 +5814,7 @@ How one shadow strategy was evaluated during the tick.
 | `max_drawdown` | number \| null | yes |  |
 | `status` | string \| null | yes |  |
 | `strategy_id` | string | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 | `total_value` | number \| null | yes |  |
 
 ### ShortCapsSettings
@@ -6707,6 +6715,7 @@ What a test notification queued: its feed id and one delivery per enabled channe
 | `error` | string \| null | no |  |
 | `error_type` | string \| null | no |  |
 | `exit_strategy_id` | string \| null | no |  |
+| `exit_strategy_name` | string \| null | no |  |
 | `fills` | integer \| null | no |  |
 | `orders_placed` | integer \| null | no |  |
 | `outside_universe_skipped` | list[string] | no |  |
@@ -6718,6 +6727,7 @@ What a test notification queued: its feed id and one delivery per enabled channe
 | `stale_buys_dropped` | list[string] | no |  |
 | `winner_expected_return` | number \| null | no |  |
 | `winner_strategy_id` | string \| null | no |  |
+| `winner_strategy_name` | string \| null | no |  |
 
 ### TicketApproval
 
@@ -6785,6 +6795,7 @@ One order ticket: the order a live book decided, why, and what became of it.
 | `status` | "awaiting_approval" \| "approved" \| "rejected" \| "expired" \| "submitted" \| "filled" \| "unfilled" \| "cancelled" \| "failed" | yes |  |
 | `status_reason` | string \| null | yes |  |
 | `strategy_id` | string \| null | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 | `submit_after` | date-time | yes |  |
 | `submitted_at` | date-time \| null | yes |  |
 | `tick_id` | string \| null | yes |  |
