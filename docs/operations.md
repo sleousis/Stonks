@@ -903,6 +903,7 @@ watch_band = 0.01
 - Approve the tickets on the Tickets page. `live_submit` sends them before the next open: a single leg as a day limit, a roll or a spread as one combo order at its net limit. A combo waits whole while any leg is not approved.
 - `options_expiry_watch` runs an hour before the close. A short option that expires today, still held and in or near the money, sends a high urgency alert. It never sends an order. Close it by hand from the ticket, or in TWS.
 - A quote with no bid and ask, or one too wide, makes no order. The job reports it, and the watch still alerts on expiry day.
+- Shares an assignment or exercise delivers are booked at the strike and belong to no strategy. Keep them or sell them with a manual order.
 
 ## Without the scheduler
 
