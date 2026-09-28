@@ -1,15 +1,20 @@
 <app-page-header
-  title="Live settings"
+  title="Real-money settings"
   [description]="
     portfolio()
-      ? 'What Stonks may do in ' + portfolio()!.name + ', a real-money account.'
-      : 'What Stonks may do in a real-money account.'
+      ? 'What Stonks may do in ' + portfolio()!.name + ', an account at a real broker. Real money moves only at the two Real money stages.'
+      : 'What Stonks may do in an account at a real broker.'
   "
 >
-  @if (isLive()) {
-    <app-mode-stamp [live]="true" />
+  @if (isLive() && stage()) {
+    <app-mode-stamp [live]="realMoney()" />
   }
-  <a actions class="btn" routerLink="/profile">Back to your portfolios</a>
+  <ng-container ngProjectAs="[actions]">
+    <a class="btn btn-ghost" routerLink="/going-live" [queryParams]="{ portfolio: id() }"
+      >Going live checklist</a
+    >
+    <a class="btn" routerLink="/profile">Back to your portfolios</a>
+  </ng-container>
 </app-page-header>
 
 @if (ctx.state() === 'failed') {
@@ -26,8 +31,11 @@
 } @else if (!isLive()) {
   <app-empty-state
     title="This portfolio trades on paper"
-    message="Live settings are for portfolios at a real broker. Paper portfolios move no real money."
+    message="These settings are for portfolios linked to a real broker. Paper portfolios move no real money. The Going live checklist shows every step."
   >
+    <a class="btn" [routerLink]="'/going-live'" [queryParams]="{ portfolio: id() }"
+      >Going live checklist</a
+    >
     <a class="btn" routerLink="/profile">Your portfolios</a>
   </app-empty-state>
 } @else {
@@ -35,12 +43,19 @@
     <!-- Stage and its gate (19.9) ------------------------------------------->
     <app-live-stage-card
       class="span-12"
+      id="stage"
       [portfolioId]="portfolio()!.id"
       [portfolioName]="portfolio()!.name"
+      (stageChange)="stage.set($event)"
     />
 
     <!-- Allocation ---------------------------------------------------------->
-    <section class="panel live-frame span-6" aria-labelledby="allocation-title">
+    <section
+      class="panel span-6"
+      id="allocation"
+      [class.live-frame]="realMoney()"
+      aria-labelledby="allocation-title"
+    >
       <div class="panel-head">
         <h2 id="allocation-title">Allocation</h2>
       </div>
@@ -56,11 +71,18 @@
         } @else {
           @let a = allocation.value();
           <div class="headline">
-            <span class="figure live-figure" data-testid="allocation-figure">{{
+            <span
+              class="figure"
+              data-testid="allocation-figure"
+              [class.live-figure]="realMoney()"
+              >{{
               allocationText(a)
             }}</span>
             @if (a.amount === null) {
-              <p class="warn-text">Nothing opens in this account until you set an amount.</p>
+              <p class="warn-text">
+              Nothing opens in this account until you set an amount. At the Real money stages this
+              is the most real money Stonks may hold here.
+            </p>
             } @else {
               <p class="muted">
                 The most Stonks may hold here. Changed
@@ -154,7 +176,9 @@
           <div class="actions">
             <button
               type="submit"
-              class="btn btn-danger"
+              class="btn"
+              [class.btn-danger]="realMoney()"
+              [class.btn-primary]="!realMoney()"
               [disabled]="!canManage() || savingAllocation()"
               [attr.aria-busy]="savingAllocation()"
             >
@@ -167,7 +191,7 @@
     </section>
 
     <!-- Account profile ----------------------------------------------------->
-    <section class="panel span-6" aria-labelledby="profile-title">
+    <section class="panel span-6" id="account-profile" aria-labelledby="profile-title">
       <div class="panel-head">
         <h2 id="profile-title">Account profile</h2>
       </div>
@@ -240,7 +264,9 @@
           <div class="actions">
             <button
               type="button"
-              class="btn btn-danger"
+              class="btn"
+              [class.btn-danger]="realMoney()"
+              [class.btn-primary]="!realMoney()"
               [disabled]="!canManage() || savingProfile() || !canSaveProfile()"
               [attr.aria-busy]="savingProfile()"
               (click)="saveProfile()"
@@ -256,19 +282,19 @@
     <!-- Buying power and margin (19.13) ------------------------------------->
     <app-live-margin-panel class="span-12" [portfolioId]="portfolio()!.id" />
 
-    <!-- Live safeguards (read only) ----------------------------------------->
-    <section class="panel span-6" aria-labelledby="safeguards-title">
+    <!-- Safeguards (read only) ---------------------------------------------->
+    <section class="panel span-6" id="safeguards" aria-labelledby="safeguards-title">
       <div class="panel-head">
-        <h2 id="safeguards-title">Live safeguards</h2>
+        <h2 id="safeguards-title">Safeguards</h2>
       </div>
       @if (rules.error(); as err) {
         <app-error-state
-          title="Could not load the live safeguards"
+          title="Could not load the safeguards"
           [error]="err"
           (retry)="rules.reload()"
         />
       } @else if (!rules.hasValue()) {
-        <app-loading-state label="Loading the live safeguards" [rows]="4" />
+        <app-loading-state label="Loading the safeguards" [rows]="4" />
       } @else {
         <div class="panel-body stack">
           <p class="muted">
@@ -366,6 +392,6 @@
     />
 
     <!-- Order preview (19.9) ------------------------------------------------>
-    <app-live-preview-panel class="span-12" [portfolioId]="portfolio()!.id" />
+    <app-live-preview-panel class="span-12" id="preview" [portfolioId]="portfolio()!.id" />
   </div>
 }

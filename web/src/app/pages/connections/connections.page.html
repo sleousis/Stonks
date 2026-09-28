@@ -1,7 +1,9 @@
 <app-page-header
   title="Broker connections"
-  description="Link your brokerage so Stonks can read your positions, cash and activity. It never places trades there."
-/>
+  description="Link your brokerage so Stonks can read your positions, cash and activity. Some brokers can also take orders, only when you allow it."
+>
+  <a actions class="btn btn-ghost" routerLink="/going-live">Going live checklist</a>
+</app-page-header>
 
 <div class="page-grid">
   <!-- Your connections ------------------------------------------------------>
@@ -20,7 +22,7 @@
     } @else if (connections.value().length === 0) {
       <app-empty-state
         title="No broker connected yet"
-        message="Connecting lets Stonks read your real positions, cash and activity, so you can see them next to your strategies. Stonks only reads. It never trades in your brokerage account."
+        message="Connecting lets Stonks read your real positions, cash and activity, so you can see them next to your strategies. What else it may do depends on the broker: see When Stonks trades below."
       >
         @if (canManage()) {
           <button type="button" class="btn btn-primary" (click)="showProviders()">
@@ -58,6 +60,47 @@
     }
   </section>
 
+  <!-- When Stonks trades (F53): the most sensitive promise, said exactly ---->
+  <section class="panel span-12" aria-labelledby="when-title">
+    <div class="panel-head">
+      <h2 id="when-title">When Stonks trades</h2>
+    </div>
+    <div class="panel-body when">
+      <div>
+        <h3>A broker that only reads</h3>
+        <p>
+          Stonks reads positions, cash and activity. It never places an order there, whatever your
+          follows or your portfolio's stage.
+        </p>
+      </div>
+      <div>
+        <h3>A broker that can trade, such as Interactive Brokers</h3>
+        <p>Stonks places orders only in the portfolio linked to this account, and only for:</p>
+        <ul>
+          <li>strategies you follow there with <strong>Approve each trade</strong>, after you approve each ticket;</li>
+          <li>strategies you follow there with <strong>Automatic</strong>;</li>
+          <li>orders you place by hand there, or suggested orders you approve.</li>
+        </ul>
+        <p>
+          Follows with <strong>Alerts only</strong> or <strong>Paper</strong> never place an order
+          at the broker. Where an order goes depends on the portfolio's stage
+          <app-help-tip term="Portfolio stage" />:
+        </p>
+        <dl class="stages">
+          @for (s of stages; track s.stage) {
+            <div>
+              <dt>{{ s.label }}</dt>
+              <dd>{{ s.means }}</dd>
+            </div>
+          }
+        </dl>
+        <p class="muted">
+          You can stop trading from any page at any time. <a routerLink="/going-live">See every step to real money</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
   <!-- Providers ------------------------------------------------------------->
   <section class="panel span-12" aria-labelledby="providers-title">
     <div class="panel-head">
@@ -92,7 +135,7 @@
                 }
               </div>
               <p>
-                {{ gives(p) }} Read only.
+                {{ gives(p) }} {{ reach(p) }}
                 @if (p.has_paper) {
                   Paper accounts work too.
                 }

@@ -29,10 +29,18 @@
           <span class="muted">No option order opens here. Closes still go out.</span>
         }
       </p>
+      @if (!v.enabled) {
+        <p class="off-line" data-testid="options-off-line">
+          Not available on this server yet. Your admin turns it on.
+        </p>
+      }
+      <!-- Off on the server (F58): one line, the rest folded away. -->
+      <details class="more" [attr.open]="v.enabled ? '' : null">
+        <summary>{{ v.enabled ? 'Details' : 'Why, and the approval level' }}</summary>
       @if (v.reasons.length) {
         <ul class="reasons" aria-label="Why options are off">
           @for (r of v.reasons; track r) {
-            <li>{{ r }}</li>
+            <li>{{ plain(r) }}</li>
           }
         </ul>
       }
@@ -109,6 +117,7 @@
           <app-permission-note permission="live.manage" />
         </div>
       </form>
+      </details>
     }
   </div>
 </section>

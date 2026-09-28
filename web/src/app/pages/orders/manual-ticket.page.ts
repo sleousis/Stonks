@@ -141,10 +141,15 @@ export function orderLines(
             <span class="label">Side</span>
             <app-segmented
               label="Side"
+              emphasis="strong"
               [options]="sides"
               [value]="sideField()"
               (valueChange)="edit(sideField, $any($event))"
             />
+            <span class="side-now" aria-live="polite">
+              <app-side-tag [side]="sideField()" />
+              {{ sideField() === 'buy' ? 'You are buying' : 'You are selling' }}
+            </span>
           </div>
 
           <div class="field">
@@ -170,6 +175,7 @@ export function orderLines(
             <span class="label">Order type</span>
             <app-segmented
               label="Order type"
+              emphasis="strong"
               [options]="types"
               [value]="orderType()"
               (valueChange)="edit(orderType, $any($event))"
@@ -195,7 +201,8 @@ export function orderLines(
                 <span id="mo-limit-error" class="hint error">{{ e }}</span>
               } @else {
                 <span id="mo-limit-hint" class="hint">
-                  A paper portfolio fills only when the last close is at or better than this.
+                  A paper portfolio fills at the last close, and only when that close is at or
+                  better than this. Otherwise the order is refused.
                 </span>
               }
             </div>
@@ -329,6 +336,13 @@ export function orderLines(
     .label {
       font-size: var(--text-sm);
       font-weight: var(--weight-medium);
+    }
+    .side-now {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      color: var(--color-ink-2);
+      font-size: var(--text-sm);
     }
     .actions {
       display: flex;

@@ -38,6 +38,11 @@ describe('Segmented', () => {
     expect(radios().map((r) => r.tabIndex)).toEqual([0, -1, -1]);
   });
 
+  it('marks the group subtle unless asked for strong emphasis', () => {
+    const { el } = render();
+    expect(el.querySelector('[role="radiogroup"]')!.getAttribute('data-emphasis')).toBe('subtle');
+  });
+
   it('picks an option on click', () => {
     const { fixture, radios } = render();
     radios()[2].click();

@@ -8,7 +8,7 @@ export default [
   },
   {
     path: 'live/:id',
-    title: 'Live settings',
+    title: 'Real-money settings',
     loadComponent: () => import('./live-settings.page').then((m) => m.LiveSettingsPage),
   },
 ] satisfies Routes;

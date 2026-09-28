@@ -199,7 +199,11 @@ describe('LiveSettingsPage', () => {
 
   afterEach(() => http.verify());
 
-  async function render(id = 'pf_live', profile: unknown = null): Promise<HTMLElement> {
+  async function render(
+    id = 'pf_live',
+    profile: unknown = null,
+    stage: LiveStageView = STAGE,
+  ): Promise<HTMLElement> {
     fixture = TestBed.createComponent(LiveSettingsPage);
     fixture.componentRef.setInput('id', id);
     fixture.detectChanges();
@@ -219,7 +223,7 @@ describe('LiveSettingsPage', () => {
       if (profile) prof.flush(profile);
       else prof.flush({ detail: 'none' }, { status: 404, statusText: 'Not Found' });
       (await nextRequest(http, '/api/portfolios/pf_live/live/rules')).flush(RULES);
-      (await nextRequest(http, '/api/portfolios/pf_live/live/stage')).flush(STAGE);
+      (await nextRequest(http, '/api/portfolios/pf_live/live/stage')).flush(stage);
       (await nextRequest(http, '/api/portfolios/pf_live/live/gate-report')).flush(REPORT);
       (await nextRequest(http, '/api/portfolios/pf_live/live/margin')).flush(MARGIN_CASH);
       await tick();
@@ -250,8 +254,34 @@ describe('LiveSettingsPage', () => {
     expect(el.querySelector('[data-testid="allocation-figure"]')?.textContent).toContain('Not set');
     expect(el.textContent).toContain('Nothing opens in this account until you set an amount.');
     expect(el.querySelector('.no-ramp')?.textContent).toContain('No automatic steps');
+    expect(el.querySelector('h1')?.textContent).toContain('Real-money settings');
+  });
+
+  it('shows no brass and a PAPER stamp while no real money moves', async () => {
+    const el = await render();
+    expect(el.querySelector('.live-frame')).toBeNull();
+    expect(el.querySelector('app-page-header app-mode-stamp')?.textContent).toContain('PAPER');
+    expect(button(el, 'Set allocation').classList).not.toContain('btn-danger');
+  });
+
+  it('keeps brass and the LIVE stamp for a Real money stage', async () => {
+    const el = await render('pf_live', null, {
+      ...STAGE,
+      stage: 'live_small',
+      next_stage: 'live_scale',
+      real_money: true,
+    });
     expect(el.querySelector('.live-frame')).not.toBeNull();
-    expect(el.textContent).toContain('LIVE');
+    expect(el.querySelector('app-page-header app-mode-stamp')?.textContent).toContain('LIVE');
+    expect(button(el, 'Set allocation').classList).toContain('btn-danger');
+  });
+
+  it('links to the Going live checklist for this portfolio', async () => {
+    const el = await render();
+    const link = [...el.querySelectorAll<HTMLAnchorElement>('a')].find((a) =>
+      a.textContent?.includes('Going live checklist'),
+    );
+    expect(link?.getAttribute('href')).toBe('/going-live?portfolio=pf_live');
   });
 
   it('sets the allocation after the ticket and a fresh code', async () => {
@@ -262,7 +292,8 @@ describe('LiveSettingsPage', () => {
     const put = await nextRequest(http, '/api/portfolios/pf_live/live/allocation', 'PUT');
     expect(confirm).toHaveBeenCalledTimes(1);
     const ticket = confirm.mock.calls[0][0] as { ticket: { live: boolean; kind: string } };
-    expect(ticket.ticket).toMatchObject({ live: true, kind: 'Allocation' });
+    // At Simulated no real money moves yet: a PAPER ticket.
+    expect(ticket.ticket).toMatchObject({ live: false, kind: 'Allocation' });
     expect(ensure).toHaveBeenCalledTimes(1);
     expect(put.request.body).toEqual({ amount: 2500, currency: 'USD', reason: 'first slice' });
     put.flush({
@@ -365,7 +396,7 @@ describe('LiveSettingsPage', () => {
     expect(panel?.textContent).toContain('A cash account borrows nothing');
   });
 
-  it('lists which live safeguards are on, read only', async () => {
+  it('lists which safeguards are on, read only', async () => {
     const el = await render();
     const items = [...el.querySelectorAll('.rules li')].map((li) => li.textContent ?? '');
     expect(items.find((t) => t.includes('Allocation cap'))).toContain('On');
@@ -382,7 +413,7 @@ describe('LiveSettingsPage', () => {
 
   it('shows the stage card and the preview panel on a live portfolio', async () => {
     const el = await render();
-    expect(el.querySelector('app-live-stage-card')?.textContent).toContain('Simulated paper');
+    expect(el.querySelector('app-live-stage-card')?.textContent).toContain('Simulated');
     expect(el.querySelector('app-live-preview-panel')?.textContent).toContain('Nothing is sent');
   });
 

@@ -91,6 +91,14 @@ describe('LiveOptionsCard', () => {
       'Options live: off',
     );
     expect(el.querySelectorAll('.reasons li').length).toBe(3);
+    // Off on the server: one line, the rest folded (F58), stage ids in trader words.
+    expect(el.querySelector('[data-testid="options-off-line"]')?.textContent).toContain(
+      'Not available on this server',
+    );
+    expect(el.querySelector('details.more')?.hasAttribute('open')).toBe(false);
+    expect(el.querySelector('.reasons')?.textContent).toContain(
+      'at stage Broker paper, not Real money, small or higher',
+    );
     expect(el.querySelector('[data-testid="options-level"]')?.textContent).toContain('None');
     expect(el.textContent).toContain('Wait for approval');
   });
@@ -130,6 +138,8 @@ describe('LiveOptionsCard', () => {
       'Options live: on',
     );
     expect(el.querySelector('.reasons')).toBeNull();
+    expect(el.querySelector('[data-testid="options-off-line"]')).toBeNull();
+    expect(el.querySelector('details.more')?.hasAttribute('open')).toBe(true);
   });
 
   it('cannot change the level without live.manage', async () => {
