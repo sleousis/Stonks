@@ -25754,7 +25754,7 @@
   "info": {
     "description": "Research + trading system: portfolio, strategies, market data, lab runs and background jobs.",
     "title": "Stonks API",
-    "version": "0.1.0"
+    "version": "1.0.0"
   },
   "openapi": "3.1.0",
   "paths": {

@@ -33,7 +33,7 @@ from stonks.core.protocols import SurvivalReport
 try:  # prefer a real package version when installed
     from stonks import __version__ as _STONKS_VERSION
 except ImportError:  # pragma: no cover
-    _STONKS_VERSION = "0.1.0"
+    _STONKS_VERSION = "1.0.0"
 
 
 #: ``meta.json`` keys the registry owns; extra metadata never overrides them.
