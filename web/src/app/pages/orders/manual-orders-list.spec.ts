@@ -12,7 +12,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
-import { answerDialog } from '../../../testing/status-dialog';
+import { answerDialog, confirmButton, dialogForm } from '../../../testing/status-dialog';
 import { ManualOrdersList, isWorking } from './manual-orders-list';
 
 function order(over: Partial<OrderView> = {}): OrderView {
@@ -119,6 +119,20 @@ describe('ManualOrdersList', () => {
     (await nextRequest(http, '/api/orders')).flush(pageOf([order({ status: 'cancelled' })]));
     await settle();
     expect(toast).toHaveBeenCalledWith('Cancelled the order for AAA.US.');
+  });
+
+  it('asks to cancel a paper order without a red button, and a real-money one with it', async () => {
+    const el = await render([order()]);
+    byText(el, 'Cancel')!.click();
+    await settle();
+    const form = () => dialogForm(fixture.nativeElement as HTMLElement)!;
+    expect(confirmButton(form()).classList).not.toContain('btn-danger');
+    [...form().querySelectorAll('button')].find((b) => b.type === 'button')!.click();
+    await settle();
+    live.set(true);
+    byText(el, 'Cancel')!.click();
+    await settle();
+    expect(confirmButton(form()).classList).toContain('btn-danger');
   });
 
   it('changes a working order and shows a refusal inside the sheet', async () => {

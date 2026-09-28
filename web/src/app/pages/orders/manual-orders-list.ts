@@ -185,7 +185,8 @@ export class ManualOrdersList {
       title: `Cancel the order for ${formatNumber(order.quantity)} ${order.ticker}?`,
       message: 'What has filled stays filled. The rest of the order stops.',
       confirmLabel: 'Cancel order',
-      tone: 'danger',
+      // Red only for real money (the vocabulary's one rule).
+      tone: this.ctx.live() ? 'danger' : 'default',
       minReason: 1,
       reasonHint: 'Kept with the order.',
     });
