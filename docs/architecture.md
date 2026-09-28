@@ -122,7 +122,7 @@ New behaviour plugs in behind a seam. Most are registries, so a new one is one n
 | `BarStore` | `store/bars.py` | DuckDB table, Parquet files |
 | `UniverseProvider` | `universes/providers/` (registry) | list, exchange, rule, index |
 | `IndexSource` | `universes/index_sources/` (registry) | wikipedia_sp500 |
-| `Strategy` | `core/protocols.py`, `strategies/base.py` | 38 catalogued: 32 strategies and 6 wrappers |
+| `Strategy` | `core/protocols.py`, `strategies/base.py` | 39 catalogued: 33 strategies and 6 wrappers |
 | `Factor` | `factors/base.py`, `factors/library/` (registry) | alpha158, classic, fundamentals |
 | `Tuner`, `Objective` | `lab/tuning/`, `lab/objectives.py` | Tuners grid, random, optuna. Objectives Sharpe, CAGR, final return, Sortino, Calmar, drawdown Sharpe, multi-metric, purged CV |
 | `SurvivalTest` | `lab/survival/` (registry) | 22 tests, presets `quick`, `standard`, `promotion` |

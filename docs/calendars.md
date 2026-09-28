@@ -11,6 +11,10 @@ flowchart LR
   N[(news, news_sentiment)] --> R
 ```
 
+## Company filings
+
+With `stonks ingest edgar`, the calendar also lists the current reports (8-K) your companies filed in the window, with each item's meaning (2.02 is earnings, 5.02 an officer change). Times are the SEC acceptance times. The list is empty for scope `all`. See [EDGAR filings](edgar.md).
+
 ## Tables
 
 Lake migration 020 adds three tables. Every source fills the same columns with the same values.

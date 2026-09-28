@@ -1,6 +1,6 @@
 # Strategies
 
-Every strategy the lab can name, grouped by family. The list comes from `stonks.lab.catalog`: each public class in `strategies/examples/` plus the wrappers, 38 in all. All are long-only by default, so short signals mean "flat".
+Every strategy the lab can name, grouped by family. The list comes from `stonks.lab.catalog`: each public class in `strategies/examples/` plus the wrappers, 39 in all. All are long-only by default, so short signals mean "flat".
 
 Four strategies can short: `ewmac_trend`, `tsmom` and the two long/short strategies below. Set `"short_mode": "short"` in their params. A short then opens only in a book that allows shorts (a portfolio with `allow_short`, or a lab dataset with `shorting`). Anywhere else the short legs are dropped. See [short selling](../design/shorting.md).
 
@@ -33,6 +33,7 @@ uv run stonks lab run quant_momentum --start 2020-01-01 --end 2025-01-01 --prese
 | Id | What it does |
 |----|--------------|
 | `factor` | Holds the top slice of a universe by any library factor or formula, equal weight, month-end rebalance. |
+| `filing_events` | Holds a stock for a few days after a chosen kind of 8-K filing (earnings by default), read by SEC acceptance time. Built for the event study. See [EDGAR filings](../edgar.md). |
 
 ## Book strategies ([details](book-strategies.md))
 
