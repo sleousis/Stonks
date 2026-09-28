@@ -131,6 +131,21 @@ def test_a_worker_token_reaches_the_worker_routes_and_nothing_else(http, worker_
     assert run.status_code == 403
 
 
+def test_a_worker_token_cannot_read_the_auth_routes_either(http, worker_token):
+    # "nothing else, not even reads" (docs/security.md): the /api/auth routes
+    # sit behind require_token, not authorize, and must confine it too.
+    from stonks.auth.credentials import parse_api_token
+
+    headers = _auth(worker_token)
+    for path in ("/api/auth/me", "/api/auth/tokens", "/api/auth/toolsets", "/api/auth/check"):
+        assert http.get(path, headers=headers).status_code == 403, path
+    # revoking itself stays possible: tokens.revoke is granted to every scope
+    token_id = parse_api_token(worker_token)
+    assert http.delete(f"/api/auth/tokens/{token_id}", headers=headers).status_code == 204
+    claim = http.post("/api/lab/worker/claim", json={"worker_id": "w1"}, headers=headers)
+    assert claim.status_code == 401
+
+
 @pytest.mark.parametrize(
     ("role", "scopes"),
     [(Role.TRADER, ["read", "trade", "lab"]), (Role.ADMIN, ["read", "trade", "lab", "admin"])],
