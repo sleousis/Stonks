@@ -35,6 +35,7 @@ from stonks.calendars.models import (
     DividendEvent,
     EarningsEvent,
     EconomicEvent,
+    FilingEvent,
     NewsItem,
     SentimentDay,
 )
@@ -81,6 +82,9 @@ class CalendarView(BaseModel):
     earnings: list[EarningsEvent]
     dividends: list[DividendEvent]
     economic: list[EconomicEvent]
+    #: Current reports (8-K) the scope's companies filed in the window, from
+    #: ``stonks ingest edgar`` (roadmap 23.13). Empty for scope ``all``.
+    filings: list[FilingEvent] = []
     #: A calendar hit ``MAX_EVENTS``; narrow the scope or the window.
     truncated: bool = False
 
@@ -212,7 +216,8 @@ class CalendarService:
             earnings = store.earnings(start, end, tickers=tickers)
             dividends = store.dividends(start, end, tickers=tickers)
             economic = store.economic(start, end, countries=countries or None)
-        truncated = any(len(x) > MAX_EVENTS for x in (earnings, dividends, economic))
+            filings = store.filings(start, end, tickers=tickers) if tickers is not None else []
+        truncated = any(len(x) > MAX_EVENTS for x in (earnings, dividends, economic, filings))
         return CalendarView(
             start=start,
             end=end,
@@ -221,6 +226,7 @@ class CalendarService:
             earnings=earnings[:MAX_EVENTS],
             dividends=dividends[:MAX_EVENTS],
             economic=economic[:MAX_EVENTS],
+            filings=filings[:MAX_EVENTS],
             truncated=truncated,
         )
 

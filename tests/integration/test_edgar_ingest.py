@@ -100,3 +100,17 @@ def test_insiders_without_acceptance_time_count_from_the_day_after_filing(lake):
     seen = lambda d: len(PointInTimeLake(lake, d).get_insider_transactions("X.US"))  # noqa: E731
     assert seen(datetime(2026, 1, 7)) == 0
     assert seen(datetime(2026, 1, 8)) == 1
+
+
+def test_current_reports_show_in_the_calendar(lake):
+    from stonks.calendars.store import CalendarStore
+
+    IngestPipeline(_source(), lake).run_filings(["AAPL.US"])
+    store = CalendarStore(lake)
+    got = store.filings(date(2026, 4, 1), date(2026, 8, 31), tickers=["AAPL.US"])
+    assert [f.items for f in got] == [["5.02"], ["2.02", "9.01"]]
+    assert got[1].item_names[0] == "results of operations (earnings)"
+    assert got[1].accepted_at == datetime(2026, 7, 30, 20, 30, 28)
+    assert got[1].form == "8-K"
+    assert store.filings(date(2026, 4, 1), date(2026, 8, 31), tickers=[]) == []
+    assert store.filings(date(2026, 4, 1), date(2026, 8, 31), tickers=["MSFT.US"]) == []

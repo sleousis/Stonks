@@ -894,6 +894,7 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `earnings` | list[[EarningsEvent](#earningsevent)] | yes |  |
 | `economic` | list[[EconomicEvent](#economicevent)] | yes |  |
 | `end` | date | yes |  |
+| `filings` | list[[FilingEvent](#filingevent)] | no |  |
 | `scope` | "all" \| "holdings" \| "watchlists" \| "tickers" | yes |  |
 | `start` | date | yes |  |
 | `tickers` | list[string] \| null | yes |  |
@@ -1582,6 +1583,7 @@ The owner's own holdings and hand-placed orders: never drift.
 | `n_quantiles` | integer | yes |  |
 | `n_tickers` | integer | yes |  |
 | `note` | string | no |  |
+| `periods` | list[[PeriodICView](#periodicview)] | no |  |
 | `quantile_curves` | [QuantileCurvesView](#quantilecurvesview) | no |  |
 | `score_turnover` | number \| null | no |  |
 | `size_basis` | string | no |  |
@@ -1630,6 +1632,7 @@ The owner's own holdings and hand-placed orders: never drift.
 | `id` | string | yes |  |
 | `kind` | string | yes |  |
 | `lookback_bars` | integer | yes |  |
+| `provenance` | [ProvenanceView](#provenanceview) \| null | no |  |
 | `set` | string \| null | no |  |
 
 ### FailingCheck
@@ -1662,6 +1665,20 @@ One go-live check that failed (``GoLiveCheck`` without ``passed``).
 |-------|------|----------|-------------|
 | `items` | list[[FeedItemView](#feeditemview)] | yes |  |
 | `unread_count` | integer | yes |  |
+
+### FilingEvent
+
+A current report (8-K) a company filed (roadmap 23.13).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `accepted_at` | date-time | yes |  |
+| `form` | string | yes |  |
+| `item_names` | list[string] | no |  |
+| `items` | list[string] | no |  |
+| `name` | string \| null | no |  |
+| `ticker` | string | yes |  |
+| `url` | string \| null | no |  |
 
 ### FillView
 
@@ -3685,6 +3702,18 @@ The model book's result. Every figure is null without two days.
 | `tool_call_id` | string | yes |  |
 | `tool_name` | string | yes |  |
 
+### PeriodICView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `end` | string | yes |  |
+| `mean_ic` | number \| null | no |  |
+| `n_dates` | integer | yes |  |
+| `period` | string | yes |  |
+| `spread_mean` | number \| null | no |  |
+| `start` | string | yes |  |
+| `t_stat_hac` | number \| null | no |  |
+
 ### PeriodPnl
 
 | Field | Type | Required | Description |
@@ -4066,6 +4095,19 @@ What a reviewer reads before promoting; it doesn't change the verdict. ``None`` 
 | `atr_window` | integer | no |  |
 | `enabled` | boolean | no |  |
 | `fallback_pct` | number | no |  |
+
+### ProvenanceView
+
+The paper a published factor comes from (roadmap 23.13).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `paper` | string | yes |  |
+| `published` | integer | yes |  |
+| `reported` | string | yes |  |
+| `sample_end` | integer | yes |  |
+| `sample_start` | integer | yes |  |
+| `t_stat` | number \| null | no |  |
 
 ### ProviderView
 

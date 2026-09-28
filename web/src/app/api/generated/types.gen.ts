@@ -969,6 +969,10 @@ export type CalendarView = {
      */
     end: string;
     /**
+     * Filings
+     */
+    filings?: Array<FilingEvent>;
+    /**
      * Scope
      */
     scope: 'all' | 'holdings' | 'watchlists' | 'tickers';
@@ -2795,6 +2799,10 @@ export type FactorTearSheetView = {
      * Note
      */
     note?: string;
+    /**
+     * Periods
+     */
+    periods?: Array<PeriodIcView>;
     quantile_curves?: QuantileCurvesView;
     /**
      * Score Turnover
@@ -2931,6 +2939,7 @@ export type FactorView = {
      * Lookback Bars
      */
     lookback_bars: number;
+    provenance?: ProvenanceView | null;
     /**
      * Set
      */
@@ -3011,6 +3020,42 @@ export type FeedView = {
      * Unread Count
      */
     unread_count: number;
+};
+
+/**
+ * FilingEvent
+ *
+ * A current report (8-K) a company filed (roadmap 23.13).
+ */
+export type FilingEvent = {
+    /**
+     * Accepted At
+     */
+    accepted_at: string;
+    /**
+     * Form
+     */
+    form: string;
+    /**
+     * Item Names
+     */
+    item_names?: Array<string>;
+    /**
+     * Items
+     */
+    items?: Array<string>;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Url
+     */
+    url?: string | null;
 };
 
 /**
@@ -8437,6 +8482,40 @@ export type PendingActionView = {
 };
 
 /**
+ * PeriodICView
+ */
+export type PeriodIcView = {
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Mean Ic
+     */
+    mean_ic?: number | null;
+    /**
+     * N Dates
+     */
+    n_dates: number;
+    /**
+     * Period
+     */
+    period: string;
+    /**
+     * Spread Mean
+     */
+    spread_mean?: number | null;
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * T Stat Hac
+     */
+    t_stat_hac?: number | null;
+};
+
+/**
  * PeriodPnl
  */
 export type PeriodPnl = {
@@ -9530,6 +9609,38 @@ export type ProtectiveStopSettings = {
      * Fallback Pct
      */
     fallback_pct?: number;
+};
+
+/**
+ * ProvenanceView
+ *
+ * The paper a published factor comes from (roadmap 23.13).
+ */
+export type ProvenanceView = {
+    /**
+     * Paper
+     */
+    paper: string;
+    /**
+     * Published
+     */
+    published: number;
+    /**
+     * Reported
+     */
+    reported: string;
+    /**
+     * Sample End
+     */
+    sample_end: number;
+    /**
+     * Sample Start
+     */
+    sample_start: number;
+    /**
+     * T Stat
+     */
+    t_stat?: number | null;
 };
 
 /**
