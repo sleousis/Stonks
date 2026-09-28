@@ -113,3 +113,22 @@ def test_a_split_between_decision_and_fill_rescales_the_order():
     assert out.fill is not None
     assert out.fill.quantity == pytest.approx(20.0)
     assert out.fill.price == 50.0
+
+
+def test_a_hold_cancels_a_working_order_before_it_fills():
+    bars = {TUE: {"A.US": OpenBar(open=100.0), "B.US": OpenBar(open=100.0)}}
+    broker = SimulatedBroker(Portfolio(cash=1_000.0, positions={"B.US": 1.0}))
+    sell = Order(client_id="s1", ticker="B.US", side="sell", quantity=1.0)
+
+    def hold(order):
+        return "held by a halt (buys)" if order.side == "buy" else None
+
+    outs = fill_at_next_open(
+        broker, [_working(_buy(qty=1.0)), _working(sell)], bars, as_of=TUE, hold=hold
+    )
+    assert [(o.status, o.fill is not None) for o in outs] == [
+        ("cancelled", False),
+        ("filled", True),
+    ]
+    assert outs[0].reason == "held by a halt (buys)"
+    assert broker.fetch_portfolio().positions == {}

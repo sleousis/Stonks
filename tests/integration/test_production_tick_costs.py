@@ -145,6 +145,23 @@ def test_the_configured_paper_book_fills_at_the_next_open(tmp_path, lake_trendin
     state.close()
 
 
+def test_a_kill_switch_cancels_a_working_paper_order(tmp_path, lake_trending):
+    from stonks.production.halts import trip_halt
+
+    state, registry = _env(
+        tmp_path, lake_trending, BuyAndHold({"ticker": "UP.US", "allocation": 0.5})
+    )
+    settings = build_tick_settings(Settings(), ["UP.US"])
+    run_tick(state, lake_trending, registry, settings, as_of=AS_OF)
+    trip_halt(state, "kill", reason="stop", actor="user:usr_owner", scope="global", halt="all")
+    run_tick(state, lake_trending, registry, settings, as_of=date(2026, 3, 23))
+    assert state.sql("SELECT COUNT(*) AS n FROM fills")[0]["n"] == 0
+    [order] = state.sql("SELECT status, status_reason FROM orders")
+    assert order["status"] == "cancelled"
+    assert order["status_reason"] == "cancelled by a halt (all)"
+    state.close()
+
+
 def test_shadow_fills_through_the_same_cost_model(tmp_path, lake_trending):
     state, registry = _env(tmp_path, lake_trending, BuyAndHold({"ticker": "FLAT.US"}))
     shadow = registry.register(

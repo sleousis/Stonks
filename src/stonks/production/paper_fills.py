@@ -106,24 +106,29 @@ def fill_at_next_open(
     *,
     as_of: date,
     actions: CorporateActions | None = None,
+    hold: Callable[[Order], str | None] | None = None,
 ) -> list[OpenFill]:
     """Fill each order decided before ``as_of`` in the first bar of its
     ticker after its decision day (see the module doc). ``bars`` are keyed
     by day, then ticker. Orders fill day by day, in the order given within
     a day (sells before buys when the tick recorded them so). Orders
-    decided on ``as_of`` are left out of the result."""
+    decided on ``as_of`` are left out of the result. ``hold(order)`` names
+    why an order may not fill (a halt in force): it is cancelled unfilled,
+    as the kill switch cancels working orders at a broker."""
     due = [w for w in working if w.decided_on < as_of]
-    first_bar: dict[str, date | None] = {}
+    results: dict[str, OpenFill] = {}
     by_day: dict[date, list[WorkingOrder]] = {}
     for w in due:
+        held = hold(w.order) if hold is not None else None
+        if held is not None:
+            results[w.order.client_id] = OpenFill(w.order, None, "cancelled", held)
+            continue
         day = next(
             (d for d in sorted(bars) if w.decided_on < d <= as_of and w.order.ticker in bars[d]),
             None,
         )
-        first_bar[w.order.client_id] = day
         if day is not None:
             by_day.setdefault(day, []).append(w)
-    results: dict[str, OpenFill] = {}
     for day in sorted(by_day):
         row = bars[day]
         broker.set_prices(
@@ -336,6 +341,7 @@ def sweep_paper_orders(
     as_of: date,
     make_broker: Callable[[Portfolio], SimulatedBroker],
     actions: CorporateActions | None = None,
+    hold: Callable[[Order], str | None] | None = None,
 ) -> PaperSweep:
     """Fill a paper book's working orders at the next open (module doc).
     ``portfolio`` changes in place. Nothing is written: the caller records
@@ -343,7 +349,13 @@ def sweep_paper_orders(
     writes the run's snapshot."""
     working = load_working_orders(state, portfolio_id)
     outcomes = sweep_orders(
-        lake, portfolio, working, as_of=as_of, make_broker=make_broker, actions=actions
+        lake,
+        portfolio,
+        working,
+        as_of=as_of,
+        make_broker=make_broker,
+        actions=actions,
+        hold=hold,
     )
     for o in outcomes:
         _log.info(
@@ -365,6 +377,7 @@ def sweep_orders(
     as_of: date,
     make_broker: Callable[[Portfolio], SimulatedBroker],
     actions: CorporateActions | None = None,
+    hold: Callable[[Order], str | None] | None = None,
 ) -> list[OpenFill]:
     """Fill ``working`` orders decided before ``as_of`` from the lake's
     daily bars (:func:`fill_at_next_open`), on a broker around
@@ -389,7 +402,7 @@ def sweep_orders(
         lookback_bars=spec.lookback_bars if spec is not None else 0,
         stats_spec=spec,
     )
-    return fill_at_next_open(broker, due, bars, as_of=as_of, actions=actions)
+    return fill_at_next_open(broker, due, bars, as_of=as_of, actions=actions, hold=hold)
 
 
 def record_open_fills(state: SqliteState, sweep: PaperSweep, *, portfolio_id: str | None) -> None:

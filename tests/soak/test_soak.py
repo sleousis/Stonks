@@ -34,8 +34,11 @@ def test_soak_smoke_across_the_dst_switch(tmp_path, monkeypatch):
     assert report.halted_days == [date(2026, 3, 9)]
     # the same New York time on both sides of the switch
     assert report.tick_local_times == {time(16, 45)}
-    # the churn strategy trades every day except under the kill switch
-    assert report.orders == report.fills == 3
+    # the churn strategy trades every day except under the kill switch. A
+    # paper order fills at the next open (P21): the 3/5 order fills on 3/6,
+    # the kill switch cancels the 3/6 order before the 3/9 open, and the
+    # 3/10 order is still working
+    assert (report.orders, report.fills) == (3, 1)
     assert report.backups >= 4 and report.health_runs >= 8
     assert report.risk_rows >= len(report.sessions)
 
@@ -79,5 +82,7 @@ def test_soak_one_quarter(tmp_path, monkeypatch):
     assert date(2026, 2, 16) not in report.sessions  # Presidents' Day
     assert date(2026, 4, 3) not in report.sessions  # Good Friday
     assert report.restarts == 3
-    assert report.orders == report.fills == 61
+    # every order fills at the next open (P21) but two: the one the kill
+    # switch cancels and the last session's, still working
+    assert (report.orders, report.fills) == (61, 59)
     assert report.tick_local_times == {time(16, 45)}

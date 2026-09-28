@@ -41,6 +41,7 @@ flowchart LR
 - What the fill model leaves unfilled is cancelled with the reason "replaced by the next decision", as a backtest replaces its queue at each rebalance. The fill that did happen stays.
 - An order the fill model refuses outright (the gap guard, a limit not reached, no cash) expires.
 - A split between the decision and the fill rescales the order.
+- A halt in force when the next tick runs holds the working orders it blocks: all of them under `all`, those that do not reduce a position under `buys`. They are cancelled unfilled, as the kill switch cancels working orders at a broker.
 - The fill is booked by the next tick, not by a job after the open. The daily bar with that open is only in the lake after the session's price ingest.
 - `[production] paper_fills = "close"` keeps the old rule: fill at once at the latest close. Books at a broker are not affected. They send before the next open (tickets and the submit window).
 - `tests/integration/test_paper_fill_parity.py` runs one strategy through the paper tick day by day and through a backtest, and checks the fills are the same, a capped partial fill included.

@@ -1057,6 +1057,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             as_of=as_of,
             make_broker=lambda held_now: _paper_broker(held_now, settings, book),
             actions=actions,
+            hold=_halt_hold(state, as_of, book),
         )
         working = {cid: t for cid, t in working.items() if cid not in paper.settled}
     paper_summary = paper.as_dict()
@@ -2416,6 +2417,28 @@ def _build_broker(
         broker.set_asset_classes(asset_classes or {})  # type: ignore[arg-type]
         broker.set_prices(prices, as_of=as_of, volumes=volumes)
     return broker
+
+
+def _halt_hold(
+    state: SqliteState, as_of: date, book: TickBook
+) -> Callable[[Order], str | None] | None:
+    """What a halt in force holds back of a paper book's working orders:
+    every order under ``all``, orders that do not reduce a position under
+    ``buys``. ``None`` when nothing is halted."""
+    halts = active_halts(state, as_of, portfolio_id=book.portfolio_id, user_id=book.owner_id)
+    if book.parent_id is not None:
+        halts += active_halts(state, as_of, portfolio_id=book.parent_id)
+    modes = {h.halt for h in halts}
+    if not modes:
+        return None
+    mode = "all" if "all" in modes else "buys"
+
+    def hold(order: Order) -> str | None:
+        if mode == "all" or not _reduces(order):
+            return f"cancelled by a halt ({mode})"
+        return None
+
+    return hold
 
 
 def _paper_broker(portfolio: Portfolio, settings: TickSettings, book: TickBook) -> SimulatedBroker:
