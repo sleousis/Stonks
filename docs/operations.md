@@ -158,15 +158,17 @@ A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_r
 
 `stonks health` exits 0 when healthy and 1 otherwise. Thresholds are under `[production.health]`:
 
-| Check | Fails when | Setting (default) |
+| Check (console name) | Fails when | Setting (default) |
 |-------|------------|---------|
-| `freshness:<ticker>` | The latest daily bar is older than N calendar days, or missing. | `max_bar_age_days` (4) |
-| `stuck_ticks` | A tick has been `running` for more than N minutes. | `stuck_tick_minutes` (60) |
-| `stuck_ingest_runs` | An ingest has been `running` for more than N minutes. | `stuck_ingest_minutes` (180) |
-| `ingest_failures` | An ingest failed in the last N hours. | `ingest_failure_lookback_hours` (24) |
-| `var_violations` | A portfolio's rolling 95% VaR violation ratio is outside 0.5 to 1.5, after at least 60 scored days. It never opens a halt. | see Live risk below |
-| `lab_queue` | Lab worker jobs waited more than N minutes with no live worker, or a running one lost its worker. It never opens a halt. | `stuck_lab_queue_minutes` (30) |
-| `broker:<gateway>` | The IB Gateway did not answer the latest `broker_health` check. It never opens the operational halt. | `[brokers.ibkr.health]` |
+| `freshness:<ticker>` (Price data is up to date) | The latest daily bar is older than N calendar days, or missing. | `max_bar_age_days` (4) |
+| `stuck_ticks` (Stuck trading runs) | A tick has been `running` for more than N minutes. | `stuck_tick_minutes` (60) |
+| `stuck_ingest_runs` (Stuck data updates) | An ingest has been `running` for more than N minutes. | `stuck_ingest_minutes` (180) |
+| `ingest_failures` (Recent data update failures) | An ingest failed in the last N hours. | `ingest_failure_lookback_hours` (24) |
+| `var_violations` (Risk estimate accuracy) | A portfolio's rolling 95% VaR violation ratio is outside 0.5 to 1.5, after at least 60 scored days. It never opens a halt. | see Live risk below |
+| `lab_queue` (Lab workers) | Lab worker jobs waited more than N minutes with no live worker, or a running one lost its worker. It never opens a halt. | `stuck_lab_queue_minutes` (30) |
+| `broker:<gateway>` (Broker gateway) | The IB Gateway did not answer the latest `broker_health` check. It never opens the operational halt. | `[brokers.ibkr.health]` |
+
+`risk_halts` (Trading stops) lists the halts in force and fails while one is. Passing `var_violations` says `not enough days yet` until a portfolio has enough scored days, and `within band` after; the console shows the first as "Not enough data yet". The console's Health page gives every check its name, a one-line meaning and the detail in plain words (`health-state.ts`), and admins get a link to act on a failing one.
 
 Freshness covers the tickers you pass, else `[production].universe`. A universe id there is resolved to its members on today's date, the same way the tick does. When nothing resolves (the universe was never refreshed), no freshness check runs, so it never opens the operational halt.
 
@@ -180,7 +182,7 @@ The API serves `GET /api/health` (liveness, used by Docker and Caddy) and `GET /
 
 A useful alert: `time() - stonks_scheduled_job_last_success_timestamp_seconds{job="tick"} > 26 * 3600` on weekdays.
 
-### Live engine monitoring
+### Intraday engine monitoring
 
 The intraday engine runs in its own process. Its monitor writes one `engine_status` row (SQLite migration 044) every `publish_seconds` (15) and when it stops. `GET /metrics` renders it, labelled by `engine` and `source`, never by key or account:
 
@@ -197,7 +199,7 @@ The intraday engine runs in its own process. Its monitor writes one `engine_stat
 | `stonks_engine_dispatch_lag_seconds` (histogram) | Clock time from a bar's settle time to its dispatch |
 | `stonks_engine_event_to_order_seconds` (histogram) | Time from a bar close dispatch to the order it caused |
 
-`GET /api/stream/status` (`data.read`) and the MCP tool `get_stream_status` show the same with the dead-man state. The console shows it on Live engine (`/live`). Useful alerts:
+`GET /api/stream/status` (`data.read`) and the MCP tool `get_stream_status` show the same with the dead-man state. The console shows it on Intraday engine (`/live`). Useful alerts:
 
 - `stonks_engine_up == 0` during market hours.
 - `histogram_quantile(0.95, rate(stonks_engine_event_to_order_seconds_bucket[15m])) > 2`.
@@ -208,6 +210,12 @@ Settings live under `[streaming.monitor]`: `deadman_minutes`, `stale_after_secon
 Over HTTP, `GET /api/health/live` (the process, plus the scheduler when `stonks serve` hosts it) and `GET /api/health/ready` (state migrated, lake present) are open to everyone, like `GET /api/health`. They answer 200 with each check's name and `ok`, or 503 naming the failing checks; details go to the log, not the response.
 
 With `[scheduler] backend = "in_process"`, `stonks serve` starts the scheduler with the app and stops it (after the running job) on shutdown. `GET /api/schedule` lists the jobs, their next fire and recent runs; `POST /api/schedule/{job}/run-now` (token, audited as `schedule.run_now`) starts a `manual:` run in the background.
+
+`GET /api/schedule` also says:
+
+- `running`: a scheduler heartbeated in the last few minutes (hosted or on its own), or a scheduled run is in progress. The console's Schedule page warns when none runs, since jobs then only start by hand.
+- `origin` on each recent run: `schedule`, `run_now`, or `outside` for a trading run started from the console's Orders page, the API or the CLI. Those come from `tick_runs` without a scheduled run and are named after the trading run job, so its Last run counts them. They carry the status (`succeeded`, `partial`, `failed`), the day and the tick id, never order counts.
+- `off_reason` on each job whose feature is off: `engine_off` (`[engine] enabled = false`), `options_off` (`[production.options] live = false`) or `no_gateway` (no `[brokers.ibkr.gateways]`). The job still fires and skips; the console folds it away from Run now.
 
 ## Lab worker
 
@@ -943,6 +951,10 @@ watch_band = 0.01
 - `options_expiry_watch` runs an hour before the close. A short option that expires today, still held and in or near the money, sends a high urgency alert. It never sends an order. Close it by hand from the ticket, or in TWS.
 - A quote with no bid and ask, or one too wide, makes no order. The job reports it, and the watch still alerts on expiry day.
 - Shares an assignment or exercise delivers are booked at the strike and belong to no strategy. Keep them or sell them with a manual order.
+
+## Settings in the console
+
+Settings, System shows admins the broker, risk policy, data sources and cost presets, read only. When the server offers editable operational settings (`GET` and `PUT /api/admin/settings`, grouped, non-secret, validated and audited), the same column shows an Operational settings form: each setting with its default, bounds checked before sending, a required reason for the audit log, and the server's per-setting errors. A server without that route answers 404 and the form stays hidden. Keys, tokens and passwords are never editable there; they stay in `.env`.
 
 ## Without the scheduler
 

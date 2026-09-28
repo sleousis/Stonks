@@ -478,6 +478,9 @@ Tickers open `/data?instrument=<id>`.
 | Halts | `/ops/halts` | Active and past halts, the kill switch (global or one portfolio, reason, buys only), Resume and Clear |
 | Schedule and backups | `/ops/schedule` | Jobs with next and last run, recent runs and Run now. Every backup on disk with its size, Back up now, Verify and a staged Restore (admins) |
 | Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
+| Model versions | `/ops/models` | Candidates across strategies and Retrain all (see Model versions below) |
+| Users | `/admin/users` | People, roles, sign-in app and password resets. Alone, the admin reads how to add the next person |
+| Settings, System | `/settings` | Broker, risk policy, data sources and cost presets, and the Operational settings form when the server offers it |
 | Universes | `/universes`, `/universes/:id` | List, create and edit each kind, index history import, members on a date, membership history, Refresh, Fetch missing data and Delete (see Universes below) |
 
 - `<app-session-strip>` sits above every page: the next trading run with
@@ -503,7 +506,26 @@ Tickers open `/data?instrument=<id>`.
   (`tickTicket()`): broker, PAPER or LIVE stamp, and the broker label
   typed. Other jobs ask plainly, named by `jobLabel()`
   (`core/schedule/job-labels.ts`: Trading run, Price update, Broker sync,
-  Health check, ...). A real run cannot be dated before the last real run.
+  Health check, Broker check before the open, ...). Every default job has
+  a name there, never its id. A real run cannot be dated before the last
+  real run.
+- **Status words.** Runs and checks use one vocabulary
+  (`core/schedule/run-status.ts`, docs/design/vocabulary.md): `runWord()`
+  turns `ok`, `succeeded`, `partial`, `error` into Done, Partly done and
+  Failed, and `CHECK_WORDS` holds Passed, Failed and Not enough data yet.
+  Pass the word as the pill's `label`.
+- **Schedule.** A line says whether a scheduler runs (inside the server,
+  on its own, or none, with the fix for admins). Recent runs lists
+  scheduled runs, Run now and trading runs started by hand (`origin`),
+  with Started by and a link to the trading run. Jobs whose feature is off
+  (`off_reason`: intraday engine, live options, no broker gateway) fold
+  into "Waiting on a feature that is off" with no Run now.
+- **Health checks.** `CHECKS` in `pages/health/health-state.ts` gives each
+  server check a name and a one-line meaning (Lab workers, Trading stops,
+  Risk estimate accuracy, ...), `plainDetail()` rewrites the server's
+  detail without ids, and `CHECK_ACTIONS` links admins to the page that
+  fixes a failing check. A new server check needs an entry there. Admins
+  never read "ask your admin": empty states name the fix.
 - Schedule, Health, Data quality and Halts refresh on their own
   (`autoRefresh`, `<app-updated-ago>`). Schedule also reads again just
   after a job's time passes, so "due now" never sticks.
@@ -535,6 +557,27 @@ Tickers open `/data?instrument=<id>`.
   `today` and `next` sessions, each with `pre_open` (30 minutes before the
   open), `open` and `close` in UTC. `today` is null on days the market is
   closed.
+
+### Operational settings (admins)
+
+`<app-system-settings>` (`pages/settings/system-settings.ts`) sits at the
+top of Settings, System. It reads `GET /api/admin/settings`
+(`api/admin-settings.service.ts`, silent) and hides itself on a 404, so
+it appears only once the server offers editable settings. The contract:
+
+- GET returns `{ groups: [{ id, label, description, fields: [...] }],
+  updated_at, updated_by }`. A field has `key` (never shown), `label`,
+  `help`, `type` (`bool`, `int`, `float`, `percent`, `string`, `choice`,
+  `list`), `value`, `default`, `min`, `max`, `unit`, `choices` and
+  `restart`. Percents are fractions on the wire and whole numbers on
+  screen.
+- PUT sends `{ values: { key: value }, reason }` with only the changed
+  keys and returns the new view. A 422 names the bad keys in `errors`
+  (`loc` or `key`, and `msg` or `message`); each shows under its field
+  and the rest in an alert above Save.
+- Values are checked before sending (numbers, bounds, choices). The
+  reason (5 characters or more) goes to the audit log. Secrets never
+  show.
 
 ## Trader screens added in 18.2
 
@@ -743,11 +786,14 @@ flowchart LR
   paused books show as a count only. The `broker:<gateway>` health checks
   still count toward the overall state, but leave the Runs list.
 
-## Live engine (Phase 21.3.4)
+## Intraday engine (Phase 21.3.4)
+
+"Live" only means real money, so the page is Intraday engine (it can
+drive paper portfolios too).
 
 | Page | Route | What it does |
 |---|---|---|
-| Live engine | `/live` | Each intraday engine: running or not, its market, the silent-engine alarm, the price stream, speed from bar close to decision and from decision to order, and steps that failed |
+| Intraday engine | `/live` | Each intraday engine: running or not, its market, the silent-engine alarm, the price stream, speed from bar close to decision and from decision to order, and steps that failed |
 
 - **Getting there.** System group, admins. The page reads `GET
   /api/stream/status` (`data.read`) every 15 seconds and on Refresh.
@@ -764,8 +810,10 @@ flowchart LR
   reads so.
 - **Intraday P&L.** A panel for P&L per portfolio. Until live marks exist
   (21.3.3) it shows the API's note.
-- **No engine.** An empty state says intraday trading is off, or that live
-  prices are on and the engine has not reported yet.
+- **No engine.** An empty state in an Engines panel says intraday
+  trading is off (the default, and what turns it on), or that minute
+  prices are on and the engine has not reported yet, with a link to
+  Schedule.
 - Words avoid system names: "late prices", not ticks. `live-state.ts`
   holds them, with tests.
 
@@ -1166,7 +1214,7 @@ about the same thing.
 | Your risk limits | `/api/risk/limits` | none | `get_my_risk_limits` |
 | Live settings (allocation, account profile, live safeguards, account rules) | `/api/portfolios/{id}/live/*` | none | none |
 | Broker gateways (Health) | `/api/brokers/gateways` | none | none |
-| Live engine | `/api/stream/status` | none | `get_stream_status` |
+| Intraday engine | `/api/stream/status` | none | `get_stream_status` |
 | Download CSV | `/api/exports/*` | none | none |
 | Tax files: gains, dividends, open lots | `/api/tax/exports/*` | `stonks tax gains`, `dividends`, `lots` | none |
 | Download PDF (tear sheet) | browser print, no route | `stonks report --backtest` (HTML) | none |

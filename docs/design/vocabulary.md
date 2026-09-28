@@ -58,6 +58,8 @@ Whether a trade uses real money depends only on the **portfolio stage**. The fol
 | Subscription, follow | Follow (the noun and the verb) |
 | Sleeve | The strategy's part of your portfolio |
 | Overview (the admin page) | Dashboard, in both the menu and the page title |
+| Live engine (the intraday engine page) | Intraday engine |
+| ok, succeeded, Good (run and check states) | The status words below |
 
 ## Status words
 
