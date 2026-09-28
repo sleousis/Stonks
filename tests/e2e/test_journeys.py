@@ -278,18 +278,30 @@ def tick_result(v: Visit):
 
 
 def test_paper_tick_places_orders_and_fills(browse, stack, viewport):
+    """P21: a paper book fills like a backtest. The tick decides at the close
+    and leaves the order working; the next session's tick fills it at the
+    open (docs/operations.md, "How paper books fill")."""
     ticker = {"desktop": "AAA.US", "phone": "BBB.US"}[viewport]
-    as_of = stack.next_tick_date().isoformat()
+    decide_on = stack.next_tick_date().isoformat()
+    fill_on = stack.next_tick_date().isoformat()
     v = browse(stack.admin)
-    run_real_tick(v, as_of, ticker)
+    run_real_tick(v, decide_on, ticker)
     result = tick_result(v)
-    expect(result.locator("dd").first).to_have_text("1")
+    expect(result.locator("dd").nth(0)).to_have_text("1")
+    expect(result.locator("dd").nth(1)).to_have_text("0")
     v.check_page("tick-result")
     expect(v.page.locator("app-session-strip .strip")).to_have_attribute("data-tone", "calm")
 
     page = v.go("/orders")
-    expect(page.locator("main")).to_contain_text(ticker)
+    working = page.locator("main tr", has_text=ticker).first
+    expect(working).to_contain_text("Working")
     v.check_page("orders")
+
+    # The next session's tick fills the working order at that day's open.
+    run_real_tick(v, fill_on, ticker)
+    result = tick_result(v)
+    expect(result.locator("dd").nth(1)).to_have_text("1")
+
     page = v.go("/orders/fills")
     expect(page.locator("main")).to_contain_text(ticker)
     v.check_page("fills")
