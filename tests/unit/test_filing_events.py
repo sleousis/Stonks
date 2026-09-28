@@ -80,3 +80,12 @@ def test_decide_buys_new_picks_equally_and_sells_the_rest():
     )
     by = {(o.side, o.ticker): o.quantity for o in orders}
     assert by == {("sell", "OLD.US"): 5.0, ("buy", "A.US"): 50.0, ("buy", "B.US"): 25.0}
+
+
+def test_the_engine_datetime_decision_time_scores_like_its_day(lake):
+    """The backtest engine and the tick pass a datetime, not a date."""
+    s = FilingEvents({"hold_days": 3})
+    for day in (date(2026, 7, 30), date(2026, 8, 2)):
+        stamp = datetime.combine(day, datetime.min.time())
+        view = PointInTimeLake(lake, stamp)
+        assert s.estimate_return("A.US", stamp, view) == s.estimate_return("A.US", day, view)

@@ -83,7 +83,9 @@ class FilingEvents(BaseStrategy):
         if not isinstance(filings, pd.DataFrame) or filings.empty:
             return None
         known = pd.Series(pd.to_datetime(filings["known_at"]))
-        close = pd.Timestamp(datetime.combine(as_of, datetime.max.time()))
+        # the engine and the tick pass a datetime: a date less one is a TypeError
+        day = as_of.date() if isinstance(as_of, datetime) else as_of
+        close = pd.Timestamp(datetime.combine(day, datetime.max.time()))
         seen = [
             date.fromisoformat(str(k)[:10])
             for k in known
@@ -91,7 +93,7 @@ class FilingEvents(BaseStrategy):
         ]
         if not seen:
             return None
-        age = as_of - max(seen)
+        age = day - max(seen)
         hold = int(self.params["hold_days"])
         if age > timedelta(days=hold):
             return None
