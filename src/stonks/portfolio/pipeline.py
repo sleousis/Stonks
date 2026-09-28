@@ -9,7 +9,11 @@ orders of one book:
 3. run the registered :class:`~stonks.portfolio.base.PortfolioConstructor`
    (``[production.construction].method``, per portfolio);
 4. turn the target book into orders;
-5. drop opening orders of tickers without a fresh price, then apply the risk rules.
+5. drop opening orders of tickers without a fresh price, then apply the risk rules;
+6. size the orders to tradable lots (``BookInput.lots``, roadmap 23.1):
+   whole shares where the broker needs them, so the backtest, the paper
+   books and the live books trade the same shares (P21). The risk re-check
+   of :func:`apply_book_risk` sizes to lots as well.
 
 Step 4 has two routes:
 
@@ -71,6 +75,7 @@ from stonks.portfolio.base import (
     PortfolioConstructor,
     TargetBook,
 )
+from stonks.portfolio.lots import LotResult, LotRule
 from stonks.portfolio.orders import orders_from_targets
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.portfolio.signals import SignalContext, normalize
@@ -134,6 +139,8 @@ class BookInput:
     risk_context: RiskContext | None = None
     #: The book may hold short positions (``portfolios.allow_short``).
     allow_short: bool = False
+    #: Round order sizes to tradable lots (``None``: no rounding).
+    lots: LotRule | None = None
 
     def strategies(self, signals: Mapping[str, Any]) -> list[str]:
         """The book's strategies that sent signals, in signal order."""
@@ -172,6 +179,8 @@ class PipelineResult:
     reason: NoTradeReason | None = None
     #: Per ticker, each strategy's share of what this decision targeted.
     attribution: dict[str, dict[str, float]] = field(default_factory=dict)
+    #: What the lot rule rounded or skipped (``None`` without a rule).
+    lots: LotResult | None = None
 
 
 def build_orders(
@@ -205,7 +214,39 @@ def apply_book_risk(
 ) -> RiskResult:
     """The risk layer as the pipeline runs it (``book.risk`` unless a slice
     ``policy`` is given); the tick re-checks its buys after the sells with
-    this. ``None`` everywhere passes the orders through."""
+    this. ``None`` everywhere passes the orders through. The result is
+    sized to the book's lots (``book.lots``)."""
+    return _risk_and_lots(orders, book, market, policy)[0]
+
+
+def _risk_and_lots(
+    orders: Sequence[Order],
+    book: BookInput,
+    market: MarketView,
+    policy: RiskPolicy | None = None,
+) -> tuple[RiskResult, LotResult | None]:
+    """The risk layer, then the lot rule on what it kept."""
+    risk = _risk(orders, book, market, policy)
+    if book.lots is None:
+        return risk, None
+    sized = book.lots.size(
+        risk.orders, book.portfolio.positions, market.prices, market.asset_classes
+    )
+    if sized.changes:
+        _log.info(
+            "pipeline.lots",
+            rounded=[c.ticker for c in sized.changes if not c.skipped],
+            skipped=[c.ticker for c in sized.skipped],
+        )
+    return replace(risk, orders=sized.orders), sized
+
+
+def _risk(
+    orders: Sequence[Order],
+    book: BookInput,
+    market: MarketView,
+    policy: RiskPolicy | None = None,
+) -> RiskResult:
     policy = policy if policy is not None else book.risk
     if policy is None:
         return RiskResult(orders=list(orders), adjustments=[])
@@ -274,7 +315,7 @@ def _single_winner(
     if book.allow_short:
         proposed = _split_at_zero(proposed, book.portfolio, _supports_short(decider))
     kept, stale = _drop_stale(proposed, market, book.portfolio)
-    risk = apply_book_risk(kept, book, market, book.risk_overrides.get(winner))
+    risk, lots = _risk_and_lots(kept, book, market, book.risk_overrides.get(winner))
     # Orders a risk rule created (e.g. a max_holding forced sell) keep the
     # rule's client id and no strategy; the winner's own orders take its ids.
     decided = {o.client_id for o in kept}
@@ -294,6 +335,7 @@ def _single_winner(
         exit_only=exit_only,
         # every opening order, long or short, is the winner's share (BE-50)
         attribution={o.ticker: {winner: 1.0} for o in orders if _opens(o, book.portfolio)},
+        lots=lots,
     )
 
 
@@ -351,13 +393,14 @@ def _from_targets(
             )
         )
     kept, stale = _drop_stale(owned, market, book.portfolio)
-    risk = apply_book_risk(kept, book, market)
+    risk, lots = _risk_and_lots(kept, book, market)
     return PipelineResult(
         orders=list(risk.orders),
         target_book=target,
         adjustments=list(risk.adjustments),
         stale_buys=stale,
         attribution={t: dict(s) for t, s in target.attribution.items() if t in target.weights},
+        lots=lots,
     )
 
 
