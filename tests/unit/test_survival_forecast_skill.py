@@ -6,6 +6,7 @@ from __future__ import annotations
 import pytest
 
 from stonks.assistant.settings import CUTOFF_SAFE_TESTS
+from stonks.features.forecasters.base import DEFAULT_LEVELS
 from stonks.lab.survival.registry import SUITE_PRESETS, build_survival_test, survival_test_names
 from stonks.strategies.examples.buy_and_hold import BuyAndHold
 from tests.fixtures.forecasting import (
@@ -142,3 +143,34 @@ def test_the_runner_adds_the_test_for_strategies_that_forecast():
         "oos",
         "forecast_skill",
     ]
+
+
+def test_a_baseline_with_a_nan_forecast_is_never_the_better_one(lake, monkeypatch):
+    """A statistical baseline that returns NaN on one origin has a NaN MSE.
+    It must not be picked as the better baseline (``min`` keeps a NaN
+    first key), or the model is judged against the weaker one."""
+    import math
+
+    from stonks.features.forecasters.base import Forecast
+    from stonks.lab.survival import forecast_skill as mod
+
+    class NanNoise(NoiseForecaster):
+        def predict_batch(self, contexts, horizon, levels=DEFAULT_LEVELS):
+            out = super().predict_batch(contexts, horizon, levels)
+            first = out[0]
+            out[0] = Forecast(math.nan, first.levels, first.quantiles)
+            return out
+
+    real = mod.build_forecaster
+
+    def fake(name, *args, **kwargs):
+        if name == "ets":
+            return NanNoise()
+        if name == "theta":
+            return ArForecaster(phi=0.5)
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(mod, "build_forecaster", fake)
+    report = _test().run(ForecastUser(ArForecaster(phi=0.5)), dataset_for(lake, TICKERS))
+    assert "theta (the better of" in report.notes
+    assert not report.passed  # the model is the theta baseline: no skill over it
