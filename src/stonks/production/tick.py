@@ -1364,6 +1364,10 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             located = broker_borrow_source(broker, lake)
             if located is not None:
                 risk_context = replace(risk_context, borrow=located)
+    if risk_context is not None and external_holdings:
+        # the equity curve is the whole account's: the drawdown rules add the
+        # holdings the book does not own back to today's value
+        risk_context = replace(risk_context, outside_positions=dict(external_holdings))
     book_input = BookInput(
         portfolio=portfolio,
         construction=construction,

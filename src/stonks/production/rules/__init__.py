@@ -194,6 +194,12 @@ class RiskContext:
     #: today's manual entries, exits and losses. ``None`` for a strategy's
     #: orders, so the manual discipline rule does nothing there.
     manual: ManualContext | None = None
+    #: Positions in the account the book does not own (the owner's manual
+    #: holdings, or their own holdings in a connected account, BE-02): the
+    #: book never trades or sizes on them, but the equity curve records the
+    #: whole account, so the drawdown rules add them back to compare like
+    #: with like.
+    outside_positions: Mapping[str, float] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.cost_model is not None and (self.slippage_bps or self.fee_per_trade):
