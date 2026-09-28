@@ -116,4 +116,10 @@ describe('BehaviourPage', () => {
       findings(report({ disposition: { ...report().disposition, present: false } })),
     ).toHaveLength(2);
   });
+
+  it('writes the findings money in the base currency, as the tables do', () => {
+    const notes = findings(report(), 'EUR');
+    expect(notes[1]).toContain('€');
+    expect(notes.join(' ')).not.toContain('$');
+  });
 });
