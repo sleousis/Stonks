@@ -573,6 +573,11 @@ class IbkrBroker:
             state = self._state_of(t, t.filled)
             if state in TERMINAL:
                 continue
+            if t.order_ref and t.contract.sec_type == "BAG" and t.contract.combo_legs:
+                # the ledger holds a combo as its legs (roadmap 17.8)
+                combo_id = self._client_id_for(t.order_ref)
+                out.extend(option_broker.bag_open_orders(self, t, combo_id, state))
+                continue
             out.append(
                 BrokerOpenOrder(
                     broker_order_id=str(t.perm_id),

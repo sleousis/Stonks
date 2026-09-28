@@ -332,3 +332,24 @@ def test_cancelling_a_combo_leg_cancels_its_bag_order():
     assert state is not None and state.state == "cancelled"
     # nothing left to cancel
     assert broker.cancel_order("cmb-sprd:1") is False
+
+
+def test_a_working_combo_lists_as_its_leg_orders():
+    """Reconciliation compares open orders with the ledger, which holds a
+    combo as its legs. A BAG order must list as those legs, or a working
+    combo reads as an unknown order plus missing legs (broker drift)."""
+    from stonks.execution.drift import LedgerOrder, order_drift
+
+    broker, _ = make()
+    broker.place_combo(spread())
+    working = broker.open_orders()
+    assert [(o.client_id, o.ticker, o.side, o.quantity) for o in working] == [
+        ("cmb-sprd:0", CALL_200.contract_id, "buy", 2.0),
+        ("cmb-sprd:1", CALL_210.contract_id, "sell", 2.0),
+    ]
+    ledger = [
+        LedgerOrder("cmb-sprd:0", CALL_200.contract_id, "accepted"),
+        LedgerOrder("cmb-sprd:1", CALL_210.contract_id, "accepted"),
+    ]
+    items, external = order_drift(ledger, working, allow_manual=True)
+    assert items == [] and external == []
