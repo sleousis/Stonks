@@ -19,6 +19,7 @@ import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
+import { strategyDisplayName } from '../../shared/strategy-names';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { PageHeader } from '../../shared/ui/page-header';
 import { NoBook, bookState } from '../../shared/ui/no-book';
@@ -46,9 +47,10 @@ export function violationText(count: number, ratio: number | null, kupiec: numbe
 }
 
 /**
- * Risk of the picked portfolio: each measure against the limit the risk
- * layer enforces, today's VaR and ES with how often the model was wrong,
- * each strategy sleeve with its alpha-decay check, and the daily history.
+ * Risk of the picked portfolio: each measure against the limit it trades
+ * under (your own limits where they are stricter), today's VaR and ES with
+ * how often the model was wrong, each strategy's part with its alpha-decay
+ * check, and the daily history.
  */
 @Component({
   selector: 'app-risk-page',
@@ -90,6 +92,8 @@ export class RiskPage {
     loader: () => this.insightsApi.get(),
   });
   protected readonly policy = resource({ loader: () => this.systemApi.riskPolicy() });
+  /** Your own limits on top of the system's; when it fails the system limits still show. */
+  protected readonly mine = resource({ loader: () => this.riskApi.myLimits() });
 
   protected readonly chart = resource({
     params: () => this.bookParams(),
@@ -117,15 +121,27 @@ export class RiskPage {
 
   /** Limits need the policy, plus insights and live risk for the readings. */
   protected readonly limitsLoading = computed(
-    () => !this.policy.hasValue() && !this.policy.error(),
+    () =>
+      (!this.policy.hasValue() && !this.policy.error()) ||
+      (!this.mine.hasValue() && !this.mine.error()),
   );
-  protected readonly rows = computed<LimitRow[]>(() =>
-    limitRows(
+  protected readonly rows = computed<LimitRow[]>(() => {
+    const system = this.policy.hasValue() ? this.policy.value() : null;
+    const effective = this.mine.hasValue() ? this.mine.value().effective : system;
+    return limitRows(
       this.insights.hasValue() ? this.insights.value() : null,
-      this.policy.hasValue() ? this.policy.value() : null,
+      effective,
       this.live.hasValue() ? this.live.value() : null,
-    ),
-  );
+      system,
+    );
+  });
+  /** At least one row follows your own, stricter limit. */
+  protected readonly anyYours = computed(() => this.rows().some((r) => r.yours));
+  /** Buys under your smallest order size are skipped: said once under the limits. */
+  protected readonly smallestOrder = computed(() => {
+    const v = this.mine.hasValue() ? this.mine.value().effective.min_order_notional : null;
+    return v ? formatMoney(v) : null;
+  });
   protected readonly statusText = STATUS_TEXT;
   protected readonly meterWidth = (r: LimitRow) =>
     `${Math.min(1, Math.max(0, r.usage ?? 0)) * 100}%`;
@@ -187,7 +203,12 @@ export class RiskPage {
   });
 
   protected readonly sleeveColumns: TableColumn<RiskSnapshotView>[] = [
-    { key: 'strategy_id', label: 'Strategy', mobile: 'title' },
+    {
+      key: 'strategy_id',
+      label: 'Strategy',
+      mobile: 'title',
+      value: (r) => (r.strategy_id ? strategyDisplayName(r.strategy_id) : 'Whole portfolio'),
+    },
     { key: 'value', label: 'Value', format: 'money' },
     { key: 'var_95', label: 'VaR 95%', format: 'percent', help: 'var' },
     {
