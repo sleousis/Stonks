@@ -568,9 +568,10 @@ export class TicketsPage {
       tickets.length === 1
         ? `${tickets[0].side === 'buy' ? 'Buy' : 'Sell'} ${tickets[0].ticker}`
         : `${tickets.length} orders in ${group.portfolioName}`;
-    if (!(await this.stepUp.ensure(`Approve ${what}.`))) return;
+    // Busy from the first click: a second one while the code check runs sends nothing.
     this.mark(ids, true);
     try {
+      if (!(await this.stepUp.ensure(`Approve ${what}.`))) return;
       const done = await this.api.approve(ids);
       this.replace(done.items);
       this.toasts.success(

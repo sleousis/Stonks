@@ -164,6 +164,22 @@ describe('TicketsPage', () => {
     expect(success).toHaveBeenCalledWith(expect.stringContaining('before the open'));
   });
 
+  it('sends one approval for a double click while the code check runs', async () => {
+    let pass!: (ok: boolean) => void;
+    vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockReturnValue(
+      new Promise<boolean>((resolve) => (pass = resolve)),
+    );
+    const el = await render([ticket(), MSFT]);
+    button(el, 'Approve', 1).click();
+    button(el, 'Approve', 1).click();
+    pass(true);
+    await tick();
+    const reqs = controller.match('/api/tickets/approve');
+    expect(reqs.length).toBe(1);
+    reqs[0].flush({ items: [ticket({ status: 'approved' })] });
+    await tick();
+  });
+
   it('sends nothing when the code is cancelled', async () => {
     vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockResolvedValue(false);
     const el = await render([ticket()]);
