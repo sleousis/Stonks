@@ -122,8 +122,10 @@ def reconcile_cmd(
 
 @app.command("journal")
 def journal_cmd(
-    paths: list[Path] = typer.Argument(..., help="journal files (.jsonl) or folders"),
-    kind: list[str] = typer.Option(
+    paths: list[Path] = typer.Argument(  # noqa: B008
+        ..., help="journal files (.jsonl) or folders"
+    ),
+    kind: list[str] = typer.Option(  # noqa: B008
         [], "--kind", help="only these kinds: call, order_status, execution, error"
     ),
     as_json: bool = typer.Option(False, "--json", help="print the events as JSON lines"),
