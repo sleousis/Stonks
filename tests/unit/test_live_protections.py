@@ -259,3 +259,58 @@ def test_loss_breaker_merges_tighter():
     # a longer window can hide a recent loss behind old gains: kept from the base
     longer = tighter_rule_settings(tight, {"losing_lock": {"loss_window_days": 365}})
     assert longer.losing_lock.loss_window_days == tight.losing_lock.loss_window_days
+
+
+def test_an_exit_with_no_strategy_closes_the_position_it_sold():
+    """A risk rule's forced exit carries no strategy: it closes the trade of
+    the strategy that held the position, never opens a phantom short."""
+    d = date(2026, 9, 1)
+    fills = [
+        FillRow("s1", "A.US", "buy", 10.0, 100.0, d),
+        FillRow(None, "A.US", "sell", 10.0, 90.0, date(2026, 9, 2)),
+        FillRow("s1", "A.US", "buy", 5.0, 80.0, date(2026, 9, 3)),
+        FillRow("s1", "A.US", "sell", 5.0, 84.0, date(2026, 9, 4)),
+    ]
+    out = closed_from_fills(fills)
+    assert [(t.strategy_id, t.exit_day.day, t.pnl) for t in out] == [
+        ("s1", 2, pytest.approx(-100.0)),
+        ("s1", 4, pytest.approx(20.0)),
+    ]
+
+
+def test_closed_trades_leave_the_persons_manual_trades_out(state):
+    from datetime import UTC, datetime
+
+    from stonks.core.types import Fill, Order
+    from stonks.production.live.trades import closed_trades
+    from stonks.production.tick import _record_fill, _record_order
+
+    def trade(cid, side, qty, price, day, origin):
+        _record_order(
+            state,
+            Order(client_id=cid, ticker="A.US", side=side, quantity=qty, strategy_id=None),
+            status="filled",
+            portfolio_id="pf_default",
+        )
+        state.execute("UPDATE orders SET origin = ? WHERE client_id = ?", [origin, cid])
+        _record_fill(
+            state,
+            Fill(
+                order_client_id=cid,
+                ticker="A.US",
+                side=side,
+                quantity=qty,
+                price=price,
+                fee=0.0,
+                filled_at=datetime(2026, 9, day, 15, tzinfo=UTC),
+            ),
+            portfolio_id="pf_default",
+        )
+
+    trade("m1", "buy", 10.0, 100.0, 1, "manual")
+    trade("m2", "sell", 10.0, 80.0, 2, "manual")
+    assert closed_trades(state, "pf_default", date(2026, 9, 3)) == []
+    trade("s1", "buy", 10.0, 100.0, 1, "strategy")
+    trade("s2", "sell", 10.0, 80.0, 2, "strategy")
+    [only] = closed_trades(state, "pf_default", date(2026, 9, 3))
+    assert only.pnl == pytest.approx(-200.0)
