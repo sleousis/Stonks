@@ -146,3 +146,38 @@ def test_the_kill_switch_cancel_never_books_a_partial_fill_twice(state):
     reconcile_orders(broker, state, now=NOW)
 
     assert sum(r["quantity"] for r in fills(state)) == 4
+
+
+LONG_CID = "2026-09-28:pf_default:a-long-registered-strategy-id:AAPL.US:buy"
+
+
+def test_a_fresh_process_books_the_fills_of_an_order_sent_under_a_hashed_ref(state):
+    """A client id longer than the orderRef limit goes out hashed. The next
+    process (the reconcile job, the next tick) must map the executions back
+    to the order, or their fills are never booked."""
+    from stonks.execution.brokers.ibkr.factory import connect_ibkr
+    from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
+
+    config = IbkrBrokerConfig(
+        gateways={
+            "paper": {"host": "gw", "port": 4004, "mode": "paper", "portfolios": ["pf_default"]}
+        }
+    )
+    gw = FakeIbGateway()
+
+    def open_broker():
+        return connect_ibkr(config, state=state, client_factory=lambda ep: gw,
+                            clock=FakeClock(NOW))  # fmt: skip
+
+    insert_order(state, LONG_CID)
+    first = open_broker()
+    first.place_order(order(LONG_CID))
+    ref = first.broker_ref(LONG_CID)
+    assert ref != LONG_CID
+    write_state(state, LONG_CID, "submitted")
+    gw.fill(ref, 10, 200.0, commission=1.0)
+
+    summary = reconcile_orders(open_broker(), state, now=NOW)
+    assert summary.orphan_fills == ()
+    assert [(r["quantity"], r["price"]) for r in fills(state)] == [(10, 200.0)]
+    assert current_state(state, LONG_CID) == "filled"

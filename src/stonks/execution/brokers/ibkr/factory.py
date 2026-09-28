@@ -14,6 +14,7 @@ is down fails that call, nothing else.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import timedelta
@@ -31,9 +32,16 @@ from stonks.execution.brokers.ibkr.contracts import (
     MemoryContractCache,
     SqliteContractCache,
 )
-from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig, IbkrGatewayConfig
+from stonks.execution.brokers.ibkr.orders import HASH_PREFIX, broker_ref
+from stonks.execution.brokers.ibkr.settings import (
+    IbkrBrokerConfig,
+    IbkrGatewayConfig,
+    IbkrOrderSettings,
+)
 from stonks.options.live.gate import gate_lookup
 from stonks.store.state import SqliteState
+
+DEFAULT_ORDER_REF_MAX_LENGTH = IbkrOrderSettings().order_ref_max_length
 
 Role = Literal["tick", "sync", "health", "reconcile", "stream", "api"]
 ClientFactory = Callable[[IbEndpoint], IbClient]
@@ -100,12 +108,39 @@ def default_client_factory(endpoint: IbEndpoint) -> IbClient:
     return IbAsyncClient(endpoint)
 
 
-def order_ref_lookup(state: SqliteState) -> Callable[[str], str | None]:
-    """Our client id for an ``orderRef`` sent earlier (``orders.broker_ref``)."""
+#: A combo leg's client id: ``<combo id>:<leg index>``.
+_LEG_ID = re.compile(r"^(?P<combo>.+):\d+$")
+
+
+def order_ref_lookup(
+    state: SqliteState, max_length: int = DEFAULT_ORDER_REF_MAX_LENGTH
+) -> Callable[[str], str | None]:
+    """Our client id for an ``orderRef`` sent earlier: ``orders.broker_ref``
+    when a writer stored it, else the ledger client id (or the combo id of a
+    combo leg) whose hashed reference it is. The hashes are built once per
+    ledger row and kept, so a later process maps every execution and open
+    order of a long client id back to its order."""
+    hashed: dict[str, str] = {}
+    seen = {"rowid": 0}
 
     def lookup(ref: str) -> str | None:
         rows = state.sql("SELECT client_id FROM orders WHERE broker_ref = ? LIMIT 1", [ref])
-        return str(rows[0]["client_id"]) if rows else None
+        if rows:
+            return str(rows[0]["client_id"])
+        if not ref.startswith(HASH_PREFIX):
+            return None
+        if ref not in hashed:
+            for row in state.sql(
+                "SELECT rowid, client_id FROM orders WHERE rowid > ? ORDER BY rowid",
+                [seen["rowid"]],
+            ):
+                seen["rowid"] = int(row["rowid"])
+                client_id = str(row["client_id"])
+                leg = _LEG_ID.match(client_id)
+                for candidate in (client_id, leg.group("combo") if leg else None):
+                    if candidate and len(candidate) > max_length:
+                        hashed.setdefault(broker_ref(candidate, max_length), candidate)
+        return hashed.get(ref)
 
     return lookup
 
@@ -177,7 +212,11 @@ def connect_ibkr(
         order_settings=config.orders,
         account_type=kind,
         allow_short=kind == "margin",
-        ref_lookup=order_ref_lookup(state) if state is not None else None,
+        ref_lookup=(
+            order_ref_lookup(state, config.orders.order_ref_max_length)
+            if state is not None
+            else None
+        ),
         stage_lookup=(
             stage_lookup(state, served) if state is not None and served is not None else None
         ),
