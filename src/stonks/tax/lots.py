@@ -98,6 +98,16 @@ class Disposal:
             return "short"
         return "long" if self.disposed > _one_year_after(self.acquired) else "short"
 
+    @property
+    def sale_day(self) -> date:
+        """When the proceeds came in: the sale, which opens a short."""
+        return self.acquired if self.kind == "short" else self.disposed
+
+    @property
+    def purchase_day(self) -> date:
+        """When the cost was paid: the buy, which covers a short."""
+        return self.disposed if self.kind == "short" else self.acquired
+
 
 @dataclass(frozen=True)
 class OpenLot:

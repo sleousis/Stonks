@@ -116,12 +116,8 @@ def gains_rows(
         if d.disposed.year != year:
             continue
         ccy = d.currency or base
-        # a short's proceeds come in at the short sale (``acquired``) and
-        # its cost is paid at the cover; a long's the other way round
-        sale_day = d.acquired if d.kind == "short" else d.disposed
-        proceeds_base = fx.convert(d.proceeds, ccy, base, sale_day)
-        cost_day = d.disposed if d.kind == "short" else d.acquired
-        cost_base = fx.convert(d.cost_basis, ccy, base, cost_day)
+        proceeds_base = fx.convert(d.proceeds, ccy, base, d.sale_day)
+        cost_base = fx.convert(d.cost_basis, ccy, base, d.purchase_day)
         wash_base = fx.convert(d.wash_sale_disallowed, ccy, base, d.disposed)
         gain_base = (
             None
