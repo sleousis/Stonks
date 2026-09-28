@@ -19,8 +19,11 @@ from stonks.notify.base import NotificationLevel
 
 #: ``price_alert``: a price rule fired (roadmap 20.2). ``event_alert``: an
 #: upcoming earnings report, ex-dividend date or economic release (20.7).
-#: Each has its own switches, apart from strategy signals.
-Category = Literal["signal", "order", "risk", "system", "price_alert", "event_alert"]
+#: ``screen_alert``: a scheduled saved screen found names that newly match
+#: (23.17). Each has its own switches, apart from strategy signals.
+Category = Literal[
+    "signal", "order", "risk", "system", "price_alert", "event_alert", "screen_alert"
+]
 Urgency = Literal["low", "normal", "high"]
 AudienceKind = Literal["users", "owner", "admins", "subscribers"]
 
@@ -39,6 +42,7 @@ TTL_SECONDS: dict[str, int] = {
     "signal": 12 * 3600,
     "price_alert": 12 * 3600,
     "event_alert": 24 * 3600,
+    "screen_alert": 24 * 3600,
     "order": 24 * 3600,
     "risk": 24 * 3600,
     "system": 24 * 3600,
