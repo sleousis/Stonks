@@ -46,6 +46,8 @@ interface Group {
   asOf: string;
   expiresAt: string;
   live: boolean;
+  /** The portfolio's stage, for the stamp's words (BROKER PAPER). */
+  stage: string | null;
   tickets: TicketView[];
   notional: number;
 }
@@ -171,7 +173,7 @@ interface Group {
                               <span class="num">{{ qty(t.quantity) }}</span>
                               <strong class="num">{{ t.ticker }}</strong>
                             </span>
-                            <app-mode-stamp [live]="group.live" />
+                            <app-mode-stamp [live]="group.live" [stage]="group.stage" />
                           </p>
                           @if (hold(t); as why) {
                             <p class="hold" [class.alarm]="t.hold === 'runaway'">{{ why }}</p>
@@ -514,6 +516,7 @@ export class TicketsPage {
           asOf: t.as_of,
           expiresAt: t.expires_at,
           live: this.isLive(t.portfolio_id),
+          stage: this.stageOf(t.portfolio_id),
           tickets: [],
           notional: 0,
         };
@@ -628,6 +631,10 @@ export class TicketsPage {
     } finally {
       this.mark([ticket.id], false);
     }
+  }
+
+  private stageOf(portfolioId: string): string | null {
+    return this.portfolios.options().find((p) => p.id === portfolioId)?.live_stage ?? null;
   }
 
   private isLive(portfolioId: string): boolean {

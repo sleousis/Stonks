@@ -26,6 +26,13 @@ from stonks.app.serialize import finite
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.production.ledger import ledger_filter
+from stonks.production.live.stages import (
+    DEFAULT_STAGE,
+    STAGES,
+    LiveStage,
+    stages_enabled,
+    trades_real_money,
+)
 from stonks.production.pnl import day_change
 
 #: Reporting currency when the held instruments don't agree on one (or the
@@ -250,6 +257,11 @@ class TradingModeView(BaseModel):
     trading: Trading = Field(
         description="paper: simulated fills or a paper broker account. live: real money."
     )
+    live_stage: LiveStage = Field(
+        default="sim_paper",
+        description="Where the portfolio stands on the way to real money. A broker portfolio "
+        "trades real money only at live_small or live_scale.",
+    )
     broker: BrokerKind = Field(
         description="simulated (the Stonks ledger), alpaca (the configured account, default "
         "portfolio only), ibkr (the IB Gateway that serves the default portfolio) or "
@@ -267,6 +279,9 @@ class PortfolioSummaryView(BaseModel):
     initial_cash: float | None
     broker_connection_id: str | None
     trading: Trading
+    #: Where the portfolio stands on the way to real money (``sim_paper``,
+    #: ``broker_paper``, ``live_small``, ``live_scale``).
+    live_stage: LiveStage = "sim_paper"
     created_at: datetime
     #: The portfolio reads use when no ``portfolio_id`` is sent.
     is_default: bool = False
@@ -306,7 +321,8 @@ class PortfolioService:
         require(principal, Permission.READ)
         with self._ctx.state() as state:
             books = PortfolioRepository(state).list(principal.scope)
-        modes = {m.portfolio_id: m for m in self._modes(books)}
+            stages = _stages(state, books)
+        modes = {m.portfolio_id: m for m in self._modes(books, stages)}
         open_books = sorted(
             (p for p in books if p.status != "archived"),
             key=lambda p: (p.id != DEFAULT_PORTFOLIO_ID, p.created_at, p.id),
@@ -322,6 +338,7 @@ class PortfolioService:
                 initial_cash=p.initial_cash,
                 broker_connection_id=p.broker_connection_id,
                 trading=modes[p.id].trading,
+                live_stage=modes[p.id].live_stage,
                 created_at=datetime.fromisoformat(p.created_at),
                 is_default=p.id == default_id,
             )
@@ -366,9 +383,12 @@ class PortfolioService:
         require(principal, Permission.READ)
         with self._ctx.state() as state:
             books = PortfolioRepository(state).list(principal.scope)
-        return self._modes(books)
+            stages = _stages(state, books)
+        return self._modes(books, stages)
 
-    def _modes(self, books: list[AccountPortfolio]) -> list[TradingModeView]:
+    def _modes(
+        self, books: list[AccountPortfolio], stages: dict[str, LiveStage]
+    ) -> list[TradingModeView]:
         from stonks.execution.brokers import broker_mode
 
         settings = self._ctx.settings
@@ -377,20 +397,28 @@ class PortfolioService:
         for p in books:
             trading: Trading
             broker: BrokerKind
+            stage = stages.get(p.id, DEFAULT_STAGE)
             if p.id == DEFAULT_PORTFOLIO_ID and brokers.kind in ("alpaca", "ibkr"):
                 # the one answer the order paths use (manual orders, step-up)
                 trading = "live" if broker_mode(settings) == "live" else "paper"
                 broker = brokers.kind
                 detail = _default_book_detail(settings, trading)
             elif p.kind == "broker":
-                trading, broker = "live", "connection"
-                detail = "mirrors a real broker account through its connection (read-only sync)"
+                # Real money follows the stage only (docs/design/vocabulary.md).
+                trading = "live" if trades_real_money(stage) else "paper"
+                broker = "connection"
+                detail = "mirrors a broker account through its connection (read-only sync)"
             else:
                 trading, broker = "paper", "simulated"
                 detail = "simulated fills on the Stonks ledger"
             out.append(
                 TradingModeView(
-                    portfolio_id=p.id, name=p.name, trading=trading, broker=broker, detail=detail
+                    portfolio_id=p.id,
+                    name=p.name,
+                    trading=trading,
+                    live_stage=stage,
+                    broker=broker,
+                    detail=detail,
                 )
             )
         return out
@@ -672,3 +700,14 @@ def _snapshot_day(row: Any) -> date | None:
     if not raw:
         return None
     return date.fromisoformat(str(raw)[:10])
+
+
+def _stages(state: Any, books: Sequence[AccountPortfolio]) -> dict[str, LiveStage]:
+    """Each book's live stage (``sim_paper`` before migration 037)."""
+    if not books or not stages_enabled(state):
+        return {}
+    ids = [p.id for p in books]
+    rows = state.sql(
+        f"SELECT id, live_stage FROM portfolios WHERE id IN ({', '.join('?' * len(ids))})", ids
+    )
+    return {r["id"]: r["live_stage"] for r in rows if r["live_stage"] in STAGES}

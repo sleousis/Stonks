@@ -11146,6 +11146,10 @@ export type PortfolioSummaryView = {
      */
     kind: 'simulated' | 'broker';
     /**
+     * Live Stage
+     */
+    live_stage?: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale';
+    /**
      * Name
      */
     name: string;
@@ -16595,6 +16599,10 @@ export type TickResultView = {
      * Winner Strategy Id
      */
     winner_strategy_id: string | null;
+    /**
+     * Winner Strategy Name
+     */
+    winner_strategy_name?: string | null;
 };
 
 /**
@@ -17396,6 +17404,12 @@ export type TradingModeView = {
      * Detail
      */
     detail: string;
+    /**
+     * Live Stage
+     *
+     * Where the portfolio stands on the way to real money. A broker portfolio trades real money only at live_small or live_scale.
+     */
+    live_stage?: 'sim_paper' | 'broker_paper' | 'live_small' | 'live_scale';
     /**
      * Name
      */

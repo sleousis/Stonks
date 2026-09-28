@@ -5,8 +5,9 @@ import type {
   ProviderView,
   SubscriptionView,
 } from '../../api/models';
+import type { PortfolioRef } from '../../api/portfolios.service';
 import { book } from '../../../testing/portfolio-fixtures';
-import { type GoingLiveFacts, goingLiveSteps } from './going-live-steps';
+import { type GoingLiveFacts, atBroker, goingLiveSteps } from './going-live-steps';
 
 const IBKR: ProviderView = {
   name: 'ibkr',
@@ -243,5 +244,14 @@ describe('goingLiveSteps', () => {
   it('sends a portfolio with no follows to the strategies first', () => {
     const s = byKey(facts({ follows: [] }));
     expect(s['mode'].link).toMatchObject({ path: '/strategies' });
+  });
+});
+
+describe('atBroker', () => {
+  it('counts a broker portfolio at every stage, not only at real money', () => {
+    const paper: PortfolioRef = { ...BROKER, trading: 'paper', live_stage: 'broker_paper' };
+    expect(atBroker(paper)).toBe(true);
+    expect(atBroker(BROKER)).toBe(true);
+    expect(atBroker(book({ id: 'pf_s', name: 'Sim' }))).toBe(false);
   });
 });

@@ -4709,6 +4709,7 @@ A new paper portfolio of yours (simulated fills on the Stonks ledger). Broker po
 | `initial_cash` | number \| null | yes |  |
 | `is_default` | boolean | no |  |
 | `kind` | "simulated" \| "broker" | yes |  |
+| `live_stage` | "sim_paper" \| "broker_paper" \| "live_small" \| "live_scale" | no |  |
 | `name` | string | yes |  |
 | `status` | "active" \| "paused" \| "archived" | yes |  |
 | `trading` | "paper" \| "live" | yes |  |
@@ -6681,6 +6682,7 @@ What a test notification queued: its feed id and one delivery per enabled channe
 | `status` | string | yes |  |
 | `tick_id` | string | yes |  |
 | `winner_strategy_id` | string \| null | yes |  |
+| `winner_strategy_name` | string \| null | no |  |
 
 ### TickRun
 
@@ -6949,6 +6951,7 @@ Whether a portfolio trades paper or live money, and through what.
 |-------|------|----------|-------------|
 | `broker` | "simulated" \| "alpaca" \| "ibkr" \| "connection" | yes | simulated (the Stonks ledger), alpaca (the configured account, default portfolio only), ibkr (the IB Gateway that serves the default portfolio) or connection (a linked broker account, synced read-only). |
 | `detail` | string | yes |  |
+| `live_stage` | "sim_paper" \| "broker_paper" \| "live_small" \| "live_scale" | no | Where the portfolio stands on the way to real money. A broker portfolio trades real money only at live_small or live_scale. |
 | `name` | string | yes |  |
 | `portfolio_id` | string | yes |  |
 | `trading` | "paper" \| "live" | yes | paper: simulated fills or a paper broker account. live: real money. |

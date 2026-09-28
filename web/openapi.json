@@ -20237,6 +20237,17 @@
             "title": "Kind",
             "type": "string"
           },
+          "live_stage": {
+            "default": "sim_paper",
+            "enum": [
+              "sim_paper",
+              "broker_paper",
+              "live_small",
+              "live_scale"
+            ],
+            "title": "Live Stage",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -30556,6 +30567,17 @@
               }
             ],
             "title": "Winner Strategy Id"
+          },
+          "winner_strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner Strategy Name"
           }
         },
         "required": [
@@ -32070,6 +32092,18 @@
           },
           "detail": {
             "title": "Detail",
+            "type": "string"
+          },
+          "live_stage": {
+            "default": "sim_paper",
+            "description": "Where the portfolio stands on the way to real money. A broker portfolio trades real money only at live_small or live_scale.",
+            "enum": [
+              "sim_paper",
+              "broker_paper",
+              "live_small",
+              "live_scale"
+            ],
+            "title": "Live Stage",
             "type": "string"
           },
           "name": {
