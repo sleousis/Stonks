@@ -247,6 +247,22 @@ describe('ScreenerPage', () => {
     expect(button(root, 'Save changes').disabled).toBe(true);
   });
 
+  it('says so when a saved screen cannot be opened', async () => {
+    const fixture = await render();
+    const root = el(fixture);
+    const error = vi.spyOn(TestBed.inject(ToastService), 'error');
+    button(root, 'Open').click();
+    (await nextRequest(http, '/api/screener/screens/scr_1')).flush(
+      { title: 'Not found', status: 404, detail: 'no such screen' },
+      { status: 404, statusText: 'Not Found' },
+    );
+    await settle(fixture);
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('no such screen'),
+      expect.anything(),
+    );
+  });
+
   it('deletes a screen after asking', async () => {
     const fixture = await render();
     const root = el(fixture);
