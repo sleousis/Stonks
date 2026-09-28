@@ -95,7 +95,7 @@ class MarginCall(RiskRule):
             return list(orders), []
         model = margin_model(ctx, settings)
         account = ctx.live.account if ctx.live is not None else None
-        if account is not None and account.account_type == "margin":
+        if isinstance(account, LiveAccountState) and account.account_type == "margin":
             return self._live(orders, ctx, model, account, settings)
         prices = dict(ctx.prices)
         deficit = model.deficit(ctx.portfolio, prices, ctx.asset_classes)

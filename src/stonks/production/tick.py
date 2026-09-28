@@ -1714,8 +1714,14 @@ def _live_context(
     except Exception as exc:
         run.log.error("tick.live_context_failed", portfolio_id=book.portfolio_id, error=str(exc))
         return LiveContext(portfolio_id=book.portfolio_id)
-    if live.account is not None and live.account.account_type == "margin" and not run.dry_run:
-        _check_margin(run, book, live.account)
+    account = live.account
+    # an external broker without our account type (Alpaca) is not a margin book
+    if (
+        isinstance(account, LiveAccountState)
+        and account.account_type == "margin"
+        and not run.dry_run
+    ):
+        _check_margin(run, book, account)
     return live
 
 
