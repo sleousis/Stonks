@@ -388,6 +388,8 @@ export class RebalancePage {
   protected readonly busy = signal(false);
   protected readonly problem = signal<string | null>(null);
   protected readonly plan = signal<RebalancePlanView | null>(null);
+  /** The request the shown plan was made from; Write tickets sends only this. */
+  private planned: PlanRequest | null = null;
   protected readonly portfolioId = computed(() => this.ctx.current()?.id ?? null);
   protected readonly canTrade = computed(() => this.session.can('portfolio.trade'));
   protected readonly canManage = computed(() => this.session.can('portfolio.manage'));
@@ -467,8 +469,10 @@ export class RebalancePage {
     this.problem.set(null);
     try {
       this.plan.set(await this.api.plan(body));
+      this.planned = body;
     } catch (err) {
       this.plan.set(null);
+      this.planned = null;
       this.problem.set(errorMessage(err));
     } finally {
       this.busy.set(false);
@@ -479,6 +483,14 @@ export class RebalancePage {
     const body = this.request();
     const pl = this.plan();
     if (typeof body === 'string' || !pl) return;
+    // The form or the portfolio changed since the preview: the plan on screen
+    // no longer says what would be written.
+    if (JSON.stringify(body) !== JSON.stringify(this.planned)) {
+      this.plan.set(null);
+      this.planned = null;
+      this.problem.set('The form changed since the preview. Preview the plan again.');
+      return;
+    }
     const ok = await this.confirmer.confirm({
       title: `Write ${this.trades().length} order ticket(s)?`,
       message: 'Each ticket waits on Approvals for your code. Nothing is sent before that.',
