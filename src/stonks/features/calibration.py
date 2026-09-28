@@ -207,7 +207,7 @@ class PlattCalibrator(Calibrator):
         model = LogisticRegression(C=1e6, max_iter=1000)
         model.fit(_logit(prob).reshape(-1, 1), labels, sample_weight=weights)
         self._a = float(model.coef_[0, 0])
-        self._b = float(model.intercept_[0])
+        self._b = float(np.asarray(model.intercept_).ravel()[0])
 
     def transform(self, p: np.ndarray) -> np.ndarray:
         if self._a is None or self._b is None:

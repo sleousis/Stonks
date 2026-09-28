@@ -333,8 +333,8 @@ def feature_importance(
 ) -> ImportanceReport:
     """Every method in ``methods`` on ``strategy.training_set(dataset)``,
     each fold fitted with a fresh ``strategy.new_classifier()``."""
-    build = getattr(strategy, "training_set", None)
-    make = getattr(strategy, "new_classifier", None)
+    build: Callable[[Any], TrainingSet] | None = getattr(strategy, "training_set", None)
+    make: Callable[[], Classifier] | None = getattr(strategy, "new_classifier", None)
     if not callable(build) or not callable(make):
         raise TypeError(
             f"{type(strategy).__name__} has no training_set(dataset) and new_classifier(): "
@@ -344,7 +344,7 @@ def feature_importance(
     unknown = [m for m in methods if m not in METHODS]
     if unknown:
         raise ValueError(f"unknown methods {unknown}; choose from {list(METHODS)}")
-    data: TrainingSet = build(dataset)
+    data = build(dataset)
     tables = []
     for method in methods:
         if method == "mda":

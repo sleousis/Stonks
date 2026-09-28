@@ -285,13 +285,8 @@ class ADFTest(StationarityTest):
 
         clean = np.asarray(values, dtype=float)
         clean = clean[np.isfinite(clean)]
-        out = adfuller(
-            clean,
-            maxlag=self.maxlag,
-            regression=self.regression,
-            autolag=None,
-            result_object=False,
-        )
+        options: dict[str, Any] = {"autolag": None, "result_object": False}
+        out = adfuller(clean, maxlag=self.maxlag, regression=self.regression, **options)
         return StationarityResult(statistic=float(out[0]), pvalue=float(out[1]))
 
 
@@ -370,7 +365,7 @@ def cusum_events(series: pd.Series, threshold: float | pd.Series) -> pd.Index:
         elif down < -h - _EPS:
             down = 0.0
             events.append(i)
-    return series.index[events]
+    return pd.Index(series.index[events])
 
 
 # ---- trend-scanning labels -----------------------------------------------------
