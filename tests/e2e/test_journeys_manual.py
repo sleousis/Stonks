@@ -161,7 +161,7 @@ def test_a_trader_keeps_price_alerts(browse, stack, viewport):
 def test_the_telegram_panel_says_when_there_is_no_bot(browse, stack, viewport):
     v = _trader(browse, stack, "telegram", viewport)
     page = v.page
-    v.go("/settings")
+    v.go("/settings?tab=alerts")
     panel = page.locator("app-telegram-link")
     expect(panel).to_contain_text("Telegram")
     expect(panel).to_contain_text("no Telegram bot yet")
