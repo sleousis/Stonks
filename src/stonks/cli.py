@@ -1445,6 +1445,25 @@ def lab_ic(ctx: typer.Context) -> None:
     raise typer.Exit(code=signal_eval.main(list(ctx.args), prog="stonks lab ic"))
 
 
+@lab_app.command(
+    "importance",
+    context_settings={
+        "allow_extra_args": True,
+        "ignore_unknown_options": True,
+        "help_option_names": [],
+    },
+    add_help_option=False,
+)
+def lab_importance(ctx: typer.Context) -> None:
+    """Feature importance of a model strategy under purged CV (MDA, SFI,
+    clustered MDA, roadmap 23.10): --strategy ID --tickers A --start --end
+    [--train-end --params JSON --folds 5 --json F --html F];
+    ``stonks lab importance --help`` for all options."""
+    from stonks.lab import importance
+
+    raise typer.Exit(code=importance.main(list(ctx.args), prog="stonks lab importance"))
+
+
 _LAB_TUNERS = ("grid", "random", "optuna")
 _LAB_SAMPLERS = ("tpe", "nsga2", "random")
 _LAB_OBJECTIVES = (

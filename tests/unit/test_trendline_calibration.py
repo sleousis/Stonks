@@ -173,3 +173,36 @@ def test_live_feature_rows_come_from_extract_features(lake):
     assert row is not None and list(row) == list(FEATURE_NAMES)
     assert np.all(np.isfinite(list(row.values())))
     assert s.model_feature_row("OTHER.US", as_of, lake) is None
+
+
+def test_feature_importance_runs_on_the_training_trades(lake):
+    from stonks.lab.importance import feature_importance
+
+    s = _strategy(n_estimators=20)
+    data = s.training_set(_dataset(lake))
+    assert data.feature_names == FEATURE_NAMES
+    assert all(t <= np.datetime64(DATES[TRAIN_END_I]) for t in data.t1)
+    report = feature_importance(s, _dataset(lake), folds=3, methods=("mda", "sfi"))
+    assert {r.name for r in report.tables[0].rows} == set(FEATURE_NAMES)
+    assert report.n_samples == len(data.y)
+
+
+def test_lab_importance_command_writes_json_and_html(tmp_path):
+    from stonks.lab.importance import main
+
+    path = tmp_path / "cli.duckdb"
+    db = make_lake(path)
+    write_bars(db, "X.US", DATES, _closes(), _volumes())
+    db.close()
+    params = {"ticker": "X.US", "lookback": 24, "hold_period": 6, "atr_lookback": 50}
+    params["n_estimators"] = 20
+    argv = ["--strategy", "trendline_meta_label", "--params", json.dumps(params)]
+    argv += ["--tickers", "X.US", "--start", DATES[0].date().isoformat()]
+    argv += ["--end", DATES[-1].date().isoformat()]
+    argv += ["--train-end", DATES[TRAIN_END_I].date().isoformat()]
+    argv += ["--folds", "3", "--methods", "sfi", "--lake", str(path)]
+    argv += ["--json", str(tmp_path / "imp.json"), "--html", str(tmp_path / "imp.html")]
+    assert main(argv) == 0
+    payload = json.loads((tmp_path / "imp.json").read_text())
+    assert payload["tables"][0]["method"] == "sfi"
+    assert "Feature importance" in (tmp_path / "imp.html").read_text(encoding="utf-8")

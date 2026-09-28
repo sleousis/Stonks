@@ -258,6 +258,15 @@ cli = "stonks lab ic"
 mcp = "run_signal_ic"
 
 [[capability]]
+id = "lab.feature_importance"
+domain = "lab"
+title = "Feature importance of a model strategy under purged CV (MDA, SFI, clustered MDA)"
+routes = []
+console = { limited = "research report written as HTML or JSON from the shell (roadmap 23.10)" }
+cli = "stonks lab importance"
+mcp = { limited = "research report written as HTML or JSON from the shell (roadmap 23.10)" }
+
+[[capability]]
 id = "factors.catalog"
 domain = "lab"
 title = "The factor library: Alpha158, classic price factors and fundamentals scores"

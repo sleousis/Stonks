@@ -111,6 +111,7 @@ from stonks.features.indicators import atr, true_range
 from stonks.features.labels import avg_uniqueness
 from stonks.features.library import fit_trendlines_single
 from stonks.features.ml import ForestClassifier, bet_size, break_even_probability
+from stonks.lab.importance import TrainingSet
 from stonks.strategies._common import LakeBarCaches, iso
 from stonks.strategies._wrapping import INTERVALS
 from stonks.strategies.base import BaseStrategy
@@ -435,7 +436,9 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
     def is_fitted(self) -> bool:
         return self._classifier is not None
 
-    def fit(self, dataset: Any) -> None:
+    def _training_trades(self, dataset: Any) -> tuple[list[BaseTrade], list[tuple[int, int]], int]:
+        """The completed base trades of every training segment, their bar
+        spans (positions across the segments) and the segment count."""
         interval = Interval.parse(self.params["interval"])
         segments = train_bar_segments(
             dataset, self.params["ticker"], interval, caches=self._bar_caches
@@ -458,12 +461,29 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
                 f"only {len(trades)} complete base trades in the training window; "
                 f"need at least {_MIN_TRADES}"
             )
+        return trades, spans, len(segments)
+
+    def training_set(self, dataset: Any) -> TrainingSet:
+        """The training trades as a :class:`~stonks.lab.importance.TrainingSet`
+        (training window only), read by ``stonks lab importance``."""
+        trades, spans, _ = self._training_trades(dataset)
+        return TrainingSet(
+            x=np.array([t.features for t in trades], dtype=float),
+            y=np.array([t.label for t in trades], dtype=int),
+            t0=np.array([t.entry_ts for t in trades], dtype="datetime64[ns]"),
+            t1=np.array([t.exit_ts for t in trades], dtype="datetime64[ns]"),
+            feature_names=FEATURE_NAMES,
+            sample_weight=avg_uniqueness([a for a, _ in spans], [b for _, b in spans]),
+        )
+
+    def fit(self, dataset: Any) -> None:
+        trades, spans, n_segments = self._training_trades(dataset)
         x = np.array([t.features for t in trades], dtype=float)
         y = np.array([t.label for t in trades], dtype=int)
         weights = avg_uniqueness([a for a, _ in spans], [b for _, b in spans])
         diagnostic, oof = self._cv_diagnostic(trades, x, y, weights)
         policy = self._fit_policy(oof, y, weights)
-        clf = self._new_classifier()
+        clf = self.new_classifier()
         clf.fit(x, y, sample_weight=weights)
         self._classifier = clf
         self._policy = policy
@@ -474,7 +494,7 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
         self._state = {
             "feature_names": list(FEATURE_NAMES),
             "n_trades": len(trades),
-            "n_segments": len(segments),
+            "n_segments": n_segments,
             "win_rate": float(y.mean()),
             "mean_uniqueness": float(weights.mean()),
             "first_entry": trades[0].entry_ts.isoformat(),
@@ -502,7 +522,8 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
             kind, oof, y, conformal_alpha=alpha if alpha > 0 else None, sample_weight=weights
         )
 
-    def _new_classifier(self) -> ForestClassifier:
+    def new_classifier(self) -> ForestClassifier:
+        """A fresh, unfitted forest with this strategy's settings."""
         return ForestClassifier(
             n_estimators=int(self.params["n_estimators"]),
             max_depth=int(self.params["max_depth"]),
@@ -522,7 +543,7 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
         t0 = np.array([t.entry_ts for t in trades], dtype="datetime64[ns]")
         t1 = np.array([t.exit_ts for t in trades], dtype="datetime64[ns]")
         oof = purged_oof_proba(
-            self._new_classifier, x, y, t0, t1, folds=folds, sample_weight=weights
+            self.new_classifier, x, y, t0, t1, folds=folds, sample_weight=weights
         )
         scored = np.isfinite(oof)
         if not scored.any():
