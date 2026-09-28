@@ -128,6 +128,7 @@ def build_tick_settings(
         live=p.live,
         paper_fills=p.paper_fills,
         execution=settings.backtest.execution,
+        lots=settings.backtest.lots,
     )
 
 

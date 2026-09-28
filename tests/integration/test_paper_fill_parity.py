@@ -21,6 +21,7 @@ from stonks.core.protocols import SurvivalReport
 from stonks.core.types import Portfolio
 from stonks.ingest.pipeline import _rows_to_df
 from stonks.ingest.schemas import TickerProfile
+from stonks.portfolio.lots import LotSettings
 from stonks.production.risk import RiskPolicy
 from stonks.production.tick import TickPlan, TickSettings, run_tick
 from stonks.registry.store import StrategyRegistry
@@ -81,8 +82,8 @@ def _days(lake) -> list[date]:
     return [pd.Timestamp(d).date() for d in frame["date"]]
 
 
-def _backtest_fills(lake) -> list[tuple]:
-    costs = CostModelSettings.realistic()
+def _backtest_fills(lake, lots=None, costs=None) -> list[tuple]:
+    costs = costs or CostModelSettings.realistic()
     broker = SimulatedBroker.from_execution(
         Portfolio(cash=10_000.0), EXECUTION, cost_model=costs.build()
     )
@@ -91,7 +92,12 @@ def _backtest_fills(lake) -> list[tuple]:
         broker=broker,
         lake=lake,
         config=BacktestConfig(
-            start=START, end=END, universe=TICKERS, construction="single_winner", risk=RISK
+            start=START,
+            end=END,
+            universe=TICKERS,
+            construction="single_winner",
+            risk=RISK,
+            lots=lots,
         ),
     ).run()
     return [
@@ -103,7 +109,7 @@ def _row(day, ticker, side, quantity, price, fee) -> tuple:
     return (day, ticker, side, round(quantity, 6), round(price, 6), round(fee, 6))
 
 
-def _tick_fills(lake, tmp_path) -> tuple[list[tuple], SqliteState]:
+def _tick_fills(lake, tmp_path, lots=None, costs=None) -> tuple[list[tuple], SqliteState]:
     state = SqliteState(tmp_path / "state.sqlite")
     state.migrate()
     registry = StrategyRegistry(state=state, artifacts_dir=tmp_path / "artifacts")
@@ -114,11 +120,12 @@ def _tick_fills(lake, tmp_path) -> tuple[list[tuple], SqliteState]:
     settings = TickSettings(
         universe=TICKERS,
         initial_cash=10_000.0,
-        costs=CostModelSettings.realistic(),
+        costs=costs or CostModelSettings.realistic(),
         risk=RISK,
         shadow_enabled=False,
         execution=EXECUTION,
         paper_fills="next_open",
+        lots=lots or LotSettings(),
     )
     for day in _days(lake):
         run_tick(state, lake, registry, settings, as_of=day, plan=TickPlan.default(settings))
@@ -214,4 +221,18 @@ def test_a_model_book_fills_like_the_backtest(lake, tmp_path):
     last = _days(lake)[-1].isoformat()
     working = state.sql("SELECT as_of FROM shadow_decisions WHERE status = 'working'")
     assert all(r["as_of"] == last for r in working)
+    state.close()
+
+
+def test_whole_shares_and_ibkr_fees_keep_the_paper_tick_in_step(lake, tmp_path):
+    """23.1 and 23.2: with whole shares and IBKR commissions on, the paper
+    tick and the backtest still fill the same shares at the same fees."""
+    lots = LotSettings(profile="whole_shares")
+    costs = CostModelSettings.ibkr("tiered")
+    expected = _backtest_fills(lake, lots, costs)
+    got, state = _tick_fills(lake, tmp_path, lots, costs)
+    assert len(expected) >= 4
+    assert all(q == int(q) for _, _, _, q, _, _ in expected)
+    assert all(fee >= 0.35 for *_, fee in expected)  # the tiered minimum at least
+    assert got == expected
     state.close()

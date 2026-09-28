@@ -100,6 +100,7 @@ from stonks.factors.style import safe_style_exposures, uses_style_model
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
 from stonks.portfolio import returns as portfolio_returns
+from stonks.portfolio.lots import LotRule, LotSettings, broker_lot_profile
 from stonks.portfolio.pipeline import (
     PORTFOLIO_STRATEGY,
     BookInput,
@@ -328,6 +329,9 @@ class TickSettings:
     #: ``[backtest.execution]``: the fill model paper books fill through
     #: at the next open, the one backtests use.
     execution: ExecutionSettings = _IMMEDIATE_FILLS
+    #: ``[backtest.lots]``: paper and model books round order sizes to lots
+    #: as backtests do (P21, roadmap 23.1). Live books use their broker's.
+    lots: LotSettings = field(default_factory=LotSettings)
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
@@ -356,6 +360,12 @@ class TickSettings:
         if self.costs is not None:
             return self.costs.build()
         return FixedCostModel(self.slippage_bps, self.fee_per_trade)
+
+    def lot_rule(self, *, external: bool) -> LotRule:
+        """The lot rule of a book: its broker's profile at a real broker
+        (IBKR: whole shares), else ``[backtest.lots]`` as in a backtest."""
+        profile = broker_lot_profile(self.broker_kind) if external else None
+        return self.lots.rule(profile)
 
     @property
     def fill_costs(self) -> FillCosts:
@@ -1326,6 +1336,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         costs=settings.fill_costs,
         risk_context=risk_context,
         allow_short=book.spec.allow_short,
+        lots=settings.lot_rule(external=external),
     )
     candidates = None if book.legacy else set(strategy_ids)
 
@@ -1718,6 +1729,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 else {}
             ),
             "stale_buys_dropped": pipeline.stale_buys,
+            **(pipeline.lots.summary() if pipeline.lots is not None else {}),
             **({"outside_universe_skipped": outside} if outside else {}),
             **({"external_holdings_skipped": external_skipped} if external_skipped else {}),
             **({"retired_exits": sorted(retired_owned)} if retired_owned else {}),
