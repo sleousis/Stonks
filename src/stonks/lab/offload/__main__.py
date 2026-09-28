@@ -3,6 +3,10 @@
 Commands::
 
     worker [--once] [--id ID]   pull lab jobs from the queue until SIGINT / SIGTERM
+    worker --api URL [--work-dir DIR] [--once] [--id ID]
+                                a worker on another machine: the queue, the
+                                lake snapshot and the results go through the
+                                API, with the token in STONKS_LAB_WORKER_TOKEN
     status                      queue and worker counts as JSON (exit 1 when unhealthy)
     snapshot                    publish a lake snapshot now (only while no
                                 other process holds the lake, e.g. before `serve`)
@@ -41,15 +45,57 @@ def _settings(config_path: Path | None) -> Any:
 
 
 def _cmd_worker(settings: Any, args: argparse.Namespace) -> int:
-    from stonks.lab.offload.worker import build_worker
-
     tmp = os.environ.get("TMPDIR")
     if tmp:  # Compose points it at the data volume; create it before first use
         Path(tmp).mkdir(parents=True, exist_ok=True)
+    if args.api:
+        return _run_remote(settings, args)
+    from stonks.lab.offload.worker import build_worker
+
     worker = build_worker(settings, worker_id=args.id)
     if args.once:
         worker.run_once()
         worker.queue.stop_worker(worker.worker_id)
+        return EXIT_OK
+    stop = threading.Event()
+
+    def _stop(signum: int, frame: Any) -> None:
+        stop.set()
+        worker.request_stop()  # a running lab job stops and goes back to the queue
+
+    signal.signal(signal.SIGINT, _stop)
+    signal.signal(signal.SIGTERM, _stop)
+    worker.run_forever(stop)
+    return EXIT_OK
+
+
+def _run_remote(settings: Any, args: argparse.Namespace) -> int:
+    from stonks.lab.offload.api_client import TOKEN_ENV
+    from stonks.lab.offload.remote_worker import build_remote_worker
+    from stonks.scheduling.backends import API_TRUSTED_HOSTS_ENV
+
+    token = os.environ.get(TOKEN_ENV, "").strip()
+    if not token:
+        print(f"set {TOKEN_ENV} to a lab_worker API token (docs/deploy.md)", file=sys.stderr)
+        return EXIT_UNHEALTHY
+    hosts = tuple(
+        h.strip() for h in os.environ.get(API_TRUSTED_HOSTS_ENV, "").split(",") if h.strip()
+    )
+    try:
+        worker = build_remote_worker(
+            settings,
+            api_url=args.api,
+            token=token,
+            worker_id=args.id,
+            work_dir=args.work_dir,
+            trusted_hosts=hosts,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_UNHEALTHY
+    if args.once:
+        worker.run_once()
+        worker.stop()
         return EXIT_OK
     stop = threading.Event()
 
@@ -97,6 +143,18 @@ def build_parser() -> argparse.ArgumentParser:
     worker = sub.add_parser("worker", help="run a lab worker")
     worker.add_argument("--once", action="store_true", help="run at most one job, then exit")
     worker.add_argument("--id", default=None, help="worker id (default: host plus random)")
+    worker.add_argument(
+        "--api",
+        default=None,
+        metavar="URL",
+        help="run on another machine against this Stonks API (token in STONKS_LAB_WORKER_TOKEN)",
+    )
+    worker.add_argument(
+        "--work-dir",
+        type=Path,
+        default=None,
+        help="with --api: snapshots and scratch stores (default: <data dir>/lab_worker)",
+    )
     sub.add_parser("status", help="queue and worker counts")
     sub.add_parser("snapshot", help="publish a lake snapshot now")
     return parser
