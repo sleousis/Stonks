@@ -32,6 +32,13 @@ A manual order takes the same road as a tick's orders, minus the signal:
    price on the ticket, and manual holdings stay out of every strategy's
    decisions, attribution and go-live evidence.
 
+A trade plan (roadmap 23.4) may ride along: a stop and a target, checked
+against the entry (the limit, else the latest close). They are kept in the
+order's decision context. In a book at a broker, a filled entry with a stop
+gets a protective stop order (:mod:`stonks.production.manual_stops`), and a
+manual exit joins the working stop's OCA group. The ``manual_discipline``
+rule sees today's manual trading through ``RiskContext.manual``.
+
 Every manual order is recorded with ``origin = 'manual'``, no strategy, who
 placed it and why (migration 027), and an ``audit_log`` row. The tick never
 trades manual holdings (``ownership.manual_positions``).
@@ -64,6 +71,8 @@ from stonks.logging import get_logger
 from stonks.production.financing import short_account
 from stonks.production.hooks import GateContext, run_gates
 from stonks.production.live.context import LiveContext
+from stonks.production.manual_history import manual_context
+from stonks.production.manual_stops import sync_manual_stops, working_manual_stop
 from stonks.production.prices import load_prices
 from stonks.production.risk import apply_risk, build_risk_context, needs_risk_context
 from stonks.production.rules import RiskContext
@@ -76,6 +85,7 @@ from stonks.production.tick import (
     _record_order,
     _snapshot_portfolio,
 )
+from stonks.production.trade_plan import PlanError, check_plan, reward_risk
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
 
@@ -119,6 +129,9 @@ class ManualOrder:
     allow_reduce: bool = False
     #: The client id of the order this one replaces (a change).
     replaces: str | None = None
+    #: The trade plan (roadmap 23.4): a protective stop and a target.
+    stop_price: float | None = None
+    target_price: float | None = None
 
 
 @dataclass(frozen=True)
@@ -135,6 +148,8 @@ class ManualBook:
     #: The broker of a book that trades at one; ``None``: simulated fills
     #: on the Stonks ledger.
     broker: Broker | None = None
+    #: The book trades real money (the manual discipline rule's stop check).
+    live: bool = False
 
 
 @dataclass(frozen=True)
@@ -156,6 +171,13 @@ class ManualResult:
     #: A halt that limits the book (its reason), even when the order passed.
     halt: str | None = None
     extra: Mapping[str, Any] = field(default_factory=dict)
+    #: The trade plan checked with the order (roadmap 23.4).
+    stop_price: float | None = None
+    target_price: float | None = None
+    #: The gain at the target over the loss at the stop.
+    reward_risk: float | None = None
+    #: The protective stop placed at the broker for this entry, if any.
+    protective_stop: str | None = None
 
 
 def manual_client_id(portfolio_id: str, key: str | None = None) -> str:
@@ -211,6 +233,7 @@ def place_manual_order(
             )
         if not preview:
             reconcile_orders(book.broker, state, portfolio_id=book.portfolio_id)
+            sync_manual_stops(state, book.broker, book.portfolio_id)
         # 19.8: the reconciliation gate. While an order of the book is still
         # ``unknown`` at the broker, nothing new is sent (as in the tick).
         unresolved = unknown_orders(state, book.portfolio_id)
@@ -234,6 +257,8 @@ def place_manual_order(
             f"no recent close for {order.ticker} in the lake "
             f"(within {tick.max_price_staleness_days} days)"
         )
+
+    plan = _check_plan(order, book, portfolio, float(price))
 
     proposed = Order(
         client_id=client_id,
@@ -286,6 +311,26 @@ def place_manual_order(
             cost_model=tick.costs,
             volumes=priced.volumes,
             portfolio_id=book.portfolio_id,
+        )
+    if _discipline_on(book.risk):
+        context = replace(
+            context
+            or RiskContext(
+                portfolio=portfolio,
+                prices=prices,
+                asset_classes=asset_classes,
+                policy=book.risk,
+                portfolio_id=book.portfolio_id,
+                as_of=as_of,
+                allow_short=book.allow_short,
+            ),
+            manual=manual_context(
+                state,
+                book.portfolio_id,
+                now,
+                live=book.live,
+                has_stop=order.stop_price is not None,
+            ),
         )
     if external:
         # 19.8: a book at a real broker gives the live safeguards and the
@@ -341,6 +386,7 @@ def place_manual_order(
             "trigger": MANUAL_ORIGIN,
             "reason": order.reason,
             "placed_by": order.actor,
+            **plan,
         },
         expected_cost_bps=_expected_cost(tick, allowed, float(price), asset_classes, priced),
     )
@@ -352,12 +398,21 @@ def place_manual_order(
         reference_price=float(price),
         adjustments=adjustments,
         halt=halt_reason,
+        stop_price=order.stop_price,
+        target_price=order.target_price,
+        reward_risk=plan.get("reward_risk"),
     )
     if preview:
         return result
     if external:
         assert book.broker is not None
-        return _place_at_broker(state, book, order, decided, result)
+        decided = _join_stop_group(state, book.portfolio_id, decided, portfolio)
+        placed = _place_at_broker(state, book, order, decided, result)
+        if order.stop_price is None:
+            return placed
+        stops = sync_manual_stops(state, book.broker, book.portfolio_id)
+        mine = next((c for c in stops if c.startswith(f"{placed.client_id}:stop")), None)
+        return replace(placed, protective_stop=mine)
     return _fill_simulated(
         state, book, order, decided, result, portfolio, priced, asset_classes, tick, now, marker
     )
@@ -629,6 +684,56 @@ def change_manual_order(
 
 
 # ---- helpers -----------------------------------------------------------------------
+
+
+def _discipline_on(policy: RiskPolicy) -> bool:
+    from stonks.production.rules._common import settings_of
+
+    found = settings_of(policy, "manual_discipline")
+    return bool(found is not None and found.active)
+
+
+def _check_plan(
+    order: ManualOrder, book: ManualBook, portfolio: Portfolio, price: float
+) -> dict[str, Any]:
+    """Check the ticket's stop and target against the entry (the limit,
+    else the latest close) and return what the decision context keeps."""
+    if order.stop_price is None and order.target_price is None:
+        return {}
+    held = float(portfolio.positions.get(order.ticker, 0.0))
+    closes = (order.side == "sell" and held > _QTY_EPS) or (
+        order.side == "buy" and held < -_QTY_EPS
+    )
+    if closes or (order.side == "sell" and not book.allow_short):
+        raise ManualOrderRefused(
+            "a stop and a target go with an entry; this order closes a position"
+        )
+    entry = order.limit_price if order.order_type == "limit" and order.limit_price else price
+    try:
+        check_plan(order.side, entry, stop=order.stop_price, target=order.target_price)
+    except PlanError as exc:
+        raise ManualOrderRefused(str(exc)) from None
+    out: dict[str, Any] = {"entry_price": entry}
+    if order.stop_price is not None:
+        out["stop_price"] = order.stop_price
+    if order.target_price is not None:
+        out["target_price"] = order.target_price
+    if order.stop_price is not None and order.target_price is not None:
+        out["reward_risk"] = reward_risk(order.side, entry, order.stop_price, order.target_price)
+    return out
+
+
+def _join_stop_group(
+    state: SqliteState, portfolio_id: str, order: Order, portfolio: Portfolio
+) -> Order:
+    """A manual exit joins the OCA group of the working manual stop on its
+    ticker, so a fill of either shrinks the other at the broker."""
+    if not _reduces(order, portfolio) or order.oca_group:
+        return order
+    stop = working_manual_stop(state, portfolio_id, order.ticker)
+    if stop is None or stop["side"] != order.side or not stop["oca_group"]:
+        return order
+    return replace(order, oca_group=stop["oca_group"])
 
 
 def _snapshot_marker(state: SqliteState, portfolio_id: str) -> int:

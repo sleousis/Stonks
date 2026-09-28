@@ -92,7 +92,9 @@ def test_an_exit_always_passes():
 
 
 def test_overrides_only_tighten():
-    base = RuleSettings(manual_discipline=ManualDisciplineSettings(enabled=True, cooldown_minutes=30))
+    base = RuleSettings(
+        manual_discipline=ManualDisciplineSettings(enabled=True, cooldown_minutes=30)
+    )
     merged = tighter_rule_settings(
         base,
         {

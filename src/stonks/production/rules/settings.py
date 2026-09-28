@@ -26,8 +26,8 @@ from stonks.production.rules.intraday_loss import IntradayLossLimitSettings
 from stonks.production.rules.intraday_orders import IntradayOrderRateSettings
 from stonks.production.rules.intraday_stale import IntradayStaleDataSettings
 from stonks.production.rules.liquidity import LiquiditySettings
-from stonks.production.rules.manual_discipline import ManualDisciplineSettings
 from stonks.production.rules.live_caps import LiveNotionalCapsSettings
+from stonks.production.rules.manual_discipline import ManualDisciplineSettings
 from stonks.production.rules.margin_call import MarginCallSettings
 from stonks.production.rules.max_holding import MaxHoldingSettings
 from stonks.production.rules.max_orders import MaxOrdersPerRunSettings

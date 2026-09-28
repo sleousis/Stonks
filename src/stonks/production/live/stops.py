@@ -428,14 +428,17 @@ def load_ledger_fills(state: SqliteState, portfolio_id: str) -> list[LedgerFill]
 
 
 def load_working_stops(state: SqliteState, portfolio_id: str) -> list[WorkingStop]:
-    """The book's protective stops that are not finished, oldest first."""
+    """The book's protective stops that are not finished, oldest first. A
+    stop a person attached to a manual entry is theirs and left out
+    (``production.manual_stops``, roadmap 23.4)."""
     if not stops_recorded(state):
         return []
     marks = ",".join("?" for _ in NON_TERMINAL_STATUSES)
+    manual = " AND origin <> 'manual'" if "origin" in ledger_columns(state, "orders") else ""
     rows = state.sql(
         "SELECT client_id, ticker, side, quantity, stop_price, strategy_id, oca_group, state,"
         " status, decision_context_json FROM orders"
-        f" WHERE portfolio_id = ? AND protective = 1 AND status IN ({marks})"
+        f" WHERE portfolio_id = ? AND protective = 1 AND status IN ({marks}){manual}"
         " ORDER BY created_at, rowid",
         [portfolio_id, *NON_TERMINAL_STATUSES],
     )
@@ -692,13 +695,15 @@ def sync_live_books(
     pauses it. One book's failure never stops the others."""
     from stonks.execution.reconcile import startup_reconcile
     from stonks.production.halts import active_halts
+    from stonks.production.manual_stops import awaiting_manual_stops, sync_manual_stops
     from stonks.production.ownership import managed_view, owned_positions
 
     out: dict[str, dict[str, Any]] = {}
     for book in books:
         pid = book.portfolio_id
         working = load_working_stops(state, pid)
-        if not book.enabled and not working:
+        manual = awaiting_manual_stops(state, pid)
+        if not book.enabled and not working and not manual:
             continue
         try:
             broker: Any = open_broker(pid)
@@ -730,6 +735,9 @@ def sync_live_books(
                 working=working,
             )
             out[pid] = send_stop_plan(state, broker, plan, portfolio_id=pid, clock=clock).as_dict()
+            if manual:
+                # the stops people attached to their own manual entries (23.4)
+                out[pid]["manual_placed"] = len(sync_manual_stops(state, broker, pid, clock=clock))
         except Exception as exc:
             _log.warning("stops.book_failed", portfolio_id=pid, error=str(exc))
             out[pid] = {"error": f"{type(exc).__name__}: {exc}"}

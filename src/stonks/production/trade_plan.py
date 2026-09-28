@@ -35,9 +35,7 @@ class PlanError(ValueError):
     """The plan does not make sense (a stop on the wrong side, no risk)."""
 
 
-def check_plan(
-    side: OrderSide, entry: float, *, stop: float | None, target: float | None
-) -> None:
+def check_plan(side: OrderSide, entry: float, *, stop: float | None, target: float | None) -> None:
     """Refuse a stop or a target on the wrong side of ``entry``."""
     if not entry > 0:
         raise PlanError("the entry price must be positive")
