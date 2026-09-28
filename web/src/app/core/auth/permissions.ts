@@ -26,7 +26,7 @@ interface Rule {
 const ALL: readonly Role[] = ['viewer', 'trader', 'admin'];
 const TRADERS: readonly Role[] = ['trader', 'admin'];
 const ADMINS: readonly Role[] = ['admin'];
-const ALL_SCOPES: readonly ApiScope[] = ['read', 'trade', 'lab', 'admin'];
+const ALL_SCOPES: readonly ApiScope[] = ['read', 'trade', 'lab', 'admin', 'lab_worker'];
 
 export const POLICY: Readonly<Record<Permission, Rule>> = {
   'data.read': { roles: ALL, scopes: ['read'] },
@@ -52,6 +52,7 @@ export const POLICY: Readonly<Record<Permission, Rule>> = {
   'password.change': { roles: ALL, scopes: ['read'] },
   'orders.approve': { roles: TRADERS, scopes: ['trade'], sessionOnly: true },
   'live.manage': { roles: TRADERS, scopes: ['trade'] },
+  'lab.worker': { roles: ADMINS, scopes: ['lab_worker'] },
 };
 
 /** True when `me` holds `permission` (false when nobody is signed in). */

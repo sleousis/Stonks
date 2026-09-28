@@ -34,6 +34,12 @@ const SCOPES: readonly ScopeOption[] = [
   { value: 'trade', label: 'Trade', help: 'Change modes and place orders. Asks for a code.' },
   { value: 'lab', label: 'Lab', help: 'Run backtests and lab jobs.' },
   { value: 'admin', label: 'Admin', help: 'Admin actions. Asks for a code.', adminOnly: true },
+  {
+    value: 'lab_worker',
+    label: 'Lab worker',
+    help: 'For a lab worker on another machine, alone. Asks for a code.',
+    adminOnly: true,
+  },
 ];
 
 const EXPIRY: readonly { days: number | null; label: string }[] = [
@@ -141,6 +147,7 @@ export class ProfilePage {
     trade: [false],
     lab: [false],
     admin: [false],
+    lab_worker: [false],
     expires: ['90'],
   });
   protected readonly createdToken = signal<string | null>(null);
