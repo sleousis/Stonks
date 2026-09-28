@@ -52,7 +52,7 @@ def account(equity=100_000.0, excess=50_000.0, **kw) -> LiveAccountState:
         (14_000.0, "warn"),
         (9_000.0, "reduce"),
         (-1.0, "call"),
-    ],  # fmt: skip
+    ],
 )
 def test_margin_level_follows_the_cushion(excess, level):
     assert margin_level(account(excess=excess), SETTINGS) == level
