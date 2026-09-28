@@ -15,10 +15,11 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
-from stonks.accounts import Scope
+from stonks.accounts import Role, Scope
 from stonks.accounts.audit import AuditLog
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, ValidationError
+from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.fx import FxRates, load_fx_rates
@@ -171,6 +172,9 @@ def _actor(who: Who) -> str:
 def _check_write(who: Who) -> None:
     if isinstance(who, Principal):
         require(who, Permission.PORTFOLIO_MANAGE)
+    elif not (who.is_service or Role(who.role).can_trade):
+        # the shell acting as a person (--user) gets that person's rights
+        raise PermissionDenied("changing tax settings needs a role that can trade")
 
 
 class TaxService:

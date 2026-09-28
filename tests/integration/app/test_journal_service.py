@@ -94,3 +94,17 @@ def test_operator_reviews_and_errors(settings, seeded, service):
         )
     with pytest.raises(ValidationError):
         service.breakdown(DEFAULT_PORTFOLIO_ID, by="colour")  # type: ignore[arg-type]
+
+
+def test_acting_as_a_viewer_from_the_shell_cannot_write(settings, seeded, service):
+    """``stonks journal ... --user`` acts with a bare Scope: a viewer is
+    refused like the API refuses them."""
+    from stonks.accounts import Role
+    from stonks.auth.errors import PermissionDenied
+
+    viewer = Scope(user_id="usr_viewer", role=Role.VIEWER)
+    trade_id = service.trades(DEFAULT_PORTFOLIO_ID).items[0].trade_id
+    with pytest.raises(PermissionDenied):
+        service.annotate(viewer, DEFAULT_PORTFOLIO_ID, trade_id, AnnotationRequest(tags=["x"]))
+    with pytest.raises(PermissionDenied):
+        service.create_playbook(viewer, PlaybookCreate(name="Mine"))

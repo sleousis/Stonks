@@ -401,3 +401,20 @@ def test_option_gains_count_the_contract_multiplier(client, people, settings):
     assert resp.status_code == 200, resp.text
     (row,) = _rows(resp.text)
     assert (row["proceeds"], row["cost_basis"], row["gain"]) == ("299.35", "200.65", "98.70")
+
+
+def test_acting_as_a_viewer_from_the_shell_cannot_write_either(client, people, book):
+    """``stonks tax settings --user`` acts as that person with a bare Scope:
+    a viewer is refused like the API refuses them (403 above)."""
+    from stonks.app.tax import LotPicksUpdate, TaxService, TaxSettingsUpdate
+    from stonks.auth.errors import PermissionDenied
+
+    service = TaxService(client.app.state.services.context)
+    viewer = Scope(user_id=people["vic"]["id"], role=Role.VIEWER)
+    with pytest.raises(PermissionDenied):
+        service.update_settings(viewer, book["pid"], TaxSettingsUpdate(jurisdiction="eu"))
+    with pytest.raises(PermissionDenied):
+        service.set_picks(
+            viewer, book["pid"], LotPicksUpdate(sell_fill_id=book["fills"]["o3"], picks=[])
+        )
+    assert service.settings(book["pid"]).jurisdiction == "us"
