@@ -32,7 +32,7 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock
 from stonks.execution.brokers.ibkr import client as ib
@@ -185,8 +185,10 @@ def _redact(value: Any) -> Any:
             if f.name == "account" and isinstance(current, str):
                 changes[f.name] = redact_account(current)
         return dataclasses.replace(value, **changes) if changes else value
-    if isinstance(value, list | tuple):
-        return type(value)(_redact(v) for v in value)
+    if isinstance(value, tuple):
+        return tuple(_redact(v) for v in cast(tuple[Any, ...], value))
+    if isinstance(value, list):
+        return [_redact(v) for v in cast(list[Any], value)]
     return value
 
 
@@ -198,30 +200,31 @@ def encode(value: Any) -> Any:
     if isinstance(value, datetime):
         return {"__datetime__": value.isoformat()}
     if isinstance(value, tuple):
-        return {"__tuple__": [encode(v) for v in value]}
+        return {"__tuple__": [encode(v) for v in cast(tuple[Any, ...], value)]}
     if isinstance(value, list):
-        return [encode(v) for v in value]
+        return [encode(v) for v in cast(list[Any], value)]
     if isinstance(value, dict):
-        return {str(k): encode(v) for k, v in value.items()}
+        return {str(k): encode(v) for k, v in cast(dict[Any, Any], value).items()}
     return value
 
 
 def decode(value: Any) -> Any:
     if isinstance(value, list):
-        return [decode(v) for v in value]
+        return [decode(v) for v in cast(list[Any], value)]
     if isinstance(value, dict):
-        if "__datetime__" in value:
-            return datetime.fromisoformat(value["__datetime__"])
-        if "__tuple__" in value:
-            return tuple(decode(v) for v in value["__tuple__"])
-        name = value.get("__type__")
+        data = cast(dict[str, Any], value)
+        if "__datetime__" in data:
+            return datetime.fromisoformat(str(data["__datetime__"]))
+        if "__tuple__" in data:
+            return tuple(decode(v) for v in cast(list[Any], data["__tuple__"]))
+        name = data.get("__type__")
         if name is not None:
-            cls = _TYPES.get(name)
+            cls = _TYPES.get(str(name))
             if cls is None:
                 raise ValueError(f"unknown journal type {name!r}")
-            fields = {k: decode(v) for k, v in value.items() if k != "__type__"}
+            fields: dict[str, Any] = {k: decode(v) for k, v in data.items() if k != "__type__"}
             return cls(**fields)
-        return {k: decode(v) for k, v in value.items()}
+        return {k: decode(v) for k, v in data.items()}
     return value
 
 
@@ -391,7 +394,11 @@ class JournalingIbClient:
         if name.startswith("_") or name not in _OPTIONAL:
             raise AttributeError(name)
         getattr(self._inner, name)  # AttributeError when the client lacks it
-        return lambda *args: self._call(name, *args)
+
+        def call(*args: Any) -> Any:
+            return self._call(name, *args)
+
+        return call
 
 
 #: Optional client calls (``IbShortableClient``, the option protocols).
@@ -400,8 +407,8 @@ _OPTIONAL = frozenset({"shortability", "option_params", "option_snapshots", "opt
 
 def _listed(value: Any) -> Any:
     """Sequences as lists so a tuple and a list answer compare equal."""
-    if isinstance(value, tuple) and not dataclasses.is_dataclass(value):
-        return list(value)
+    if isinstance(value, tuple):  # a plain tuple: our dataclasses are not tuples
+        return list(cast(tuple[Any, ...], value))
     return value
 
 
@@ -493,7 +500,16 @@ class ReplayIbClient:
     def __getattr__(self, name: str) -> Any:
         if name.startswith("_") or name not in _OPTIONAL or not self._queues.get(name):
             raise AttributeError(name)
-        return lambda *args: self._next(name)
+
+        def call(*args: Any) -> Any:
+            return self._next(name)
+
+        return call
+
+
+def _dicts(value: Any) -> list[dict[str, Any]]:
+    items = cast(list[Any], value) if isinstance(value, list) else [value]
+    return [cast(dict[str, Any], v) for v in items if isinstance(v, dict)]
 
 
 def journal_summary(events: Sequence[JournalEvent]) -> list[dict[str, Any]]:
@@ -504,21 +520,19 @@ def journal_summary(events: Sequence[JournalEvent]) -> list[dict[str, Any]]:
         detail = ""
         if e.error is not None:
             code = e.error.get("code")
-            detail = f"{e.error.get('type')}{f' {code}' if code is not None else ''}: {e.error.get('message')}"
+            coded = f" {code}" if code is not None else ""
+            detail = f"{e.error.get('type')}{coded}: {e.error.get('message')}"
         elif e.unchanged:
             detail = "unchanged"
         elif e.kind == "order_status":
-            trades = e.result if isinstance(e.result, list) else [e.result]
             detail = "; ".join(
                 f"{t.get('order_ref')} {t.get('status')} {t.get('filled')}/{t.get('total_quantity')}"
-                for t in trades
-                if isinstance(t, dict)
+                for t in _dicts(e.result)
             )
-        elif e.kind == "execution" and isinstance(e.result, list):
+        elif e.kind == "execution":
             detail = "; ".join(
                 f"{x.get('exec_id')} {x.get('side')} {x.get('shares')} @ {x.get('price')}"
-                for x in e.result
-                if isinstance(x, dict)
+                for x in _dicts(e.result)
             )
         rows.append(
             {"seq": e.seq, "at": e.at, "kind": e.kind, "method": e.method, "detail": detail}

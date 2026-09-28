@@ -177,6 +177,11 @@ def _vendor_frame(lake: Any, tickers: Sequence[str], since: date, as_of: date) -
     )
 
 
+def _day(value: Any) -> date:
+    """A lake date (a date, a datetime or a pandas Timestamp) as a date."""
+    return date.fromisoformat(pd.Timestamp(value).strftime("%Y-%m-%d"))
+
+
 def _gap(a: float, b: float) -> float:
     return abs(a - b) / abs(b) if b else float("inf")
 
@@ -196,7 +201,7 @@ def _compare_one(
     if not second:
         return PriceCheckItem(ticker, "unknown", f"{source.name} has no price", source.name)
     last = vendor.iloc[-1]
-    vendor_day: date = pd.Timestamp(last["date"]).date()
+    vendor_day = _day(last["date"])
     vendor_close = float(last["close"]) * (scale if source.major_units else 1.0)
     by_day = {b.day: b for b in second}
     match = second[-1] if source.any_day else by_day.get(vendor_day)
@@ -236,14 +241,15 @@ def _adjustment_gap(
     if last.adj_close is None:
         return None
     end = vendor.iloc[-1]
-    for row in vendor.itertuples(index=False):
-        day = pd.Timestamp(row.date).date()
+    for row in vendor.to_dict("records"):
+        day = _day(row["date"])
         first = by_day.get(day)
         if first is None or first.adj_close is None or day >= last.day:
             continue
-        if not row.adj_close or not end["adj_close"] or not first.adj_close or not last.adj_close:
+        start_adj = row["adj_close"]
+        if not start_adj or not end["adj_close"] or not first.adj_close or not last.adj_close:
             return None
-        vendor_return = float(end["adj_close"]) / float(row.adj_close)
+        vendor_return = float(end["adj_close"]) / float(start_adj)
         second_return = last.adj_close / first.adj_close
         return abs(vendor_return / second_return - 1.0)
     return None

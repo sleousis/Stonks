@@ -102,7 +102,7 @@ def recent_sessions(lake: Any, universe: Sequence[str], as_of: date, n: int) -> 
         " ORDER BY date DESC LIMIT ?",
         [list(universe), as_of, n],
     )
-    return sorted(pd.Timestamp(d).date() for d in df["date"])
+    return sorted(date.fromisoformat(pd.Timestamp(d).strftime("%Y-%m-%d")) for d in df["date"])
 
 
 def replay_strategies(
