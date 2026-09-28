@@ -51,7 +51,7 @@ x-app: &app
 # and write the image as ghcr.io/gnzsnz/ib-gateway:<tag>@sha256:<digest>.
 # Update it on purpose, like the Stonks image, and test on paper first.
 x-ib-gateway: &ib-gateway
-  image: ghcr.io/gnzsnz/ib-gateway:10.50.1e
+  image: ghcr.io/gnzsnz/ib-gateway:10.51.1a
   restart: unless-stopped
   # The image has TWS_PASSWORD_FILE but no file variant for the user id.
   # Read it from its secret file here, so no credential sits in the Compose
@@ -193,7 +193,7 @@ services:
       disable: true
 
   caddy:
-    image: caddy:2.10-alpine
+    image: caddy:2.11-alpine
     restart: unless-stopped
     depends_on:
       api:
@@ -277,7 +277,7 @@ services:
 
   # One-shot backup tool, not started by `up`. See deploy/backup/.
   restic:
-    image: restic/restic:0.18.0
+    image: restic/restic:0.19.1
     profiles: ["backup"]
     env_file:
       - path: .env
