@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import threading
 import time
@@ -39,6 +40,8 @@ _log = get_logger("stonks.lab.offload.snapshot")
 CURRENT_FILE = "CURRENT.json"
 LAKE_FILE = "lake.duckdb"
 _HOLDS = "holds"
+#: A snapshot folder name (a UTC stamp, maybe with a ``-N`` suffix).
+SNAPSHOT_NAME = re.compile(r"[0-9A-Za-z][0-9A-Za-z_-]{0,63}")
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,44 @@ class LakeSnapshots:
             path=path,
             created_at=datetime.fromisoformat(meta["created_at"]),
             fingerprint=str(meta.get("fingerprint", "")),
+        )
+
+    def get(self, name: str) -> SnapshotInfo | None:
+        """The snapshot in folder ``name`` (current or not), or ``None``."""
+        if not SNAPSHOT_NAME.fullmatch(name):
+            return None
+        current = self.current()
+        if current is not None and current.directory.name == name:
+            return current
+        path = self.root / name / LAKE_FILE
+        if not path.is_file():
+            return None
+        return SnapshotInfo(
+            path=path,
+            created_at=datetime.fromtimestamp(path.stat().st_mtime, UTC),
+            fingerprint="",
+        )
+
+    def adopt(self, name: str, created_at: datetime, fingerprint: str) -> SnapshotInfo:
+        """Make the already-filled folder ``name`` current (a remote lab
+        worker's downloaded copy of the server's snapshot)."""
+        if not SNAPSHOT_NAME.fullmatch(name) or not (self.root / name / LAKE_FILE).is_file():
+            raise FileNotFoundError(f"no snapshot folder {name!r} under {self.root}")
+        with self._lock:
+            meta = {"dir": name, "created_at": created_at.isoformat(), "fingerprint": fingerprint}
+            tmp = self.root / f".{CURRENT_FILE}.{os.getpid()}.tmp"
+            tmp.write_text(json.dumps(meta), encoding="utf-8")
+            os.replace(tmp, self.root / CURRENT_FILE)
+        self.prune()
+        info = self.current()
+        assert info is not None
+        return info
+
+    def files(self, info: SnapshotInfo) -> list[Path]:
+        """Every file of ``info``'s folder except the hold marks."""
+        root = info.directory
+        return sorted(
+            p for p in root.rglob("*") if p.is_file() and p.relative_to(root).parts[0] != _HOLDS
         )
 
     def is_stale(self, info: SnapshotInfo | None, lake: DuckDBLake, max_age_minutes: float) -> bool:

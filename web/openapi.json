@@ -553,10 +553,31 @@
           "read",
           "trade",
           "lab",
-          "admin"
+          "admin",
+          "lab_worker"
         ],
         "title": "ApiScope",
         "type": "string"
+      },
+      "ArtifactFile": {
+        "properties": {
+          "content_b64": {
+            "title": "Content B64",
+            "type": "string"
+          },
+          "path": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "content_b64"
+        ],
+        "title": "ArtifactFile",
+        "type": "object"
       },
       "AssetClassCosts": {
         "description": "Fee and spread for one asset class.",
@@ -2156,6 +2177,72 @@
           }
         },
         "title": "CircuitBreakerSettings",
+        "type": "object"
+      },
+      "ClaimResult": {
+        "properties": {
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClaimedJob"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ClaimResult",
+        "type": "object"
+      },
+      "ClaimedJob": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "params": {
+            "additionalProperties": true,
+            "title": "Params",
+            "type": "object"
+          },
+          "seed": {
+            "$ref": "#/components/schemas/ResearchRows"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/SnapshotRef"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "params",
+          "owner_id",
+          "created_at",
+          "snapshot",
+          "seed"
+        ],
+        "title": "ClaimedJob",
         "type": "object"
       },
       "ClearHaltRequest": {
@@ -6522,6 +6609,24 @@
           }
         },
         "title": "HealthRunRequest",
+        "type": "object"
+      },
+      "HeartbeatReply": {
+        "properties": {
+          "cancel_requested": {
+            "title": "Cancel Requested",
+            "type": "boolean"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "running",
+          "cancel_requested"
+        ],
+        "title": "HeartbeatReply",
         "type": "object"
       },
       "HeatmapOptions": {
@@ -17317,6 +17422,52 @@
         "title": "ResearchProposalView",
         "type": "object"
       },
+      "ResearchRows": {
+        "description": "Rows of the research tables plus the artifact files that go with them.",
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactFile"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "lab_runs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Lab Runs",
+            "type": "array"
+          },
+          "lab_trials": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Lab Trials",
+            "type": "array"
+          },
+          "strategies": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Strategies",
+            "type": "array"
+          },
+          "survival_reports": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Survival Reports",
+            "type": "array"
+          }
+        },
+        "title": "ResearchRows",
+        "type": "object"
+      },
       "ResearchSessionDetailView": {
         "properties": {
           "cpu_seconds_used": {
@@ -20575,6 +20726,31 @@
           "errors"
         ],
         "title": "SmokeCheck",
+        "type": "object"
+      },
+      "SnapshotRef": {
+        "description": "A lake snapshot by folder name; fetch it from\n``GET /api/lab/worker/snapshots/{name}``.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "fingerprint": {
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "created_at",
+          "fingerprint"
+        ],
+        "title": "SnapshotRef",
         "type": "object"
       },
       "SnapshotView": {
@@ -25628,6 +25804,184 @@
           "warning"
         ],
         "title": "WhatIfView",
+        "type": "object"
+      },
+      "WorkerConfig": {
+        "description": "The server's ``[lab.offload]`` timing, which the worker follows.",
+        "properties": {
+          "executor": {
+            "title": "Executor",
+            "type": "string"
+          },
+          "heartbeat_seconds": {
+            "title": "Heartbeat Seconds",
+            "type": "number"
+          },
+          "kinds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Kinds",
+            "type": "array"
+          },
+          "lease_seconds": {
+            "title": "Lease Seconds",
+            "type": "number"
+          },
+          "poll_seconds": {
+            "title": "Poll Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "executor",
+          "kinds",
+          "heartbeat_seconds",
+          "poll_seconds",
+          "lease_seconds"
+        ],
+        "title": "WorkerConfig",
+        "type": "object"
+      },
+      "WorkerHeartbeat": {
+        "properties": {
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "progress": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Progress",
+            "type": "number"
+          },
+          "worker_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "title": "Worker Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "worker_id"
+        ],
+        "title": "WorkerHeartbeat",
+        "type": "object"
+      },
+      "WorkerHello": {
+        "properties": {
+          "cpus": {
+            "maximum": 4096.0,
+            "minimum": 1.0,
+            "title": "Cpus",
+            "type": "integer"
+          },
+          "host": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Host",
+            "type": "string"
+          },
+          "pid": {
+            "minimum": 0.0,
+            "title": "Pid",
+            "type": "integer"
+          },
+          "worker_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "title": "Worker Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "worker_id",
+          "host",
+          "pid",
+          "cpus"
+        ],
+        "title": "WorkerHello",
+        "type": "object"
+      },
+      "WorkerOutcome": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "research": {
+            "$ref": "#/components/schemas/ResearchRows"
+          },
+          "result": {
+            "title": "Result"
+          },
+          "status": {
+            "enum": [
+              "succeeded",
+              "failed",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "worker_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "title": "Worker Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "worker_id",
+          "status"
+        ],
+        "title": "WorkerOutcome",
+        "type": "object"
+      },
+      "WorkerRef": {
+        "properties": {
+          "worker_id": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "title": "Worker Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "worker_id"
+        ],
+        "title": "WorkerRef",
+        "type": "object"
+      },
+      "WorkerStopped": {
+        "properties": {
+          "stopped": {
+            "title": "Stopped",
+            "type": "boolean"
+          },
+          "worker_id": {
+            "title": "Worker Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "worker_id",
+          "stopped"
+        ],
+        "title": "WorkerStopped",
         "type": "object"
       },
       "stonks__app__brokers__BrokerAccountView": {
@@ -36355,6 +36709,665 @@
         "tags": [
           "lab"
         ]
+      }
+    },
+    "/api/lab/worker/claim": {
+      "post": {
+        "description": "Claim the oldest queued lab job a remote worker can run, with the\nsnapshot to read and the research seed; ``job`` is null when none waits.",
+        "operationId": "claimLabWorkerJob",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerRef"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Claim Job",
+        "tags": [
+          "lab-worker"
+        ],
+        "x-permission": "lab.worker"
+      }
+    },
+    "/api/lab/worker/jobs/{job_id}/complete": {
+      "post": {
+        "description": "Store the job's outcome and import the ledger rows and strategies it\nwrote (409 when the job is no longer this worker's).",
+        "operationId": "completeLabWorkerJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerOutcome"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Complete Job",
+        "tags": [
+          "lab-worker"
+        ],
+        "x-permission": "lab.worker"
+      }
+    },
+    "/api/lab/worker/jobs/{job_id}/heartbeat": {
+      "post": {
+        "description": "Keep the job's lease and store its progress. The reply says whether\na user asked to cancel it, or it is no longer this worker's.",
+        "operationId": "heartbeatLabWorkerJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerHeartbeat"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HeartbeatReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Heartbeat Job",
+        "tags": [
+          "lab-worker"
+        ],
+        "x-permission": "lab.worker"
+      }
+    },
+    "/api/lab/worker/jobs/{job_id}/release": {
+      "post": {
+        "description": "A stopping worker hands its running job back to the queue (it ends\ncancelled instead when a user asked to cancel it).",
+        "operationId": "releaseLabWorkerJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9_-]+$",
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerRef"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Release Job",
+        "tags": [
+          "lab-worker"
+        ],
+        "x-permission": "lab.worker"
+      }
+    },
+    "/api/lab/worker/register": {
+      "post": {
+        "description": "Add the worker (or restart it under the same id) and return the\nserver's lease and heartbeat timing.",
+        "operationId": "registerLabWorker",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerHello"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerConfig"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Register Worker",
+        "tags": [
+          "lab-worker"
+        ],
+        "x-permission": "lab.worker"
+      }
+    },
+    "/api/lab/worker/snapshots/{name}": {
+      "get": {
+        "description": "A read-only lake snapshot, streamed as a tar. The worker keeps it\nuntil a newer one is named in a claim.",
+        "operationId": "downloadLabSnapshot",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "pattern": "^[0-9A-Za-z][0-9A-Za-z_-]*$",
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/x-tar": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The snapshot folder as an uncompressed tar"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download Snapshot",
+        "tags": [
+          "lab-worker"
+        ],
+        "x-permission": "lab.worker"
+      }
+    },
+    "/api/lab/worker/stop": {
+      "post": {
+        "description": "Mark the worker stopped (health and metrics stop counting it).",
+        "operationId": "stopLabWorker",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerRef"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerStopped"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stop Worker",
+        "tags": [
+          "lab-worker"
+        ],
+        "x-permission": "lab.worker"
       }
     },
     "/api/market/bars": {

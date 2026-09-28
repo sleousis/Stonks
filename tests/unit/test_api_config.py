@@ -93,3 +93,43 @@ def test_auth_section_from_toml_with_env_overrides(tmp_path, monkeypatch):
 def test_trusted_proxies_must_be_addresses_or_networks():
     with pytest.raises(ValidationError):
         ApiConfig(trusted_proxies=["caddy"])
+
+
+def test_api_host_and_allowed_hosts_from_env(tmp_path, monkeypatch):
+    """Compose sets both: Caddy passes the real Host (the domain) and the
+    scheduler calls http://api:8000."""
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text('[api]\nallowed_hosts = ["toml.example"]\n')
+    monkeypatch.delenv("STONKS_API_HOST", raising=False)
+    monkeypatch.delenv("STONKS_API_ALLOWED_HOSTS", raising=False)
+    settings = load_settings(config_path=cfg)
+    assert settings.api.host == "127.0.0.1"
+    assert settings.api.allowed_hosts == ["toml.example"]
+    monkeypatch.setenv("STONKS_API_HOST", "0.0.0.0")
+    monkeypatch.setenv("STONKS_API_ALLOWED_HOSTS", " Stonks.Example.com , api,, ")
+    settings = load_settings(config_path=cfg)
+    assert settings.api.host == "0.0.0.0"
+    assert settings.api.allowed_hosts == ["stonks.example.com", "api"]
+
+
+def test_blank_env_hosts_keep_the_file_values(tmp_path, monkeypatch):
+    cfg = tmp_path / "cfg.toml"
+    cfg.write_text('[api]\nhost = "10.0.0.5"\nallowed_hosts = ["toml.example"]\n')
+    monkeypatch.setenv("STONKS_API_HOST", "  ")
+    monkeypatch.setenv("STONKS_API_ALLOWED_HOSTS", "")
+    settings = load_settings(config_path=cfg)
+    assert settings.api.host == "10.0.0.5"
+    assert settings.api.allowed_hosts == ["toml.example"]
+
+
+@pytest.mark.parametrize(
+    "bad", ["*", "evil*.example.com", "*.*.example.com", "https://x.example", "x.example/path"]
+)
+def test_allowed_hosts_refuse_catch_alls_and_urls(bad):
+    with pytest.raises(ValidationError, match="allowed_hosts"):
+        ApiConfig(allowed_hosts=[bad])
+
+
+def test_allowed_hosts_accept_names_and_subdomain_wildcards():
+    cfg = ApiConfig(allowed_hosts=["stonks.example.com", "*.ts.net", "api", "10.1.2.3"])
+    assert cfg.allowed_hosts == ["stonks.example.com", "*.ts.net", "api", "10.1.2.3"]

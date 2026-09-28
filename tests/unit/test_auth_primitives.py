@@ -186,6 +186,23 @@ def test_tokens_can_never_do_step_up_or_session_only_actions():
         require(token, Permission.TOKENS_MANAGE)
 
 
+def test_the_lab_worker_scope_is_admin_only_and_confined():
+    """A remote lab worker's token (roadmap 14.9): only admins hold the
+    scope, it grants only the worker permission, and a token holding only
+    it is confined to the worker routes."""
+    assert ApiScope.LAB_WORKER not in ROLE_SCOPES[Role.TRADER]
+    worker = _principal(Role.ADMIN, {ApiScope.LAB_WORKER}, via="token")
+    assert worker.confined and worker.can_write
+    assert allowed(worker, Permission.LAB_WORKER)
+    assert not allowed(worker, Permission.READ)
+    assert not allowed(worker, Permission.LAB_RUN)
+    assert not allowed(_principal(Role.TRADER, via="token"), Permission.LAB_WORKER)
+    assert not allowed(_principal(Role.ADMIN, {ApiScope.LAB}, via="token"), Permission.LAB_WORKER)
+    mixed = _principal(Role.ADMIN, {ApiScope.LAB_WORKER, ApiScope.READ}, via="token")
+    assert not mixed.confined
+    assert not _principal(Role.ADMIN, set(), via="token").confined
+
+
 def test_every_permission_has_a_rule():
     from stonks.auth.policy import POLICY
 

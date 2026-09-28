@@ -458,6 +458,7 @@ retry_backoff_seconds = 1.0
 # REST API for `stonks serve`. Every call needs a credential: a browser
 # session or a personal API token (see docs/security.md). The old shared
 # STONKS_API_TOKEN is read from the environment only, never from this file.
+# Bind address. Env: STONKS_API_HOST (Compose sets 0.0.0.0).
 host = "127.0.0.1"
 port = 8000
 # The Angular dev server. The only origin CORS lets send cookies.
@@ -468,6 +469,8 @@ open_reads_on_loopback = false
 # Peers allowed to set X-Forwarded-For (IPs or networks). Compose sets
 # STONKS_API_TRUSTED_PROXIES to its Docker network so Caddy's header counts.
 trusted_proxies = ["127.0.0.1"]
+# Host names the API answers besides loopback (400 for any other Host).
+# Env: STONKS_API_ALLOWED_HOSTS, comma-separated; Compose sets STONKS_DOMAIN,api.
 allowed_hosts = []
 max_concurrent_jobs = 2
 default_page_size = 50

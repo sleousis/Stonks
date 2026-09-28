@@ -24,6 +24,7 @@ from stonks.app.ingest import IngestService
 from stonks.app.insights import InsightsService
 from stonks.app.jobs import Job, JobRunner, JobStore
 from stonks.app.lab import LabService
+from stonks.app.lab_workers import LabWorkerService
 from stonks.app.manual_orders import ManualOrdersService
 from stonks.app.market import MarketDataService
 from stonks.app.model_versions import ModelVersionService
@@ -194,6 +195,7 @@ class Services:
     ingest: IngestService
     ticks: TickService
     lab: LabService
+    lab_workers: LabWorkerService
     operations: OperationsService
     brokers: BrokerService
     studio: StudioService
@@ -269,6 +271,8 @@ class Services:
             ingest=IngestService(context, runner),
             ticks=TickService(context, orders, runner),
             lab=lab,
+            # Roadmap 14.9: the lab queue over the API for remote workers.
+            lab_workers=LabWorkerService(context, runner),
             operations=OperationsService(context),
             brokers=BrokerService(
                 context, connector=broker_connector, secrets=lambda: _configured_secrets(context)

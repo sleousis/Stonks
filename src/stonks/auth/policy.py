@@ -53,6 +53,8 @@ class Permission(StrEnum):
     ORDER_APPROVE = "orders.approve"
     #: A live portfolio's allocation and account profile (roadmap 19.6, 19.7).
     LIVE_MANAGE = "live.manage"
+    #: A remote lab worker claims, runs and reports lab jobs (roadmap 14.9).
+    LAB_WORKER = "lab.worker"
 
 
 @dataclass(frozen=True)
@@ -95,6 +97,9 @@ POLICY: dict[Permission, Rule] = {
     # fresh second factor, turns one into an order.
     Permission.ORDER_APPROVE: Rule(_TRADERS, frozenset({ApiScope.TRADE}), step_up=True),
     Permission.LIVE_MANAGE: Rule(_TRADERS, frozenset({ApiScope.TRADE}), step_up=True),
+    # Its own scope: the worker writes results for every owner and registers
+    # strategies, so only an admin mints one, and it can do nothing else.
+    Permission.LAB_WORKER: Rule(_ADMINS, frozenset({ApiScope.LAB_WORKER})),
 }
 
 

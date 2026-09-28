@@ -54,7 +54,7 @@ flowchart LR
 | `deploy/compose.yaml` | `api` and `caddy`, plus profiles for `scheduler`, `lab-worker`, `restic` (backup), the IB Gateways and the model server. |
 | `deploy/ibkr/` | The IB Gateway guide and the folder for its secret files (never committed). |
 | `deploy/compose.tailscale.yaml` | Lets Caddy get its `*.ts.net` certificate from Tailscale. |
-| `deploy/Caddyfile` | HTTPS, security headers, reverse proxy to the API. |
+| `deploy/Caddyfile` | HTTPS, security headers, reverse proxy to the API. It passes the real `Host`, and the API answers only `STONKS_DOMAIN` (Compose sets `STONKS_API_ALLOWED_HOSTS`, see [security.md](security.md#allowed-hosts)). |
 | `deploy/.env.example` | Every setting and secret the server needs (placeholders). |
 | `deploy/cloud-init.yaml` | First-boot setup: users, Docker, firewall, automatic updates, data volume, Tailscale. |
 | `infra/terraform/hetzner/` | Creates the server, firewall and volume on Hetzner Cloud. |
@@ -145,7 +145,7 @@ ssh deploy@stonks 'chmod 600 /opt/stonks/deploy/.env'
 ssh -t deploy@stonks 'nano /opt/stonks/deploy/.env'
 ```
 
-Fill in at least `STONKS_IMAGE` (`ghcr.io/<owner>/<repo>`, lower case), `STONKS_DOMAIN`, `STONKS_API_TOKEN` (`openssl rand -hex 32`), `EODHD_API_KEY`, the `RESTIC_*` and `AWS_*` backup values, and the `HC_PING_*` URLs.
+Fill in at least `STONKS_IMAGE` (`ghcr.io/<owner>/<repo>`, lower case), `STONKS_DOMAIN` (the API refuses requests for any other name), `STONKS_API_TOKEN` (`openssl rand -hex 32`), `EODHD_API_KEY`, the `RESTIC_*` and `AWS_*` backup values, and the `HC_PING_*` URLs.
 
 Secrets live **only** in this file. They are never baked into the image and never committed.
 
@@ -363,7 +363,42 @@ docker compose up -d
 - For a big search, resize the VM for an hour (Hetzner and DigitalOcean resize in about a minute), raise `STONKS_LAB_WORKER_CPUS`, and resize back.
 - Watch it: `docker compose exec lab-worker python -m stonks.lab.offload status`, the `lab_queue` health check and the `stonks_lab_*` metrics ([operations.md](operations.md#lab-worker)).
 
-The worker must share the data folder with the API on a local disk: the queue is the SQLite state DB, and SQLite on a network file system is not safe. A worker on another machine (the 32-core PC) needs a queue over the API. That is not built yet.
+The `lab-worker` service shares the data folder with the API on a local disk: its queue is the SQLite state DB, and SQLite on a network file system is not safe. A worker on another machine uses the API instead.
+
+### A worker on another machine
+
+A big PC at home can run the lab jobs of a cloud server. It reaches the API over Tailscale (or public HTTPS) and never opens the server's state DB or lake.
+
+```mermaid
+sequenceDiagram
+  participant W as PC: lab worker
+  participant A as api (server)
+  W->>A: POST /api/lab/worker/claim
+  A-->>W: job, snapshot name, trial ledger
+  W->>A: GET /api/lab/worker/snapshots/{name} (once per snapshot)
+  loop every heartbeat_seconds
+    W->>A: POST .../jobs/{id}/heartbeat (progress)
+    A-->>W: cancel requested?
+  end
+  W->>A: POST .../jobs/{id}/complete (result, ledger rows, registered strategies)
+```
+
+1. On the server, set `STONKS_LAB_EXECUTOR=worker` in `deploy/.env` and restart the api. The `lab-worker` profile is optional: both kinds of worker share one queue.
+2. Sign in as an admin, open Profile, and create an API token with the **Lab worker** scope only (it asks for a code). That token reaches the worker routes and nothing else.
+3. On the PC, install Stonks (`uv sync`) and run:
+
+```bash
+export STONKS_LAB_WORKER_TOKEN=stk_...
+uv run python -m stonks.lab.offload worker --api https://stonks.your-tailnet.ts.net
+```
+
+- It downloads the current lake snapshot into `<data dir>/lab_worker/lab_snapshots` (or `--work-dir`) and keeps it until the server publishes a newer one. With Parquet bars the first download is the whole bar history, later ones only when the lake changed.
+- Each job runs on scratch stores under `<work dir>/jobs/<job id>`, seeded with the trial ledger (so trial counts and the deflated Sharpe see every earlier trial, P2) and the active strategies (for the pool correlation test). They are deleted after the upload.
+- The result comes back with the ledger rows, trial matrices and any registered strategy (always `shadow`). The job row, its events and its result route work as for any job.
+- Cancel works through the heartbeat. Ctrl+C or SIGTERM hands the running job back to the queue. A PC that goes to sleep stops its heartbeat, and its job fails after `lease_seconds`.
+- The token goes only over https, to a loopback URL, or to a host listed in `STONKS_API_TRUSTED_HOSTS` (for plain http inside a trusted network).
+- A remote worker takes lab runs and sweeps. Jobs that read server files stay for a worker on the server: Studio lab runs (drafts and user code) and lab runs of a registered strategy (its artifact). Run the `lab-worker` service too if you queue those, or take `studio_lab_run` out of `[lab.offload] kinds`.
+- Run the same Stonks version on both sides, so the rows it uploads have the same columns.
 
 ## Local home server guide
 
@@ -524,8 +559,3 @@ Caddy then gets a Let's Encrypt certificate by itself. Everyone on the internet 
 ## Windows without Docker
 
 For a single-user setup on Windows, run `uv run stonks serve` as a service with [WinSW](https://github.com/winsw/winsw) or NSSM (working directory: the repo; environment: `.env`), and schedule the daily loop with Task Scheduler as in [operations.md](operations.md). Backups then use `stonks backup` (Phase 12.4) and any file-sync tool.
-
-## Known gaps
-
-- `[api]` host and allowed hosts cannot be set from the environment yet, so Caddy presents requests to the API as `localhost` (see `deploy/Caddyfile`).
-- A lab worker on another machine needs a queue over the API, which is not built (see [10. Lab offload](#10-lab-offload)).

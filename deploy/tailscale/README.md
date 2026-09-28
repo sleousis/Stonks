@@ -36,4 +36,4 @@ Remove the user (or their device) in the Tailscale admin console. Their access e
 
 ## Alternative: Cloudflare Tunnel
 
-If traders cannot install Tailscale, run `cloudflared` as an extra compose service pointing at `http://api:8000` (with `httpHostHeader: localhost`, like Caddy's `header_up`), drop the Caddy service, and put Cloudflare Access (email one-time codes) in front. The server still opens no port. Tailscale remains the default because it also covers SSH and CI.
+If traders cannot install Tailscale, run `cloudflared` as an extra compose service pointing at `http://api:8000` (add the tunnel hostname to `STONKS_API_ALLOWED_HOSTS` in `compose.yaml`, since the API refuses any other Host), drop the Caddy service, and put Cloudflare Access (email one-time codes) in front. The server still opens no port. Tailscale remains the default because it also covers SSH and CI.

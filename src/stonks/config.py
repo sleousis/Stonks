@@ -384,7 +384,12 @@ class ApiConfig(BaseModel):
     # header from any other peer is ignored. Env: STONKS_API_TRUSTED_PROXIES
     # (comma-separated).
     trusted_proxies: list[str] = Field(default_factory=lambda: ["127.0.0.1"])
-    # Extra Host header values accepted besides localhost / 127.0.0.1 / ::1.
+    # Extra Host header values accepted besides localhost / 127.0.0.1 / ::1
+    # (and ``host`` when it names one address). Behind Caddy: the public
+    # domain, plus ``api`` for the scheduler on the Compose network. A
+    # ``*.example.com`` entry allows its subdomains; a bare ``*`` is refused.
+    # Env: STONKS_API_ALLOWED_HOSTS (comma-separated). STONKS_API_HOST sets
+    # ``host``.
     allowed_hosts: list[str] = []
     # Size of the general job pool (backtests, lab runs); ticks and ingests
     # each have one dedicated worker on top.
@@ -408,6 +413,21 @@ class ApiConfig(BaseModel):
         if isinstance(data, dict) and "token" in data:
             raise ValueError("api.token must not be set in config; use STONKS_API_TOKEN")
         return data
+
+    @field_validator("allowed_hosts")
+    @classmethod
+    def _hosts_are_names(cls, value: list[str]) -> list[str]:
+        out: list[str] = []
+        for raw in value:
+            item = raw.strip().lower()
+            if not item:
+                continue
+            if item == "*" or "*" in item.removeprefix("*."):
+                raise ValueError(f"api.allowed_hosts: {raw!r} would accept any host; name each one")
+            if any(ch in item for ch in "/@ ?#") or "://" in item:
+                raise ValueError(f"api.allowed_hosts: {raw!r} is not a host name")
+            out.append(item)
+        return out
 
     @field_validator("trusted_proxies")
     @classmethod
@@ -678,6 +698,16 @@ def _overlay_env(data: dict) -> None:
     if proxies is not None and proxies.strip():
         data.setdefault("api", {})["trusted_proxies"] = [
             p.strip() for p in proxies.split(",") if p.strip()
+        ]
+
+    api_host = os.environ.get("STONKS_API_HOST")
+    if api_host is not None and api_host.strip():
+        data.setdefault("api", {})["host"] = api_host.strip()
+
+    hosts = os.environ.get("STONKS_API_ALLOWED_HOSTS")
+    if hosts is not None and hosts.strip():
+        data.setdefault("api", {})["allowed_hosts"] = [
+            h.strip() for h in hosts.split(",") if h.strip()
         ]
 
     executor = os.environ.get("STONKS_LAB_EXECUTOR")

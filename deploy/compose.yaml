@@ -98,13 +98,19 @@ x-ib-health: &ib-health
 services:
   api:
     <<: *app
-    command: ["stonks", "serve", "--host", "0.0.0.0", "--port", "8000"]
+    command: ["stonks", "serve", "--port", "8000"]
     # The anchor's environment is replaced, not merged: repeat STONKS_DATA_DIR.
     # Caddy's X-Forwarded-For is believed only from this network, so the
     # login limit and the audit log see each visitor's real IP. Port 8000 is
     # not published, so nothing outside the network can reach the API.
     environment:
       STONKS_DATA_DIR: /data
+      # Bind every address inside the container ([api].host).
+      STONKS_API_HOST: 0.0.0.0
+      # Host names the API answers ([api].allowed_hosts): the domain Caddy
+      # serves (Caddy passes the real Host) and "api" for the scheduler on
+      # this network. Any other Host gets 400.
+      STONKS_API_ALLOWED_HOSTS: ${STONKS_DOMAIN:-localhost},api
       STONKS_API_TRUSTED_PROXIES: ${STONKS_DOCKER_SUBNET:-172.31.250.0/24}
       # "worker" queues heavy lab jobs for the lab-worker service (14.9).
       STONKS_LAB_EXECUTOR: ${STONKS_LAB_EXECUTOR:-in_process}
