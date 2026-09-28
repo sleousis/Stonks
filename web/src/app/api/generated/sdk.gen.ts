@@ -4273,7 +4273,8 @@ export const listUniverseExchanges = <ThrowOnError extends boolean = false>(opti
  * Import Index History
  *
  * Import an index's constituents and changes (CSV or JSON) for
- * ``index`` universes to rebuild membership from.
+ * ``index`` universes to rebuild membership from. The index the trading
+ * universe follows needs ``strategy.promote``.
  */
 export const importIndexHistory = <ThrowOnError extends boolean = false>(options: Options<ImportIndexHistoryData, ThrowOnError>): RequestResult<ImportIndexHistoryResponses, ImportIndexHistoryErrors, ThrowOnError> => (options.client ?? client).post<ImportIndexHistoryResponses, ImportIndexHistoryErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -4320,7 +4321,8 @@ export const getUniverse = <ThrowOnError extends boolean = false>(options: Optio
  * Update Universe
  *
  * Replace the definition. The members stay as they are until the next
- * refresh.
+ * refresh. The trading universe (``[production].universe``) needs
+ * ``strategy.promote``.
  */
 export const updateUniverse = <ThrowOnError extends boolean = false>(options: Options<UpdateUniverseData, ThrowOnError>): RequestResult<UpdateUniverseResponses, UpdateUniverseErrors, ThrowOnError> => (options.client ?? client).put<UpdateUniverseResponses, UpdateUniverseErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
