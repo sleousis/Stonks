@@ -392,7 +392,7 @@ def from_contract(c: Any) -> IbContract:
             action="BUY" if str(leg.action).upper() == "BUY" else "SELL",
             exchange=str(leg.exchange or "SMART"),
         )
-        for leg in (getattr(c, "comboLegs", None) or [])
+        for leg in _items(getattr(c, "comboLegs", None))
     )
     return IbContract(
         con_id=int(c.conId),

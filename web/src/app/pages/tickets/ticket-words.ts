@@ -33,6 +33,9 @@ export function holdWords(hold: TicketView['hold']): string | null {
   if (hold === 'hard_to_borrow') {
     return 'Held for you: this short sale is hard to borrow, so its borrow fee is high.';
   }
+  if (hold === 'options') {
+    return 'Held for you: every option order waits for your approval. Its limit sits at the mid.';
+  }
   return null;
 }
 

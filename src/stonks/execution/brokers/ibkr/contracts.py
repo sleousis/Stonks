@@ -357,6 +357,11 @@ class ContractResolver:
         found = self.cache.by_con_id(con_id)
         return found.ticker if found is not None else None
 
+    def details(self, query: IbContractQuery) -> Sequence[IbContractDetails]:
+        """Every contract IBKR lists for ``query`` (none when it finds
+        nothing), unfiltered. The option chain reads one expiry at a time."""
+        return self._details(query)
+
     # ---- internals ------------------------------------------------------------
 
     def _look_up(self, ticker: str) -> ResolvedContract:

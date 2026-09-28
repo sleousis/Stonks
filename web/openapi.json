@@ -24299,7 +24299,8 @@
                 "enum": [
                   "approve_mode",
                   "runaway",
-                  "hard_to_borrow"
+                  "hard_to_borrow",
+                  "options"
                 ],
                 "type": "string"
               },
@@ -24307,7 +24308,7 @@
                 "type": "null"
               }
             ],
-            "description": "Why it waits for a person (approve mode, a runaway run, or a hard to borrow short sale).",
+            "description": "Why it waits for a person (approve mode, a runaway run, a hard to borrow short sale, or a live option order).",
             "title": "Hold"
           },
           "id": {

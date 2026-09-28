@@ -45,6 +45,7 @@ from stonks.execution.brokers.ibkr.client import (
     IbContractQuery,
     IbExecution,
     IbOptionDataClient,
+    IbOptionEvent,
     IbOptionEventClient,
     IbOptionSnapshot,
     IbTrade,
@@ -84,10 +85,10 @@ def is_option_order(order: Order) -> bool:
 def _held(broker: IbkrBroker) -> dict[str, float]:
     account = broker.account_id
     held: dict[str, float] = {}
-    for p in broker._guard("positions", lambda: broker.client.positions(account)):
+    for p in broker.guarded("positions", lambda: broker.client.positions(account)):
         if p.account and p.account != account:
             continue
-        ticker = broker._ticker_of(p.contract)
+        ticker = broker.ticker_of(p.contract)
         held[ticker] = held.get(ticker, 0.0) + p.position
     return held
 
@@ -161,7 +162,7 @@ def _leg_contracts(broker: IbkrBroker, combo: ComboOrder) -> list[ResolvedContra
 def place_combo(broker: IbkrBroker, combo: ComboOrder) -> None:
     """A combo as one ``BAG`` order at its net limit. A one-leg combo goes
     out as a plain option order under its leg's client id."""
-    account = broker._ensure_may_trade()
+    account = broker.ensure_may_trade()
     ensure_options_allowed(broker, combo.signed_quantities(), combo.effect == "close")
     if len(combo.legs) == 1:
         leg_order = combo.leg_orders()[0]
@@ -184,9 +185,9 @@ def place_combo(broker: IbkrBroker, combo: ComboOrder) -> None:
         _place_checked(broker, order, account)
         return
     ref = broker.broker_ref(combo.client_id)
-    broker._refs[ref] = combo.client_id
+    broker.remember_ref(ref, combo.client_id)
     if _bag_trade(broker, ref) is not None or any(
-        e.order_ref == ref for e in broker._guard("executions", broker.client.executions)
+        e.order_ref == ref for e in broker.guarded("executions", broker.client.executions)
     ):
         _log.info("ibkr.combo.already_at_broker", client_id=combo.client_id)
         return
@@ -195,15 +196,15 @@ def place_combo(broker: IbkrBroker, combo: ComboOrder) -> None:
     contract = combo_contract(combo, [r.con_id for r in resolved], currency)
     tick = min((r.min_tick for r in resolved if r.contract.sec_type == "OPT"), default=0.01)
     request = to_ib_combo_order(combo, tick=tick, account=account, settings=broker.order_settings)
-    broker._bag_legs[ref] = tuple(r.con_id for r in resolved)
+    broker.bag_legs[ref] = tuple(r.con_id for r in resolved)
     _submit(broker, combo.client_id, contract, request)
 
 
 def _bag_trade(broker: IbkrBroker, ref: str) -> IbTrade | None:
-    trade = broker._find_trade(ref)
+    trade = broker.find_trade(ref)
     if trade is None or trade.contract.sec_type != "BAG":
         return None
-    broker._bag_legs[ref] = tuple(leg.con_id for leg in trade.contract.combo_legs)
+    broker.bag_legs[ref] = tuple(leg.con_id for leg in trade.contract.combo_legs)
     return trade
 
 
@@ -220,15 +221,15 @@ def leg_state(broker: IbkrBroker, client_id: str) -> BrokerOrderState | None:
     leg = trade.contract.combo_legs[index]
     execs = [
         e
-        for e in broker._guard("executions", broker.client.executions)
+        for e in broker.guarded("executions", broker.client.executions)
         if e.order_ref == ref and e.contract.con_id == leg.con_id
     ]
     filled = sum(e.shares for e in execs)
     avg = sum(e.shares * e.price for e in execs) / filled if filled > 0 else None
-    state = broker._state_of(trade, trade.filled)
+    state = broker.state_of(trade, trade.filled)
     ticker = broker.resolver.ticker_for(leg.con_id)
     if ticker is None:
-        ticker = broker._ticker_of(execs[0].contract) if execs else str(leg.con_id)
+        ticker = broker.ticker_of(execs[0].contract) if execs else str(leg.con_id)
     return BrokerOrderState(
         client_id=client_id,
         broker_order_id=str(trade.perm_id),
@@ -246,17 +247,17 @@ def leg_client_id(broker: IbkrBroker, e: IbExecution, client_id: str) -> str:
     """The leg's client id for an execution of a ``BAG`` order (its own
     client id for anything else)."""
     ref = e.order_ref
-    legs = broker._bag_legs.get(ref)
+    legs = broker.bag_legs.get(ref)
     if legs is None:
         if e.contract.sec_type not in ("OPT", "STK") or _LEG_ID.match(client_id):
             return client_id
-        if ref in broker._not_bags:
+        if ref in broker.not_bags:
             return client_id
         trade = _bag_trade(broker, ref)
         if trade is None:
-            broker._not_bags.add(ref)
+            broker.not_bags.add(ref)
             return client_id
-        legs = broker._bag_legs[ref]
+        legs = broker.bag_legs[ref]
     try:
         return f"{client_id}:{legs.index(e.contract.con_id)}"
     except ValueError:
@@ -293,17 +294,15 @@ def what_if_combo(broker: IbkrBroker, combo: ComboOrder) -> MarginPreview:
         request = to_ib_combo_order(
             combo, tick=tick, account=account, settings=broker.order_settings
         )
-    answer = broker._guard(
+    answer = broker.guarded(
         f"what-if of {combo.client_id}", lambda: broker.client.what_if(contract, request)
     )
-    from stonks.execution.brokers.ibkr.broker import _num, _opt
-
     return MarginPreview(
         client_id=combo.client_id,
-        initial_margin_change=_num(answer.init_margin_change),
-        maintenance_margin_change=_num(answer.maint_margin_change),
-        equity_with_loan_after=_num(answer.equity_with_loan_after),
-        commission=_opt(answer.commission),
+        initial_margin_change=_greek(answer.init_margin_change) or 0.0,
+        maintenance_margin_change=_greek(answer.maint_margin_change) or 0.0,
+        equity_with_loan_after=_greek(answer.equity_with_loan_after) or 0.0,
+        commission=_greek(answer.commission),
         commission_currency=answer.commission_currency or None,
         warning=answer.warning or None,
     )
@@ -438,7 +437,7 @@ def option_chain(
             last_trade_date=text,
             multiplier="100",
         )
-        for d in broker.resolver._details(query):
+        for d in broker.resolver.details(query):
             cid = option_id_for_contract(d.contract)
             if cid is None:
                 continue
@@ -500,10 +499,10 @@ def option_events(broker: IbkrBroker) -> list[OptionEvent]:
     the event source (the Flex statement's ``OptionEAE`` rows, or the fake
     gateway). An event on a contract we cannot name is logged and left out."""
     account = broker.account_id
-    raw: list = []
+    raw: list[IbOptionEvent] = []
     client = broker.client
     if isinstance(client, IbOptionEventClient):
-        raw.extend(broker._guard("option events", client.option_events))
+        raw.extend(broker.guarded("option events", client.option_events))
     if broker.option_event_reader is not None:
         raw.extend(broker.option_event_reader())
     out: dict[str, OptionEvent] = {}

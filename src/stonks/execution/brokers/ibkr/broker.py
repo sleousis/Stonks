@@ -166,8 +166,8 @@ class IbkrBroker:
         self.option_event_reader = option_event_reader
         #: orderRef -> leg conIds of a combo (BAG) order, and refs known not
         #: to be combos.
-        self._bag_legs: dict[str, tuple[int, ...]] = {}
-        self._not_bags: set[str] = set()
+        self.bag_legs: dict[str, tuple[int, ...]] = {}
+        self.not_bags: set[str] = set()
         #: This session's API client id and the gateway's master client id.
         #: Unknown (``None``) counts as the master: the client's own view is
         #: taken as every order.
@@ -633,6 +633,29 @@ class IbkrBroker:
 
     def option_events(self) -> list[OptionEvent]:
         return option_broker.option_events(self)
+
+    # The options side (``option_broker.py``) reaches the session through these.
+
+    def guarded[T](self, action: str, fn: Callable[[], T]) -> T:
+        """``fn()`` with IBKR's errors mapped onto the broker errors."""
+        return self._guard(action, fn)
+
+    def ticker_of(self, contract: IbContract) -> str:
+        return self._ticker_of(contract)
+
+    def ensure_may_trade(self) -> str:
+        """The checked account, when this broker may change orders."""
+        return self._ensure_may_trade()
+
+    def find_trade(self, ref: str) -> IbTrade | None:
+        return self._find_trade(ref)
+
+    def state_of(self, trade: IbTrade, filled: float) -> OrderState:
+        return self._state_of(trade, filled)
+
+    def remember_ref(self, ref: str, client_id: str) -> None:
+        """``ref`` was sent for ``client_id`` (a combo's orderRef, say)."""
+        self._refs[ref] = client_id
 
     # ---- ExecutionSource ------------------------------------------------------------
 
