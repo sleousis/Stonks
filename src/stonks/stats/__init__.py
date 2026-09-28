@@ -8,4 +8,6 @@
 - :mod:`stonks.stats.hac` - Newey-West standard error of a mean.
 - :mod:`stonks.stats.pbo` - probability of backtest overfitting (CSCV).
 - :mod:`stonks.stats.multiple_testing` - Holm and Benjamini-Hochberg.
+- :mod:`stonks.stats.data_snooping` - White's Reality Check, Hansen's SPA
+  and the Romano-Wolf step-down over many strategies at once.
 """
