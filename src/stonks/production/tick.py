@@ -147,7 +147,7 @@ from stonks.production.financing import (
     record_accrual,
     short_account,
 )
-from stonks.production.halts import active_halts
+from stonks.production.halts import active_halts, halts_enabled
 from stonks.production.hooks import (
     GateContext,
     NotifySignal,
@@ -1161,10 +1161,12 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         if external_holdings:
             log.info("tick.external_holdings", tickers=sorted(external_holdings))
     manual_holdings: dict[str, float] = {}
-    if scope is not None and not external and not connection:
-        # Roadmap 20.1: what a person bought by hand in a simulated book is
-        # theirs. Strategies decide and size without it and never trade it;
-        # the snapshot puts it back.
+    if scope is not None and not connection:
+        # Roadmap 20.1: what a person bought by hand is theirs, in a
+        # simulated book and in the default portfolio's account at an
+        # external broker alike. Strategies decide and size without it and
+        # never trade it; the snapshot puts it back (at a broker the
+        # snapshot is the whole account).
         manual = manual_positions(state, portfolio_id, actions)
         if manual:
             portfolio, manual_holdings = strip_holdings(account, manual)
@@ -1362,6 +1364,10 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             located = broker_borrow_source(broker, lake)
             if located is not None:
                 risk_context = replace(risk_context, borrow=located)
+    if risk_context is not None and external_holdings:
+        # the equity curve is the whole account's: the drawdown rules add the
+        # holdings the book does not own back to today's value
+        risk_context = replace(risk_context, outside_positions=dict(external_holdings))
     book_input = BookInput(
         portfolio=portfolio,
         construction=construction,
@@ -1718,7 +1724,14 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             if financing is not None:
                 record_accrual(state, portfolio_id, as_of, financing, tick_id=tick_id)
             _snapshot_portfolio(state, tick_id, after, marks, as_of, portfolio_id=scope)
-            hook_summary = hooks(after, marks)
+            # attribution counts the book's own shares, never the owner's
+            if connection:
+                own_after = Portfolio(cash=after.cash, positions=own_view(after))
+            elif manual_holdings:
+                own_after = strip_holdings(after, manual_holdings)[0]
+            else:
+                own_after = after
+            hook_summary = hooks(own_after, marks)
     elif not dry_run:
         with state.transaction():
             record_open_fills(state, paper, portfolio_id=scope)
@@ -1744,7 +1757,8 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             )
             whole = merge_holdings(portfolio, manual_holdings) if manual_holdings else portfolio
             _snapshot_portfolio(state, tick_id, whole, prices, as_of, portfolio_id=scope)
-            hook_summary = hooks(whole, prices)
+            # attribution counts the book's own shares, never the owner's
+            hook_summary = hooks(portfolio, prices)
 
     rejected = [order.ticker for order, st, _ in outcomes if st == "rejected"]
     if rejected:
@@ -2573,8 +2587,15 @@ def _halt_hold(
 ) -> Callable[[Order], str | None] | None:
     """What a halt in force holds back of a paper book's working orders:
     every order under ``all``, orders that do not reduce a position under
-    ``buys``. ``None`` when nothing is halted."""
-    halts = active_halts(state, as_of, portfolio_id=book.portfolio_id, user_id=book.owner_id)
+    ``buys``. ``None`` when nothing is halted. The legacy book carries no
+    owner id: its owner comes from the portfolio row, as the gate reads it
+    (TO-02)."""
+    from stonks.production.hooks.risk_halts import portfolio_owner
+
+    owner = book.owner_id
+    if owner is None and halts_enabled(state):
+        owner = portfolio_owner(state, book.portfolio_id)
+    halts = active_halts(state, as_of, portfolio_id=book.portfolio_id, user_id=owner)
     if book.parent_id is not None:
         halts += active_halts(state, as_of, portfolio_id=book.parent_id)
     modes = {h.halt for h in halts}

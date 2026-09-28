@@ -106,8 +106,9 @@ def manual_context(
         " AND client_id NOT IN (SELECT order_client_id FROM fills)",
         [portfolio_id, today.isoformat(), *_DONE_WITHOUT_FILL],
     )
-    # a working order that would grow the manual position is an entry
-    working = [r for r in rows if (held.get(r["ticker"], 0.0) >= -_EPS) == (r["side"] == "buy")]
+    # a working order that would open or grow the manual position is an
+    # entry: a buy from flat or long, a short sale from flat or short
+    working = [r for r in rows if _opens(held.get(r["ticker"], 0.0), r["side"])]
     losing = [e.filled_at for e in exits if e.pnl < -_EPS]
     return ManualContext(
         now=now,
@@ -117,3 +118,7 @@ def manual_context(
         pnl_today=sum(e.pnl for e in exits if e.filled_at.date() == today),
         last_losing_exit_at=max(losing) if losing else None,
     )
+
+
+def _opens(held: float, side: str) -> bool:
+    return held >= -_EPS if side == "buy" else held <= _EPS

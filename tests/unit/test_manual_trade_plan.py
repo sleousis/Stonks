@@ -255,3 +255,98 @@ def test_plan_sizes_from_the_book_value(state, lake, tick, portfolio_id, owner):
             state, lake, book, tick, ticker="UP.US", side="buy", stop_price=120.0,
             risk_percent=1.0, now=NOW,
         )  # fmt: skip
+
+
+class StopRejectingBroker(FillingBroker):
+    """Fills market orders; refuses stop orders while ``refuse_stops``."""
+
+    refuse_stops = True
+
+    def place_order(self, order: Order):
+        from stonks.execution.brokers.base import OrderRejectedError
+
+        if order.order_type == "stop" and self.refuse_stops:
+            raise OrderRejectedError("stop price too close")
+        super().place_order(order)
+
+
+def test_no_stop_is_placed_for_an_entry_already_sold(state, lake, tick, portfolio_id, owner):
+    """A rejected stop is tried again, but never for a position a manual
+    exit closed meanwhile: a sell stop on a flat book would open a short."""
+    broker = StopRejectingBroker()
+    book = _book(portfolio_id, owner, broker=broker)
+    entry = place_manual_order(
+        state,
+        lake,
+        _order(portfolio_id, owner, stop_price=94.0, client_key="e1"),
+        book,
+        tick,
+        now=NOW,
+    )
+    assert entry.status == "filled" and entry.protective_stop is None
+    place_manual_order(
+        state,
+        lake,
+        _order(portfolio_id, owner, side="sell", quantity=10.0, client_key="x1"),
+        book,
+        tick,
+        now=NOW,
+    )
+    assert broker.portfolio.positions.get("UP.US", 0.0) == 0.0
+    broker.refuse_stops = False
+    assert pending_manual_stops(state, portfolio_id) == []
+    assert sync_manual_stops(state, broker, portfolio_id) == []
+
+
+def test_a_partly_sold_entry_gets_a_stop_for_what_is_left(state, lake, tick, portfolio_id, owner):
+    broker = StopRejectingBroker()
+    book = _book(portfolio_id, owner, broker=broker)
+    place_manual_order(
+        state,
+        lake,
+        _order(portfolio_id, owner, stop_price=94.0, client_key="e1"),
+        book,
+        tick,
+        now=NOW,
+    )
+    place_manual_order(
+        state,
+        lake,
+        _order(portfolio_id, owner, side="sell", quantity=4.0, client_key="x1"),
+        book,
+        tick,
+        now=NOW,
+    )
+    broker.refuse_stops = False
+    [pending] = pending_manual_stops(state, portfolio_id)
+    assert pending.filled_quantity == pytest.approx(6.0)
+    [placed] = sync_manual_stops(state, broker, portfolio_id)
+    assert broker.orders[placed].quantity == pytest.approx(6.0)
+
+
+def test_a_working_short_sale_counts_as_an_entry(state, lake, tick, portfolio_id, owner):
+    """A short sale from flat opens a position: while it works at the
+    broker it counts against the daily entry cap like a working buy."""
+    broker = WorkingBroker()
+    book = _book(portfolio_id, owner, broker=broker, allow_short=True)
+    out = place_manual_order(
+        state,
+        lake,
+        _order(
+            portfolio_id,
+            owner,
+            side="sell",
+            order_type="limit",
+            limit_price=101.0,
+            client_key="s1",
+        ),
+        book,
+        tick,
+        now=NOW,
+    )
+    assert out.status == "pending"
+    # the order row is stamped with the wall clock
+    from datetime import UTC, datetime
+
+    ctx = manual_context(state, portfolio_id, datetime.now(UTC), live=False, has_stop=False)
+    assert ctx.entries_today == 1

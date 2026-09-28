@@ -34,7 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from stonks.core.types import Order
 from stonks.production.rules import RiskAdjustment, RiskContext, RiskRule, register_rule
-from stonks.production.rules._common import book_value, scale_opens, settings_of
+from stonks.production.rules._common import account_value, scale_opens, settings_of
 
 BreakerKind = Literal["month_loss", "week_loss", "drawdown"]
 Cooldown = Literal["rest_of_month", "none"]
@@ -187,7 +187,7 @@ class CircuitBreaker(RiskRule):
         as_of = ctx.as_of or (curve[-1][0] if curve else None)
         if as_of is None:
             return list(orders), []
-        value = book_value(ctx)
+        value = account_value(ctx)  # the curve is the whole account's
         if value is None:  # a holding has no mark: no fake drawdown (BE-45)
             return list(orders), []
         curve.append((as_of, value))

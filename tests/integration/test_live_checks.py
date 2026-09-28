@@ -252,6 +252,18 @@ def test_a_wrong_account_is_a_fault_that_pauses_at_once(state, sent):
     assert not active_halts(state, MON.date(), portfolio_id=PF)
 
 
+def test_a_fault_pauses_approve_subscriptions_too(state, sent):
+    """Approve mode trades at the broker too (roadmap 19.8): a fault pauses
+    it with auto, as the tick and the broker health job do."""
+    auto_subscription(state)
+    state.execute("UPDATE subscriptions SET mode = 'approve' WHERE id = 'sub_1'")
+    broker = ib_broker(state, FakeIbGateway(["U7654321"]))  # a live account on paper
+    result = check(state, broker, sent=sent)
+    assert result.status == "fault"
+    assert result.report.paused == ("sub_1",)
+    assert paused_reason(state).startswith("broker_error: ")
+
+
 # ---- start and end of day --------------------------------------------------------------------
 
 

@@ -64,6 +64,8 @@ class ManualStop:
     ticker: str
     #: The entry's side (the stop takes the other one).
     side: OrderSide
+    #: What the stop covers: the entry's fills, never more than the person
+    #: still holds unprotected on that side.
     filled_quantity: float
     stop_price: float
     placed_by: str | None
@@ -94,6 +96,7 @@ def pending_manual_stops(state: SqliteState, portfolio_id: str) -> list[ManualSt
         [portfolio_id, *_SETTLED],
     )
     out: list[ManualStop] = []
+    room: dict[tuple[str, str], float] | None = None
     for r in rows:
         stop = _context(r["decision_context_json"]).get("stop_price")
         if not isinstance(stop, int | float) or stop <= 0 or float(r["filled"]) <= _EPS:
@@ -105,17 +108,50 @@ def pending_manual_stops(state: SqliteState, portfolio_id: str) -> list[ManualSt
         )
         if any(c["status"] != "rejected" for c in children):
             continue
+        if room is None:
+            room = _unprotected(state, portfolio_id)
+        # never more than the person still holds of the entry's side: a
+        # manual exit may have closed it while its stop waited (a stop on a
+        # flat book would open the other way)
+        key = (str(r["ticker"]), str(r["side"]))
+        quantity = min(float(r["filled"]), room.get(key, 0.0))
+        if quantity <= _EPS:
+            continue
+        room[key] = room.get(key, 0.0) - quantity
         out.append(
             ManualStop(
                 entry_client_id=cid,
                 ticker=str(r["ticker"]),
                 side=r["side"],
-                filled_quantity=float(r["filled"]),
+                filled_quantity=quantity,
                 stop_price=float(stop),
                 placed_by=r["placed_by"],
             )
         )
     return out
+
+
+def _unprotected(state: SqliteState, portfolio_id: str) -> dict[tuple[str, str], float]:
+    """Per ``(ticker, entry side)``, the manual holding no working manual
+    stop protects yet: the net manual fills of that side, less the working
+    manual stops that close it."""
+    from stonks.execution.reconcile import NON_TERMINAL_STATUSES
+    from stonks.production.ownership import manual_positions
+
+    room: dict[tuple[str, str], float] = {}
+    for ticker, qty in manual_positions(state, portfolio_id).items():
+        room[(ticker, "buy" if qty > 0 else "sell")] = abs(qty)
+    marks = ",".join("?" for _ in NON_TERMINAL_STATUSES)
+    rows = state.sql(
+        "SELECT ticker, side, quantity FROM orders WHERE portfolio_id = ? AND origin = 'manual'"
+        f" AND order_type = 'stop' AND status IN ({marks})",
+        [portfolio_id, *NON_TERMINAL_STATUSES],
+    )
+    for r in rows:
+        key = (str(r["ticker"]), "buy" if r["side"] == "sell" else "sell")
+        if key in room:
+            room[key] -= float(r["quantity"])
+    return room
 
 
 def awaiting_manual_stops(state: SqliteState, portfolio_id: str) -> bool:
