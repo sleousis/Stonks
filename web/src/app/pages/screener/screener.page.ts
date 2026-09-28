@@ -35,6 +35,7 @@ import { PermissionNote } from '../../shared/ui/permission-note';
 import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { SaveUniverseSheet } from './save-universe-sheet';
+import { ScreenAlerts } from './screen-alerts';
 import { ScreenFilters } from './screen-filters';
 import {
   ASSET_CLASSES,
@@ -78,6 +79,7 @@ interface OpenScreen {
     ErrorState,
     EmptyState,
     SaveUniverseSheet,
+    ScreenAlerts,
     JobProgress,
     ScreenFilters,
   ],

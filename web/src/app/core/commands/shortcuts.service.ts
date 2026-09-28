@@ -2,6 +2,7 @@ import { DOCUMENT } from '@angular/common';
 import { Injectable, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 
+import { PrivacyService } from '../privacy/privacy.service';
 import { CommandRegistry } from './command-registry';
 
 /** A two-key sequence: press `prefix`, then `key`, within a second or so. */
@@ -26,6 +27,7 @@ export const SHORTCUTS_STORAGE_KEY = 'stonks.shortcuts';
  * - Ctrl+K / Cmd+K toggles the command palette, even while typing.
  * - `/` opens the palette, `?` shows the cheat sheet.
  * - `g` then a key jumps to a page; `n` then a key starts something new.
+ * - `h` (or Alt+Shift+H, which always works) hides or shows money amounts.
  *
  * Single-character shortcuts can be turned off in the cheat sheet (WCAG
  * 2.1.4, for speech-input users); Ctrl+K always works.
@@ -35,6 +37,7 @@ export class ShortcutsService {
   private readonly doc = inject(DOCUMENT);
   private readonly router = inject(Router);
   private readonly registry = inject(CommandRegistry);
+  private readonly privacy = inject(PrivacyService);
 
   readonly paletteOpen = signal(false);
   readonly helpOpen = signal(false);
@@ -87,6 +90,18 @@ export class ShortcutsService {
       return true;
     }
 
+    if (
+      event.altKey &&
+      event.shiftKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      event.code === 'KeyH'
+    ) {
+      event.preventDefault();
+      this.privacy.toggle();
+      return true;
+    }
+
     if (event.ctrlKey || event.metaKey || event.altKey) return false;
     if (!this.singleKeys() || isTyping(event.target) || this.anyDialogOpen()) {
       this.pending = null;
@@ -114,6 +129,11 @@ export class ShortcutsService {
     if (key === '/') {
       event.preventDefault();
       this.openPalette();
+      return true;
+    }
+    if (key === 'h') {
+      event.preventDefault();
+      this.privacy.toggle();
       return true;
     }
     if (key === 'g' || key === 'n') {

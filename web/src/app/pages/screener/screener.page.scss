@@ -195,3 +195,11 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+
+.alerts-panel {
+  min-width: 0;
+
+  @include bp.from-desktop {
+    grid-column: 2;
+  }
+}
