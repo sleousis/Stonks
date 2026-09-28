@@ -46,6 +46,7 @@ from stonks.lab.preflight import (
     run_preflight,
 )
 from stonks.lab.survival.base import SurvivalSuite, TuningSetup
+from stonks.lab.survival.forecast_skill import ForecastSkillTest
 from stonks.lab.survival.plateau import PlateauOptions
 from stonks.lab.trials import (
     LabRunContext,
@@ -338,7 +339,8 @@ class LabRunner:
             n_trials_family=n_family,
             n_trials_searched=n_searched,
         )
-        for test in self._suite.tests:
+        suite = self._suite_for(strategy)
+        for test in suite.tests:
             bind = getattr(test, "bind_tuning", None)
             if callable(bind):
                 bind(setup)
@@ -346,7 +348,7 @@ class LabRunner:
             if callable(bind_run):
                 bind_run(ctx)
 
-        reports = self._suite.run(strategy, suite_dataset(dataset, strategy))
+        reports = suite.run(strategy, suite_dataset(dataset, strategy))
         if heatmap is not None:
             heatmap = self._overlay(heatmap, strategy_cls, setup, reports)
         # RS-39: an empty suite tested nothing, so it can't pass
@@ -432,6 +434,15 @@ class LabRunner:
         return plateau_overlay(
             heatmap, report, space, step=float(step) if step is not None else PlateauOptions().step
         )
+
+    def _suite_for(self, strategy: Any) -> SurvivalSuite:
+        """The run's suite, plus ``forecast_skill`` for a strategy that
+        forecasts through the forecaster seam (roadmap 23.11): its model must
+        beat the baselines whatever preset was asked for."""
+        ids = {getattr(t, "id", None) for t in self._suite.tests}
+        if ForecastSkillTest.id in ids or not callable(getattr(strategy, "forecaster", None)):
+            return self._suite
+        return SurvivalSuite([*self._suite.tests, ForecastSkillTest()])
 
     def _run_preflight(
         self,

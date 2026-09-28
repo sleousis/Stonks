@@ -729,6 +729,7 @@ _TEST_NAMES = {
     "signal_ic": "Signal IC",
     "pool_correlation": "Pool correlation",
     "stress": "Stress",
+    "forecast_skill": "Forecast skill",
 }
 
 

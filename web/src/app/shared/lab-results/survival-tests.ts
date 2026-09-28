@@ -38,6 +38,11 @@ export const SURVIVAL_TESTS: readonly SurvivalTestInfo[] = [
     label: 'Walk-forward permutation',
     hint: 'The walk-forward result beats shuffled prices. Slow.',
   },
+  {
+    id: 'forecast_skill',
+    label: 'Forecast skill',
+    hint: 'The forecasting model beats the random walk, ETS and Theta.',
+  },
   // Legacy alias of `mcpt`, still in stored reports.
   { id: 'permutation', label: 'Monte Carlo permutation', hint: 'Beats shuffled prices (MCPT).' },
 ];
