@@ -52,7 +52,9 @@ rollback() {
 		exit 1
 	fi
 	env_set STONKS_IMAGE_TAG "$previous"
-	compose up -d --remove-orphans
+	# set -e is still on: a failing `up` must not end the script before the
+	# health check below reports the outcome.
+	compose up -d --remove-orphans || log "compose up for $previous failed"
 	if wait_healthy 180; then
 		notify warning "rolled back to $previous after failed deploy of $tag"
 	else

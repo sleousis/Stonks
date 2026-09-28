@@ -79,3 +79,66 @@ def test_the_example_env_has_no_working_placeholder_credentials():
     )
     for key in ("STONKS_API_TOKEN", "RESTIC_PASSWORD", "STONKS_SECRET_KEYS"):
         assert values[key] == "", f"{key} must be empty in the example, not a guessable value"
+
+
+FAKE_DOCKER = """#!/usr/bin/env bash
+# Records every call. "compose up" always fails (a broken release and a
+# broken rollback); a snapshot tar leaves an empty file behind.
+printf '%s\n' "$*" >> "$FAKE_LOG"
+case "$*" in
+*" up "*) exit 1 ;;
+*"compose"*" ps "*) exit 0 ;;
+inspect*) exit 1 ;;
+*"tar czf /out/"*)
+	name="${*##*tar czf /out/}"
+	touch "$FAKE_SNAPDIR/${name%% *}"
+	;;
+esac
+exit 0
+"""
+
+
+@needs_bash
+def test_a_failed_rollback_still_reports_its_outcome(tmp_path):
+    """The new tag fails to start and so does the previous one. The rollback
+    must still reach its health check and say the stack is not healthy,
+    instead of dying on the failed ``compose up`` without a word."""
+    deploy_dir = tmp_path / "deploy"
+    shutil.copytree(LIB.parent, deploy_dir / "scripts")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    for name, body in {
+        "docker": FAKE_DOCKER,
+        "curl": "#!/bin/sh\nexit 7\n",
+        "sleep": "#!/bin/sh\nexit 0\n",
+        "crontab": "#!/bin/sh\nexit 0\n",
+    }.items():
+        (fake_bin / name).write_text(body, encoding="utf-8", newline="\n")
+        (fake_bin / name).chmod(0o755)
+    data = tmp_path / "srv" / "data"
+    snapdir = tmp_path / "srv" / "snapshots"
+    snapdir.mkdir(parents=True)
+    (deploy_dir / ".env").write_text(
+        f"STONKS_IMAGE=stonks\nSTONKS_IMAGE_TAG=v1.0.0\nSTONKS_DATA_PATH={data}\n"
+        "COMPOSE_PROFILES=scheduler\nSTONKS_API_TOKEN=x\n",
+        encoding="utf-8",
+    )
+    (deploy_dir / ".deployed-tag").write_text("v1.0.0\n", encoding="utf-8")
+    log = tmp_path / "docker.log"
+    out = subprocess.run(
+        [BASH, str(deploy_dir / "scripts" / "deploy.sh"), "v1.1.0"],
+        env={
+            "PATH": f"{fake_bin}:/usr/bin:/bin",
+            "FAKE_LOG": str(log),
+            "FAKE_SNAPDIR": str(snapdir),
+            "HOME": str(tmp_path),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert out.returncode == 1
+    assert "rollback to v1.0.0 is NOT healthy" in out.stderr
+    assert "STONKS_IMAGE_TAG=v1.0.0" in (deploy_dir / ".env").read_text(encoding="utf-8")
+    calls = log.read_text(encoding="utf-8")
+    assert calls.count(" up -d") == 2  # the new tag, then the rollback
