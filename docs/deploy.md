@@ -45,7 +45,7 @@ flowchart LR
 ```
 
 - **One image** (`Dockerfile`) holds the API, the built console and the scheduler. It runs as a non-root user (uid 10001).
-- **Compose** (`deploy/compose.yaml`) runs three services: `api`, `scheduler` and `caddy`, plus optional services behind profiles (see [Profiles](#profiles)). Everything the app writes lives on one volume, `/data`, which sits on an attached block volume on the host (`/srv/stonks/data`).
+- **Compose** (`deploy/compose.yaml`) runs `api` and `caddy`, plus `scheduler` and the optional services behind profiles (see [Profiles](#profiles)). Everything the app writes lives on one volume, `/data`, which sits on an attached block volume on the host (`/srv/stonks/data`).
 - **Private access** is the default: the server has no public port. Traders join the tailnet. Public HTTPS with Let's Encrypt is one setting away.
 
 | File | Purpose |
@@ -183,17 +183,17 @@ sequenceDiagram
   participant You
   participant GH as GitHub Actions
   participant VM as Server
-  You->>GH: git tag v0.1.0 && git push --tags
+  You->>GH: git tag v1.0.0 && git push --tags
   GH->>GH: Release: build amd64+arm64 image, SBOM, provenance
-  GH->>GH: GitHub release with changelog
+  GH->>GH: GitHub release with the CHANGELOG section
   GH->>VM: Deploy: rsync deploy/, docker login (job token)
-  GH->>VM: deploy.sh v0.1.0
+  GH->>VM: deploy.sh v1.0.0
   VM->>VM: pull, stop, snapshot, backup, db init, start
   VM-->>GH: healthy (or rolled back)
 ```
 
-1. Bump `version` in `pyproject.toml`, refresh the changelog (`git cliff --tag v0.1.0 -o CHANGELOG.md`), commit.
-2. `git tag v0.1.0 && git push origin v0.1.0`.
+1. Bump `version` in `pyproject.toml`, write its section in `CHANGELOG.md` (`git cliff --unreleased` lists the commits), commit.
+2. `git tag v1.0.0 && git push origin v1.0.0`.
 3. Watch **Release**, then **Deploy**, in the Actions tab.
 4. On the server, run `docker compose run --rm api stonks users bootstrap --email you@example.com` once. Then open `https://stonks.<tailnet>.ts.net`, sign in and set up the second factor. Every call needs a sign-in or a token. Behind Caddy the API trusts forwarded client IPs only from the Compose network (`STONKS_DOCKER_SUBNET`).
 

@@ -93,7 +93,25 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Changelog for this tag
+      - name: Changelog section for this version
+        id: notes
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          # The hand-written section "## [<version>]" of CHANGELOG.md, up to
+          # the next "## [" heading. None: fall back to the git-cliff list.
+          awk -v v="## [${VERSION}]" '
+            index($0, v) == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if grep -q '[^[:space:]]' RELEASE_NOTES.md; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Changelog for this tag (git-cliff fallback)
+        if: steps.notes.outputs.found != 'true'
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
