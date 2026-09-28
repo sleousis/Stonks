@@ -208,6 +208,13 @@ def _bag_trade(broker: IbkrBroker, ref: str) -> IbTrade | None:
     return trade
 
 
+def bag_ref(broker: IbkrBroker, client_id: str) -> str | None:
+    """The ``orderRef`` of the ``BAG`` order that holds combo leg
+    ``<combo>:<i>``, or ``None`` for anything that is not a leg id."""
+    m = _LEG_ID.match(client_id)
+    return broker.broker_ref(m.group("combo")) if m is not None else None
+
+
 def leg_state(broker: IbkrBroker, client_id: str) -> BrokerOrderState | None:
     """The state of combo leg ``<combo>:<i>`` from its ``BAG`` order."""
     m = _LEG_ID.match(client_id)

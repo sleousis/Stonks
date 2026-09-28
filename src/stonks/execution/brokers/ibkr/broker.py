@@ -476,7 +476,17 @@ class IbkrBroker:
     def cancel_order(self, client_id: str) -> bool:
         self._ensure_may_trade()
         ref = self.broker_ref(client_id)
-        trade = next((t for t in self._open_trades() if t.order_ref == ref), None)
+        open_trades = self._open_trades()
+        trade = next((t for t in open_trades if t.order_ref == ref), None)
+        if trade is None:
+            # a combo leg lives in its BAG order: cancelling it cancels the combo
+            bag = option_broker.bag_ref(self, client_id)
+            trade = next(
+                (t for t in open_trades if t.order_ref == bag and t.contract.sec_type == "BAG"),
+                None,
+            )
+            if trade is not None:
+                ref = trade.order_ref
         if trade is None:
             return False
         if ibkr_state(trade.status, filled=trade.filled) in TERMINAL:

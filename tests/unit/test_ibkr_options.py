@@ -318,3 +318,17 @@ def test_assignments_become_option_events():
 def test_the_broker_offers_the_option_capability():
     broker, _ = make()
     assert isinstance(broker, OptionBroker)
+
+
+def test_cancelling_a_combo_leg_cancels_its_bag_order():
+    """The ledger holds a combo as leg orders ``<combo>:<i>``, the broker as
+    one BAG order under the combo id. The kill switch cancels ledger rows,
+    so a leg's cancel must reach the BAG."""
+    broker, gw = make()
+    broker.place_combo(spread())
+    assert broker.cancel_order("cmb-sprd:0") is True
+    assert gw.trade("cmb-sprd").status == "Cancelled"
+    state = broker.get_order_state("cmb-sprd:1")
+    assert state is not None and state.state == "cancelled"
+    # nothing left to cancel
+    assert broker.cancel_order("cmb-sprd:1") is False
