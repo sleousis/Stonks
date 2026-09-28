@@ -24,6 +24,9 @@ function run(i: number, over: Partial<LedgerRunView> = {}): LedgerRunView {
     verdict: 'fail',
     n_trials: 20,
     n_failed: 2,
+    robustness: 'did_not_survive',
+    trials_ran: 18,
+    trials_errored: 2,
     best_score: 0.8123,
     universe_id: null,
     tickers: 2,
@@ -110,13 +113,21 @@ describe('LedgerRunPage', () => {
       ...run(1, { universe_id: 'sp500', tickers: 500 }),
       n_trials_class: 140,
       trials: [
-        { trial_index: 0, params: { lookback_days: 20 }, score: 0.5, n_bars: 120, status: 'ok' },
+        {
+          trial_index: 0,
+          params: { lookback_days: 20 },
+          score: 0.5,
+          n_bars: 120,
+          status: 'ok',
+          outcome: 'ran',
+        },
         {
           trial_index: 1,
           params: { lookback_days: 60 },
           score: null,
           n_bars: null,
           status: 'failed',
+          outcome: 'error',
         },
       ],
     };
