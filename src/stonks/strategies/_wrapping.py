@@ -103,6 +103,42 @@ class InnerStrategyWrapper(BaseStrategy):
         """The inner strategy's data tickers (subclasses add their own)."""
         return strategy_data_tickers(self._inner)
 
+    # ---- forecaster hooks (roadmap 23.11): the inner strategy's model runs --------
+
+    @classmethod
+    def forecast_models(cls, params: Mapping[str, Any]) -> tuple[str, ...]:
+        """The forecasters the inner strategy of ``params`` may run, so the
+        pretraining cutoff rule sees a wrapped model too (P12)."""
+        from stonks.features.forecasters.cutoff import strategy_forecast_models
+
+        params = dict(params or {})
+        defaults = {s.name: s.default for s in cls.parameter_spec()}
+        inner_cls = import_strategy_class(
+            params.get("inner_class_path", defaults.get("inner_class_path"))
+        )
+        inner_params = params.get("inner_params", defaults.get("inner_params")) or {}
+        return strategy_forecast_models(inner_cls, dict(inner_params))
+
+    def _inner_hook(self, name: str) -> Any:
+        value = getattr(self._inner, name, None)
+        if value is None:
+            raise AttributeError(name)
+        return value
+
+    @property
+    def forecaster(self) -> Any:
+        """The inner strategy's ``forecaster`` hook (``AttributeError``
+        when it has none, so ``getattr(..., None)`` reads as absent)."""
+        return self._inner_hook("forecaster")
+
+    @property
+    def forecast_horizon(self) -> Any:
+        return self._inner_hook("forecast_horizon")
+
+    @property
+    def forecast_context_bars(self) -> Any:
+        return self._inner_hook("forecast_context_bars")
+
     @property
     def inner(self) -> Strategy:
         return self._inner
