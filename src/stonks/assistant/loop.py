@@ -42,6 +42,11 @@ from typing import Any, Literal
 import anyio
 
 from stonks.assistant import catalog
+from stonks.assistant.grounding import (
+    check_grounding,
+    flag_note,
+    rewrite_request,
+)
 from stonks.assistant.guard import Gate
 from stonks.assistant.model import (
     ChatMessage,
@@ -59,7 +64,9 @@ from stonks.logging import get_logger
 
 _log = get_logger("stonks.assistant.loop")
 
-EventKind = Literal["text", "tool_call", "tool_result", "confirm_required", "done", "error"]
+EventKind = Literal[
+    "text", "tool_call", "tool_result", "confirm_required", "grounding", "done", "error"
+]
 
 DECLINED = "The person declined this action. It was not run."
 MOVED_ON = "The person sent a new message instead of confirming. The action was not run."
@@ -129,6 +136,7 @@ class AgentLoop:
         self._owner_id = owner_id
         self._trace: list[dict[str, Any]] = []
         self._draft_ids: list[str] = []
+        self._final_text = ""
 
     # ---- entry points ------------------------------------------------------
 
@@ -233,13 +241,19 @@ class AgentLoop:
                 yield self._done(conversation_id, step)
                 return
             assert turn is not None
+            if not turn.tool_calls:
+                self._final_text = turn.text
+                async for event in self._grounded(conversation_id, turn.text, step, deadline):
+                    yield event
+                self._store.add_message(
+                    conversation_id, ChatMessage(role="assistant", content=self._final_text)
+                )
+                yield self._done(conversation_id, step)
+                return
             self._store.add_message(
                 conversation_id,
                 ChatMessage(role="assistant", content=turn.text, tool_calls=turn.tool_calls),
             )
-            if not turn.tool_calls:
-                yield self._done(conversation_id, step)
-                return
             paused: str | None = None
             for tool_call in turn.tool_calls:
                 if paused is not None:
@@ -268,11 +282,16 @@ class AgentLoop:
         yield self._done(conversation_id, cfg.max_steps)
 
     async def _model_chunks(
-        self, conversation_id: str, specs: list[Any], deadline: float
+        self,
+        conversation_id: str,
+        specs: list[Any],
+        deadline: float,
+        extra: tuple[ChatMessage, ...] = (),
     ) -> AsyncIterator[str | ModelTurn]:
         messages = [
             ChatMessage(role="system", content=system_prompt()),
             *self._history(conversation_id),
+            *extra,
         ]
         stream = self._model.stream(
             messages,
@@ -381,6 +400,72 @@ class AgentLoop:
         self._answer(conversation_id, tool_call, _payload(outcome))
         self._note(name, arguments, outcome)
         yield self._result_event(tool_call.id, name, outcome)
+
+    # ---- grounding (roadmap 23.8) -------------------------------------------------
+
+    async def _grounded(
+        self, conversation_id: str, text: str, step: int, deadline: float
+    ) -> AsyncIterator[AssistantEvent]:
+        """Check the final reply's numbers against this turn's tool results.
+        Leaves the text to store in ``self._final_text``."""
+        cfg = self._config.grounding
+        if cfg.mode == "off" or not text.strip():
+            return
+        payloads, user_texts = self._turn_evidence(conversation_id)
+        report = check_grounding(text, payloads, user_texts=user_texts, settings=cfg)
+        rewritten = False
+        if not report.ok and cfg.mode == "rewrite" and step < self._config.max_steps:
+            yield AssistantEvent("grounding", {"status": "rewriting", **report.as_dict()})
+            extra = (
+                ChatMessage(role="assistant", content=text),
+                ChatMessage(role="user", content=rewrite_request(report)),
+            )
+            second: ModelTurn | None = None
+            try:
+                async for chunk in self._model_chunks(conversation_id, [], deadline, extra):
+                    if isinstance(chunk, ModelTurn):
+                        second = chunk
+                    else:
+                        yield AssistantEvent("text", {"delta": chunk})
+            except (TimeoutError, ModelError) as exc:
+                _log.warning("assistant.grounding_rewrite_failed", error=type(exc).__name__)
+            if second is not None and second.text.strip() and not second.tool_calls:
+                text, rewritten = second.text, True
+                report = check_grounding(text, payloads, user_texts=user_texts, settings=cfg)
+            else:
+                # the rewrite failed: show the first answer again, flagged below
+                yield AssistantEvent("grounding", {"status": "restored", "answer": text})
+        if not report.ok:
+            note = flag_note(report)
+            yield AssistantEvent("text", {"delta": note})
+            text += note
+        self._final_text = text
+        if rewritten or not report.ok:
+            self._trace.append(
+                {"tool": "grounding_check", **report.as_dict(), "rewritten": rewritten}
+            )
+            status = "ok" if report.ok else "flagged"
+            yield AssistantEvent(
+                "grounding", {"status": status, **report.as_dict(), "rewritten": rewritten}
+            )
+
+    def _turn_evidence(self, conversation_id: str) -> tuple[list[Any], list[str]]:
+        """The ok tool results since the person's last message, and that message."""
+        messages = self._store.messages(conversation_id)
+        start = max((i for i, m in enumerate(messages) if m.role == "user"), default=-1)
+        payloads: list[Any] = []
+        for message in messages[start + 1 :]:
+            if message.role != "tool":
+                continue
+            try:
+                payload = json.loads(message.content)
+            except ValueError:
+                payloads.append(message.content)
+                continue
+            if isinstance(payload, dict) and payload.get("ok"):
+                payloads.append(payload.get("result"))
+        users = [messages[start].content] if start >= 0 else []
+        return payloads, users
 
     # ---- the envelope ------------------------------------------------------------
 

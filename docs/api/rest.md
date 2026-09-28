@@ -29,6 +29,9 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/assistant/briefings/prefs` | Get Briefing Prefs | sign-in |  | [BriefingPrefsView](#briefingprefsview) |
+| PUT | `/api/assistant/briefings/prefs` | Set Briefing Prefs | `notifications.manage` | [BriefingPrefsUpdate](#briefingprefsupdate) | [BriefingPrefsView](#briefingprefsview) |
+| POST | `/api/assistant/briefings/run` | Run Briefings | `operations.run` | [BriefingRunRequest](#briefingrunrequest) | [BriefingRunView](#briefingrunview) |
 | GET | `/api/assistant/conversations` | List Conversations | sign-in |  | [Page_ConversationView_](#page_conversationview_) |
 | POST | `/api/assistant/conversations` | Create Conversation | `data.read` | [ConversationCreate](#conversationcreate) | [ConversationView](#conversationview) |
 | GET | `/api/assistant/conversations/{conversation_id}` | Get Conversation | sign-in |  | [ConversationDetailView](#conversationdetailview) |
@@ -58,6 +61,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/auth/tokens` | List Tokens | sign-in |  | [Page_TokenView_](#page_tokenview_) |
 | POST | `/api/auth/tokens` | Create Token | `tokens.manage` | [TokenCreateRequest](#tokencreaterequest) | [TokenCreatedView](#tokencreatedview) |
 | DELETE | `/api/auth/tokens/{token_id}` | Revoke Token | `tokens.revoke` |  |  |
+| GET | `/api/auth/toolsets` | List Toolsets | sign-in |  | [Page_ToolsetView_](#page_toolsetview_) |
 | GET | `/api/auth/users` | List Users | `users.read` |  | [Page_UserView_](#page_userview_) |
 | POST | `/api/auth/users` | Create User | `users.manage` | [UserCreateRequest](#usercreaterequest) | [UserView](#userview) |
 | PATCH | `/api/auth/users/{user_id}` | Update User | `users.manage` | [UserUpdateRequest](#userupdaterequest) | [UserView](#userview) |
@@ -361,6 +365,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/decisions` | List Trade Decisions | `data.read` |  | [Page_TradeDecisionView_](#page_tradedecisionview_) |
 | GET | `/api/portfolio` | Get Portfolio | sign-in |  | [PortfolioView](#portfolioview) |
 | GET | `/api/portfolio/snapshots` | List Snapshots | sign-in |  | [Page_SnapshotView_](#page_snapshotview_) |
 | GET | `/api/portfolio/totals` | Get Totals | `portfolio.totals` |  | [PortfolioTotalsView](#portfoliototalsview) |
@@ -779,7 +784,7 @@ One server-sent event of a turn. ``kind`` is also the SSE event name.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `data` | object | yes |  |
-| `kind` | "text" \| "tool_call" \| "tool_result" \| "confirm_required" \| "done" \| "error" | yes |  |
+| `kind` | "text" \| "tool_call" \| "tool_result" \| "confirm_required" \| "grounding" \| "done" \| "error" | yes |  |
 
 ### AssistantStatusView
 
@@ -1014,6 +1019,39 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `since` | date \| null | yes |  |
 | `unconverted` | integer | yes |  |
 | `until` | date \| null | yes |  |
+
+### BriefingPrefsUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `post_close` | boolean | yes |  |
+| `pre_open` | boolean | yes |  |
+
+### BriefingPrefsView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `available` | boolean | yes |  |
+| `post_close` | boolean | yes |  |
+| `pre_open` | boolean | yes |  |
+
+### BriefingRunRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+| `kind` | "pre_open" \| "post_close" | yes |  |
+
+### BriefingRunView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `failed` | integer | no |  |
+| `kind` | "pre_open" \| "post_close" | yes |  |
+| `people` | integer | no |  |
+| `sent` | integer | no |  |
+| `skipped` | string \| null | no |  |
 
 ### BrokerInfo
 
@@ -3212,6 +3250,7 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `mfa_fresh` | boolean | yes |  |
 | `role` | [Role](#role) | yes |  |
 | `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+| `toolsets` | list[string] \| null | no |  |
 | `user_id` | string | yes |  |
 | `via` | "session" \| "token" \| "legacy" \| "cli" \| "scheduler" \| "assistant" \| "telegram" | yes |  |
 
@@ -4085,6 +4124,24 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[TokenView](#tokenview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_ToolsetView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[ToolsetView](#toolsetview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_TradeDecisionView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[TradeDecisionView](#tradedecisionview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -6359,6 +6416,7 @@ One order ticket: the order a live book decided, why, and what became of it.
 | `expires_in_days` | integer \| null | no |  |
 | `name` | string | yes |  |
 | `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+| `toolsets` | list[string] \| null | no |  |
 
 ### TokenCreatedView
 
@@ -6378,6 +6436,7 @@ One order ticket: the order a live book decided, why, and what became of it.
 | `name` | string | yes |  |
 | `revoked_at` | string \| null | yes |  |
 | `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+| `toolsets` | list[string] \| null | no |  |
 
 ### ToolCallView
 
@@ -6386,6 +6445,34 @@ One order ticket: the order a live book decided, why, and what became of it.
 | `arguments` | object | yes |  |
 | `id` | string | yes |  |
 | `name` | string | yes |  |
+
+### ToolsetView
+
+One MCP tool group a token can be limited to.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `about` | string | yes |  |
+| `name` | string | yes |  |
+
+### TradeDecisionView
+
+One ticker in one book on one tick: the step that kept it out or trimmed it. ``step`` is one of universe, rank, constructor, buffer, stale_price, risk_rule, lots, scope, external, halt, held or traded.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `detail` | object | yes |  |
+| `outcome` | string | yes |  |
+| `portfolio_id` | string | yes |  |
+| `score` | number \| null | yes |  |
+| `step` | string | yes |  |
+| `step_text` | string | yes |  |
+| `strategies` | list[string] | yes |  |
+| `strategy_id` | string \| null | yes |  |
+| `summary` | string | yes |  |
+| `tick_id` | string | yes |  |
+| `ticker` | string | yes |  |
 
 ### TradePlanRequest
 

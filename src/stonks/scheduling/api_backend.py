@@ -39,6 +39,7 @@ from stonks.scheduling.jobs import (
     MembersResolver,
     RunContext,
     borrow_markets,
+    briefing_outcome,
     closed_day_outcome,
     ensure_window,
     job_is_scoped,
@@ -365,6 +366,17 @@ def api_price_check(ctx: RunContext) -> JobOutcome:
         "/api/health/price-check/run", {"as_of": ctx.fire.as_of.isoformat()}
     )
     return price_check_outcome(ctx, view)
+
+
+@API_ACTIONS.register("briefings")
+def api_briefings(ctx: RunContext) -> JobOutcome:
+    """The server runs the assistant, so it writes the research-only
+    briefings (``POST /api/assistant/briefings/run``, roadmap 23.8)."""
+    view = _executor(ctx).client.post(
+        "/api/assistant/briefings/run",
+        {"kind": str(ctx.params.get("kind", "pre_open")), "as_of": ctx.fire.as_of.isoformat()},
+    )
+    return briefing_outcome(view)
 
 
 @API_ACTIONS.register("model_retrain")

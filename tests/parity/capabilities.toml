@@ -978,6 +978,15 @@ cli = { limited = "trader reads live in the console and MCP" }
 mcp = "list_risk_snapshots"
 
 [[capability]]
+id = "decisions.why_not"
+domain = "risk"
+title = "Why a ticker did or did not trade: the step that kept it out or trimmed it"
+routes = ["GET /api/decisions"]
+console = "listTradeDecisions"
+cli = { limited = "trader reads why-not in the console, MCP and the assistant" }
+mcp = "list_trade_decisions"
+
+[[capability]]
 id = "risk.intraday"
 domain = "risk"
 title = "Intraday P&L and risk snapshots of a portfolio for one day"
@@ -1255,6 +1264,33 @@ routes = ["GET /api/auth/tokens", "POST /api/auth/tokens", "DELETE /api/auth/tok
 console = ["listApiTokens", "createApiToken", "revokeApiToken"]
 cli = { limited = "a token is made in a signed-in session" }
 mcp = { limited = "a token must never mint tokens" }
+
+[[capability]]
+id = "auth.toolsets"
+domain = "accounts"
+title = "The MCP tool groups a token can be limited to"
+routes = ["GET /api/auth/toolsets"]
+console = "listMcpToolsets"
+cli = { limited = "a token is made in a signed-in session" }
+mcp = { limited = "the MCP server reads its own groups from whoami" }
+
+[[capability]]
+id = "assistant.briefings"
+domain = "assistant"
+title = "Research-only briefings before the open and after the close: your switches"
+routes = ["GET /api/assistant/briefings/prefs", "PUT /api/assistant/briefings/prefs"]
+console = ["getBriefingPrefs", "setBriefingPrefs"]
+cli = { limited = "a person's own setting, in the console" }
+mcp = { limited = "a person's own alert setting, in the console" }
+
+[[capability]]
+id = "assistant.briefings.run"
+domain = "assistant"
+title = "Send the research-only briefings now"
+routes = ["POST /api/assistant/briefings/run"]
+console = { limited = "the scheduler's briefing jobs call it" }
+cli = "stonks schedule run-now"
+mcp = { limited = "the scheduler's briefing jobs call it" }
 
 [[capability]]
 id = "users.list"

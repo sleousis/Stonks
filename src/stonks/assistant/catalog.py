@@ -39,6 +39,7 @@ DEFAULT_TOOLS: frozenset[str] = frozenset(
         "get_strategy",
         "list_halts",
         "get_live_risk",
+        "list_trade_decisions",
         "list_notifications",
         "list_price_alerts",
         "list_jobs",

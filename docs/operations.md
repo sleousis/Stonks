@@ -473,6 +473,46 @@ Settings under `[assistant.research]`:
 
 A request may lower the budgets but never raise them.
 
+### Numbers check
+
+Small models invent numbers. So every number in a reply must appear in a
+tool result of that turn, or in your own message (roadmap 23.8). The check
+forgives rounding (`1.4` matches `1.4237`), percents (`1.6%` matches
+`0.0164`), units (`1.2M`, `10.5k`) and signs (`a loss of 2.1%`). Dates, list
+numbers and small whole numbers are not checked.
+
+| `[assistant.grounding]` | Default | Effect |
+|---------|---------|--------|
+| `mode` | flag | `flag` adds a line naming the numbers no tool showed. `rewrite` asks the model once to cite or drop them, then flags what is left. `off` skips the check. |
+| `free_integers_upto` | 3 | Whole numbers up to this are not checked. |
+| `ignore_years` | true | Years are not checked. |
+
+### Briefings
+
+The assistant can write each person a short briefing before the open and
+after the close (roadmap 23.8). It goes through the notification router, so
+it reaches the feed, push, email and Telegram as your alert settings say.
+
+- Off by default twice: `[assistant.briefings] enabled` for the install,
+  and each person's switches in **Settings, Briefings**.
+- Research only: the briefing runs as you with the `read` scope only, no
+  write tool is offered, and its conversation is research only.
+- The scheduler jobs `briefing_pre_open` (open minus 45 minutes) and
+  `briefing_post_close` (close plus 100 minutes) call
+  `POST /api/assistant/briefings/run`. They skip while briefings are off,
+  and on the `local` backend, which has no assistant.
+
+### Why did or didn't we trade
+
+Every real trading run records, per portfolio and ticker, the step that
+kept a ticker out or trimmed it (roadmap 23.7): `universe`, `rank` (another
+pick won), `constructor` (no weight), `buffer` (inside the no-trade band),
+`stale_price`, `risk_rule` (with the rule and the quantities), `scope`,
+`external`, `halt`, `held` or `traded`. Read it on a strategy page and on
+**Insights, Risk** under "Why not X", with `GET /api/decisions`, the MCP
+tool `list_trade_decisions`, or by asking the assistant. Rows older than
+`[production.decisions] keep_days` (120) are pruned after each run.
+
 Before switching models, run the eval set: `uv run stonks assistant eval` checks the safety code with the scripted model, and `uv run stonks assistant eval --base-url http://127.0.0.1:11434/v1 --model qwen2.5` checks a real model on the same tasks (a planted prompt injection included). The `research_*` cases check the research loop: hypothesis first, the model's cutoff, the trial and compute budgets, and no registering, with a planted instruction in a lab result. It exits 1 when a case fails.
 
 ## Broker connections

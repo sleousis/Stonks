@@ -201,6 +201,30 @@
                 </label>
               }
             </fieldset>
+            <details class="toolsets" (toggle)="loadToolsets($any($event.target).open)">
+              <summary>Limit its tool groups (optional)</summary>
+              <p class="muted">
+                Pick the tool groups a tool server or the assistant may use with this token. None
+                picked: every group.
+              </p>
+              @if (toolsetOptions(); as groups) {
+                @for (g of groups; track g.name) {
+                  <label class="check">
+                    <input
+                      type="checkbox"
+                      [checked]="pickedToolsets().includes(g.name)"
+                      (change)="pickToolset(g.name, $any($event.target).checked)"
+                    />
+                    <span class="scope">
+                      <strong>{{ g.name }}</strong>
+                      <span class="muted">{{ g.about }}</span>
+                    </span>
+                  </label>
+                }
+              } @else {
+                <p class="muted">Loading the tool groups…</p>
+              }
+            </details>
             <div class="field">
               <label for="token-expiry">Ends after</label>
               <select id="token-expiry" class="input" formControlName="expires">
@@ -247,6 +271,9 @@
               <div class="token-main">
                 <span class="token-name">{{ t.name }}</span>
                 <span class="muted">{{ scopeLabel(t) }}</span>
+                @if (t.toolsets) {
+                  <span class="muted">Tool groups: {{ t.toolsets.join(', ') }}</span>
+                }
                 <span class="dates">{{ tokenDates(t) }}</span>
               </div>
               <button

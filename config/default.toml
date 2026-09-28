@@ -155,6 +155,12 @@ min_window = 60
 ratio_low = 0.5
 ratio_high = 1.5
 
+[production.decisions]
+# Why did or didn't we trade (roadmap 23.7): per tick, book and ticker, the
+# step that kept a ticker out or trimmed it. Rows older than keep_days go.
+enabled = true
+keep_days = 120
+
 [production.decay]
 # Alpha decay per strategy sleeve: fires when the short-window IR stays
 # negative for negative_days, or the long-window IR falls below
@@ -695,3 +701,17 @@ long_term = 0.26
 [tax.rates.uk]
 short_term = 0.24
 long_term = 0.24
+
+[assistant.grounding]
+# Every number in a reply must appear in a tool result of that turn (roadmap
+# 23.8). flag adds a note naming the numbers no tool showed. rewrite asks the
+# model once to cite or drop them, then flags what is left. off: no check.
+mode = "flag"
+free_integers_upto = 3             # whole numbers up to this are not checked
+ignore_years = true
+
+[assistant.briefings]
+# Research-only briefings before the open and after the close (roadmap
+# 23.8), through the notification router and Telegram. Each person also
+# turns them on. Read tools only, never a write.
+enabled = false

@@ -116,7 +116,9 @@ def default_jobs() -> list[JobConfig]:
     ``engine_stop`` (close plus 10 minutes) run the intraday engine process
     and skip while ``[engine] enabled = false``. ``live_margin`` (every 30
     minutes) reads the margin cushion of each margin account and skips
-    while there is none (the default)."""
+    while there is none (the default). ``briefing_pre_open`` (open minus 45
+    minutes) and ``briefing_post_close`` (close plus 100 minutes) send the
+    research-only briefings and skip while ``[assistant.briefings]`` is off."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -271,6 +273,22 @@ def default_jobs() -> list[JobConfig]:
             action="options_live",
             trigger=SessionTriggerConfig(offset_minutes=-60),
             params={"phase": "watch"},
+            catch_up="none",
+        ),
+        # Research-only briefings (roadmap 23.8), both skip while
+        # [assistant.briefings] enabled = false. Never caught up late.
+        JobConfig(
+            name="briefing_pre_open",
+            action="briefings",
+            trigger=SessionTriggerConfig(anchor="open", offset_minutes=-45),
+            params={"kind": "pre_open"},
+            catch_up="none",
+        ),
+        JobConfig(
+            name="briefing_post_close",
+            action="briefings",
+            trigger=SessionTriggerConfig(offset_minutes=100),
+            params={"kind": "post_close"},
             catch_up="none",
         ),
         # The live stages' gate metrics for the session, after the tick

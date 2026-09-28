@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import re
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
@@ -138,6 +139,8 @@ class ApiTokenInfo:
     last_used_at: str | None
     expires_at: str | None
     revoked_at: str | None
+    #: MCP tool groups the token may use (roadmap 23.8); None means every group.
+    toolsets: tuple[str, ...] | None = None
 
     @classmethod
     def from_row(cls, row: Any) -> ApiTokenInfo:
@@ -150,6 +153,7 @@ class ApiTokenInfo:
             last_used_at=row["last_used_at"],
             expires_at=row["expires_at"],
             revoked_at=row["revoked_at"],
+            toolsets=_toolsets(row["toolsets"]),
         )
 
 
@@ -419,6 +423,7 @@ class AuthService:
             mfa_fresh=False,
             via="token",
             credential_id=token_id,
+            toolsets=_toolsets(row["toolsets"]),
         )
 
     def _principal_for_legacy(self, token: str) -> Principal:
@@ -761,9 +766,12 @@ class AuthService:
         scopes: Iterable[ApiScope | str],
         expires_in_days: int | None = None,
         ip: str | None = None,
+        toolsets: Iterable[str] | None = None,
     ) -> tuple[ApiTokenInfo, str]:
         """``(info, token)``; the token is shown once. Tokens come from a
-        signed-in session only; ``trade`` and ``admin`` need a step-up."""
+        signed-in session only; ``trade`` and ``admin`` need a step-up.
+        ``toolsets`` names the MCP tool groups the token may use (None:
+        every group); the API checks the names against the MCP server's."""
         require(principal, Permission.TOKENS_MANAGE)
         wanted = frozenset(ApiScope(s) for s in scopes)
         if not wanted:
@@ -777,6 +785,9 @@ class AuthService:
             self._require_step_up(principal)
         if not (name or "").strip():
             raise ValidationError("name must not be blank")
+        groups = None if toolsets is None else sorted(set(toolsets))
+        if groups is not None and (not groups or not all(_TOOLSET.match(g) for g in groups)):
+            raise ValidationError("toolsets must name at least one MCP tool group")
         token_id, token = mint_api_token()
         now = self._now()
         expires = now + timedelta(days=expires_in_days) if expires_in_days else None
@@ -784,7 +795,7 @@ class AuthService:
         with self._state() as state, state.transaction():
             state.execute(
                 "INSERT INTO api_tokens (id, user_id, name, token_hash, scopes, created_at,"
-                " expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                " expires_at, toolsets) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     token_id,
                     principal.user_id,
@@ -793,6 +804,7 @@ class AuthService:
                     json.dumps(ordered),
                     _iso(now),
                     _iso(expires) if expires else None,
+                    json.dumps(groups) if groups is not None else None,
                 ],
             )
             AuditLog(state).record(
@@ -800,7 +812,11 @@ class AuthService:
                 "auth.token.create",
                 "api_token",
                 token_id,
-                details={"scopes": ordered, "expires_at": _iso(expires) if expires else None},
+                details={
+                    "scopes": ordered,
+                    "expires_at": _iso(expires) if expires else None,
+                    "toolsets": groups,
+                },
                 ip=ip,
             )
             info = ApiTokenInfo.from_row(
@@ -1100,3 +1116,13 @@ class AuthService:
             self._drop_telegram(state, user.id, actor=actor, reason="password_reset")
             AuditLog(state).record(actor, "auth.password.reset", "user", user.id)
             return user
+
+
+_TOOLSET = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+
+
+def _toolsets(raw: str | None) -> tuple[str, ...] | None:
+    """A token's stored MCP tool groups; NULL means every group."""
+    if raw is None:
+        return None
+    return tuple(str(g) for g in json.loads(raw))

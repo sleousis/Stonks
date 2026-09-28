@@ -100,6 +100,9 @@ from stonks.factors.style import safe_style_exposures, uses_style_model
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
 from stonks.portfolio import returns as portfolio_returns
+from stonks.portfolio.explain import TickerDecision
+from stonks.portfolio.explain import explain as explain_decisions
+from stonks.portfolio.explain import mark as mark_decisions
 from stonks.portfolio.lots import LotRule, LotSettings, broker_lot_profile
 from stonks.portfolio.pipeline import (
     PORTFOLIO_STRATEGY,
@@ -132,6 +135,9 @@ from stonks.production.corporate_actions import (
     working_orders,
 )
 from stonks.production.decay import DecaySettings
+from stonks.production.decisions import prune_decisions
+from stonks.production.decisions import record_decisions as _store_decisions
+from stonks.production.decisions_settings import DecisionSettings
 from stonks.production.feature_drift_settings import FeatureDriftSettings
 from stonks.production.financing import (
     broker_borrow_source,
@@ -300,6 +306,9 @@ class TickSettings:
     decay: DecaySettings = field(default_factory=DecaySettings)
     #: ``[production.feature_drift]``: read by the ``feature_drift`` tick hook.
     feature_drift: FeatureDriftSettings = field(default_factory=FeatureDriftSettings)
+
+    #: ``[production.decisions]``: why a ticker did or did not trade (23.7).
+    decisions: DecisionSettings = field(default_factory=DecisionSettings)
     #: A scoped tick (explicit tickers, e.g. a crypto-only job) trades only
     #: tickers of ``universe``: holdings outside it are marked but never
     #: traded, not even sold (TO-04). The full tick over the configured
@@ -849,6 +858,25 @@ def _run_tick_body(
     )
 
 
+def _record_decisions(run: _TickRun, portfolio_id: str, decisions: list[TickerDecision]) -> None:
+    """Store why each ticker did or did not trade (roadmap 23.7). A real
+    tick only, and a failure here never fails the tick."""
+    cfg = run.settings.decisions
+    if run.dry_run or not cfg.enabled:
+        return
+    try:
+        _store_decisions(
+            run.state,
+            tick_id=run.tick_id,
+            portfolio_id=portfolio_id,
+            as_of=run.as_of,
+            decisions=decisions,
+        )
+        prune_decisions(run.state, before=run.as_of - timedelta(days=cfg.keep_days))
+    except Exception as exc:  # the explanation is a nicety, the trade is not
+        _log.warning("tick.decisions_failed", portfolio_id=portfolio_id, error=repr(exc))
+
+
 def _broker_mode(settings: TickSettings) -> BrokerMode:
     assert settings.broker_mode is not None  # resolved in __post_init__
     return settings.broker_mode
@@ -1388,7 +1416,18 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         ]
         if exits:
             log.info("tick.retired_exits", tickers=sorted(retired_owned))
+    raw_signals = {sid: book_scores[sid] for sid in book_scores if sid in strategy_ids}
+    decisions = explain_decisions(
+        raw_signals,
+        signals,
+        pipeline,
+        portfolio,
+        prices,
+        universe=book.spec.universe,
+        constructor=construction.method,
+    )
     if pipeline.reason is not None and not exits:
+        _record_decisions(run, portfolio_id, decisions)
         return noop(pipeline.reason)
     winner_id = pipeline.decided_by
     if winner_id is not None and not pipeline.exit_only:
@@ -1423,7 +1462,17 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     if halt is not None:
         log.warning("tick.portfolio_halted", halt=halt.halt, gate=halt.gate, reason=halt.reason)
         # A halt keeps only position-reducing orders (sells of longs, covers).
+        before_halt = {o.ticker for o in proposed}
         proposed = [] if halt.halt == "all" else [o for o in proposed if _reduces(o)]
+        decisions = mark_decisions(
+            decisions,
+            before_halt - {o.ticker for o in proposed},
+            "halt",
+            {"halt": halt.halt, "gate": halt.gate},
+        )
+    decisions = mark_decisions(decisions, outside, "scope")
+    decisions = mark_decisions(decisions, external_skipped, "external")
+    _record_decisions(run, portfolio_id, decisions)
 
     if broker is None:
         broker = _build_broker(

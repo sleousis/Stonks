@@ -147,6 +147,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`list_tax_lot_picks`](#list_tax_lot_picks) | read | no |
 | [`list_tickets`](#list_tickets) | read | no |
 | [`list_ticks`](#list_ticks) | read | no |
+| [`list_trade_decisions`](#list_trade_decisions) | read | no |
 | [`list_trade_journal`](#list_trade_journal) | read | no |
 | [`list_trading_modes`](#list_trading_modes) | read | no |
 | [`list_universe_exchanges`](#list_universe_exchanges) | read | no |
@@ -1610,6 +1611,28 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `status` | string \| null | no | `null` |  |
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
+
+### `list_trade_decisions`
+
+Why a ticker did or did not trade in one of your portfolios,
+newest first. Each row names the step that kept it out or trimmed
+it: universe, rank (another pick won), constructor (no weight),
+buffer (inside the no-trade band), stale_price, risk_rule (with the
+rule and the quantities), lots (rounded to tradable lots or
+skipped below one lot), scope, external, halt, held or traded.
+Ask with a ticker to answer "why didn't we buy X".
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `ticker` | string \| null | no | `null` | one ticker, e.g. AAPL.US |
+| `portfolio_id` | string \| null | no | `null` |  |
+| `strategy_id` | string \| null | no | `null` | rows this strategy owned or scored |
+| `tick_id` | string \| null | no | `null` | one tick |
+| `since` | string \| null | no | `null` | YYYY-MM-DD |
+| `limit` | integer | no | `20` |  |
+| `offset` | integer | no | `0` |  |
 
 ### `list_trade_journal`
 

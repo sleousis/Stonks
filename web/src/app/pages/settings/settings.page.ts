@@ -20,6 +20,7 @@ import { formatDateTime, formatMoney, formatNumber, formatPercent } from '../../
 import { ToastService } from '../../core/notify/toast.service';
 import { type ThemeMode, ThemeService } from '../../core/theme/theme.service';
 import { DisplayPrefs } from '../../shared/ui/display-prefs';
+import { BriefingPrefs } from '../../shared/ui/briefing-prefs';
 import { NotificationPrefs } from '../../shared/ui/notification-prefs';
 import { TelegramLink } from './telegram-link';
 import { NotificationSettings } from '../../shared/ui/notification-settings';
@@ -49,6 +50,7 @@ interface CostRow {
     DisplayPrefs,
     RiskLimitsPanel,
     NotificationPrefs,
+    BriefingPrefs,
     TelegramLink,
     NotificationSettings,
     PageHeader,

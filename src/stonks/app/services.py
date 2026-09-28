@@ -13,6 +13,7 @@ from stonks.app.alerts import AlertService
 from stonks.app.assistant import AssistantService
 from stonks.app.assistant_research import ResearchService
 from stonks.app.backups import BackupService
+from stonks.app.briefings import BriefingService
 from stonks.app.brokers import BrokerConnector, BrokerService
 from stonks.app.calendars import CalendarService
 from stonks.app.catalog import CatalogService, LabCatalogSource, StrategySource
@@ -221,7 +222,11 @@ class Services:
     options: OptionsService
     calendars: CalendarService
     screener: ScreenerService
+    briefings: BriefingService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
+    #: The ASGI app serving these services, set by ``create_app``: the
+    #: in-process scheduler runs briefings through its MCP tools (23.8).
+    asgi_app: Any = field(default=None, repr=False)
 
     @classmethod
     def create(
@@ -309,6 +314,7 @@ class Services:
                 model_factory=lambda: assistant.model_factory,
             ),
             telegram=TelegramService(context),
+            briefings=BriefingService(context, assistant),
             factors=FactorService(context, runner),
             options=OptionsService(context, runner),
             calendars=CalendarService(context, runner),

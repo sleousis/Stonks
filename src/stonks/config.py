@@ -36,6 +36,7 @@ from stonks.options.live.settings import OptionsLiveSettings
 from stonks.portfolio.lots import LotSettings
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.decay import DecaySettings
+from stonks.production.decisions_settings import DecisionSettings
 from stonks.production.feature_drift_settings import FeatureDriftSettings
 from stonks.production.intraday_pnl_settings import IntradayPnlSettings
 from stonks.production.live.settings import LiveSettings
@@ -324,6 +325,10 @@ class ProductionConfig(BaseModel):
     # ``[production.feature_drift]`` (roadmap 23.10): PSI of model
     # strategies' live features against their training profile, warn only.
     feature_drift: FeatureDriftSettings = FeatureDriftSettings()
+
+    # ``[production.decisions]``: why a ticker did or did not trade, per
+    # tick and book (roadmap 23.7).
+    decisions: DecisionSettings = DecisionSettings()
     # ``[production.live]``: live trading at a real broker (roadmap 19).
     live: LiveSettings = LiveSettings()
     # ``[production.price_check]``: the second-source price check before

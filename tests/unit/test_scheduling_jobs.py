@@ -66,6 +66,8 @@ def test_default_jobs_build():
         "engine_stop",
         "live_margin",
         "price_check",
+        "briefing_pre_open",
+        "briefing_post_close",
     }
     tick = by_name["tick"]
     # 21.2.5: the engine runs from before the open to after the close

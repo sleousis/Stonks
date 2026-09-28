@@ -171,6 +171,19 @@ export function applyEvent(items: readonly ChatItem[], event: AssistantEvent): C
           message: str(data['message'], 'The assistant stopped.'),
         },
       ];
+    case 'grounding': {
+      // The numbers check: a rewrite replaces the answer so far, and a
+      // failed rewrite shows the first answer again.
+      const status = str(data['status']);
+      const last = items[items.length - 1];
+      const dropLast = last?.type === 'answer' && (status === 'rewriting' || status === 'restored');
+      const next = dropLast ? items.slice(0, -1) : [...items];
+      if (status === 'restored') {
+        const text = str(data['answer']);
+        if (text) next.push({ type: 'answer', key: key('answer'), text, streaming: true });
+      }
+      return next;
+    }
     case 'done':
       return endStreaming([...items]);
     default:

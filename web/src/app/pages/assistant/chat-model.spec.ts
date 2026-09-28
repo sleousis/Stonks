@@ -21,6 +21,30 @@ const ev = (kind: AssistantEvent['kind'], data: Record<string, unknown> = {}): A
 });
 
 describe('chat model', () => {
+  it('drops the answer so far when the numbers check asks for a rewrite', () => {
+    const items = run([
+      ev('text', { delta: 'Sharpe 1.87.' }),
+      ev('grounding', { status: 'rewriting', ungrounded: ['1.87'] }),
+      ev('text', { delta: 'Sharpe 1.4 (get_strategy).' }),
+      ev('grounding', { status: 'ok', rewritten: true }),
+      ev('done', { steps: 2 }),
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ type: 'answer', text: 'Sharpe 1.4 (get_strategy).' });
+  });
+
+  it('shows the first answer again when the rewrite fails', () => {
+    const items = run([
+      ev('text', { delta: 'Sharpe 1.87.' }),
+      ev('grounding', { status: 'rewriting' }),
+      ev('text', { delta: 'partial' }),
+      ev('grounding', { status: 'restored', answer: 'Sharpe 1.87.' }),
+      ev('done', { steps: 2 }),
+    ]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ type: 'answer', text: 'Sharpe 1.87.' });
+  });
+
   it('joins streamed text into one answer and ends it on done', () => {
     const items = run([
       ev('text', { delta: 'Your' }),

@@ -56,6 +56,8 @@ class Principal:
     via: Via
     #: Session hash or token id; lets logout and revocation find the credential.
     credential_id: str | None = None
+    #: MCP tool groups an API token may use (roadmap 23.8). None: every group.
+    toolsets: frozenset[str] | None = None
 
     @classmethod
     def create(
@@ -68,11 +70,21 @@ class Principal:
         mfa_fresh: bool,
         via: Via,
         credential_id: str | None = None,
+        toolsets: Iterable[str] | None = None,
     ) -> Principal:
         """Build a principal whose scopes are clamped to what ``role`` allows."""
         role = Role(role)
         granted = frozenset(ApiScope(s) for s in scopes) & ROLE_SCOPES[role]
-        return cls(user_id, kind, role, granted, mfa_fresh and via == "session", via, credential_id)
+        return cls(
+            user_id,
+            kind,
+            role,
+            granted,
+            mfa_fresh and via == "session",
+            via,
+            credential_id,
+            frozenset(toolsets) if toolsets is not None else None,
+        )
 
     @classmethod
     def service(cls, name: str) -> Principal:

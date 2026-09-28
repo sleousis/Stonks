@@ -10,6 +10,7 @@ import {
   createApiToken,
   getMe,
   listApiTokens,
+  listMcpToolsets,
   login,
   logout,
   regenerateRecoveryCodes,
@@ -77,6 +78,11 @@ export class AuthService {
 
   createToken(body: TokenCreateRequest) {
     return unwrap(createApiToken({ body }));
+  }
+
+  /** The MCP tool groups a token can be limited to. */
+  toolsets() {
+    return allItems((query) => unwrap(listMcpToolsets({ query })));
   }
 
   revokeToken(tokenId: string) {

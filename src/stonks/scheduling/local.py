@@ -400,6 +400,13 @@ def price_check_outcome(ctx: RunContext, view: dict[str, Any]) -> JobOutcome:
     return JobOutcome("succeeded", detail, alerted=True)
 
 
+@register_action("briefings")
+def briefings_action(ctx: RunContext) -> JobOutcome:
+    """Briefings run the assistant over the API's tools, so only the api
+    and in_process backends send them (roadmap 23.8)."""
+    return JobOutcome("skipped", {"reason": "briefings run in the API server"})
+
+
 @register_action("model_retrain")
 def model_retrain_action(ctx: RunContext) -> JobOutcome:
     """Refit in this process, opening the stores like the CLI does."""

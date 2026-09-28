@@ -24,12 +24,14 @@ Safety model
 """
 
 import json
+from collections.abc import Collection
 
 from mcp.server import MCPServer
 
 from stonks.mcp.client import ApiClient
 from stonks.mcp.tools import register_all
 from stonks.mcp.tools.common import ToolContext
+from stonks.mcp.toolsets import allowed
 
 INSTRUCTIONS = """Stonks research + trading system. Tools talk to the local REST API started
 with `stonks serve`. Read tools are safe. Job tools queue backtests, lab runs,
@@ -49,10 +51,21 @@ kill switch, restoring a backup, a manual order on a real-money book) are
 refused here. The user does them in the web app."""
 
 
-def build_server(api: ApiClient, *, max_wait_seconds: float = 600.0) -> MCPServer:
+def build_server(
+    api: ApiClient,
+    *,
+    max_wait_seconds: float = 600.0,
+    toolsets: Collection[str] | None = None,
+) -> MCPServer:
+    """``toolsets``: the tool groups the token may use (roadmap 23.8). The
+    tools of other groups are not registered at all. None keeps every tool."""
     server = MCPServer("stonks", instructions=INSTRUCTIONS)
     t = ToolContext(server, api, max_wait_seconds)
-    register_all(t)
+    groups = register_all(t)
+    if toolsets is not None:
+        for name, group in groups.items():
+            if not allowed(name, group, toolsets):
+                server.remove_tool(name)
     _register_resources(t)
     return server
 
@@ -86,6 +99,11 @@ def _register_resources(t: ToolContext) -> None:
 # --- entrypoint --------------------------------------------------------------------
 
 
-def run_stdio(api: ApiClient, *, max_wait_seconds: float = 600.0) -> None:
+def run_stdio(
+    api: ApiClient,
+    *,
+    max_wait_seconds: float = 600.0,
+    toolsets: Collection[str] | None = None,
+) -> None:
     """Serve over stdio until the client disconnects (blocking)."""
-    build_server(api, max_wait_seconds=max_wait_seconds).run("stdio")
+    build_server(api, max_wait_seconds=max_wait_seconds, toolsets=toolsets).run("stdio")

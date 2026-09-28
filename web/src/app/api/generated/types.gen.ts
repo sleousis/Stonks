@@ -500,6 +500,9 @@ export type AssetClassCosts = {
  * - ``tool_call``: ``{id, name, arguments, needs_confirmation}``
  * - ``tool_result``: ``{id, name, ok, result | error}``
  * - ``confirm_required``: ``{action_id, tool, description, arguments, preview}``
+ * - ``grounding``: ``{status, ok, checked, ungrounded, ...}``: the numeric
+ * grounding check (``rewriting``: the answer so far is replaced by a
+ * rewrite, ``restored``: ``{answer}`` is shown again, ``ok`` or ``flagged``)
  * - ``error``: ``{code, message}`` (``model_error``, ``timeout``, ``max_steps``, ...)
  * - ``done``: ``{conversation_id, steps, pending_action_id}``, always last
  */
@@ -513,7 +516,7 @@ export type AssistantEventView = {
     /**
      * Kind
      */
-    kind: 'text' | 'tool_call' | 'tool_result' | 'confirm_required' | 'done' | 'error';
+    kind: 'text' | 'tool_call' | 'tool_result' | 'confirm_required' | 'grounding' | 'done' | 'error';
 };
 
 /**
@@ -1204,6 +1207,82 @@ export type BreakdownView = {
      * Until
      */
     until: string | null;
+};
+
+/**
+ * BriefingPrefsUpdate
+ */
+export type BriefingPrefsUpdate = {
+    /**
+     * Post Close
+     */
+    post_close: boolean;
+    /**
+     * Pre Open
+     */
+    pre_open: boolean;
+};
+
+/**
+ * BriefingPrefsView
+ */
+export type BriefingPrefsView = {
+    /**
+     * Available
+     */
+    available: boolean;
+    /**
+     * Post Close
+     */
+    post_close: boolean;
+    /**
+     * Pre Open
+     */
+    pre_open: boolean;
+};
+
+/**
+ * BriefingRunRequest
+ */
+export type BriefingRunRequest = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+    /**
+     * Kind
+     */
+    kind: 'pre_open' | 'post_close';
+};
+
+/**
+ * BriefingRunView
+ */
+export type BriefingRunView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Failed
+     */
+    failed?: number;
+    /**
+     * Kind
+     */
+    kind: 'pre_open' | 'post_close';
+    /**
+     * People
+     */
+    people?: number;
+    /**
+     * Sent
+     */
+    sent?: number;
+    /**
+     * Skipped
+     */
+    skipped?: string | null;
 };
 
 /**
@@ -7304,6 +7383,10 @@ export type MeView = {
      */
     scopes: Array<ApiScope>;
     /**
+     * Toolsets
+     */
+    toolsets?: Array<string> | null;
+    /**
      * User Id
      */
     user_id: string;
@@ -9540,6 +9623,50 @@ export type PageTokenView = {
      * Items
      */
     items: Array<TokenView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[ToolsetView]
+ */
+export type PageToolsetView = {
+    /**
+     * Items
+     */
+    items: Array<ToolsetView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[TradeDecisionView]
+ */
+export type PageTradeDecisionView = {
+    /**
+     * Items
+     */
+    items: Array<TradeDecisionView>;
     /**
      * Limit
      */
@@ -15771,6 +15898,10 @@ export type TokenCreateRequest = {
      * Scopes
      */
     scopes: Array<ApiScope>;
+    /**
+     * Toolsets
+     */
+    toolsets?: Array<string> | null;
 };
 
 /**
@@ -15816,6 +15947,10 @@ export type TokenView = {
      * Scopes
      */
     scopes: Array<ApiScope>;
+    /**
+     * Toolsets
+     */
+    toolsets?: Array<string> | null;
 };
 
 /**
@@ -15836,6 +15971,82 @@ export type ToolCallView = {
      * Name
      */
     name: string;
+};
+
+/**
+ * ToolsetView
+ *
+ * One MCP tool group a token can be limited to.
+ */
+export type ToolsetView = {
+    /**
+     * About
+     */
+    about: string;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * TradeDecisionView
+ *
+ * One ticker in one book on one tick: the step that kept it out or
+ * trimmed it. ``step`` is one of universe, rank, constructor, buffer,
+ * stale_price, risk_rule, lots, scope, external, halt, held or traded.
+ */
+export type TradeDecisionView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Detail
+     */
+    detail: {
+        [key: string]: unknown;
+    };
+    /**
+     * Outcome
+     */
+    outcome: string;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Score
+     */
+    score: number | null;
+    /**
+     * Step
+     */
+    step: string;
+    /**
+     * Step Text
+     */
+    step_text: string;
+    /**
+     * Strategies
+     */
+    strategies: Array<string>;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+    /**
+     * Summary
+     */
+    summary: string;
+    /**
+     * Tick Id
+     */
+    tick_id: string;
+    /**
+     * Ticker
+     */
+    ticker: string;
 };
 
 /**
@@ -16995,6 +17206,129 @@ export type ListAlertsResponses = {
 
 export type ListAlertsResponse = ListAlertsResponses[keyof ListAlertsResponses];
 
+export type GetBriefingPrefsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/assistant/briefings/prefs';
+};
+
+export type GetBriefingPrefsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetBriefingPrefsError = GetBriefingPrefsErrors[keyof GetBriefingPrefsErrors];
+
+export type GetBriefingPrefsResponses = {
+    /**
+     * Successful Response
+     */
+    200: BriefingPrefsView;
+};
+
+export type GetBriefingPrefsResponse = GetBriefingPrefsResponses[keyof GetBriefingPrefsResponses];
+
+export type SetBriefingPrefsData = {
+    body: BriefingPrefsUpdate;
+    path?: never;
+    query?: never;
+    url: '/api/assistant/briefings/prefs';
+};
+
+export type SetBriefingPrefsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetBriefingPrefsError = SetBriefingPrefsErrors[keyof SetBriefingPrefsErrors];
+
+export type SetBriefingPrefsResponses = {
+    /**
+     * Successful Response
+     */
+    200: BriefingPrefsView;
+};
+
+export type SetBriefingPrefsResponse = SetBriefingPrefsResponses[keyof SetBriefingPrefsResponses];
+
+export type RunBriefingsData = {
+    body: BriefingRunRequest;
+    path?: never;
+    query?: never;
+    url: '/api/assistant/briefings/run';
+};
+
+export type RunBriefingsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RunBriefingsError = RunBriefingsErrors[keyof RunBriefingsErrors];
+
+export type RunBriefingsResponses = {
+    /**
+     * Successful Response
+     */
+    200: BriefingRunView;
+};
+
+export type RunBriefingsResponse = RunBriefingsResponses[keyof RunBriefingsResponses];
+
 export type ListAssistantConversationsData = {
     body?: never;
     path?: never;
@@ -18153,6 +18487,66 @@ export type RevokeApiTokenResponses = {
 };
 
 export type RevokeApiTokenResponse = RevokeApiTokenResponses[keyof RevokeApiTokenResponses];
+
+export type ListMcpToolsetsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/auth/toolsets';
+};
+
+export type ListMcpToolsetsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListMcpToolsetsError = ListMcpToolsetsErrors[keyof ListMcpToolsetsErrors];
+
+export type ListMcpToolsetsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageToolsetView;
+};
+
+export type ListMcpToolsetsResponse = ListMcpToolsetsResponses[keyof ListMcpToolsetsResponses];
 
 export type ListUsersData = {
     body?: never;
@@ -19898,6 +20292,88 @@ export type SyncConnectionResponses = {
 };
 
 export type SyncConnectionResponse = SyncConnectionResponses[keyof SyncConnectionResponses];
+
+export type ListTradeDecisionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Ticker
+         *
+         * one ticker, e.g. AAPL.US
+         */
+        ticker?: string | null;
+        /**
+         * Strategy Id
+         *
+         * rows this strategy owned or scored
+         */
+        strategy_id?: string | null;
+        /**
+         * Tick Id
+         *
+         * one tick
+         */
+        tick_id?: string | null;
+        /**
+         * Since
+         *
+         * days on or after this one
+         */
+        since?: string | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/decisions';
+};
+
+export type ListTradeDecisionsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListTradeDecisionsError = ListTradeDecisionsErrors[keyof ListTradeDecisionsErrors];
+
+export type ListTradeDecisionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageTradeDecisionView;
+};
+
+export type ListTradeDecisionsResponse = ListTradeDecisionsResponses[keyof ListTradeDecisionsResponses];
 
 export type RemoveDemoPortfolioData = {
     body?: never;

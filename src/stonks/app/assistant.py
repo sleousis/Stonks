@@ -160,6 +160,9 @@ class AssistantEventView(BaseModel):
     - ``tool_call``: ``{id, name, arguments, needs_confirmation}``
     - ``tool_result``: ``{id, name, ok, result | error}``
     - ``confirm_required``: ``{action_id, tool, description, arguments, preview}``
+    - ``grounding``: ``{status, ok, checked, ungrounded, ...}``: the numeric
+      grounding check (``rewriting``: the answer so far is replaced by a
+      rewrite, ``restored``: ``{answer}`` is shown again, ``ok`` or ``flagged``)
     - ``error``: ``{code, message}`` (``model_error``, ``timeout``, ``max_steps``, ...)
     - ``done``: ``{conversation_id, steps, pending_action_id}``, always last
     """

@@ -24,6 +24,7 @@ import {
 } from '../../../testing/status-dialog';
 import { STRATEGY_METADATA } from '../../../testing/strategy-fixtures';
 import { LIFECYCLE } from '../../shared/governance-labels';
+import { WhyNotPanel } from '../../shared/ui/why-not-panel';
 import { FollowPanel } from './follow-panel';
 import { StrategyDetailPage, historyEntries, paperPerformance } from './strategy-detail.page';
 
@@ -31,6 +32,12 @@ import { StrategyDetailPage, historyEntries, paperPerformance } from './strategy
 @Component({ selector: 'app-follow-panel', template: 'Follow panel' })
 class FollowPanelStub {
   readonly strategyId = input.required<string>();
+}
+
+/** The why-not panel has its own spec. */
+@Component({ selector: 'app-why-not-panel', template: 'Why not' })
+class WhyNotPanelStub {
+  readonly strategyId = input<string | null>(null);
 }
 
 const DETAIL: StrategyDetail = {
@@ -158,8 +165,8 @@ describe('StrategyDetailPage', () => {
       ],
     });
     TestBed.overrideComponent(StrategyDetailPage, {
-      remove: { imports: [FollowPanel] },
-      add: { imports: [FollowPanelStub] },
+      remove: { imports: [FollowPanel, WhyNotPanel] },
+      add: { imports: [FollowPanelStub, WhyNotPanelStub] },
     });
     const session = TestBed.inject(SessionService);
     vi.spyOn(session, 'can').mockImplementation(() => allowed());

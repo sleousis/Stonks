@@ -121,6 +121,7 @@ def build_tick_settings(
         risk_monitor=p.risk_monitor,
         decay=p.decay,
         feature_drift=p.feature_drift,
+        decisions=p.decisions,
         scoped=scoped,
         bars_due=dict(bars_due) if bars_due else None,
         scoring_workers=p.scoring_workers or default_max_workers(),
