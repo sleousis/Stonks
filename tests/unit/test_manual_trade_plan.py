@@ -322,3 +322,31 @@ def test_a_partly_sold_entry_gets_a_stop_for_what_is_left(state, lake, tick, por
     assert pending.filled_quantity == pytest.approx(6.0)
     [placed] = sync_manual_stops(state, broker, portfolio_id)
     assert broker.orders[placed].quantity == pytest.approx(6.0)
+
+
+def test_a_working_short_sale_counts_as_an_entry(state, lake, tick, portfolio_id, owner):
+    """A short sale from flat opens a position: while it works at the
+    broker it counts against the daily entry cap like a working buy."""
+    broker = WorkingBroker()
+    book = _book(portfolio_id, owner, broker=broker, allow_short=True)
+    out = place_manual_order(
+        state,
+        lake,
+        _order(
+            portfolio_id,
+            owner,
+            side="sell",
+            order_type="limit",
+            limit_price=101.0,
+            client_key="s1",
+        ),
+        book,
+        tick,
+        now=NOW,
+    )
+    assert out.status == "pending"
+    # the order row is stamped with the wall clock
+    from datetime import UTC, datetime
+
+    ctx = manual_context(state, portfolio_id, datetime.now(UTC), live=False, has_stop=False)
+    assert ctx.entries_today == 1
