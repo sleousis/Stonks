@@ -45,6 +45,8 @@ def test_build_tick_settings_maps_every_production_field():
         scoring_workers=default_max_workers(),  # scoring_workers = 0: every core
         paper_fills="next_open",
         execution=settings.backtest.execution,
+        # production's default keeps a test book for approved strategies (F28)
+        model_books="all",
     )
 
 
@@ -124,7 +126,8 @@ def test_construction_and_model_books_reach_the_tick_settings():
 def test_defaults_build_books_from_subscriptions():
     p = Settings().production
     assert p.construction.method == "single_winner"
-    assert p.model_books == "shadow"
+    # approved strategies keep a test book too (complexity audit F28)
+    assert p.model_books == "all"
     # pf_default is subscribed to each active strategy (accounts.default_book)
     assert p.books_from_subscriptions is True
 
