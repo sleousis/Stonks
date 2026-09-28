@@ -256,6 +256,11 @@ fee_bps = 0.5
 [backtest.costs.asset_classes.equity]
 half_spread_bps = 2.0
 fee_bps = 0.5
+# Broker commission (roadmap 23.2): "none", "ibkr_fixed" or "ibkr_tiered".
+# With an IBKR schedule set fee_bps = 0.0, the commission replaces it.
+# commission = "ibkr_tiered"
+# US regulatory fees: SEC fee and FINRA TAF on sales, CAT fee on both sides.
+# us_sell_fees = true
 
 [backtest.costs.asset_classes.crypto]
 half_spread_bps = 5.0
@@ -268,6 +273,38 @@ fee_flat = 1.0
 [backtest.costs.asset_classes.bond]
 half_spread_bps = 5.0
 fee_bps = 1.0
+
+# Rates of the commission schedules and regulatory fees. The values below are
+# the defaults. Check them against the sources before trusting a figure.
+# [backtest.costs.commissions.ibkr_fixed]
+# per_share = 0.005        # IBKR Pro Fixed, interactivebrokers.com/en/pricing/commissions-stocks.php
+# minimum = 1.00
+# max_fraction = 0.01      # the cap, 1% of the trade value
+# [backtest.costs.commissions.ibkr_tiered]
+# monthly_shares = 0       # picks the volume tier (0.0035 per share up to 300,000)
+# minimum = 0.35
+# max_fraction = 0.01
+# exchange_per_share = 0.003   # taking liquidity, Reg NMS cap
+# clearing_per_share = 0.0002  # NSCC and DTC
+# [backtest.costs.commissions.us_regulatory]
+# sec_rate_per_million = 27.80  # SEC Section 31 fee rate advisory
+# taf_per_share = 0.000166      # FINRA By-Laws Schedule A
+# taf_max = 8.30
+# cat_per_share = 0.000035      # CAT LLC fee schedule
+
+[backtest.lots]
+# Round order sizes to tradable lots in backtests, the lab, paper books and
+# model books, all alike (roadmap 23.1, P21). "fractional" (the default, no
+# rounding), "whole_shares" (whole stocks, bonds and commodities, fractional
+# crypto, as at IBKR) or "whole". Live books always use their broker's rule.
+profile = "fractional"
+# The profile the minimum capital is measured against, and the share of
+# opening orders that must buy at least one lot.
+min_capital_profile = "whole_shares"
+min_capital_quantile = 0.95
+# Lot size per ticker where it is not one unit.
+# [backtest.lots.lot_sizes]
+# "7203.TSE" = 100
 
 [backtest.execution]
 # Cash-account settlement of sale proceeds in lab and API backtests, in
