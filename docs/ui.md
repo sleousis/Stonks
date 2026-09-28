@@ -815,7 +815,7 @@ flowchart LR
   switch and the four follow modes (Alerts only, Paper, Approve each trade,
   Automatic) in one row, with the current mode's line and why the gated
   modes are closed. The strategy page's Follow panel uses it once you
-  follow, and Today can use it for each row. Automatic asks you to type the
+  follow, and Today uses it for each row. Automatic asks you to type the
   strategy's display name, never its id, and the ticket's words and button
   follow the portfolio's PAPER or LIVE stamp.
 - **Header actions.** The header offers one forward step: Put on trial,
