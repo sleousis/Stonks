@@ -292,6 +292,35 @@ def test_behaviour_reads_the_lake_splits(client, people, settings, alice_book):
     assert body["total_pnl"] == pytest.approx(100.0)
 
 
+def test_behaviour_counts_an_option_contract_multiplier(client, people, settings, alice_book):
+    """An option fill's price is per share: one contract bought at 2.00 and
+    sold at 3.00 makes 100, not 1."""
+    contract = "UP.US:2026-06-19:C:100"
+    with SqliteState(settings.state.path) as state:
+        for cid, side, price, at in (
+            ("manual:o:1", "buy", 2.0, "2026-01-05T15:00:00+00:00"),
+            ("manual:o:2", "sell", 3.0, "2026-01-20T15:00:00+00:00"),
+        ):
+            state.execute(
+                "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status,"
+                " created_at, updated_at, portfolio_id, origin) VALUES (?, ?, ?, 1, 'limit',"
+                " 'filled', ?, ?, ?, 'manual')",
+                [cid, contract, side, at, at, alice_book],
+            )
+            state.execute(
+                "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at,"
+                " portfolio_id) VALUES (?, ?, 1, ?, 0, ?, ?)",
+                [cid, contract, price, at, alice_book],
+            )
+    body = client.get(
+        "/api/insights/behaviour",
+        params={"portfolio_id": alice_book},
+        headers=people["alice"]["headers"],
+    ).json()
+    assert body["trades"] == 1
+    assert body["total_pnl"] == pytest.approx(100.0)
+
+
 def test_dashboard_and_insights_share_one_day_change(client, people, alice_book):
     """Visual audit M2: the P&L series (Dashboard, Today) and Insights read
     the headline value and day change from one service, so they agree."""

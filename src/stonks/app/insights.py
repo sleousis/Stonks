@@ -463,13 +463,17 @@ class InsightsService:
                 " AND quantity IS NOT NULL AND price IS NOT NULL",
                 [portfolio_id],
             )
+        from stonks.core.instruments import InstrumentBook
+
+        # an option fill's price is per share: a trip counts it per contract
+        per_unit = InstrumentBook().multiplier
         out = [
             BehaviourFill(
                 id=f"fill:{r['id']}",
                 ticker=r["ticker"],
                 side=r["side"],
                 quantity=float(r["quantity"]),
-                price=float(r["price"]),
+                price=float(r["price"]) * per_unit(r["ticker"]),
                 fee=float(r["fee"] or 0.0),
                 filled_at=_utc_time(r["filled_at"]),
                 source="manual",
@@ -489,7 +493,7 @@ class InsightsService:
                     ticker=r["ticker"],
                     side=side,
                     quantity=abs(qty),
-                    price=float(r["price"]),
+                    price=float(r["price"]) * per_unit(r["ticker"]),
                     fee=abs(float(r["fee"] or 0.0)),
                     filled_at=_utc_time(str(r["trade_date"])),
                     source="broker",
