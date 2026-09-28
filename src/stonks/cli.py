@@ -2495,6 +2495,13 @@ from stonks.cli_tickets import app as tickets_app  # noqa: E402
 
 app.add_typer(tickets_app, name="tickets")
 
+# ---- execution algos and the rebalancing planner (roadmap 23.16) ---------------
+
+from stonks.cli_execution import algos_app, plan_app  # noqa: E402
+
+app.add_typer(algos_app, name="algos")
+app.add_typer(plan_app, name="plan")
+
 # ---- price alerts -------------------------------------------------------------
 
 from stonks.cli_price_alerts import app as price_alerts_app  # noqa: E402

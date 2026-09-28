@@ -36,6 +36,7 @@ from stonks.app.order_drafts import OrderDraftService
 from stonks.app.orders import OrdersService
 from stonks.app.ownership import check_owner, owner_filter, owner_of
 from stonks.app.pagination import Page
+from stonks.app.planner import ExecutionService
 from stonks.app.portfolio import PortfolioService
 from stonks.app.price_alerts import PriceAlertService
 from stonks.app.schedule import ScheduleService
@@ -193,6 +194,7 @@ class Services:
     live: LiveService
     order_drafts: OrderDraftService
     tickets: TicketService
+    execution: ExecutionService
     price_alerts: PriceAlertService
     ingest: IngestService
     ticks: TickService
@@ -270,6 +272,7 @@ class Services:
             live=LiveService(context),
             order_drafts=OrderDraftService(context, manual_orders),
             tickets=TicketService(context),
+            execution=ExecutionService(context),
             price_alerts=PriceAlertService(context),
             ingest=IngestService(context, runner),
             ticks=TickService(context, orders, runner),
