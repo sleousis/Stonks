@@ -224,6 +224,10 @@ def tick_action(ctx: RunContext) -> JobOutcome:
                     universe, lake.get_asset_classes(universe), ctx.fire.scheduled_for
                 ),
             )
+            dry_run = bool(ctx.params.get("dry_run", False))
+            # built before the tick starts: its failure was not alerted yet,
+            # so it propagates and the scheduler alerts
+            plan = runtime.plan_for(state, dry_run=dry_run)
             try:
                 result = run_tick(
                     state=state,
@@ -231,10 +235,10 @@ def tick_action(ctx: RunContext) -> JobOutcome:
                     registry=registry,
                     settings=runtime.settings,
                     as_of=ctx.fire.as_of,
-                    dry_run=bool(ctx.params.get("dry_run", False)),
+                    dry_run=dry_run,
                     notifier=runtime.notifier,
                     broker_factory=runtime.broker_factory,
-                    plan=runtime.plan_for(state, dry_run=bool(ctx.params.get("dry_run", False))),
+                    plan=plan,
                 )
             except BackdatedTickError as exc:
                 return JobOutcome("skipped", {"reason": "backdated", "error": str(exc)})

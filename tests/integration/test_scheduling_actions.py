@@ -128,6 +128,22 @@ def test_a_tick_job_with_its_own_tickers_runs_scoped(settings, monkeypatch, para
     assert seen == [scoped]
 
 
+def test_a_tick_that_fails_before_it_starts_is_not_taken_as_alerted(settings, monkeypatch):
+    """Only a failure inside ``run_tick`` was alerted by the tick. When the
+    book plan cannot even be built, the scheduler must alert, so the
+    action raises instead of returning ``alerted=True``."""
+    from stonks.production import settings_builder
+
+    def broken(self, state, *, dry_run=False):
+        raise RuntimeError("subscriptions unreadable")
+
+    monkeypatch.setattr(settings_builder.TickRuntime, "plan_for", broken)
+    ctx, _ = _ctx(settings, "tick", date(2026, 9, 25))
+    with pytest.raises(RuntimeError, match="subscriptions unreadable"):
+        get_action("tick")(ctx)
+    assert _tick_rows(settings) == []
+
+
 def test_tick_skip_can_be_disabled(settings):
     # Thanksgiving 2025: a closed day in the past (a future tick is refused)
     ctx, _ = _ctx(settings, "tick", date(2025, 11, 27), skip_closed_days=False)
