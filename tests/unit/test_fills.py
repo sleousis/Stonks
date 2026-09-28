@@ -324,5 +324,33 @@ def test_adv_is_split_adjusted_across_a_split():
         }
     )
     stats = lagged_market_stats(bars, MarketStatsSpec(adv_window=5, vol_window=3))
-    assert stats["adv"].iloc[5:].tolist() == pytest.approx([4_000.0] * (n - 5))
+    # bar 5 still trades in pre-split shares (price 400): its ADV is in those
+    # shares, so an order sized there is capped and priced in the same units
+    assert stats["adv"].iloc[5] == pytest.approx(1_000.0)
+    assert stats["adv"].iloc[6:].tolist() == pytest.approx([4_000.0] * (n - 6))
     assert stats["sigma_daily"].iloc[4:].tolist() == pytest.approx([0.0] * (n - 4))
+
+
+def test_adv_ignores_a_split_after_the_fill_bar():
+    """A split later in the data must not change the ADV of an earlier bar:
+    the adjusted series rebases old volume into today's shares, which the
+    order quantity at that bar is not in (and it would be look-ahead)."""
+    n = 12
+    close = [400.0] * n
+    raw = pd.DataFrame(
+        {
+            "ticker": "A.US",
+            "timestamp": pd.date_range("2026-01-01", periods=n, freq="D"),
+            "high": close,
+            "low": close,
+            "close": close,
+            "adj_close": close,
+            "volume": [1_000.0] * n,
+        }
+    )
+    # the same bars, downloaded after a later 4:1 split: adj_close is / 4
+    later = raw.assign(adj_close=[100.0] * n)
+    spec = MarketStatsSpec(adv_window=5, vol_window=3)
+    pd.testing.assert_series_equal(
+        lagged_market_stats(later, spec)["adv"], lagged_market_stats(raw, spec)["adv"]
+    )
