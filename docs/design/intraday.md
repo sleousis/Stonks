@@ -125,7 +125,7 @@ flowchart LR
 | Backtest and replay | A decision on the close of minute t fills at the open of minute t+1 (P21). A fill takes at most the participation cap of that minute's volume (P20). The rest stays working or expires, per order type. Limit and stop orders fill from the bar range, as `backtest/fills.py` does today. Recorded quotes add the half spread. |
 | Paper | The simulated broker with the same rules, fed by the live stream. |
 | Live | Marketable limit day orders at IBKR, collared by the price band (`price_band` rule), `tif = day`, never outside regular hours. Fills come from executions, as in Phase 19. |
-| TCA | Decision price is the bar close, arrival price is the next bar's open or the quote at submit. The gap between backtest and live is recorded per order (P22). |
+| TCA | Decision price is the bar close. Arrival price is the next minute's open (section 10). The gap between backtest and live is recorded per order (P22). |
 
 ## 6. Safety
 
@@ -325,7 +325,7 @@ Shared files (`config.py`, `config/default.toml`, `cli.py`, router mounts, the M
 | 21.3.2 Intraday risk | The per-minute loss limit and `intraday_loss` halt kind, intraday drawdown scaling, orders per minute cap, the stale data gate, the kill switch per event. | `production/rules/intraday_*.py`, `production/intraday_halts.py`, `production/halts.py`, SQLite migration 042 (built) |
 | 21.3.3 Live marks and P&L (built) | Minute marks from the stream, intraday P&L per book and strategy sleeve, intraday risk snapshots. | `production/intraday_pnl.py`, SQLite migration 043 |
 | 21.3.4 Monitoring | Stream and engine metrics on `/metrics`, the engine dead-man, latency from event to order, alerts, a live panel in the console. | `scheduling/metrics.py`, `api/routers/stream.py`, `web/src/app/pages/live/*` |
-| 21.3.5 Intraday TCA | Spread from recorded quotes, arrival at the next minute, cost model calibration for minute trading. | `production/tca.py` (additions), `backtest/costs.py` (additions) |
+| 21.3.5 Intraday TCA (built) | Spread from recorded quotes, arrival at the next minute, cost model calibration for minute trading (section 10). | `production/intraday_tca.py`, `backtest/cost_calibration.py` |
 
 Waves:
 
@@ -430,3 +430,30 @@ flowchart LR
 - **Dead-man** (`engine/deadman.py`): no bar close for `deadman_minutes` while the engine's market is open alerts the operator. It runs inside the scheduler's `DeadlineWatchdog` as an extra check and deduplicates in `scheduler_deadline_alerts`, like a missed deadline.
 - **Status route**: `GET /api/stream/status` (`data.read`) adds live or not, market open, the dead-man state and scrubbed stream errors. Intraday P&L per book comes with 21.3.3. Until then the route carries a note, and the console shows it.
 - **Settings**: `[streaming.monitor]` with `deadman_minutes` (5), `stale_after_seconds` (120) and `publish_seconds` (15).
+
+## 10. Intraday TCA (21.3.5, built)
+
+The daily TCA prices an order against the next session. An intraday order lives for minutes, so `production/intraday_tca.py` prices it against minutes and against the recorded quotes.
+
+```mermaid
+flowchart LR
+  REC[(recorded quotes<br/>Parquet)] --> QB[QuoteBook<br/>last quote at or before]
+  BARS[(1m bars)] --> MB[MinuteBars<br/>next open, volume, last close]
+  LED[(orders, fills)] --> TCA[load_intraday_tca]
+  QB --> TCA
+  MB --> TCA
+  TCA --> SUM[per order, strategy, sleeve]
+  TCA --> EV[calibration evidence]
+  EV --> FIT[fit_minute_costs]
+  FIT --> TOML[proposed backtest.costs block<br/>never applied]
+```
+
+- **Which orders.** An order is intraday when its decision context names an intraday `interval`. Without one, an order placed outside a tick and not by a person counts, which is how the router records them.
+- **Arrival** is the open of the first bar that starts at or after the decision, the price a backtest fills at (P21). Without that bar, the fills' recorded arrival price stands in, then the quote mid at that minute.
+- **Spread** is the last valid quote at or before the decision and at or before each fill. A quote older than 60 seconds, a crossed quote or a quote with one side missing is not used.
+- **Shortfall** uses the daily `compute_shortfall`, so the numbers compare. Impact splits into the quoted half spread paid (`spread`) and the rest (`residual`: slippage and impact beyond the spread). Opportunity cost uses the day's last minute close. The convention gap does not apply.
+- **Groups**: per order, strategy, sleeve (portfolio and strategy), ticker, portfolio or day.
+- **Calibration** fits `cost_bps = half_spread_bps + impact_bps * sqrt(quantity / bar_volume)`. The half spread per asset class is the median quoted half spread. Impact is least squares through the origin on what each fill paid over arrival, less its own quoted half spread, clipped to `[0, max_impact_bps]`. Under 10 quotes or 10 fills keeps the current value and says so.
+- **Point in time.** Quotes, bars, orders and fills after the end date are never read.
+- **Never applied.** The result is a `[backtest.costs]` block for a person to review. With recorded quotes the minute fill model already adds the quoted half spread, so books filled that way set `half_spread_bps` to 0.
+- No migration: it reads `orders`, `fills`, the `bars` store and the recordings.

@@ -826,6 +826,23 @@ The go-live report shows the strategy's live shortfall next to the modelled cost
 
 Backtests use the same math. `Backtester.decision_prices` holds the close each order was decided at, and `production.tca.backtest_shortfalls` prices the simulated fills against it.
 
+### Intraday costs
+
+Intraday orders are priced against minutes and the recorded quotes (`[streaming.record]`), not the next session.
+
+```bash
+uv run stonks tca intraday                        # all intraday orders of the default book
+uv run stonks tca intraday --by sleeve            # or order, strategy, ticker, portfolio, day
+uv run stonks tca intraday --by order --json      # one row per order
+uv run stonks tca calibrate --interval 1m --end 2026-09-25 [--start 2026-09-01] [--out proposed.toml]
+```
+
+- The arrival price is the next minute's open, the price a backtest fills at.
+- `spread` is the quoted half spread paid at the fills and `residual` is the rest of the impact. `quoted` is the spread at the decision.
+- A quote older than 60 seconds is not used.
+
+`stonks tca calibrate` fits the cost model's half spread (per asset class) and square-root impact to the recorded quotes and the intraday fills. It reads nothing after `--end`. It prints a proposed `[backtest.costs]` block, or writes it to `--out`. Stonks never applies it. Read the fit (quotes, fills used, r2, notes), then copy the block into your config by hand. With too little data a value stays as it is and a note says why. Books filled with recorded quotes already pay the quoted half spread, so set `half_spread_bps` to 0 for them.
+
 ## Options research
 
 Options are research only for now: chains in the lake, pricing, backtests and validation. Nothing in the tick trades them.
