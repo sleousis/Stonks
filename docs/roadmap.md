@@ -534,6 +534,30 @@ From the competitor study of 44 open-source projects (Qlib, alphalens, vectorbt,
 | 22.9 AI research loop | The assistant proposes hypotheses and runs lab trials under a budget, each counted in the trial ledger. Done: `assistant/research.py`, `POST /api/assistant/research`, the `start_research` MCP tool, SQLite `030_research_loop`, research cases in `stonks assistant eval`. Only validation windows after the model's training cutoff (`[assistant.research] model_cutoff`) count, budgets are enforced in code, and nothing registers. The console lists sessions, starts one, and shows each proposal with its budget use and lab run (Lab, Research sessions). |
 | 22.10 Research polish | Done. Factor attribution uses the sector known on each day (DuckDB `022_instrument_sector_versions`) and a stored universe's membership, with a look-ahead test. The tick reads style exposures when only a strategy's risk override turns the `style_exposure` rule on. `forecast_blend` takes its cost model through the `CostAware` seam (`strategies/costs.py`), bound by the lab, the backtest and the tick, with realistic defaults. The Approvals nav item shows how many tickets wait. The accessibility audit covers `/calendar`, `/screener`, `/lab/factors` and `/lab/research`. |
 
+## Phase 23: What 102 more projects taught us
+
+From a second study of the top GitHub projects for "stocks", "algotrade", "algotrading", "ML trading" and "trading" (2026-09-28). None of them validates or governs like Stonks. The gaps are practical: whole shares, real IBKR fee shapes, tools for a person trading by hand, and a few statistical and ML checks. Not pursued: reinforcement learning trading stacks, an LLM veto over signals, and model weights with non-commercial licences.
+
+| WP | Scope | Status |
+|----|-------|--------|
+| 23.1 Whole shares | Size orders to lots in the shared order pipeline (backtest, paper and live alike), report skipped orders and rounding drift, and show the minimum capital a strategy needs in lab results and the go-live check. | planned |
+| 23.2 IBKR fee schedules | Per-share tiered and fixed fees with minimum and cap, and the US sell fees (SEC, FINRA TAF, CAT) in the cost model, used by the lab, the paper books and TCA. | planned |
+| 23.3 Round-trip journal | Trades built from fills for paper and live books, with adverse and favourable excursion, R multiples, exit efficiency, a P&L calendar, tags, mistakes and playbooks. | planned |
+| 23.4 Trade plan on the ticket | Entry, stop and target on the manual ticket with a size from a chosen risk, an attached protective stop, and optional discipline rules for manual orders (stop required, cooldown after a loss, daily caps). | planned |
+| 23.5 Tax preview and behaviour | Before a sell, the lots it closes, the gain and the estimated tax. A behaviour report on manual and synced trades: hold times, overtrading, revenge trades, and what overriding strategies cost. | planned |
+| 23.6 Second-source price check | Compare vendor closes and adjustments with a second source for held and signalled tickers before the tick, and hold orders on a large gap. | planned |
+| 23.7 Why did or didn't we trade | Per ticker and run, the step that kept a ticker out or trimmed it (rank, constructor, buffer, stale price, a named risk rule), in the console and as an MCP tool. | planned |
+| 23.8 A more trustworthy assistant | A grounding check that every number in a reply matches a tool result, scheduled research-only briefings, and MCP toolset allowlists per token. | planned |
+| 23.9 Multiple testing and model checks | White's Reality Check, Hansen SPA and Romano-Wolf over each trial family, a statistical swap test and live calibration for model versions, and a weekly re-run that flags restatements. | planned |
+| 23.10 ML toolkit | Calibrated probabilities and abstention before bet sizing, feature importance under purged folds, fractional differencing, CUSUM events, trend-scanning labels, and live feature drift. | planned |
+| 23.11 Forecasting models | Chronos, Kronos and TimesFM behind one forecaster seam with a pretraining cutoff rule, and a forecast skill survival test against simple baselines. | planned |
+| 23.12 Learning ranker | A retrainable gradient-boosting ranker on the factor dataset, governed like every model. | planned |
+| 23.13 New data and factor provenance | SEC EDGAR filings point in time, published anomalies with their source and a before and after publication split, a factor bench with FDR, and named chart setups as factors and screener metrics. | planned |
+| 23.14 Fund look-through and breadth | ETF holdings so insights and the sector cap see concentration inside funds, and a market breadth card on Today. | planned |
+| 23.15 Live safety extras | Checks before resuming after the kill switch, a replay of recent days before a book starts or moves up a stage, a per-ticker loss breaker, and a broker event journal with replay. | planned |
+| 23.16 Execution algorithms and planner | IBKR Adaptive, TWAP and VWAP behind one seam, and a rebalancing planner that shows the trades to reach target weights before sending. | planned |
+| 23.17 Smaller comforts | Privacy mode that hides money, a demo portfolio, scheduled screen alerts, and CSV statement import. | planned |
+
 ## Execution order
 
 1. Wave 1 in parallel: backtest (1.2, 1.3, 3.5), lab (1.4, 1.5, 3.3), production (2.3, 2.4, 2.5), broker (2.1, 2.2), data (3.4), strategies (3.1, 3.2, 4.2), and the service layer plus REST API for existing features (5.1).
