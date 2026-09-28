@@ -102,7 +102,9 @@ def test_sells_pay_sec_taf_and_cat():
 
 
 def test_taf_is_capped_per_trade():
-    fees = UsRegulatoryFees(sec_rate_per_million=0, taf_per_share=0.000166, taf_max=8.30, cat_per_share=0)
+    fees = UsRegulatoryFees(
+        sec_rate_per_million=0, taf_per_share=0.000166, taf_max=8.30, cat_per_share=0
+    )
     assert regulatory_fee(_trade(side="sell", quantity=1_000_000), 1.0, fees) == pytest.approx(8.30)
 
 
@@ -113,7 +115,9 @@ def test_asset_class_commission_is_added_to_the_fee():
     settings = CostModelSettings(
         asset_classes={"equity": AssetClassCosts(commission="ibkr_fixed", us_sell_fees=True)},
         commissions=CommissionSettings(
-            us_regulatory=UsRegulatoryFees(sec_rate_per_million=0, taf_per_share=0.0001, cat_per_share=0)
+            us_regulatory=UsRegulatoryFees(
+                sec_rate_per_million=0, taf_per_share=0.0001, cat_per_share=0
+            )
         ),
     )
     model = settings.build()

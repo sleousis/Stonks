@@ -133,7 +133,7 @@ class LotSettings(BaseModel):
     #: The profile the minimum capital figure is measured against.
     min_capital_profile: str = "whole_shares"
     #: Share of opening orders that must buy at least one lot.
-    min_capital_quantile: float = Field(0.95, gt=0.0, le=1.0)
+    min_capital_quantile: float = Field(default=0.95, gt=0.0, le=1.0)
 
     @field_validator("profile", "min_capital_profile")
     @classmethod

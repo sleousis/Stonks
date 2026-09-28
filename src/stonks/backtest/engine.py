@@ -642,9 +642,7 @@ class Backtester:
             orders = self._decide_per_strategy(as_of, prices, tradable)
             if members is not None:
                 orders = self._enforce_membership(orders, members, as_of)
-            lots = self._lot_rule.size(
-                orders, portfolio.positions, prices, self._asset_classes
-            )
+            lots = self._lot_rule.size(orders, portfolio.positions, prices, self._asset_classes)
             orders = lots.orders
         if lots is not None:
             self._lot_stats.record(

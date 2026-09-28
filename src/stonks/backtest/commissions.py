@@ -54,10 +54,10 @@ class IbkrFixedFees(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    per_share: float = Field(0.005, ge=0.0)
-    minimum: float = Field(1.00, ge=0.0)
+    per_share: float = Field(default=0.005, ge=0.0)
+    minimum: float = Field(default=1.00, ge=0.0)
     #: The cap as a fraction of the trade value (0.01 = 1%).
-    max_fraction: float = Field(0.01, gt=0.0)
+    max_fraction: float = Field(default=0.01, gt=0.0)
 
 
 #: IBKR Pro Tiered, US stocks: (monthly shares up to, USD per share).
@@ -80,15 +80,15 @@ class IbkrTieredFees(BaseModel):
 
     tiers: tuple[tuple[float, float], ...] = IBKR_TIERS
     #: Shares traded this month, which picks the tier (0 = the first tier).
-    monthly_shares: float = Field(0.0, ge=0.0)
-    minimum: float = Field(0.35, ge=0.0)
-    max_fraction: float = Field(0.01, gt=0.0)
+    monthly_shares: float = Field(default=0.0, ge=0.0)
+    minimum: float = Field(default=0.35, ge=0.0)
+    max_fraction: float = Field(default=0.01, gt=0.0)
     #: Exchange fee per share. 0.003 is a typical fee to take liquidity on a
     #: US lit venue (Reg NMS caps it at 0.003). Adding liquidity earns a
     #: rebate instead, so this is a cautious figure.
-    exchange_per_share: float = Field(0.003, ge=0.0)
+    exchange_per_share: float = Field(default=0.003, ge=0.0)
     #: Clearing fee per share (NSCC and DTC, USD 0.00020 on IBKR's page).
-    clearing_per_share: float = Field(0.0002, ge=0.0)
+    clearing_per_share: float = Field(default=0.0002, ge=0.0)
 
     @field_validator("tiers")
     @classmethod
@@ -117,14 +117,14 @@ class UsRegulatoryFees(BaseModel):
     #: SEC Section 31 fee, USD per million of sale value. 27.80 is the fiscal
     #: 2025 rate (SEC Fee Rate Advisory, effective 2024-05-22). Source:
     #: sec.gov/divisions/marketreg/sec-fee-rate-advisories.
-    sec_rate_per_million: float = Field(27.80, ge=0.0)
+    sec_rate_per_million: float = Field(default=27.80, ge=0.0)
     #: FINRA TAF, USD per share sold, and its cap per trade (2024 rates).
     #: Source: FINRA By-Laws, Schedule A, Section 1.
-    taf_per_share: float = Field(0.000166, ge=0.0)
-    taf_max: float = Field(8.30, ge=0.0)
+    taf_per_share: float = Field(default=0.000166, ge=0.0)
+    taf_max: float = Field(default=8.30, ge=0.0)
     #: CAT fee, USD per executed share, on both sides. Source: CAT LLC fee
     #: schedule (catnmsplan.com), as passed through on IBKR's pricing page.
-    cat_per_share: float = Field(0.000035, ge=0.0)
+    cat_per_share: float = Field(default=0.000035, ge=0.0)
 
 
 class CommissionSettings(BaseModel):

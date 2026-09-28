@@ -157,9 +157,7 @@ def test_stats_report_skips_drift_and_minimum_capital():
     assert report.skipped == 1
     assert report.skipped_share == pytest.approx(0.5)
     assert report.max_drift == pytest.approx(0.6)  # the whole skipped order
-    assert report.min_capital == pytest.approx(
-        sorted([400.0, 1_000.0 / 0.001])[-1], rel=0.1
-    )
+    assert report.min_capital == pytest.approx(sorted([400.0, 1_000.0 / 0.001])[-1], rel=0.1)
     metrics = report.metrics()
     assert metrics["lot_skipped_orders"] == 1.0
     assert "min_capital" in metrics
@@ -181,7 +179,13 @@ def test_sells_do_not_set_the_minimum_capital():
     stats = LotStats(settings)
     orders = [_order("AAPL.US", "sell", 0.2)]
     positions = {"AAPL.US": 5.0}
-    stats.record(orders, settings.rule().size(orders, positions, PRICES, CLASSES), positions, CLASSES, 1_000.0)
+    stats.record(
+        orders,
+        settings.rule().size(orders, positions, PRICES, CLASSES),
+        positions,
+        CLASSES,
+        1_000.0,
+    )
     assert stats.report().min_capital is None
 
 
