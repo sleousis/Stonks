@@ -173,8 +173,11 @@ def _predict(
 
 
 def _per_date(dates: Sequence[date], values: np.ndarray) -> np.ndarray:
-    frame = pd.DataFrame({"d": list(dates), "v": values})
-    return frame.groupby("d", sort=True)["v"].mean().to_numpy(dtype=float)
+    days = np.asarray([d.toordinal() for d in dates])
+    order = np.unique(days)
+    sums = np.bincount(np.searchsorted(order, days), weights=np.asarray(values, dtype=float))
+    counts = np.bincount(np.searchsorted(order, days))
+    return sums / counts
 
 
 class ForecastSkillTest:

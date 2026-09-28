@@ -28,6 +28,8 @@ import math
 from collections.abc import Mapping, Sequence
 from typing import Any, ClassVar
 
+import numpy as np
+
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import AssetClass, Features, Order, Portfolio
@@ -158,8 +160,8 @@ class ForecastSignal(BaseStrategy):
         bars = cache.last_n_bars(ticker, Interval.DAY_1, cutoff, n)
         if len(bars) < n:
             return None
-        closes = bars["close"].astype(float)
-        if not closes.notna().all() or (closes <= 0).any():
+        closes = np.asarray(bars["close"], dtype=float)
+        if not np.all(np.isfinite(closes)) or np.any(closes <= 0):
             return None
         try:
             return self.forecaster().predict(bars.reset_index(drop=True), self.forecast_horizon)

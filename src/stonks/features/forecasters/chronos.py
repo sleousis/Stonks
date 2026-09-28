@@ -40,7 +40,7 @@ class _Chronos(PretrainedForecaster):
     extra: ClassVar[str | None] = "chronos"
 
     def _load(self) -> Any:
-        from chronos import BaseChronosPipeline
+        from chronos import BaseChronosPipeline  # pyright: ignore[reportMissingImports]
 
         return BaseChronosPipeline.from_pretrained(
             self.model_id, device_map=self.device, local_files_only=self.local_files_only
@@ -56,7 +56,7 @@ class _Chronos(PretrainedForecaster):
         lv = _check_levels(levels)
         closes = self._closes(contexts)
         pipeline = self.model()  # checks the optional group first
-        import torch
+        import torch  # pyright: ignore[reportMissingImports]
 
         quantiles, _mean = pipeline.predict_quantiles(
             [torch.tensor(c, dtype=torch.float32) for c in closes],

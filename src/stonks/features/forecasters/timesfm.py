@@ -51,7 +51,7 @@ class TimesFm25Forecaster(PretrainedForecaster):
             )
 
     def _load(self) -> Any:
-        import timesfm
+        import timesfm  # pyright: ignore[reportMissingImports]
 
         model = timesfm.TimesFM_2p5_200M_torch.from_pretrained(
             self.model_id, local_files_only=self.local_files_only

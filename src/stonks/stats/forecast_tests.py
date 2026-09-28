@@ -119,7 +119,9 @@ def rank_ic(
     for _, group in frame.groupby("date", sort=True):
         if len(group) < min_names or group["p"].nunique() < 2 or group["r"].nunique() < 2:
             continue
-        ic = group["p"].rank().corr(group["r"].rank())
+        p_rank = np.asarray(group["p"].rank(), dtype=float)
+        r_rank = np.asarray(group["r"].rank(), dtype=float)
+        ic = float(np.corrcoef(p_rank, r_rank)[0, 1])
         if math.isfinite(ic):
-            ics.append(float(ic))
+            ics.append(ic)
     return (float(np.mean(ics)) if ics else math.nan), len(ics)
