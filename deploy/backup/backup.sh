@@ -5,8 +5,8 @@
 #   1. If the image has `python -m stonks.ops backup` (Phase 12.4), it writes a
 #      consistent copy of the lake, Parquet bars, state and artifacts into
 #      /data/backups, and restic uploads that folder. No downtime.
-#   2. Otherwise the api and scheduler are stopped for the upload, restic
-#      copies the whole data volume, and both are started again.
+#   2. Otherwise the writers (api, scheduler, lab-worker) are stopped for the
+#      upload, restic copies the whole data volume, and they start again.
 #
 # Usage: deploy/backup/backup.sh [--services-stopped] [--tag TAG]
 # Needs RESTIC_REPOSITORY, RESTIC_PASSWORD and the S3 keys in deploy/.env.
@@ -47,7 +47,7 @@ restarted=0
 finish() {
 	local rc=$?
 	if [ "$restarted" = 1 ]; then
-		start_writers || notify error "backup could not restart api/scheduler"
+		start_writers || notify error "backup could not restart the api and the other writers"
 	fi
 	if [ "$rc" = 0 ]; then
 		ping_hc "$hc"
