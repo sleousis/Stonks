@@ -260,6 +260,84 @@ def _print_sheet(sheet: Any) -> None:
             )
 
 
+@app.command("bench")
+def bench(
+    factors: str = typer.Argument(
+        "classic,fundamentals,published,setups",
+        help="sets, ids and formulas, or 'all' for the whole library",
+    ),
+    start: str = typer.Option(..., "--start", help="YYYY-MM-DD"),
+    end: str = typer.Option(..., "--end", help="YYYY-MM-DD"),
+    tickers: str | None = _TICKERS,
+    universe_id: str | None = _UNIVERSE,
+    interval: str = typer.Option("1d", "--interval"),
+    horizon: int = typer.Option(21, "--horizon", min=1, help="forward-return horizon in bars"),
+    every_bars: int = typer.Option(5, "--every-bars", min=1, help="sample every N bars"),
+    q: float = typer.Option(0.1, "--q", min=0.001, max=0.5, help="false discovery rate"),
+    no_record: bool = typer.Option(
+        False, "--no-record", help="do not count the factors in the trial ledger"
+    ),
+    json_path: str | None = typer.Option(None, "--json", help="write the result as JSON"),
+) -> None:
+    """Score every factor on a universe, label each alive, reversed or dead
+    with Benjamini-Hochberg, and count each one in the trial ledger."""
+    from stonks.app.factors import FactorBenchRequest
+
+    def run() -> Any:
+        request = FactorBenchRequest(
+            factors=factors,
+            start=_day(start, "--start"),
+            end=_day(end, "--end"),
+            interval=interval,
+            horizon=horizon,
+            every_bars=every_bars,
+            q=q,
+            record=not no_record,
+            **_universe(tickers, universe_id),
+        )
+        return _service().bench(request)
+
+    result = _call(run)
+    if json_path is not None:
+        Path(json_path).write_text(json.dumps(result.to_dict(), indent=2), encoding="utf-8")
+    if result.status != "ok":
+        console.print(f"{result.status}: {result.note}")
+        return
+    table = Table(title=f"{len(result.rows)} factors, h={result.horizon}, FDR q={result.q}")
+    for col in (
+        "factor",
+        "family",
+        "dir",
+        "dates",
+        "mean IC",
+        "t (HAC)",
+        "p",
+        "label",
+        "after pub.",
+    ):
+        table.add_column(col)
+    order = {"alive": 0, "reversed": 1, "dead": 2, "n/a": 3}
+    for r in sorted(result.rows, key=lambda r: (order[r.label], r.p_value)):
+        table.add_row(
+            r.factor_id,
+            r.family,
+            "+1" if r.direction > 0 else "-1",
+            str(r.n_dates),
+            _fmt(r.mean_ic),
+            _fmt(r.t_stat_hac, "{:+.2f}"),
+            _fmt(r.p_value, "{:.3f}"),
+            r.label,
+            _fmt(r.post_publication_ic),
+        )
+    console.print(table)
+    counts = result.counts()
+    console.print(", ".join(f"{k} {v}" for k, v in counts.items()))
+    if result.run_id:
+        console.print(
+            f"trial ledger: run {result.run_id}, {result.n_trials_family} factors benched so far"
+        )
+
+
 @app.command("dataset")
 def dataset(
     factors: str = typer.Argument(..., help="sets, ids and formulas, e.g. 'alpha158,mom_12_1'"),

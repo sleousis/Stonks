@@ -303,6 +303,15 @@ cli = "stonks factors dataset"
 mcp = { limited = "a file export for model training, run from the shell" }
 
 [[capability]]
+id = "factors.bench"
+domain = "lab"
+title = "Factor bench: score every factor on a universe, label it with FDR, count it in the trial ledger"
+routes = []
+console = { limited = "a long research run over the whole library, run from the shell" }
+cli = "stonks factors bench"
+mcp = { limited = "a long research run over the whole library, run from the shell" }
+
+[[capability]]
 id = "lab.survival_tests"
 domain = "lab"
 title = "Survival test catalog"

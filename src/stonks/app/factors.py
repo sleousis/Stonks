@@ -18,6 +18,7 @@ from stonks.app.errors import NotFoundError, ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.core.interval import Interval
 from stonks.factors.base import Factor
+from stonks.factors.bench import BenchResult, factor_bench, record_bench
 from stonks.factors.dataset import factor_dataset
 from stonks.factors.engine import PanelRequest
 from stonks.factors.expression import ExpressionError
@@ -31,6 +32,7 @@ from stonks.factors.registry import (
 )
 from stonks.factors.settings import make_panel_cache
 from stonks.factors.tearsheet import FactorTearSheet, TearSheetOptions, factor_tearsheet
+from stonks.lab.trials import TrialLedger
 
 FACTOR_TEARSHEET_JOB = "factor_tearsheet"
 
@@ -163,6 +165,33 @@ class FactorDatasetRequest(_UniverseMixin):
     interval: str = "1d"
     #: Bars of the next-open label; ``None`` leaves it out.
     label_horizon: int | None = Field(default=1, ge=1, le=MAX_HORIZON_BARS)
+
+    @model_validator(mode="after")
+    def _window(self) -> Self:
+        if self.start >= self.end:
+            raise ValueError("start must be before end")
+        return self
+
+
+#: The sets the factor bench scores when none are named.
+DEFAULT_BENCH_FACTORS = "classic,fundamentals,published,setups"
+
+
+class FactorBenchRequest(_UniverseMixin):
+    """Score many factors at once (roadmap 23.13). ``factors`` takes set
+    names, ids and formulas, or ``all`` for the whole library."""
+
+    factors: str = Field(default=DEFAULT_BENCH_FACTORS, min_length=1, max_length=20_000)
+    start: date
+    end: date
+    interval: str = "1d"
+    horizon: int = Field(default=21, ge=1, le=MAX_HORIZON_BARS)
+    every_bars: int = Field(default=5, ge=1, le=MAX_HORIZON_BARS)
+    #: The false discovery rate for Benjamini-Hochberg.
+    q: float = Field(default=0.1, gt=0.0, lt=1.0)
+    min_names: int = Field(default=5, ge=2, le=1000)
+    #: Count every factor as a trial in the ledger (P2). Off only for a dry look.
+    record: bool = True
 
     @model_validator(mode="after")
     def _window(self) -> Self:
@@ -383,6 +412,38 @@ class FactorService:
     def _handle_tearsheet(self, params: dict[str, Any], ctx: JobContext) -> FactorTearSheetView:
         return self.run_tearsheet(FactorTearSheetRequest.model_validate(params))
 
+    # ---- the factor bench ----------------------------------------------------------
+
+    def bench(self, request: FactorBenchRequest) -> BenchResult:
+        """Score every named factor, label it with FDR and, unless
+        ``record`` is off, count each one in the trial ledger."""
+        spec = request.factors.strip()
+        if spec == "all":
+            spec = ",".join(factor_sets())
+        try:
+            factors = resolve_factors(spec)
+        except (ExpressionError, ValueError) as exc:
+            raise ValidationError(str(exc)) from None
+        interval = _interval(request.interval)
+        with self._ctx.lake() as lake:
+            panel_request = self._panel_request(lake, request, interval)
+            result = factor_bench(
+                factors,
+                lake,
+                panel_request,
+                horizon=request.horizon,
+                every_bars=request.every_bars,
+                q=request.q,
+                min_names=request.min_names,
+                engine=FactorEngine(lake, self.cache),
+            )
+        if not request.record or result.status != "ok":
+            return result
+        with self._ctx.state() as state:
+            state.migrate()  # idempotent: a fresh install may not have the ledger yet
+            ledger = TrialLedger(state, self._ctx.settings.registry.artifacts_dir)
+            return record_bench(ledger, result)
+
     # ---- datasets ------------------------------------------------------------------
 
     def dataset(self, request: FactorDatasetRequest) -> pd.DataFrame:
@@ -417,7 +478,10 @@ class FactorService:
         return lake.members_as_of(request.universe_id, day)
 
     def _panel_request(
-        self, lake: Any, request: FactorTearSheetRequest | FactorDatasetRequest, interval: Interval
+        self,
+        lake: Any,
+        request: FactorTearSheetRequest | FactorDatasetRequest | FactorBenchRequest,
+        interval: Interval,
     ) -> PanelRequest:
         if request.universe is not None:
             return PanelRequest(tuple(request.universe), request.start, request.end, interval)
