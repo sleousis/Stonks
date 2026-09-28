@@ -287,7 +287,12 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
     },
     "stop_cooldown": {"cooldown_days": _max_optional, "count_losses": _more_counting},
     "stop_guard": {"max_stops": _min_optional, "window_days": max, "count_losses": _more_counting},
-    "losing_lock": {"max_consecutive_losses": _min_optional, "lock_days": max},
+    "losing_lock": {
+        "max_consecutive_losses": _min_optional,
+        "lock_days": max,
+        "max_loss_pct": _min_optional,
+        "loss_window_days": max,
+    },
     "style_exposure": {"max_abs_exposure": _min_optional, "styles": union_styles},
     "protective_stops": {
         "enabled": _either,

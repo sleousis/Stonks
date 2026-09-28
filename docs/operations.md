@@ -568,7 +568,7 @@ These risk rules act only on books at a real broker and never drop a closing ord
 | `account_rules` | `enabled`, `settlement_days`, `pdt_*`, `wash_sale_window_days`, `short_disclosure_threshold` | The account rules below. |
 | `stop_cooldown` | `cooldown_days`, `count_losses` | A strategy does not reopen a ticker for some days after a stop-out on it. |
 | `stop_guard` | `max_stops`, `window_days`, `count_losses` | A strategy opens nothing after N stop-outs in the window. |
-| `losing_lock` | `max_consecutive_losses`, `lock_days` | A ticker whose last trades for the strategy all lost is locked. |
+| `losing_lock` | `max_consecutive_losses`, `lock_days`, `max_loss_pct`, `loss_window_days` | A ticker whose last trades for the strategy all lost is locked. With `max_loss_pct` it is also a loss breaker: a ticker is locked once the strategy's realised loss on it over the window reaches that share of the entry notional. |
 
 A stop-out is the fill of a protective stop (below). `count_losses` decides whether any losing exit counts too. Left unset, losses count only while the book has no protective stops. `true` always counts them, `false` never does.
 
