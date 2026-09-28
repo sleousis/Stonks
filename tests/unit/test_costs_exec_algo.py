@@ -47,3 +47,15 @@ def test_unknown_algo_is_refused_in_settings():
         ExecAlgoAssumption(name="iceberg")
     with pytest.raises(ValueError):
         CostModelSettings.model_validate({"exec_algo": {"name": "vwap", "params": {"slices": 0}}})
+
+
+def test_the_calibration_toml_round_trips_the_algo():
+    import tomllib
+
+    from stonks.backtest.cost_calibration import costs_toml
+
+    vwap = ExecAlgoAssumption(name="vwap", params={"end_minutes": 90})
+    for settings in (BASE, BASE.model_copy(update={"exec_algo": vwap})):
+        parsed = tomllib.loads(costs_toml(settings))["backtest"]["costs"]
+        again = CostModelSettings.model_validate(parsed)
+        assert again.exec_algo == settings.exec_algo

@@ -233,11 +233,16 @@ def _table(name: str, values: Mapping[str, Any]) -> list[str]:
 def costs_toml(settings: CostModelSettings, *, header: Sequence[str] = ()) -> str:
     """``settings`` as a ``[backtest.costs]`` TOML block, comments first."""
     dumped = settings.model_dump()
-    scalars = {k: v for k, v in dumped.items() if not isinstance(v, dict)}
+    scalars = {k: v for k, v in dumped.items() if not isinstance(v, dict) and v is not None}
     lines = [f"# {line}" for line in header]
     lines += _table("backtest.costs", scalars)
     lines += ["", *_table("backtest.costs.default", dumped["default"])]
     lines += ["", *_table("backtest.costs.istar", dumped["istar"])]
     for cls in sorted(dumped["asset_classes"]):
         lines += ["", *_table(f"backtest.costs.asset_classes.{cls}", dumped["asset_classes"][cls])]
+    algo = dumped.get("exec_algo")
+    if algo:  # roadmap 23.16: the execution algo the fills assume
+        lines += ["", *_table("backtest.costs.exec_algo", {"name": algo["name"]})]
+        if algo.get("params"):
+            lines += ["", *_table("backtest.costs.exec_algo.params", algo["params"])]
     return "\n".join(lines) + "\n"
