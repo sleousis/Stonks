@@ -232,6 +232,31 @@ describe('HaltsPage', () => {
       await flushAll([BREAKER]);
     });
 
+    it('never shows the checks of an earlier opening of the sheet', async () => {
+      button('Resume trading')!.click();
+      await settle();
+      const cancel = [...el.querySelectorAll<HTMLButtonElement>('app-resume-sheet button')].find(
+        (b) => b.textContent?.trim() === 'Cancel',
+      )!;
+      cancel.click();
+      await settle();
+      button('Resume trading')!.click();
+      await settle();
+      const [first, second] = http.match('/api/halts/1/resume-checks');
+      second.flush({
+        halt_id: 1,
+        passed: false,
+        checks: [{ name: 'gateway_up', passed: false, detail: 'down', portfolio_id: null }],
+      });
+      await settle();
+      // The slow answer from the first opening lands last: it must not win.
+      first.flush({ halt_id: 1, passed: true, checks: [] });
+      await settle();
+      const form = el.querySelector<HTMLFormElement>('app-resume-sheet form')!;
+      expect(form.textContent).toContain('down');
+      expect(form.querySelector('#resume-override')).not.toBeNull();
+    });
+
     it('resumes only with the typed words and after a step-up', async () => {
       button('Resume trading')!.click();
       await settle();
