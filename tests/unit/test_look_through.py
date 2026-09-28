@@ -143,3 +143,24 @@ def test_loader_reads_the_lake_and_prefers_instrument_labels(lake) -> None:
     assert snap.sector_weights() == pytest.approx({"Technology": 0.07, "Financial Services": 0.03})
     assert snap.covered == pytest.approx(0.10)
     assert load_fund_snapshots(lake, [], DAY) == {}
+
+
+def test_a_fund_list_over_one_hundred_percent_never_adds_up_past_the_book() -> None:
+    # Vendor weights are rounded, so a full list can add up to 100.5 %. The
+    # fund still counts once: its parts are scaled to its own value.
+    funds = {
+        "SPY.US": _snap(
+            "SPY.US",
+            ("AAPL.US", 0.605, "Technology", "US"),
+            ("JPM.US", 0.40, "Financial Services", "US"),
+        )
+    }
+    book = Book(
+        cash=0.0,
+        holdings=(Holding("SPY.US", "SPY.US", 10, 1_000.0, 10_000.0, "equity", None, "USD"),),
+    )
+    lt = look_through(book, funds, countries={}, names={})
+    assert sum(s.value for s in lt.sector) == pytest.approx(10_000.0)
+    assert sum(s.value for s in lt.country) == pytest.approx(10_000.0)
+    assert sum(n.value for n in lt.names) == pytest.approx(10_000.0)
+    assert lt.listed_fund_value == pytest.approx(10_000.0)

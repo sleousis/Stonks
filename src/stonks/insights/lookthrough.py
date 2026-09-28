@@ -71,8 +71,12 @@ def look_through(
             acc.name = acc.name or (names.get(h.ticker) if h.ticker else None)
             continue
         fund_value += value
+        # A list whose rounded weights add up past 100 % is scaled back, so
+        # the fund never counts for more than its own value.
+        listed_weight = sum(c.weight for c in snap.constituents)
+        scale = snap.covered / listed_weight if listed_weight > snap.covered else 1.0
         for c in snap.constituents:
-            part = value * c.weight
+            part = value * c.weight * scale
             add(sector, c.sector or UNKNOWN, part, snap.fund)
             add(country, c.country or UNKNOWN, part, snap.fund)
             acc = add(people, c.holding, part, snap.fund)
