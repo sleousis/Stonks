@@ -5338,6 +5338,7 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `applies` | "next_run" \| "restart" | yes | next_run: the next trading run or job uses it. restart: the scheduler picks it up when it restarts. |
+| `choices` | list[string] \| null | no | The allowed values for a choice field (null: free input). For production.universe, the ids of the stored universes; a ticker list is also accepted. |
 | `default` | any | yes | The value from the TOML config and environment. |
 | `group` | "risk" \| "trading" \| "notifications" \| "schedule" | yes |  |
 | `help` | string | yes |  |

@@ -12897,6 +12897,12 @@ export type SystemSettingView = {
      */
     applies: 'next_run' | 'restart';
     /**
+     * Choices
+     *
+     * The allowed values for a choice field (null: free input). For production.universe, the ids of the stored universes; a ticker list is also accepted.
+     */
+    choices?: Array<string> | null;
+    /**
      * Default
      *
      * The value from the TOML config and environment.

@@ -20,6 +20,9 @@ def test_only_admins_read_the_system_settings(client, people):
     assert (cap["group"], cap["applies"], cap["overridden"]) == ("risk", "next_run", False)
     assert cap["value"] == cap["default"]
     assert items["scheduler.jobs.tick.enabled"]["applies"] == "restart"
+    assert items["production.model_books"]["choices"] == ["all", "shadow"]
+    assert isinstance(items["production.universe"]["choices"], list)  # stored universe ids
+    assert cap["choices"] is None
     text = body.text.lower()
     for secret in ("api_key", "webhook.url", "secret", "password", "token", "state.path"):
         assert secret not in text, secret

@@ -23876,6 +23876,21 @@
             "title": "Applies",
             "type": "string"
           },
+          "choices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The allowed values for a choice field (null: free input). For production.universe, the ids of the stored universes; a ticker list is also accepted.",
+            "title": "Choices"
+          },
           "default": {
             "description": "The value from the TOML config and environment.",
             "title": "Default"

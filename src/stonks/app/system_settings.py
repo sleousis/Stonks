@@ -62,6 +62,19 @@ class SystemSettingView(BaseModel):
         default=None,
         description="Set when the stored override no longer validates and is skipped.",
     )
+    choices: list[str] | None = Field(
+        default=None,
+        description="The allowed values for a choice field (null: free input). For "
+        "production.universe, the ids of the stored universes; a ticker list is also accepted.",
+    )
+
+
+#: Closed choices per key (the universe's come from the lake).
+_CHOICES: dict[str, list[str]] = {
+    "production.model_books": ["all", "shadow"],
+    "production.risk.rules.circuit_breaker.cooldown": ["rest_of_month", "none"],
+    "notify.min_level": ["info", "warning", "error"],
+}
 
 
 class SystemSettingsView(BaseModel):
@@ -87,12 +100,25 @@ class SystemSettingsService:
         with self._ctx.state() as state:
             rows = {r.key: r for r in OverrideStore(state).rows()}
         effective, problems = apply_overrides(base, {k: r.value for k, r in rows.items()})
+        choices = {**_CHOICES, "production.universe": self._universe_ids()}
         return SystemSettingsView(
             items=[
-                _view(entry, base, effective, rows.get(entry.key), problems.get(entry.key))
+                _view(
+                    entry, base, effective, rows.get(entry.key), problems.get(entry.key)
+                ).model_copy(update={"choices": choices.get(entry.key)})
                 for entry in editable_settings(base)
             ]
         )
+
+    def _universe_ids(self) -> list[str]:
+        """The stored universes a trading universe can name."""
+        from stonks.universes import UniverseStore
+
+        try:
+            with self._ctx.lake() as lake:
+                return sorted(d.id for d in UniverseStore(lake).list())
+        except Exception:  # a busy or missing lake: free input only
+            return []
 
     def get(self, principal: Who, key: str) -> SystemSettingView:
         found = next((s for s in self.list(principal).items if s.key == key), None)
@@ -166,9 +192,10 @@ def _view(
 
 
 def _first_error(exc: ValueError) -> str:
-    errors = getattr(exc, "errors", None)
-    if callable(errors):
-        found = errors()
+    from pydantic import ValidationError as PydanticError
+
+    if isinstance(exc, PydanticError):
+        found = exc.errors()
         if found:
             return str(found[0].get("msg", exc))
     return str(exc).splitlines()[0]
