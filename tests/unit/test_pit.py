@@ -325,3 +325,28 @@ def test_bar_caches_read_each_series_once_per_run_and_clamp_every_view(lake):
     assert between["timestamp"].max() == D
     assert memo_scope(first) is memo_scope(second) is session
     assert memo_scope(lake) is lake
+
+
+def test_a_filing_date_before_the_period_end_waits_for_the_period_end():
+    """Bad vendor data: a filing date before the period closed. Every
+    statement reader waits for the period end (the history reader's
+    clamp), so the raw table read does not show a quarter still open."""
+    lake = DuckDBLake(Path(":memory:"))
+    lake.migrate()
+    lake.upsert_income_statement(
+        pd.DataFrame(
+            {
+                "ticker": "A.US",
+                "period_end": [date(2024, 3, 31)],
+                "frequency": "Q",
+                "filing_date": [date(2024, 1, 15)],
+                "revenue": [42.0],
+            }
+        )
+    )
+    view = PointInTimeLake(lake, datetime(2024, 2, 1))
+    assert view.get_statement_history("income_statement", "A.US").empty
+    assert view.get_income_statement("A.US").empty
+    later = PointInTimeLake(lake, datetime(2024, 4, 2))
+    assert list(later.get_income_statement("A.US")["revenue"]) == [42.0]
+    lake.close()

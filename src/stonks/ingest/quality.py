@@ -188,8 +188,12 @@ class BarQualityChecker:
         high, low, close = prices["high"], prices["low"], prices["close"]
         high_below_low = ~missing & (high < low)
         tol = cfg.range_tolerance
+        # the slack scales with the magnitude, so it widens the range for
+        # negative values too (yields, futures)
         out_of_range = (
-            ~missing & ~high_below_low & ((close > high * (1 + tol)) | (close < low * (1 - tol)))
+            ~missing
+            & ~high_below_low
+            & ((close > high + tol * np.abs(high)) | (close < low - tol * np.abs(low)))
         )
         for mask, reason in (
             (missing, "missing_price"),

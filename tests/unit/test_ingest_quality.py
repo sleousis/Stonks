@@ -264,6 +264,18 @@ def test_non_positive_values_allowed_where_they_are_real(asset_class):
     assert "non_positive_price" in set(_reasons(equity).values())
 
 
+@pytest.mark.parametrize("asset_class", ["bond", "commodity"])
+def test_a_negative_close_on_its_high_or_low_is_in_range(asset_class):
+    # the rounding slack widens the range away from the bar for negative
+    # values too: a flat negative print (open = high = low = close) is sound
+    frame = _frame([-0.5, -0.4, -0.6])
+    frame["high"] = [-0.5, -0.4, -0.55]
+    frame["low"] = [-0.5, -0.45, -0.6]
+    frame["open"] = frame["close"]
+    result = _checker().check(frame, interval=D1, asset_class=asset_class)
+    assert _reasons(result) == {}
+
+
 def test_spike_rule_is_skipped_for_bonds():
     closes = _walk(60, start=2.0)
     closes[40] = closes[39] * 3

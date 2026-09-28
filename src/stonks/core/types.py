@@ -79,8 +79,8 @@ class Order:
     algo: Mapping[str, Any] | None = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
-        if self.quantity <= 0:
-            raise ValueError(f"Order.quantity must be positive, got {self.quantity}")
+        if not (_finite(self.quantity) and self.quantity > 0):
+            raise ValueError(f"Order.quantity must be positive and finite, got {self.quantity}")
         for name in ("limit_price", "stop_price"):
             value = getattr(self, name)
             if value is not None and not (_finite(value) and value > 0):

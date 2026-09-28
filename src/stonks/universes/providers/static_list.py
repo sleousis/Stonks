@@ -89,8 +89,15 @@ def parse_list_csv(content: str) -> dict[str, Any]:
         ticker = row[t_col]
         start = row[s_col] if s_col is not None and s_col < len(row) else ""
         end = row[e_col] if e_col is not None and e_col < len(row) else ""
-        if start:
-            spans.append({"ticker": ticker, "start_date": start, "end_date": end or None})
+        if start or end:
+            # an exit without a known start still ends the membership
+            spans.append(
+                {
+                    "ticker": ticker,
+                    "start_date": start or EARLIEST.isoformat(),
+                    "end_date": end or None,
+                }
+            )
         else:
             tickers.append(ticker)
     spec = ListSpec.model_validate({"tickers": tickers, "spans": spans})

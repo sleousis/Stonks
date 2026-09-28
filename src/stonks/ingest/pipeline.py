@@ -844,7 +844,11 @@ def _prices_to_df(rows: Iterable[RawPriceBar]) -> pd.DataFrame:
 def _intraday_to_df(rows: Iterable[IntradayBar]) -> pd.DataFrame:
     cols = ("ticker", "timestamp", "open", "high", "low", "close", "adj_close", "volume")
     data = [tuple(getattr(r, c) for c in cols) for r in rows]
-    return pd.DataFrame(data, columns=list(cols))
+    frame = pd.DataFrame(data, columns=list(cols))
+    # naive UTC, like the stored bars the quality checks compare against
+    # (a vendor's aware stamps would not compare with them)
+    frame["timestamp"] = pd.to_datetime(frame["timestamp"], utc=True).dt.tz_localize(None)
+    return frame
 
 
 def _macro_to_df(rows: Iterable[MacroIndicatorRow]) -> pd.DataFrame:
