@@ -369,6 +369,14 @@ def api_broker_health(ctx: RunContext) -> JobOutcome:
     return broker_health_action(ctx)
 
 
+@API_ACTIONS.register("live_margin")
+def api_live_margin(ctx: RunContext) -> JobOutcome:
+    """State DB and the gateway only: runs in this process."""
+    from stonks.scheduling.local import live_margin_action
+
+    return live_margin_action(ctx)
+
+
 @API_ACTIONS.register("live_reconcile")
 def api_live_reconcile(ctx: RunContext) -> JobOutcome:
     """State DB and the gateway only: runs in this process."""

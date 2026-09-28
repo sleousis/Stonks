@@ -250,3 +250,60 @@ def margin_portfolios(state: SqliteState, portfolio_ids: Sequence[str]) -> list[
         if profile is not None and profile.account_type == "margin":
             out.append(pid)
     return out
+
+
+# ---- the live_margin job ------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class MonitorResult:
+    portfolio_id: str
+    #: ``None`` when the account could not be read (``error`` says why).
+    check: MarginCheck | None
+    error: str | None = None
+
+
+def run_margin_monitor(
+    state: SqliteState,
+    config: Any,
+    settings: MarginCallSettings,
+    *,
+    clock: Clock = SYSTEM_CLOCK,
+    client_factory: Any = None,
+    publish: Publish | None = None,
+) -> list[MonitorResult]:
+    """Read every margin account listed on a gateway in
+    ``[brokers.ibkr.gateways]`` (the ``reconcile`` client id), record its
+    level and alert its owner when it is thin. An account that cannot be
+    read is reported, never raised: the ``broker_health`` job alerts on a
+    gateway that is down."""
+    from stonks.execution.brokers.ibkr import factory as ibkr_factory
+
+    results: list[MonitorResult] = []
+    for name, gateway in sorted(config.gateways.items()):
+        wanted = margin_portfolios(state, gateway.portfolios)
+        if not wanted:
+            continue
+        broker = ibkr_factory.connect_ibkr(
+            config,
+            gateway=name,
+            role="reconcile",
+            state=state,
+            clock=clock,
+            client_factory=client_factory or ibkr_factory.default_client_factory,
+        )
+        try:
+            try:
+                account = broker.fetch_account()
+            except Exception as exc:
+                _log.warning("live.margin_unreadable", gateway=name, error=str(exc))
+                results += [MonitorResult(pid, None, str(exc)) for pid in wanted]
+                continue
+            for pid in wanted:
+                check = check_margin(
+                    state, pid, account, settings, source="monitor", publish=publish, clock=clock
+                )
+                results.append(MonitorResult(pid, check, None if check else "no margin cushion"))
+        finally:
+            broker.close()
+    return results
