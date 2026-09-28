@@ -55,9 +55,11 @@ export function compareToReal(
   const lastDay = shadow.at(-1)?.time ?? null;
   const real = firstDay ? normalizeTo100(realRows, firstDay) : [];
   const shadowReturn = returnOf(shadow);
-  // Real rows on or before the shadow's last day; none means no overlap.
+  // The same days only: your portfolio must have started by the strategy's
+  // first day. One that started later covers fewer days, so no comparison.
+  const startedBy = !!firstDay && realRows.some((r) => r.day <= firstDay);
   const realReturn =
-    real.length && lastDay && real[0].time <= lastDay ? returnOf(real, lastDay) : null;
+    startedBy && real.length && lastDay && real[0].time <= lastDay ? returnOf(real, lastDay) : null;
   const sortedRows = [...shadowRows].sort((a, b) => a.day.localeCompare(b.day));
   const last = sortedRows.at(-1);
   return {
