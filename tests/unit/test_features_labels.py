@@ -152,3 +152,16 @@ def test_sequential_bootstrap_is_seeded_and_prefers_unique_events():
     # a uniform bootstrap would draw the unique event a quarter of the time
     assert counts[3] / len(a) > 0.3
     assert len(sequential_bootstrap(t0, t1, seed=0)) == 4
+
+
+def test_a_passed_vol_is_aligned_by_date_not_position():
+    """A vol series on a shorter index (``ewma_vol(...).dropna()``) must give
+    each event its own day's width, never a later bar's (look-ahead)."""
+    rng = np.random.default_rng(3)
+    idx = pd.bdate_range("2025-01-01", periods=40)
+    close = pd.Series(100 * np.exp(np.cumsum(rng.normal(0, 0.01, 40))), index=idx)
+    vol = pd.Series(np.linspace(0.01, 0.05, 40), index=idx)
+    full = triple_barrier(close, [idx[20]], vol=vol, max_hold=5)
+    trimmed = triple_barrier(close, [idx[20]], vol=vol.iloc[2:], max_hold=5)
+    assert trimmed["vol"].iloc[0] == pytest.approx(vol.iloc[20])
+    pd.testing.assert_frame_equal(trimmed, full)
