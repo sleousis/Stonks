@@ -52,23 +52,22 @@ describe('todaysSignals', () => {
 
 describe('trading runs on the blotter', () => {
   it("counts only the reader's own portfolios, never another book's orders (M15)", () => {
-    // Someone else's one-book run: the API keeps only the global totals.
-    expect(runDetail(run({ summary: { orders_placed: 1, fills: 0 } }))).toBe(
-      'None of your portfolios traded in this run.',
-    );
-    // A many-book run: only the reader's books are under `portfolios`.
+    // Someone else's run: the API sends no counts, so the line says only
+    // "Trading run finished".
+    const other = run({ summary: { orders_placed: null, fills: null } });
+    expect(ownRunCounts(other)).toBeNull();
+    expect(runDetail(other)).toBe('');
+    // A many-book run: the API sums the reader's books only.
     const many = run({
       summary: {
-        orders_placed: 9,
-        fills: 9,
+        orders_placed: 3,
+        fills: 2,
         portfolios: { pf_a: { orders_placed: 2, fills: 1 }, pf_b: { orders_placed: 1, fills: 1 } },
       } as TickRun['summary'],
     });
     expect(ownRunCounts(many)).toEqual({ orders: 3, fills: 2 });
     expect(runDetail(many)).toBe('3 orders, 2 fills in your portfolios.');
-    const none = run({
-      summary: { orders_placed: 4, fills: 4, portfolios: {} } as TickRun['summary'],
-    });
+    const none = run({ summary: { portfolios: {} } as TickRun['summary'] });
     expect(ownRunCounts(none)).toBeNull();
   });
 

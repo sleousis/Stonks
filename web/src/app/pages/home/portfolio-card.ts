@@ -3,7 +3,12 @@ import { RouterLink } from '@angular/router';
 
 import { PortfolioService } from '../../api/portfolio.service';
 import { formatMoney, formatNumber, formatPercent, toneClass } from '../../core/format/format';
-import { dayChangeMoney, dayChangePercent, sessionLabel } from '../../core/format/day-change';
+import {
+  dayChangeFrom,
+  dayChangeMoney,
+  dayChangePercent,
+  sessionLabel,
+} from '../../core/format/day-change';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { baseCurrencyLine } from '../../shared/base-currency';
 import { StatTile } from '../../shared/ui/stat-tile';
@@ -249,16 +254,20 @@ export class PortfolioCard {
   /** Paper or live, when the portfolio list is known. Brass means live. */
   protected readonly mode = computed(() => this.portfolioCtx.current()?.trading ?? null);
   protected readonly live = computed(() => this.mode() === 'live');
+  /** The API's one headline change (`day_change`), the same as Dashboard and Insights (M2). */
+  private readonly day = computed(() =>
+    dayChangeFrom(this.pnl.hasValue() ? this.pnl.value()?.day_change : null, this.latest()),
+  );
   protected readonly dayChange = computed(() => {
-    const row = this.latest();
-    return row?.daily_change == null ? null : dayChangeMoney(row.daily_change, this.currency());
+    const d = this.day();
+    return d?.change == null ? null : dayChangeMoney(d.change, this.currency());
   });
   protected readonly dayReturn = computed(() => {
-    const row = this.latest();
-    return row?.daily_return == null ? null : dayChangePercent(row.daily_return);
+    const d = this.day();
+    return d?.pct == null ? null : dayChangePercent(d.pct);
   });
-  protected readonly dayTone = computed(() => toneClass(this.latest()?.daily_change));
-  protected readonly dayLabel = computed(() => sessionLabel(this.latest()?.day));
+  protected readonly dayTone = computed(() => toneClass(this.day()?.change));
+  protected readonly dayLabel = computed(() => sessionLabel(this.day()?.day));
 
   private readonly sorted = computed(() =>
     this.portfolio.hasValue() && this.portfolio.value()

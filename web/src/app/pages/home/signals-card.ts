@@ -47,31 +47,27 @@ export function todaysRuns(runs: readonly TickRun[], now = new Date()): TickRun[
 
 /**
  * The orders and fills a trading run made in the reader's own portfolios
- * (M15), or null when none of them took part. The API keeps a run's global
- * totals for everyone, and only the reader's books under `portfolio_id`
- * (a one-book run the reader owns) or `portfolios` (their books of a
- * many-book run), so the totals are never shown as the reader's.
+ * (M15), or null when none of them took part. The API scopes the counts to
+ * the reader's books: `orders_placed` and `fills` are null (absent) when
+ * none of them traded, so another book's totals never show as the reader's.
  */
 export function ownRunCounts(run: TickRun): { orders: number; fills: number } | null {
-  const s = run.summary as (TickRun['summary'] & { portfolios?: unknown }) | null;
-  if (!s) return null;
-  if (s.portfolio_id) return { orders: s.orders_placed ?? 0, fills: s.fills ?? 0 };
-  const books = s.portfolios;
-  if (!books || typeof books !== 'object') return null;
-  const mine = Object.values(books as Record<string, Record<string, unknown>>);
-  if (!mine.length) return null;
-  const sum = (key: string) =>
-    mine.reduce((n, b) => n + (typeof b?.[key] === 'number' ? (b[key] as number) : 0), 0);
-  return { orders: sum('orders_placed'), fills: sum('fills') };
+  const s = run.summary;
+  if (!s || (s.orders_placed == null && s.fills == null)) return null;
+  return { orders: s.orders_placed ?? 0, fills: s.fills ?? 0 };
 }
 
-/** One line of a trading run: "3 orders, 3 fills" in your portfolios, or its error. */
+/**
+ * One line under a trading run: "3 orders, 3 fills" in your portfolios, or
+ * its error. Nothing when none of your portfolios traded: the title
+ * ("Trading run finished") says it all.
+ */
 export function runDetail(run: TickRun): string {
   const s = run.summary;
   if (run.status === 'running') return 'Deciding and placing orders now.';
   if (s?.error) return s.error;
   const own = ownRunCounts(run);
-  if (!own) return 'None of your portfolios traded in this run.';
+  if (!own) return '';
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
   return `${plural(own.orders, 'order')}, ${plural(own.fills, 'fill')} in your portfolios.`;
 }
@@ -158,7 +154,9 @@ interface BlotterRow {
                 } @else {
                   <span class="title">{{ r.title }}</span>
                 }
-                <p class="message">{{ r.message }}</p>
+                @if (r.message) {
+                  <p class="message">{{ r.message }}</p>
+                }
               </div>
               @if (r.status; as st) {
                 <app-status-pill class="status" [status]="st.status" [label]="st.label" />

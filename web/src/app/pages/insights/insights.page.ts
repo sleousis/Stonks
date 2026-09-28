@@ -26,7 +26,7 @@ import {
   formatNumber,
   formatPercent,
 } from '../../core/format/format';
-import { dayChangeLine } from '../../core/format/day-change';
+import { dayChangeFrom, dayChangeLine } from '../../core/format/day-change';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
 import { baseCurrencyLine } from '../../shared/base-currency';
@@ -202,10 +202,14 @@ export class InsightsPage {
 
   protected readonly dayChange = computed(() => {
     if (!this.insights.hasValue()) return null;
-    const day = this.insights.value().pnl.find((p) => p.period === '1d');
+    const view = this.insights.value();
+    const period = view.pnl.find((p) => p.period === '1d');
+    // The API's one headline change (`day_change`), the same as Today and Dashboard (M2).
+    const day =
+      dayChangeFrom(view.day_change) ??
+      (period ? { change: period.change, pct: period.change_pct, day: period.end_day } : null);
     if (!day || day.change == null) return null;
-    // One format for the day's change on Today, Dashboard and Insights (M2).
-    return dayChangeLine(day.change, day.change_pct, day.end_day, this.currency());
+    return dayChangeLine(day.change, day.pct, day.day, this.currency());
   });
 
   protected readonly betaDetail = computed(() => {

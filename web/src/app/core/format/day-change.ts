@@ -54,3 +54,28 @@ export function dayChangeLine(
   const pct = ret == null ? '' : ` (${dayChangePercent(ret)})`;
   return `${dayChangeMoney(change, currency)}${pct} ${sessionPhrase(day, now)}`;
 }
+
+/** The day's change figures a page shows: the change, its percent and the session. */
+export interface DayChangeFigures {
+  change: number | null;
+  pct: number | null;
+  day: string | null;
+}
+
+/**
+ * The headline day change from the API's one `day_change` (`/api/pnl` and
+ * `/api/insights` both serve it), so Today, Dashboard and Insights show the
+ * same number. A server without it falls back to the latest P&L row.
+ */
+export function dayChangeFrom(
+  view: { change: number | null; change_pct: number | null; day: string } | null | undefined,
+  row?: {
+    daily_change?: number | null;
+    daily_return?: number | null;
+    day?: string | null;
+  } | null,
+): DayChangeFigures | null {
+  if (view) return { change: view.change, pct: view.change_pct, day: view.day };
+  if (!row) return null;
+  return { change: row.daily_change ?? null, pct: row.daily_return ?? null, day: row.day ?? null };
+}

@@ -13,7 +13,7 @@ import {
   formatPercent,
   toneClass,
 } from '../../core/format/format';
-import { dayChangeLine } from '../../core/format/day-change';
+import { dayChangeFrom, dayChangeLine } from '../../core/format/day-change';
 import type { ChartSeries } from '../../shared/chart/chart-engine';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
@@ -110,12 +110,16 @@ export class DashboardPage {
   protected readonly rows = computed(() => (this.pnl.hasValue() ? this.pnl.value().rows : []));
   private readonly latest = computed(() => this.rows().at(-1) ?? null);
 
+  /** The API's one headline change (`day_change`), the same as Today and Insights. */
+  private readonly day = computed(() =>
+    dayChangeFrom(this.pnl.hasValue() ? this.pnl.value().day_change : null, this.latest()),
+  );
   protected readonly dayChange = computed(() => {
-    const row = this.latest();
-    if (!row || row.daily_change == null) return null;
-    return dayChangeLine(row.daily_change, row.daily_return, row.day, this.currency());
+    const d = this.day();
+    if (!d || d.change == null) return null;
+    return dayChangeLine(d.change, d.pct, d.day, this.currency());
   });
-  protected readonly dayTone = computed(() => toneClass(this.latest()?.daily_change));
+  protected readonly dayTone = computed(() => toneClass(this.day()?.change));
 
   protected readonly cashShare = computed(() => {
     if (!this.portfolio.hasValue()) return null;

@@ -1825,9 +1825,9 @@ flowchart LR
   real money to sum. A tape of the latest session's fills, today's signals
   and trading runs in one time line with the next run on top (the feed's
   `signal` items and the runs from the last 24 hours). A run line counts
-  only the orders and fills in the reader's own portfolios
-  (`ownRunCounts()`), and says "None of your portfolios traded in this run"
-  otherwise; its status reads Done, Partly done or Failed
+  only the orders and fills in the reader's own portfolios, as the API
+  scopes them (`ownRunCounts()`). When the counts are null it says only
+  "Trading run finished". Its status reads Done, Partly done or Failed
   (`shared/status-words.ts`). My strategies: an on/off switch and one
   compact follow-mode control (`<app-follow-mode>`: Alerts only, Paper,
   Approve each trade, Automatic) per follow, the portfolio it trades when
