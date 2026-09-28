@@ -218,7 +218,15 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "cooldown": _stricter_cooldown,
     },
     "operational_halt": {"max_bar_age_days": _min_optional},
-    "margin_call": {"enabled": _either, "margin": _keep_base, "buffer": max},
+    "margin_call": {
+        "enabled": _either,
+        "margin": _keep_base,
+        "buffer": max,
+        # 19.13: a higher cushion alerts and reduces earlier
+        "warn_cushion": max,
+        "reduce_cushion": max,
+        "restore_cushion": max,
+    },
     "squeeze_guard": {
         "max_borrow_fee": _min_optional,
         "max_adverse_pct": _min_optional,
