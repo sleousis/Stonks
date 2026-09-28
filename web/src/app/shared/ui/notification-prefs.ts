@@ -3,10 +3,12 @@ import {
   Component,
   computed,
   inject,
+  input,
   linkedSignal,
   resource,
   signal,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import type { PreferenceItem, PreferencesView } from '../../api/models';
 import { NotificationsService } from '../../api/notifications.service';
@@ -19,13 +21,13 @@ import { ErrorState, LoadingState } from './states';
 
 type Category = PreferenceItem['category'];
 
-const CATEGORIES: readonly { value: Category; label: string }[] = [
-  { value: 'signal', label: 'Signals' },
-  { value: 'price_alert', label: 'Price alerts' },
-  { value: 'event_alert', label: 'Upcoming events' },
-  { value: 'order', label: 'Orders and fills' },
-  { value: 'risk', label: 'Risk alerts' },
-  { value: 'system', label: 'System' },
+const CATEGORIES: readonly { value: Category; label: string; hint: string }[] = [
+  { value: 'signal', label: 'Signals', hint: 'What your strategies want to trade' },
+  { value: 'price_alert', label: 'Price alerts', hint: 'Your rules on daily closes' },
+  { value: 'event_alert', label: 'Upcoming events', hint: 'Earnings, dividends, releases' },
+  { value: 'order', label: 'Orders and fills', hint: 'Orders placed and filled' },
+  { value: 'risk', label: 'Risk alerts', hint: 'Limits, loss halts, stops' },
+  { value: 'system', label: 'System', hint: 'Data and server problems' },
 ];
 
 const CHANNEL_LABELS: Record<string, string> = {
@@ -37,227 +39,278 @@ const CHANNEL_LABELS: Record<string, string> = {
 
 /** The in-app feed always gets everything; it is not a switch. */
 const ALWAYS_ON = 'inapp';
+/** The server's own log: an operator channel, never a choice for people (M6). */
+const HIDDEN = new Set([ALWAYS_ON, 'log']);
+
+/** The panels this component can show, each its own titled section. */
+export type PrefsPart = 'channels' | 'events' | 'quiet' | 'webhook';
+const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook'];
 
 /**
- * Which alerts go where (push, email, webhook) and quiet hours. A switch
- * with no saved choice shows as on: the server's channel default applies
- * until the trader picks.
+ * Which alerts go where (push, email, webhook, Telegram), upcoming event
+ * alerts, quiet hours and your webhook, one panel each. A switch with no
+ * saved choice shows as on: the server's channel default applies until the
+ * trader picks. `[only]` picks some of the panels (the Alert settings page
+ * puts the webhook with the other channels); by default all show.
  */
 @Component({
   selector: 'app-notification-prefs',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [LoadingState, ErrorState, PermissionNote],
+  imports: [LoadingState, ErrorState, PermissionNote, RouterLink],
   template: `
-    <section class="panel" aria-labelledby="prefs-title">
-      <div class="panel-head">
-        <h3 id="prefs-title">Alert settings</h3>
-      </div>
-      @if (prefs.error(); as err) {
+    @if (prefs.error(); as err) {
+      <section class="panel" aria-label="Alert settings">
         <app-error-state
           title="Could not load alert settings"
           [error]="err"
           (retry)="prefs.reload()"
         />
-      } @else if (!prefs.hasValue()) {
+      </section>
+    } @else if (!prefs.hasValue()) {
+      <section class="panel" aria-label="Alert settings">
         <app-loading-state label="Loading alert settings" [rows]="4" />
-      } @else {
-        <div class="panel-body body">
-          <p class="lead">Everything shows in the app. Choose what else reaches you.</p>
-          <div class="test-row">
-            <button
-              type="button"
-              class="btn"
-              [disabled]="testing()"
-              [attr.aria-busy]="testing()"
-              (click)="sendTest()"
-            >
-              {{ testing() ? 'Sending…' : 'Send a test notification' }}
-            </button>
-            <span class="hint">Check that alerts reach your phone and your other channels.</span>
+      </section>
+    } @else {
+      @if (show('channels')) {
+        <section class="panel" aria-labelledby="prefs-title">
+          <div class="panel-head">
+            <h3 id="prefs-title">Which alerts go where</h3>
           </div>
-          <app-permission-note permission="notifications.manage" />
-          @if (channels().length === 0) {
-            <p class="note">This server has no push, email or webhook delivery set up yet.</p>
-          } @else {
-            <div class="grid-scroll">
-              <table class="grid">
-                <caption class="visually-hidden">
-                  Alert types by channel
-                </caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Alert</th>
-                    @for (c of channels(); track c) {
-                      <th scope="col">{{ channelLabel(c) }}</th>
-                    }
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (cat of categories; track cat.value) {
+          <div class="panel-body body">
+            <p class="lead">
+              Everything shows in the Feed. Choose what else reaches you, and on which channel.
+            </p>
+            <app-permission-note permission="notifications.manage" />
+            @if (channels().length === 0) {
+              <p class="note">This server has no push, email or webhook delivery set up yet.</p>
+            } @else {
+              <div class="grid-scroll">
+                <table class="grid">
+                  <caption class="visually-hidden">
+                    Alert types by channel
+                  </caption>
+                  <thead>
                     <tr>
-                      <th scope="row">{{ cat.label }}</th>
+                      <th scope="col">Alert</th>
                       @for (c of channels(); track c) {
-                        <td>
-                          <label class="cell">
-                            <input
-                              type="checkbox"
-                              [checked]="isOn(cat.value, c)"
-                              [disabled]="locked()"
-                              (change)="setPref(cat.value, c, $event)"
-                            />
-                            <span class="visually-hidden"
-                              >{{ cat.label }} by {{ channelLabel(c) }}</span
-                            >
-                          </label>
-                        </td>
+                        <th scope="col">{{ channelLabel(c) }}</th>
                       }
                     </tr>
-                  }
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    @for (cat of categories; track cat.value) {
+                      <tr>
+                        <th scope="row">
+                          {{ cat.label }}
+                          <span class="row-hint">{{ cat.hint }}</span>
+                        </th>
+                        @for (c of channels(); track c) {
+                          <td>
+                            <label class="cell">
+                              <input
+                                type="checkbox"
+                                [checked]="isOn(cat.value, c)"
+                                [disabled]="locked()"
+                                (change)="setPref(cat.value, c, $event)"
+                              />
+                              <span class="visually-hidden"
+                                >{{ cat.label }} by {{ channelLabel(c) }}</span
+                              >
+                            </label>
+                          </td>
+                        }
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            }
+            <div class="test-row">
+              <button
+                type="button"
+                class="btn"
+                [disabled]="testing()"
+                [attr.aria-busy]="testing()"
+                (click)="sendTest()"
+              >
+                {{ testing() ? 'Sending…' : 'Send a test notification' }}
+              </button>
+              <span class="hint">Check that alerts reach your phone and your other channels.</span>
             </div>
-          }
+          </div>
+        </section>
+      }
 
-          @if (eventAlerts().length) {
-            <fieldset class="quiet">
-              <legend>Upcoming events</legend>
-              <p class="hint">
-                Alerts before events on what you hold or watch. Turn a kind off and you get none of
-                it, not even in the app.
-              </p>
-              <div class="kinds">
-                @for (e of eventAlerts(); track e.topic) {
-                  <label class="kind">
-                    <input
-                      type="checkbox"
-                      [checked]="e.enabled"
-                      [disabled]="locked()"
-                      (change)="setEventAlert(e.topic, $event)"
-                    />
-                    <span>{{ e.label }}</span>
-                  </label>
-                }
-              </div>
-            </fieldset>
-          }
-
-          @if (economic(); as econ) {
-            <fieldset class="quiet" aria-describedby="econ-hint">
-              <legend>Economic releases</legend>
-              <p id="econ-hint" class="hint">
-                An alert the day before each release, such as inflation, jobs or a rate decision.
-                @if (econ.default_countries) {
-                  The countries follow the currencies of your portfolios until you pick your own.
-                }
-                @if (!economicOn()) {
-                  Turn on Economic releases coming up to get them.
-                }
-              </p>
-              <div class="field">
-                <label for="econ-importance">Importance</label>
-                <select
-                  id="econ-importance"
-                  class="input"
-                  [disabled]="locked()"
-                  (change)="setImportance($event)"
-                >
-                  @for (o of econ.importance_options ?? []; track o.value) {
-                    <option [value]="o.value" [selected]="o.value === econ.min_importance">
-                      {{ o.label }}
-                    </option>
-                  }
-                </select>
-              </div>
+      @if (show('events') && (eventAlerts().length || economic())) {
+        <section class="panel" aria-labelledby="events-title">
+          <div class="panel-head">
+            <h3 id="events-title">Upcoming events</h3>
+          </div>
+          <div class="panel-body body">
+            @if (eventAlerts().length) {
               <fieldset class="quiet">
-                <legend class="sub">Countries</legend>
-                <div class="countries">
-                  @for (c of countryChoices(); track c.value) {
+                <legend class="visually-hidden">Upcoming events</legend>
+                <p class="hint">
+                  Alerts before events on what you hold or watch. Turn a kind off and you get none
+                  of it, not even in the Feed.
+                </p>
+                <div class="kinds">
+                  @for (e of eventAlerts(); track e.topic) {
                     <label class="kind">
                       <input
                         type="checkbox"
-                        [checked]="c.chosen"
+                        [checked]="e.enabled"
                         [disabled]="locked()"
-                        (change)="setCountry(c.value, $event)"
+                        (change)="setEventAlert(e.topic, $event)"
                       />
-                      <span>{{ c.label }}</span>
+                      <span>{{ e.label }}</span>
                     </label>
                   }
                 </div>
               </fieldset>
-              @if (countryError(); as err) {
+            }
+
+            @if (economic(); as econ) {
+              <fieldset class="quiet" aria-describedby="econ-hint">
+                <legend>Economic releases</legend>
+                <p id="econ-hint" class="hint">
+                  An alert the day before each release, such as inflation, jobs or a rate decision.
+                  @if (econ.default_countries) {
+                    The countries follow the currencies of your portfolios until you pick your own.
+                  }
+                  @if (!economicOn()) {
+                    Turn on Economic releases coming up to get them.
+                  }
+                </p>
+                <div class="field">
+                  <label for="econ-importance">Importance</label>
+                  <select
+                    id="econ-importance"
+                    class="input"
+                    [disabled]="locked()"
+                    (change)="setImportance($event)"
+                  >
+                    @for (o of econ.importance_options ?? []; track o.value) {
+                      <option [value]="o.value" [selected]="o.value === econ.min_importance">
+                        {{ o.label }}
+                      </option>
+                    }
+                  </select>
+                </div>
+                <details class="countries-fold">
+                  <summary>Countries ({{ chosenCount() }} picked)</summary>
+                  <fieldset class="quiet">
+                    <legend class="visually-hidden">Countries</legend>
+                    <div class="countries">
+                      @for (c of countryChoices(); track c.value) {
+                        <label class="kind">
+                          <input
+                            type="checkbox"
+                            [checked]="c.chosen"
+                            [disabled]="locked()"
+                            (change)="setCountry(c.value, $event)"
+                          />
+                          <span>{{ c.label }}</span>
+                        </label>
+                      }
+                    </div>
+                  </fieldset>
+                </details>
+                @if (countryError(); as err) {
+                  <p class="error" role="alert">{{ err }}</p>
+                }
+                @if (!econ.default_countries) {
+                  <div class="actions">
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      [disabled]="locked()"
+                      (click)="followPortfolios()"
+                    >
+                      Follow my portfolio currencies
+                    </button>
+                  </div>
+                }
+              </fieldset>
+            }
+          </div>
+        </section>
+      }
+
+      @if (show('quiet')) {
+        <section class="panel" aria-labelledby="quiet-title">
+          <div class="panel-head">
+            <h3 id="quiet-title">Quiet hours</h3>
+          </div>
+          <div class="panel-body body">
+            <fieldset class="quiet">
+              <legend class="visually-hidden">Quiet hours</legend>
+              <p class="hint">
+                Signals, fills, price alerts and upcoming events wait for a morning summary. Risk
+                alerts always come through. Times are in {{ view()?.timezone }}.
+              </p>
+              <div class="times">
+                <div class="field">
+                  <label for="quiet-start">From</label>
+                  <input
+                    id="quiet-start"
+                    class="input"
+                    type="time"
+                    [disabled]="!canManage()"
+                    [value]="quietStart()"
+                    (input)="quietStart.set($any($event.target).value)"
+                  />
+                </div>
+                <div class="field">
+                  <label for="quiet-end">Until</label>
+                  <input
+                    id="quiet-end"
+                    class="input"
+                    type="time"
+                    [disabled]="!canManage()"
+                    [value]="quietEnd()"
+                    (input)="quietEnd.set($any($event.target).value)"
+                  />
+                </div>
+              </div>
+              @if (quietError(); as err) {
                 <p class="error" role="alert">{{ err }}</p>
               }
-              @if (!econ.default_countries) {
-                <div class="actions">
+              <div class="actions">
+                <button type="button" class="btn" [disabled]="locked()" (click)="saveQuiet()">
+                  Save quiet hours
+                </button>
+                @if (view()?.quiet_start) {
                   <button
                     type="button"
                     class="btn btn-ghost"
                     [disabled]="locked()"
-                    (click)="followPortfolios()"
+                    (click)="clearQuiet()"
                   >
-                    Follow my portfolio currencies
+                    Turn off
                   </button>
-                </div>
-              }
+                }
+              </div>
             </fieldset>
-          }
+          </div>
+        </section>
+      }
 
-          <fieldset class="quiet">
-            <legend>Quiet hours</legend>
-            <p class="hint">
-              Signals, fills, price alerts and upcoming events wait for a morning summary. Risk
-              alerts always come through. Times are in {{ view()?.timezone }}.
-            </p>
-            <div class="times">
-              <div class="field">
-                <label for="quiet-start">From</label>
-                <input
-                  id="quiet-start"
-                  class="input"
-                  type="time"
-                  [disabled]="!canManage()"
-                  [value]="quietStart()"
-                  (input)="quietStart.set($any($event.target).value)"
-                />
-              </div>
-              <div class="field">
-                <label for="quiet-end">Until</label>
-                <input
-                  id="quiet-end"
-                  class="input"
-                  type="time"
-                  [disabled]="!canManage()"
-                  [value]="quietEnd()"
-                  (input)="quietEnd.set($any($event.target).value)"
-                />
-              </div>
-            </div>
-            @if (quietError(); as err) {
-              <p class="error" role="alert">{{ err }}</p>
-            }
-            <div class="actions">
-              <button type="button" class="btn" [disabled]="locked()" (click)="saveQuiet()">
-                Save quiet hours
-              </button>
-              @if (view()?.quiet_start) {
-                <button
-                  type="button"
-                  class="btn btn-ghost"
-                  [disabled]="locked()"
-                  (click)="clearQuiet()"
-                >
-                  Turn off
-                </button>
-              }
-            </div>
-          </fieldset>
-
-          @if (hasWebhook()) {
+      @if (show('webhook') && hasWebhook()) {
+        <section class="panel" aria-labelledby="webhook-title">
+          <div class="panel-head">
+            <h3 id="webhook-title">Your webhook</h3>
+          </div>
+          <div class="panel-body body">
             <fieldset class="quiet">
-              <legend>Your webhook</legend>
+              <legend class="visually-hidden">Your webhook</legend>
               <p class="hint">
-                Alerts you send to Webhook above are posted to this address. It must start with
-                https. For your safety the full address is never shown again after you save it.
+                Alerts you send to Webhook in
+                <a routerLink="/notifications/settings" fragment="prefs-title"
+                  >Which alerts go where</a
+                >
+                are posted to this address. It must start with https. For your safety the full
+                address is never shown again after you save it.
               </p>
               @if (view()?.webhook; as current) {
                 <p class="current">
@@ -300,15 +353,45 @@ const ALWAYS_ON = 'inapp';
                 }
               </div>
             </fieldset>
-          }
-        </div>
+          </div>
+        </section>
       }
-    </section>
+    }
   `,
   styles: `
     :host {
-      display: block;
+      display: grid;
+      gap: var(--space-4);
       min-width: 0;
+    }
+    /* Narrow screens keep the grid short: the Price alerts panel says the same. */
+    @media (max-width: 40rem) {
+      .row-hint {
+        display: none;
+      }
+    }
+    .row-hint {
+      display: block;
+      color: var(--color-ink-3);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-regular);
+    }
+    .countries-fold summary::before {
+      content: '▸';
+      margin-right: var(--space-2);
+      color: var(--color-ink-3);
+      transition: transform 0.15s ease;
+    }
+    .countries-fold[open] summary::before {
+      transform: rotate(90deg);
+    }
+    .countries-fold summary {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--touch-min);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
+      cursor: pointer;
     }
     .body {
       display: grid;
@@ -441,6 +524,12 @@ export class NotificationPrefs {
   private readonly confirm = inject(ConfirmService);
   private readonly session = inject(SessionService);
 
+  /** Which panels to show; all of them when not set. */
+  readonly only = input<readonly PrefsPart[] | null>(null);
+  protected show(part: PrefsPart): boolean {
+    return (this.only() ?? ALL_PARTS).includes(part);
+  }
+
   protected readonly categories = CATEGORIES;
   protected readonly prefs = resource({ loader: () => this.api.preferences() });
   /** The settings as shown, replaced by each save's response. */
@@ -448,7 +537,7 @@ export class NotificationPrefs {
     this.prefs.hasValue() ? this.prefs.value() : null,
   );
   protected readonly channels = computed(
-    () => this.view()?.channels.filter((c) => c !== ALWAYS_ON) ?? [],
+    () => this.view()?.channels.filter((c) => !HIDDEN.has(c)) ?? [],
   );
   /** One switch per kind of upcoming-event alert (earnings, dividends, economic). */
   protected readonly eventAlerts = computed(() => this.view()?.event_alerts ?? []);
@@ -473,6 +562,9 @@ export class NotificationPrefs {
       .map((c) => ({ value: c, label: c, chosen: true }));
     return [...offered, ...extra];
   });
+  protected readonly chosenCount = computed(
+    () => this.countryChoices().filter((c) => c.chosen).length,
+  );
   protected readonly countryError = signal<string | null>(null);
   protected readonly quietStart = linkedSignal(() => this.view()?.quiet_start ?? '');
   protected readonly quietEnd = linkedSignal(() => this.view()?.quiet_end ?? '');
@@ -605,7 +697,7 @@ export class NotificationPrefs {
     try {
       const sent = await this.api.sendTest();
       const names = sent.channels
-        .filter((c) => c !== ALWAYS_ON)
+        .filter((c) => !HIDDEN.has(c))
         .map((c) => this.channelLabel(c).toLowerCase());
       if (sent.deliveries > 0) {
         const where = names.length ? ` by ${names.join(', ')}` : '';

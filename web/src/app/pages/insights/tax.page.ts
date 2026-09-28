@@ -8,6 +8,7 @@ import {
   resource,
   signal,
 } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 import type { TaxSettingsView } from '../../api/models';
 import { TaxService } from '../../api/tax.service';
@@ -17,6 +18,7 @@ import { ApiError } from '../../core/http/api-error';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { saveFile } from '../../shared/ui/export-button';
+import { HelpTip } from '../../shared/ui/help-tip';
 import { NoBook, bookState } from '../../shared/ui/no-book';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
@@ -63,6 +65,8 @@ const CURRENCY = /^[A-Z]{3}$/;
   selector: 'app-tax-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    RouterLink,
+    HelpTip,
     PageHeader,
     InsightsNav,
     NoBook,
@@ -98,15 +102,33 @@ const CURRENCY = /^[A-Z]{3}$/;
               <app-loading-state label="Loading the tax settings" [rows]="4" />
             } @else {
               <form class="form-grid" (submit)="$event.preventDefault(); save()" novalidate>
+                @if (locked()) {
+                  <div class="locked" role="note" id="tax-locked">
+                    <p class="locked-title">
+                      Base currency and where you file are locked while this portfolio trades real
+                      money.
+                    </p>
+                    <p>
+                      They are also your broker account's profile: the account rules and the tax
+                      files rely on them, so they cannot change under real positions. To change
+                      them, move the portfolio back to Broker paper on its
+                      <a [routerLink]="['/profile/live', portfolioId()]">live settings</a> page. The
+                      lot method and wash sales can still change.
+                    </p>
+                  </div>
+                }
                 <div class="field">
-                  <label for="tax-base">Base currency</label>
+                  <span class="label-row">
+                    <label for="tax-base">Base currency</label>
+                    <app-help-tip term="base_currency" />
+                  </span>
                   <input
                     id="tax-base"
                     class="input num base"
                     maxlength="3"
                     autocomplete="off"
                     autocapitalize="characters"
-                    [disabled]="!canManage()"
+                    [disabled]="!canManage() || locked()"
                     [attr.aria-invalid]="baseError() ? true : null"
                     [attr.aria-describedby]="baseError() ? 'tax-base-error' : 'tax-base-hint'"
                     [value]="base()"
@@ -121,8 +143,31 @@ const CURRENCY = /^[A-Z]{3}$/;
                     >
                   }
                 </div>
-                <app-segmented label="Where you file" [options]="jurisdictions" [(value)]="where" />
-                <app-segmented label="Lots a sale closes" [options]="methods" [(value)]="method" />
+                <div class="field">
+                  <span class="label" aria-hidden="true">Where you file</span>
+                  @if (locked()) {
+                    <p class="fixed" aria-describedby="tax-locked">
+                      <span class="visually-hidden">Where you file: </span>{{ whereLabel() }}
+                    </p>
+                  } @else {
+                    <app-segmented
+                      label="Where you file"
+                      [options]="jurisdictions"
+                      [(value)]="where"
+                    />
+                  }
+                </div>
+                <div class="field">
+                  <span class="label-row">
+                    <span class="label" aria-hidden="true">Lots a sale closes</span>
+                    <app-help-tip term="lot" />
+                  </span>
+                  <app-segmented
+                    label="Lots a sale closes"
+                    [options]="methods"
+                    [(value)]="method"
+                  />
+                </div>
                 <p class="hint">
                   @if (method() === 'fifo') {
                     A sale closes the oldest shares first.
@@ -131,16 +176,19 @@ const CURRENCY = /^[A-Z]{3}$/;
                   }
                 </p>
                 @if (where() === 'us') {
-                  <label class="check">
-                    <input
-                      type="checkbox"
-                      [disabled]="!canManage()"
-                      [checked]="washSales()"
-                      (change)="washSales.set($any($event.target).checked)"
-                      aria-describedby="tax-wash-hint"
-                    />
-                    Wash sale adjustment
-                  </label>
+                  <span class="label-row">
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [disabled]="!canManage()"
+                        [checked]="washSales()"
+                        (change)="washSales.set($any($event.target).checked)"
+                        aria-describedby="tax-wash-hint"
+                      />
+                      Wash sale adjustment
+                    </label>
+                    <app-help-tip term="wash_sale" />
+                  </span>
                   <p id="tax-wash-hint" class="hint">
                     A loss is put off when you buy the same ticker within 30 days before or after
                     the sale.
@@ -230,15 +278,17 @@ const CURRENCY = /^[A-Z]{3}$/;
               </button>
             </div>
             <p class="hint">
-              Open lots list what you still hold, lot by lot: cost basis, days held, short or long
-              term and the day it turns long term, and the gain at the latest close.
+              Open lots list what you still hold, lot by lot: cost basis
+              <app-help-tip term="cost_basis" />, days held, short or long term
+              <app-help-tip term="long_term" /> and the day it turns long term, and the gain at the
+              latest close.
             </p>
           </div>
         </section>
 
         <section class="panel span-12" aria-labelledby="tax-lots-title">
           <div class="panel-head">
-            <h2 id="tax-lots-title">Specific lots</h2>
+            <h2 id="tax-lots-title">Specific lots <app-help-tip term="specific_lots" /></h2>
           </div>
           <div class="panel-body">
             @if (settings.hasValue() && settings.value().lot_method === 'specific') {
@@ -276,6 +326,31 @@ const CURRENCY = /^[A-Z]{3}$/;
     .field select {
       max-width: 10rem;
     }
+    .label-row {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-1);
+    }
+    .label {
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
+    }
+    .fixed {
+      margin: 0;
+      color: var(--color-ink-2);
+    }
+    .locked {
+      display: grid;
+      gap: var(--space-1);
+      padding: var(--space-2) var(--space-3);
+      border-left: 3px solid var(--color-warn);
+      border-radius: var(--radius-sm);
+      background: var(--color-warn-soft);
+      font-size: var(--text-sm);
+    }
+    .locked-title {
+      font-weight: var(--weight-semibold);
+    }
   `,
 })
 export class TaxPage {
@@ -301,6 +376,11 @@ export class TaxPage {
   protected readonly where = linkedSignal<Jurisdiction>(() => this.loaded()?.jurisdiction ?? 'us');
   protected readonly method = linkedSignal<LotMethod>(() => this.loaded()?.lot_method ?? 'fifo');
   protected readonly washSales = linkedSignal(() => this.loaded()?.wash_sales ?? true);
+  /** Real money: base currency and jurisdiction cannot change (the server refuses). */
+  protected readonly locked = computed(() => this.loaded()?.locked ?? false);
+  protected readonly whereLabel = computed(
+    () => JURISDICTIONS.find((j) => j.value === this.where())?.label ?? this.where(),
+  );
   protected readonly baseError = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly dirty = computed(() => {

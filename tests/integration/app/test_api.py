@@ -133,6 +133,8 @@ def test_portfolio_routes(client):
     assert body["positions"][0]["ticker"] == "UP.US"
     snaps = client.get("/api/portfolio/snapshots", headers=AUTH).json()
     assert snaps["total"] == 1
+    # The trading day it is for, next to the wall-clock time it was taken.
+    assert "as_of" in snaps["items"][0]
 
 
 def test_strategy_routes(client, seeded):

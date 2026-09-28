@@ -34,7 +34,7 @@ describe('GlossaryPage', () => {
   it('opens with how Stonks works, then the trading words and the figures (F5)', () => {
     const { el } = render();
     const headings = [...el.querySelectorAll('section.group h2')].map((h) => h.textContent);
-    expect(headings).toEqual(['How Stonks works', 'Trading words', 'Figures', 'Research words']);
+    expect(headings).toEqual(['How Stonks works', 'Trading words', 'Your money and alerts', 'Figures', 'Research words']);
     expect(el.querySelector('#on_trial')!.textContent).toContain('On trial');
     expect(el.querySelector('#test_book')!.textContent).toContain('Test book');
     const trading = el.querySelectorAll('section.group')[1];

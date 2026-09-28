@@ -57,6 +57,7 @@ ADMIN_PAGES = (
     "/connections",
     "/trades",
     "/notifications/price-alerts",
+    "/notifications/settings",
     "/ops/models",
     "/live",
     f"/strategies/{ACTIVE_IDS['AAA.US']}?tab=versions",
@@ -84,6 +85,7 @@ TRADER_PAGES = (
     "/orders/new",
     "/going-live",
     "/notifications/price-alerts",
+    "/notifications/settings",
     "/calendar",
     "/screener",
 )

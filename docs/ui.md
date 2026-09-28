@@ -683,9 +683,8 @@ Tickers open `/data?instrument=<id>`.
   `app-typed-confirm`.
 - **Settings** shows one section at a time (M14), picked with
   `<app-page-tabs>` and kept in the address (`/settings?tab=alerts`):
-  Account (sign-in and security, the For scripts fold), Alerts (devices and
-  push, Telegram, the alert table; the feed and price alerts stay on
-  Notifications), Display (theme, numbers and dates, keyboard), Risk limits,
+  Account (sign-in and security, the For scripts fold), Alerts (one panel that opens
+  Alert settings, the one home of every alert setting), Display (theme, numbers and dates, keyboard), Risk limits,
   and System for admins (broker, risk policy, data sources, cost models,
   and how to turn the assistant on while it is off). Alert settings have
   **Send a test notification** (`POST /api/notifications/test`): it goes to
@@ -784,7 +783,7 @@ flowchart LR
 | Page | Route | What it does |
 |---|---|---|
 | Insights | `/insights` | The picked portfolio's value, beta, exposure and largest holding, where the money sits (asset class, sector, currency or holding), returns over periods, a monthly returns heatmap, risk, which strategies agree with each holding, and the snapshot history |
-| Risk | `/insights/risk` | Each measure against its limit, today's VaR and ES with how often the model missed, each strategy sleeve with its alpha-decay check, and the daily history as a chart and a table |
+| Risk | `/insights/risk` | Each measure against the limit it trades under (your own limits where they are stricter), today's VaR and ES with how often the model missed, each strategy's part with its alpha-decay check, and the daily history as a chart and a table |
 
 ```mermaid
 flowchart LR
@@ -796,25 +795,49 @@ flowchart LR
 
 - Both screens read the portfolio picked in the session strip (a synced
   broker account too) through `api/insights.service.ts` and
-  `api/risk.service.ts`. `<app-insights-nav>` links them and the Cash flows and Tax screens.
+  `api/risk.service.ts`. `<app-insights-nav>` links them and the Cash flows and Tax screens,
+  as underline tabs like the Notifications tabs (sections of one page).
+- **Every number is explained where it shows.** Beta, gross exposure,
+  net exposure and the largest holding have help tips, and "What these
+  figures mean" under the tiles says each in one line with an example.
+  The Returns panel works one example through change, the time-weighted
+  and the money-weighted return. Asset classes read as words ("Equity").
+  Strategies are named with `strategyDisplayName()`.
+- **Portfolio history** leads with the trading day a snapshot is for
+  (`SnapshotView.as_of`) and links it to its trading run. When it was
+  saved is a second column, hidden on phones.
 - **Insights** reads `GET /api/insights`, `GET /api/insights/agreement` and
   `GET /api/portfolio/snapshots` (server paged). Each stance is a word and a
   mark (agrees, disagrees, has no view), never colour alone. Admins
   (`portfolio.totals`) also get "All portfolios" from
-  `GET /api/insights/totals`: sums only, never holdings. The headline value
-  is brass only for a live portfolio.
+  `GET /api/insights/totals`: sums only, never holdings. While the sums are
+  held back (fewer than three people with real money) it is one quiet line.
+  The headline value is brass only for a live portfolio.
 - **Risk** puts each reading next to its limit in `limitRows()`
   (`pages/insights/limit-rows.ts`): largest holding, open positions,
   largest sector, asset-class weights, gross and net exposure, volatility
   and drawdown from `GET /api/insights`, against `GET /api/risk/policy`,
   and the VaR violation ratio from `GET /api/risk/live` against its 0.5 to
   1.5 band. At 80% of a limit a row reads "Near the limit". The status is
-  always written out next to the meter. The limits shown are the system
-  ones, and a trader's own settings can make them tighter.
+  always written out next to the meter.
+- **Your own limits.** The rows use `GET /api/risk/limits` `effective`:
+  the system policy tightened by your own limits (largest holding, open
+  positions, cash to keep). A row your own limit sets carries a "Your
+  limit" tag, the smallest order size is said under the list, and "Change
+  your risk limits" links to Settings. When your limits fail to load the
+  system limits still show, and the page says so.
+- The risk figures (VaR, ES at 95% and 99%, the VaR misses) each have a
+  tip and a one-line reading ("on 19 days out of 20 the loss should be
+  smaller"). "Strategy sleeves" is now "Each strategy's part".
 - The chart draws the last 200 readings (`GET /api/risk/snapshots`, 95%
   VaR and ES in pane 0, the day's loss in pane 1). The table below it is
   server paged.
 - New glossary terms: violation ratio, alpha decay and concentration.
+  The money pages add a group of their own, "Your money and alerts":
+  gross and net exposure, beta coverage, a strategy's part, base
+  currency, lot, FIFO, specific lots, cost basis, wash sale, long term,
+  cash flow, price alert and quiet hours. An entry may carry an `example`
+  in numbers, shown on the glossary page (TWR, MWR and exposure do).
 
 ## Live trading screens (Phase 19 wave 1)
 
@@ -976,13 +999,19 @@ flowchart LR
 - **Frozen.** After a burst of changes the assistant freezes itself. A
   warning banner says until when, and Unfreeze now asks first and then for a
   fresh code (`killswitch.resume`).
-- **Off.** Without a model server the page says the assistant is off and
-  what an admin does about it. No chat is shown.
+- **Off.** Without a model server the page is a calm state, not an error:
+  "The assistant is not set up on this server", that nothing is wrong,
+  what it needs, who sets it up (the admin's next step shows only to
+  admins) and Back to Today. No chat is shown. The menu hides the item
+  while it is off, and a direct link to `/assistant` still opens this.
 - **Phones.** The list and the open conversation are one screen each, with
   "All conversations" to go back. Stop ends the answer early.
 - **Cash flows.** Recording a deposit or withdrawal moves the paper book's
   cash, so it confirms as a ticket (`portfolio.manage`). A broker book gets
-  its flows from the sync, so the form is replaced by a note.
+  its flows from the sync, so the form is replaced by a note. The page
+  works one example through both returns, says before you type that a
+  withdrawal can take at most the cash (and refuses more), and that
+  nothing can be recorded while a trading run is running.
 - **Returns.** Insights shows each period's change (deposits count) and its
   time-weighted return (they do not), the money-weighted return per year
   and net deposits. Today's portfolio card adds a one-line summary. Both
@@ -993,10 +1022,22 @@ flowchart LR
   return of each month from the daily values, so a deposit is never a
   gain. `<app-monthly-returns>` (`shared/ui/monthly-returns.ts`) draws it:
   a row per year, a cell per month shaded by sign and size (three steps),
-  the signed percent in every cell and the year compounded at the end. It
-  scrolls sideways on a phone and can take keyboard focus. The tear sheet
-  uses the same component.
-- **Tax.** Save stays off until something changed. Specific lots
+  the signed percent in every cell and the year compounded at the end,
+  headed "Year total" (the first column is "Year"). Where the grid does
+  not fit (a container under about 46rem: phones, narrow panels) it
+  stacks by year instead: the year and its total, then only the months
+  from the first to the last with a return, so the latest month is never
+  off screen. A container query decides, so the tear sheet, which uses
+  the same component, gets the same behaviour.
+- **Tax.** Save stays off until something changed. While the portfolio
+  trades real money (`TaxSettingsView.locked`, a Real money stage) base
+  currency and where you file are locked: the page says so above the
+  form, why (they are the broker account's profile too, and the account
+  rules and tax files rely on them) and how to change them (back to
+  Broker paper on the live settings page). The base currency field is
+  disabled and where you file shows as text. The lot method and wash
+  sales still change. Lots, FIFO, specific lots, cost basis, wash sale
+  and long term have help tips. Specific lots
   (`<app-lot-picks>`) lists your sales, then the earlier buys of that ticker
   with a number field each. Picks may not add up to more than the sale.
   "Use oldest first" clears them. The yearly CSVs download through
@@ -1094,7 +1135,8 @@ flowchart LR
 | New order | `/orders/new` | The order ticket: check an order, place it, and change or cancel your working orders by hand |
 | Suggested orders | `/tickets` (the old `/orders/drafts` redirects) | Orders the assistant proposed, in the Approvals inbox, each a ticket to approve (fresh code) or reject |
 | Price alerts | `/notifications/price-alerts` | Make, switch off, change and delete price alerts, and see when they fired |
-| Telegram | Settings, Your account | Link status, a one-time link code, and Unlink |
+| Alert settings | `/notifications/settings` | Every alert setting in one place: what reaches you and when, and where it reaches you |
+| Telegram | Alert settings, Where alerts reach you | Link status, a one-time link code, and Unlink |
 
 ```mermaid
 flowchart LR
@@ -1112,9 +1154,10 @@ flowchart LR
 - **Idempotency.** The ticket sends its own `client_id`. A new key is made when the order changes and after it is placed, so a retry of the same order never places it twice.
 - **Change and cancel.** "Your orders by hand" lists `GET /api/orders?origin=manual`. A working order (pending, submitted, partly filled) has **Change** (`<app-order-change-sheet>`: new quantity or limit and a reason, the same refusal panel) and **Cancel** (a reason, `<app-status-change-dialog>`).
 - **Suggested orders.** The Approvals page reads `GET /api/orders/drafts` once: pending ones under Waiting for you, the rest under History. `pages/tickets/suggested-orders.ts` shows them. **Approve** asks for a fresh code, shows the order ticket (the ticker typed for real money), then calls `.../approve`. A refused approval shows its reason on the card, and the order turns rejected. **Reject** takes an optional note.
-- **Price alerts.** `<app-notifications-tabs>` links the feed and Price alerts. The editor watches one ticker or a watchlist and fires when the price rises above or falls below a level, or moves by a percent either way over some days (`pct` is in percent, 8 means 8%). Changing an alert keeps its target and condition and starts it fresh. Firings are a server-paged table filtered by alert, with the ticker linking to its chart.
-- **Telegram.** `<app-telegram-link>` (`pages/settings/telegram-link.ts`) reads `GET /api/telegram/link`. **Get a link code** shows `/link CODE` once in `<app-one-time-secret>`, with the bot's `t.me` link and the time it runs out. **Check the link** reads the status again. **Unlink** asks first. Without a bot on the server the panel says so and offers nothing.
-- The alert settings table scrolls inside its own box on phones, now that Telegram adds a channel.
+- **Price alerts.** `<app-notifications-tabs>` links the Feed, Price alerts and Alert settings. The page says alerts check each day's closing price after the evening data update, not live prices. The editor watches one ticker or a watchlist and fires when the price rises above or falls below a level, or moves by a percent either way over some days (`pct` is in percent, 8 means 8%). Changing an alert keeps its target and condition and starts it fresh. Firings are a server-paged table filtered by alert, with the ticker linking to its chart.
+- **Telegram.** `<app-telegram-link>` (`pages/notifications/telegram-link.ts`) reads `GET /api/telegram/link`. **Get a link code** shows `/link CODE` once in `<app-one-time-secret>`, with the bot's `t.me` link and the time it runs out. **Check the link** reads the status again. **Unlink** asks first. Without a bot on the server the panel says so and offers nothing, and an admin also gets the next step (the operations guide's Telegram section).
+- **Alert settings** (`pages/notifications/alert-settings.page.ts`) is the one home of every alert setting. Two groups, in this order: "Where alerts reach you" (`<app-notification-settings title="Push on this device">`, `<app-push-devices>`, `<app-telegram-link>`, and the webhook through `[only]="['webhook']"`), first so turning push on leads on a phone, then "What reaches you, and when" (`<app-notification-prefs [only]="['channels', 'events', 'quiet']">`: the alert and channel grid with a one-line hint per alert on wider screens and the test button, upcoming events and economic releases with the countries folded, quiet hours, and a Price alerts panel that links to the tab). The server's own `log` channel is never offered. Two columns on a desktop, one on a phone. Settings keeps one Alerts panel that links here, and the Feed no longer carries the devices list.
+- `<app-notification-prefs>` shows one titled panel per part (`[only]` picks some; all by default). The alert settings table scrolls inside its own box on phones.
 
 ## Calendar, news and the screener (20.7, 20.8)
 
@@ -1137,8 +1180,8 @@ flowchart LR
 - **Calendar.** `pages/calendar/calendar.page.ts`. "Whose events" picks the scope. Watchlists offers one list or all of them, and Tickers waits until you name some. From and To span at most 120 days, checked before any call. The tabs count each calendar. Countries shows on the Economic tab only. A cut read says so. `?ticker=&date=` opens one ticker from that day, which is where the event alerts link. `?country=&date=` opens the Economic tab for one country, where the economic release alerts link. The Economic tab shows each release's importance. Pure helpers live in `calendar-view.ts`.
 - **News.** `<app-news-panel>` (`pages/calendar/news-panel.ts`) takes the scope as `query`. Everything has no news, so the panel asks for a narrower scope and calls nothing. Each ticker gets a mood card (the 30-day score weighted by articles, in words, a shape and a signed number). Articles link out only over http or https, in a new tab.
 - **Ticket warning.** `<app-earnings-warning>` (`pages/orders/earnings-warning.ts`) sits under the ticker on the order ticket. For a full ticker it calls `GET /api/calendars/earnings-warnings` silently and shows one warning line when the report falls before the next open, with a link to the calendar. A failed check shows nothing and never blocks the ticket.
-- **Event alerts.** `<app-event-alert-kinds>` in the alert settings lists each upcoming-event alert and how far ahead it looks. They are sent as Signals, so the Signals row decides where they reach you. There is no switch per kind yet: the server has no preference for it.
-- **Screener.** `pages/screener/`. Where to look (a universe, a date, asset classes, sectors, exchanges, lowest price and dollar volume, the same words the universe editor uses), metric filters from `GET /api/screener/metrics` grouped by price and fundamentals, then sort, rows and extra columns. Percent metrics are typed in percent (8 means 8%) and sent as fractions. `screen-form.ts` turns the form into a spec and back, and says what is wrong in words before anything is sent. Results link each ticker to its chart and format each column by the metric's unit.
+- **Event alerts.** Alert settings has an Upcoming events row in the channel grid (where they reach you) and an Upcoming events panel with one switch per kind (earnings, dividends, economic releases) plus the economic release importance and countries. A kind switched off sends nothing, not even to the Feed.
+- **Screener.** `pages/screener/`. Where to look (a universe, a date, asset classes, sectors, exchanges, lowest price and dollar volume), metric filters from `GET /api/screener/metrics` grouped by price and fundamentals, then sort, rows and extra columns. Percent metrics are typed in percent (8 means 8%) and sent as fractions. `screen-form.ts` turns the form into a spec and back, and says what is wrong in words before anything is sent. Results link each ticker to its chart and format each column by the metric's unit.
 - **Saved screens.** Your screens list sits beside the form. Open reads the screen by id and fills the form. Save changes stays off until something changed. Delete asks first.
 - **Save as a universe.** `<app-save-universe-sheet>` asks for a name and a short name (the universe id), then the members: Re-run the screen (rule mode, from a start date, weekly, monthly or quarterly) or Today's matches (snapshot mode, with the survivorship warning). An unchanged saved screen goes by its id, so the universe follows it. The call is silent and a refusal shows in the sheet. The page then shows the saved universe and the server's warnings.
 - `TableColumn.display` gives a column its own text (a unit per column) while sorting still uses `value`.
@@ -1377,7 +1420,7 @@ which admins also see without a single recipient.
 - Offline, the shell swaps the page for `app-offline-page` (nothing stale is
   shown) and brings the page back, freshly loaded, when the connection
   returns. A newly deployed version shows a "reload" toast once.
-- Notifications are opt-in from **Settings, Notifications**; the browser
+- Notifications are opt-in from **Notifications, Alert settings, Push on this device** (and the setup guide); the browser
   prompt appears only after the button is pressed. On iPhone and iPad the
   panel explains Add to Home Screen first (iOS delivers Web Push only to
   installed apps). `NotificationPermissionService` subscribes with `SwPush`

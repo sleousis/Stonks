@@ -3,7 +3,7 @@
 - a trader places an order by hand from the ticket, and sees a refusal,
 - a trader approves an order draft,
 - a trader makes, switches off and deletes a price alert,
-- the Telegram panel in Settings says the server has no bot.
+- the Telegram panel in Alert settings says the server has no bot.
 
 Each test runs on desktop and on a 375px phone (the ``viewport`` fixture),
 with a fresh trader and a paper portfolio of their own.
@@ -168,6 +168,10 @@ def test_the_telegram_panel_says_when_there_is_no_bot(browse, stack, viewport):
     v = _trader(browse, stack, "telegram", viewport)
     page = v.page
     v.go("/settings?tab=alerts")
+    # Settings sends alert settings to their one page (F39).
+    page.get_by_role("link", name="Open alert settings").click()
+    expect(page.get_by_role("heading", level=1)).to_have_text("Alert settings")
+    expect(page.get_by_role("heading", name="Where alerts reach you")).to_be_visible()
     panel = page.locator("app-telegram-link")
     expect(panel).to_contain_text("Telegram")
     expect(panel).to_contain_text("no Telegram bot yet")

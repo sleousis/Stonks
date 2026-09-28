@@ -1,14 +1,18 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 
-/** The views under Notifications: the feed and the price alerts that feed it. */
+/**
+ * The views under Notifications: the feed, the price alerts that feed it,
+ * and every alert setting in one place (what reaches you, where and when).
+ */
 export const NOTIFICATIONS_TABS = [
   { path: '/notifications', label: 'Feed' },
   { path: '/notifications/price-alerts', label: 'Price alerts' },
+  { path: '/notifications/settings', label: 'Alert settings' },
 ] as const;
 
 /**
- * The tab bar of Notifications and Price alerts, one tap apart. Plain links,
+ * The tab bar of the Feed, Price alerts and Alert settings, one tap apart. Plain links,
  * the current one marked with aria-current. 44px tall on phones.
  */
 @Component({

@@ -19,12 +19,18 @@ import type {
 } from '../../api/models';
 import { PortfolioService } from '../../api/portfolio.service';
 import { SessionService } from '../../core/auth/session.service';
-import { formatDateTime, formatMoney, formatNumber, formatPercent } from '../../core/format/format';
+import {
+  formatDate,
+  formatDateTime,
+  formatMoney,
+  formatNumber,
+  formatPercent,
+} from '../../core/format/format';
 import { dayChangeLine } from '../../core/format/day-change';
-import { DateTimePipe } from '../../shared/format.pipes';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
 import { baseCurrencyLine } from '../../shared/base-currency';
+import { strategyDisplayName } from '../../shared/strategy-names';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { HelpTip } from '../../shared/ui/help-tip';
@@ -66,6 +72,15 @@ export const STANCE: Record<Opinion['stance'], { text: string; mark: string }> =
   error: { text: 'could not score it', mark: '!' },
 };
 
+/** Asset classes as words people read ("Equity", not "equity"). */
+export const ASSET_CLASS_LABELS: Record<string, string> = {
+  cash: 'Cash',
+  equity: 'Equity',
+  crypto: 'Crypto',
+  commodity: 'Commodity',
+  bond: 'Bond',
+};
+
 /** "1 agrees, 2 disagree". */
 export function agreementLine(h: HoldingAgreement): string {
   const agree = `${h.agree} ${h.agree === 1 ? 'agrees' : 'agree'}`;
@@ -91,7 +106,6 @@ export function agreementLine(h: HoldingAgreement): string {
     StatTile,
     DataTable,
     TableCell,
-    DateTimePipe,
     HelpTip,
     MonthlyReturns,
     UpdatedAgo,
@@ -198,7 +212,13 @@ export class InsightsPage {
     if (!this.insights.hasValue()) return null;
     const e = this.insights.value().exposure;
     if (e.beta == null) return 'No beta for these holdings yet';
-    return `Against ${e.benchmark ?? 'the benchmark'}, ${this.pct(e.beta_coverage, false)} covered`;
+    return `Against ${e.benchmark ?? 'the benchmark'}, ${this.pct(e.beta_coverage, false)} of holdings covered`;
+  });
+
+  /** Net exposure under the gross figure, said in words. */
+  protected readonly netDetail = computed(() => {
+    if (!this.insights.hasValue()) return null;
+    return `Net ${this.pct(this.insights.value().exposure.net)}, long minus short`;
   });
 
   /** At least one month with a measured return for the heatmap. */
@@ -223,8 +243,13 @@ export class InsightsPage {
   protected readonly stance = STANCE;
   protected readonly agreementLine = agreementLine;
 
+  protected readonly strategyName = (id: string) => strategyDisplayName(id);
+  /** The trading day a snapshot is for; older rows fall back to when it was taken. */
+  protected readonly snapshotDay = (s: SnapshotView) => formatDate(s.as_of ?? s.taken_at);
+
   protected readonly historyColumns: TableColumn<SnapshotView>[] = [
-    { key: 'taken_at', label: 'Taken', format: 'datetime', mobile: 'title' },
+    { key: 'as_of', label: 'Trading day', mobile: 'title', value: (s) => s.as_of ?? s.taken_at },
+    { key: 'taken_at', label: 'Saved at', format: 'datetime', mobile: 'hide' },
     { key: 'total_value', label: 'Value', format: 'money', currency: () => this.currency() },
     { key: 'cash', label: 'Cash', format: 'money', currency: () => this.currency() },
     {
@@ -236,7 +261,10 @@ export class InsightsPage {
   ];
   protected readonly snapshotKey = (s: SnapshotView) => String(s.id);
   protected readonly sliceKey = (s: AllocationSlice) => s.key;
-  protected readonly sliceLabel = (s: AllocationSlice) => (s.key === 'cash' ? 'Cash' : s.key);
+  protected readonly sliceLabel = (s: AllocationSlice) =>
+    this.dimension() === 'asset_class' || s.key === 'cash'
+      ? (ASSET_CLASS_LABELS[s.key] ?? s.key)
+      : s.key;
   protected readonly barWidth = (s: AllocationSlice) =>
     `${Math.max(0, Math.min(1, Math.abs(s.weight ?? 0))) * 100}%`;
 }

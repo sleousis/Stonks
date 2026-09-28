@@ -7,8 +7,22 @@
   margin-bottom: var(--space-2);
 }
 
-.off p + p {
-  margin-top: var(--space-2);
+.off .panel-body {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  max-width: 65ch;
+  padding-block: var(--space-6);
+}
+
+.off-mark {
+  color: var(--color-ink-3);
+  font-size: var(--text-2xl, 1.5rem);
+  line-height: 1;
+}
+
+.off p {
+  margin: 0;
 }
 
 .banner {

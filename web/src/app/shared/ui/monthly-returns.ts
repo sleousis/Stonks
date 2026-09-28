@@ -23,6 +23,11 @@ export interface MonthCell {
 export interface YearRow {
   year: string;
   cells: MonthCell[];
+  /**
+   * The months from the first to the last one with a return, for the
+   * stacked phone view: never the empty months around them.
+   */
+  span: MonthCell[];
   /** Compounded over the months shown. */
   total: string;
   totalTone: Tone;
@@ -68,9 +73,12 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
         };
       });
       const total = any ? growth - 1 : null;
+      const first = row.findIndex((c) => c.value !== null);
+      const last = row.length - 1 - [...row].reverse().findIndex((c) => c.value !== null);
       return {
         year,
         cells: row,
+        span: first < 0 ? [] : row.slice(first, last + 1),
         total: total === null ? '–' : formatPercent(total, { signed: true, digits: 1 }),
         totalTone: tone(total),
       };
@@ -80,8 +88,10 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
 /**
  * A monthly returns heatmap: one row per year, a cell per month shaded by
  * sign and size, and the year compounded at the end. Every cell carries its
- * signed percent, so the colour is never the only cue. Scrolls sideways on
- * a phone.
+ * signed percent, so the colour is never the only cue. Where the grid does
+ * not fit (a phone, a narrow panel) it stacks by year instead: each year's
+ * total, then only the months that have a return, so the latest month is
+ * never off screen.
  *
  *   <app-monthly-returns caption="Paper return by month" [months]="sheet.monthly_returns" />
  */
@@ -89,7 +99,7 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
   selector: 'app-monthly-returns',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="months-scroll" tabindex="0" [attr.aria-label]="caption()">
+    <div class="months-scroll" tabindex="0" role="region" [attr.aria-label]="caption()">
       <table class="months">
         <caption class="visually-hidden">
           {{
@@ -102,7 +112,7 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
             @for (m of monthNames; track m) {
               <th scope="col">{{ m }}</th>
             }
-            <th scope="col">Year</th>
+            <th scope="col">Year total</th>
           </tr>
         </thead>
         <tbody>
@@ -120,11 +130,90 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
         </tbody>
       </table>
     </div>
+    <div class="stacked" role="region" [attr.aria-label]="caption()">
+      @for (y of rows(); track y.year) {
+        <section class="year" [attr.aria-label]="y.year">
+          <p class="year-head">
+            <span class="num year-name">{{ y.year }}</span>
+            <span class="year-total">
+              Year total
+              <span class="num total" [attr.data-tone]="y.totalTone">{{ y.total }}</span>
+            </span>
+          </p>
+          @if (y.span.length) {
+            <dl class="year-months">
+              @for (c of y.span; track c.month) {
+                <div class="cell" [attr.data-tone]="c.tone" [attr.data-strength]="c.strength">
+                  <dt>{{ c.month }}</dt>
+                  <dd class="num">{{ c.text || '–' }}</dd>
+                </div>
+              }
+            </dl>
+          }
+        </section>
+      }
+    </div>
   `,
   styles: `
     :host {
       display: block;
       min-width: 0;
+      container-type: inline-size;
+    }
+    .stacked {
+      display: none;
+      gap: var(--space-3);
+      padding: 0 var(--space-4) var(--space-3);
+    }
+    /* The grid needs about 44rem; narrower, it stacks by year (never hides a month). */
+    @container (max-width: 46rem) {
+      .months-scroll {
+        display: none;
+      }
+      .stacked {
+        display: grid;
+      }
+    }
+    .year-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-1) var(--space-3);
+      margin-bottom: var(--space-2);
+      font-size: var(--text-sm);
+    }
+    .year-name {
+      font-weight: var(--weight-semibold);
+    }
+    .year-total {
+      color: var(--color-ink-3);
+    }
+    .year-total .total {
+      padding: 0 var(--space-1);
+      border-radius: var(--radius-sm);
+    }
+    .year-months {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+      gap: 2px;
+      margin: 0;
+    }
+    .year-months .cell {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-2);
+      padding: var(--space-2);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
+      font-size: var(--text-sm);
+    }
+    .year-months dt {
+      color: var(--color-ink-2);
+    }
+    .year-months dd {
+      margin: 0;
     }
     .months-scroll {
       overflow-x: auto;
@@ -181,8 +270,12 @@ export function yearRows(months: readonly MonthReturnLike[]): YearRow[] {
     }
     @media print {
       .months-scroll {
+        display: block;
         overflow: visible;
         padding: 0;
+      }
+      .stacked {
+        display: none;
       }
       .months {
         min-width: 0;

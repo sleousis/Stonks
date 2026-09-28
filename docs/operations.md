@@ -354,7 +354,7 @@ The Telegram bot sends your notifications to a chat and answers a few commands. 
 2. Put the token in `.env` as `STONKS_TELEGRAM_BOT_TOKEN`. Never in TOML.
 3. With the token set, linked chats get notifications (the `telegram` channel, on by default, and a fallback for urgent ones like email).
 4. To answer commands too, set `[telegram] enabled = true` and restart `stonks serve`. The bot then polls inside the API process.
-5. Each person links their own chat: make a one-time code in the console (Settings, Telegram) or with the CLI, then send `/link CODE` to the bot. The code works once, for 10 minutes.
+5. Each person links their own chat: make a one-time code in the console (Notifications, Alert settings, Telegram) or with the CLI, then send `/link CODE` to the bot. The code works once, for 10 minutes.
 
 ```bash
 uv run stonks telegram link-code --user you@example.com

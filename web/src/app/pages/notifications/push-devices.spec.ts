@@ -81,7 +81,7 @@ describe('PushDevices', () => {
     expect(phone.textContent).toContain('Last used 2h ago');
     expect(laptop.textContent).toContain('Not used yet');
     expect(laptop.textContent).toContain('Recent deliveries failed');
-    expect(el.querySelector('a[href="/settings"]')).not.toBeNull();
+    expect(el.textContent).toContain('Push on this device');
   });
 
   it('asks first, then removes another device', async () => {

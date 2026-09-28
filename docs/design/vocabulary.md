@@ -77,6 +77,24 @@ One word per state, on every page.
 | A check that failed | Failed |
 | A check with too little data | Not enough data yet |
 
+## Money and alert words
+
+The money pages and alerts use these words. Each has a glossary entry.
+
+| Words people see | Meaning |
+|---|---|
+| Gross exposure | Long plus short positions as a share of value. |
+| Net exposure | Long minus short positions as a share of value. |
+| The strategy's part | The part of a portfolio one strategy holds (was "sleeve"). |
+| Your limit | A risk limit you set that is stricter than the system's. |
+| Year total | A year's months compounded, in the monthly returns (never a second "Year"). |
+| Base currency | The currency a portfolio is valued in. |
+| Lot, Oldest first (FIFO), Specific lots, Cost basis, Wash sale, Long term | Tax lot words. |
+| Cash flow, Deposit, Withdrawal, Net deposits | Money put in or taken out. Never profit. |
+| Price alert | A rule on a ticker's daily close. |
+| Alert settings | The one page for what reaches you, where and when. |
+| Quiet hours | Hours when alerts wait for a morning summary. |
+
 ## Stop buttons
 
 - **Kill switch:** "Stop trading". One pattern everywhere: a sheet that defaults to the portfolio on screen, shows a ticket and needs a reason.

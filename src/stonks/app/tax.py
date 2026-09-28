@@ -56,6 +56,13 @@ class TaxSettingsView(BaseModel):
     )
     wash_sales: bool = Field(description="US wash sale adjustment (us jurisdiction only).")
     updated_at: datetime | None = None
+    locked: bool = Field(
+        default=False,
+        description=(
+            "True while the portfolio trades real money: the base currency and jurisdiction"
+            " are the live account profile's too and cannot change."
+        ),
+    )
 
 
 class TaxSettingsUpdate(BaseModel):
@@ -449,6 +456,13 @@ def _refuse_locked_change(
         )
 
 
+def _is_locked(state: SqliteState, portfolio_id: str) -> bool:
+    """Whether the portfolio's stage trades real money (see ``_refuse_locked_change``)."""
+    from stonks.production.live.stages import get_stage, trades_real_money
+
+    return trades_real_money(get_stage(state, portfolio_id))
+
+
 def _settings_view(state: SqliteState, portfolio_id: str) -> TaxSettingsView:
     base = state.sql("SELECT base_currency FROM portfolios WHERE id = ?", [portfolio_id])
     row = state.sql(
@@ -457,6 +471,7 @@ def _settings_view(state: SqliteState, portfolio_id: str) -> TaxSettingsView:
         [portfolio_id],
     )
     currency = str(base[0]["base_currency"]).upper() if base else "USD"
+    locked = _is_locked(state, portfolio_id)
     if not row:
         return TaxSettingsView(
             portfolio_id=portfolio_id,
@@ -464,6 +479,7 @@ def _settings_view(state: SqliteState, portfolio_id: str) -> TaxSettingsView:
             jurisdiction="us",
             lot_method="fifo",
             wash_sales=True,
+            locked=locked,
         )
     r = row[0]
     return TaxSettingsView(
@@ -473,4 +489,5 @@ def _settings_view(state: SqliteState, portfolio_id: str) -> TaxSettingsView:
         lot_method=r["lot_method"],
         wash_sales=bool(r["wash_sales"]),
         updated_at=datetime.fromisoformat(r["updated_at"]),
+        locked=locked,
     )

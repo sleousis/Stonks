@@ -119,6 +119,26 @@ describe('TaxPage', () => {
     expect(el.textContent).toContain('No sales yet');
   });
 
+  it('says when and why base currency and filing place are locked (real money)', async () => {
+    settings = { ...SETTINGS, locked: true };
+    await render();
+    const note = el.querySelector('.locked')!;
+    expect(note.textContent).toContain('locked while this portfolio trades real money');
+    expect(note.textContent).toContain('Broker paper');
+    expect(note.querySelector('a[href="/profile/live/pf_1"]')).not.toBeNull();
+    expect(el.querySelector<HTMLInputElement>('#tax-base')!.disabled).toBe(true);
+    // Where you file shows as text, not as choices; the lot method can still change.
+    expect(radio('European Union')).toBeUndefined();
+    expect(el.textContent).toContain('United States');
+    expect(radio('Specific lots')).toBeDefined();
+  });
+
+  it('shows no lock note on a paper portfolio', async () => {
+    await render();
+    expect(el.querySelector('.locked')).toBeNull();
+    expect(el.querySelector<HTMLInputElement>('#tax-base')!.disabled).toBe(false);
+  });
+
   it('hides wash sales outside the US and checks the currency code', async () => {
     await render();
     radio('European Union').click();

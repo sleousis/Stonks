@@ -4868,6 +4868,7 @@ A lake snapshot by folder name; fetch it from ``GET /api/lab/worker/snapshots/{n
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `as_of` | date \| null | no | The trading day the snapshot is for (null on old rows). |
 | `cash` | number | yes |  |
 | `id` | integer | yes |  |
 | `positions` | dict[str, number] | yes |  |
@@ -5387,6 +5388,7 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 |-------|------|----------|-------------|
 | `base_currency` | string | yes | Reporting currency of values, P&L and exports. |
 | `jurisdiction` | "us" \| "eu" \| "uk" | yes | us applies wash sales when switched on. |
+| `locked` | boolean | no | True while the portfolio trades real money: the base currency and jurisdiction are the live account profile's too and cannot change. |
 | `lot_method` | "fifo" \| "specific" | yes | fifo, or specific: your picks first, then FIFO for the rest. |
 | `portfolio_id` | string | yes |  |
 | `updated_at` | date-time \| null | no |  |

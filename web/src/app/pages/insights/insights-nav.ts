@@ -28,37 +28,51 @@ export const INSIGHTS_SECTIONS = [
   `,
   styles: `
     @use 'breakpoints' as bp;
+
+    /* Underline tabs, the same as Notifications: sections of one page. */
+    :host {
+      display: block;
+      min-width: 0;
+    }
     .section-nav {
       display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-2);
-      margin-bottom: var(--space-4);
+      gap: var(--space-1);
+      margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+      border-bottom: 1px solid var(--color-border);
+      overflow-x: auto;
+      scrollbar-width: none;
     }
     a {
       display: inline-flex;
       align-items: center;
-      min-height: 2.25rem;
+      min-height: 36px;
       padding: 0 var(--space-3);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
+      margin-bottom: -1px;
+      border-bottom: 2px solid transparent;
       color: var(--color-ink-2);
+      font-size: var(--text-sm);
+      font-weight: var(--weight-medium);
       text-decoration: none;
-      font-weight: 500;
-      @include bp.phone {
-        min-height: var(--touch-min);
-      }
-      @include bp.coarse {
-        min-height: var(--touch-min);
-      }
+      white-space: nowrap;
     }
     a:hover {
       color: var(--color-ink);
-      background: var(--color-surface-2);
     }
     a.active {
       color: var(--color-ink);
-      background: var(--color-surface-3);
-      border-color: var(--color-ink-3);
+      border-bottom-color: var(--color-accent);
+    }
+    @include bp.phone {
+      a {
+        flex: 1 1 auto;
+        justify-content: center;
+        min-height: var(--touch-min);
+      }
+    }
+    @include bp.coarse {
+      a {
+        min-height: var(--touch-min);
+      }
     }
   `,
 })

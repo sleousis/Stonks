@@ -157,6 +157,15 @@ describe('SettingsPage', () => {
     sessionStorage.clear();
   });
 
+  it('sends alert settings to their one page instead of hosting them (F39)', async () => {
+    await setup(TRADER);
+    expect(el.querySelector('app-notification-prefs')).toBeNull();
+    expect(el.querySelector('app-telegram-link')).toBeNull();
+    const link = el.querySelector<HTMLAnchorElement>('a[href="/notifications/settings"]');
+    expect(link?.textContent?.trim()).toBe('Open alert settings');
+    http.verify();
+  });
+
   function headings(): string[] {
     return [...el.querySelectorAll('h2, h3')].map((h) => h.textContent?.trim() ?? '');
   }
