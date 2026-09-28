@@ -146,7 +146,7 @@ RegisterConfirm = Annotated[
         description="must be true with register_strategy / register_if_passes; otherwise a preview"
     ),
 ]
-CostModelName = Literal["zero", "realistic"]
+CostModelName = Literal["zero", "realistic", "ibkr_tiered", "ibkr_fixed"]
 LabCostModel = Annotated[
     CostModelName | None,
     Field(description="transaction-cost preset (see list_cost_models); default [backtest.costs]"),

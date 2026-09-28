@@ -11,6 +11,7 @@ import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { TicketCountService } from '../../core/tickets/ticket-count.service';
 import { TRADER } from '../../../testing/auth-fixtures';
+import { provideFakeTax } from '../../../testing/fake-tax';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { TicketsPage } from './tickets.page';
 
@@ -86,7 +87,7 @@ describe('TicketsPage', () => {
 
   beforeEach(async () => {
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting(), provideFakeTax()],
     });
     controller = TestBed.inject(HttpTestingController);
     const session = TestBed.inject(SessionService);

@@ -695,7 +695,7 @@ Waves:
 7. Opening auction for every order (proposed, matches the backtest) or a day order at the open with a collar?
 8. Will other traders bring their own IBKR logins? Each login needs its own gateway container and its own weekly approval.
 9. Do you want a read-only stage (gateway with `READ_ONLY_API=yes`, sync only) before broker paper?
-10. Fractional shares stay off in this phase. Do small accounts need them later?
+10. Fractional shares stay off in this phase. Do small accounts need them later? Partly answered by 23.1: the order pipeline sizes a live IBKR book to whole shares before the risk rules count its cash, and every backtest reports the minimum capital a strategy needs ([whole shares and fees](whole-shares-and-fees.md)).
 
 ## 11. What wave 1 built
 

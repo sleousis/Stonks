@@ -25,6 +25,7 @@ const CATEGORIES: readonly { value: Category; label: string; hint: string }[] = 
   { value: 'signal', label: 'Signals', hint: 'What your strategies want to trade' },
   { value: 'price_alert', label: 'Price alerts', hint: 'Your rules on daily closes' },
   { value: 'event_alert', label: 'Upcoming events', hint: 'Earnings, dividends, releases' },
+  { value: 'screen_alert', label: 'Screen alerts', hint: 'Saved screens with new matches' },
   { value: 'order', label: 'Orders and fills', hint: 'Orders placed and filled' },
   { value: 'risk', label: 'Risk alerts', hint: 'Limits, loss halts, stops' },
   { value: 'system', label: 'System', hint: 'Data and server problems' },

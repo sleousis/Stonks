@@ -28,11 +28,19 @@ Everything else is a warning, and an error with ``strict=True``:
 * ``zero_costs``: the dataset charges no costs (BL-13);
 * ``missing_benchmark``: the benchmark ticker has no bars in the window.
 
-With no lake the preflight is skipped. The checks only read.
+One more check is always an error and runs even with no lake:
+
+* ``forecast_cutoff``: the strategy runs a pretrained forecaster whose
+  pretraining cutoff (roadmap 23.11) is on or after the first day of the
+  validation window, so the model may have seen the prices it is judged
+  on. The strategy names its models with ``forecast_models(params)``.
+
+With no lake the data checks are skipped. The checks only read.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import date, timedelta
 from typing import Any, Literal
@@ -40,6 +48,7 @@ from typing import Any, Literal
 import pandas as pd
 
 from stonks.backtest.benchmark import normalize_spec
+from stonks.features.forecasters.cutoff import cutoff_violations, strategy_forecast_models
 from stonks.logging import get_logger
 from stonks.strategies.base import strategy_data_tickers
 
@@ -121,16 +130,19 @@ def run_preflight(
     *,
     strict: bool = False,
     universe_id: str | None = None,
+    params: Mapping[str, Any] | None = None,
 ) -> PreflightReport:
     """Check ``dataset`` (and ``strategy``'s history needs) before a run.
     ``universe_id`` (default: the dataset's ``universe_id`` attribute, if
-    any) names the point-in-time universe the dataset was built from."""
+    any) names the point-in-time universe the dataset was built from.
+    ``params`` are the pinned params, which may pick the forecaster."""
+    cutoff_issues = forecast_cutoff_issues(dataset, strategy, params)
     lake = getattr(dataset, "lake", None)
     if lake is None:
-        return PreflightReport(skipped=True)
+        return PreflightReport(cutoff_issues, skipped=True)
     if universe_id is None:
         universe_id = getattr(dataset, "universe_id", None)
-    issues: list[PreflightIssue] = []
+    issues: list[PreflightIssue] = list(cutoff_issues)
 
     def add(code: str, message: str, *, fatal: bool = False, **details: Any) -> None:
         severity: Severity = "error" if fatal or strict else "warning"
@@ -153,6 +165,46 @@ def run_preflight(
     for issue in report.issues:
         _log.info("lab.preflight.issue", code=issue.code, severity=issue.severity)
     return report
+
+
+def forecast_cutoff_issues(
+    dataset: Any, strategy: Any, params: Mapping[str, Any] | None = None
+) -> list[PreflightIssue]:
+    """``forecast_cutoff`` errors for each model ``strategy`` may run whose
+    pretraining cutoff is on or after the validation window's first day.
+    The window is taken with no embargo: an embargo only moves it later."""
+    if strategy is None:
+        return []
+    models = strategy_forecast_models(strategy, params)
+    if not models:
+        return []
+    start = dataset.val_window[0]
+    issues = []
+    for v in cutoff_violations(models, start):
+        if v.cutoff is None:
+            message = (
+                f"unknown forecaster {v.model!r}: its pretraining cutoff is unknown, so no "
+                "window can be shown to be out of sample"
+            )
+        else:
+            message = (
+                f"the validation window starts {start}, on or before {v.model}'s pretraining "
+                f"cutoff {v.cutoff}: the model may have seen those prices. Move the run so "
+                f"the validation window starts after {v.cutoff}"
+            )
+        issues.append(
+            PreflightIssue(
+                "forecast_cutoff",
+                "error",
+                message,
+                {
+                    "model": v.model,
+                    "cutoff": v.cutoff.isoformat() if v.cutoff else None,
+                    "validation_start": start.isoformat(),
+                },
+            )
+        )
+    return issues
 
 
 def _references(lake: Any, dataset: Any, strategy: Any, universe: list[str], add: Any) -> None:

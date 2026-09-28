@@ -17,6 +17,7 @@ from stonks.app.halts import (
     HaltService,
     HaltView,
     KillSwitchRequest,
+    ResumeChecksView,
     ResumeRequest,
 )
 from stonks.app.pagination import Page, page_of
@@ -49,6 +50,20 @@ def get_halt(halt_id: int, halts: HaltsDep, principal: PrincipalDep) -> HaltView
     return halts.get(principal, halt_id)
 
 
+@router.get(
+    "/{halt_id}/resume-checks",
+    response_model=ResumeChecksView,
+    operation_id="getResumeChecks",
+    dependencies=needs(Permission.KILLSWITCH_USER),
+)
+def get_resume_checks(halt_id: int, halts: HaltsDep, principal: PrincipalDep) -> ResumeChecksView:
+    """What a resume of this kill switch checks, read now: per covered
+    portfolio at a real broker, the gateway is up, the last reconcile was
+    clean, the account reads and its equity covers a multiple of the
+    largest position. Read only."""
+    return halts.resume_checks(principal, halt_id)
+
+
 @router.post(
     "/kill",
     status_code=201,
@@ -78,7 +93,8 @@ def resume_kill_switch(
 ) -> HaltView:
     """Turn a kill switch off. ``confirmation`` must be exactly
     ``RESUME TRADING``; the reason is audited. Needs a second factor from
-    the last few minutes (step-up), so API tokens get 403."""
+    the last few minutes (step-up), so API tokens get 403. A failed resume
+    check is a 409 unless ``override_checks`` is set (audited)."""
     return halts.resume_kill(principal, halt_id, body, ip=client_ip(request))
 
 

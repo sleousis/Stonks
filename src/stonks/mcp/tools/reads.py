@@ -175,6 +175,14 @@ def register(t: ToolContext) -> None:
         )
 
     @server.tool(annotations=READ)
+    async def get_market_breadth(as_of: IsoDate | None = None) -> dict[str, Any]:
+        """Market breadth from the lake, display only: advances and declines,
+        the share of stocks above their 50 and 200 day averages, new one year
+        highs and lows, and distribution days on the index (falls of 0.2% or
+        more on higher volume), each with a plain sentence."""
+        return await t.get("/api/market/breadth", {"as_of": iso(as_of)})
+
+    @server.tool(annotations=READ)
     async def list_orders(
         portfolio_id: PortfolioId = None,
         tick_id: str | None = None,
@@ -400,6 +408,14 @@ def register(t: ToolContext) -> None:
         """Operational health (every `stonks health` check): bar freshness, stuck
         ticks and ingest runs, recent ingest failures; see `healthy`."""
         return await t.get("/api/health/report", {"tickers": tickers})
+
+    @server.tool(annotations=READ)
+    async def get_price_check() -> dict[str, Any] | None:
+        """The newest second-source price check: each held and signalled
+        ticker's vendor close and adjusted return against a second source,
+        and the tickers whose opening orders the tick holds (`held`). Null
+        before the first check."""
+        return await t.get("/api/health/price-check")
 
     @server.tool(annotations=READ)
     async def get_stream_status() -> dict[str, Any]:

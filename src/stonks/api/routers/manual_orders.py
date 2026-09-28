@@ -18,6 +18,8 @@ from stonks.app.manual_orders import (
     ManualOrderResult,
     OrderCancelRequest,
     OrderCancelResult,
+    TradePlanRequest,
+    TradePlanView,
 )
 from stonks.auth import Permission
 
@@ -53,6 +55,21 @@ def preview_manual_order(
     """Run every check of an order and say what would be placed. Nothing is
     recorded or sent."""
     return services.manual_orders.preview(principal, body)
+
+
+@router.post(
+    "/manual/plan",
+    response_model=TradePlanView,
+    operation_id="planManualOrder",
+    dependencies=needs(Permission.PORTFOLIO_TRADE),
+)
+def plan_manual_order(
+    services: ServicesDep, principal: PrincipalDep, body: TradePlanRequest
+) -> TradePlanView:
+    """Size an entry from the risk you choose (a percent of the book or an
+    amount) and the distance to your stop, in whole shares within the cash.
+    Nothing is placed."""
+    return services.manual_orders.plan(principal, body)
 
 
 @router.post(

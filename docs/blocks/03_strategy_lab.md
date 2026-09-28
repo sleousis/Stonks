@@ -88,7 +88,7 @@ uv run stonks lab run ma_crossover --tickers AAPL.US --start 2023-01-01 --end 20
 
 ## Survival tests
 
-A test is one module in `lab/survival/` with an `id` and a `run` method; `survival/registry.py` finds it. There are 21:
+A test is one module in `lab/survival/` with an `id` and a `run` method; `survival/registry.py` finds it. There are 23:
 
 | Id | Checks |
 |----|--------|
@@ -98,6 +98,7 @@ A test is one module in `lab/survival/` with an `id` and a `run` method; `surviv
 | `drift` | Feature distributions did not shift (PSI) |
 | `walk_forward` | Rolling tune and test windows, walk-forward efficiency |
 | `deflated_sharpe` | Sharpe still significant after counting every trial |
+| `data_snooping` | The best trial beats cash after White's Reality Check, Hansen's SPA and Romano-Wolf over the trial family (roadmap 23.9) |
 | `pbo` | Probability of backtest overfitting (CSCV) |
 | `mc_trades` | Monte Carlo over the trade sequence |
 | `cost_stress` | Survives doubled costs and a speed limit |
@@ -120,7 +121,7 @@ Presets (`--preset`):
 |--------|-------|
 | `quick` (default; `--register` defaults to `promotion`) | `oos`, `period_stability` |
 | `standard` | `quick` plus `perturbation`, `walk_forward`, `deflated_sharpe`, `cost_stress` |
-| `promotion` | `oos`, `walk_forward`, `deflated_sharpe`, `pbo`, `mc_trades`, `cost_stress`, `plateau`, `cross_instrument`, `benchmark_relative`, `mcpt` (200 permutations), `event_study`, `vs_random`, `cpcv`, `crisis` |
+| `promotion` | `oos`, `walk_forward`, `deflated_sharpe`, `pbo`, `mc_trades`, `cost_stress`, `plateau`, `cross_instrument`, `benchmark_relative`, `mcpt` (200 permutations), `event_study`, `vs_random`, `cpcv`, `crisis`, `data_snooping` |
 
 `--tests a,b,c` picks tests by id instead. `--test-option` passes options to one test.
 
@@ -140,6 +141,34 @@ Other rules:
 - IC standard errors keep gaps in the date calendar.
 - The suite runs `walk_forward` first, so `mc_trades` always scores the stitched trades. Reports keep the order you asked for.
 - The trial matrix is indexed by date.
+
+### Data snooping (roadmap 23.9)
+
+A search that tries many settings finds a good-looking one by luck. `deflated_sharpe` corrects the Sharpe ratio for the number of trials. `data_snooping` tests the trials directly, as a bootstrap over their per-bar returns (`stats/data_snooping.py`):
+
+- White's Reality Check: can the best trial's mean return be luck, given every trial tried?
+- Hansen's SPA: the same question, less hurt by bad trials that cannot win. The test passes when its p-value is at most `max_p` (0.05).
+- Romano-Wolf step-down: which trials beat cash while the chance of any false find stays at `max_p`. The report says how many it rejects and whether the selected trial is one of them.
+
+The trial family is the run's own trials plus every run of the same research family. Other runs' trials are lined up on the run's bars by date, and a missing bar counts as cash. The bootstrap is a stationary block bootstrap (mean block 10 bars) with a fixed seed. Fewer than `min_trials` usable trials fails for lack of data.
+
+### Lab verify (roadmap 23.9)
+
+`stonks lab verify [RUN_OR_STRATEGY ...]` reruns a stored lab result from its manifest and says whether it still holds (P2, P12):
+
+1. It recomputes the data fingerprint over the same tickers, window and interval, and names the tickers whose bars, corporate actions or statement versions changed since. Restated statements are listed apart (`restated_tickers`).
+2. It compares the config hash and the git sha with today's.
+3. It rebuilds the chosen parameters on the run's dataset, scores them with the run's objective and seed, and compares with the stored score.
+
+A result has moved when the score changed by more than `[lab.verify] tolerance`, or can no longer be scored. Changed data alone is reported, not judged: a restated revenue figure does not move a price-only strategy. The CLI exits 1 when a result moved.
+
+The weekly `lab_verify` job (Sunday 07:00 UTC, all three scheduler backends) reruns every strategy of `[lab.verify] statuses` and sends one operator alert naming the ones that moved. REST: `POST /api/lab/verify` then `GET /api/lab/verify/jobs/{job_id}/result`. MCP: `verify_lab_results`.
+
+```toml
+[lab.verify]
+tolerance = 0.05        # in the objective's units
+statuses = ["active"]   # what the weekly job re-checks
+```
 
 ### Purged CV, CPCV and labels (BL-45)
 

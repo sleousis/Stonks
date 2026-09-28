@@ -1,4 +1,5 @@
 import type {
+  CalibrationView,
   ModelVersionView,
   SwapCheckView,
   SwapReportView,
@@ -72,8 +73,9 @@ export function swapCheckRow(c: SwapCheckView): SwapCheckRow {
     value = pct(c.value);
     limit = c.limit == null ? MISSING : `≤ ${formatPercent(c.limit)}`;
   } else if (c.name === 'vs_live') {
-    value = pct(c.value, true);
-    limit = c.limit == null ? MISSING : `≥ ${formatPercent(c.limit, { signed: true })}`;
+    // A paired test (roadmap 23.9): the HAC t-statistic of the daily gap.
+    value = c.value == null ? MISSING : `t ${formatNumber(c.value, { digits: 2 })}`;
+    limit = c.limit == null ? MISSING : `≥ ${formatNumber(c.limit, { digits: 2 })}`;
   }
   return {
     name: c.name,
@@ -82,6 +84,31 @@ export function swapCheckRow(c: SwapCheckView): SwapCheckRow {
     value,
     limit,
     detail: c.detail,
+  };
+}
+
+/** One version's live calibration, formatted (roadmap 23.9). */
+export interface CalibrationRow {
+  version: number;
+  resolved: string;
+  brier: string;
+  baseRate: string;
+  skill: string;
+  ece: string;
+  /** Beats always forecasting the base rate (null until resolved). */
+  beatsBaseRate: boolean | null;
+}
+
+export function calibrationRow(c: CalibrationView): CalibrationRow {
+  const num = (v: number | null, digits = 3) => (v == null ? MISSING : formatNumber(v, { digits }));
+  return {
+    version: c.version,
+    resolved: `${formatNumber(c.n_resolved, { digits: 0 })} of ${formatNumber(c.n_forecasts, { digits: 0 })}`,
+    brier: num(c.brier),
+    baseRate: num(c.brier_base_rate),
+    skill: num(c.skill, 2),
+    ece: num(c.ece),
+    beatsBaseRate: c.skill == null ? null : c.skill > 0,
   };
 }
 

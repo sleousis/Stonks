@@ -46,6 +46,7 @@ from stonks.core.types import AssetClass, Order
 
 if TYPE_CHECKING:
     from stonks.backtest.simulated_broker import FinancingEvent
+    from stonks.portfolio.lots import LotReport
 
 _TRADING_DAYS_PER_YEAR = 252
 
@@ -177,6 +178,9 @@ class BacktestReport:
     #: Financing, forced orders, exposure and long/short attribution of a
     #: backtest that allows shorts; ``None`` for a long-only one.
     short_book: ShortBookReport | None = None
+    #: What lot rounding did and the minimum capital (roadmap 23.1); the
+    #: engine always fills it.
+    lots: LotReport | None = None
 
     @property
     def profit_factor(self) -> float:

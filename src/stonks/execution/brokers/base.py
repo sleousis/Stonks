@@ -194,6 +194,16 @@ class OrderCanceller(Protocol):
     def cancel_order(self, client_id: str) -> bool: ...
 
 
+@runtime_checkable
+class NativeAlgoBroker(Protocol):
+    """Optional capability (roadmap 23.16): the execution algos the broker
+    runs itself (IBKR: Adaptive, VWAP, TWAP). An order with one of them goes
+    out as one order; any other sliceable algo is sent as child slices by
+    Stonks (``execution.algos.slicer``)."""
+
+    native_algos: frozenset[str]
+
+
 # ---- live broker capabilities (roadmap 19.1) -------------------------------------
 
 

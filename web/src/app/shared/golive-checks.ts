@@ -1,5 +1,5 @@
 import type { GoLiveCheckView, GoLiveReport, PromotionChecklistView } from '../api/models';
-import { MISSING, formatNumber, formatPercent } from '../core/format/format';
+import { MISSING, formatMoney, formatNumber, formatPercent } from '../core/format/format';
 import { toTraderWords } from './governance-labels';
 
 export type GoLiveCheckName = GoLiveCheckView['name'];
@@ -220,6 +220,8 @@ export function checklistItems(c: PromotionChecklistView | undefined): Checklist
     item('dsr', 'Deflated Sharpe', 'deflated_sharpe', (v) => formatNumber(v, { digits: 3 })),
     item('pbo', 'PBO', 'pbo', (v) => formatNumber(v, { digits: 3 })),
     item('excess_cagr', 'Excess CAGR', 'excess_cagr', (v) => formatPercent(v, { signed: true })),
+    item('min_capital', 'Minimum capital', 'min_capital', (v) => formatMoney(v, { compact: true })),
+    item('lot_skipped_share', 'Skipped by whole shares', 'min_capital', (v) => formatPercent(v)),
     text('hypothesis', 'Hypothesis'),
     text('premortem', 'Premortem'),
   ];

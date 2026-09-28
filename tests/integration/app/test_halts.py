@@ -454,3 +454,76 @@ def test_a_portfolio_kill_cancels_everything_only_when_it_covers_the_gateway(
     # the gateway serves only pf_default, so cancelling all of it is safe
     assert gw.global_cancels == 1
     assert _order_status(settings, TICK_ORDER) == "cancelled"
+
+
+# ---- resume checks (roadmap 23.15) --------------------------------------------------
+
+
+class _Account:
+    def __init__(self, equity):
+        self.equity = equity
+
+
+class CheckedBroker:
+    """A broker the resume checks read: positions, account and quotes."""
+
+    def __init__(self, equity=100_000.0, positions=None, down=False):
+        from stonks.core.types import Portfolio
+
+        self._portfolio = Portfolio(cash=equity, positions=positions or {})
+        self._equity = equity
+        self.down = down
+
+    def fetch_portfolio(self):
+        if self.down:
+            from stonks.execution.brokers.base import BrokerUnavailableError
+
+            raise BrokerUnavailableError("gateway down")
+        return self._portfolio
+
+    def fetch_account(self):
+        return _Account(self._equity)
+
+    def quotes(self, tickers):
+        return {}
+
+
+def _checked_halts(services, broker):
+    return HaltService(
+        services.context, brokers=lambda pid: broker if pid == "pf_default" else None
+    )
+
+
+def test_resume_checks_are_read_before_the_phrase(services, people):
+    halts = _checked_halts(services, CheckedBroker())
+    halt = halts.engage_kill(people["owner"], KillSwitchRequest(scope="global", reason="r"))
+    view = halts.resume_checks(people["owner"], halt.id)
+    assert view.passed
+    names = {c.name for c in view.checks if c.portfolio_id == "pf_default"}
+    assert {"gateway_up", "last_reconcile_clean", "account_readable", "equity_cover"} <= names
+
+
+def test_a_failed_check_refuses_the_resume_unless_overridden(services, people, settings):
+    from stonks.app.errors import ConflictError
+
+    halts = _checked_halts(services, CheckedBroker(down=True))
+    halt = halts.engage_kill(people["owner"], KillSwitchRequest(scope="global", reason="r"))
+    assert not halts.resume_checks(people["owner"], halt.id).passed
+    body = ResumeRequest(confirmation=RESUME_PHRASE, reason="back")
+    with pytest.raises(ConflictError, match="gateway_up"):
+        halts.resume_kill(people["owner"], halt.id, body)
+    forced = ResumeRequest(confirmation=RESUME_PHRASE, reason="back", override_checks=True)
+    assert halts.resume_kill(people["owner"], halt.id, forced).active is False
+    [row] = _audit(settings, "kill_switch.resume")
+    details = json.loads(row["details_json"])
+    assert details["override_checks"] is True
+    assert any(c["name"] == "gateway_up" and c["passed"] is False for c in details["checks"])
+
+
+def test_the_resume_checks_route(client):
+    halt_id = client.post(
+        "/api/halts/kill", json={"scope": "global", "reason": "r"}, headers=AUTH
+    ).json()["id"]
+    got = client.get(f"/api/halts/{halt_id}/resume-checks", headers=AUTH)
+    assert got.status_code == 200, got.text
+    assert got.json()["passed"] is True and got.json()["halt_id"] == halt_id

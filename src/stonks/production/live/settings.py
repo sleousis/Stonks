@@ -89,6 +89,31 @@ class ReconcileSettings(BaseModel):
     commission_tolerance: float = Field(default=0.01, ge=0.0)
 
 
+class ResumeCheckSettings(BaseModel):
+    """``[production.live.resume]``: the checks shown before a kill switch
+    is resumed (roadmap 23.15). A failed check refuses the resume unless
+    the person overrides it, which is audited."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The account's net liquidation must be at least this multiple of its
+    #: largest position's value.
+    min_equity_multiple: float = Field(default=1.5, gt=0)
+
+
+class ReplaySettings(BaseModel):
+    """``[production.live.replay]``: before a book starts, restarts or moves
+    up a stage, its strategies are replayed over the last sessions (roadmap
+    23.15). The replay blocks when they made no decision at all or failed
+    on every call. It never looks at profit or loss."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = True
+    #: Sessions replayed, the newest first.
+    sessions: int = Field(default=5, ge=1, le=60)
+
+
 class LiveSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -120,3 +145,5 @@ class LiveSettings(BaseModel):
     cancel_stale_orders: bool = True
     stages: StageGateSettings = Field(default_factory=StageGateSettings)
     reconcile: ReconcileSettings = Field(default_factory=ReconcileSettings)
+    resume: ResumeCheckSettings = Field(default_factory=ResumeCheckSettings)
+    replay: ReplaySettings = Field(default_factory=ReplaySettings)

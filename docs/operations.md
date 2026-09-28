@@ -84,6 +84,8 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `ingest_prices`: last 7 days of daily bars for `[production].universe` | close + 30 min | 60 min |
 | `ingest_borrow`: IBKR's short stock files into `borrow_rates` (`[sources.ibkr_borrow] markets`) | close + 35 min | none |
 | `price_alerts`: every person's price alerts against the new closes | close + 40 min | none |
+| `screen_alerts`: every due saved-screen alert on the new closes | close + 42 min | none |
+| `price_check`: held and signalled tickers against a second source (see Second-source price check) | close + 42 min | none |
 | `tick` | close + 45 min | 60 min |
 | `report`: `reports/latest.html` next to the state DB | close + 90 min | none |
 | `health`: checks, and opens or clears the operational halt | every 4 hours | none |
@@ -95,16 +97,18 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `live_eod_check`: the same after the close, before the tick decides | close + 15 min | none |
 | `calendars_refresh`: earnings, dividend and economic calendars, then the event alerts (see [calendars](calendars.md)) | 06:00 UTC daily | none |
 | `model_retrain`: refit strategies that learn from data into candidate versions (see [Model lifecycle](model-lifecycle.md)) | Saturday 06:00 UTC | none |
+| `lab_verify`: rerun each active strategy's lab result on today's data and alert when a restatement moved it (see [Strategy lab](blocks/03_strategy_lab.md#lab-verify-roadmap-239)) | Sunday 07:00 UTC | none |
 | `live_submit`: send approved order tickets (see Live trading) | open - 20 min | none |
 | `live_stops`: protective stops for the entries the opening auction filled (see Protective stops) | open + 30 min | none |
 | `options_live`: book option assignments, plan expiry closes and rolls as held tickets (see Live options) | close + 55 min | none |
 | `options_expiry_watch`: alert on a short option still in the money on its expiry day (see Live options) | close - 60 min | none |
 | `live_gate_days`: the live stages' gate metrics for the session (see Live trading) | close + 75 min | none |
 | `live_margin`: the margin cushion of each margin account, with an alert when it is thin (see Margin accounts) | every 30 minutes | none |
+| `algo_slices`: sends the due child slices of TWAP and VWAP orders Stonks works itself (see [execution algos](execution-algos.md)) | every 5 minutes | none |
 | `engine_start`: start the intraday engine process (see [intraday](design/intraday.md)) | open - 15 min | none |
 | `engine_stop`: ask the intraday engine to stop, and wait for it | close + 10 min | none |
 
-Session jobs run on NYSE trading days. The two engine jobs skip while `[engine] enabled = false`. The two options jobs skip while `[production.options] live = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio, and `live_margin` while no portfolio has a margin profile). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
+Session jobs run on NYSE trading days. `price_check` skips while `[production.price_check] enabled = false`. The two engine jobs skip while `[engine] enabled = false`. The two options jobs skip while `[production.options] live = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio, and `live_margin` while no portfolio has a margin profile). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 
 The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 
@@ -291,6 +295,37 @@ Every `ingest prices` and `ingest intraday` batch is checked before it is stored
 
 Each run stores a summary in `ingest_runs.quality_json` and alerts when it quarantines a bar, when 5 or more tickers warn, or when a fallback source supplied data. Set the thresholds under `[ingest.quality]`. Set a fallback source per primary under `[ingest.fallback]`, for example `sources = { eodhd = "yahoo" }`. Every ingest command, the scheduled ingest and the ensurer use both. Triage: [runbooks/data-stale.md](runbooks/data-stale.md).
 
+### Second-source price check
+
+Before the tick, the `price_check` job compares the vendor's latest close of every held and signalled ticker with a second source (roadmap 23.6). It also compares the adjusted return over the last `adjustment_window_days`, so a split or dividend one source applied and the other missed shows up.
+
+```mermaid
+flowchart LR
+  L[(lake closes)] --> C{compare}
+  Y[second source: Yahoo] --> C
+  M[IBKR marks for held tickers] --> C
+  C -->|one ticker off| H[its new buys held today, alert]
+  C -->|most tickers off| O[operational halt]
+  C --> R[(price_checks)]
+```
+
+- A gap on one ticker holds its opening orders for that day and alerts the operator. Sells and covers still go out.
+- When at least `systematic_share` of the compared tickers gap (and at least `min_systematic_tickers` were compared), the vendor is off: the global operational halt opens. The `price_check` health check keeps it open until a later check agrees, then the next health run clears it.
+- Held tickers of a portfolio on an IB Gateway are checked against IBKR's marks (closes only) with `use_broker_marks`. The rest go to `source`, Yahoo by default.
+- A ticker neither source prices is shown as unknown and never held.
+- Every run is a `price_checks` row. Health shows the newest one, `GET /api/health/price-check` and the MCP tool `get_price_check` read it, and `POST /api/health/price-check/run` runs it (admins).
+
+```toml
+[production.price_check]
+enabled = true
+source = "yahoo"
+max_close_gap = 0.02        # 2% off the second source's close
+max_adjustment_gap = 0.05   # adjusted returns 5% apart
+adjustment_window_days = 30
+systematic_share = 0.5
+min_systematic_tickers = 3
+```
+
 ## Alerts
 
 Operator alerts go through the `Notifier` seam, set under `[notify]`:
@@ -354,6 +389,37 @@ uv run stonks price-alerts list|events --user you@example.com
 uv run stonks price-alerts run [--as-of YYYY-MM-DD]    # what the job does, for every person
 ```
 
+## Screen alerts
+
+A saved screen can alert its owner when names start to match it (roadmap 23.17). Notify only: nothing trades.
+
+- The `screen_alerts` job runs after the price update. A `daily` alert runs on every run, a `weekly` one on its weekday. Each alert runs at most once a day, so a rerun sends nothing twice.
+- The first run stores the matches and sends nothing. Later runs send the names that were not in the last run's matches. Names that stop matching drop out, so they alert again if they come back.
+- Alerts go to the owner through the notification router in the `screen_alert` category, with its own switch per channel in Settings.
+- A screen that fails (over the candidate cap, a deleted universe) records the error on the alert, and the other alerts still run.
+
+```bash
+uv run stonks screener alert SCREEN_ID [--weekly fri] [--off] [--user you@example.com]
+uv run stonks screener alerts | alert-events | alert-delete SCREEN_ID
+uv run stonks screener alerts-run [--as-of YYYY-MM-DD]    # what the job does, for every person
+```
+
+## CSV statement imports
+
+For a broker with no connection, bring its history in from the CSV file it exports (roadmap 23.17).
+
+- Map the columns onto trades, dividends and cash flows. A guess from the headers comes first. Type values (`BUY=trade, DIV=dividend`) map the broker's words to kinds, and sale values make the quantity negative.
+- The preview writes nothing. It shows each row as new, already imported or skipped, with the reason.
+- Rows land in `broker_activities` on one CSV connection per person that never syncs, plus a `sync` snapshot of the holdings the trades add up to. Insights, cash flows and tax reports read them like a synced account.
+- Each row has a stable id, so importing the same file twice adds nothing. Two identical fills in one file stay two rows.
+- Undo removes exactly the rows one import added and rebuilds the holdings.
+
+```bash
+uv run stonks imports preview FILE --new "Old broker" [--mapping JSON] [--currency EUR]
+uv run stonks imports commit FILE --portfolio PF_ID [--mapping JSON]
+uv run stonks imports list | undo IMPORT_ID
+```
+
 ## Telegram
 
 The Telegram bot sends your notifications to a chat and answers a few commands. It uses long polling, so it needs no public webhook and works on a home server.
@@ -412,7 +478,7 @@ Rules the code enforces, whatever the model says:
 
 - Every proposal is recorded with its hypothesis before it runs.
 - Models remember prices from before their training cutoff. So a trial runs only when its validation window starts after `model_cutoff`. Without a cutoff the loop is off.
-- The suite holds only tests that judge the validation window or the run's own trials (`oos`, `deflated_sharpe`, `pbo`, `period_stability`, `perturbation`, `runs_test`). Walk-forward and permutation tests score older folds, so they are left out.
+- The suite holds only tests that judge the validation window or the run's own trials (`oos`, `deflated_sharpe`, `pbo`, `period_stability`, `perturbation`, `runs_test`, `forecast_skill`). Walk-forward and permutation tests score older folds, so they are left out.
 - Every lab run is a normal ledgered run in the session's trial family. Deflated Sharpe counts the larger of the class's trials and the session's trials. A run stopped half way counts its whole budget as failed trials.
 - It never registers or promotes. A proposal that asks to is rejected. A person registers a result and promotes it through the go-live check as usual.
 - A frozen assistant starts no session, and a freeze stops a running one.
@@ -430,6 +496,46 @@ Settings under `[assistant.research]`:
 | `min_hypothesis_chars`, `min_premortem_chars` | 40, 20 | Shortest hypothesis and premortem. |
 
 A request may lower the budgets but never raise them.
+
+### Numbers check
+
+Small models invent numbers. So every number in a reply must appear in a
+tool result of that turn, or in your own message (roadmap 23.8). The check
+forgives rounding (`1.4` matches `1.4237`), percents (`1.6%` matches
+`0.0164`), units (`1.2M`, `10.5k`) and signs (`a loss of 2.1%`). Dates, list
+numbers and small whole numbers are not checked.
+
+| `[assistant.grounding]` | Default | Effect |
+|---------|---------|--------|
+| `mode` | flag | `flag` adds a line naming the numbers no tool showed. `rewrite` asks the model once to cite or drop them, then flags what is left. `off` skips the check. |
+| `free_integers_upto` | 3 | Whole numbers up to this are not checked. |
+| `ignore_years` | true | Years are not checked. |
+
+### Briefings
+
+The assistant can write each person a short briefing before the open and
+after the close (roadmap 23.8). It goes through the notification router, so
+it reaches the feed, push, email and Telegram as your alert settings say.
+
+- Off by default twice: `[assistant.briefings] enabled` for the install,
+  and each person's switches in **Settings, Briefings**.
+- Research only: the briefing runs as you with the `read` scope only, no
+  write tool is offered, and its conversation is research only.
+- The scheduler jobs `briefing_pre_open` (open minus 45 minutes) and
+  `briefing_post_close` (close plus 100 minutes) call
+  `POST /api/assistant/briefings/run`. They skip while briefings are off,
+  and on the `local` backend, which has no assistant.
+
+### Why did or didn't we trade
+
+Every real trading run records, per portfolio and ticker, the step that
+kept a ticker out or trimmed it (roadmap 23.7): `universe`, `rank` (another
+pick won), `constructor` (no weight), `buffer` (inside the no-trade band),
+`stale_price`, `risk_rule` (with the rule and the quantities), `scope`,
+`external`, `halt`, `held` or `traded`. Read it on a strategy page and on
+**Insights, Risk** under "Why not X", with `GET /api/decisions`, the MCP
+tool `list_trade_decisions`, or by asking the assistant. Rows older than
+`[production.decisions] keep_days` (120) are pruned after each run.
 
 Before switching models, run the eval set: `uv run stonks assistant eval` checks the safety code with the scripted model, and `uv run stonks assistant eval --base-url http://127.0.0.1:11434/v1 --model qwen2.5` checks a real model on the same tasks (a planted prompt injection included). The `research_*` cases check the research loop: hypothesis first, the model's cutoff, the trial and compute budgets, and no registering, with a planted instruction in a lab result. It exits 1 when a case fails.
 
@@ -473,6 +579,23 @@ uv run stonks orders list --manual --user you@example.com
 - A change cancels the working order and places a new one (`<id>.r1`, `<id>.r2`, ...) through every check again. Only a working manual order can change. Cancel works on any working order of your portfolio.
 - Each order is recorded with `origin = manual`, no strategy, who placed it and why, and an `audit_log` row. An order is refused while a tick runs.
 - The tick never trades a manual holding. Strategies decide and size without it, and the snapshot keeps it.
+
+### Trade plan and discipline
+
+The ticket takes an optional plan: a stop and a target. The stop sits below a buy and above a short sale, the target on the other side. The entry is your limit, else the latest close. The plan is kept on the order.
+
+- **Size from risk.** `POST /api/orders/manual/plan` (the ticket's Work out size) takes the risk you accept, as a percent of the book or an amount, and returns the whole shares whose loss at the stop fits it. A buy is also cut to the cash on hand. It places nothing.
+- **Protective stop.** In a book at a broker, a filled entry with a stop gets one good till cancelled stop order for the filled quantity, id `<entry>:stop`. It is placed right away when the entry fills at once, else at the next manual order of the book or the next `live_stops` run. A later manual exit of the same ticker joins its OCA group, so the broker never sells twice. The stop is yours: the strategy stop sync leaves it alone, and you cancel it like any working order. A simulated book keeps the plan on the order only.
+- **Discipline rules.** `[production.risk.rules.manual_discipline]`, off by default, tighten only per portfolio. They refuse new manual entries, never exits:
+
+```toml
+[production.risk.rules.manual_discipline]
+enabled = true
+require_stop_live = true     # a real-money entry needs a stop
+cooldown_minutes = 60        # no entry for an hour after a losing manual exit
+max_entries_per_day = 5      # manual entries a day (UTC)
+max_daily_loss = 500.0       # stop entries once today's manual exits lost this much
+```
 
 ## Live trading
 
@@ -567,6 +690,7 @@ The console shows the words, the API and the CLI the ids in brackets. Only the t
 - The IBKR adapter only sends an opening order to a live gateway when the portfolio is at `live_small` or up. Closes and cancels still go out, so a book moved down can wind down.
 - `live_gate_days` records, for every portfolio past `sim_paper`: orders sent, filled, rejected, refused by our own rules and stuck, fills with no commission, the TCA gap, the book's and its model book's return, and drift. A session is clean with no drift, no stuck order, every commission booked and under 2% rejected. A week that is not clean sends the owner an alert. It never changes the stage or the allocation.
 - Thresholds sit under `[production.live.stages]`: 20 paper days for gate 1, 20 clean sessions in `broker_paper` for gate 2, 40 sessions with the last 30 clean and 30 filled orders for gate 3, whose TCA gap interval must include zero or sit below it.
+- Every promotion also replays the book's strategies over the last `[production.live.replay] sessions` (5) sessions, point in time (`recent_replay`). It blocks when a strategy made no decision at all, failed on every call or did not load. It never looks at profit or loss. Switching a subscription to approve or auto, or turning a paused or disabled one back on, runs the same replay first. With no universe or no bars it shows as unavailable and does not block.
 - Checks with no data yet (drift before reconciliation lands, the kill switch drill before 19.11, tracking error without model books) show as "no data yet" and do not block. Tracking error needs `[production] model_books = "all"`.
 - The preview runs the live book's decision as a dry run through every rule and the broker's what-if. It never sends an order and needs trade rights only.
 
@@ -607,7 +731,7 @@ These risk rules act only on books at a real broker and never drop a closing ord
 | `account_rules` | `enabled`, `settlement_days`, `pdt_*`, `wash_sale_window_days`, `short_disclosure_threshold` | The account rules below. |
 | `stop_cooldown` | `cooldown_days`, `count_losses` | A strategy does not reopen a ticker for some days after a stop-out on it. |
 | `stop_guard` | `max_stops`, `window_days`, `count_losses` | A strategy opens nothing after N stop-outs in the window. |
-| `losing_lock` | `max_consecutive_losses`, `lock_days` | A ticker whose last trades for the strategy all lost is locked. |
+| `losing_lock` | `max_consecutive_losses`, `lock_days`, `max_loss_pct`, `loss_window_days` | A ticker whose last trades for the strategy all lost is locked. With `max_loss_pct` it is also a loss breaker: a ticker is locked once the strategy's realised loss on it over the window reaches that share of the entry notional. |
 
 A stop-out is the fill of a protective stop (below). `count_losses` decides whether any losing exit counts too. Left unset, losses count only while the book has no protective stops. `true` always counts them, `false` never does.
 
@@ -648,6 +772,16 @@ These risk rules act only on intraday books, on each event of the intraday engin
 - Overrides only tighten. A longer loss window is tighter, because it sees a higher peak.
 - The engine checks the halts on every event (`production.intraday_halts.event_verdict`), so a kill switch stops the next order, not the next day. A stop-all kill switch also cancels the book's working orders at the broker. The engine run summary counts halted orders, tripped halts and cancelled orders.
 - Clearing an `intraday_loss` halt needs a reason, like every halt.
+
+### Broker event journal
+
+With `[brokers.ibkr.journal] enabled = true`, every call the IBKR adapter makes to a gateway is written to disk with its raw answer or error: order status, executions, errors and the rest (roadmap 23.15). One JSON line per event under `<dir>/<gateway>/<role>/<UTC day>.jsonl`. An answer equal to the one before is stored as `unchanged`. Account ids are replaced by a short hash that keeps the `DU` or `U` prefix. It holds no credentials.
+
+```
+uv run stonks live journal data/broker_journal/paper/tick [--kind error] [--json]
+```
+
+To replay an incident in a test, read the files with `ReplayIbClient.from_files(paths)` and drive an `IbkrBroker` over it with the same calls: it answers as the gateway did then, errors included.
 
 ### Order states
 
@@ -693,7 +827,7 @@ Risk rules run between construction and the broker, configured under `[productio
 | `cash_buffer_fraction` | Buys are clipped so this fraction stays in cash, net of costs. |
 | `min_order_notional` | Smaller buys are dropped. |
 
-Weights use portfolio value before the tick's orders. Sells are never blocked, only clipped to the held quantity, and go before buys. Portfolio and subscription overrides can only tighten the policy. The rules are a registry (`production/rules/`); the newer ones (`risk_per_position`, `portfolio_vol`, `drawdown_scaling`, `liquidity`, `sector_cap`, `max_holding`, `circuit_breaker`, `operational_halt`, `style_exposure`, and the [intraday rules](#intraday-risk)) are set under `[production.risk.rules.<name>]` and stay off until a limit is set there (see `config/default.toml`).
+Weights use portfolio value before the tick's orders. Sells are never blocked, only clipped to the held quantity, and go before buys. Portfolio and subscription overrides can only tighten the policy. The rules are a registry (`production/rules/`); the newer ones (`risk_per_position`, `portfolio_vol`, `drawdown_scaling`, `liquidity`, `sector_cap`, `max_holding`, `circuit_breaker`, `operational_halt`, `style_exposure`, and the [intraday rules](#intraday-risk)) are set under `[production.risk.rules.<name>]` and stay off until a limit is set there (see `config/default.toml`). The sector cap's `look_through = true` also counts the sectors inside held funds (see [look-through](look-through.md)).
 
 ### Safe defaults
 
@@ -751,6 +885,7 @@ flowchart LR
 - Engaging stop-all while a buys-only kill switch is on escalates it to stop everything. The old row closes with "escalated to all" and a new one opens. Engaging buys-only never weakens a stop-all.
 - Engaging also cancels the orders your portfolios still have working at an external broker (only buys with `buys_only`), and books the result. A failed cancel is logged and audited but never undoes the halt. Engage again to retry.
 - Resume the kill switch with `POST /api/halts/{id}/resume` and the text `RESUME TRADING`. Clear other halts with `POST /api/halts/{id}/clear` and a reason.
+- Before the phrase, the console, `stonks halts resume` and `GET /api/halts/{id}/resume-checks` show the resume checks for each covered portfolio at a real broker: the gateway answers, the last reconcile was clean, the account reads, and net liquidation is at least `[production.live.resume] min_equity_multiple` (1.5) times the largest position. A failed check refuses the resume unless you override it (`override_checks`, `--override-checks`). The audit row keeps the checks and the override. An unknown answer is shown and never blocks.
 - Every action writes an `audit_log` row. Every clear also writes a `risk_reset` row in `status_changes`.
 - A trip sends a `risk` notification to the portfolio owner, or to the admins for a global halt.
 - A halt on a broker portfolio also stops its paper account.

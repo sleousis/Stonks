@@ -1,10 +1,13 @@
-"""Newey & West (1987) heteroskedasticity- and autocorrelation-consistent SE."""
+"""Newey & West (1987) heteroskedasticity- and autocorrelation-consistent SE,
+and the HAC t-test of a mean built on it."""
 
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 import numpy as np
+from scipy.stats import norm
 
 
 def default_lags(t: int) -> int:
@@ -31,3 +34,28 @@ def newey_west_se(x: np.ndarray, lags: int | None = None) -> float:
     for lag in range(1, n_lags + 1):
         s += 2 * (1 - lag / (n_lags + 1)) * float(d[lag:] @ d[:-lag]) / t
     return math.sqrt(max(s, 0.0) / t)
+
+
+@dataclass(frozen=True)
+class MeanTest:
+    """A t-test of ``mean(x) = 0`` with a Newey-West standard error."""
+
+    n: int
+    mean: float
+    se: float
+    t_stat: float
+    #: One-sided p-value against ``mean < 0``: ``Phi(t)``.
+    p_below: float
+
+
+def hac_mean_test(x: np.ndarray, lags: int | None = None) -> MeanTest:
+    """HAC t-test of the mean of ``x`` (for a paired test pass the per-bar
+    differences). With a zero standard error the statistic is 0 for a zero
+    mean and infinite otherwise. NaNs are dropped."""
+    v = np.asarray(x, dtype=float)
+    v = v[np.isfinite(v)]
+    se = newey_west_se(v, lags)
+    mean = float(v.mean())
+    flat = 0.0 if mean == 0 else math.copysign(math.inf, mean)
+    t = mean / se if se > 0 else flat
+    return MeanTest(n=int(v.size), mean=mean, se=se, t_stat=t, p_below=float(norm.cdf(t)))

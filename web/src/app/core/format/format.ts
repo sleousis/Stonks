@@ -42,6 +42,15 @@ export function browserFormat(): ActiveFormat {
 /** Written only by FormatService; read by every formatter below. */
 export const activeFormat = signal<ActiveFormat>(browserFormat());
 
+/**
+ * Privacy mode (roadmap 23.17): money amounts render as a mask so a screen
+ * can be shared or seen over a shoulder. Percentages, counts and dates stay.
+ * Written only by PrivacyService (core/privacy).
+ */
+export const moneyHidden = signal(false);
+/** What a hidden money amount shows. Screen readers hear "hidden". */
+export const MONEY_MASK = '•••••';
+
 type Num = number | null | undefined;
 
 export interface NumberOptions {
@@ -84,6 +93,7 @@ function signedText(text: string, value: number, signed: boolean | undefined): s
 
 export function formatMoney(value: Num, opts: NumberOptions = {}): string {
   if (!isNum(value)) return MISSING;
+  if (moneyHidden()) return MONEY_MASK;
   const { locale } = activeFormat();
   const options: Intl.NumberFormatOptions = opts.compact
     ? {

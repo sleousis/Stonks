@@ -121,3 +121,36 @@ def test_api_backtests_bind_their_cost_model_to_the_strategy(lake_trending):
     )
     app_lab.backtest_report(settings, strategy, dear, lake_trending)
     assert strategy.costs == custom
+
+
+def test_lots_parse_from_config_and_default_to_fractional():
+    assert Settings().backtest.lots.profile == "fractional"
+    lots = Settings(backtest={"lots": {"profile": "whole_shares"}}).backtest.lots
+    assert lots.profile == "whole_shares"
+
+
+def test_api_and_lab_backtests_take_the_configured_lots(lake_trending):
+    from datetime import date
+
+    from stonks.app import lab as app_lab
+    from stonks.app.lab import BacktestRequest
+    from stonks.portfolio.lots import LotSettings
+    from stonks.strategies.examples.buy_and_hold import BuyAndHold
+
+    settings = Settings(backtest={"lots": {"profile": "whole_shares"}})
+    request = BacktestRequest(
+        strategy={"strategy_id": "x"},
+        universe=["UP.US"],
+        start=date(2026, 1, 5),
+        end=date(2026, 2, 27),
+        benchmark="none",
+    )
+    report, interval = app_lab.backtest_report(
+        settings, BuyAndHold({"ticker": "UP.US"}), request, lake_trending
+    )
+    assert report.lots is not None and report.lots.profile == "whole_shares"
+    view = app_lab.backtest_result(report, interval, request)
+    assert view.lots is not None and view.lots.profile == "whole_shares"
+    ds = LabDataset(lake=lake_trending, universe=["UP.US"], lots=LotSettings(profile="whole"))
+    config = backtest_config(ds, (date(2026, 1, 1), date(2026, 2, 1)))
+    assert config.lots is not None and config.lots.profile == "whole"

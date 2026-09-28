@@ -97,9 +97,14 @@ from stonks.execution.reconcile import (
     startup_reconcile,
 )
 from stonks.factors.style import safe_style_exposures, uses_style_model
+from stonks.lifecycle.calibration import track_calibration
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
 from stonks.portfolio import returns as portfolio_returns
+from stonks.portfolio.explain import TickerDecision
+from stonks.portfolio.explain import explain as explain_decisions
+from stonks.portfolio.explain import mark as mark_decisions
+from stonks.portfolio.lots import LotRule, LotSettings, broker_lot_profile
 from stonks.portfolio.pipeline import (
     PORTFOLIO_STRATEGY,
     BookInput,
@@ -131,6 +136,10 @@ from stonks.production.corporate_actions import (
     working_orders,
 )
 from stonks.production.decay import DecaySettings
+from stonks.production.decisions import prune_decisions
+from stonks.production.decisions import record_decisions as _store_decisions
+from stonks.production.decisions_settings import DecisionSettings
+from stonks.production.feature_drift_settings import FeatureDriftSettings
 from stonks.production.financing import (
     broker_borrow_source,
     last_accrual,
@@ -296,6 +305,11 @@ class TickSettings:
     #: ``risk_monitor`` tick hook.
     risk_monitor: RiskMonitorSettings = field(default_factory=RiskMonitorSettings)
     decay: DecaySettings = field(default_factory=DecaySettings)
+    #: ``[production.feature_drift]``: read by the ``feature_drift`` tick hook.
+    feature_drift: FeatureDriftSettings = field(default_factory=FeatureDriftSettings)
+
+    #: ``[production.decisions]``: why a ticker did or did not trade (23.7).
+    decisions: DecisionSettings = field(default_factory=DecisionSettings)
     #: A scoped tick (explicit tickers, e.g. a crypto-only job) trades only
     #: tickers of ``universe``: holdings outside it are marked but never
     #: traded, not even sold (TO-04). The full tick over the configured
@@ -328,6 +342,9 @@ class TickSettings:
     #: ``[backtest.execution]``: the fill model paper books fill through
     #: at the next open, the one backtests use.
     execution: ExecutionSettings = _IMMEDIATE_FILLS
+    #: ``[backtest.lots]``: paper and model books round order sizes to lots
+    #: as backtests do (P21, roadmap 23.1). Live books use their broker's.
+    lots: LotSettings = field(default_factory=LotSettings)
 
     def __post_init__(self) -> None:
         self.simulated_costs  # noqa: B018 - validates costs vs legacy (not both)
@@ -356,6 +373,12 @@ class TickSettings:
         if self.costs is not None:
             return self.costs.build()
         return FixedCostModel(self.slippage_bps, self.fee_per_trade)
+
+    def lot_rule(self, *, external: bool) -> LotRule:
+        """The lot rule of a book: its broker's profile at a real broker
+        (IBKR: whole shares), else ``[backtest.lots]`` as in a backtest."""
+        profile = broker_lot_profile(self.broker_kind) if external else None
+        return self.lots.rule(profile)
 
     @property
     def fill_costs(self) -> FillCosts:
@@ -627,6 +650,9 @@ class _TickRun:
     active: frozenset[str] = frozenset()
     #: Every registered strategy's status right now.
     statuses: Mapping[str, str] = field(default_factory=dict)
+    #: Tickers the second-source price check held on this day (roadmap
+    #: 23.6): not buyable, closes still go out.
+    price_holds: frozenset[str] = frozenset()
     _shadow: SignalSet | None = None
     _shadow_error: Exception | None = None
     _vols: dict[str, float] | None = None
@@ -740,6 +766,7 @@ def _run_tick_body(
         pool=pool,
         statuses=(statuses := {h.id: h.status for h in registry.list_all()}),
         active=frozenset(sid for sid, st in statuses.items() if st == "active"),
+        price_holds=_price_holds(state, as_of),
     )
     _expect_consumers(run)
 
@@ -830,6 +857,25 @@ def _run_tick_body(
         dry_run=dry_run,
         broker_mode=_broker_mode(settings),
     )
+
+
+def _record_decisions(run: _TickRun, portfolio_id: str, decisions: list[TickerDecision]) -> None:
+    """Store why each ticker did or did not trade (roadmap 23.7). A real
+    tick only, and a failure here never fails the tick."""
+    cfg = run.settings.decisions
+    if run.dry_run or not cfg.enabled:
+        return
+    try:
+        _store_decisions(
+            run.state,
+            tick_id=run.tick_id,
+            portfolio_id=portfolio_id,
+            as_of=run.as_of,
+            decisions=decisions,
+        )
+        prune_decisions(run.state, before=run.as_of - timedelta(days=cfg.keep_days))
+    except Exception as exc:  # the explanation is a nicety, the trade is not
+        _log.warning("tick.decisions_failed", portfolio_id=portfolio_id, error=repr(exc))
 
 
 def _broker_mode(settings: TickSettings) -> BrokerMode:
@@ -1250,7 +1296,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     market = MarketView(
         as_of=as_of,
         prices=prices,
-        buyable=_buyable(book_prices, settings.bars_due),
+        buyable=_buyable(book_prices, settings.bars_due) - run.price_holds,
         volumes=book_prices.volumes,
         asset_classes=asset_classes,
         vols_annual=({} if construction.is_single_winner else run.vols([*universe, *held])),
@@ -1326,6 +1372,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         costs=settings.fill_costs,
         risk_context=risk_context,
         allow_short=book.spec.allow_short,
+        lots=settings.lot_rule(external=external),
     )
     candidates = None if book.legacy else set(strategy_ids)
 
@@ -1370,7 +1417,18 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         ]
         if exits:
             log.info("tick.retired_exits", tickers=sorted(retired_owned))
+    raw_signals = {sid: book_scores[sid] for sid in book_scores if sid in strategy_ids}
+    decisions = explain_decisions(
+        raw_signals,
+        signals,
+        pipeline,
+        portfolio,
+        prices,
+        universe=book.spec.universe,
+        constructor=construction.method,
+    )
     if pipeline.reason is not None and not exits:
+        _record_decisions(run, portfolio_id, decisions)
         return noop(pipeline.reason)
     winner_id = pipeline.decided_by
     if winner_id is not None and not pipeline.exit_only:
@@ -1405,7 +1463,17 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
     if halt is not None:
         log.warning("tick.portfolio_halted", halt=halt.halt, gate=halt.gate, reason=halt.reason)
         # A halt keeps only position-reducing orders (sells of longs, covers).
+        before_halt = {o.ticker for o in proposed}
         proposed = [] if halt.halt == "all" else [o for o in proposed if _reduces(o)]
+        decisions = mark_decisions(
+            decisions,
+            before_halt - {o.ticker for o in proposed},
+            "halt",
+            {"halt": halt.halt, "gate": halt.gate},
+        )
+    decisions = mark_decisions(decisions, outside, "scope")
+    decisions = mark_decisions(decisions, external_skipped, "external")
+    _record_decisions(run, portfolio_id, decisions)
 
     if broker is None:
         broker = _build_broker(
@@ -1718,6 +1786,8 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 else {}
             ),
             "stale_buys_dropped": pipeline.stale_buys,
+            **(pipeline.lots.summary() if pipeline.lots is not None else {}),
+            **({"price_check_held": sorted(run.price_holds)} if run.price_holds else {}),
             **({"outside_universe_skipped": outside} if outside else {}),
             **({"external_holdings_skipped": external_skipped} if external_skipped else {}),
             **({"retired_exits": sorted(retired_owned)} if retired_owned else {}),
@@ -2443,6 +2513,21 @@ def _client_id_fn(as_of: date, portfolio_id: str) -> Callable[[str | None, str, 
     return make
 
 
+def _price_holds(state: SqliteState, as_of: date) -> frozenset[str]:
+    """Roadmap 23.6: the tickers the day's price check held. A read that
+    fails holds nothing and is logged (the stale-price guard still runs)."""
+    from stonks.production.price_check import price_holds
+
+    try:
+        held = price_holds(state, as_of)
+    except Exception as exc:
+        _log.warning("tick.price_holds_unreadable", error=str(exc))
+        return frozenset()
+    if held:
+        _log.warning("tick.price_check_holds", tickers=sorted(held))
+    return held
+
+
 def _buyable(book: PriceBook, due: Mapping[str, date] | None) -> frozenset[str]:
     """Fresh tickers, less those whose due session bar is missing."""
     if not due:
@@ -2630,7 +2715,22 @@ def _version_book_phase(
     except Exception as exc:
         run.log.error("tick.version_books_failed", error=str(exc), error_type=type(exc).__name__)
         return {"model_versions_error": f"{type(exc).__name__}: {exc}"}
-    return {"model_versions": [o.as_dict() for o in outcomes]}
+    summary: dict[str, Any] = {"model_versions": [o.as_dict() for o in outcomes]}
+    # 23.9: each classifier version's forecasts, for its live calibration.
+    try:
+        calibration = track_calibration(
+            state,
+            run.lake,
+            [(b.strategy_id, b.version, strategy(b.store.book_id)) for b in books],
+            [*settings.universe, *held],
+            run.as_of,
+        )
+    except Exception as exc:  # a model that fails to load must not fail the tick
+        run.log.error("tick.calibration_failed", error=str(exc), error_type=type(exc).__name__)
+        calibration = []
+    if calibration:
+        summary["model_calibration"] = calibration
+    return summary
 
 
 def _record_signal_phase(run: _TickRun) -> None:

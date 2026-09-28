@@ -12,6 +12,9 @@ repository (design section 4, decision 2026-09-26).
 - Switching to ``approve`` (roadmap 19.8, optional: every order waits for
   a person) asks for the same step-up and checklist. So does approve to
   auto, which takes the person out of each order.
+- Starting or restarting an approve or auto book first replays its
+  strategy over the last sessions (roadmap 23.15, ``app.replay``): no
+  decision at all, or every call failing, is a blocker. P&L never is.
 - Turning a disabled or paused auto subscription back on (``enabled:
   true``) restarts real orders, so it asks for the same step-up and runs
   the same checklist (UX-02). A paused one is resumed. Turning it off
@@ -153,6 +156,8 @@ class SubscriptionService:
                 mode = Mode(request.mode)
                 if mode.trades_live and (mode is not sub.mode or sub.auto_paused):
                     require(principal, Permission.AUTO_ENABLE)
+                    if not repo.auto_blockers(scope, sub.id):  # else set_mode refuses first
+                        self._check_replay(state, sub)
                 sub = repo.set_mode(scope, sub.id, mode, reason=request.reason)
             restarts = (
                 request.enabled is True
@@ -166,12 +171,23 @@ class SubscriptionService:
                 blockers = repo.auto_blockers(scope, sub.id)
                 if blockers:
                     raise AutoBlocked(blockers)
+                self._check_replay(state, sub)
                 if sub.auto_paused:
                     sub = repo.set_mode(scope, sub.id, sub.mode, reason=request.reason)
             if request.enabled is not None:
                 change = repo.enable if request.enabled else repo.disable
                 sub = change(scope, sub.id, reason=request.reason)
             return self._view(state, repo, principal, sub)
+
+    def _check_replay(self, state: SqliteState, sub: Subscription) -> None:
+        """Roadmap 23.15: an approve or auto book that starts or restarts
+        first replays its strategy over the last sessions. No decision at
+        all, or every call failing, refuses it. Recent P&L never does."""
+        from stonks.app.replay import run_replay
+
+        report = run_replay(self._ctx, state, [sub.strategy_id])
+        if report.passed is False:
+            raise AutoBlocked([f"recent replay: {b}" for b in report.blockers()])
 
     @staticmethod
     def _view(

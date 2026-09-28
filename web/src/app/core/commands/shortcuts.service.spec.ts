@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
 
+import { moneyHidden } from '../format/format';
+import { PrivacyService } from '../privacy/privacy.service';
 import { CommandRegistry, commandScore, matchScore } from './command-registry';
 import { SHORTCUTS_STORAGE_KEY, ShortcutsService } from './shortcuts.service';
 
@@ -126,6 +128,23 @@ describe('ShortcutsService', () => {
     expect(svc.handle(key('k', { ctrlKey: true }))).toBe(true);
     svc.setSingleKeys(true);
     expect(localStorage.getItem(SHORTCUTS_STORAGE_KEY)).toBeNull();
+  });
+
+  it('hides money with h, and with Alt+Shift+H even when single keys are off', () => {
+    const privacy = TestBed.inject(PrivacyService);
+    privacy.set(false);
+    expect(svc.handle(key('h'))).toBe(true);
+    expect(privacy.hidden()).toBe(true);
+    const input = document.createElement('input');
+    expect(svc.handle(key('h', {}, input))).toBe(false);
+    svc.setSingleKeys(false);
+    expect(svc.handle(key('h'))).toBe(false);
+    const always = key('H', { altKey: true, shiftKey: true, code: 'KeyH' });
+    expect(svc.handle(always)).toBe(true);
+    expect(always.defaultPrevented).toBe(true);
+    expect(privacy.hidden()).toBe(false);
+    privacy.set(false);
+    moneyHidden.set(false);
   });
 
   it('leaves other modifier combinations to the browser', () => {

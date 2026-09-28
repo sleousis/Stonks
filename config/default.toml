@@ -86,6 +86,7 @@ schedule = [[0.10, 0.5], [0.20, 0.0]]
 # max_holding_bars = 60            # force-sell positions held 60+ bars
 # [production.risk.rules.sector_cap]
 # max_weight_per_sector = 0.3
+# look_through = true              # count a held fund's sectors too (23.14)
 # [production.risk.rules.liquidity]
 # max_pct_adv = 0.05               # buys up to 5% of 20-day average volume
 # [production.risk.rules.portfolio_vol]
@@ -165,6 +166,12 @@ min_window = 60
 ratio_low = 0.5
 ratio_high = 1.5
 
+[production.decisions]
+# Why did or didn't we trade (roadmap 23.7): per tick, book and ticker, the
+# step that kept a ticker out or trimmed it. Rows older than keep_days go.
+enabled = true
+keep_days = 120
+
 [production.decay]
 # Alpha decay per strategy sleeve: fires when the short-window IR stays
 # negative for negative_days, or the long-window IR falls below
@@ -173,6 +180,16 @@ short_window = 60
 long_window = 120
 negative_days = 20
 min_fraction = 0.5
+
+[production.feature_drift]
+# Live feature drift of model strategies (roadmap 23.10): each real tick
+# stores the rows a model scores and, once the last window_days days hold
+# min_rows rows, compares them with the training profile stored with the
+# model (PSI per feature). Warn only: nothing is blocked.
+enabled = true
+window_days = 60
+min_rows = 50
+warn_psi = 0.25
 
 [production.intraday_pnl]
 # Live marks and intraday P&L of the engine's books (roadmap 21.3.3): one
@@ -267,6 +284,11 @@ fee_bps = 0.5
 [backtest.costs.asset_classes.equity]
 half_spread_bps = 2.0
 fee_bps = 0.5
+# Broker commission (roadmap 23.2): "none", "ibkr_fixed" or "ibkr_tiered".
+# With an IBKR schedule set fee_bps = 0.0, the commission replaces it.
+# commission = "ibkr_tiered"
+# US regulatory fees: SEC fee and FINRA TAF on sales, CAT fee on both sides.
+# us_sell_fees = true
 
 [backtest.costs.asset_classes.crypto]
 half_spread_bps = 5.0
@@ -279,6 +301,38 @@ fee_flat = 1.0
 [backtest.costs.asset_classes.bond]
 half_spread_bps = 5.0
 fee_bps = 1.0
+
+# Rates of the commission schedules and regulatory fees. The values below are
+# the defaults. Check them against the sources before trusting a figure.
+# [backtest.costs.commissions.ibkr_fixed]
+# per_share = 0.005        # IBKR Pro Fixed, interactivebrokers.com/en/pricing/commissions-stocks.php
+# minimum = 1.00
+# max_fraction = 0.01      # the cap, 1% of the trade value
+# [backtest.costs.commissions.ibkr_tiered]
+# monthly_shares = 0       # picks the volume tier (0.0035 per share up to 300,000)
+# minimum = 0.35
+# max_fraction = 0.01
+# exchange_per_share = 0.003   # taking liquidity, Reg NMS cap
+# clearing_per_share = 0.0002  # NSCC and DTC
+# [backtest.costs.commissions.us_regulatory]
+# sec_rate_per_million = 27.80  # SEC Section 31 fee rate advisory
+# taf_per_share = 0.000166      # FINRA By-Laws Schedule A
+# taf_max = 8.30
+# cat_per_share = 0.000035      # CAT LLC fee schedule
+
+[backtest.lots]
+# Round order sizes to tradable lots in backtests, the lab, paper books and
+# model books, all alike (roadmap 23.1, P21). "fractional" (the default, no
+# rounding), "whole_shares" (whole stocks, bonds and commodities, fractional
+# crypto, as at IBKR) or "whole". Live books always use their broker's rule.
+profile = "fractional"
+# The profile the minimum capital is measured against, and the share of
+# opening orders that must buy at least one lot.
+min_capital_profile = "whole_shares"
+min_capital_quantile = 0.95
+# Lot size per ticker where it is not one unit.
+# [backtest.lots.lot_sizes]
+# "7203.TSE" = 100
 
 [backtest.execution]
 # Cash-account settlement of sale proceeds in lab and API backtests, in
@@ -347,6 +401,14 @@ keep_snapshots = 2
 poll_seconds = 2
 heartbeat_seconds = 10
 lease_seconds = 120
+
+[lab.verify]
+# `stonks lab verify <run or strategy>` and the weekly lab_verify job rerun a
+# lab result from its stored manifest (roadmap 23.9). A rerun whose objective
+# score differs by more than `tolerance` has moved. The job re-checks the
+# strategies of `statuses` and alerts on the ones that moved.
+tolerance = 0.05
+statuses = ["active"]
 
 [factors]
 # Factor panel cache (roadmap 22.2, docs/factors.md). "parquet" keeps one file
@@ -485,6 +547,15 @@ user = "shortstock"
 timeout_seconds = 30
 markets = ["usa"]
 
+[sources.edgar]
+# SEC EDGAR filings for `stonks ingest edgar` (roadmap 23.13): Form 4
+# insider trades, 8-K items and 13F holdings, free and keyless. The SEC
+# asks every client to name itself with a contact address. Set it here or
+# in STONKS_EDGAR_USER_AGENT, e.g. "Jane Trader jane@example.com".
+user_agent = ""
+min_request_interval_seconds = 0.125   # the SEC allows 10 requests a second
+forms = ["8-K", "8-K/A", "10-Q", "10-K", "10-K/A"]
+
 [brokers]
 # Broker `stonks tick` (CLI and API) trades through. "simulated" (default)
 # fills in memory against the last portfolio snapshot and needs no keys.
@@ -572,7 +643,8 @@ min_days_between_fits = 5         # a newer fit is kept, not redone (unless forc
 [lifecycle.swap]
 min_days = 20                     # candidate model book days before a swap
 max_drawdown = 0.25
-max_underperformance = 0.02       # the candidate may trail the live version by this much
+vs_live_alpha = 0.05              # refuse when the candidate trails live with p below this
+min_paired_days = 10              # paired daily returns the vs_live test needs
 
 [mcp]
 # `stonks mcp` talks to the running REST API (`stonks serve`); it never opens
@@ -623,3 +695,43 @@ max_budget_per_proposal = 50      # tuning trials per proposal
 survival_tests = ["oos", "deflated_sharpe", "pbo"]
 min_hypothesis_chars = 40
 min_premortem_chars = 20
+
+[breadth]
+# The market breadth card on Today (roadmap 23.14). Display only. Without a
+# universe_id it measures every equity with daily bars in the lake.
+# universe_id = "sp500"
+index = "SPY.US"                  # distribution days are counted on it
+min_history = 60                  # sessions before a stock counts for highs and lows
+high_low_window = 252             # about one year
+distribution_window = 25          # sessions
+distribution_drop = 0.002         # an index fall of 0.2 % or more on higher volume
+lookback_days = 400
+
+# Estimated tax rates for the pre-trade tax preview and the tax owed this
+# year (roadmap 23.5). A guide, not tax advice: set the rates that apply to
+# you. short_term: held one year or less; long_term: held longer.
+[tax.rates.us]
+short_term = 0.32
+long_term = 0.15
+
+[tax.rates.eu]
+short_term = 0.26
+long_term = 0.26
+
+[tax.rates.uk]
+short_term = 0.24
+long_term = 0.24
+
+[assistant.grounding]
+# Every number in a reply must appear in a tool result of that turn (roadmap
+# 23.8). flag adds a note naming the numbers no tool showed. rewrite asks the
+# model once to cite or drop them, then flags what is left. off: no check.
+mode = "flag"
+free_integers_upto = 3             # whole numbers up to this are not checked
+ignore_years = true
+
+[assistant.briefings]
+# Research-only briefings before the open and after the close (roadmap
+# 23.8), through the notification router and Telegram. Each person also
+# turns them on. Read tools only, never a write.
+enabled = false

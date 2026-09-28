@@ -66,6 +66,8 @@ ADMIN_PAGES = (
     "/screener",
     "/lab/factors",
     "/lab/research",
+    # Phase 23
+    "/journal",
 )
 TRADER_PAGES = (
     "/",
@@ -88,6 +90,7 @@ TRADER_PAGES = (
     "/notifications/settings",
     "/calendar",
     "/screener",
+    "/journal",
 )
 
 

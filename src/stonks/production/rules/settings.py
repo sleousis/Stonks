@@ -27,6 +27,7 @@ from stonks.production.rules.intraday_orders import IntradayOrderRateSettings
 from stonks.production.rules.intraday_stale import IntradayStaleDataSettings
 from stonks.production.rules.liquidity import LiquiditySettings
 from stonks.production.rules.live_caps import LiveNotionalCapsSettings
+from stonks.production.rules.manual_discipline import ManualDisciplineSettings
 from stonks.production.rules.margin_call import MarginCallSettings
 from stonks.production.rules.max_holding import MaxHoldingSettings
 from stonks.production.rules.max_orders import MaxOrdersPerRunSettings
@@ -62,6 +63,7 @@ __all__ = [
     "LiquiditySettings",
     "LiveNotionalCapsSettings",
     "LosingLockSettings",
+    "ManualDisciplineSettings",
     "MarginCallSettings",
     "MaxHoldingSettings",
     "MaxOrdersPerRunSettings",
@@ -133,6 +135,9 @@ class RuleSettings(BaseModel):
     intraday_drawdown: IntradayDrawdownSettings = IntradayDrawdownSettings()
     intraday_order_rate: IntradayOrderRateSettings = IntradayOrderRateSettings()
     intraday_stale_data: IntradayStaleDataSettings = IntradayStaleDataSettings()
+    # Limits a person sets on their own manual orders (roadmap 23.4), off
+    # by default.
+    manual_discipline: ManualDisciplineSettings = ManualDisciplineSettings()
 
 
 def _min_optional(a: float | None, b: float | None) -> float | None:
@@ -204,7 +209,7 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "atr_multiple": max,
         "max_var": _min_optional,
     },
-    "sector_cap": {"max_weight_per_sector": _min_optional},
+    "sector_cap": {"max_weight_per_sector": _min_optional, "look_through": _either},
     "liquidity": {
         "max_pct_adv": _min_optional,
         "min_median_dollar_volume": _max_optional,
@@ -287,7 +292,12 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
     },
     "stop_cooldown": {"cooldown_days": _max_optional, "count_losses": _more_counting},
     "stop_guard": {"max_stops": _min_optional, "window_days": max, "count_losses": _more_counting},
-    "losing_lock": {"max_consecutive_losses": _min_optional, "lock_days": max},
+    "losing_lock": {
+        "max_consecutive_losses": _min_optional,
+        "lock_days": max,
+        "max_loss_pct": _min_optional,
+        "loss_window_days": max,
+    },
     "style_exposure": {"max_abs_exposure": _min_optional, "styles": union_styles},
     "protective_stops": {
         "enabled": _either,
@@ -308,6 +318,13 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "max_orders_per_day": _min_optional,
     },
     "intraday_stale_data": {"max_bar_age_seconds": _min_optional},
+    "manual_discipline": {
+        "enabled": _either,
+        "require_stop_live": _either,
+        "cooldown_minutes": _max_optional,
+        "max_entries_per_day": _min_optional,
+        "max_daily_loss": _min_optional,
+    },
 }
 
 

@@ -242,6 +242,30 @@ def retrain_body(ctx: RunContext) -> dict[str, Any]:
     return body
 
 
+def verify_body(ctx: RunContext) -> dict[str, Any]:
+    """The ``lab_verify`` request (``app.lab_verify.VerifyRequest``): alert
+    on a move, plus ``params.targets`` and ``tolerance``."""
+    body: dict[str, Any] = {"alert": True}
+    if ctx.params.get("targets"):
+        body["targets"] = [str(v) for v in ctx.params["targets"]]
+    if ctx.params.get("tolerance") is not None:
+        body["tolerance"] = float(ctx.params["tolerance"])
+    return body
+
+
+def verify_outcome(result: Mapping[str, Any], job_id: str | None = None) -> JobOutcome:
+    """A verify result (``VerifyResultView`` as JSON): failed when a result
+    moved (the alert went out), skipped when nothing was checked."""
+    detail = {k: result.get(k) for k in ("checked", "moved", "alerted") if k in result}
+    if job_id is not None:
+        detail["job_id"] = job_id
+    if not result.get("checked"):
+        return JobOutcome("skipped", {**detail, "reason": "nothing_to_verify"})
+    if result.get("moved"):
+        return JobOutcome("failed", detail)
+    return JobOutcome("succeeded", detail)
+
+
 def retrain_outcome(result: Mapping[str, Any], job_id: str | None = None) -> JobOutcome:
     """A retrain result (``RetrainResultView`` as JSON): failed when a fit
     failed, skipped when nothing needed a refit."""
@@ -387,3 +411,12 @@ def _validate_calendar(trigger: Trigger) -> None:
     name = getattr(trigger, "calendar", None)
     if name:
         get_calendar(name)
+
+
+def briefing_outcome(view: dict[str, Any]) -> JobOutcome:
+    """A briefings run as a job outcome: skipped while briefings are off."""
+    keys = ("kind", "as_of", "skipped", "people", "sent", "failed")
+    detail = {k: view.get(k) for k in keys}
+    if view.get("skipped"):
+        return JobOutcome("skipped", {"reason": view["skipped"], **detail})
+    return JobOutcome("succeeded", detail)

@@ -59,6 +59,7 @@ import { StatTile } from '../../shared/ui/stat-tile';
 import { ErrorState, EmptyState, LoadingState } from '../../shared/ui/states';
 import { StatusChangeDialog } from '../../shared/ui/status-change-dialog';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { WhyNotPanel } from '../../shared/ui/why-not-panel';
 import { StrategyVerdict } from '../../shared/ui/strategy-verdict';
 import { OrderStatus } from '../orders/order-status';
 import { FollowPanel } from './follow-panel';
@@ -233,6 +234,7 @@ const NA = 'n/a';
     FollowPanel,
     GoliveCheckList,
     ModelVersionsPanel,
+    WhyNotPanel,
     MonthlyReturns,
     PermissionNote,
     PageTabs,

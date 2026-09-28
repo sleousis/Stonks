@@ -40,6 +40,7 @@ from stonks.scheduling.jobs import (
     JobOutcome,
     RunContext,
     borrow_markets,
+    briefing_outcome,
     build_job_specs,
     closed_day_outcome,
     job_is_scoped,
@@ -298,6 +299,38 @@ def in_process_price_alerts(ctx: RunContext) -> JobOutcome:
     return JobOutcome("succeeded", out.as_dict())
 
 
+@IN_PROCESS_ACTIONS.register("screen_alerts")
+def in_process_screen_alerts(ctx: RunContext) -> JobOutcome:
+    """Every due screen alert of every person on the day's data."""
+    from stonks.app.screen_alerts import ScreenAlertService
+
+    service = ScreenAlertService(_executor(ctx).services.context)
+    out = service.evaluate(as_of=ctx.fire.as_of)
+    return JobOutcome("succeeded", out.as_dict())
+
+
+@IN_PROCESS_ACTIONS.register("price_check")
+def in_process_price_check(ctx: RunContext) -> JobOutcome:
+    """The second-source price check through the server's own stores."""
+    from stonks.scheduling.local import price_check_outcome
+
+    if not ctx.settings.production.price_check.enabled:
+        return JobOutcome("skipped", {"reason": "disabled"})
+    view = _executor(ctx).services.price_checks.run(ctx.fire.as_of)
+    return price_check_outcome(ctx, view.model_dump(mode="json"))
+
+
+@IN_PROCESS_ACTIONS.register("briefings")
+def in_process_briefings(ctx: RunContext) -> JobOutcome:
+    """Research-only briefings through the server's own app (roadmap 23.8)."""
+    import anyio
+
+    services = _executor(ctx).services
+    kind = str(ctx.params.get("kind", "pre_open"))
+    view = anyio.run(services.briefings.run, services.asgi_app, kind, ctx.fire.as_of)
+    return briefing_outcome(view.model_dump(mode="json"))
+
+
 @IN_PROCESS_ACTIONS.register("model_retrain")
 def in_process_model_retrain(ctx: RunContext) -> JobOutcome:
     """Refit on the server's JobRunner; each fit becomes a candidate version."""
@@ -308,6 +341,20 @@ def in_process_model_retrain(ctx: RunContext) -> JobOutcome:
         RetrainRequest.model_validate(retrain_body(ctx)), actor=SCHEDULER_ACTOR
     )
     return retrain_job_outcome(*ex.run_job(job, RETRAIN_JOB, RetrainResultView))
+
+
+@IN_PROCESS_ACTIONS.register("lab_verify")
+def in_process_lab_verify(ctx: RunContext) -> JobOutcome:
+    """Rerun on the server's JobRunner; a moved result raises an alert."""
+    from stonks.app.lab_verify import VERIFY_JOB, VerifyRequest, VerifyResultView
+    from stonks.scheduling.jobs import verify_body, verify_outcome
+
+    ex = _executor(ctx)
+    job = ex.services.lab_verify.submit(VerifyRequest.model_validate(verify_body(ctx)))
+    status, error, result, job_id = ex.run_job(job, VERIFY_JOB, VerifyResultView)
+    if status != "succeeded" or result is None:
+        return JobOutcome("failed", {"job_id": job_id, "error": error})
+    return verify_outcome(result, job_id)
 
 
 @IN_PROCESS_ACTIONS.register("connections_sync")
@@ -410,6 +457,15 @@ def in_process_options_live(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import options_live_action
 
     return options_live_action(ctx)
+
+
+@IN_PROCESS_ACTIONS.register("algo_slices")
+def in_process_algo_slices(ctx: RunContext) -> JobOutcome:
+    """Child slices of parent orders live in the state DB and at the
+    broker, so every backend works them the same way (roadmap 23.16)."""
+    from stonks.scheduling.local import algo_slices_action
+
+    return algo_slices_action(ctx)
 
 
 @IN_PROCESS_ACTIONS.register("live_stops")

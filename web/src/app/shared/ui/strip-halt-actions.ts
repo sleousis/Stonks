@@ -131,7 +131,8 @@ export class StripHaltActions {
     const halts = this.resumable();
     if (!halts.length || this.busy()) return;
     const names = this.state.scopeText();
-    const reason = await this.sheet().open({
+    const sheet = this.sheet();
+    const opened = sheet.open({
       live: halts.some((h) => this.isLive(h)),
       lines: [
         { label: 'Scope', value: [...new Set(halts.map(names))].join(', ') },
@@ -140,11 +141,22 @@ export class StripHaltActions {
         { label: 'Why it stopped', value: halts[0].reason || 'None given' },
       ],
     });
-    if (reason === null) return;
+    // Roadmap 23.15: the resume checks show above the typed words. With
+    // several switches the first one's checks show; the server checks each.
+    this.api.resumeChecks(halts[0].id).then(
+      (checks) => sheet.setChecks(checks),
+      () => sheet.setChecks('error'),
+    );
+    const answer = await opened;
+    if (answer === null) return;
     if (!(await this.stepUp.ensure('Resume trading'))) return;
     await this.run(async () => {
       for (const h of halts) {
-        await this.api.resume(h.id, { confirmation: RESUME_CONFIRMATION, reason });
+        await this.api.resume(h.id, {
+          confirmation: RESUME_CONFIRMATION,
+          reason: answer.reason,
+          ...(answer.overrideChecks ? { override_checks: true } : {}),
+        });
       }
       this.toasts.success('Resumed trading.');
     });

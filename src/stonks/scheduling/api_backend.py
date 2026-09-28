@@ -39,6 +39,7 @@ from stonks.scheduling.jobs import (
     MembersResolver,
     RunContext,
     borrow_markets,
+    briefing_outcome,
     closed_day_outcome,
     ensure_window,
     job_is_scoped,
@@ -342,6 +343,42 @@ def api_price_alerts(ctx: RunContext) -> JobOutcome:
     return JobOutcome("succeeded", {k: view.get(k) for k in keys})
 
 
+@API_ACTIONS.register("screen_alerts")
+def api_screen_alerts(ctx: RunContext) -> JobOutcome:
+    """The server holds the lake, so it runs the screens
+    (``POST /api/screener/alerts/evaluate``)."""
+    view = _executor(ctx).client.post(
+        "/api/screener/alerts/evaluate", {"as_of": ctx.fire.as_of.isoformat()}
+    )
+    keys = ("alerts", "ran", "baselines", "fired", "published", "failed")
+    return JobOutcome("succeeded", {k: view.get(k) for k in keys})
+
+
+@API_ACTIONS.register("price_check")
+def api_price_check(ctx: RunContext) -> JobOutcome:
+    """The server holds the lake, so it compares
+    (``POST /api/health/price-check/run``)."""
+    from stonks.scheduling.local import price_check_outcome
+
+    if not ctx.settings.production.price_check.enabled:
+        return JobOutcome("skipped", {"reason": "disabled"})
+    view = _executor(ctx).client.post(
+        "/api/health/price-check/run", {"as_of": ctx.fire.as_of.isoformat()}
+    )
+    return price_check_outcome(ctx, view)
+
+
+@API_ACTIONS.register("briefings")
+def api_briefings(ctx: RunContext) -> JobOutcome:
+    """The server runs the assistant, so it writes the research-only
+    briefings (``POST /api/assistant/briefings/run``, roadmap 23.8)."""
+    view = _executor(ctx).client.post(
+        "/api/assistant/briefings/run",
+        {"kind": str(ctx.params.get("kind", "pre_open")), "as_of": ctx.fire.as_of.isoformat()},
+    )
+    return briefing_outcome(view)
+
+
 @API_ACTIONS.register("model_retrain")
 def api_model_retrain(ctx: RunContext) -> JobOutcome:
     """The server holds the lake, so it refits (``POST /api/model-versions/retrain``)."""
@@ -352,6 +389,19 @@ def api_model_retrain(ctx: RunContext) -> JobOutcome:
         "/api/model-versions/jobs/{job_id}/result",
     )
     return retrain_job_outcome(status, error, result, job_id)
+
+
+@API_ACTIONS.register("lab_verify")
+def api_lab_verify(ctx: RunContext) -> JobOutcome:
+    """The server holds the lake, so it reruns (``POST /api/lab/verify``)."""
+    from stonks.scheduling.jobs import verify_body, verify_outcome
+
+    job_id, status, error, result = _run_job(
+        _executor(ctx), "/api/lab/verify", verify_body(ctx), "/api/lab/verify/jobs/{job_id}/result"
+    )
+    if status != "succeeded" or result is None:
+        return JobOutcome("failed", {"job_id": job_id, "error": error})
+    return verify_outcome(result, job_id)
 
 
 @API_ACTIONS.register("connections_sync")
@@ -506,6 +556,15 @@ def api_options_live(ctx: RunContext) -> JobOutcome:
     from stonks.scheduling.local import options_live_action
 
     return options_live_action(ctx)
+
+
+@API_ACTIONS.register("algo_slices")
+def api_algo_slices(ctx: RunContext) -> JobOutcome:
+    """Child slices of parent orders live in the state DB and at the
+    broker, so every backend works them the same way (roadmap 23.16)."""
+    from stonks.scheduling.local import algo_slices_action
+
+    return algo_slices_action(ctx)
 
 
 @API_ACTIONS.register("live_stops")

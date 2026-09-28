@@ -74,7 +74,8 @@ class JobConfig(BaseModel):
     name: str = Field(min_length=1, pattern=r"^[A-Za-z0-9_.-]+$")
     #: A registered job action (``ingest_prices``, ``tick``, ``health``,
     #: ``report``, ``universes_refresh``, ``backup``, ``connections_sync``,
-    #: ``price_alerts``, ``calendars_refresh``, ``model_retrain``).
+    #: ``price_alerts``, ``screen_alerts``, ``calendars_refresh``,
+    #: ``model_retrain``, ``lab_verify``).
     action: str
     trigger: TriggerConfig
     params: dict[str, Any] = Field(default_factory=dict)
@@ -103,6 +104,9 @@ def default_jobs() -> list[JobConfig]:
     close) skip while no gateway is configured.
     ``model_retrain`` refits the strategies that learn from data every
     Saturday into candidate versions, and skips when there are none.
+    ``lab_verify`` reruns every active strategy's lab result from its stored
+    manifest on Sunday and alerts when a restatement moved one beyond
+    ``[lab.verify] tolerance``; it skips while none is active.
     ``live_submit`` (open minus 20 minutes) sends approved order tickets and
     skips while none is open. ``live_stops`` (open plus 30 minutes) places
     the protective stops of the entries that just filled, and skips while no
@@ -115,7 +119,12 @@ def default_jobs() -> list[JobConfig]:
     ``engine_stop`` (close plus 10 minutes) run the intraday engine process
     and skip while ``[engine] enabled = false``. ``live_margin`` (every 30
     minutes) reads the margin cushion of each margin account and skips
-    while there is none (the default)."""
+    while there is none (the default). ``briefing_pre_open`` (open minus 45
+    minutes) and ``briefing_post_close`` (close plus 100 minutes) send the
+    research-only briefings and skip while ``[assistant.briefings]`` is off.
+    ``algo_slices`` (every 5 minutes) sends the due child slices of TWAP and
+    VWAP parents at a broker that does not run them, and skips while no
+    parent is working."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -150,6 +159,20 @@ def default_jobs() -> list[JobConfig]:
             name="price_alerts",
             action="price_alerts",
             trigger=SessionTriggerConfig(offset_minutes=40),
+        ),
+        # Saved screens with an alert, on the same closes (roadmap 23.17).
+        JobConfig(
+            name="screen_alerts",
+            action="screen_alerts",
+            trigger=SessionTriggerConfig(offset_minutes=42),
+        ),
+        # The second-source price check on the closes the ingest stored,
+        # before the tick reads its holds (roadmap 23.6). Skips while
+        # [production.price_check] enabled = false.
+        JobConfig(
+            name="price_check",
+            action="price_check",
+            trigger=SessionTriggerConfig(offset_minutes=42),
         ),
         JobConfig(
             name="tick",
@@ -191,6 +214,12 @@ def default_jobs() -> list[JobConfig]:
             name="model_retrain",
             action="model_retrain",
             trigger=DailyTriggerConfig(at=time(6, 0), weekdays=[5]),
+        ),
+        # Roadmap 23.9: did vendor restatements move a registered result?
+        JobConfig(
+            name="lab_verify",
+            action="lab_verify",
+            trigger=DailyTriggerConfig(at=time(7, 0), weekdays=[6]),
         ),
         JobConfig(
             name="ibkr_reauth_reminder",
@@ -258,6 +287,22 @@ def default_jobs() -> list[JobConfig]:
             params={"phase": "watch"},
             catch_up="none",
         ),
+        # Research-only briefings (roadmap 23.8), both skip while
+        # [assistant.briefings] enabled = false. Never caught up late.
+        JobConfig(
+            name="briefing_pre_open",
+            action="briefings",
+            trigger=SessionTriggerConfig(anchor="open", offset_minutes=-45),
+            params={"kind": "pre_open"},
+            catch_up="none",
+        ),
+        JobConfig(
+            name="briefing_post_close",
+            action="briefings",
+            trigger=SessionTriggerConfig(offset_minutes=100),
+            params={"kind": "post_close"},
+            catch_up="none",
+        ),
         # The live stages' gate metrics for the session, after the tick
         # wrote its snapshots (roadmap 19.9). A dirty week only alerts.
         JobConfig(
@@ -267,6 +312,14 @@ def default_jobs() -> list[JobConfig]:
         ),
         # The margin cushion of every margin account (roadmap 19.13), with
         # an alert when it is thin. Skips while no margin profile exists.
+        # Child slices of execution algos Stonks works itself (roadmap
+        # 23.16). Skips while no parent order is working.
+        JobConfig(
+            name="algo_slices",
+            action="algo_slices",
+            trigger=IntervalTriggerConfig(every_minutes=5),
+            catch_up="none",
+        ),
         JobConfig(
             name="live_margin",
             action="live_margin",

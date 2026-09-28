@@ -52,6 +52,8 @@ export function violationText(count: number, ratio: number | null, kupiec: numbe
  * how often the model was wrong, each strategy's part with its alpha-decay
  * check, and the daily history.
  */
+import { WhyNotPanel } from '../../shared/ui/why-not-panel';
+
 @Component({
   selector: 'app-risk-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -59,6 +61,7 @@ export function violationText(count: number, ratio: number | null, kupiec: numbe
     RouterLink,
     PageHeader,
     InsightsNav,
+    WhyNotPanel,
     DataTable,
     TableCell,
     HelpTip,

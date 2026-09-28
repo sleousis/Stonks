@@ -10,6 +10,7 @@ import {
 import { RouterLink } from '@angular/router';
 
 import { InsightsService } from '../../api/insights.service';
+import { LookThroughPanel } from './look-through';
 import type {
   AllocationSlice,
   HoldingAgreement,
@@ -113,6 +114,7 @@ export function agreementLine(h: HoldingAgreement): string {
     EmptyState,
     ErrorState,
     NoBook,
+    LookThroughPanel,
   ],
   templateUrl: './insights.page.html',
   styleUrl: './insights.page.scss',
@@ -131,6 +133,10 @@ export class InsightsPage {
   protected readonly book = computed(() => bookState(this.portfolioCtx));
   private readonly bookParams = computed(() =>
     this.book() === 'ready' ? { portfolio: this.portfolioCtx.selectedId() } : undefined,
+  );
+  /** The portfolio the look-through panel reads, once a book is ready. */
+  protected readonly lookThroughFor = computed(() =>
+    this.book() === 'ready' ? (this.portfolioCtx.selectedId() ?? 'default') : null,
   );
   protected readonly insights = resource({
     params: () => this.bookParams(),

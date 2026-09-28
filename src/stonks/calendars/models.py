@@ -36,6 +36,20 @@ class DividendEvent(BaseModel):
     declaration_date: date | None = None
 
 
+class FilingEvent(BaseModel):
+    """A current report (8-K) a company filed (roadmap 23.13)."""
+
+    ticker: str
+    name: str | None = None
+    form: str
+    #: When the regulator accepted it (UTC).
+    accepted_at: datetime
+    #: Item codes (``2.02``) and what each announces.
+    items: list[str] = []
+    item_names: list[str] = []
+    url: str | None = None
+
+
 class EconomicEvent(BaseModel):
     country: str
     event_time: datetime

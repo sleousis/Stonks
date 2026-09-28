@@ -39,6 +39,7 @@ DEFAULT_TOOLS: frozenset[str] = frozenset(
         "get_strategy",
         "list_halts",
         "get_live_risk",
+        "list_trade_decisions",
         "list_notifications",
         "list_price_alerts",
         "list_jobs",
@@ -58,6 +59,9 @@ CATEGORIES: dict[str, tuple[str, frozenset[str]]] = {
                 "get_tca_summary",
                 "list_trade_journal",
                 "get_order_tca",
+                "list_round_trips",
+                "get_pnl_calendar",
+                "get_journal_breakdown",
                 "list_cash_flows",
                 "get_tax_settings",
                 "get_fx_rate",
@@ -99,7 +103,7 @@ CATEGORIES: dict[str, tuple[str, frozenset[str]]] = {
         ),
     ),
     "alerts": (
-        "alerts: your feed, price alerts and when they fired, event alert switches",
+        "alerts: your feed, price alerts and when they fired, event alert switches, screen alerts",
         frozenset(
             {
                 "list_alerts",
@@ -109,6 +113,9 @@ CATEGORIES: dict[str, tuple[str, frozenset[str]]] = {
                 "create_price_alert",
                 "update_price_alert",
                 "delete_price_alert",
+                "list_screen_alerts",
+                "list_screen_alert_events",
+                "set_screen_alert",
                 "mark_notifications_read",
             }
         ),
@@ -139,6 +146,7 @@ CATEGORIES: dict[str, tuple[str, frozenset[str]]] = {
                 "run_lab",
                 "run_sweep",
                 "run_signal_ic",
+                "verify_lab_results",
                 "get_job",
                 "cancel_job",
                 "list_survival_tests",

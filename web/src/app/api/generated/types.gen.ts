@@ -5,6 +5,36 @@ export type ClientOptions = {
 };
 
 /**
+ * AboveAverage
+ */
+export type AboveAverage = {
+    /**
+     * Count
+     *
+     * Stocks closing above it.
+     */
+    count: number;
+    /**
+     * Days
+     *
+     * The average's length in sessions.
+     */
+    days: number;
+    /**
+     * Eligible
+     *
+     * Stocks with enough bars to have the average.
+     */
+    eligible: number;
+    /**
+     * Pct
+     *
+     * count / eligible; null when none is eligible.
+     */
+    pct: number | null;
+};
+
+/**
  * AccountProfileBody
  */
 export type AccountProfileBody = {
@@ -245,6 +275,124 @@ export type AlertView = {
 };
 
 /**
+ * AlgoInfo
+ */
+export type AlgoInfo = {
+    /**
+     * Cost Assumption
+     *
+     * spread_factor, impact_factor and timing_bps the backtest assumes.
+     */
+    cost_assumption: {
+        [key: string]: number;
+    };
+    /**
+     * Defaults
+     */
+    defaults: {
+        [key: string]: unknown;
+    };
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Params Schema
+     */
+    params_schema: {
+        [key: string]: unknown;
+    };
+    /**
+     * Sliceable
+     *
+     * Stonks can send it as child orders at other brokers.
+     */
+    sliceable: boolean;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * AlgoList
+ */
+export type AlgoList = {
+    /**
+     * Items
+     */
+    items: Array<AlgoInfo>;
+};
+
+/**
+ * AlgoSettingList
+ */
+export type AlgoSettingList = {
+    /**
+     * Items
+     */
+    items: Array<AlgoSettingView>;
+};
+
+/**
+ * AlgoSettingUpdate
+ */
+export type AlgoSettingUpdate = {
+    /**
+     * Algo
+     */
+    algo: string;
+    /**
+     * Params
+     */
+    params?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Strategy Id
+     */
+    strategy_id?: string | null;
+};
+
+/**
+ * AlgoSettingView
+ */
+export type AlgoSettingView = {
+    /**
+     * Algo
+     */
+    algo: string;
+    /**
+     * Params
+     */
+    params: {
+        [key: string]: unknown;
+    };
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Strategy Id
+     *
+     * Empty: the portfolio's own setting.
+     */
+    strategy_id: string | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Updated By
+     */
+    updated_by: string | null;
+};
+
+/**
  * AllocationSlice
  */
 export type AllocationSlice = {
@@ -347,6 +495,72 @@ export type AlphaBetaView = {
 };
 
 /**
+ * AnnotationRequest
+ *
+ * A trade's review. Replaces what was there.
+ */
+export type AnnotationRequest = {
+    /**
+     * Followed Plan
+     */
+    followed_plan?: boolean | null;
+    /**
+     * Mistakes
+     */
+    mistakes?: Array<string>;
+    /**
+     * Playbook Id
+     */
+    playbook_id?: string | null;
+    /**
+     * Review
+     */
+    review?: string | null;
+    /**
+     * Tags
+     */
+    tags?: Array<string>;
+};
+
+/**
+ * AnnotationView
+ */
+export type AnnotationView = {
+    /**
+     * Followed Plan
+     */
+    followed_plan: boolean | null;
+    /**
+     * Mistakes
+     */
+    mistakes: Array<string>;
+    /**
+     * Playbook Id
+     */
+    playbook_id: string | null;
+    /**
+     * Review
+     */
+    review: string | null;
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
+     * Trade Id
+     */
+    trade_id: number;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Updated By
+     */
+    updated_by: string;
+};
+
+/**
  * ApiScope
  *
  * What a credential may do. A token never exceeds its user's role.
@@ -374,6 +588,10 @@ export type ArtifactFile = {
  */
 export type AssetClassCosts = {
     /**
+     * Commission
+     */
+    commission?: string;
+    /**
      * Fee Bps
      */
     fee_bps?: number;
@@ -385,6 +603,10 @@ export type AssetClassCosts = {
      * Half Spread Bps
      */
     half_spread_bps?: number;
+    /**
+     * Us Sell Fees
+     */
+    us_sell_fees?: boolean;
 };
 
 /**
@@ -396,6 +618,9 @@ export type AssetClassCosts = {
  * - ``tool_call``: ``{id, name, arguments, needs_confirmation}``
  * - ``tool_result``: ``{id, name, ok, result | error}``
  * - ``confirm_required``: ``{action_id, tool, description, arguments, preview}``
+ * - ``grounding``: ``{status, ok, checked, ungrounded, ...}``: the numeric
+ * grounding check (``rewriting``: the answer so far is replaced by a
+ * rewrite, ``restored``: ``{answer}`` is shown again, ``ok`` or ``flagged``)
  * - ``error``: ``{code, message}`` (``model_error``, ``timeout``, ``max_steps``, ...)
  * - ``done``: ``{conversation_id, steps, pending_action_id}``, always last
  */
@@ -409,7 +634,7 @@ export type AssistantEventView = {
     /**
      * Kind
      */
-    kind: 'text' | 'tool_call' | 'tool_result' | 'confirm_required' | 'done' | 'error';
+    kind: 'text' | 'tool_call' | 'tool_result' | 'confirm_required' | 'grounding' | 'done' | 'error';
 };
 
 /**
@@ -492,7 +717,7 @@ export type BacktestRequest = {
     /**
      * Cost Model
      */
-    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    cost_model?: 'zero' | 'realistic' | 'ibkr_tiered' | 'ibkr_fixed' | CostModelSettings | null;
     /**
      * End
      */
@@ -585,6 +810,7 @@ export type BacktestResult = {
      * Kurtosis
      */
     kurtosis?: number | null;
+    lots?: LotView | null;
     /**
      * Max Dd Duration Bars
      */
@@ -725,6 +951,107 @@ export type BarView = {
 };
 
 /**
+ * BehaviourBucketView
+ */
+export type BehaviourBucketView = {
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Trades
+     */
+    trades: number;
+    /**
+     * Win Rate
+     */
+    win_rate: number | null;
+};
+
+/**
+ * BehaviourView
+ *
+ * How you trade by hand: your manual orders and the trades a broker
+ * sync brought in, paired into round trips (FIFO, fees in).
+ */
+export type BehaviourView = {
+    /**
+     * Against Strategies Cost
+     *
+     * P&L of the trades against the strategies (negative: what it cost).
+     */
+    against_strategies_cost: number | null;
+    /**
+     * Avg Loss
+     */
+    avg_loss: number | null;
+    /**
+     * Avg Win
+     */
+    avg_win: number | null;
+    /**
+     * By Holding
+     */
+    by_holding: Array<BehaviourBucketView>;
+    /**
+     * By Weekday
+     *
+     * By the weekday of the entry.
+     */
+    by_weekday: Array<BehaviourBucketView>;
+    disposition: DispositionView;
+    /**
+     * Open Positions
+     */
+    open_positions: number;
+    overtrading: OvertradingView;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Entries within a day of a losing exit, and how they did.
+     */
+    revenge: BehaviourBucketView;
+    /**
+     * Since
+     */
+    since: string | null;
+    /**
+     * Sources
+     *
+     * Fills by source: manual or broker.
+     */
+    sources: {
+        [key: string]: number;
+    };
+    /**
+     * Total Pnl
+     */
+    total_pnl: number;
+    /**
+     * Trades
+     *
+     * Closed round trips.
+     */
+    trades: number;
+    /**
+     * Versus Strategies
+     *
+     * Trades with, against or without a view of the active strategies' signals at the entry.
+     */
+    versus_strategies: Array<BehaviourBucketView>;
+    /**
+     * Win Rate
+     */
+    win_rate: number | null;
+};
+
+/**
  * BenchmarkStatsView
  *
  * A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``).
@@ -852,6 +1179,231 @@ export type BorrowSettings = {
 };
 
 /**
+ * Breadth
+ */
+export type Breadth = {
+    above_200: AboveAverage;
+    above_50: AboveAverage;
+    /**
+     * Advance Decline Ratio
+     *
+     * advancers / decliners; null without decliners.
+     */
+    advance_decline_ratio: number | null;
+    /**
+     * Advancers
+     */
+    advancers: number;
+    /**
+     * As Of
+     *
+     * The last day with bars; null for an empty lake.
+     */
+    as_of: string | null;
+    /**
+     * Decliners
+     */
+    decliners: number;
+    /**
+     * Distribution Dates
+     */
+    distribution_dates: Array<string>;
+    /**
+     * Distribution Days
+     *
+     * Null without index bars.
+     */
+    distribution_days: number | null;
+    /**
+     * Distribution Window
+     */
+    distribution_window: number;
+    /**
+     * High Low Window
+     *
+     * Sessions in the high and low window.
+     */
+    high_low_window: number;
+    /**
+     * Index
+     *
+     * The index distribution days are counted on.
+     */
+    index: string | null;
+    /**
+     * Lines
+     *
+     * What the numbers mean, in plain words.
+     */
+    lines: Array<BreadthLine>;
+    /**
+     * Members
+     *
+     * Stocks with a close on as_of and the day before.
+     */
+    members: number;
+    /**
+     * New Highs
+     */
+    new_highs: number;
+    /**
+     * New Lows
+     */
+    new_lows: number;
+    /**
+     * Unchanged
+     */
+    unchanged: number;
+};
+
+/**
+ * BreadthLine
+ */
+export type BreadthLine = {
+    /**
+     * Key
+     */
+    key: 'advance_decline' | 'above_average' | 'highs_lows' | 'distribution' | 'empty';
+    /**
+     * Text
+     *
+     * One plain sentence.
+     */
+    text: string;
+    /**
+     * Tone
+     */
+    tone: 'good' | 'neutral' | 'bad';
+};
+
+/**
+ * BreadthView
+ */
+export type BreadthView = {
+    breadth: Breadth;
+    /**
+     * Universe
+     *
+     * What was measured, in words.
+     */
+    universe: string;
+};
+
+/**
+ * BreakdownView
+ */
+export type BreakdownView = {
+    /**
+     * Base Currency
+     */
+    base_currency: string;
+    /**
+     * By
+     */
+    by: 'all' | 'sleeve' | 'origin' | 'ticker' | 'side' | 'exit_trigger' | 'tag' | 'mistake' | 'playbook' | 'plan';
+    /**
+     * Fx Missing
+     */
+    fx_missing: Array<string>;
+    /**
+     * Groups
+     */
+    groups: Array<GroupStatsView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Since
+     */
+    since: string | null;
+    /**
+     * Unconverted
+     */
+    unconverted: number;
+    /**
+     * Until
+     */
+    until: string | null;
+};
+
+/**
+ * BriefingPrefsUpdate
+ */
+export type BriefingPrefsUpdate = {
+    /**
+     * Post Close
+     */
+    post_close: boolean;
+    /**
+     * Pre Open
+     */
+    pre_open: boolean;
+};
+
+/**
+ * BriefingPrefsView
+ */
+export type BriefingPrefsView = {
+    /**
+     * Available
+     */
+    available: boolean;
+    /**
+     * Post Close
+     */
+    post_close: boolean;
+    /**
+     * Pre Open
+     */
+    pre_open: boolean;
+};
+
+/**
+ * BriefingRunRequest
+ */
+export type BriefingRunRequest = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+    /**
+     * Kind
+     */
+    kind: 'pre_open' | 'post_close';
+};
+
+/**
+ * BriefingRunView
+ */
+export type BriefingRunView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Failed
+     */
+    failed?: number;
+    /**
+     * Kind
+     */
+    kind: 'pre_open' | 'post_close';
+    /**
+     * People
+     */
+    people?: number;
+    /**
+     * Sent
+     */
+    sent?: number;
+    /**
+     * Skipped
+     */
+    skipped?: string | null;
+};
+
+/**
  * BrokerInfo
  */
 export type BrokerInfo = {
@@ -871,6 +1423,36 @@ export type BrokerInfo = {
      * Paper
      */
     paper: boolean;
+};
+
+/**
+ * CalendarBucketView
+ */
+export type CalendarBucketView = {
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * Trades
+     */
+    trades: number;
+    /**
+     * Wins
+     */
+    wins: number;
 };
 
 /**
@@ -969,6 +1551,10 @@ export type CalendarView = {
      */
     end: string;
     /**
+     * Filings
+     */
+    filings?: Array<FilingEvent>;
+    /**
      * Scope
      */
     scope: 'all' | 'holdings' | 'watchlists' | 'tickers';
@@ -984,6 +1570,61 @@ export type CalendarView = {
      * Truncated
      */
     truncated?: boolean;
+};
+
+/**
+ * CalibrationView
+ *
+ * Live calibration of a classifier version's probability forecasts
+ * (roadmap 23.9): Brier score against always forecasting the base rate,
+ * the reliability table and the expected calibration error. Empty for a
+ * model that forecasts no probabilities.
+ */
+export type CalibrationView = {
+    /**
+     * Base Rate
+     */
+    base_rate: number | null;
+    /**
+     * Bins
+     */
+    bins: Array<ReliabilityBinView>;
+    /**
+     * Brier
+     */
+    brier: number | null;
+    /**
+     * Brier Base Rate
+     */
+    brier_base_rate: number | null;
+    /**
+     * Ece
+     */
+    ece: number | null;
+    /**
+     * Mean Forecast
+     */
+    mean_forecast: number | null;
+    /**
+     * N Forecasts
+     */
+    n_forecasts: number;
+    /**
+     * N Resolved
+     */
+    n_resolved: number;
+    /**
+     * Skill
+     */
+    skill: number | null;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string;
+    /**
+     * Version
+     */
+    version: number;
 };
 
 /**
@@ -1249,6 +1890,90 @@ export type ClearHaltRequest = {
      * Reason
      */
     reason: string;
+};
+
+/**
+ * ColumnMapping
+ *
+ * Which CSV column holds which field. Only ``date`` is required, plus
+ * either a ``type`` column (with ``types`` mapping its values to kinds) or
+ * one fixed ``kind`` for every row.
+ */
+export type ColumnMapping = {
+    /**
+     * Amount
+     */
+    amount?: string | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Date
+     */
+    date: string;
+    /**
+     * Date Format
+     */
+    date_format?: string | null;
+    /**
+     * Default Currency
+     */
+    default_currency?: string;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Exchange
+     */
+    exchange?: string | null;
+    /**
+     * Fee
+     */
+    fee?: string | null;
+    /**
+     * Kind
+     */
+    kind?: 'trade' | 'dividend' | 'interest' | 'fee' | 'deposit' | 'withdrawal' | 'split' | 'other' | null;
+    /**
+     * Price
+     */
+    price?: string | null;
+    /**
+     * Quantity
+     */
+    quantity?: string | null;
+    /**
+     * Sell Values
+     */
+    sell_values?: Array<string>;
+    /**
+     * Symbol
+     */
+    symbol?: string | null;
+    /**
+     * Type
+     */
+    type?: string | null;
+    /**
+     * Types
+     */
+    types?: {
+        [key: string]: 'trade' | 'dividend' | 'interest' | 'fee' | 'deposit' | 'withdrawal' | 'split' | 'other';
+    };
+};
+
+/**
+ * CommissionSettings
+ *
+ * ``[backtest.costs.commissions]``: the rates of every schedule. An
+ * asset class picks its schedule with ``commission``.
+ */
+export type CommissionSettings = {
+    ibkr_fixed?: IbkrFixedFees;
+    ibkr_tiered?: IbkrTieredFees;
+    us_regulatory?: UsRegulatoryFees;
 };
 
 /**
@@ -1553,7 +2278,7 @@ export type CostModelPreset = {
     /**
      * Name
      */
-    name: 'zero' | 'realistic';
+    name: 'zero' | 'realistic' | 'ibkr_tiered' | 'ibkr_fixed';
     settings: CostModelSettings;
 };
 
@@ -1574,7 +2299,9 @@ export type CostModelSettings = {
     asset_classes?: {
         [key: string]: AssetClassCosts;
     };
+    commissions?: CommissionSettings;
     default?: AssetClassCosts;
+    exec_algo?: ExecAlgoAssumption | null;
     /**
      * Half Spread Model
      */
@@ -1724,6 +2451,127 @@ export type DayChangeView = {
 };
 
 /**
+ * DemoPointView
+ */
+export type DemoPointView = {
+    /**
+     * Day
+     */
+    day: string;
+    /**
+     * Value
+     */
+    value: number;
+};
+
+/**
+ * DemoPortfolioView
+ *
+ * Your demo portfolio. ``exists`` is false until you open one: then
+ * the other fields are empty.
+ */
+export type DemoPortfolioView = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+    /**
+     * Cash
+     */
+    cash?: number | null;
+    /**
+     * Created At
+     */
+    created_at?: string | null;
+    /**
+     * Currency
+     */
+    currency?: string;
+    /**
+     * Curve
+     */
+    curve?: Array<DemoPointView>;
+    /**
+     * Day Change
+     */
+    day_change?: number | null;
+    /**
+     * Exists
+     */
+    exists: boolean;
+    /**
+     * Label
+     */
+    label?: string;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Positions
+     */
+    positions?: Array<DemoPositionView>;
+    /**
+     * Start Value
+     */
+    start_value?: number | null;
+    /**
+     * Total Return
+     */
+    total_return?: number | null;
+    /**
+     * Total Value
+     */
+    total_value?: number | null;
+};
+
+/**
+ * DemoPositionView
+ */
+export type DemoPositionView = {
+    /**
+     * Cost
+     */
+    cost: number;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Pnl Pct
+     */
+    pnl_pct: number;
+    /**
+     * Price
+     */
+    price: number;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Sector
+     */
+    sector: string;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Value
+     */
+    value: number;
+    /**
+     * Weight
+     */
+    weight: number;
+};
+
+/**
  * DisconnectView
  */
 export type DisconnectView = {
@@ -1743,6 +2591,32 @@ export type DisconnectView = {
      * Remote Removed
      */
     remote_removed: boolean | null;
+};
+
+/**
+ * DispositionView
+ */
+export type DispositionView = {
+    /**
+     * Avg Days Losers
+     */
+    avg_days_losers: number | null;
+    /**
+     * Avg Days Winners
+     */
+    avg_days_winners: number | null;
+    /**
+     * Present
+     *
+     * Losers are held clearly longer than winners.
+     */
+    present: boolean;
+    /**
+     * Ratio
+     *
+     * Losers held this many times longer than winners.
+     */
+    ratio: number | null;
 };
 
 /**
@@ -1849,7 +2723,7 @@ export type DraftBacktestRequest = {
     /**
      * Cost Model
      */
-    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    cost_model?: 'zero' | 'realistic' | 'ibkr_tiered' | 'ibkr_fixed' | CostModelSettings | null;
     /**
      * End
      */
@@ -1933,7 +2807,7 @@ export type DraftLabRunRequest = {
     /**
      * Cost Model
      */
-    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    cost_model?: 'zero' | 'realistic' | 'ibkr_tiered' | 'ibkr_fixed' | CostModelSettings | null;
     /**
      * Embargo Bars
      */
@@ -2003,7 +2877,7 @@ export type DraftLabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'data_snooping' | 'deflated_sharpe' | 'drift' | 'event_study' | 'forecast_skill' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -2606,6 +3480,24 @@ export type ExchangeView = {
 };
 
 /**
+ * ExecAlgoAssumption
+ *
+ * ``[backtest.costs.exec_algo]``: the execution algo the fills assume.
+ */
+export type ExecAlgoAssumption = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Params
+     */
+    params?: {
+        [key: string]: unknown;
+    };
+};
+
+/**
  * Exposure
  */
 export type Exposure = {
@@ -2860,6 +3752,10 @@ export type FactorTearSheetView = {
      * Note
      */
     note?: string;
+    /**
+     * Periods
+     */
+    periods?: Array<PeriodIcView>;
     quantile_curves?: QuantileCurvesView;
     /**
      * Score Turnover
@@ -2996,6 +3892,7 @@ export type FactorView = {
      * Lookback Bars
      */
     lookback_bars: number;
+    provenance?: ProvenanceView | null;
     /**
      * Set
      */
@@ -3079,6 +3976,42 @@ export type FeedView = {
 };
 
 /**
+ * FilingEvent
+ *
+ * A current report (8-K) a company filed (roadmap 23.13).
+ */
+export type FilingEvent = {
+    /**
+     * Accepted At
+     */
+    accepted_at: string;
+    /**
+     * Form
+     */
+    form: string;
+    /**
+     * Item Names
+     */
+    item_names?: Array<string>;
+    /**
+     * Items
+     */
+    items?: Array<string>;
+    /**
+     * Name
+     */
+    name?: string | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Url
+     */
+    url?: string | null;
+};
+
+/**
  * FillView
  */
 export type FillView = {
@@ -3118,6 +4051,44 @@ export type FillView = {
      * Ticker
      */
     ticker: string;
+};
+
+/**
+ * FundCoverage
+ */
+export type FundCoverage = {
+    /**
+     * As Of
+     *
+     * The day the fund's holdings list describes.
+     */
+    as_of: string;
+    /**
+     * Covered
+     *
+     * Share of the fund the listed holdings explain (0 to 1).
+     */
+    covered: number;
+    /**
+     * Fund
+     */
+    fund: string;
+    /**
+     * Holdings
+     *
+     * Holdings listed for the fund.
+     */
+    holdings: number;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Value
+     *
+     * Market value of the fund in the book.
+     */
+    value: number;
 };
 
 /**
@@ -3510,6 +4481,74 @@ export type GroupIcView = {
      * T Stat Hac
      */
     t_stat_hac: number | null;
+};
+
+/**
+ * GroupStatsView
+ *
+ * Results of one group of closed legs, money in the base currency.
+ */
+export type GroupStatsView = {
+    /**
+     * Avg Exit Efficiency
+     */
+    avg_exit_efficiency: number | null;
+    /**
+     * Avg Holding Days
+     */
+    avg_holding_days: number | null;
+    /**
+     * Avg Loss
+     */
+    avg_loss: number | null;
+    /**
+     * Avg Pnl
+     */
+    avg_pnl: number | null;
+    /**
+     * Avg R
+     */
+    avg_r: number | null;
+    /**
+     * Avg Win
+     */
+    avg_win: number | null;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Losses
+     */
+    losses: number;
+    /**
+     * Open
+     */
+    open: number;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Profit Factor
+     */
+    profit_factor: number | null;
+    /**
+     * R Trades
+     */
+    r_trades: number;
+    /**
+     * Trades
+     */
+    trades: number;
+    /**
+     * Win Rate
+     */
+    win_rate: number | null;
+    /**
+     * Wins
+     */
+    wins: number;
 };
 
 /**
@@ -3936,6 +4975,65 @@ export type IStarSettings = {
      * Pov
      */
     pov?: number;
+};
+
+/**
+ * IbkrFixedFees
+ *
+ * IBKR Pro Fixed, US stocks and ETFs.
+ * Source: interactivebrokers.com/en/pricing/commissions-stocks.php
+ * (Fixed: USD 0.005 per share, minimum USD 1.00, maximum 1% of trade value).
+ */
+export type IbkrFixedFees = {
+    /**
+     * Max Fraction
+     */
+    max_fraction?: number;
+    /**
+     * Minimum
+     */
+    minimum?: number;
+    /**
+     * Per Share
+     */
+    per_share?: number;
+};
+
+/**
+ * IbkrTieredFees
+ *
+ * IBKR Pro Tiered, US stocks and ETFs. Source: the page above
+ * (minimum USD 0.35 per order, maximum 1% of trade value, plus exchange,
+ * clearing and pass-through fees).
+ */
+export type IbkrTieredFees = {
+    /**
+     * Clearing Per Share
+     */
+    clearing_per_share?: number;
+    /**
+     * Exchange Per Share
+     */
+    exchange_per_share?: number;
+    /**
+     * Max Fraction
+     */
+    max_fraction?: number;
+    /**
+     * Minimum
+     */
+    minimum?: number;
+    /**
+     * Monthly Shares
+     */
+    monthly_shares?: number;
+    /**
+     * Tiers
+     */
+    tiers?: Array<[
+        number,
+        number
+    ]>;
 };
 
 /**
@@ -4602,6 +5700,22 @@ export type JournalEntryView = {
 };
 
 /**
+ * JournalLabelsView
+ *
+ * Tags and mistakes already used in the portfolio, for suggestions.
+ */
+export type JournalLabelsView = {
+    /**
+     * Mistakes
+     */
+    mistakes: Array<string>;
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+};
+
+/**
  * JournalNoteView
  */
 export type JournalNoteView = {
@@ -4629,6 +5743,239 @@ export type JournalNoteView = {
      * Updated At
      */
     updated_at: string;
+};
+
+/**
+ * JournalTradeDetailView
+ *
+ * A whole trade: every leg and its review.
+ */
+export type JournalTradeDetailView = {
+    /**
+     * Followed Plan
+     */
+    followed_plan: boolean | null;
+    /**
+     * Legs
+     */
+    legs: Array<JournalTradeView>;
+    /**
+     * Mistakes
+     */
+    mistakes: Array<string>;
+    /**
+     * Origin
+     */
+    origin: 'strategy' | 'manual';
+    /**
+     * Playbook Id
+     */
+    playbook_id: string | null;
+    /**
+     * Playbook Name
+     */
+    playbook_name: string | null;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Pnl Base
+     */
+    pnl_base: number | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Review
+     */
+    review: string | null;
+    /**
+     * Side
+     */
+    side: 'long' | 'short';
+    /**
+     * Sleeve
+     */
+    sleeve: string;
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Trade Id
+     */
+    trade_id: number;
+    /**
+     * Updated At
+     */
+    updated_at: string | null;
+    /**
+     * Updated By
+     */
+    updated_by: string | null;
+};
+
+/**
+ * JournalTradeView
+ *
+ * One leg of a trade. Money is in the instrument's currency, and
+ * ``pnl_base`` in the portfolio's base currency (null with no FX rate).
+ */
+export type JournalTradeView = {
+    /**
+     * Currency
+     */
+    currency: string;
+    /**
+     * Dividends
+     */
+    dividends: number;
+    /**
+     * Entry At
+     */
+    entry_at: string;
+    /**
+     * Entry Client Id
+     */
+    entry_client_id: string;
+    /**
+     * Entry Price
+     */
+    entry_price: number;
+    /**
+     * Exit At
+     */
+    exit_at: string | null;
+    /**
+     * Exit Client Id
+     */
+    exit_client_id: string | null;
+    /**
+     * Exit Efficiency
+     */
+    exit_efficiency: number | null;
+    /**
+     * Exit Price
+     */
+    exit_price: number;
+    /**
+     * Exit Trigger
+     */
+    exit_trigger: string | null;
+    /**
+     * Fees
+     */
+    fees: number;
+    /**
+     * Followed Plan
+     */
+    followed_plan: boolean | null;
+    /**
+     * Holding Days
+     */
+    holding_days: number;
+    /**
+     * Is Open
+     */
+    is_open: boolean;
+    /**
+     * Leg Id
+     */
+    leg_id: string;
+    /**
+     * Mae Pct
+     */
+    mae_pct: number | null;
+    /**
+     * Mae R
+     */
+    mae_r: number | null;
+    /**
+     * Mfe Pct
+     */
+    mfe_pct: number | null;
+    /**
+     * Mistakes
+     */
+    mistakes: Array<string>;
+    /**
+     * Origin
+     */
+    origin: 'strategy' | 'manual';
+    /**
+     * Playbook Id
+     */
+    playbook_id: string | null;
+    /**
+     * Playbook Name
+     */
+    playbook_name: string | null;
+    /**
+     * Pnl
+     */
+    pnl: number;
+    /**
+     * Pnl Base
+     */
+    pnl_base: number | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * R Multiple
+     */
+    r_multiple: number | null;
+    /**
+     * Return Pct
+     */
+    return_pct: number;
+    /**
+     * Review
+     */
+    review: string | null;
+    /**
+     * Risk Amount
+     */
+    risk_amount: number | null;
+    /**
+     * Side
+     */
+    side: 'long' | 'short';
+    /**
+     * Sleeve
+     */
+    sleeve: string;
+    /**
+     * Stop Price
+     */
+    stop_price: number | null;
+    /**
+     * Stop Source
+     */
+    stop_source: string | null;
+    /**
+     * Tags
+     */
+    tags: Array<string>;
+    /**
+     * Target Price
+     */
+    target_price: number | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Trade Id
+     */
+    trade_id: number;
 };
 
 /**
@@ -4686,7 +6033,7 @@ export type LabRunRequest = {
     /**
      * Cost Model
      */
-    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    cost_model?: 'zero' | 'realistic' | 'ibkr_tiered' | 'ibkr_fixed' | CostModelSettings | null;
     /**
      * Embargo Bars
      */
@@ -4761,7 +6108,7 @@ export type LabRunRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'data_snooping' | 'deflated_sharpe' | 'drift' | 'event_study' | 'forecast_skill' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -5519,6 +6866,160 @@ export type LoginView = {
 };
 
 /**
+ * LookThrough
+ */
+export type LookThrough = {
+    /**
+     * Country
+     */
+    country: Array<LookThroughSlice>;
+    /**
+     * Fund Value
+     *
+     * Value of every held fund with a holdings list.
+     */
+    fund_value: number;
+    /**
+     * Funds
+     *
+     * Held funds with a holdings list.
+     */
+    funds: Array<FundCoverage>;
+    /**
+     * Listed Fund Value
+     *
+     * Part of fund_value the listed holdings explain. The rest shows as 'not listed'.
+     */
+    listed_fund_value: number;
+    /**
+     * Names
+     *
+     * Largest single names, funds split.
+     */
+    names: Array<LookThroughName>;
+    /**
+     * Sector
+     */
+    sector: Array<LookThroughSlice>;
+};
+
+/**
+ * LookThroughName
+ *
+ * One company with its direct and fund holdings added up (23.14).
+ */
+export type LookThroughName = {
+    /**
+     * Direct Value
+     */
+    direct_value: number;
+    /**
+     * Fund Value
+     */
+    fund_value: number;
+    /**
+     * Funds
+     *
+     * Held funds that own this name.
+     */
+    funds: Array<string>;
+    /**
+     * Key
+     *
+     * The ticker, or the fund's own code for the holding.
+     */
+    key: string;
+    /**
+     * Name
+     */
+    name: string | null;
+    /**
+     * Value
+     *
+     * Direct value plus each fund's value times its weight.
+     */
+    value: number;
+    /**
+     * Weight
+     *
+     * value / the book's total value.
+     */
+    weight: number | null;
+};
+
+/**
+ * LookThroughSlice
+ *
+ * One sector or country with funds split into what they hold (23.14).
+ */
+export type LookThroughSlice = {
+    /**
+     * Direct Value
+     *
+     * Part held directly, not through a fund.
+     */
+    direct_value: number;
+    /**
+     * Fund Value
+     *
+     * Part held through funds.
+     */
+    fund_value: number;
+    /**
+     * Key
+     *
+     * A sector, an ISO country code, cash, not listed or unknown.
+     */
+    key: string;
+    /**
+     * Value
+     *
+     * Market value in the group, funds split by weight.
+     */
+    value: number;
+    /**
+     * Weight
+     *
+     * value / the book's total value.
+     */
+    weight: number | null;
+};
+
+/**
+ * LookThroughView
+ *
+ * A portfolio's exposure with each held fund split into what it holds
+ * (roadmap 23.14).
+ */
+export type LookThroughView = {
+    /**
+     * As Of
+     *
+     * Fund holdings are the lists known on this day.
+     */
+    as_of: string;
+    /**
+     * Currency
+     *
+     * Reporting currency. Amounts are not FX-converted.
+     */
+    currency: string;
+    look_through: LookThrough;
+    /**
+     * Notes
+     */
+    notes: Array<string>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Total Value
+     */
+    total_value: number;
+};
+
+/**
  * LosingLockSettings
  */
 export type LosingLockSettings = {
@@ -5527,9 +7028,17 @@ export type LosingLockSettings = {
      */
     lock_days?: number;
     /**
+     * Loss Window Days
+     */
+    loss_window_days?: number;
+    /**
      * Max Consecutive Losses
      */
     max_consecutive_losses?: number | null;
+    /**
+     * Max Loss Pct
+     */
+    max_loss_pct?: number | null;
 };
 
 /**
@@ -5582,6 +7091,110 @@ export type LotPicksUpdate = {
      * Sell Fill Id
      */
     sell_fill_id: number;
+};
+
+/**
+ * LotSaleView
+ */
+export type LotSaleView = {
+    /**
+     * Acquired
+     */
+    acquired: string;
+    /**
+     * Cost Basis
+     */
+    cost_basis: number;
+    /**
+     * Gain
+     */
+    gain: number;
+    /**
+     * Holding Period
+     */
+    holding_period: 'short' | 'long';
+    /**
+     * Proceeds
+     */
+    proceeds: number;
+    /**
+     * Quantity
+     */
+    quantity: number;
+};
+
+/**
+ * LotView
+ *
+ * What lot rounding did in a backtest (roadmap 23.1).
+ */
+export type LotView = {
+    /**
+     * Max Drift
+     */
+    max_drift?: number | null;
+    /**
+     * Mean Drift
+     */
+    mean_drift?: number | null;
+    /**
+     * Min Capital
+     */
+    min_capital?: number | null;
+    /**
+     * Min Capital Profile
+     */
+    min_capital_profile?: string;
+    /**
+     * Orders
+     */
+    orders?: number;
+    /**
+     * Profile
+     */
+    profile: string;
+    /**
+     * Rounded
+     */
+    rounded?: number;
+    /**
+     * Skipped
+     */
+    skipped?: number;
+    /**
+     * Skipped Notional
+     */
+    skipped_notional?: number | null;
+    /**
+     * Skipped Share
+     */
+    skipped_share?: number | null;
+};
+
+/**
+ * ManualDisciplineSettings
+ */
+export type ManualDisciplineSettings = {
+    /**
+     * Cooldown Minutes
+     */
+    cooldown_minutes?: number | null;
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Max Daily Loss
+     */
+    max_daily_loss?: number | null;
+    /**
+     * Max Entries Per Day
+     */
+    max_entries_per_day?: number | null;
+    /**
+     * Require Stop Live
+     */
+    require_stop_live?: boolean;
 };
 
 /**
@@ -5663,6 +7276,18 @@ export type ManualOrderRequest = {
      */
     side: 'buy' | 'sell';
     /**
+     * Stop Price
+     *
+     * A protective stop for this entry: below a buy, above a short sale. A book at a broker gets a stop order once the entry fills.
+     */
+    stop_price?: number | null;
+    /**
+     * Target Price
+     *
+     * Where you plan to take the profit (recorded).
+     */
+    target_price?: number | null;
+    /**
      * Ticker
      *
      * Instrument id, e.g. AAPL.US
@@ -5717,6 +7342,12 @@ export type ManualOrderResult = {
      */
     portfolio_id: string;
     /**
+     * Protective Stop
+     *
+     * The client id of the stop order placed at the broker.
+     */
+    protective_stop?: string | null;
+    /**
      * Quantity
      *
      * What was placed (smaller when allow_reduce applied).
@@ -5739,6 +7370,12 @@ export type ManualOrderResult = {
      */
     requested_quantity: number;
     /**
+     * Reward Risk
+     *
+     * The gain at the target over the loss at the stop.
+     */
+    reward_risk?: number | null;
+    /**
      * Side
      */
     side: 'buy' | 'sell';
@@ -5746,6 +7383,16 @@ export type ManualOrderResult = {
      * Status
      */
     status: 'preview' | 'pending' | 'filled' | 'partially_filled' | 'rejected' | 'cancelled';
+    /**
+     * Stop Price
+     *
+     * The protective stop planned.
+     */
+    stop_price?: number | null;
+    /**
+     * Target Price
+     */
+    target_price?: number | null;
     /**
      * Ticker
      */
@@ -6104,6 +7751,10 @@ export type MeView = {
      * Scopes
      */
     scopes: Array<ApiScope>;
+    /**
+     * Toolsets
+     */
+    toolsets?: Array<string> | null;
     /**
      * User Id
      */
@@ -7312,6 +8963,38 @@ export type OrderView = {
 };
 
 /**
+ * OvertradingView
+ */
+export type OvertradingView = {
+    /**
+     * Active Days
+     */
+    active_days: number;
+    /**
+     * Busy Day Pnl
+     */
+    busy_day_pnl: number;
+    /**
+     * Busy Days
+     *
+     * Days with many entries (5 or more).
+     */
+    busy_days: number;
+    /**
+     * Entries Per Active Day
+     */
+    entries_per_active_day: number | null;
+    /**
+     * Max Entries In A Day
+     */
+    max_entries_in_a_day: number;
+    /**
+     * Other Day Pnl
+     */
+    other_day_pnl: number;
+};
+
+/**
  * Page[AlertView]
  */
 export type PageAlertView = {
@@ -7664,6 +9347,28 @@ export type PageJournalEntryView = {
 };
 
 /**
+ * Page[JournalTradeView]
+ */
+export type PageJournalTradeView = {
+    /**
+     * Items
+     */
+    items: Array<JournalTradeView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[LedgerRunView]
  */
 export type PageLedgerRunView = {
@@ -7803,6 +9508,28 @@ export type PageOrderView = {
      * Items
      */
     items: Array<OrderView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[PlaybookView]
+ */
+export type PagePlaybookView = {
+    /**
+     * Items
+     */
+    items: Array<PlaybookView>;
     /**
      * Limit
      */
@@ -7994,6 +9721,50 @@ export type PageSavedScreenView = {
 };
 
 /**
+ * Page[ScreenAlertEventView]
+ */
+export type PageScreenAlertEventView = {
+    /**
+     * Items
+     */
+    items: Array<ScreenAlertEventView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[ScreenAlertView]
+ */
+export type PageScreenAlertView = {
+    /**
+     * Items
+     */
+    items: Array<ScreenAlertView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
  * Page[ShadowDecisionView]
  */
 export type PageShadowDecisionView = {
@@ -8067,6 +9838,28 @@ export type PageStatementFlagView = {
      * Items
      */
     items: Array<StatementFlagView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[StatementImportView]
+ */
+export type PageStatementImportView = {
+    /**
+     * Items
+     */
+    items: Array<StatementImportView>;
     /**
      * Limit
      */
@@ -8199,6 +9992,50 @@ export type PageTokenView = {
      * Items
      */
     items: Array<TokenView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[ToolsetView]
+ */
+export type PageToolsetView = {
+    /**
+     * Items
+     */
+    items: Array<ToolsetView>;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Total
+     */
+    total: number;
+};
+
+/**
+ * Page[TradeDecisionView]
+ */
+export type PageTradeDecisionView = {
+    /**
+     * Items
+     */
+    items: Array<TradeDecisionView>;
     /**
      * Limit
      */
@@ -8428,6 +10265,68 @@ export type ParameterInfo = {
 };
 
 /**
+ * ParentOrderList
+ */
+export type ParentOrderList = {
+    /**
+     * Items
+     */
+    items: Array<ParentOrderView>;
+};
+
+/**
+ * ParentOrderView
+ *
+ * A parent order Stonks works as child slices.
+ */
+export type ParentOrderView = {
+    /**
+     * Algo
+     */
+    algo: string;
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Filled
+     */
+    filled: number;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell';
+    /**
+     * Slices
+     */
+    slices: Array<SliceView>;
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Window End
+     */
+    window_end: string;
+    /**
+     * Window Start
+     */
+    window_start: string;
+};
+
+/**
  * PasswordChangeRequest
  */
 export type PasswordChangeRequest = {
@@ -8584,6 +10483,40 @@ export type PendingActionView = {
 };
 
 /**
+ * PeriodICView
+ */
+export type PeriodIcView = {
+    /**
+     * End
+     */
+    end: string;
+    /**
+     * Mean Ic
+     */
+    mean_ic?: number | null;
+    /**
+     * N Dates
+     */
+    n_dates: number;
+    /**
+     * Period
+     */
+    period: string;
+    /**
+     * Spread Mean
+     */
+    spread_mean?: number | null;
+    /**
+     * Start
+     */
+    start: string;
+    /**
+     * T Stat Hac
+     */
+    t_stat_hac?: number | null;
+};
+
+/**
  * PeriodPnl
  */
 export type PeriodPnl = {
@@ -8636,6 +10569,208 @@ export type PeriodPnl = {
 };
 
 /**
+ * PlanConfirm
+ */
+export type PlanConfirm = {
+    /**
+     * Key
+     *
+     * Idempotency key. Default: one from the plan's trades.
+     */
+    key?: string | null;
+    /**
+     * Long Term Rate
+     */
+    long_term_rate?: number | null;
+    /**
+     * Min Trade Value
+     */
+    min_trade_value?: number;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Short Term Rate
+     */
+    short_term_rate?: number | null;
+    /**
+     * Source
+     *
+     * strategy: the strategy's latest model book weights; targets: your list.
+     */
+    source: 'strategy' | 'targets';
+    /**
+     * Strategy Id
+     */
+    strategy_id?: string | null;
+    /**
+     * Targets
+     */
+    targets?: Array<PlanTarget>;
+};
+
+/**
+ * PlanConfirmResult
+ */
+export type PlanConfirmResult = {
+    /**
+     * Key
+     */
+    key: string;
+    plan: RebalancePlanView;
+    /**
+     * Ticket Ids
+     */
+    ticket_ids: Array<string>;
+    /**
+     * Written
+     *
+     * New tickets. A repeat of the same key writes none.
+     */
+    written: number;
+};
+
+/**
+ * PlanLineView
+ */
+export type PlanLineView = {
+    /**
+     * Cost
+     */
+    cost: number;
+    /**
+     * Cost Bps
+     */
+    cost_bps: number | null;
+    /**
+     * Current Quantity
+     */
+    current_quantity: number;
+    /**
+     * Current Weight
+     */
+    current_weight: number;
+    /**
+     * Price
+     */
+    price: number | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell' | null;
+    /**
+     * Skipped
+     */
+    skipped: string | null;
+    /**
+     * Target Quantity
+     */
+    target_quantity: number;
+    /**
+     * Target Weight
+     */
+    target_weight: number;
+    tax: PlanTaxView | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Value
+     */
+    value: number;
+    /**
+     * Weight After
+     */
+    weight_after: number;
+};
+
+/**
+ * PlanRequest
+ */
+export type PlanRequest = {
+    /**
+     * Long Term Rate
+     */
+    long_term_rate?: number | null;
+    /**
+     * Min Trade Value
+     */
+    min_trade_value?: number;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Short Term Rate
+     */
+    short_term_rate?: number | null;
+    /**
+     * Source
+     *
+     * strategy: the strategy's latest model book weights; targets: your list.
+     */
+    source: 'strategy' | 'targets';
+    /**
+     * Strategy Id
+     */
+    strategy_id?: string | null;
+    /**
+     * Targets
+     */
+    targets?: Array<PlanTarget>;
+};
+
+/**
+ * PlanTarget
+ */
+export type PlanTarget = {
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Weight
+     */
+    weight: number;
+};
+
+/**
+ * PlanTaxView
+ */
+export type PlanTaxView = {
+    /**
+     * Estimated Tax
+     */
+    estimated_tax: number | null;
+    /**
+     * Gain
+     */
+    gain: number;
+    /**
+     * Long Term Gain
+     */
+    long_term_gain: number;
+    /**
+     * Lots
+     */
+    lots: Array<LotSaleView>;
+    /**
+     * Short Term Gain
+     */
+    short_term_gain: number;
+};
+
+/**
  * PlateauOverlayView
  *
  * The plateau test's verdict on the tuned set, laid over the map.
@@ -8667,6 +10802,128 @@ export type PlateauOverlayView = {
      * Y Range
      */
     y_range?: Array<number> | null;
+};
+
+/**
+ * PlaybookCreate
+ */
+export type PlaybookCreate = {
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * PlaybookUpdate
+ */
+export type PlaybookUpdate = {
+    /**
+     * Archived
+     */
+    archived?: boolean | null;
+    /**
+     * Description
+     */
+    description?: string | null;
+    /**
+     * Name
+     */
+    name?: string | null;
+};
+
+/**
+ * PlaybookView
+ */
+export type PlaybookView = {
+    /**
+     * Archived
+     */
+    archived: boolean;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Description
+     */
+    description: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+};
+
+/**
+ * PnlCalendarView
+ *
+ * Realised P&L of closed legs by exit day, ISO week and month.
+ */
+export type PnlCalendarView = {
+    /**
+     * Base Currency
+     */
+    base_currency: string;
+    /**
+     * Best Day
+     */
+    best_day: string | null;
+    /**
+     * Days
+     */
+    days: Array<CalendarBucketView>;
+    /**
+     * Fx Missing
+     */
+    fx_missing: Array<string>;
+    /**
+     * Months
+     */
+    months: Array<CalendarBucketView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Since
+     */
+    since: string | null;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Trades
+     */
+    trades: number;
+    /**
+     * Unconverted
+     */
+    unconverted: number;
+    /**
+     * Until
+     */
+    until: string | null;
+    /**
+     * Weeks
+     */
+    weeks: Array<CalendarBucketView>;
+    /**
+     * Worst Day
+     */
+    worst_day: string | null;
 };
 
 /**
@@ -9114,7 +11371,7 @@ export type PreferenceItem = {
     /**
      * Category
      */
-    category: 'signal' | 'order' | 'risk' | 'system' | 'price_alert' | 'event_alert';
+    category: 'signal' | 'order' | 'risk' | 'system' | 'price_alert' | 'event_alert' | 'screen_alert';
     /**
      * Channel
      */
@@ -9262,6 +11519,50 @@ export type PreviewAccountView = {
      * Settled Cash
      */
     settled_cash: number;
+};
+
+/**
+ * PreviewLotView
+ */
+export type PreviewLotView = {
+    /**
+     * Acquired
+     */
+    acquired: string;
+    /**
+     * Cost Basis
+     */
+    cost_basis: number;
+    /**
+     * Gain
+     */
+    gain: number;
+    /**
+     * Holding Period
+     */
+    holding_period: 'short' | 'long';
+    /**
+     * Kind
+     */
+    kind: 'long' | 'short';
+    /**
+     * Open Fill Id
+     *
+     * The fill that opened the lot.
+     */
+    open_fill_id: number;
+    /**
+     * Proceeds
+     */
+    proceeds: number;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Wash Sale Disallowed
+     */
+    wash_sale_disallowed: number;
 };
 
 /**
@@ -9560,6 +11861,123 @@ export type PriceBandSettings = {
 };
 
 /**
+ * PriceCheckItemView
+ */
+export type PriceCheckItemView = {
+    /**
+     * Adjustment Gap
+     */
+    adjustment_gap?: number | null;
+    /**
+     * Close Gap
+     */
+    close_gap?: number | null;
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Second Close
+     */
+    second_close?: number | null;
+    /**
+     * Source
+     */
+    source?: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Vendor Close
+     */
+    vendor_close?: number | null;
+    /**
+     * Vendor Date
+     */
+    vendor_date?: string | null;
+};
+
+/**
+ * PriceCheckRunBody
+ */
+export type PriceCheckRunBody = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+};
+
+/**
+ * PriceCheckRunView
+ */
+export type PriceCheckRunView = {
+    check?: PriceCheckView | null;
+    /**
+     * Ran
+     */
+    ran: boolean;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+};
+
+/**
+ * PriceCheckView
+ */
+export type PriceCheckView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Checked At
+     */
+    checked_at: string;
+    /**
+     * Detail
+     */
+    detail?: string | null;
+    /**
+     * Halt Id
+     */
+    halt_id?: number | null;
+    /**
+     * Held
+     */
+    held: Array<string>;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Items
+     */
+    items: Array<PriceCheckItemView>;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Tickers Checked
+     */
+    tickers_checked: number;
+    /**
+     * Tickers Compared
+     */
+    tickers_compared: number;
+};
+
+/**
  * ProbeView
  */
 export type ProbeView = {
@@ -9649,6 +12067,14 @@ export type PromotionChecklistView = {
      */
     hypothesis?: string | null;
     /**
+     * Lot Skipped Share
+     */
+    lot_skipped_share?: number | null;
+    /**
+     * Min Capital
+     */
+    min_capital?: number | null;
+    /**
      * N Trials Class
      */
     n_trials_class?: number | null;
@@ -9682,6 +12108,38 @@ export type ProtectiveStopSettings = {
      * Fallback Pct
      */
     fallback_pct?: number;
+};
+
+/**
+ * ProvenanceView
+ *
+ * The paper a published factor comes from (roadmap 23.13).
+ */
+export type ProvenanceView = {
+    /**
+     * Paper
+     */
+    paper: string;
+    /**
+     * Published
+     */
+    published: number;
+    /**
+     * Reported
+     */
+    reported: string;
+    /**
+     * Sample End
+     */
+    sample_end: number;
+    /**
+     * Sample Start
+     */
+    sample_start: number;
+    /**
+     * T Stat
+     */
+    t_stat?: number | null;
 };
 
 /**
@@ -9832,6 +12290,86 @@ export type QuietHoursUpdate = {
 };
 
 /**
+ * RebalancePlanView
+ */
+export type RebalancePlanView = {
+    /**
+     * Algo
+     *
+     * The execution algo the trades would use.
+     */
+    algo: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Buys
+     */
+    buys: number;
+    /**
+     * Cash After
+     */
+    cash_after: number;
+    /**
+     * Cash Before
+     */
+    cash_before: number;
+    /**
+     * Cash Weight After
+     */
+    cash_weight_after: number;
+    /**
+     * Equity
+     */
+    equity: number;
+    /**
+     * Lines
+     */
+    lines: Array<PlanLineView>;
+    /**
+     * Max Drift After
+     */
+    max_drift_after: number;
+    /**
+     * Notes
+     */
+    notes: Array<string>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Sells
+     */
+    sells: number;
+    /**
+     * Source
+     */
+    source: 'strategy' | 'targets';
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+    /**
+     * Tax Total
+     */
+    tax_total: number | null;
+    /**
+     * Total Cost
+     */
+    total_cost: number;
+    /**
+     * Turnover
+     *
+     * Traded value over the book's value.
+     */
+    turnover: number;
+};
+
+/**
  * ReconcileReportView
  */
 export type ReconcileReportView = {
@@ -9896,6 +12434,32 @@ export type RecoveryCodesView = {
      * Recovery Codes
      */
     recovery_codes: Array<string>;
+};
+
+/**
+ * ReliabilityBinView
+ */
+export type ReliabilityBinView = {
+    /**
+     * Count
+     */
+    count: number;
+    /**
+     * Lower
+     */
+    lower: number;
+    /**
+     * Mean Forecast
+     */
+    mean_forecast: number | null;
+    /**
+     * Observed Rate
+     */
+    observed_rate: number | null;
+    /**
+     * Upper
+     */
+    upper: number;
 };
 
 /**
@@ -10272,6 +12836,50 @@ export type RestoreResultView = {
 };
 
 /**
+ * ResumeCheckView
+ */
+export type ResumeCheckView = {
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Passed
+     */
+    passed: boolean | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
+};
+
+/**
+ * ResumeChecksView
+ *
+ * What is checked before a kill switch resume (roadmap 23.15): per
+ * portfolio at a real broker, the gateway, the last reconcile, the
+ * account and the equity cover of the largest position.
+ */
+export type ResumeChecksView = {
+    /**
+     * Checks
+     */
+    checks: Array<ResumeCheckView>;
+    /**
+     * Halt Id
+     */
+    halt_id: number;
+    /**
+     * Passed
+     */
+    passed: boolean;
+};
+
+/**
  * ResumeRequest
  */
 export type ResumeRequest = {
@@ -10279,6 +12887,10 @@ export type ResumeRequest = {
      * Confirmation
      */
     confirmation: string;
+    /**
+     * Override Checks
+     */
+    override_checks?: boolean;
     /**
      * Reason
      */
@@ -10719,6 +13331,7 @@ export type RuleSettings = {
     liquidity?: LiquiditySettings;
     live_notional_caps?: LiveNotionalCapsSettings;
     losing_lock?: LosingLockSettings;
+    manual_discipline?: ManualDisciplineSettings;
     margin_call?: MarginCallSettings;
     max_holding?: MaxHoldingSettings;
     max_orders_per_run?: MaxOrdersPerRunSettings;
@@ -10965,6 +13578,152 @@ export type ScheduledRunView = {
 };
 
 /**
+ * ScreenAlertEventView
+ */
+export type ScreenAlertEventView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Matched
+     */
+    matched: number;
+    /**
+     * Screen Id
+     */
+    screen_id: string;
+    /**
+     * Screen Name
+     */
+    screen_name: string | null;
+    /**
+     * Tickers
+     */
+    tickers: Array<string>;
+};
+
+/**
+ * ScreenAlertRunRequest
+ */
+export type ScreenAlertRunRequest = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+};
+
+/**
+ * ScreenAlertRunView
+ */
+export type ScreenAlertRunView = {
+    /**
+     * Alerts
+     */
+    alerts: number;
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Baselines
+     */
+    baselines: number;
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Fired
+     */
+    fired: number;
+    /**
+     * Published
+     */
+    published: number;
+    /**
+     * Ran
+     */
+    ran: number;
+};
+
+/**
+ * ScreenAlertSet
+ *
+ * Turn an alert on for one of your saved screens, or change it.
+ */
+export type ScreenAlertSet = {
+    /**
+     * Cadence
+     */
+    cadence?: 'daily' | 'weekly';
+    /**
+     * Enabled
+     */
+    enabled?: boolean;
+    /**
+     * Weekday
+     *
+     * Weekly: the day it runs, 0 = Monday.
+     */
+    weekday?: number | null;
+};
+
+/**
+ * ScreenAlertView
+ */
+export type ScreenAlertView = {
+    /**
+     * Cadence
+     */
+    cadence: 'daily' | 'weekly';
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Last As Of
+     */
+    last_as_of: string | null;
+    /**
+     * Last Error
+     */
+    last_error: string | null;
+    /**
+     * Matched
+     */
+    matched: number;
+    /**
+     * Screen Id
+     */
+    screen_id: string;
+    /**
+     * Screen Name
+     */
+    screen_name: string;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Weekday
+     */
+    weekday: number | null;
+};
+
+/**
  * ScreenResult
  */
 export type ScreenResult = {
@@ -11194,6 +13953,10 @@ export type ScreenUniverseView = {
  * SectorCapSettings
  */
 export type SectorCapSettings = {
+    /**
+     * Look Through
+     */
+    look_through?: boolean;
     /**
      * Max Weight Per Sector
      */
@@ -11585,6 +14348,44 @@ export type SignalIcView = {
 };
 
 /**
+ * SliceView
+ */
+export type SliceView = {
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Filled
+     */
+    filled: number;
+    /**
+     * Order State
+     */
+    order_state: string | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Send After
+     */
+    send_after: string;
+    /**
+     * Seq
+     */
+    seq: number;
+    /**
+     * Status
+     */
+    status: 'planned' | 'sent' | 'skipped';
+    /**
+     * Status Reason
+     */
+    status_reason: string | null;
+};
+
+/**
  * SmokeCheck
  */
 export type SmokeCheck = {
@@ -11929,6 +14730,196 @@ export type StatementFlagView = {
      * Ticker
      */
     ticker: string;
+};
+
+/**
+ * StatementImportRequest
+ *
+ * A CSV to preview or import, into ``portfolio_id`` (a broker portfolio
+ * of yours) or into a new portfolio named ``new_portfolio``.
+ */
+export type StatementImportRequest = {
+    /**
+     * Content
+     *
+     * The CSV text.
+     */
+    content: string;
+    /**
+     * Currency
+     */
+    currency?: string;
+    /**
+     * Filename
+     */
+    filename?: string | null;
+    /**
+     * Column mapping; blank guesses it from the headers.
+     */
+    mapping?: ColumnMapping | null;
+    /**
+     * New Portfolio
+     */
+    new_portfolio?: string | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
+};
+
+/**
+ * StatementImportView
+ */
+export type StatementImportView = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Filename
+     */
+    filename: string | null;
+    /**
+     * First Date
+     */
+    first_date: string | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Last Date
+     */
+    last_date: string | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Portfolio Name
+     */
+    portfolio_name: string | null;
+    /**
+     * Rows Added
+     */
+    rows_added: number;
+    /**
+     * Rows Duplicate
+     */
+    rows_duplicate: number;
+    /**
+     * Rows Skipped
+     */
+    rows_skipped: number;
+    /**
+     * Rows Total
+     */
+    rows_total: number;
+    /**
+     * Undone At
+     */
+    undone_at: string | null;
+};
+
+/**
+ * StatementPreview
+ */
+export type StatementPreview = {
+    /**
+     * Duplicate
+     */
+    duplicate: number;
+    /**
+     * First Date
+     */
+    first_date: string | null;
+    /**
+     * Guessed
+     */
+    guessed: boolean;
+    /**
+     * Headers
+     */
+    headers: Array<string>;
+    /**
+     * Last Date
+     */
+    last_date: string | null;
+    mapping: ColumnMapping;
+    /**
+     * New
+     */
+    new: number;
+    /**
+     * Rows
+     */
+    rows: Array<StatementRowView>;
+    /**
+     * Skipped
+     */
+    skipped: number;
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Unmapped
+     */
+    unmapped: Array<string>;
+};
+
+/**
+ * StatementRowView
+ */
+export type StatementRowView = {
+    /**
+     * Amount
+     */
+    amount?: number | null;
+    /**
+     * Currency
+     */
+    currency?: string | null;
+    /**
+     * Day
+     */
+    day?: string | null;
+    /**
+     * Fee
+     */
+    fee?: number | null;
+    /**
+     * Kind
+     */
+    kind?: string | null;
+    /**
+     * Line
+     */
+    line: number;
+    /**
+     * Price
+     */
+    price?: number | null;
+    /**
+     * Quantity
+     */
+    quantity?: number | null;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+    /**
+     * Status
+     */
+    status: 'new' | 'duplicate' | 'skipped';
+    /**
+     * Symbol
+     */
+    symbol?: string | null;
+    /**
+     * Ticker
+     */
+    ticker?: string | null;
 };
 
 /**
@@ -12668,7 +15659,7 @@ export type SweepRequest = {
     /**
      * Cost Model
      */
-    cost_model?: 'zero' | 'realistic' | CostModelSettings | null;
+    cost_model?: 'zero' | 'realistic' | 'ibkr_tiered' | 'ibkr_fixed' | CostModelSettings | null;
     /**
      * Embargo Bars
      */
@@ -12746,7 +15737,7 @@ export type SweepRequest = {
     /**
      * Survival Tests
      */
-    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'deflated_sharpe' | 'drift' | 'event_study' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
+    survival_tests?: Array<'benchmark_relative' | 'cost_stress' | 'cpcv' | 'crisis' | 'cross_instrument' | 'data_snooping' | 'deflated_sharpe' | 'drift' | 'event_study' | 'forecast_skill' | 'mc_trades' | 'mcpt' | 'oos' | 'pbo' | 'period_stability' | 'permutation' | 'perturbation' | 'plateau' | 'pool_correlation' | 'runs_test' | 'signal_ic' | 'stress' | 'vs_random' | 'walk_forward' | 'walk_forward_mcpt'> | null;
     /**
      * Test Options
      */
@@ -13023,6 +16014,116 @@ export type SystemSettingsView = {
 };
 
 /**
+ * TaxPreviewView
+ *
+ * What a trade would realise now, before it is placed. An estimate at
+ * your configured rates, not tax advice.
+ */
+export type TaxPreviewView = {
+    /**
+     * After Tax Proceeds
+     */
+    after_tax_proceeds: number;
+    /**
+     * Currency
+     *
+     * The trade's currency; every amount is in it.
+     */
+    currency: string;
+    /**
+     * Estimated Tax
+     *
+     * Tax on this trade's own gains (0 on a loss).
+     */
+    estimated_tax: number;
+    /**
+     * Jurisdiction
+     */
+    jurisdiction: 'us' | 'eu' | 'uk';
+    /**
+     * Long Term Gain
+     */
+    long_term_gain: number;
+    /**
+     * Lot Method
+     */
+    lot_method: 'fifo' | 'specific';
+    /**
+     * Lots
+     *
+     * The lots the trade closes, in order.
+     */
+    lots: Array<PreviewLotView>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Price
+     *
+     * The price used: yours, else the latest close.
+     */
+    price: number;
+    /**
+     * Proceeds
+     */
+    proceeds: number;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    rates: TaxRatesView;
+    /**
+     * Realized Gain
+     */
+    realized_gain: number;
+    /**
+     * Short Term Gain
+     */
+    short_term_gain: number;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell';
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Wash Sale Disallowed
+     */
+    wash_sale_disallowed: number;
+    /**
+     * Wash Sale Warning
+     */
+    wash_sale_warning?: string | null;
+    /**
+     * Year Tax Change
+     *
+     * How much the trade changes this year's estimated tax (negative lowers it).
+     */
+    year_tax_change: number;
+};
+
+/**
+ * TaxRatesView
+ */
+export type TaxRatesView = {
+    /**
+     * Long Term
+     *
+     * Rate on gains held more than one year.
+     */
+    long_term: number;
+    /**
+     * Short Term
+     *
+     * Rate on gains held one year or less.
+     */
+    short_term: number;
+};
+
+/**
  * TaxSettingsUpdate
  */
 export type TaxSettingsUpdate = {
@@ -13086,6 +16187,58 @@ export type TaxSettingsView = {
      * US wash sale adjustment (us jurisdiction only).
      */
     wash_sales: boolean;
+};
+
+/**
+ * TaxYearView
+ *
+ * Gains realised this year and the estimated tax on them, in the base
+ * currency. Short and long term losses offset gains first.
+ */
+export type TaxYearView = {
+    /**
+     * Base Currency
+     */
+    base_currency: string;
+    /**
+     * Disposals
+     */
+    disposals: number;
+    /**
+     * Estimated Tax
+     */
+    estimated_tax: number;
+    /**
+     * Jurisdiction
+     */
+    jurisdiction: 'us' | 'eu' | 'uk';
+    /**
+     * Long Term Gain
+     */
+    long_term_gain: number;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    rates: TaxRatesView;
+    /**
+     * Short Term Gain
+     */
+    short_term_gain: number;
+    /**
+     * Unconverted
+     *
+     * Disposals left out for want of an FX rate.
+     */
+    unconverted: number;
+    /**
+     * Wash Sale Disallowed
+     */
+    wash_sale_disallowed: number;
+    /**
+     * Year
+     */
+    year: number;
 };
 
 /**
@@ -13189,7 +16342,7 @@ export type TcaSummaryView = {
     /**
      * By
      */
-    by: 'all' | 'strategy' | 'ticker' | 'portfolio' | 'day' | 'week' | 'month';
+    by: 'all' | 'strategy' | 'ticker' | 'portfolio' | 'algo' | 'day' | 'week' | 'month';
     /**
      * Fx Missing
      */
@@ -13770,6 +16923,10 @@ export type TokenCreateRequest = {
      * Scopes
      */
     scopes: Array<ApiScope>;
+    /**
+     * Toolsets
+     */
+    toolsets?: Array<string> | null;
 };
 
 /**
@@ -13815,6 +16972,10 @@ export type TokenView = {
      * Scopes
      */
     scopes: Array<ApiScope>;
+    /**
+     * Toolsets
+     */
+    toolsets?: Array<string> | null;
 };
 
 /**
@@ -13835,6 +16996,212 @@ export type ToolCallView = {
      * Name
      */
     name: string;
+};
+
+/**
+ * ToolsetView
+ *
+ * One MCP tool group a token can be limited to.
+ */
+export type ToolsetView = {
+    /**
+     * About
+     */
+    about: string;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
+ * TradeDecisionView
+ *
+ * One ticker in one book on one tick: the step that kept it out or
+ * trimmed it. ``step`` is one of universe, rank, constructor, buffer,
+ * stale_price, risk_rule, lots, scope, external, halt, held or traded.
+ */
+export type TradeDecisionView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Detail
+     */
+    detail: {
+        [key: string]: unknown;
+    };
+    /**
+     * Outcome
+     */
+    outcome: string;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Score
+     */
+    score: number | null;
+    /**
+     * Step
+     */
+    step: string;
+    /**
+     * Step Text
+     */
+    step_text: string;
+    /**
+     * Strategies
+     */
+    strategies: Array<string>;
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+    /**
+     * Summary
+     */
+    summary: string;
+    /**
+     * Tick Id
+     */
+    tick_id: string;
+    /**
+     * Ticker
+     */
+    ticker: string;
+};
+
+/**
+ * TradePlanRequest
+ *
+ * Size an entry from the risk you choose and the distance to the stop.
+ */
+export type TradePlanRequest = {
+    /**
+     * Entry Price
+     *
+     * Your entry, e.g. a limit. Default: the latest close.
+     */
+    entry_price?: number | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
+    /**
+     * Risk Amount
+     *
+     * Risk as an amount in the book's currency.
+     */
+    risk_amount?: number | null;
+    /**
+     * Risk Percent
+     *
+     * Risk as a percent of the book's value.
+     */
+    risk_percent?: number | null;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell';
+    /**
+     * Stop Price
+     */
+    stop_price: number;
+    /**
+     * Target Price
+     */
+    target_price?: number | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+};
+
+/**
+ * TradePlanView
+ */
+export type TradePlanView = {
+    /**
+     * Capped By
+     *
+     * cash: the cash cut the size.
+     */
+    capped_by: 'cash' | null;
+    /**
+     * Cash
+     */
+    cash: number;
+    /**
+     * Entry Is Close
+     *
+     * The entry is the latest close.
+     */
+    entry_is_close: boolean;
+    /**
+     * Entry Price
+     */
+    entry_price: number;
+    /**
+     * Equity
+     *
+     * The book's value at the latest closes.
+     */
+    equity: number;
+    /**
+     * Note
+     */
+    note?: string | null;
+    /**
+     * Notional
+     */
+    notional: number;
+    /**
+     * Quantity
+     *
+     * Whole shares whose loss at the stop fits the risk.
+     */
+    quantity: number;
+    /**
+     * Reward Risk
+     *
+     * The gain at the target over the risk.
+     */
+    reward_risk: number | null;
+    /**
+     * Risk Amount
+     *
+     * The loss at the stop for that quantity.
+     */
+    risk_amount: number;
+    /**
+     * Risk Budget
+     *
+     * The risk you chose, as an amount.
+     */
+    risk_budget: number;
+    /**
+     * Risk Per Share
+     */
+    risk_per_share: number;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell';
+    /**
+     * Stop Price
+     */
+    stop_price: number;
+    /**
+     * Target Price
+     */
+    target_price: number | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
 };
 
 /**
@@ -14194,6 +17561,30 @@ export type UniverseView = {
 };
 
 /**
+ * UsRegulatoryFees
+ *
+ * US regulatory transaction fees, passed through by IBKR on either plan.
+ */
+export type UsRegulatoryFees = {
+    /**
+     * Cat Per Share
+     */
+    cat_per_share?: number;
+    /**
+     * Sec Rate Per Million
+     */
+    sec_rate_per_million?: number;
+    /**
+     * Taf Max
+     */
+    taf_max?: number;
+    /**
+     * Taf Per Share
+     */
+    taf_per_share?: number;
+};
+
+/**
  * UserCreateRequest
  */
 export type UserCreateRequest = {
@@ -14303,6 +17694,116 @@ export type VapidKeyView = {
      * Public Key
      */
     public_key: string | null;
+};
+
+/**
+ * VerifyReportView
+ */
+export type VerifyReportView = {
+    /**
+     * Changed Tickers
+     */
+    changed_tickers: Array<string>;
+    /**
+     * Class Path
+     */
+    class_path: string;
+    /**
+     * Code Changed
+     */
+    code_changed: boolean | null;
+    /**
+     * Config Changed
+     */
+    config_changed: boolean | null;
+    /**
+     * Current Score
+     */
+    current_score: number | null;
+    /**
+     * Data Changed
+     */
+    data_changed: boolean | null;
+    /**
+     * Error
+     */
+    error: string | null;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Moved
+     */
+    moved: boolean;
+    /**
+     * Objective
+     */
+    objective: string | null;
+    /**
+     * Restated Tickers
+     */
+    restated_tickers?: Array<string>;
+    /**
+     * Run Id
+     */
+    run_id: string | null;
+    /**
+     * Score Delta
+     */
+    score_delta: number | null;
+    /**
+     * Stored Score
+     */
+    stored_score: number | null;
+    /**
+     * Target
+     */
+    target: string;
+    /**
+     * Tolerance
+     */
+    tolerance: number;
+};
+
+/**
+ * VerifyRequest
+ */
+export type VerifyRequest = {
+    /**
+     * Alert
+     */
+    alert?: boolean;
+    /**
+     * Targets
+     */
+    targets?: Array<string>;
+    /**
+     * Tolerance
+     */
+    tolerance?: number | null;
+};
+
+/**
+ * VerifyResultView
+ */
+export type VerifyResultView = {
+    /**
+     * Alerted
+     */
+    alerted?: boolean;
+    /**
+     * Checked
+     */
+    checked: number;
+    /**
+     * Moved
+     */
+    moved: Array<string>;
+    /**
+     * Reports
+     */
+    reports: Array<VerifyReportView>;
 };
 
 /**
@@ -14839,6 +18340,129 @@ export type ListAlertsResponses = {
 };
 
 export type ListAlertsResponse = ListAlertsResponses[keyof ListAlertsResponses];
+
+export type GetBriefingPrefsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/assistant/briefings/prefs';
+};
+
+export type GetBriefingPrefsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetBriefingPrefsError = GetBriefingPrefsErrors[keyof GetBriefingPrefsErrors];
+
+export type GetBriefingPrefsResponses = {
+    /**
+     * Successful Response
+     */
+    200: BriefingPrefsView;
+};
+
+export type GetBriefingPrefsResponse = GetBriefingPrefsResponses[keyof GetBriefingPrefsResponses];
+
+export type SetBriefingPrefsData = {
+    body: BriefingPrefsUpdate;
+    path?: never;
+    query?: never;
+    url: '/api/assistant/briefings/prefs';
+};
+
+export type SetBriefingPrefsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetBriefingPrefsError = SetBriefingPrefsErrors[keyof SetBriefingPrefsErrors];
+
+export type SetBriefingPrefsResponses = {
+    /**
+     * Successful Response
+     */
+    200: BriefingPrefsView;
+};
+
+export type SetBriefingPrefsResponse = SetBriefingPrefsResponses[keyof SetBriefingPrefsResponses];
+
+export type RunBriefingsData = {
+    body: BriefingRunRequest;
+    path?: never;
+    query?: never;
+    url: '/api/assistant/briefings/run';
+};
+
+export type RunBriefingsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RunBriefingsError = RunBriefingsErrors[keyof RunBriefingsErrors];
+
+export type RunBriefingsResponses = {
+    /**
+     * Successful Response
+     */
+    200: BriefingRunView;
+};
+
+export type RunBriefingsResponse = RunBriefingsResponses[keyof RunBriefingsResponses];
 
 export type ListAssistantConversationsData = {
     body?: never;
@@ -15998,6 +19622,66 @@ export type RevokeApiTokenResponses = {
 };
 
 export type RevokeApiTokenResponse = RevokeApiTokenResponses[keyof RevokeApiTokenResponses];
+
+export type ListMcpToolsetsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/auth/toolsets';
+};
+
+export type ListMcpToolsetsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListMcpToolsetsError = ListMcpToolsetsErrors[keyof ListMcpToolsetsErrors];
+
+export type ListMcpToolsetsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageToolsetView;
+};
+
+export type ListMcpToolsetsResponse = ListMcpToolsetsResponses[keyof ListMcpToolsetsResponses];
 
 export type ListUsersData = {
     body?: never;
@@ -17744,6 +21428,252 @@ export type SyncConnectionResponses = {
 
 export type SyncConnectionResponse = SyncConnectionResponses[keyof SyncConnectionResponses];
 
+export type ListTradeDecisionsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Ticker
+         *
+         * one ticker, e.g. AAPL.US
+         */
+        ticker?: string | null;
+        /**
+         * Strategy Id
+         *
+         * rows this strategy owned or scored
+         */
+        strategy_id?: string | null;
+        /**
+         * Tick Id
+         *
+         * one tick
+         */
+        tick_id?: string | null;
+        /**
+         * Since
+         *
+         * days on or after this one
+         */
+        since?: string | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/decisions';
+};
+
+export type ListTradeDecisionsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListTradeDecisionsError = ListTradeDecisionsErrors[keyof ListTradeDecisionsErrors];
+
+export type ListTradeDecisionsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageTradeDecisionView;
+};
+
+export type ListTradeDecisionsResponse = ListTradeDecisionsResponses[keyof ListTradeDecisionsResponses];
+
+export type RemoveDemoPortfolioData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/demo';
+};
+
+export type RemoveDemoPortfolioErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RemoveDemoPortfolioError = RemoveDemoPortfolioErrors[keyof RemoveDemoPortfolioErrors];
+
+export type RemoveDemoPortfolioResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type RemoveDemoPortfolioResponse = RemoveDemoPortfolioResponses[keyof RemoveDemoPortfolioResponses];
+
+export type GetDemoPortfolioData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/demo';
+};
+
+export type GetDemoPortfolioErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetDemoPortfolioError = GetDemoPortfolioErrors[keyof GetDemoPortfolioErrors];
+
+export type GetDemoPortfolioResponses = {
+    /**
+     * Successful Response
+     */
+    200: DemoPortfolioView;
+};
+
+export type GetDemoPortfolioResponse = GetDemoPortfolioResponses[keyof GetDemoPortfolioResponses];
+
+export type OpenDemoPortfolioData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/demo';
+};
+
+export type OpenDemoPortfolioErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type OpenDemoPortfolioError = OpenDemoPortfolioErrors[keyof OpenDemoPortfolioErrors];
+
+export type OpenDemoPortfolioResponses = {
+    /**
+     * Successful Response
+     */
+    200: DemoPortfolioView;
+};
+
+export type OpenDemoPortfolioResponse = OpenDemoPortfolioResponses[keyof OpenDemoPortfolioResponses];
+
+export type ListExecutionAlgosData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/execution/algos';
+};
+
+export type ListExecutionAlgosErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListExecutionAlgosError = ListExecutionAlgosErrors[keyof ListExecutionAlgosErrors];
+
+export type ListExecutionAlgosResponses = {
+    /**
+     * Successful Response
+     */
+    200: AlgoList;
+};
+
+export type ListExecutionAlgosResponse = ListExecutionAlgosResponses[keyof ListExecutionAlgosResponses];
+
 export type ExportFillsData = {
     body?: never;
     path?: never;
@@ -18596,6 +22526,52 @@ export type ResumeKillSwitchResponses = {
 
 export type ResumeKillSwitchResponse = ResumeKillSwitchResponses[keyof ResumeKillSwitchResponses];
 
+export type GetResumeChecksData = {
+    body?: never;
+    path: {
+        /**
+         * Halt Id
+         */
+        halt_id: number;
+    };
+    query?: never;
+    url: '/api/halts/{halt_id}/resume-checks';
+};
+
+export type GetResumeChecksErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetResumeChecksError = GetResumeChecksErrors[keyof GetResumeChecksErrors];
+
+export type GetResumeChecksResponses = {
+    /**
+     * Successful Response
+     */
+    200: ResumeChecksView;
+};
+
+export type GetResumeChecksResponse = GetResumeChecksResponses[keyof GetResumeChecksResponses];
+
 export type GetHealthData = {
     body?: never;
     path?: never;
@@ -18636,6 +22612,90 @@ export type GetLivenessResponses = {
 };
 
 export type GetLivenessResponse = GetLivenessResponses[keyof GetLivenessResponses];
+
+export type GetPriceCheckData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/health/price-check';
+};
+
+export type GetPriceCheckErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetPriceCheckError = GetPriceCheckErrors[keyof GetPriceCheckErrors];
+
+export type GetPriceCheckResponses = {
+    /**
+     * Response Getpricecheck
+     *
+     * Successful Response
+     */
+    200: PriceCheckView | null;
+};
+
+export type GetPriceCheckResponse = GetPriceCheckResponses[keyof GetPriceCheckResponses];
+
+export type RunPriceCheckData = {
+    body: PriceCheckRunBody;
+    path?: never;
+    query?: never;
+    url: '/api/health/price-check/run';
+};
+
+export type RunPriceCheckErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RunPriceCheckError = RunPriceCheckErrors[keyof RunPriceCheckErrors];
+
+export type RunPriceCheckResponses = {
+    /**
+     * Successful Response
+     */
+    200: PriceCheckRunView;
+};
+
+export type RunPriceCheckResponse = RunPriceCheckResponses[keyof RunPriceCheckResponses];
 
 export type GetReadinessData = {
     body?: never;
@@ -19000,6 +23060,114 @@ export type GetStrategyAgreementResponses = {
 
 export type GetStrategyAgreementResponse = GetStrategyAgreementResponses[keyof GetStrategyAgreementResponses];
 
+export type GetBehaviourReportData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Since
+         *
+         * First day to include, YYYY-MM-DD
+         */
+        since?: string | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/insights/behaviour';
+};
+
+export type GetBehaviourReportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetBehaviourReportError = GetBehaviourReportErrors[keyof GetBehaviourReportErrors];
+
+export type GetBehaviourReportResponses = {
+    /**
+     * Successful Response
+     */
+    200: BehaviourView;
+};
+
+export type GetBehaviourReportResponse = GetBehaviourReportResponses[keyof GetBehaviourReportResponses];
+
+export type GetLookThroughData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Top
+         *
+         * Single names to list.
+         */
+        top?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/insights/look-through';
+};
+
+export type GetLookThroughErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLookThroughError = GetLookThroughErrors[keyof GetLookThroughErrors];
+
+export type GetLookThroughResponses = {
+    /**
+     * Successful Response
+     */
+    200: LookThroughView;
+};
+
+export type GetLookThroughResponse = GetLookThroughResponses[keyof GetLookThroughResponses];
+
 export type GetInsightsTotalsData = {
     body?: never;
     path?: never;
@@ -19289,6 +23457,567 @@ export type CreateStreamTokenResponses = {
 };
 
 export type CreateStreamTokenResponse = CreateStreamTokenResponses[keyof CreateStreamTokenResponses];
+
+export type GetJournalBreakdownData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * By
+         *
+         * sleeve, origin, ticker, side, exit_trigger, tag, mistake, playbook, plan
+         */
+        by?: 'all' | 'sleeve' | 'origin' | 'ticker' | 'side' | 'exit_trigger' | 'tag' | 'mistake' | 'playbook' | 'plan';
+        /**
+         * Since
+         *
+         * closed on or after this day (open: entered)
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * closed on or before this day (open: entered)
+         */
+        until?: string | null;
+        /**
+         * Sleeve
+         *
+         * one strategy id, or manual
+         */
+        sleeve?: string | null;
+        /**
+         * Origin
+         *
+         * strategy or manual orders
+         */
+        origin?: 'strategy' | 'manual' | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/journal/breakdown';
+};
+
+export type GetJournalBreakdownErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetJournalBreakdownError = GetJournalBreakdownErrors[keyof GetJournalBreakdownErrors];
+
+export type GetJournalBreakdownResponses = {
+    /**
+     * Successful Response
+     */
+    200: BreakdownView;
+};
+
+export type GetJournalBreakdownResponse = GetJournalBreakdownResponses[keyof GetJournalBreakdownResponses];
+
+export type GetPnlCalendarData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Since
+         *
+         * closed on or after this day (open: entered)
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * closed on or before this day (open: entered)
+         */
+        until?: string | null;
+        /**
+         * Sleeve
+         *
+         * one strategy id, or manual
+         */
+        sleeve?: string | null;
+        /**
+         * Origin
+         *
+         * strategy or manual orders
+         */
+        origin?: 'strategy' | 'manual' | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/journal/calendar';
+};
+
+export type GetPnlCalendarErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetPnlCalendarError = GetPnlCalendarErrors[keyof GetPnlCalendarErrors];
+
+export type GetPnlCalendarResponses = {
+    /**
+     * Successful Response
+     */
+    200: PnlCalendarView;
+};
+
+export type GetPnlCalendarResponse = GetPnlCalendarResponses[keyof GetPnlCalendarResponses];
+
+export type ListJournalLabelsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/journal/labels';
+};
+
+export type ListJournalLabelsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListJournalLabelsError = ListJournalLabelsErrors[keyof ListJournalLabelsErrors];
+
+export type ListJournalLabelsResponses = {
+    /**
+     * Successful Response
+     */
+    200: JournalLabelsView;
+};
+
+export type ListJournalLabelsResponse = ListJournalLabelsResponses[keyof ListJournalLabelsResponses];
+
+export type ListPlaybooksData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Include Archived
+         */
+        include_archived?: boolean;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/journal/playbooks';
+};
+
+export type ListPlaybooksErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListPlaybooksError = ListPlaybooksErrors[keyof ListPlaybooksErrors];
+
+export type ListPlaybooksResponses = {
+    /**
+     * Successful Response
+     */
+    200: PagePlaybookView;
+};
+
+export type ListPlaybooksResponse = ListPlaybooksResponses[keyof ListPlaybooksResponses];
+
+export type CreatePlaybookData = {
+    body: PlaybookCreate;
+    path?: never;
+    query?: never;
+    url: '/api/journal/playbooks';
+};
+
+export type CreatePlaybookErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CreatePlaybookError = CreatePlaybookErrors[keyof CreatePlaybookErrors];
+
+export type CreatePlaybookResponses = {
+    /**
+     * Successful Response
+     */
+    201: PlaybookView;
+};
+
+export type CreatePlaybookResponse = CreatePlaybookResponses[keyof CreatePlaybookResponses];
+
+export type UpdatePlaybookData = {
+    body: PlaybookUpdate;
+    path: {
+        /**
+         * Playbook Id
+         */
+        playbook_id: string;
+    };
+    query?: never;
+    url: '/api/journal/playbooks/{playbook_id}';
+};
+
+export type UpdatePlaybookErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UpdatePlaybookError = UpdatePlaybookErrors[keyof UpdatePlaybookErrors];
+
+export type UpdatePlaybookResponses = {
+    /**
+     * Successful Response
+     */
+    200: PlaybookView;
+};
+
+export type UpdatePlaybookResponse = UpdatePlaybookResponses[keyof UpdatePlaybookResponses];
+
+export type ListJournalTradesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Status
+         *
+         * all, open or closed
+         */
+        status?: 'all' | 'open' | 'closed';
+        /**
+         * Sleeve
+         *
+         * one strategy id, or manual
+         */
+        sleeve?: string | null;
+        /**
+         * Origin
+         *
+         * strategy or manual orders
+         */
+        origin?: 'strategy' | 'manual' | null;
+        /**
+         * Ticker
+         */
+        ticker?: string | null;
+        /**
+         * Since
+         *
+         * closed on or after this day (open: entered)
+         */
+        since?: string | null;
+        /**
+         * Until
+         *
+         * closed on or before this day (open: entered)
+         */
+        until?: string | null;
+        /**
+         * Tag
+         */
+        tag?: string | null;
+        /**
+         * Mistake
+         */
+        mistake?: string | null;
+        /**
+         * Playbook Id
+         */
+        playbook_id?: string | null;
+        /**
+         * Plan
+         *
+         * followed, broke or not_said
+         */
+        plan?: 'followed' | 'broke' | 'not_said' | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/journal/trades';
+};
+
+export type ListJournalTradesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListJournalTradesError = ListJournalTradesErrors[keyof ListJournalTradesErrors];
+
+export type ListJournalTradesResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageJournalTradeView;
+};
+
+export type ListJournalTradesResponse = ListJournalTradesResponses[keyof ListJournalTradesResponses];
+
+export type GetJournalTradeData = {
+    body?: never;
+    path: {
+        /**
+         * Trade Id
+         *
+         * the id of the fill that opened the trade
+         */
+        trade_id: number;
+    };
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/journal/trades/{trade_id}';
+};
+
+export type GetJournalTradeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetJournalTradeError = GetJournalTradeErrors[keyof GetJournalTradeErrors];
+
+export type GetJournalTradeResponses = {
+    /**
+     * Successful Response
+     */
+    200: JournalTradeDetailView;
+};
+
+export type GetJournalTradeResponse = GetJournalTradeResponses[keyof GetJournalTradeResponses];
+
+export type ReviewJournalTradeData = {
+    body: AnnotationRequest;
+    path: {
+        /**
+         * Trade Id
+         *
+         * the id of the fill that opened the trade
+         */
+        trade_id: number;
+    };
+    query?: {
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/journal/trades/{trade_id}/review';
+};
+
+export type ReviewJournalTradeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ReviewJournalTradeError = ReviewJournalTradeErrors[keyof ReviewJournalTradeErrors];
+
+export type ReviewJournalTradeResponses = {
+    /**
+     * Successful Response
+     */
+    200: AnnotationView;
+};
+
+export type ReviewJournalTradeResponse = ReviewJournalTradeResponses[keyof ReviewJournalTradeResponses];
 
 export type StartBacktestData = {
     body: BacktestRequest;
@@ -19917,6 +24646,96 @@ export type GetSweepResultResponses = {
 
 export type GetSweepResultResponse = GetSweepResultResponses[keyof GetSweepResultResponses];
 
+export type StartLabVerifyData = {
+    /**
+     * Body
+     */
+    body?: VerifyRequest | null;
+    path?: never;
+    query?: never;
+    url: '/api/lab/verify';
+};
+
+export type StartLabVerifyErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StartLabVerifyError = StartLabVerifyErrors[keyof StartLabVerifyErrors];
+
+export type StartLabVerifyResponses = {
+    /**
+     * Successful Response
+     */
+    202: Job;
+};
+
+export type StartLabVerifyResponse = StartLabVerifyResponses[keyof StartLabVerifyResponses];
+
+export type GetLabVerifyResultData = {
+    body?: never;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/lab/verify/jobs/{job_id}/result';
+};
+
+export type GetLabVerifyResultErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLabVerifyResultError = GetLabVerifyResultErrors[keyof GetLabVerifyResultErrors];
+
+export type GetLabVerifyResultResponses = {
+    /**
+     * Successful Response
+     */
+    200: VerifyResultView;
+};
+
+export type GetLabVerifyResultResponse = GetLabVerifyResultResponses[keyof GetLabVerifyResultResponses];
+
 export type ClaimLabWorkerJobData = {
     body: WorkerRef;
     path?: never;
@@ -20285,6 +25104,54 @@ export type GetBarsResponses = {
 };
 
 export type GetBarsResponse = GetBarsResponses[keyof GetBarsResponses];
+
+export type GetMarketBreadthData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * As Of
+         *
+         * Measure on this day. Default: the last day with bars.
+         */
+        as_of?: string | null;
+    };
+    url: '/api/market/breadth';
+};
+
+export type GetMarketBreadthErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetMarketBreadthError = GetMarketBreadthErrors[keyof GetMarketBreadthErrors];
+
+export type GetMarketBreadthResponses = {
+    /**
+     * Successful Response
+     */
+    200: BreadthView;
+};
+
+export type GetMarketBreadthResponse = GetMarketBreadthResponses[keyof GetMarketBreadthResponses];
 
 export type ListCoverageData = {
     body?: never;
@@ -21767,6 +26634,47 @@ export type PlaceManualOrderResponses = {
 
 export type PlaceManualOrderResponse = PlaceManualOrderResponses[keyof PlaceManualOrderResponses];
 
+export type PlanManualOrderData = {
+    body: TradePlanRequest;
+    path?: never;
+    query?: never;
+    url: '/api/orders/manual/plan';
+};
+
+export type PlanManualOrderErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type PlanManualOrderError = PlanManualOrderErrors[keyof PlanManualOrderErrors];
+
+export type PlanManualOrderResponses = {
+    /**
+     * Successful Response
+     */
+    200: TradePlanView;
+};
+
+export type PlanManualOrderResponse = PlanManualOrderResponses[keyof PlanManualOrderResponses];
+
 export type PreviewManualOrderData = {
     body: ManualOrderRequest;
     path?: never;
@@ -21903,6 +26811,88 @@ export type ChangeManualOrderResponses = {
 };
 
 export type ChangeManualOrderResponse = ChangeManualOrderResponses[keyof ChangeManualOrderResponses];
+
+export type ConfirmRebalanceData = {
+    body: PlanConfirm;
+    path?: never;
+    query?: never;
+    url: '/api/planner/confirm';
+};
+
+export type ConfirmRebalanceErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ConfirmRebalanceError = ConfirmRebalanceErrors[keyof ConfirmRebalanceErrors];
+
+export type ConfirmRebalanceResponses = {
+    /**
+     * Successful Response
+     */
+    200: PlanConfirmResult;
+};
+
+export type ConfirmRebalanceResponse = ConfirmRebalanceResponses[keyof ConfirmRebalanceResponses];
+
+export type PlanRebalanceData = {
+    body: PlanRequest;
+    path?: never;
+    query?: never;
+    url: '/api/planner/plan';
+};
+
+export type PlanRebalanceErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type PlanRebalanceError = PlanRebalanceErrors[keyof PlanRebalanceErrors];
+
+export type PlanRebalanceResponses = {
+    /**
+     * Successful Response
+     */
+    200: RebalancePlanView;
+};
+
+export type PlanRebalanceResponse = PlanRebalanceResponses[keyof PlanRebalanceResponses];
 
 export type GetPnlData = {
     body?: never;
@@ -22294,6 +27284,52 @@ export type RenamePortfolioResponses = {
 
 export type RenamePortfolioResponse = RenamePortfolioResponses[keyof RenamePortfolioResponses];
 
+export type ListAlgoParentsData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/algo-parents';
+};
+
+export type ListAlgoParentsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListAlgoParentsError = ListAlgoParentsErrors[keyof ListAlgoParentsErrors];
+
+export type ListAlgoParentsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ParentOrderList;
+};
+
+export type ListAlgoParentsResponse = ListAlgoParentsResponses[keyof ListAlgoParentsResponses];
+
 export type ListCashFlowsData = {
     body?: never;
     path: {
@@ -22396,6 +27432,149 @@ export type RecordCashFlowResponses = {
 };
 
 export type RecordCashFlowResponse = RecordCashFlowResponses[keyof RecordCashFlowResponses];
+
+export type ClearExecutionAlgoData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: {
+        /**
+         * Strategy Id
+         */
+        strategy_id?: string | null;
+    };
+    url: '/api/portfolios/{portfolio_id}/execution-algos';
+};
+
+export type ClearExecutionAlgoErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ClearExecutionAlgoError = ClearExecutionAlgoErrors[keyof ClearExecutionAlgoErrors];
+
+export type ClearExecutionAlgoResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type ClearExecutionAlgoResponse = ClearExecutionAlgoResponses[keyof ClearExecutionAlgoResponses];
+
+export type ListExecutionAlgoSettingsData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/execution-algos';
+};
+
+export type ListExecutionAlgoSettingsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListExecutionAlgoSettingsError = ListExecutionAlgoSettingsErrors[keyof ListExecutionAlgoSettingsErrors];
+
+export type ListExecutionAlgoSettingsResponses = {
+    /**
+     * Successful Response
+     */
+    200: AlgoSettingList;
+};
+
+export type ListExecutionAlgoSettingsResponse = ListExecutionAlgoSettingsResponses[keyof ListExecutionAlgoSettingsResponses];
+
+export type SetExecutionAlgoData = {
+    body: AlgoSettingUpdate;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/execution-algos';
+};
+
+export type SetExecutionAlgoErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetExecutionAlgoError = SetExecutionAlgoErrors[keyof SetExecutionAlgoErrors];
+
+export type SetExecutionAlgoResponses = {
+    /**
+     * Successful Response
+     */
+    200: AlgoSettingView;
+};
+
+export type SetExecutionAlgoResponse = SetExecutionAlgoResponses[keyof SetExecutionAlgoResponses];
 
 export type GetAccountProfileData = {
     body?: never;
@@ -24067,6 +29246,158 @@ export type RunScheduledJobNowResponses = {
 
 export type RunScheduledJobNowResponse = RunScheduledJobNowResponses[keyof RunScheduledJobNowResponses];
 
+export type ListScreenAlertsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/screener/alerts';
+};
+
+export type ListScreenAlertsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListScreenAlertsError = ListScreenAlertsErrors[keyof ListScreenAlertsErrors];
+
+export type ListScreenAlertsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageScreenAlertView;
+};
+
+export type ListScreenAlertsResponse = ListScreenAlertsResponses[keyof ListScreenAlertsResponses];
+
+export type EvaluateScreenAlertsData = {
+    /**
+     * Body
+     */
+    body?: ScreenAlertRunRequest | null;
+    path?: never;
+    query?: never;
+    url: '/api/screener/alerts/evaluate';
+};
+
+export type EvaluateScreenAlertsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type EvaluateScreenAlertsError = EvaluateScreenAlertsErrors[keyof EvaluateScreenAlertsErrors];
+
+export type EvaluateScreenAlertsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScreenAlertRunView;
+};
+
+export type EvaluateScreenAlertsResponse = EvaluateScreenAlertsResponses[keyof EvaluateScreenAlertsResponses];
+
+export type ListScreenAlertEventsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Screen Id
+         */
+        screen_id?: string | null;
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/screener/alerts/events';
+};
+
+export type ListScreenAlertEventsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListScreenAlertEventsError = ListScreenAlertEventsErrors[keyof ListScreenAlertEventsErrors];
+
+export type ListScreenAlertEventsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageScreenAlertEventView;
+};
+
+export type ListScreenAlertEventsResponse = ListScreenAlertEventsResponses[keyof ListScreenAlertEventsResponses];
+
 export type SubmitScreenJobData = {
     body: ScreenRunRequest;
     path?: never;
@@ -24468,6 +29799,144 @@ export type UpdateScreenResponses = {
 };
 
 export type UpdateScreenResponse = UpdateScreenResponses[keyof UpdateScreenResponses];
+
+export type DeleteScreenAlertData = {
+    body?: never;
+    path: {
+        /**
+         * Screen Id
+         */
+        screen_id: string;
+    };
+    query?: never;
+    url: '/api/screener/screens/{screen_id}/alert';
+};
+
+export type DeleteScreenAlertErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type DeleteScreenAlertError = DeleteScreenAlertErrors[keyof DeleteScreenAlertErrors];
+
+export type DeleteScreenAlertResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type DeleteScreenAlertResponse = DeleteScreenAlertResponses[keyof DeleteScreenAlertResponses];
+
+export type GetScreenAlertData = {
+    body?: never;
+    path: {
+        /**
+         * Screen Id
+         */
+        screen_id: string;
+    };
+    query?: never;
+    url: '/api/screener/screens/{screen_id}/alert';
+};
+
+export type GetScreenAlertErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetScreenAlertError = GetScreenAlertErrors[keyof GetScreenAlertErrors];
+
+export type GetScreenAlertResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScreenAlertView;
+};
+
+export type GetScreenAlertResponse = GetScreenAlertResponses[keyof GetScreenAlertResponses];
+
+export type SetScreenAlertData = {
+    body: ScreenAlertSet;
+    path: {
+        /**
+         * Screen Id
+         */
+        screen_id: string;
+    };
+    query?: never;
+    url: '/api/screener/screens/{screen_id}/alert';
+};
+
+export type SetScreenAlertErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetScreenAlertError = SetScreenAlertErrors[keyof SetScreenAlertErrors];
+
+export type SetScreenAlertResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScreenAlertView;
+};
+
+export type SetScreenAlertResponse = SetScreenAlertResponses[keyof SetScreenAlertResponses];
 
 export type SizeScreenData = {
     body: ScreenRunRequest;
@@ -25025,6 +30494,186 @@ export type InstallStarterSetResponses = {
 };
 
 export type InstallStarterSetResponse = InstallStarterSetResponses[keyof InstallStarterSetResponses];
+
+export type ListStatementImportsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         *
+         * page size
+         */
+        limit?: number | null;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/api/statement-imports';
+};
+
+export type ListStatementImportsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListStatementImportsError = ListStatementImportsErrors[keyof ListStatementImportsErrors];
+
+export type ListStatementImportsResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageStatementImportView;
+};
+
+export type ListStatementImportsResponse = ListStatementImportsResponses[keyof ListStatementImportsResponses];
+
+export type CommitStatementImportData = {
+    body: StatementImportRequest;
+    path?: never;
+    query?: never;
+    url: '/api/statement-imports';
+};
+
+export type CommitStatementImportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CommitStatementImportError = CommitStatementImportErrors[keyof CommitStatementImportErrors];
+
+export type CommitStatementImportResponses = {
+    /**
+     * Successful Response
+     */
+    201: StatementImportView;
+};
+
+export type CommitStatementImportResponse = CommitStatementImportResponses[keyof CommitStatementImportResponses];
+
+export type PreviewStatementImportData = {
+    body: StatementImportRequest;
+    path?: never;
+    query?: never;
+    url: '/api/statement-imports/preview';
+};
+
+export type PreviewStatementImportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type PreviewStatementImportError = PreviewStatementImportErrors[keyof PreviewStatementImportErrors];
+
+export type PreviewStatementImportResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatementPreview;
+};
+
+export type PreviewStatementImportResponse = PreviewStatementImportResponses[keyof PreviewStatementImportResponses];
+
+export type UndoStatementImportData = {
+    body?: never;
+    path: {
+        /**
+         * Import Id
+         */
+        import_id: string;
+    };
+    query?: never;
+    url: '/api/statement-imports/{import_id}/undo';
+};
+
+export type UndoStatementImportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type UndoStatementImportError = UndoStatementImportErrors[keyof UndoStatementImportErrors];
+
+export type UndoStatementImportResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatementImportView;
+};
+
+export type UndoStatementImportResponse = UndoStatementImportResponses[keyof UndoStatementImportResponses];
 
 export type ListStatementFlagsData = {
     body?: never;
@@ -25703,6 +31352,56 @@ export type GetModelVersionHistoryResponses = {
 };
 
 export type GetModelVersionHistoryResponse = GetModelVersionHistoryResponses[keyof GetModelVersionHistoryResponses];
+
+export type GetModelCalibrationData = {
+    body?: never;
+    path: {
+        /**
+         * Strategy Id
+         */
+        strategy_id: string;
+        /**
+         * Version
+         */
+        version: number;
+    };
+    query?: never;
+    url: '/api/strategies/{strategy_id}/versions/{version}/calibration';
+};
+
+export type GetModelCalibrationErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetModelCalibrationError = GetModelCalibrationErrors[keyof GetModelCalibrationErrors];
+
+export type GetModelCalibrationResponses = {
+    /**
+     * Successful Response
+     */
+    200: CalibrationView;
+};
+
+export type GetModelCalibrationResponse = GetModelCalibrationResponses[keyof GetModelCalibrationResponses];
 
 export type CheckModelSwapData = {
     body?: never;
@@ -27060,6 +32759,72 @@ export type SetTaxLotPicksResponses = {
 
 export type SetTaxLotPicksResponse = SetTaxLotPicksResponses[keyof SetTaxLotPicksResponses];
 
+export type PreviewTradeTaxData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Ticker
+         */
+        ticker: string;
+        /**
+         * Side
+         */
+        side: 'buy' | 'sell';
+        /**
+         * Quantity
+         */
+        quantity: number;
+        /**
+         * Price
+         *
+         * Default: the latest close
+         */
+        price?: number | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/tax/preview';
+};
+
+export type PreviewTradeTaxErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type PreviewTradeTaxError = PreviewTradeTaxErrors[keyof PreviewTradeTaxErrors];
+
+export type PreviewTradeTaxResponses = {
+    /**
+     * Successful Response
+     */
+    200: TaxPreviewView;
+};
+
+export type PreviewTradeTaxResponse = PreviewTradeTaxResponses[keyof PreviewTradeTaxResponses];
+
 export type GetTaxSettingsData = {
     body?: never;
     path?: never;
@@ -27155,6 +32920,60 @@ export type UpdateTaxSettingsResponses = {
 };
 
 export type UpdateTaxSettingsResponse = UpdateTaxSettingsResponses[keyof UpdateTaxSettingsResponses];
+
+export type GetTaxYearData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Year
+         *
+         * Default: this year
+         */
+        year?: number | null;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/tax/year';
+};
+
+export type GetTaxYearErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetTaxYearError = GetTaxYearErrors[keyof GetTaxYearErrors];
+
+export type GetTaxYearResponses = {
+    /**
+     * Successful Response
+     */
+    200: TaxYearView;
+};
+
+export type GetTaxYearResponse = GetTaxYearResponses[keyof GetTaxYearResponses];
 
 export type ListJournalData = {
     body?: never;
@@ -27377,9 +33196,9 @@ export type GetTcaSummaryData = {
         /**
          * By
          *
-         * group by strategy, ticker, portfolio, day, week or month
+         * group by strategy, ticker, portfolio, algo, day, week or month
          */
-        by?: 'all' | 'strategy' | 'ticker' | 'portfolio' | 'day' | 'week' | 'month';
+        by?: 'all' | 'strategy' | 'ticker' | 'portfolio' | 'algo' | 'day' | 'week' | 'month';
         /**
          * Since
          *

@@ -13,6 +13,7 @@ from stonks.app.alerts import AlertService
 from stonks.app.assistant import AssistantService
 from stonks.app.assistant_research import ResearchService
 from stonks.app.backups import BackupService
+from stonks.app.briefings import BriefingService
 from stonks.app.brokers import BrokerConnector, BrokerService
 from stonks.app.calendars import CalendarService
 from stonks.app.catalog import CatalogService, LabCatalogSource, StrategySource
@@ -23,7 +24,8 @@ from stonks.app.factors import FactorService
 from stonks.app.ingest import IngestService
 from stonks.app.insights import InsightsService
 from stonks.app.jobs import Job, JobRunner, JobStore
-from stonks.app.lab import LabService
+from stonks.app.lab import LabService, lab_objectives
+from stonks.app.lab_verify import LabVerifyService
 from stonks.app.lab_workers import LabWorkerService
 from stonks.app.live import LiveService
 from stonks.app.manual_orders import ManualOrdersService
@@ -36,8 +38,10 @@ from stonks.app.order_drafts import OrderDraftService
 from stonks.app.orders import OrdersService
 from stonks.app.ownership import check_owner, owner_filter, owner_of
 from stonks.app.pagination import Page
+from stonks.app.planner import ExecutionService
 from stonks.app.portfolio import PortfolioService
 from stonks.app.price_alerts import PriceAlertService
+from stonks.app.price_checks import PriceCheckService
 from stonks.app.schedule import ScheduleService
 from stonks.app.screener import ScreenerService
 from stonks.app.signals import SignalService
@@ -187,18 +191,21 @@ class Services:
     portfolio: PortfolioService
     strategies: StrategyService
     model_versions: ModelVersionService
+    lab_verify: LabVerifyService
     market: MarketDataService
     orders: OrdersService
     manual_orders: ManualOrdersService
     live: LiveService
     order_drafts: OrderDraftService
     tickets: TicketService
+    execution: ExecutionService
     price_alerts: PriceAlertService
     ingest: IngestService
     ticks: TickService
     lab: LabService
     lab_workers: LabWorkerService
     operations: OperationsService
+    price_checks: PriceCheckService
     brokers: BrokerService
     studio: StudioService
     alerts: AlertService
@@ -219,7 +226,11 @@ class Services:
     options: OptionsService
     calendars: CalendarService
     screener: ScreenerService
+    briefings: BriefingService
     _user_finder: UserStrategyFinder | None = field(default=None, repr=False)
+    #: The ASGI app serving these services, set by ``create_app``: the
+    #: in-process scheduler runs briefings through its MCP tools (23.8).
+    asgi_app: Any = field(default=None, repr=False)
 
     @classmethod
     def create(
@@ -264,12 +275,14 @@ class Services:
             portfolio=portfolio,
             strategies=strategies,
             model_versions=ModelVersionService(context, runner),
+            lab_verify=LabVerifyService(context, runner, objectives=lab_objectives()),
             market=MarketDataService(context),
             orders=orders,
             manual_orders=manual_orders,
             live=LiveService(context),
             order_drafts=OrderDraftService(context, manual_orders),
             tickets=TicketService(context),
+            execution=ExecutionService(context),
             price_alerts=PriceAlertService(context),
             ingest=IngestService(context, runner),
             ticks=TickService(context, orders, runner),
@@ -277,6 +290,7 @@ class Services:
             # Roadmap 14.9: the lab queue over the API for remote workers.
             lab_workers=LabWorkerService(context, runner),
             operations=OperationsService(context),
+            price_checks=PriceCheckService(context),
             brokers=BrokerService(
                 context, connector=broker_connector, secrets=lambda: _configured_secrets(context)
             ),
@@ -306,6 +320,7 @@ class Services:
                 model_factory=lambda: assistant.model_factory,
             ),
             telegram=TelegramService(context),
+            briefings=BriefingService(context, assistant),
             factors=FactorService(context, runner),
             options=OptionsService(context, runner),
             calendars=CalendarService(context, runner),

@@ -21,6 +21,7 @@ from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.strategies import FailingCheck
+from stonks.lifecycle.calibration import calibration_report
 from stonks.lifecycle.check import SwapReport, evaluate_swap
 from stonks.lifecycle.retrain import RetrainSummary, retrain_models
 from stonks.logging import get_logger
@@ -91,6 +92,35 @@ class SwapReportView(BaseModel):
     live_return: float | None
     candidate_drawdown: float | None
     checks: list[SwapCheckView]
+
+
+class ReliabilityBinView(BaseModel):
+    lower: float
+    upper: float
+    count: int
+    mean_forecast: float | None
+    observed_rate: float | None
+
+
+class CalibrationView(BaseModel):
+    """Live calibration of a classifier version's probability forecasts
+    (roadmap 23.9): Brier score against always forecasting the base rate,
+    the reliability table and the expected calibration error. Empty for a
+    model that forecasts no probabilities."""
+
+    strategy_id: str
+    version: int
+    n_forecasts: int
+    n_resolved: int
+    brier: float | None
+    #: Brier score of always forecasting the observed base rate.
+    brier_base_rate: float | None
+    #: ``1 - brier / brier_base_rate``: above 0 beats the base rate.
+    skill: float | None
+    base_rate: float | None
+    mean_forecast: float | None
+    ece: float | None
+    bins: list[ReliabilityBinView]
 
 
 class RetrainRequest(BaseModel):
@@ -186,6 +216,14 @@ class ModelVersionService:
                 f"{strategy_id} v{version}",
             )
         return _report_view(report)
+
+    def calibration(self, strategy_id: str, version: int) -> CalibrationView:
+        """Brier score and reliability of one version's live forecasts."""
+        with self._ctx.state() as state:
+            versions = self._on(state)
+            _found(lambda: versions.get(strategy_id, version), f"{strategy_id} v{version}")
+            report = calibration_report(state, strategy_id, version)
+        return CalibrationView.model_validate(report.as_dict())
 
     # ---- governed writes ---------------------------------------------------------
 

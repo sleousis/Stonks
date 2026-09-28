@@ -117,6 +117,39 @@ BRKB = stock(72063691, "BRK B", primary="NYSE")
 VOD = stock(9999, "VOD", currency="GBP", primary="LSE", magnifier=100)
 
 
+#: The algos IBKR accepts here, with the order types each takes.
+_ALGO_ORDER_TYPES: dict[str, frozenset[str]] = {
+    "Adaptive": frozenset({"MKT", "LMT"}),
+    "Vwap": frozenset({"MKT", "LMT"}),
+    "Twap": frozenset({"MKT", "LMT"}),
+}
+
+
+def _algo_rejection(order: IbOrderRequest) -> tuple[int, str] | None:
+    """What IBKR answers an algo order it would refuse, as (code, text)."""
+    name = order.algo_strategy or ""
+    kinds = _ALGO_ORDER_TYPES.get(name)
+    if kinds is None:
+        return 442, f"Invalid algo strategy: {name}"
+    if order.order_type not in kinds:
+        return 442, f"{name} does not take {order.order_type} orders"
+    if order.tif != "DAY":
+        return 442, f"{name} orders must be DAY orders"
+    params = dict(order.algo_params)
+    if name == "Adaptive" and params.get("adaptivePriority") not in ("Patient", "Normal", "Urgent"):
+        return 442, "Invalid adaptivePriority"
+    if name == "Vwap":
+        pct = float(params.get("maxPctVol", "0.1"))
+        if not 0.0 < pct <= 0.5:
+            return 442, "maxPctVol must be above 0 and at most 0.5"
+    start, end = params.get("startTime"), params.get("endTime")
+    if start and end:
+        fmt = "%Y%m%d-%H:%M:%S"
+        if datetime.strptime(end, fmt) <= datetime.strptime(start, fmt):
+            return 442, "endTime must be after startTime"
+    return None
+
+
 class FakeIbGateway:
     def __init__(
         self,
@@ -178,6 +211,8 @@ class FakeIbGateway:
         self.option_snapshot_data: dict[int, IbOptionSnapshot] = {}
         self.option_snapshot_requests: list[list[int]] = []
         self._option_events: list[IbOptionEvent] = []
+        #: IBKR algo orders by orderRef: the algo and its params (23.16)
+        self.algo_orders: dict[str, tuple[str, dict[str, str]]] = {}
 
     # ---- client ids -----------------------------------------------------------------
 
@@ -245,6 +280,18 @@ class FakeIbGateway:
         self._put(replace(t, filled=filled, avg_fill_price=avg, status=status))
         self._reduce_oca(t.perm_id, quantity)
         return exec_id
+
+    def work_algo(
+        self,
+        order_ref: str,
+        fills: Sequence[tuple[float, float]],
+        *,
+        commission: float | None = None,
+    ) -> list[str]:
+        """IBKR's own child orders of an algo fill: one execution per
+        ``(quantity, price)``, all under the parent's orderRef (23.16)."""
+        assert order_ref in self.algo_orders, "not an algo order"
+        return [self.fill(order_ref, q, p, commission=commission) for q, p in fills]
 
     def _reduce_oca(self, perm_id: int, quantity: float) -> None:
         """OCA type 2: the other open orders of the group shrink by the
@@ -555,6 +602,10 @@ class FakeIbGateway:
         self._need_connection()
         self.sent.append((contract, order))
         rejection, self.reject_next = self.reject_next, None
+        if rejection is None and order.algo_strategy:
+            rejection = _algo_rejection(order)
+            if rejection is None:
+                self.algo_orders[order.order_ref] = (order.algo_strategy, dict(order.algo_params))
         status = "PreSubmitted" if order.tif == "OPG" else "Submitted"
         trade = IbTrade(
             order_id=view._next_order_id,

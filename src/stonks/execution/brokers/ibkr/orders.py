@@ -26,6 +26,10 @@ Rules, from ``docs/design/live-trading.md`` section 2:
 - Prices arrive in the currency's major unit and leave in IBKR's price
   unit: times the contract's ``price_magnifier`` (pounds to pence for
   London), snapped on IBKR's own tick grid (roadmap 19.16).
+- An order with an execution algo (``Order.algo``, roadmap 23.16) goes out
+  with IBKR's ``algoStrategy`` and ``algoParams`` (Adaptive, VWAP, TWAP).
+  It is a limit or collared market order, never a stop, and a day order:
+  no opening auction, no good-till-cancelled, no immediate-or-cancel.
 """
 
 from __future__ import annotations
@@ -37,6 +41,7 @@ from decimal import ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 from stonks.core.instruments import InstrumentSpec
 from stonks.core.types import Order, TimeInForce
+from stonks.execution.algos import AlgoParamsError, algo_name_of, native_of
 from stonks.execution.brokers.base import OrderRejectedError
 from stonks.execution.brokers.ibkr.client import IbOrderRequest, IbOrderType, IbTif
 from stonks.execution.brokers.ibkr.contracts import to_ib_price
@@ -142,7 +147,11 @@ def to_ib_order(
         return to_ib_price(price, mag)
 
     is_stop = order.order_type in ("stop", "stop_limit")
-    tif = _time_in_force(order, is_stop, settings, intraday=intraday)
+    algo_strategy, algo_params = _algo(order, is_stop)
+    if algo_strategy is not None:
+        tif: TimeInForce = "day"
+    else:
+        tif = _time_in_force(order, is_stop, settings, intraday=intraday)
     limit: float | None = None
     aux: float | None = None
     order_type: IbOrderType
@@ -184,4 +193,25 @@ def to_ib_order(
         outside_rth=False,
         oca_group=order.oca_group,
         oca_type=OCA_REDUCE_WITH_BLOCK if order.oca_group else None,
+        algo_strategy=algo_strategy,
+        algo_params=algo_params,
     )
+
+
+def _algo(order: Order, is_stop: bool) -> tuple[str | None, tuple[tuple[str, str], ...]]:
+    """IBKR's ``algoStrategy`` and ``algoParams`` for ``order.algo``, or
+    ``(None, ())`` for a plain order."""
+    name = algo_name_of(order.algo)
+    if name is None or order.algo is None:
+        return None, ()
+    if is_stop:
+        raise OrderRejectedError(f"{order.client_id}: a stop order cannot use the {name} algo")
+    if order.time_in_force not in (None, "day"):
+        raise OrderRejectedError(
+            f"{order.client_id}: an algo order is a day order, not {order.time_in_force}"
+        )
+    try:
+        native = native_of(order.algo)
+    except AlgoParamsError as exc:
+        raise OrderRejectedError(f"{order.client_id}: {exc}") from None
+    return native.strategy, native.params

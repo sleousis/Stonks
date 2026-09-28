@@ -128,12 +128,12 @@ describe('LabRunFormView', () => {
     );
   });
 
-  it('offers all 22 robustness tests for a custom suite, each with what it guards against', async () => {
+  it('offers all 24 robustness tests for a custom suite, each with what it guards against', async () => {
     await create();
     el.querySelector<HTMLInputElement>('input[name="lr-suite"][value="custom"]')!.click();
     fixture.detectChanges();
     const items = [...el.querySelectorAll('ul.tests > li')];
-    expect(items).toHaveLength(22);
+    expect(items).toHaveLength(24);
     for (const li of items)
       expect(li.querySelector('.check-hint')!.textContent).toMatch(
         /Guards against|For information/,

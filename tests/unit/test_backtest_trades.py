@@ -397,3 +397,31 @@ def test_fitness_turnover_uses_the_calendar_sessions_per_year():
         assert turnover_daily > 0.125  # above the floor, so the divisor matters
         expected = base.sharpe * math.sqrt(abs(base.cagr) / turnover_daily)
         assert report.fitness == pytest.approx(expected)
+
+
+# ---- keys and refs for ledgers outside a backtest (roadmap 23.3) --------------
+
+
+def test_key_of_and_ref_of_label_lots_and_legs():
+    fills = [
+        _fill("buy", 10, 100.0, 0, strategy="a"),
+        _fill("sell", 4, 110.0, 1, strategy="b"),
+        _fill("sell", 6, 120.0, 2, strategy="b"),
+    ]
+    refs = {id(f): f"r{i}" for i, f in enumerate(fills)}
+    trips = build_round_trips(
+        fills,
+        key_of=lambda f: "sleeve-" + f.order_client_id[0],
+        ref_of=lambda f: refs[id(f)],
+    )
+    assert [t.strategy_key for t in trips] == ["sleeve-a", "sleeve-a"]
+    assert [t.entry_ref for t in trips] == ["r0", "r0"]
+    assert [t.exit_ref for t in trips] == ["r1", "r2"]
+
+
+def test_refs_default_to_client_ids_and_open_lots_have_no_exit_ref():
+    buy = _fill("buy", 5, 10.0, 0)
+    [trip] = build_round_trips([buy], marks={"X.US": 11.0})
+    assert trip.is_open
+    assert trip.entry_ref == buy.order_client_id
+    assert trip.exit_ref == ""

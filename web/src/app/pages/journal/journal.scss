@@ -1,0 +1,246 @@
+@use 'breakpoints' as bp;
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.panel + .panel {
+  margin-top: var(--space-4);
+}
+
+.lead {
+  padding: 0 var(--space-4) var(--space-4);
+  max-width: 70ch;
+  color: var(--color-ink-2);
+  font-size: var(--text-sm);
+}
+
+.tiles {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: var(--space-4);
+
+  @include bp.from-desktop {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.trade-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-h);
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+
+  @include bp.phone {
+    min-height: var(--touch-min);
+  }
+
+  @include bp.coarse {
+    min-height: var(--touch-min);
+  }
+}
+
+// ---- calendar ---------------------------------------------------------------
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+
+  .btn {
+    @include bp.phone {
+      min-height: var(--touch-min);
+    }
+  }
+}
+
+.month-name {
+  min-width: 9ch;
+  text-align: center;
+  font-weight: var(--weight-semibold);
+}
+
+.cal {
+  width: calc(100% - 2 * var(--space-4));
+  margin: 0 var(--space-4) var(--space-4);
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: var(--text-sm);
+
+  th {
+    padding: var(--space-1);
+    color: var(--color-ink-2);
+    font-weight: var(--weight-medium);
+    text-align: center;
+  }
+
+  td {
+    height: 3.5rem;
+    padding: var(--space-1);
+    border: 1px solid var(--color-border);
+    vertical-align: top;
+    overflow: hidden;
+  }
+
+  td.pad {
+    background: var(--color-surface-2);
+  }
+
+  .day {
+    display: block;
+    color: var(--color-ink-2);
+    font-size: var(--text-xs);
+  }
+
+  .amt {
+    display: block;
+    font-size: var(--text-xs);
+    overflow-wrap: anywhere;
+  }
+
+  .week {
+    font-weight: var(--weight-semibold);
+    text-align: end;
+    vertical-align: middle;
+  }
+
+  @include bp.phone {
+    width: calc(100% - 2 * var(--space-2));
+    margin: 0 var(--space-2) var(--space-4);
+
+    td {
+      height: 3rem;
+      padding: 2px;
+    }
+
+    .amt,
+    .week {
+      font-size: 0.625rem;
+    }
+  }
+}
+
+.sub-title {
+  padding: 0 var(--space-4);
+  font-size: var(--text-md);
+}
+
+.months {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-4) var(--space-4);
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .btn {
+    @include bp.phone {
+      min-height: var(--touch-min);
+    }
+  }
+}
+
+// ---- playbooks --------------------------------------------------------------
+
+.playbooks {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-4);
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  li.archived .pb-name {
+    color: var(--color-ink-2);
+  }
+}
+
+.pb-name {
+  font-weight: var(--weight-semibold);
+}
+
+.pb-rules {
+  white-space: pre-line;
+  font-size: var(--text-sm);
+}
+
+.pb-form,
+.review {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 40rem;
+  padding: var(--space-4);
+
+  .btn {
+    justify-self: start;
+
+    @include bp.phone {
+      min-height: var(--touch-min);
+    }
+  }
+}
+
+.hint {
+  color: var(--color-ink-2);
+  font-size: var(--text-xs);
+}
+
+// ---- one trade ----------------------------------------------------------------
+
+.legs {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--space-4);
+}
+
+.leg {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.leg-head {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-2);
+}
+
+.facts {
+  display: grid;
+  gap: var(--space-2) var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  margin: 0 0 var(--space-2);
+  padding: 0;
+
+  dt {
+    color: var(--color-ink-2);
+    font-size: var(--text-xs);
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.review + app-permission-note,
+.facts + app-permission-note {
+  display: block;
+  padding: 0 var(--space-4) var(--space-4);
+}

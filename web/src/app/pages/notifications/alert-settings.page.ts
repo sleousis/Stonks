@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import { BriefingPrefs } from '../../shared/ui/briefing-prefs';
 import { NotificationPrefs } from '../../shared/ui/notification-prefs';
 import { NotificationSettings } from '../../shared/ui/notification-settings';
 import { PageHeader } from '../../shared/ui/page-header';
@@ -23,6 +24,7 @@ import { TelegramLink } from './telegram-link';
     PageHeader,
     NotificationsTabs,
     NotificationPrefs,
+    BriefingPrefs,
     NotificationSettings,
     PushDevices,
     TelegramLink,
@@ -46,6 +48,7 @@ import { TelegramLink } from './telegram-link';
       <section class="group" aria-labelledby="what-group">
         <h2 id="what-group" class="group-title">What reaches you, and when</h2>
         <app-notification-prefs [only]="['channels', 'events', 'quiet']" />
+        <app-briefing-prefs />
         <section class="panel" aria-labelledby="price-alerts-title">
           <div class="panel-head">
             <h3 id="price-alerts-title">Price alerts</h3>

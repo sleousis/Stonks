@@ -51,7 +51,15 @@ describe('OrdersPage', () => {
     const el = await at('/orders');
     const nav = el.querySelector('nav.tabs')!;
     const tabs = [...nav.querySelectorAll('a')].map((a) => a.textContent?.trim());
-    expect(tabs).toEqual(['Orders', 'New order', 'Fills', 'Trading runs', 'Trade costs']);
+    expect(tabs).toEqual([
+      'Orders',
+      'New order',
+      'Rebalance',
+      'Fills',
+      'Trading runs',
+      'Trade costs',
+      'Journal',
+    ]);
     const drafts = routes[0].children?.find((r) => r.path === 'drafts');
     expect(drafts?.redirectTo).toBe('/tickets');
   });

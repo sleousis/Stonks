@@ -157,6 +157,97 @@ def test_insights_need_a_credential(client, alice_book):
     assert client.get("/api/insights").status_code == 401
 
 
+def test_look_through_splits_a_held_fund(client, settings, people):
+    """Alice holds UP.US and FLAT.US, and FLAT.US is a fund that owns half
+    UP.US (roadmap 23.14)."""
+    from datetime import date, datetime
+
+    import pandas as pd
+
+    from stonks.store.lake import DuckDBLake
+
+    pid = _portfolio(settings.state.path, people["alice"]["id"], "Alice funds")
+    _snapshot(settings.state.path, pid, "2026-03-31", 0.0, '{"UP.US": 10, "FLAT.US": 100}', 1.0)
+    lake = DuckDBLake(settings.lake.path)
+    lake.upsert_fund_holdings(
+        pd.DataFrame(
+            [
+                {
+                    "fund": "FLAT.US",
+                    "holding": "UP.US",
+                    "as_of": date(2026, 3, 1),
+                    "source": "fake",
+                    "weight": 0.5,
+                    "sector": "Technology",
+                    "country": "US",
+                },
+            ]
+        ),
+        known_at=datetime(2026, 3, 2),
+    )
+    lake.close()
+    alice = people["alice"]["headers"]
+    res = client.get("/api/insights/look-through", params={"portfolio_id": pid}, headers=alice)
+    assert res.status_code == 200, res.text
+    body = res.json()
+    lt = body["look_through"]
+    up = next(n for n in lt["names"] if n["key"] == "UP.US")
+    flat_value = lt["funds"][0]["value"]
+    assert lt["funds"][0]["fund"] == "FLAT.US"
+    assert up["fund_value"] == pytest.approx(flat_value * 0.5)
+    assert up["funds"] == ["FLAT.US"]
+    assert any(s["key"] == "not listed" for s in lt["sector"])
+    assert any("not listed" in n for n in body["notes"])
+    # Bob may not read Alice's book.
+    bob = people["bob"]["headers"]
+    other = client.get("/api/insights/look-through", params={"portfolio_id": pid}, headers=bob)
+    assert other.status_code == 404
+
+
+def _manual_fill(path, pid: str, cid: str, side: str, qty: float, price: float, at: str) -> None:
+    with SqliteState(path) as state:
+        state.execute(
+            "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status,"
+            " created_at, updated_at, portfolio_id, origin) VALUES (?, 'UP.US', ?, ?, 'market',"
+            " 'filled', ?, ?, ?, 'manual')",
+            [cid, side, qty, at, at, pid],
+        )
+        state.execute(
+            "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at,"
+            " portfolio_id) VALUES (?, 'UP.US', ?, ?, 0, ?, ?)",
+            [cid, qty, price, at, pid],
+        )
+
+
+def test_behaviour_report_of_manual_trades(client, people, settings, alice_book):
+    path = settings.state.path
+    _manual_fill(path, alice_book, "manual:a:1", "buy", 10, 100.0, "2026-03-02T15:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:a:2", "sell", 10, 90.0, "2026-03-04T15:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:a:3", "buy", 5, 90.0, "2026-03-04T16:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:a:4", "sell", 5, 95.0, "2026-03-05T15:00:00+00:00")
+    alice = people["alice"]["headers"]
+    r = client.get("/api/insights/behaviour", params={"portfolio_id": alice_book}, headers=alice)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["trades"] == 2 and body["win_rate"] == 0.5
+    assert body["total_pnl"] == -100.0 + 25.0
+    assert body["revenge"]["trades"] == 1
+    assert body["sources"] == {"manual": 4}
+    assert {b["label"] for b in body["versus_strategies"]} == {"with", "against", "no_view"}
+    later = client.get(
+        "/api/insights/behaviour",
+        params={"portfolio_id": alice_book, "since": "2026-03-05"},
+        headers=alice,
+    ).json()
+    assert later["trades"] == 0
+    bob = client.get(
+        "/api/insights/behaviour",
+        params={"portfolio_id": alice_book},
+        headers=people["bob"]["headers"],
+    )
+    assert bob.status_code == 404
+
+
 def test_dashboard_and_insights_share_one_day_change(client, people, alice_book):
     """Visual audit M2: the P&L series (Dashboard, Today) and Insights read
     the headline value and day change from one service, so they agree."""

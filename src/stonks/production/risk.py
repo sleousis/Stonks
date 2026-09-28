@@ -39,6 +39,7 @@ from stonks.production import rules as _rules
 from stonks.production.ledger import ledger_filter
 from stonks.production.prices import load_history
 from stonks.production.rules import OrderRule, RiskAdjustment, RiskContext, RiskRule
+from stonks.production.rules.sector_cap import wants_look_through
 from stonks.production.rules.style_exposure import wants_exposures
 from stonks.store.lake import DuckDBLake
 from stonks.store.state import SqliteState
@@ -182,7 +183,8 @@ def build_risk_context(
 
     ``overrides`` are the per-strategy policies the context also serves:
     style exposures are read when ``policy`` or any of them turns the style
-    exposure rule on (22.10)."""
+    exposure rule on (22.10), and fund sector weights when one turns the
+    sector cap's look-through on (23.14)."""
     from stonks.production.pnl import load_pnl
 
     held = [t for t, q in portfolio.positions.items() if abs(q) > 1e-12]
@@ -193,6 +195,12 @@ def build_risk_context(
         from stonks.factors.style import safe_style_exposures
 
         exposures = safe_style_exposures(lake, tickers, as_of)
+    fund_sectors: dict[str, dict[str, float]] = {}
+    if any(p is not None and wants_look_through(p) for p in (policy, *overrides)):
+        from stonks.funds import safe_fund_snapshots
+
+        snaps = safe_fund_snapshots(lake, tickers, as_of)
+        fund_sectors = {fund: snap.sector_weights() for fund, snap in snaps.items()}
     return RiskContext(
         portfolio=portfolio,
         prices=dict(prices),
@@ -213,6 +221,7 @@ def build_risk_context(
         volumes=dict(volumes or {}),
         as_of=as_of,
         factor_exposures=exposures,
+        fund_sectors=fund_sectors,
     )
 
 

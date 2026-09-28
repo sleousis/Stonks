@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [lab-worker](#lab-worker-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [starter](#starter-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [system-settings](#system-settings-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [demo](#demo-endpoints) · [execution](#execution-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [journal](#journal-endpoints) · [lab](#lab-endpoints) · [lab-worker](#lab-worker-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [starter](#starter-endpoints) · [statement-imports](#statement-imports-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [system-settings](#system-settings-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -29,6 +29,9 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/assistant/briefings/prefs` | Get Briefing Prefs | sign-in |  | [BriefingPrefsView](#briefingprefsview) |
+| PUT | `/api/assistant/briefings/prefs` | Set Briefing Prefs | `notifications.manage` | [BriefingPrefsUpdate](#briefingprefsupdate) | [BriefingPrefsView](#briefingprefsview) |
+| POST | `/api/assistant/briefings/run` | Run Briefings | `operations.run` | [BriefingRunRequest](#briefingrunrequest) | [BriefingRunView](#briefingrunview) |
 | GET | `/api/assistant/conversations` | List Conversations | sign-in |  | [Page_ConversationView_](#page_conversationview_) |
 | POST | `/api/assistant/conversations` | Create Conversation | `data.read` | [ConversationCreate](#conversationcreate) | [ConversationView](#conversationview) |
 | GET | `/api/assistant/conversations/{conversation_id}` | Get Conversation | sign-in |  | [ConversationDetailView](#conversationdetailview) |
@@ -58,6 +61,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/auth/tokens` | List Tokens | sign-in |  | [Page_TokenView_](#page_tokenview_) |
 | POST | `/api/auth/tokens` | Create Token | `tokens.manage` | [TokenCreateRequest](#tokencreaterequest) | [TokenCreatedView](#tokencreatedview) |
 | DELETE | `/api/auth/tokens/{token_id}` | Revoke Token | `tokens.revoke` |  |  |
+| GET | `/api/auth/toolsets` | List Toolsets | sign-in |  | [Page_ToolsetView_](#page_toolsetview_) |
 | GET | `/api/auth/users` | List Users | `users.read` |  | [Page_UserView_](#page_userview_) |
 | POST | `/api/auth/users` | Create User | `users.manage` | [UserCreateRequest](#usercreaterequest) | [UserView](#userview) |
 | PATCH | `/api/auth/users/{user_id}` | Update User | `users.manage` | [UserUpdateRequest](#userupdaterequest) | [UserView](#userview) |
@@ -124,6 +128,26 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/connections/{connection_id}/link` | Link Account | `portfolio.manage` | [LinkAccountRequest](#linkaccountrequest) | [LinkResultView](#linkresultview) |
 | POST | `/api/connections/{connection_id}/sync` | Sync Connection | `portfolio.manage` |  | [SyncResultView](#syncresultview) |
 
+## demo endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/demo` | Get Demo | sign-in |  | [DemoPortfolioView](#demoportfolioview) |
+| POST | `/api/demo` | Open Demo | `data.read` |  | [DemoPortfolioView](#demoportfolioview) |
+| DELETE | `/api/demo` | Remove Demo | `data.read` |  |  |
+
+## execution endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/execution/algos` | List Execution Algos | sign-in |  | [AlgoList](#algolist) |
+| POST | `/api/planner/confirm` | Confirm Rebalance | `portfolio.trade` | [PlanConfirm](#planconfirm) | [PlanConfirmResult](#planconfirmresult) |
+| POST | `/api/planner/plan` | Plan Rebalance | `data.read` | [PlanRequest](#planrequest) | [RebalancePlanView](#rebalanceplanview) |
+| GET | `/api/portfolios/{portfolio_id}/algo-parents` | List Algo Parents | sign-in |  | [ParentOrderList](#parentorderlist) |
+| GET | `/api/portfolios/{portfolio_id}/execution-algos` | List Execution Algo Settings | sign-in |  | [AlgoSettingList](#algosettinglist) |
+| PUT | `/api/portfolios/{portfolio_id}/execution-algos` | Set Execution Algo | `portfolio.manage` | [AlgoSettingUpdate](#algosettingupdate) | [AlgoSettingView](#algosettingview) |
+| DELETE | `/api/portfolios/{portfolio_id}/execution-algos` | Clear Execution Algo | `portfolio.manage` |  |  |
+
 ## exports endpoints
 
 | Method | Path | Summary | Auth | Request | Response |
@@ -161,6 +185,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/halts/{halt_id}` | Get Halt | sign-in |  | [HaltView](#haltview) |
 | POST | `/api/halts/{halt_id}/clear` | Clear Halt | `risk.reset` | [ClearHaltRequest](#clearhaltrequest) | [HaltView](#haltview) |
 | POST | `/api/halts/{halt_id}/resume` | Resume Kill Switch | `killswitch.resume` | [ResumeRequest](#resumerequest) | [HaltView](#haltview) |
+| GET | `/api/halts/{halt_id}/resume-checks` | Get Resume Checks | `killswitch.user` |  | [ResumeChecksView](#resumechecksview) |
 
 ## health endpoints
 
@@ -168,6 +193,8 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/health` | Liveness probe | none |  | [Health](#health) |
 | GET | `/api/health/live` | Liveness probe (process and hosted scheduler) | none |  | [ProbeView](#probeview) |
+| GET | `/api/health/price-check` | Latest Price Check | sign-in |  | [PriceCheckView](#pricecheckview) \| null |
+| POST | `/api/health/price-check/run` | Run Price Check | `operations.run` | [PriceCheckRunBody](#pricecheckrunbody) | [PriceCheckRunView](#pricecheckrunview) |
 | GET | `/api/health/ready` | Readiness probe (state migrated, lake present) | none |  | [ProbeView](#probeview) |
 | GET | `/api/health/report` | Health Report | sign-in |  | [HealthReportView](#healthreportview) |
 | POST | `/api/health/run` | Run Health Checks | `operations.run` | [HealthRunRequest](#healthrunrequest) | [HealthReportView](#healthreportview) |
@@ -186,6 +213,8 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/insights` | Get Insights | sign-in |  | [InsightsView](#insightsview) |
 | GET | `/api/insights/agreement` | Get Agreement | sign-in |  | [AgreementView](#agreementview) |
+| GET | `/api/insights/behaviour` | Get Behaviour | sign-in |  | [BehaviourView](#behaviourview) |
+| GET | `/api/insights/look-through` | Get Look Through | `data.read` |  | [LookThroughView](#lookthroughview) |
 | GET | `/api/insights/totals` | Get Totals | `portfolio.totals` |  | [InsightsTotalsView](#insightstotalsview) |
 
 ## jobs endpoints
@@ -197,6 +226,20 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/jobs/{job_id}/cancel` | Cancel Job | `lab.run` |  | [Job](#job) |
 | GET | `/api/jobs/{job_id}/events` | Stream Job Events | sign-in |  | SSE of [JobEvent](#jobevent) |
 | POST | `/api/jobs/{job_id}/stream-token` | Create Stream Token | `data.read` |  | [StreamToken](#streamtoken) |
+
+## journal endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/journal/breakdown` | Get Journal Breakdown | sign-in |  | [BreakdownView](#breakdownview) |
+| GET | `/api/journal/calendar` | Get Pnl Calendar | sign-in |  | [PnlCalendarView](#pnlcalendarview) |
+| GET | `/api/journal/labels` | List Journal Labels | sign-in |  | [JournalLabelsView](#journallabelsview) |
+| GET | `/api/journal/playbooks` | List Playbooks | sign-in |  | [Page_PlaybookView_](#page_playbookview_) |
+| POST | `/api/journal/playbooks` | Create Playbook | `portfolio.manage` | [PlaybookCreate](#playbookcreate) | [PlaybookView](#playbookview) |
+| PATCH | `/api/journal/playbooks/{playbook_id}` | Update Playbook | `portfolio.manage` | [PlaybookUpdate](#playbookupdate) | [PlaybookView](#playbookview) |
+| GET | `/api/journal/trades` | List Journal Trades | sign-in |  | [Page_JournalTradeView_](#page_journaltradeview_) |
+| GET | `/api/journal/trades/{trade_id}` | Get Journal Trade | sign-in |  | [JournalTradeDetailView](#journaltradedetailview) |
+| PUT | `/api/journal/trades/{trade_id}/review` | Review Journal Trade | `portfolio.manage` | [AnnotationRequest](#annotationrequest) | [AnnotationView](#annotationview) |
 
 ## lab endpoints
 
@@ -216,6 +259,8 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/lab/survival-tests` | List Survival Tests | sign-in |  | list[[SurvivalTestInfo](#survivaltestinfo)] |
 | POST | `/api/lab/sweeps` | Start Sweep | `lab.run` | [SweepRequest](#sweeprequest) | [Job](#job) |
 | GET | `/api/lab/sweeps/{job_id}/result` | Get Sweep Result | sign-in |  | [SweepResultView](#sweepresultview) |
+| POST | `/api/lab/verify` | Start Verify | `lab.run` | [VerifyRequest](#verifyrequest) \| null | [Job](#job) |
+| GET | `/api/lab/verify/jobs/{job_id}/result` | Get Verify Result | sign-in |  | [VerifyResultView](#verifyresultview) |
 
 ## lab-worker endpoints
 
@@ -252,6 +297,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
 | GET | `/api/market/bars` | Get Bars | sign-in |  | [BarSeries](#barseries) |
+| GET | `/api/market/breadth` | Get Breadth | `data.read` |  | [BreadthView](#breadthview) |
 | GET | `/api/market/coverage` | List Coverage | sign-in |  | [Page_CoverageRow_](#page_coveragerow_) |
 | GET | `/api/market/data-coverage` | Get Data Coverage | sign-in |  | [DataCoverage](#datacoverage) |
 | GET | `/api/market/instruments` | List Instruments | sign-in |  | [Page_InstrumentView_](#page_instrumentview_) |
@@ -265,6 +311,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/model-versions/retrain` | Start Retrain | `lab.run` | [RetrainRequest](#retrainrequest) \| null | [Job](#job) |
 | GET | `/api/strategies/{strategy_id}/versions` | List Versions | sign-in |  | [Page_ModelVersionView_](#page_modelversionview_) |
 | GET | `/api/strategies/{strategy_id}/versions/history` | Version History | sign-in |  | [Page_VersionEventView_](#page_versioneventview_) |
+| GET | `/api/strategies/{strategy_id}/versions/{version}/calibration` | Model Calibration | sign-in |  | [CalibrationView](#calibrationview) |
 | GET | `/api/strategies/{strategy_id}/versions/{version}/check` | Check Swap | sign-in |  | [SwapReportView](#swapreportview) |
 | POST | `/api/strategies/{strategy_id}/versions/{version}/reject` | Reject Version | `strategy.promote` | [VersionChangeRequest](#versionchangerequest) \| null | [ModelVersionView](#modelversionview) |
 | POST | `/api/strategies/{strategy_id}/versions/{version}/swap` | Swap Version | `strategy.promote` | [VersionChangeRequest](#versionchangerequest) \| null | [ModelVersionView](#modelversionview) |
@@ -313,6 +360,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/orders/drafts/{draft_id}/reject` | Reject Order Draft | `portfolio.trade` | [OrderDraftDecision](#orderdraftdecision) | [OrderDraftView](#orderdraftview) |
 | GET | `/api/orders/fills` | List Fills | sign-in |  | [Page_FillView_](#page_fillview_) |
 | POST | `/api/orders/manual` | Place Manual Order | `portfolio.trade` | [ManualOrderRequest](#manualorderrequest) | [ManualOrderResult](#manualorderresult) |
+| POST | `/api/orders/manual/plan` | Plan Manual Order | `portfolio.trade` | [TradePlanRequest](#tradeplanrequest) | [TradePlanView](#tradeplanview) |
 | POST | `/api/orders/manual/preview` | Preview Manual Order | `portfolio.trade` | [ManualOrderRequest](#manualorderrequest) | [ManualOrderResult](#manualorderresult) |
 | POST | `/api/orders/{client_id}/cancel` | Cancel Order | `portfolio.trade` | [OrderCancelRequest](#ordercancelrequest) | [OrderCancelResult](#ordercancelresult) |
 | POST | `/api/orders/{client_id}/change` | Change Manual Order | `portfolio.trade` | [ManualOrderChange](#manualorderchange) | [ManualOrderResult](#manualorderresult) |
@@ -333,6 +381,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/decisions` | List Trade Decisions | `data.read` |  | [Page_TradeDecisionView_](#page_tradedecisionview_) |
 | GET | `/api/portfolio` | Get Portfolio | sign-in |  | [PortfolioView](#portfolioview) |
 | GET | `/api/portfolio/snapshots` | List Snapshots | sign-in |  | [Page_SnapshotView_](#page_snapshotview_) |
 | GET | `/api/portfolio/totals` | Get Totals | `portfolio.totals` |  | [PortfolioTotalsView](#portfoliototalsview) |
@@ -394,6 +443,9 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 
 | Method | Path | Summary | Auth | Request | Response |
 |--------|------|---------|------|---------|----------|
+| GET | `/api/screener/alerts` | List Screen Alerts | sign-in |  | [Page_ScreenAlertView_](#page_screenalertview_) |
+| POST | `/api/screener/alerts/evaluate` | Evaluate Screen Alerts | `operations.run` | [ScreenAlertRunRequest](#screenalertrunrequest) \| null | [ScreenAlertRunView](#screenalertrunview) |
+| GET | `/api/screener/alerts/events` | List Screen Alert Events | sign-in |  | [Page_ScreenAlertEventView_](#page_screenalerteventview_) |
 | POST | `/api/screener/jobs` | Submit Screen Job | `data.read` | [ScreenRunRequest](#screenrunrequest) | [Job](#job) |
 | GET | `/api/screener/jobs/{job_id}/result` | Get Screen Job Result | `data.read` |  | [ScreenResult](#screenresult) |
 | GET | `/api/screener/metrics` | List Metrics | sign-in |  | list[[MetricView](#metricview)] |
@@ -403,6 +455,9 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/screener/screens/{screen_id}` | Get Screen | sign-in |  | [SavedScreenView](#savedscreenview) |
 | PATCH | `/api/screener/screens/{screen_id}` | Update Screen | `portfolio.manage` | [SavedScreenUpdate](#savedscreenupdate) | [SavedScreenView](#savedscreenview) |
 | DELETE | `/api/screener/screens/{screen_id}` | Delete Screen | `portfolio.manage` |  |  |
+| GET | `/api/screener/screens/{screen_id}/alert` | Get Screen Alert | sign-in |  | [ScreenAlertView](#screenalertview) |
+| PUT | `/api/screener/screens/{screen_id}/alert` | Set Screen Alert | `notifications.manage` | [ScreenAlertSet](#screenalertset) | [ScreenAlertView](#screenalertview) |
+| DELETE | `/api/screener/screens/{screen_id}/alert` | Delete Screen Alert | `notifications.manage` |  |  |
 | POST | `/api/screener/size` | Size Screen | `data.read` | [ScreenRunRequest](#screenrunrequest) | [ScreenSize](#screensize) |
 | POST | `/api/screener/universes` | Save As Universe | `lab.run` | [ScreenUniverseRequest](#screenuniverserequest) | [ScreenUniverseView](#screenuniverseview) |
 
@@ -426,6 +481,15 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/starter` | Get Starter Set | sign-in |  | [StarterView](#starterview) |
 | POST | `/api/starter/install` | Install Starter Set | `operations.run` |  | [StarterInstallView](#starterinstallview) |
+
+## statement-imports endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/statement-imports` | List Statement Imports | sign-in |  | [Page_StatementImportView_](#page_statementimportview_) |
+| POST | `/api/statement-imports` | Commit Statement Import | `portfolio.manage` | [StatementImportRequest](#statementimportrequest) | [StatementImportView](#statementimportview) |
+| POST | `/api/statement-imports/preview` | Preview Statement Import | `portfolio.manage` | [StatementImportRequest](#statementimportrequest) | [StatementPreview](#statementpreview) |
+| POST | `/api/statement-imports/{import_id}/undo` | Undo Statement Import | `portfolio.manage` |  | [StatementImportView](#statementimportview) |
 
 ## statements endpoints
 
@@ -500,8 +564,10 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/tax/exports/lots` | Open tax lots as CSV | sign-in |  | `text/csv` |
 | GET | `/api/tax/lots/picks` | List Tax Lot Picks | sign-in |  | [Page_LotPickView_](#page_lotpickview_) |
 | PUT | `/api/tax/lots/picks` | Set Tax Lot Picks | `portfolio.manage` | [LotPicksUpdate](#lotpicksupdate) | list[[LotPickView](#lotpickview)] |
+| GET | `/api/tax/preview` | Preview Trade Tax | sign-in |  | [TaxPreviewView](#taxpreviewview) |
 | GET | `/api/tax/settings` | Get Tax Settings | sign-in |  | [TaxSettingsView](#taxsettingsview) |
 | PUT | `/api/tax/settings` | Update Tax Settings | `portfolio.manage` | [TaxSettingsUpdate](#taxsettingsupdate) | [TaxSettingsView](#taxsettingsview) |
+| GET | `/api/tax/year` | Get Tax Year | sign-in |  | [TaxYearView](#taxyearview) |
 
 ## tca endpoints
 
@@ -559,6 +625,15 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | DELETE | `/api/watchlists/{watchlist_id}` | Delete Watchlist | `portfolio.manage` |  |  |
 
 ## Schemas
+
+### AboveAverage
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `count` | integer | yes | Stocks closing above it. |
+| `days` | integer | yes | The average's length in sessions. |
+| `eligible` | integer | yes | Stocks with enough bars to have the average. |
+| `pct` | number \| null | yes | count / eligible; null when none is eligible. |
 
 ### AccountProfileBody
 
@@ -645,6 +720,49 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | `message` | string | yes |  |
 | `title` | string | yes |  |
 
+### AlgoInfo
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cost_assumption` | dict[str, number] | yes | spread_factor, impact_factor and timing_bps the backtest assumes. |
+| `defaults` | object | yes |  |
+| `description` | string | yes |  |
+| `name` | string | yes |  |
+| `params_schema` | object | yes |  |
+| `sliceable` | boolean | yes | Stonks can send it as child orders at other brokers. |
+| `title` | string | yes |  |
+
+### AlgoList
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[AlgoInfo](#algoinfo)] | yes |  |
+
+### AlgoSettingList
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[AlgoSettingView](#algosettingview)] | yes |  |
+
+### AlgoSettingUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `algo` | string | yes |  |
+| `params` | object | no |  |
+| `strategy_id` | string \| null | no |  |
+
+### AlgoSettingView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `algo` | string | yes |  |
+| `params` | object | yes |  |
+| `portfolio_id` | string | yes |  |
+| `strategy_id` | string \| null | yes | Empty: the portfolio's own setting. |
+| `updated_at` | date-time | yes |  |
+| `updated_by` | string \| null | yes |  |
+
 ### AllocationSlice
 
 | Field | Type | Required | Description |
@@ -684,6 +802,31 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | `n_periods` | integer | no |  |
 | `r_squared` | number \| null | no |  |
 
+### AnnotationRequest
+
+A trade's review. Replaces what was there.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `followed_plan` | boolean \| null | no |  |
+| `mistakes` | list[string] | no |  |
+| `playbook_id` | string \| null | no |  |
+| `review` | string \| null | no |  |
+| `tags` | list[string] | no |  |
+
+### AnnotationView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `followed_plan` | boolean \| null | yes |  |
+| `mistakes` | list[string] | yes |  |
+| `playbook_id` | string \| null | yes |  |
+| `review` | string \| null | yes |  |
+| `tags` | list[string] | yes |  |
+| `trade_id` | integer | yes |  |
+| `updated_at` | string | yes |  |
+| `updated_by` | string | yes |  |
+
 ### ApiScope
 
 What a credential may do. A token never exceeds its user's role.
@@ -703,9 +846,11 @@ Fee and spread for one asset class.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `commission` | string | no |  |
 | `fee_bps` | number | no |  |
 | `fee_flat` | number | no |  |
 | `half_spread_bps` | number | no |  |
+| `us_sell_fees` | boolean | no |  |
 
 ### AssistantEventView
 
@@ -714,7 +859,7 @@ One server-sent event of a turn. ``kind`` is also the SSE event name.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `data` | object | yes |  |
-| `kind` | "text" \| "tool_call" \| "tool_result" \| "confirm_required" \| "done" \| "error" | yes |  |
+| `kind` | "text" \| "tool_call" \| "tool_result" \| "confirm_required" \| "grounding" \| "done" \| "error" | yes |  |
 
 ### AssistantStatusView
 
@@ -744,7 +889,7 @@ Give ``universe`` (tickers) or ``universe_id``: a stored universe, every member 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `benchmark` | string \| null | no |  |
-| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
 | `fee_per_trade` | number | no |  |
 | `initial_cash` | number | no |  |
@@ -773,6 +918,7 @@ Give ``universe`` (tickers) or ``universe_id``: a stored universe, every member 
 | `fitness` | number \| null | no |  |
 | `interval` | string | yes |  |
 | `kurtosis` | number \| null | no |  |
+| `lots` | [LotView](#lotview) \| null | no |  |
 | `max_dd_duration_bars` | integer | no |  |
 | `max_drawdown` | number \| null | yes |  |
 | `profit_factor` | number \| null | yes |  |
@@ -823,6 +969,38 @@ Give ``universe`` (tickers) or ``universe_id``: a stored universe, every member 
 | `timestamp` | date-time | yes |  |
 | `volume` | number \| null | yes |  |
 
+### BehaviourBucketView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `label` | string | yes |  |
+| `pnl` | number | yes |  |
+| `trades` | integer | yes |  |
+| `win_rate` | number \| null | yes |  |
+
+### BehaviourView
+
+How you trade by hand: your manual orders and the trades a broker sync brought in, paired into round trips (FIFO, fees in).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `against_strategies_cost` | number \| null | yes | P&L of the trades against the strategies (negative: what it cost). |
+| `avg_loss` | number \| null | yes |  |
+| `avg_win` | number \| null | yes |  |
+| `by_holding` | list[[BehaviourBucketView](#behaviourbucketview)] | yes |  |
+| `by_weekday` | list[[BehaviourBucketView](#behaviourbucketview)] | yes | By the weekday of the entry. |
+| `disposition` | [DispositionView](#dispositionview) | yes |  |
+| `open_positions` | integer | yes |  |
+| `overtrading` | [OvertradingView](#overtradingview) | yes |  |
+| `portfolio_id` | string | yes |  |
+| `revenge` | [BehaviourBucketView](#behaviourbucketview) | yes | Entries within a day of a losing exit, and how they did. |
+| `since` | date \| null | yes |  |
+| `sources` | dict[str, integer] | yes | Fills by source: manual or broker. |
+| `total_pnl` | number | yes |  |
+| `trades` | integer | yes | Closed round trips. |
+| `versus_strategies` | list[[BehaviourBucketView](#behaviourbucketview)] | yes | Trades with, against or without a view of the active strategies' signals at the entry. |
+| `win_rate` | number \| null | yes |  |
+
 ### BenchmarkStatsView
 
 A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios are ``None`` when not finite.
@@ -868,6 +1046,88 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `hard_fee_rate_annual` | number | no |  |
 | `none` | list[string] | no |  |
 
+### Breadth
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `above_200` | [AboveAverage](#aboveaverage) | yes |  |
+| `above_50` | [AboveAverage](#aboveaverage) | yes |  |
+| `advance_decline_ratio` | number \| null | yes | advancers / decliners; null without decliners. |
+| `advancers` | integer | yes |  |
+| `as_of` | date \| null | yes | The last day with bars; null for an empty lake. |
+| `decliners` | integer | yes |  |
+| `distribution_dates` | list[date] | yes |  |
+| `distribution_days` | integer \| null | yes | Null without index bars. |
+| `distribution_window` | integer | yes |  |
+| `high_low_window` | integer | yes | Sessions in the high and low window. |
+| `index` | string \| null | yes | The index distribution days are counted on. |
+| `lines` | list[[BreadthLine](#breadthline)] | yes | What the numbers mean, in plain words. |
+| `members` | integer | yes | Stocks with a close on as_of and the day before. |
+| `new_highs` | integer | yes |  |
+| `new_lows` | integer | yes |  |
+| `unchanged` | integer | yes |  |
+
+### BreadthLine
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | "advance_decline" \| "above_average" \| "highs_lows" \| "distribution" \| "empty" | yes |  |
+| `text` | string | yes | One plain sentence. |
+| `tone` | "good" \| "neutral" \| "bad" | yes |  |
+
+### BreadthView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `breadth` | [Breadth](#breadth) | yes |  |
+| `universe` | string | yes | What was measured, in words. |
+
+### BreakdownView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_currency` | string | yes |  |
+| `by` | "all" \| "sleeve" \| "origin" \| "ticker" \| "side" \| "exit_trigger" \| "tag" \| "mistake" \| "playbook" \| "plan" | yes |  |
+| `fx_missing` | list[string] | yes |  |
+| `groups` | list[[GroupStatsView](#groupstatsview)] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `since` | date \| null | yes |  |
+| `unconverted` | integer | yes |  |
+| `until` | date \| null | yes |  |
+
+### BriefingPrefsUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `post_close` | boolean | yes |  |
+| `pre_open` | boolean | yes |  |
+
+### BriefingPrefsView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `available` | boolean | yes |  |
+| `post_close` | boolean | yes |  |
+| `pre_open` | boolean | yes |  |
+
+### BriefingRunRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+| `kind` | "pre_open" \| "post_close" | yes |  |
+
+### BriefingRunView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `failed` | integer | no |  |
+| `kind` | "pre_open" \| "post_close" | yes |  |
+| `people` | integer | no |  |
+| `sent` | integer | no |  |
+| `skipped` | string \| null | no |  |
+
 ### BrokerInfo
 
 | Field | Type | Required | Description |
@@ -876,6 +1136,17 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `credentials_configured` | boolean | yes |  |
 | `kind` | "simulated" \| "alpaca" \| "ibkr" | yes |  |
 | `paper` | boolean | yes |  |
+
+### CalendarBucketView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `end` | date | yes |  |
+| `key` | string | yes |  |
+| `pnl` | number | yes |  |
+| `start` | date | yes |  |
+| `trades` | integer | yes |  |
+| `wins` | integer | yes |  |
 
 ### CalendarRefreshRequest
 
@@ -911,10 +1182,29 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `earnings` | list[[EarningsEvent](#earningsevent)] | yes |  |
 | `economic` | list[[EconomicEvent](#economicevent)] | yes |  |
 | `end` | date | yes |  |
+| `filings` | list[[FilingEvent](#filingevent)] | no |  |
 | `scope` | "all" \| "holdings" \| "watchlists" \| "tickers" | yes |  |
 | `start` | date | yes |  |
 | `tickers` | list[string] \| null | yes |  |
 | `truncated` | boolean | no |  |
+
+### CalibrationView
+
+Live calibration of a classifier version's probability forecasts (roadmap 23.9): Brier score against always forecasting the base rate, the reliability table and the expected calibration error. Empty for a model that forecasts no probabilities.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_rate` | number \| null | yes |  |
+| `bins` | list[[ReliabilityBinView](#reliabilitybinview)] | yes |  |
+| `brier` | number \| null | yes |  |
+| `brier_base_rate` | number \| null | yes |  |
+| `ece` | number \| null | yes |  |
+| `mean_forecast` | number \| null | yes |  |
+| `n_forecasts` | integer | yes |  |
+| `n_resolved` | integer | yes |  |
+| `skill` | number \| null | yes |  |
+| `strategy_id` | string | yes |  |
+| `version` | integer | yes |  |
 
 ### CapitalRampSettings
 
@@ -1024,6 +1314,38 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `reason` | string | yes |  |
+
+### ColumnMapping
+
+Which CSV column holds which field. Only ``date`` is required, plus either a ``type`` column (with ``types`` mapping its values to kinds) or one fixed ``kind`` for every row.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | string \| null | no |  |
+| `currency` | string \| null | no |  |
+| `date` | string | yes |  |
+| `date_format` | string \| null | no |  |
+| `default_currency` | string | no |  |
+| `description` | string \| null | no |  |
+| `exchange` | string \| null | no |  |
+| `fee` | string \| null | no |  |
+| `kind` | "trade" \| "dividend" \| "interest" \| "fee" \| "deposit" \| "withdrawal" \| "split" \| "other" \| null | no |  |
+| `price` | string \| null | no |  |
+| `quantity` | string \| null | no |  |
+| `sell_values` | list[string] | no |  |
+| `symbol` | string \| null | no |  |
+| `type` | string \| null | no |  |
+| `types` | dict[str, "trade" \| "dividend" \| "interest" \| "fee" \| "deposit" \| "withdrawal" \| "split" \| "other"] | no |  |
+
+### CommissionSettings
+
+``[backtest.costs.commissions]``: the rates of every schedule. An asset class picks its schedule with ``commission``.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ibkr_fixed` | [IbkrFixedFees](#ibkrfixedfees) | no |  |
+| `ibkr_tiered` | [IbkrTieredFees](#ibkrtieredfees) | no |  |
+| `us_regulatory` | [UsRegulatoryFees](#usregulatoryfees) | no |  |
 
 ### ComparePoint
 
@@ -1138,7 +1460,7 @@ Live shortfall of the strategy's real orders against the cost model's estimate (
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `description` | string | yes |  |
-| `name` | "zero" \| "realistic" | yes |  |
+| `name` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" | yes |  |
 | `settings` | [CostModelSettings](#costmodelsettings) | yes |  |
 
 ### CostModelSettings
@@ -1149,7 +1471,9 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 |-------|------|----------|-------------|
 | `adv_window` | integer | no |  |
 | `asset_classes` | dict[str, [AssetClassCosts](#assetclasscosts)] | no |  |
+| `commissions` | [CommissionSettings](#commissionsettings) | no |  |
 | `default` | [AssetClassCosts](#assetclasscosts) | no |  |
+| `exec_algo` | [ExecAlgoAssumption](#execalgoassumption) \| null | no |  |
 | `half_spread_model` | "class" \| "corwin_schultz" \| "abdi_ranaldo" | no |  |
 | `impact_bps` | number | no |  |
 | `impact_gamma` | number | no |  |
@@ -1202,6 +1526,48 @@ A book's headline value and change on its latest day. ``/api/pnl`` and ``/api/in
 | `previous_day` | date \| null | yes | The day the change is measured from (null with one day of history or across a gap longer than a long weekend). |
 | `value` | number | yes | The book's value at the latest snapshot. |
 
+### DemoPointView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `day` | date | yes |  |
+| `value` | number | yes |  |
+
+### DemoPortfolioView
+
+Your demo portfolio. ``exists`` is false until you open one: then the other fields are empty.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+| `cash` | number \| null | no |  |
+| `created_at` | date-time \| null | no |  |
+| `currency` | string | no |  |
+| `curve` | list[[DemoPointView](#demopointview)] | no |  |
+| `day_change` | number \| null | no |  |
+| `exists` | boolean | yes |  |
+| `label` | string | no |  |
+| `name` | string \| null | no |  |
+| `positions` | list[[DemoPositionView](#demopositionview)] | no |  |
+| `start_value` | number \| null | no |  |
+| `total_return` | number \| null | no |  |
+| `total_value` | number \| null | no |  |
+
+### DemoPositionView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cost` | number | yes |  |
+| `name` | string | yes |  |
+| `pnl` | number | yes |  |
+| `pnl_pct` | number | yes |  |
+| `price` | number | yes |  |
+| `quantity` | number | yes |  |
+| `sector` | string | yes |  |
+| `ticker` | string | yes |  |
+| `value` | number | yes |  |
+| `weight` | number | yes |  |
+
 ### DisconnectView
 
 | Field | Type | Required | Description |
@@ -1210,6 +1576,15 @@ A book's headline value and change on its latest day. ``/api/pnl`` and ``/api/in
 | `connection_id` | string | yes |  |
 | `remote_error` | string \| null | yes |  |
 | `remote_removed` | boolean \| null | yes |  |
+
+### DispositionView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `avg_days_losers` | number \| null | yes |  |
+| `avg_days_winners` | number \| null | yes |  |
+| `present` | boolean | yes | Losers are held clearly longer than winners. |
+| `ratio` | number \| null | yes | Losers held this many times longer than winners. |
 
 ### DividendEvent
 
@@ -1247,7 +1622,7 @@ A :class:`~stonks.app.lab.BacktestRequest` without the strategy (the draft is th
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `benchmark` | string \| null | no |  |
-| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `end` | date | yes |  |
 | `fee_per_trade` | number | no |  |
 | `initial_cash` | number | no |  |
@@ -1275,7 +1650,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 |-------|------|----------|-------------|
 | `benchmark` | string \| null | no |  |
 | `budget` | integer | no |  |
-| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
 | `grid_size` | integer | no |  |
@@ -1294,7 +1669,7 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `seed` | integer | no |  |
 | `start` | date | yes |  |
 | `strict_preflight` | boolean \| null | no |  |
-| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "data_snooping" \| "deflated_sharpe" \| "drift" \| "event_study" \| "forecast_skill" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" \| "optuna" | no |  |
@@ -1527,6 +1902,15 @@ An exchange our instruments name, for the exchange picker.
 | `instruments` | integer | yes |  |
 | `listed` | integer | yes |  |
 
+### ExecAlgoAssumption
+
+``[backtest.costs.exec_algo]``: the execution algo the fills assume.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes |  |
+| `params` | object | no |  |
+
 ### Exposure
 
 | Field | Type | Required | Description |
@@ -1622,6 +2006,7 @@ The owner's own holdings and hand-placed orders: never drift.
 | `n_quantiles` | integer | yes |  |
 | `n_tickers` | integer | yes |  |
 | `note` | string | no |  |
+| `periods` | list[[PeriodICView](#periodicview)] | no |  |
 | `quantile_curves` | [QuantileCurvesView](#quantilecurvesview) | no |  |
 | `score_turnover` | number \| null | no |  |
 | `size_basis` | string | no |  |
@@ -1670,6 +2055,7 @@ The owner's own holdings and hand-placed orders: never drift.
 | `id` | string | yes |  |
 | `kind` | string | yes |  |
 | `lookback_bars` | integer | yes |  |
+| `provenance` | [ProvenanceView](#provenanceview) \| null | no |  |
 | `set` | string \| null | no |  |
 
 ### FailingCheck
@@ -1703,6 +2089,20 @@ One go-live check that failed (``GoLiveCheck`` without ``passed``).
 | `items` | list[[FeedItemView](#feeditemview)] | yes |  |
 | `unread_count` | integer | yes |  |
 
+### FilingEvent
+
+A current report (8-K) a company filed (roadmap 23.13).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `accepted_at` | date-time | yes |  |
+| `form` | string | yes |  |
+| `item_names` | list[string] | no |  |
+| `items` | list[string] | no |  |
+| `name` | string \| null | no |  |
+| `ticker` | string | yes |  |
+| `url` | string \| null | no |  |
+
 ### FillView
 
 | Field | Type | Required | Description |
@@ -1716,6 +2116,17 @@ One go-live check that failed (``GoLiveCheck`` without ``passed``).
 | `side` | string \| null | no |  |
 | `tick_id` | string \| null | yes |  |
 | `ticker` | string | yes |  |
+
+### FundCoverage
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes | The day the fund's holdings list describes. |
+| `covered` | number | yes | Share of the fund the listed holdings explain (0 to 1). |
+| `fund` | string | yes |  |
+| `holdings` | integer | yes | Holdings listed for the fund. |
+| `source` | string | yes |  |
+| `value` | number | yes | Market value of the fund in the book. |
 
 ### FxRateView
 
@@ -1855,6 +2266,28 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | `mean_names` | number \| null | yes |  |
 | `n_dates` | integer | yes |  |
 | `t_stat_hac` | number \| null | yes |  |
+
+### GroupStatsView
+
+Results of one group of closed legs, money in the base currency.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `avg_exit_efficiency` | number \| null | yes |  |
+| `avg_holding_days` | number \| null | yes |  |
+| `avg_loss` | number \| null | yes |  |
+| `avg_pnl` | number \| null | yes |  |
+| `avg_r` | number \| null | yes |  |
+| `avg_win` | number \| null | yes |  |
+| `key` | string | yes |  |
+| `losses` | integer | yes |  |
+| `open` | integer | yes |  |
+| `pnl` | number | yes |  |
+| `profit_factor` | number \| null | yes |  |
+| `r_trades` | integer | yes |  |
+| `trades` | integer | yes |  |
+| `win_rate` | number \| null | yes |  |
+| `wins` | integer | yes |  |
 
 ### HaltView
 
@@ -2010,6 +2443,29 @@ Kissell's I-Star parameters: ``I = a1 (Q/ADV)^a2 sigma^a3`` bps, with a temporar
 | `b1` | number | no |  |
 | `periods_per_year` | number | no |  |
 | `pov` | number | no |  |
+
+### IbkrFixedFees
+
+IBKR Pro Fixed, US stocks and ETFs. Source: interactivebrokers.com/en/pricing/commissions-stocks.php (Fixed: USD 0.005 per share, minimum USD 1.00, maximum 1% of trade value).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_fraction` | number | no |  |
+| `minimum` | number | no |  |
+| `per_share` | number | no |  |
+
+### IbkrTieredFees
+
+IBKR Pro Tiered, US stocks and ETFs. Source: the page above (minimum USD 0.35 per order, maximum 1% of trade value, plus exchange, clearing and pass-through fees).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `clearing_per_share` | number | no |  |
+| `exchange_per_share` | number | no |  |
+| `max_fraction` | number | no |  |
+| `minimum` | number | no |  |
+| `monthly_shares` | number | no |  |
+| `tiers` | list[list[any]] | no |  |
 
 ### IndexHistoryImport
 
@@ -2244,6 +2700,15 @@ One order: why it was placed, the signal context, the outcome and the notes peop
 | `ticker` | string | yes |  |
 | `trigger` | string \| null | yes |  |
 
+### JournalLabelsView
+
+Tags and mistakes already used in the portfolio, for suggestions.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mistakes` | list[string] | yes |  |
+| `tags` | list[string] | yes |  |
+
 ### JournalNoteView
 
 | Field | Type | Required | Description |
@@ -2254,6 +2719,74 @@ One order: why it was placed, the signal context, the outcome and the notes peop
 | `note` | string | yes |  |
 | `order_client_id` | string | yes |  |
 | `updated_at` | string | yes |  |
+
+### JournalTradeDetailView
+
+A whole trade: every leg and its review.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `followed_plan` | boolean \| null | yes |  |
+| `legs` | list[[JournalTradeView](#journaltradeview)] | yes |  |
+| `mistakes` | list[string] | yes |  |
+| `origin` | "strategy" \| "manual" | yes |  |
+| `playbook_id` | string \| null | yes |  |
+| `playbook_name` | string \| null | yes |  |
+| `pnl` | number | yes |  |
+| `pnl_base` | number \| null | yes |  |
+| `portfolio_id` | string | yes |  |
+| `review` | string \| null | yes |  |
+| `side` | "long" \| "short" | yes |  |
+| `sleeve` | string | yes |  |
+| `tags` | list[string] | yes |  |
+| `ticker` | string | yes |  |
+| `trade_id` | integer | yes |  |
+| `updated_at` | string \| null | yes |  |
+| `updated_by` | string \| null | yes |  |
+
+### JournalTradeView
+
+One leg of a trade. Money is in the instrument's currency, and ``pnl_base`` in the portfolio's base currency (null with no FX rate).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `currency` | string | yes |  |
+| `dividends` | number | yes |  |
+| `entry_at` | date-time | yes |  |
+| `entry_client_id` | string | yes |  |
+| `entry_price` | number | yes |  |
+| `exit_at` | date-time \| null | yes |  |
+| `exit_client_id` | string \| null | yes |  |
+| `exit_efficiency` | number \| null | yes |  |
+| `exit_price` | number | yes |  |
+| `exit_trigger` | string \| null | yes |  |
+| `fees` | number | yes |  |
+| `followed_plan` | boolean \| null | yes |  |
+| `holding_days` | number | yes |  |
+| `is_open` | boolean | yes |  |
+| `leg_id` | string | yes |  |
+| `mae_pct` | number \| null | yes |  |
+| `mae_r` | number \| null | yes |  |
+| `mfe_pct` | number \| null | yes |  |
+| `mistakes` | list[string] | yes |  |
+| `origin` | "strategy" \| "manual" | yes |  |
+| `playbook_id` | string \| null | yes |  |
+| `playbook_name` | string \| null | yes |  |
+| `pnl` | number | yes |  |
+| `pnl_base` | number \| null | yes |  |
+| `quantity` | number | yes |  |
+| `r_multiple` | number \| null | yes |  |
+| `return_pct` | number | yes |  |
+| `review` | string \| null | yes |  |
+| `risk_amount` | number \| null | yes |  |
+| `side` | "long" \| "short" | yes |  |
+| `sleeve` | string | yes |  |
+| `stop_price` | number \| null | yes |  |
+| `stop_source` | string \| null | yes |  |
+| `tags` | list[string] | yes |  |
+| `target_price` | number \| null | yes |  |
+| `ticker` | string | yes |  |
+| `trade_id` | integer | yes |  |
 
 ### KillSwitchRequest
 
@@ -2273,7 +2806,7 @@ Tunes the class the ``strategy`` ref points at over its parameter space. The ref
 |-------|------|----------|-------------|
 | `benchmark` | string \| null | no |  |
 | `budget` | integer | no |  |
-| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
 | `ensure_data` | boolean | no |  |
@@ -2294,7 +2827,7 @@ Tunes the class the ``strategy`` ref points at over its parameter space. The ref
 | `start` | date | yes |  |
 | `strategy` | [StrategyRef](#strategyref) | yes |  |
 | `strict_preflight` | boolean \| null | no |  |
-| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "data_snooping" \| "deflated_sharpe" \| "drift" \| "event_study" \| "forecast_skill" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" \| "optuna" | no |  |
@@ -2550,12 +3083,64 @@ One recorded lab run: what was tested, why, and how it came out.
 | `next_step` | "enrol" \| "verify" | yes |  |
 | `user_id` | string | yes |  |
 
+### LookThrough
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `country` | list[[LookThroughSlice](#lookthroughslice)] | yes |  |
+| `fund_value` | number | yes | Value of every held fund with a holdings list. |
+| `funds` | list[[FundCoverage](#fundcoverage)] | yes | Held funds with a holdings list. |
+| `listed_fund_value` | number | yes | Part of fund_value the listed holdings explain. The rest shows as 'not listed'. |
+| `names` | list[[LookThroughName](#lookthroughname)] | yes | Largest single names, funds split. |
+| `sector` | list[[LookThroughSlice](#lookthroughslice)] | yes |  |
+
+### LookThroughName
+
+One company with its direct and fund holdings added up (23.14).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `direct_value` | number | yes |  |
+| `fund_value` | number | yes |  |
+| `funds` | list[string] | yes | Held funds that own this name. |
+| `key` | string | yes | The ticker, or the fund's own code for the holding. |
+| `name` | string \| null | yes |  |
+| `value` | number | yes | Direct value plus each fund's value times its weight. |
+| `weight` | number \| null | yes | value / the book's total value. |
+
+### LookThroughSlice
+
+One sector or country with funds split into what they hold (23.14).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `direct_value` | number | yes | Part held directly, not through a fund. |
+| `fund_value` | number | yes | Part held through funds. |
+| `key` | string | yes | A sector, an ISO country code, cash, not listed or unknown. |
+| `value` | number | yes | Market value in the group, funds split by weight. |
+| `weight` | number \| null | yes | value / the book's total value. |
+
+### LookThroughView
+
+A portfolio's exposure with each held fund split into what it holds (roadmap 23.14).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes | Fund holdings are the lists known on this day. |
+| `currency` | string | yes | Reporting currency. Amounts are not FX-converted. |
+| `look_through` | [LookThrough](#lookthrough) | yes |  |
+| `notes` | list[string] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `total_value` | number | yes |  |
+
 ### LosingLockSettings
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `lock_days` | integer | no |  |
+| `loss_window_days` | integer | no |  |
 | `max_consecutive_losses` | integer \| null | no |  |
+| `max_loss_pct` | number \| null | no |  |
 
 ### LotPick
 
@@ -2581,6 +3166,44 @@ The lots one sell fill closes. An empty list clears the picks.
 |-------|------|----------|-------------|
 | `picks` | list[[LotPick](#lotpick)] | no |  |
 | `sell_fill_id` | integer | yes |  |
+
+### LotSaleView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `acquired` | date | yes |  |
+| `cost_basis` | number | yes |  |
+| `gain` | number | yes |  |
+| `holding_period` | "short" \| "long" | yes |  |
+| `proceeds` | number | yes |  |
+| `quantity` | number | yes |  |
+
+### LotView
+
+What lot rounding did in a backtest (roadmap 23.1).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `max_drift` | number \| null | no |  |
+| `mean_drift` | number \| null | no |  |
+| `min_capital` | number \| null | no |  |
+| `min_capital_profile` | string | no |  |
+| `orders` | integer | no |  |
+| `profile` | string | yes |  |
+| `rounded` | integer | no |  |
+| `skipped` | integer | no |  |
+| `skipped_notional` | number \| null | no |  |
+| `skipped_share` | number \| null | no |  |
+
+### ManualDisciplineSettings
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cooldown_minutes` | integer \| null | no |  |
+| `enabled` | boolean | no |  |
+| `max_daily_loss` | number \| null | no |  |
+| `max_entries_per_day` | integer \| null | no |  |
+| `require_stop_live` | boolean | no |  |
 
 ### ManualOrderChange
 
@@ -2608,6 +3231,8 @@ One order you place by hand. It goes through the kill switch, every halt and eve
 | `quantity` | number | yes |  |
 | `reason` | string | yes | Why you trade (recorded). |
 | `side` | "buy" \| "sell" | yes |  |
+| `stop_price` | number \| null | no | A protective stop for this entry: below a buy, above a short sale. A book at a broker gets a stop order once the entry fills. |
+| `target_price` | number \| null | no | Where you plan to take the profit (recorded). |
 | `ticker` | string | yes | Instrument id, e.g. AAPL.US |
 
 ### ManualOrderResult
@@ -2623,12 +3248,16 @@ One order you place by hand. It goes through the kill switch, every halt and eve
 | `live` | boolean | yes | The book trades real money. |
 | `order_type` | "market" \| "limit" | yes |  |
 | `portfolio_id` | string | yes |  |
+| `protective_stop` | string \| null | no | The client id of the stop order placed at the broker. |
 | `quantity` | number | yes | What was placed (smaller when allow_reduce applied). |
 | `reason` | string \| null | no | Why it ended in its status. |
 | `reference_price` | number | yes | The latest close the order was checked at. |
 | `requested_quantity` | number | yes |  |
+| `reward_risk` | number \| null | no | The gain at the target over the loss at the stop. |
 | `side` | "buy" \| "sell" | yes |  |
 | `status` | "preview" \| "pending" \| "filled" \| "partially_filled" \| "rejected" \| "cancelled" | yes |  |
+| `stop_price` | number \| null | no | The protective stop planned. |
+| `target_price` | number \| null | no |  |
 | `ticker` | string | yes |  |
 
 ### MarginAccountView
@@ -2779,6 +3408,7 @@ Monte-Carlo permutation test settings (survival test ``permutation``).
 | `mfa_fresh` | boolean | yes |  |
 | `role` | [Role](#role) | yes |  |
 | `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+| `toolsets` | list[string] \| null | no |  |
 | `user_id` | string | yes |  |
 | `via` | "session" \| "token" \| "legacy" \| "cli" \| "scheduler" \| "assistant" \| "telegram" | yes |  |
 
@@ -3231,6 +3861,17 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `time_in_force` | string \| null | no |  |
 | `updated_at` | string | yes |  |
 
+### OvertradingView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `active_days` | integer | yes |  |
+| `busy_day_pnl` | number | yes |  |
+| `busy_days` | integer | yes | Days with many entries (5 or more). |
+| `entries_per_active_day` | number \| null | yes |  |
+| `max_entries_in_a_day` | integer | yes |  |
+| `other_day_pnl` | number | yes |  |
+
 ### Page_AlertView_
 
 | Field | Type | Required | Description |
@@ -3375,6 +4016,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_JournalTradeView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[JournalTradeView](#journaltradeview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_LedgerRunView_
 
 | Field | Type | Required | Description |
@@ -3434,6 +4084,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[OrderView](#orderview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_PlaybookView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[PlaybookView](#playbookview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -3510,6 +4169,24 @@ An order to propose. The server prices it and checks it; a person approves it in
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
 
+### Page_ScreenAlertEventView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[ScreenAlertEventView](#screenalerteventview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_ScreenAlertView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[ScreenAlertView](#screenalertview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
 ### Page_ShadowDecisionView_
 
 | Field | Type | Required | Description |
@@ -3542,6 +4219,15 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[StatementFlagView](#statementflagview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_StatementImportView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[StatementImportView](#statementimportview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -3596,6 +4282,24 @@ An order to propose. The server prices it and checks it; a person approves it in
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `items` | list[[TokenView](#tokenview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_ToolsetView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[ToolsetView](#toolsetview)] | yes |  |
+| `limit` | integer | yes |  |
+| `offset` | integer | yes |  |
+| `total` | integer | yes |  |
+
+### Page_TradeDecisionView_
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[TradeDecisionView](#tradedecisionview)] | yes |  |
 | `limit` | integer | yes |  |
 | `offset` | integer | yes |  |
 | `total` | integer | yes |  |
@@ -3683,6 +4387,30 @@ The model book's result. Every figure is null without two days.
 | `name` | string | yes |  |
 | `tunable` | boolean | yes |  |
 
+### ParentOrderList
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[ParentOrderView](#parentorderview)] | yes |  |
+
+### ParentOrderView
+
+A parent order Stonks works as child slices.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `algo` | string | yes |  |
+| `client_id` | string | yes |  |
+| `filled` | number | yes |  |
+| `portfolio_id` | string | yes |  |
+| `quantity` | number | yes |  |
+| `side` | "buy" \| "sell" | yes |  |
+| `slices` | list[[SliceView](#sliceview)] | yes |  |
+| `state` | string | yes |  |
+| `ticker` | string | yes |  |
+| `window_end` | date-time | yes |  |
+| `window_start` | date-time | yes |  |
+
 ### PasswordChangeRequest
 
 | Field | Type | Required | Description |
@@ -3746,6 +4474,18 @@ The model book's result. Every figure is null without two days.
 | `tool_call_id` | string | yes |  |
 | `tool_name` | string | yes |  |
 
+### PeriodICView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `end` | string | yes |  |
+| `mean_ic` | number \| null | no |  |
+| `n_dates` | integer | yes |  |
+| `period` | string | yes |  |
+| `spread_mean` | number \| null | no |  |
+| `start` | string | yes |  |
+| `t_stat_hac` | number \| null | no |  |
+
 ### PeriodPnl
 
 | Field | Type | Required | Description |
@@ -3760,6 +4500,77 @@ The model book's result. Every figure is null without two days.
 | `start_value` | number \| null | yes |  |
 | `twr` | number \| null | no | Time-weighted return over the period: deposits and withdrawals taken out, so a deposit is never profit. Null without a start value. |
 
+### PlanConfirm
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | string \| null | no | Idempotency key. Default: one from the plan's trades. |
+| `long_term_rate` | number \| null | no |  |
+| `min_trade_value` | number | no |  |
+| `portfolio_id` | string | yes |  |
+| `reason` | string | yes |  |
+| `short_term_rate` | number \| null | no |  |
+| `source` | "strategy" \| "targets" | yes | strategy: the strategy's latest model book weights; targets: your list. |
+| `strategy_id` | string \| null | no |  |
+| `targets` | list[[PlanTarget](#plantarget)] | no |  |
+
+### PlanConfirmResult
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | string | yes |  |
+| `plan` | [RebalancePlanView](#rebalanceplanview) | yes |  |
+| `ticket_ids` | list[string] | yes |  |
+| `written` | integer | yes | New tickets. A repeat of the same key writes none. |
+
+### PlanLineView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cost` | number | yes |  |
+| `cost_bps` | number \| null | yes |  |
+| `current_quantity` | number | yes |  |
+| `current_weight` | number | yes |  |
+| `price` | number \| null | yes |  |
+| `quantity` | number | yes |  |
+| `side` | "buy" \| "sell" \| null | yes |  |
+| `skipped` | string \| null | yes |  |
+| `target_quantity` | number | yes |  |
+| `target_weight` | number | yes |  |
+| `tax` | [PlanTaxView](#plantaxview) \| null | yes |  |
+| `ticker` | string | yes |  |
+| `value` | number | yes |  |
+| `weight_after` | number | yes |  |
+
+### PlanRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `long_term_rate` | number \| null | no |  |
+| `min_trade_value` | number | no |  |
+| `portfolio_id` | string | yes |  |
+| `short_term_rate` | number \| null | no |  |
+| `source` | "strategy" \| "targets" | yes | strategy: the strategy's latest model book weights; targets: your list. |
+| `strategy_id` | string \| null | no |  |
+| `targets` | list[[PlanTarget](#plantarget)] | no |  |
+
+### PlanTarget
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ticker` | string | yes |  |
+| `weight` | number | yes |  |
+
+### PlanTaxView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `estimated_tax` | number \| null | yes |  |
+| `gain` | number | yes |  |
+| `long_term_gain` | number | yes |  |
+| `lots` | list[[LotSaleView](#lotsaleview)] | yes |  |
+| `short_term_gain` | number | yes |  |
+
 ### PlateauOverlayView
 
 The plateau test's verdict on the tuned set, laid over the map.
@@ -3772,6 +4583,52 @@ The plateau test's verdict on the tuned set, laid over the map.
 | `step` | number | yes |  |
 | `x_range` | list[number] \| null | no |  |
 | `y_range` | list[number] \| null | no |  |
+
+### PlaybookCreate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `description` | string \| null | no |  |
+| `name` | string | yes |  |
+
+### PlaybookUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `archived` | boolean \| null | no |  |
+| `description` | string \| null | no |  |
+| `name` | string \| null | no |  |
+
+### PlaybookView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `archived` | boolean | yes |  |
+| `created_at` | string | yes |  |
+| `description` | string \| null | yes |  |
+| `id` | string | yes |  |
+| `name` | string | yes |  |
+| `updated_at` | string | yes |  |
+
+### PnlCalendarView
+
+Realised P&L of closed legs by exit day, ISO week and month.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_currency` | string | yes |  |
+| `best_day` | string \| null | yes |  |
+| `days` | list[[CalendarBucketView](#calendarbucketview)] | yes |  |
+| `fx_missing` | list[string] | yes |  |
+| `months` | list[[CalendarBucketView](#calendarbucketview)] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `since` | date \| null | yes |  |
+| `total` | number | yes |  |
+| `trades` | integer | yes |  |
+| `unconverted` | integer | yes |  |
+| `until` | date \| null | yes |  |
+| `weeks` | list[[CalendarBucketView](#calendarbucketview)] | yes |  |
+| `worst_day` | string \| null | yes |  |
 
 ### PnlRowView
 
@@ -3924,7 +4781,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers and n
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `category` | "signal" \| "order" \| "risk" \| "system" \| "price_alert" \| "event_alert" | yes |  |
+| `category` | "signal" \| "order" \| "risk" \| "system" \| "price_alert" \| "event_alert" \| "screen_alert" | yes |  |
 | `channel` | string | yes |  |
 | `enabled` | boolean | yes |  |
 | `strategy_id` | string \| null | no |  |
@@ -3983,6 +4840,20 @@ The BL-37 data preflight of a lab run. A run only starts with no errors, so a re
 | `currency` | string | yes |  |
 | `equity` | number | yes |  |
 | `settled_cash` | number | yes |  |
+
+### PreviewLotView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `acquired` | date | yes |  |
+| `cost_basis` | number | yes |  |
+| `gain` | number | yes |  |
+| `holding_period` | "short" \| "long" | yes |  |
+| `kind` | "long" \| "short" | yes |  |
+| `open_fill_id` | integer | yes | The fill that opened the lot. |
+| `proceeds` | number | yes |  |
+| `quantity` | number | yes |  |
+| `wash_sale_disallowed` | number | yes |  |
 
 ### PreviewOrderView
 
@@ -4085,6 +4956,50 @@ Change the name, the thresholds or switch the rule on or off. The target and the
 | `max_gap_pct` | number \| null | no |  |
 | `nbbo_band_pct` | number | no |  |
 
+### PriceCheckItemView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `adjustment_gap` | number \| null | no |  |
+| `close_gap` | number \| null | no |  |
+| `detail` | string | yes |  |
+| `second_close` | number \| null | no |  |
+| `source` | string | no |  |
+| `status` | string | yes |  |
+| `ticker` | string | yes |  |
+| `vendor_close` | number \| null | no |  |
+| `vendor_date` | date \| null | no |  |
+
+### PriceCheckRunBody
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+
+### PriceCheckRunView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `check` | [PriceCheckView](#pricecheckview) \| null | no |  |
+| `ran` | boolean | yes |  |
+| `reason` | string \| null | no |  |
+
+### PriceCheckView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `checked_at` | date-time | yes |  |
+| `detail` | string \| null | no |  |
+| `halt_id` | integer \| null | no |  |
+| `held` | list[string] | yes |  |
+| `id` | integer | yes |  |
+| `items` | list[[PriceCheckItemView](#pricecheckitemview)] | yes |  |
+| `source` | string | yes |  |
+| `status` | string | yes |  |
+| `tickers_checked` | integer | yes |  |
+| `tickers_compared` | integer | yes |  |
+
 ### ProbeView
 
 | Field | Type | Required | Description |
@@ -4117,6 +5032,8 @@ What a reviewer reads before promoting; it doesn't change the verdict. ``None`` 
 | `dsr` | number \| null | no |  |
 | `excess_cagr` | number \| null | no |  |
 | `hypothesis` | string \| null | no |  |
+| `lot_skipped_share` | number \| null | no |  |
+| `min_capital` | number \| null | no |  |
 | `n_trials_class` | integer \| null | no |  |
 | `pbo` | number \| null | no |  |
 | `premortem` | string \| null | no |  |
@@ -4129,6 +5046,19 @@ What a reviewer reads before promoting; it doesn't change the verdict. ``None`` 
 | `atr_window` | integer | no |  |
 | `enabled` | boolean | no |  |
 | `fallback_pct` | number | no |  |
+
+### ProvenanceView
+
+The paper a published factor comes from (roadmap 23.13).
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `paper` | string | yes |  |
+| `published` | integer | yes |  |
+| `reported` | string | yes |  |
+| `sample_end` | integer | yes |  |
+| `sample_start` | integer | yes |  |
+| `t_stat` | number \| null | no |  |
 
 ### ProviderView
 
@@ -4195,6 +5125,28 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 | `end` | string \| null | no |  |
 | `start` | string \| null | no |  |
 
+### RebalancePlanView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `algo` | object \| null | yes | The execution algo the trades would use. |
+| `as_of` | date | yes |  |
+| `buys` | number | yes |  |
+| `cash_after` | number | yes |  |
+| `cash_before` | number | yes |  |
+| `cash_weight_after` | number | yes |  |
+| `equity` | number | yes |  |
+| `lines` | list[[PlanLineView](#planlineview)] | yes |  |
+| `max_drift_after` | number | yes |  |
+| `notes` | list[string] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `sells` | number | yes |  |
+| `source` | "strategy" \| "targets" | yes |  |
+| `strategy_id` | string \| null | yes |  |
+| `tax_total` | number \| null | yes |  |
+| `total_cost` | number | yes |  |
+| `turnover` | number | yes | Traded value over the book's value. |
+
 ### ReconcileReportView
 
 | Field | Type | Required | Description |
@@ -4218,6 +5170,16 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `recovery_codes` | list[string] | yes |  |
+
+### ReliabilityBinView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `count` | integer | yes |  |
+| `lower` | number | yes |  |
+| `mean_forecast` | number \| null | yes |  |
+| `observed_rate` | number \| null | yes |  |
+| `upper` | number | yes |  |
 
 ### ResearchProposalView
 
@@ -4332,11 +5294,31 @@ A research session: what to look for, on which universe, and budgets that may on
 | `next_steps` | list[string] | yes |  |
 | `state_migrations_applied` | list[integer] | yes |  |
 
+### ResumeCheckView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `detail` | string | yes |  |
+| `name` | string | yes |  |
+| `passed` | boolean \| null | yes |  |
+| `portfolio_id` | string \| null | no |  |
+
+### ResumeChecksView
+
+What is checked before a kill switch resume (roadmap 23.15): per portfolio at a real broker, the gateway, the last reconcile, the account and the equity cover of the largest position.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `checks` | list[[ResumeCheckView](#resumecheckview)] | yes |  |
+| `halt_id` | integer | yes |  |
+| `passed` | boolean | yes |  |
+
 ### ResumeRequest
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `confirmation` | string | yes |  |
+| `override_checks` | boolean | no |  |
 | `reason` | string | yes |  |
 
 ### RetrainOutcomeView
@@ -4506,6 +5488,7 @@ Type: "viewer" \| "trader" \| "admin"
 | `liquidity` | [LiquiditySettings](#liquiditysettings) | no |  |
 | `live_notional_caps` | [LiveNotionalCapsSettings](#livenotionalcapssettings) | no |  |
 | `losing_lock` | [LosingLockSettings](#losinglocksettings) | no |  |
+| `manual_discipline` | [ManualDisciplineSettings](#manualdisciplinesettings) | no |  |
 | `margin_call` | [MarginCallSettings](#margincallsettings) | no |  |
 | `max_holding` | [MaxHoldingSettings](#maxholdingsettings) | no |  |
 | `max_orders_per_run` | [MaxOrdersPerRunSettings](#maxordersperrunsettings) | no |  |
@@ -4617,6 +5600,61 @@ Rename, replace the spec, or both. Unset fields stay.
 | `started_at` | date-time | yes |  |
 | `status` | string | yes |  |
 
+### ScreenAlertEventView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `created_at` | date-time | yes |  |
+| `id` | integer | yes |  |
+| `matched` | integer | yes |  |
+| `screen_id` | string | yes |  |
+| `screen_name` | string \| null | yes |  |
+| `tickers` | list[string] | yes |  |
+
+### ScreenAlertRunRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+
+### ScreenAlertRunView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alerts` | integer | yes |  |
+| `as_of` | date | yes |  |
+| `baselines` | integer | yes |  |
+| `failed` | integer | yes |  |
+| `fired` | integer | yes |  |
+| `published` | integer | yes |  |
+| `ran` | integer | yes |  |
+
+### ScreenAlertSet
+
+Turn an alert on for one of your saved screens, or change it.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cadence` | "daily" \| "weekly" | no |  |
+| `enabled` | boolean | no |  |
+| `weekday` | integer \| null | no | Weekly: the day it runs, 0 = Monday. |
+
+### ScreenAlertView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cadence` | "daily" \| "weekly" | yes |  |
+| `created_at` | date-time | yes |  |
+| `enabled` | boolean | yes |  |
+| `last_as_of` | date \| null | yes |  |
+| `last_error` | string \| null | yes |  |
+| `matched` | integer | yes |  |
+| `screen_id` | string | yes |  |
+| `screen_name` | string | yes |  |
+| `updated_at` | date-time | yes |  |
+| `weekday` | integer \| null | yes |  |
+
 ### ScreenResult
 
 | Field | Type | Required | Description |
@@ -4709,6 +5747,7 @@ Store a screen (``spec`` or ``screen_id``) as a universe.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `look_through` | boolean | no |  |
 | `max_weight_per_sector` | number \| null | no |  |
 
 ### SentimentDay
@@ -4846,6 +5885,19 @@ Implementation shortfall of one order. Costs are positive, in bps of the filled 
 | `top_quantile_turnover` | number \| null | no |  |
 | `window` | list[any] | yes |  |
 
+### SliceView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `client_id` | string | yes |  |
+| `filled` | number | yes |  |
+| `order_state` | string \| null | yes |  |
+| `quantity` | number | yes |  |
+| `send_after` | date-time | yes |  |
+| `seq` | integer | yes |  |
+| `status` | "planned" \| "sent" \| "skipped" | yes |  |
+| `status_reason` | string \| null | yes |  |
+
 ### SmokeCheck
 
 | Field | Type | Required | Description |
@@ -4979,6 +6031,69 @@ Set on a strategy of the starter set (``stonks starter install``): a simple refe
 | `period_end` | date | yes |  |
 | `severity` | "error" \| "warning" | yes |  |
 | `ticker` | string | yes |  |
+
+### StatementImportRequest
+
+A CSV to preview or import, into ``portfolio_id`` (a broker portfolio of yours) or into a new portfolio named ``new_portfolio``.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `content` | string | yes | The CSV text. |
+| `currency` | string | no |  |
+| `filename` | string \| null | no |  |
+| `mapping` | [ColumnMapping](#columnmapping) \| null | no | Column mapping; blank guesses it from the headers. |
+| `new_portfolio` | string \| null | no |  |
+| `portfolio_id` | string \| null | no |  |
+
+### StatementImportView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | date-time | yes |  |
+| `filename` | string \| null | yes |  |
+| `first_date` | date \| null | yes |  |
+| `id` | string | yes |  |
+| `last_date` | date \| null | yes |  |
+| `portfolio_id` | string | yes |  |
+| `portfolio_name` | string \| null | yes |  |
+| `rows_added` | integer | yes |  |
+| `rows_duplicate` | integer | yes |  |
+| `rows_skipped` | integer | yes |  |
+| `rows_total` | integer | yes |  |
+| `undone_at` | date-time \| null | yes |  |
+
+### StatementPreview
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `duplicate` | integer | yes |  |
+| `first_date` | date \| null | yes |  |
+| `guessed` | boolean | yes |  |
+| `headers` | list[string] | yes |  |
+| `last_date` | date \| null | yes |  |
+| `mapping` | [ColumnMapping](#columnmapping) | yes |  |
+| `new` | integer | yes |  |
+| `rows` | list[[StatementRowView](#statementrowview)] | yes |  |
+| `skipped` | integer | yes |  |
+| `total` | integer | yes |  |
+| `unmapped` | list[string] | yes |  |
+
+### StatementRowView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `amount` | number \| null | no |  |
+| `currency` | string \| null | no |  |
+| `day` | date \| null | no |  |
+| `fee` | number \| null | no |  |
+| `kind` | string \| null | no |  |
+| `line` | integer | yes |  |
+| `price` | number \| null | no |  |
+| `quantity` | number \| null | no |  |
+| `reason` | string \| null | no |  |
+| `status` | "new" \| "duplicate" \| "skipped" | yes |  |
+| `symbol` | string \| null | no |  |
+| `ticker` | string \| null | no |  |
 
 ### StatusChangeRequest
 
@@ -5259,7 +6374,7 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 |-------|------|----------|-------------|
 | `benchmark` | string \| null | no |  |
 | `budget` | integer | no |  |
-| `cost_model` | "zero" \| "realistic" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
+| `cost_model` | "zero" \| "realistic" \| "ibkr_tiered" \| "ibkr_fixed" \| [CostModelSettings](#costmodelsettings) \| null | no |  |
 | `embargo_bars` | integer \| null | no |  |
 | `end` | date | yes |  |
 | `exclude` | list[string] | no |  |
@@ -5280,7 +6395,7 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `start` | date | yes |  |
 | `strategies` | list[string] \| null | no |  |
 | `strict_preflight` | boolean \| null | no |  |
-| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "deflated_sharpe" \| "drift" \| "event_study" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
+| `survival_tests` | list["benchmark_relative" \| "cost_stress" \| "cpcv" \| "crisis" \| "cross_instrument" \| "data_snooping" \| "deflated_sharpe" \| "drift" \| "event_study" \| "forecast_skill" \| "mc_trades" \| "mcpt" \| "oos" \| "pbo" \| "period_stability" \| "permutation" \| "perturbation" \| "plateau" \| "pool_correlation" \| "runs_test" \| "signal_ic" \| "stress" \| "vs_random" \| "walk_forward" \| "walk_forward_mcpt"] \| null | no |  |
 | `test_options` | dict[str, object] \| null | no |  |
 | `train_ratio` | number | no |  |
 | `tuner` | "grid" \| "random" \| "optuna" | no |  |
@@ -5376,6 +6491,39 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 |-------|------|----------|-------------|
 | `items` | list[[SystemSettingView](#systemsettingview)] | yes |  |
 
+### TaxPreviewView
+
+What a trade would realise now, before it is placed. An estimate at your configured rates, not tax advice.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `after_tax_proceeds` | number | yes |  |
+| `currency` | string | yes | The trade's currency; every amount is in it. |
+| `estimated_tax` | number | yes | Tax on this trade's own gains (0 on a loss). |
+| `jurisdiction` | "us" \| "eu" \| "uk" | yes |  |
+| `long_term_gain` | number | yes |  |
+| `lot_method` | "fifo" \| "specific" | yes |  |
+| `lots` | list[[PreviewLotView](#previewlotview)] | yes | The lots the trade closes, in order. |
+| `portfolio_id` | string | yes |  |
+| `price` | number | yes | The price used: yours, else the latest close. |
+| `proceeds` | number | yes |  |
+| `quantity` | number | yes |  |
+| `rates` | [TaxRatesView](#taxratesview) | yes |  |
+| `realized_gain` | number | yes |  |
+| `short_term_gain` | number | yes |  |
+| `side` | "buy" \| "sell" | yes |  |
+| `ticker` | string | yes |  |
+| `wash_sale_disallowed` | number | yes |  |
+| `wash_sale_warning` | string \| null | no |  |
+| `year_tax_change` | number | yes | How much the trade changes this year's estimated tax (negative lowers it). |
+
+### TaxRatesView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `long_term` | number | yes | Rate on gains held more than one year. |
+| `short_term` | number | yes | Rate on gains held one year or less. |
+
 ### TaxSettingsUpdate
 
 | Field | Type | Required | Description |
@@ -5396,6 +6544,24 @@ A sweep over a basket: ``universe`` (tickers) or ``universe_id`` (every member d
 | `portfolio_id` | string | yes |  |
 | `updated_at` | date-time \| null | no |  |
 | `wash_sales` | boolean | yes | US wash sale adjustment (us jurisdiction only). |
+
+### TaxYearView
+
+Gains realised this year and the estimated tax on them, in the base currency. Short and long term losses offset gains first.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_currency` | string | yes |  |
+| `disposals` | integer | yes |  |
+| `estimated_tax` | number | yes |  |
+| `jurisdiction` | "us" \| "eu" \| "uk" | yes |  |
+| `long_term_gain` | number | yes |  |
+| `portfolio_id` | string | yes |  |
+| `rates` | [TaxRatesView](#taxratesview) | yes |  |
+| `short_term_gain` | number | yes |  |
+| `unconverted` | integer | yes | Disposals left out for want of an FX rate. |
+| `wash_sale_disallowed` | number | yes |  |
+| `year` | integer | yes |  |
 
 ### TcaGroupView
 
@@ -5434,7 +6600,7 @@ A group's money figures in the portfolio's base currency (roadmap 20.5), each or
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `base_currency` | string \| null | no |  |
-| `by` | "all" \| "strategy" \| "ticker" \| "portfolio" \| "day" \| "week" \| "month" | yes |  |
+| `by` | "all" \| "strategy" \| "ticker" \| "portfolio" \| "algo" \| "day" \| "week" \| "month" | yes |  |
 | `fx_missing` | list[string] | no |  |
 | `groups` | list[[TcaGroupView](#tcagroupview)] | yes |  |
 | `groups_base` | list[[TcaMoneyView](#tcamoneyview)] | no |  |
@@ -5632,6 +6798,7 @@ One order ticket: the order a live book decided, why, and what became of it.
 | `expires_in_days` | integer \| null | no |  |
 | `name` | string | yes |  |
 | `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+| `toolsets` | list[string] \| null | no |  |
 
 ### TokenCreatedView
 
@@ -5651,6 +6818,7 @@ One order ticket: the order a live book decided, why, and what became of it.
 | `name` | string | yes |  |
 | `revoked_at` | string \| null | yes |  |
 | `scopes` | list[[ApiScope](#apiscope)] | yes |  |
+| `toolsets` | list[string] \| null | no |  |
 
 ### ToolCallView
 
@@ -5659,6 +6827,70 @@ One order ticket: the order a live book decided, why, and what became of it.
 | `arguments` | object | yes |  |
 | `id` | string | yes |  |
 | `name` | string | yes |  |
+
+### ToolsetView
+
+One MCP tool group a token can be limited to.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `about` | string | yes |  |
+| `name` | string | yes |  |
+
+### TradeDecisionView
+
+One ticker in one book on one tick: the step that kept it out or trimmed it. ``step`` is one of universe, rank, constructor, buffer, stale_price, risk_rule, lots, scope, external, halt, held or traded.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `detail` | object | yes |  |
+| `outcome` | string | yes |  |
+| `portfolio_id` | string | yes |  |
+| `score` | number \| null | yes |  |
+| `step` | string | yes |  |
+| `step_text` | string | yes |  |
+| `strategies` | list[string] | yes |  |
+| `strategy_id` | string \| null | yes |  |
+| `summary` | string | yes |  |
+| `tick_id` | string | yes |  |
+| `ticker` | string | yes |  |
+
+### TradePlanRequest
+
+Size an entry from the risk you choose and the distance to the stop.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `entry_price` | number \| null | no | Your entry, e.g. a limit. Default: the latest close. |
+| `portfolio_id` | string \| null | no |  |
+| `risk_amount` | number \| null | no | Risk as an amount in the book's currency. |
+| `risk_percent` | number \| null | no | Risk as a percent of the book's value. |
+| `side` | "buy" \| "sell" | yes |  |
+| `stop_price` | number | yes |  |
+| `target_price` | number \| null | no |  |
+| `ticker` | string | yes |  |
+
+### TradePlanView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `capped_by` | "cash" \| null | yes | cash: the cash cut the size. |
+| `cash` | number | yes |  |
+| `entry_is_close` | boolean | yes | The entry is the latest close. |
+| `entry_price` | number | yes |  |
+| `equity` | number | yes | The book's value at the latest closes. |
+| `note` | string \| null | no |  |
+| `notional` | number | yes |  |
+| `quantity` | integer | yes | Whole shares whose loss at the stop fits the risk. |
+| `reward_risk` | number \| null | yes | The gain at the target over the risk. |
+| `risk_amount` | number | yes | The loss at the stop for that quantity. |
+| `risk_budget` | number | yes | The risk you chose, as an amount. |
+| `risk_per_share` | number | yes |  |
+| `side` | "buy" \| "sell" | yes |  |
+| `stop_price` | number | yes |  |
+| `target_price` | number \| null | yes |  |
+| `ticker` | string | yes |  |
 
 ### TradeStatsView
 
@@ -5784,6 +7016,17 @@ A universe's new definition. The members stay as they are until the next refresh
 | `spec` | object | yes |  |
 | `updated_at` | date-time \| null | no |  |
 
+### UsRegulatoryFees
+
+US regulatory transaction fees, passed through by IBKR on either plan.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cat_per_share` | number | no |  |
+| `sec_rate_per_million` | number | no |  |
+| `taf_max` | number | no |  |
+| `taf_per_share` | number | no |  |
+
 ### UserCreateRequest
 
 | Field | Type | Required | Description |
@@ -5837,6 +7080,44 @@ Smoke-run on these lake tickers (sample data when empty), over the last ``bars``
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `public_key` | string \| null | yes |  |
+
+### VerifyReportView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `changed_tickers` | list[string] | yes |  |
+| `class_path` | string | yes |  |
+| `code_changed` | boolean \| null | yes |  |
+| `config_changed` | boolean \| null | yes |  |
+| `current_score` | number \| null | yes |  |
+| `data_changed` | boolean \| null | yes |  |
+| `error` | string \| null | yes |  |
+| `kind` | string | yes |  |
+| `moved` | boolean | yes |  |
+| `objective` | string \| null | yes |  |
+| `restated_tickers` | list[string] | no |  |
+| `run_id` | string \| null | yes |  |
+| `score_delta` | number \| null | yes |  |
+| `stored_score` | number \| null | yes |  |
+| `target` | string | yes |  |
+| `tolerance` | number | yes |  |
+
+### VerifyRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alert` | boolean | no |  |
+| `targets` | list[string] | no |  |
+| `tolerance` | number \| null | no |  |
+
+### VerifyResultView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `alerted` | boolean | no |  |
+| `checked` | integer | yes |  |
+| `moved` | list[string] | yes |  |
+| `reports` | list[[VerifyReportView](#verifyreportview)] | yes |  |
 
 ### VerifyView
 

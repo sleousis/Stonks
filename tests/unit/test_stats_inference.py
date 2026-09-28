@@ -192,3 +192,27 @@ def test_pbo_is_nan_when_no_split_is_usable():
     res = cscv(m, n_blocks=4)
     assert res.n_combinations == 0
     assert math.isnan(res.pbo) and math.isnan(res.p_loss)
+
+
+# ---- HAC mean test (roadmap 23.9) ------------------------------------------------
+
+
+def test_hac_mean_test_known_value_without_lags():
+    from stonks.stats.hac import hac_mean_test
+
+    x = np.array([1.0, -1.0, 2.0, 0.0])  # mean 0.5, std(ddof=0) sqrt(1.25)
+    out = hac_mean_test(x, lags=0)
+    se = math.sqrt(1.25) / 2
+    assert out.n == 4
+    assert out.se == pytest.approx(se)
+    assert out.t_stat == pytest.approx(0.5 / se)
+    assert out.p_below == pytest.approx(0.5 * (1 + math.erf((0.5 / se) / math.sqrt(2))))
+
+
+def test_hac_mean_test_flat_series():
+    from stonks.stats.hac import hac_mean_test
+
+    zero = hac_mean_test(np.zeros(10))
+    assert zero.t_stat == 0.0 and zero.p_below == pytest.approx(0.5)
+    ahead = hac_mean_test(np.full(10, 0.01))
+    assert ahead.t_stat > 1e6 and ahead.p_below == pytest.approx(1.0)

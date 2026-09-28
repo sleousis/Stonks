@@ -22,6 +22,8 @@ export const routes: Routes = [
   { path: 'insights', loadChildren: () => import('./pages/insights/insights.routes') },
   // 13: the first-run guide, watchlists and price charts
   { path: 'welcome', loadChildren: () => import('./pages/welcome/welcome.routes') },
+  // 23.17: the demo portfolio (sample data, never a real book)
+  { path: 'demo', loadChildren: () => import('./pages/demo/demo.routes') },
   { path: 'watchlists', loadChildren: () => import('./pages/watchlists/watchlists.routes') },
   { path: 'charts', loadChildren: () => import('./pages/charts/charts.routes') },
   {
@@ -69,6 +71,7 @@ export const routes: Routes = [
     loadChildren: () => import('./pages/notifications/notifications.routes'),
   },
   { path: 'trades', loadChildren: () => import('./pages/trades/trades.routes') },
+  { path: 'journal', loadChildren: () => import('./pages/journal/journal.routes') },
   // 20: the AI assistant
   { path: 'assistant', loadChildren: () => import('./pages/assistant/assistant.routes') },
   // 20.7 and 20.8: event calendars and news, the screener

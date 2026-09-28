@@ -327,3 +327,40 @@ def test_a_commission_in_another_currency_is_converted(client, people, book, set
     [row] = [r for r in rows if r["ticker"] == "EU.XETRA"]
     # the 1.25 USD commission is 1.00 EUR at 1.25 USD per EUR
     assert (row["currency"], row["cost_basis"]) == ("EUR", "1001.00")
+
+
+def test_trade_preview_and_year_estimate(client, people, book):
+    alice = people["alice"]
+    pid = book["pid"]
+    r = client.get(
+        "/api/tax/preview",
+        params={"portfolio_id": pid, "ticker": "UP.US", "side": "sell", "quantity": 8,
+                "price": 130.0},
+        headers=alice["headers"],
+    )  # fmt: skip
+    assert r.status_code == 200, r.text
+    got = r.json()
+    assert [lot["open_fill_id"] for lot in got["lots"]] == [book["fills"]["o2"]]
+    assert got["lots"][0]["holding_period"] == "long"
+    assert got["proceeds"] == 8 * 130.0
+    assert got["after_tax_proceeds"] == got["proceeds"] - got["estimated_tax"]
+    assert got["rates"]["long_term"] > 0
+    buy = client.get(
+        "/api/tax/preview",
+        params={"portfolio_id": pid, "ticker": "UP.US", "side": "buy", "quantity": 1,
+                "price": 100.0},
+        headers=alice["headers"],
+    )  # fmt: skip
+    assert buy.status_code == 200 and buy.json()["lots"] == []
+    year = client.get(
+        "/api/tax/year", params={"portfolio_id": pid, "year": 2025}, headers=alice["headers"]
+    )
+    assert year.status_code == 200, year.text
+    y = year.json()
+    assert y["year"] == 2025 and y["disposals"] == 2 and y["estimated_tax"] == 0.0
+    assert y["short_term_gain"] < 0
+    for who in ("bob",):
+        r = client.get(
+            "/api/tax/year", params={"portfolio_id": pid}, headers=people[who]["headers"]
+        )
+        assert r.status_code == 404

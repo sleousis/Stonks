@@ -122,10 +122,11 @@ New behaviour plugs in behind a seam. Most are registries, so a new one is one n
 | `BarStore` | `store/bars.py` | DuckDB table, Parquet files |
 | `UniverseProvider` | `universes/providers/` (registry) | list, exchange, rule, index |
 | `IndexSource` | `universes/index_sources/` (registry) | wikipedia_sp500 |
-| `Strategy` | `core/protocols.py`, `strategies/base.py` | 38 catalogued: 32 strategies and 6 wrappers |
+| `Strategy` | `core/protocols.py`, `strategies/base.py` | 39 catalogued: 33 strategies and 6 wrappers |
 | `Factor` | `factors/base.py`, `factors/library/` (registry) | alpha158, classic, fundamentals |
 | `Tuner`, `Objective` | `lab/tuning/`, `lab/objectives.py` | Tuners grid, random, optuna. Objectives Sharpe, CAGR, final return, Sortino, Calmar, drawdown Sharpe, multi-metric, purged CV |
-| `SurvivalTest` | `lab/survival/` (registry) | 22 tests, presets `quick`, `standard`, `promotion` |
+| `SurvivalTest` | `lab/survival/` (registry) | 24 tests, presets `quick`, `standard`, `promotion` |
+| `Forecaster` | `features/forecasters/` (registry) | random_walk, drift, ets, theta, chronos_bolt, chronos_2, timesfm_2_5, kronos_small, kronos_mini ([forecasting](forecasting.md)) |
 | `PortfolioConstructor` | `portfolio/base.py` (registry) | single_winner, equal_weight_top_n, inverse_vol, vol_target, atr_parity, hrp, erc, mean_variance_costs |
 | `RiskRule` | `production/rules/` (registry) | caps, position risk, portfolio vol, style exposure, drawdown scaling, liquidity, sector cap, max holding, circuit breaker, short rules, account rules, live safeguards, protective stops, option limits, intraday rules |
 | `PostTickHook`, `TradeGate` | `production/hooks/` (registry) | position attribution, notification enqueue, quit rule, TCA, risk monitor, halts gate, runaway guard |
@@ -263,6 +264,6 @@ Switch: set `[lake.bars] backend = "parquet"`, stop `stonks serve`, run `uv run 
 ## More
 
 - [Operations](operations.md), [deploy](deploy.md), [capacity](capacity.md), [runbooks](runbooks/)
-- [Principles](principles.md), [strategies](strategies/README.md), [web console](ui.md), [universes and on-demand data](universes.md), [calendars and news](calendars.md), [factors](factors.md), [model lifecycle](model-lifecycle.md), [tax](tax.md), [security](security.md)
-- Designs: [accounts and modes](design/accounts-and-modes.md), [live trading](design/live-trading.md), [intraday](design/intraday.md), [short selling](design/shorting.md), [options](design/options.md)
+- [Principles](principles.md), [strategies](strategies/README.md), [web console](ui.md), [universes and on-demand data](universes.md), [calendars and news](calendars.md), [factors](factors.md), [model lifecycle](model-lifecycle.md), [ML toolkit](ml-toolkit.md), [tax](tax.md), [security](security.md)
+- Designs: [accounts and modes](design/accounts-and-modes.md), [live trading](design/live-trading.md), [intraday](design/intraday.md), [short selling](design/shorting.md), [options](design/options.md), [whole shares and fees](design/whole-shares-and-fees.md)
 - Block notes (history and details): [ingestion](blocks/01_ingestion.md), [storage](blocks/02_storage.md), [lab](blocks/03_strategy_lab.md), [registry](blocks/04_strategy_store.md), [tick](blocks/05_production_tick.md)

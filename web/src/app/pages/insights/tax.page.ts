@@ -26,6 +26,7 @@ import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
 import { ErrorState, LoadingState } from '../../shared/ui/states';
 import { InsightsNav } from './insights-nav';
 import { LotPicks } from './lot-picks';
+import { TaxYearCard } from './tax-year-card';
 
 type Jurisdiction = TaxSettingsView['jurisdiction'];
 type LotMethod = TaxSettingsView['lot_method'];
@@ -73,6 +74,7 @@ const CURRENCY = /^[A-Z]{3}$/;
     Segmented,
     PermissionNote,
     LotPicks,
+    TaxYearCard,
     LoadingState,
     ErrorState,
   ],
@@ -86,6 +88,7 @@ const CURRENCY = /^[A-Z]{3}$/;
     @if (book() === 'none') {
       <app-no-book message="Tax settings and yearly files show here once you have a portfolio." />
     } @else {
+      <app-tax-year-card class="year-card" [portfolio]="portfolioId()" />
       <div class="page-grid">
         <section class="panel span-7" aria-labelledby="tax-settings-title">
           <div class="panel-head">
@@ -305,6 +308,10 @@ const CURRENCY = /^[A-Z]{3}$/;
     }
   `,
   styles: `
+    .year-card {
+      display: block;
+      margin-bottom: var(--space-4);
+    }
     .base {
       max-width: 8rem;
       text-transform: uppercase;

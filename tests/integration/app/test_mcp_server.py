@@ -96,6 +96,7 @@ READ_TOOLS = {
     "search_instruments",
     "get_bars",
     "get_coverage",
+    "get_market_breadth",
     "list_orders",
     "list_fills",
     "list_ticks",
@@ -111,6 +112,7 @@ READ_TOOLS = {
     "list_shadow_pnl",
     "get_shadow_pnl",
     "get_health_report",
+    "get_price_check",
     "get_stream_status",
     "get_broker",
     "list_sources",
@@ -135,15 +137,25 @@ READ_TOOLS = {
     "whoami",
     "get_insights",
     "get_strategy_agreement",
+    "get_look_through",
+    "get_behaviour_report",
+    "preview_trade_tax",
+    "get_tax_year",
     "get_insights_totals",
     "get_live_risk",
     "live_risk",
     "list_risk_snapshots",
+    "list_trade_decisions",
     "risk_snapshots",
     "list_intraday_snapshots",
     "get_tca_summary",
     "list_trade_journal",
     "get_order_tca",
+    "list_round_trips",
+    "get_round_trip",
+    "get_pnl_calendar",
+    "get_journal_breakdown",
+    "list_playbooks",
     "get_golive_report",
     "list_ledger_runs",
     "get_ledger_run",
@@ -187,10 +199,13 @@ READ_TOOLS = {
     "run_screen",
     "list_screens",
     "get_screen",
+    "list_screen_alerts",
+    "list_screen_alert_events",
     "list_model_versions",
     "get_model_version_history",
     "list_model_candidates",
     "check_model_swap",
+    "get_model_calibration",
     "list_tickets",
     "get_ticket",
     "get_live_stage",
@@ -200,6 +215,10 @@ READ_TOOLS = {
     "get_live_margin",
     "get_options_live",
     "get_broker_gateways",
+    "list_execution_algos",
+    "get_execution_algo_settings",
+    "list_algo_parents",
+    "plan_rebalance",
 }
 # Not destructive: queue research jobs, or create / smoke-check a draft.
 JOB_TOOLS = {
@@ -207,6 +226,7 @@ JOB_TOOLS = {
     "run_lab",
     "run_ingest",
     "run_signal_ic",
+    "verify_lab_results",
     "run_factor_tearsheet",
     "run_options_backtest",
     "create_draft",
@@ -233,6 +253,7 @@ EDIT_TOOLS = {
     "update_watchlist",
     "update_price_alert",
     "update_screen",
+    "set_screen_alert",
 }
 GUARDED_TOOLS = {
     "create_universe",
@@ -260,8 +281,11 @@ GUARDED_TOOLS = {
     "set_event_alerts",
     "save_screen_as_universe",
     "delete_screen",
+    "delete_screen_alert",
     "swap_model_version",
     "reject_model_version",
+    "set_execution_algo",
+    "confirm_rebalance",
 }
 
 
@@ -397,7 +421,7 @@ async def test_risk_policy_broker_sources_cost_models(mcp, settings):
     sources = (await call(mcp, "list_sources"))["items"]
     assert any(s["default"] for s in sources)
     presets = (await call(mcp, "list_cost_models"))["items"]
-    assert {p["name"] for p in presets} == {"zero", "realistic"}
+    assert {p["name"] for p in presets} == {"zero", "realistic", "ibkr_fixed", "ibkr_tiered"}
 
 
 @pytest.mark.anyio

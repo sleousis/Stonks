@@ -45,6 +45,13 @@ flowchart LR
   for subscriptions and the kill switch. A token never exceeds its user's
   role.
 - `whoami` shows the user, role and scopes.
+- A token can also be limited to some tool groups (Settings, API tokens,
+  "Limit its tool groups"). A group is one tool module: `reads`, `jobs`,
+  `orders`, `risk`, `decisions` and so on (`GET /api/auth/toolsets` lists
+  them). The server reads the token's groups from `/api/auth/me` at start
+  and registers only their tools, plus `whoami`. If it cannot ask, it keeps
+  only `whoami`. The in-app assistant applies the same limit to a limited
+  token.
 - Every tool does only what that user may do in the web app. A refused
   call says that the token's role or scopes do not allow it.
 - Portfolio tools take an optional `portfolio_id`. It must be one of your

@@ -18,9 +18,11 @@ buys with ``buys_only``) through the broker interface (``execution.cancel``); a
 failed cancel is logged and never undoes the halt. Engaging, resuming and clearing each write an ``audit_log``
 row; resuming and clearing also write the ``risk_reset`` row in
 ``status_changes``. Resuming the kill switch needs the typed confirmation
-:data:`RESUME_PHRASE` and a reason. Other halts (the circuit breaker, the
-operational halt) are cleared with a reason by the portfolio owner, or an
-admin for global ones.
+:data:`RESUME_PHRASE` and a reason, and runs the resume checks of roadmap
+23.15 first (``production.resume_checks``): a failed check refuses the
+resume unless ``override_checks`` is set, and the audit row keeps them.
+Other halts (the circuit breaker, the operational halt) are cleared with a
+reason by the portfolio owner, or an admin for global ones.
 
 Other users' portfolios and halts read as missing (404), never forbidden.
 """
@@ -37,7 +39,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from stonks.accounts import NotFound, Role, Scope, owned_portfolio
 from stonks.accounts.audit import AuditLog
 from stonks.app.context import AppContext
-from stonks.app.errors import NotFoundError, ValidationError
+from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
@@ -97,6 +99,27 @@ class ResumeRequest(BaseModel):
     #: Must be exactly ``RESUME TRADING``.
     confirmation: str = Field(max_length=64)
     reason: str = Field(min_length=1, max_length=500)
+    #: Resume although a resume check failed. Audited with the checks.
+    override_checks: bool = False
+
+
+class ResumeCheckView(BaseModel):
+    name: str
+    #: ``null``: unknown, shown and not blocking.
+    passed: bool | None
+    detail: str
+    portfolio_id: str | None = None
+
+
+class ResumeChecksView(BaseModel):
+    """What is checked before a kill switch resume (roadmap 23.15): per
+    portfolio at a real broker, the gateway, the last reconcile, the
+    account and the equity cover of the largest position."""
+
+    halt_id: int
+    #: No check failed (unknown ones do not block).
+    passed: bool
+    checks: list[ResumeCheckView]
 
 
 class ClearHaltRequest(BaseModel):
@@ -318,7 +341,61 @@ class HaltService:
             halt = self._load(state, scope, halt_id)
             if halt.kind != "kill":
                 raise ValidationError(f"halt {halt_id} is a {halt.kind} halt; clear it instead")
-            return self._clear(state, who, halt, request.reason, "kill_switch.resume", ip)
+            checks = self._resume_checks(state, halt)
+            failed = [c for c in checks if c.passed is False]
+            if failed and not request.override_checks:
+                names = ", ".join(
+                    f"{c.name}{f' ({c.portfolio_id})' if c.portfolio_id else ''}" for c in failed
+                )
+                raise ConflictError(
+                    f"resume checks failed: {names}. Fix them, or resume with override_checks"
+                )
+            extra = {
+                "checks": [c.model_dump() for c in checks],
+                "override_checks": bool(failed and request.override_checks),
+            }
+            return self._clear(
+                state, who, halt, request.reason, "kill_switch.resume", ip, extra=extra
+            )
+
+    def resume_checks(self, who: Who, halt_id: int) -> ResumeChecksView:
+        """The checks a resume of this kill switch runs, read now. Nothing
+        is sent and nothing is written."""
+        scope = _scope(who)
+        with self._state() as state:
+            halt = self._load(state, scope, halt_id)
+            if halt.kind != "kill":
+                raise ValidationError(f"halt {halt_id} is a {halt.kind} halt; clear it instead")
+            checks = self._resume_checks(state, halt)
+        return ResumeChecksView(
+            halt_id=halt.id,
+            passed=all(c.passed is not False for c in checks),
+            checks=checks,
+        )
+
+    def _resume_checks(self, state: SqliteState, halt: Halt) -> list[ResumeCheckView]:
+        """Per covered portfolio, :func:`portfolio_resume_checks` through its
+        broker. A broker that cannot be built fails ``gateway_up``."""
+        from stonks.execution.brokers.base import close_broker
+        from stonks.production.resume_checks import ResumeCheck, portfolio_resume_checks
+
+        settings = self._context.settings.production.live.resume
+        out: list[ResumeCheckView] = []
+        for portfolio_id in _covered_portfolios(state, halt):
+            broker: object | None = None
+            try:
+                try:
+                    broker = self._brokers(portfolio_id)
+                except Exception as exc:
+                    found = [ResumeCheck("gateway_up", False, f"no broker: {exc}", portfolio_id)]
+                else:
+                    if broker is None:
+                        continue
+                    found = portfolio_resume_checks(state, portfolio_id, broker, settings=settings)
+            finally:
+                close_broker(broker)
+            out.extend(ResumeCheckView(**c.__dict__) for c in found)
+        return out
 
     # ---- other halts -------------------------------------------------------------------
 
@@ -382,6 +459,8 @@ class HaltService:
         reason: str,
         action: str,
         ip: str | None,
+        *,
+        extra: dict[str, Any] | None = None,
     ) -> HaltView:
         scope = _scope(who)
         if halt.scope == "global":
@@ -402,7 +481,12 @@ class HaltService:
                     "risk_halt",
                     str(halt.id),
                     portfolio_id=halt.portfolio_id,
-                    details={"kind": halt.kind, "scope": halt.scope, "reason": reason},
+                    details={
+                        "kind": halt.kind,
+                        "scope": halt.scope,
+                        "reason": reason,
+                        **(extra or {}),
+                    },
                     ip=ip,
                 )
         except HaltError as exc:

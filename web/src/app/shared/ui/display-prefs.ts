@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 
 import { formatDateTime, formatMoney, formatPercent } from '../../core/format/format';
 import { type FormatPrefs, FormatService, LOCALE_OPTIONS } from '../../core/format/format.service';
+import { PrivacyService } from '../../core/privacy/privacy.service';
 
 const SAMPLE_TIME = '2026-09-26T14:05:00Z';
 
@@ -75,6 +76,18 @@ const SAMPLE_TIME = '2026-09-26T14:05:00Z';
             Region format
           </label>
         </fieldset>
+        <label class="check">
+          <input
+            type="checkbox"
+            aria-describedby="pref-privacy-hint"
+            [checked]="privacy.hidden()"
+            (change)="privacy.set($any($event.target).checked)"
+          />
+          Hide money amounts on this device
+        </label>
+        <p id="pref-privacy-hint" class="hint">
+          For sharing a screen. Percentages stay. Press h, or Alt+Shift+H, anywhere.
+        </p>
         <p id="pref-sample" class="sample" aria-live="polite">
           Looks like <span class="num">{{ sample() }}</span>
         </p>
@@ -102,6 +115,11 @@ const SAMPLE_TIME = '2026-09-26T14:05:00Z';
       font-size: var(--text-sm);
       font-weight: var(--weight-medium);
     }
+    .hint {
+      margin: 0;
+      font-size: var(--text-xs);
+      color: var(--color-ink-3);
+    }
     .sample {
       font-size: var(--text-sm);
       color: var(--color-ink-2);
@@ -114,6 +132,7 @@ const SAMPLE_TIME = '2026-09-26T14:05:00Z';
   `,
 })
 export class DisplayPrefs {
+  protected readonly privacy = inject(PrivacyService);
   protected readonly fmt = inject(FormatService);
   protected readonly prefs = this.fmt.prefs;
   protected readonly locales = LOCALE_OPTIONS;

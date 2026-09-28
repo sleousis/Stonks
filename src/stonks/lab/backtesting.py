@@ -58,6 +58,7 @@ def backtest_config(
         construction=getattr(dataset, "construction", None),
         universe_id=getattr(dataset, "universe_id", None),
         allow_short=getattr(dataset, "shorting", None) is not None,
+        lots=getattr(dataset, "lots", None),
     )
 
 

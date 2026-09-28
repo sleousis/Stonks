@@ -61,6 +61,11 @@ describe('AlertSettingsPage', () => {
       for (const req of http.match((r) => r.url.split('?')[0].endsWith('/api/telegram/link'))) {
         req.flush({ bot_configured: false, bot_enabled: false, linked: false });
       }
+      for (const req of http.match((r) =>
+        r.url.split('?')[0].endsWith('/api/assistant/briefings/prefs'),
+      )) {
+        req.flush({ available: false, pre_open: false, post_close: false });
+      }
     }
     await tick();
     fixture.detectChanges();
@@ -80,6 +85,7 @@ describe('AlertSettingsPage', () => {
       'Which alerts go where',
       'Upcoming events',
       'Quiet hours',
+      'Briefings',
       'Price alerts',
     ]);
   });

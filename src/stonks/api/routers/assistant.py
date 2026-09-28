@@ -31,6 +31,12 @@ from stonks.app.assistant_research import (
     ResearchSessionView,
     ResearchStart,
 )
+from stonks.app.briefings import (
+    BriefingPrefsUpdate,
+    BriefingPrefsView,
+    BriefingRunRequest,
+    BriefingRunView,
+)
 from stonks.app.jobs import Job
 from stonks.app.pagination import Page, page_of
 from stonks.assistant.loop import AssistantEvent
@@ -123,6 +129,42 @@ def clear_freeze(services: ServicesDep, principal: PrincipalDep) -> Response:
     second factor."""
     services.assistant.clear_freeze(principal)
     return Response(status_code=204)
+
+
+@router.get("/briefings/prefs", response_model=BriefingPrefsView, operation_id="getBriefingPrefs")
+def get_briefing_prefs(services: ServicesDep, principal: PrincipalDep) -> BriefingPrefsView:
+    """Your research-only briefings before the open and after the close,
+    and whether this install sends them at all."""
+    return services.briefings.prefs(principal)
+
+
+@router.put(
+    "/briefings/prefs",
+    response_model=BriefingPrefsView,
+    operation_id="setBriefingPrefs",
+    dependencies=needs(Permission.NOTIFICATIONS_MANAGE),
+)
+def set_briefing_prefs(
+    body: BriefingPrefsUpdate, services: ServicesDep, principal: PrincipalDep
+) -> BriefingPrefsView:
+    """Turn your briefings on or off. They come through your notification
+    channels (the feed, push, email, Telegram)."""
+    return services.briefings.set_prefs(principal, body)
+
+
+@router.post(
+    "/briefings/run",
+    response_model=BriefingRunView,
+    operation_id="runBriefings",
+    dependencies=needs(Permission.OPERATIONS_RUN),
+)
+async def run_briefings(
+    body: BriefingRunRequest, request: Request, services: ServicesDep
+) -> BriefingRunView:
+    """Send one kind of briefing to everyone who turned it on now (the
+    scheduler runs this before the open and after the close). Research
+    only: each briefing runs with read tools only."""
+    return await services.briefings.run(request.app, body.kind, body.as_of)
 
 
 def _message_turn(

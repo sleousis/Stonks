@@ -647,6 +647,7 @@ top of Settings, System. It reads `GET /api/settings/system` through
 | Notifications | `/notifications` | The in-app feed, unread first marks, Mark read and Mark all read, deep links, and "Your devices" (push devices, Remove) |
 | Broker connections | `/connections`, `/connections/:id`, `/connections/callback` | Provider cards (reads only, or reads and trades when you allow it), "When Stonks trades", connect by keys or the provider's sign-in page, accounts, Link to a portfolio, Sync now, Disconnect |
 | Trade costs | `/trades`, `/trades/orders/:clientId` | A tab of Orders (the page keeps the Orders title): totals and shortfall by strategy, ticker or portfolio, the trade journal, and each order as a ticket with notes |
+| Journal | `/journal`, `/journal/trades/:tradeId` | Round trips from fills with excursions, R and exit efficiency, the P&L calendar, results by plan, tag, mistake, playbook, strategy or exit, playbooks, and a review per trade |
 | Sweep, Signal IC | `/lab/sweeps`, `/lab/signal-ic` | See Lab form above |
 | Help | `/help/glossary` | How Stonks works in five sentences, then every term the help tips explain |
 
@@ -710,6 +711,12 @@ top of Settings, System. It reads `GET /api/settings/system` through
   The featured Total cost tile spans two columns so its figure is never
   smaller than its neighbours'.
   Orders and fills link to the order ticket. Notes need `portfolio.manage`.
+- **Journal.** A trade runs from the fill that opened it to the fill that
+  closed it, and a partial exit is its own line. Views: Trades, Calendar,
+  Results and Playbooks. The calendar is a month grid, Monday first, with the
+  week's total at the end of each row. A review (tags, mistakes, playbook,
+  followed or broke the plan, a note) needs `portfolio.manage`. See
+  [the journal](journal.md).
 - **Order tickets.** `ConfirmService.confirm({ ticket: { lines, side, live } })`
   shows a confirmation as an order ticket: `<app-side-tag>` (solid B, outlined
   S), mono figures and `<app-mode-stamp>` (grey PAPER, brass LIVE). A real
@@ -758,7 +765,7 @@ top of Settings, System. It reads `GET /api/settings/system` through
 
 | Page | Route | What it does |
 |---|---|---|
-| Model versions tab | `/strategies/:id?tab=versions` | Every fit of the strategy's model, the candidate's test book against the model in use, the swap check, Swap in and Reject, a retrain of this strategy, and the version log |
+| Model versions tab | `/strategies/:id?tab=versions` | Every fit of the strategy's model, the candidate's test book against the model in use, the swap check, the forecast calibration of the model in use and the candidate, Swap in and Reject, a retrain of this strategy, and the version log |
 | Model versions | `/ops/models` | Admins: every candidate across strategies, each linking to its tab, and Retrain all |
 
 - **The tab** is the last tab of the strategy page, shown to people who may
@@ -827,6 +834,7 @@ flowchart LR
 | Page | Route | What it does |
 |---|---|---|
 | Insights | `/insights` | The picked portfolio's value, beta, exposure and largest holding, where the money sits (asset class, sector, currency or holding), returns over periods, a monthly returns heatmap, risk, which strategies agree with each holding, and the snapshot history |
+| Behaviour | `/insights/behaviour` | How you trade by hand: manual and synced broker trades as round trips, P&L by holding time and weekday, win rate, the disposition effect, busy days, revenge trades after a loss, and what trading against the active strategies cost |
 | Risk | `/insights/risk` | Each measure against the limit it trades under (your own limits where they are stricter), today's VaR and ES with how often the model missed, each strategy's part with its alpha-decay check, and the daily history as a chart and a table |
 
 ```mermaid
@@ -882,6 +890,16 @@ flowchart LR
   currency, lot, FIFO, specific lots, cost basis, wash sale, long term,
   cash flow, price alert and quiet hours. An entry may carry an `example`
   in numbers, shown on the glossary page (TWR, MWR and exposure do).
+- **Inside your funds** (23.14, `pages/insights/look-through.ts`) reads
+  `GET /api/insights/look-through` and shows single names, sectors or
+  countries with each held fund split into what it owns. Each row says how
+  much is direct and how much comes through which funds. See
+  [look-through](look-through.md).
+- **Market breadth** on Today (23.14, `pages/home/breadth-card.ts`) reads
+  `GET /api/market/breadth`: up and down, the share above the 50 and 200
+  day averages, new highs and lows and distribution days, each with a plain
+  sentence and a dot whose colour is never the only signal. Display only.
+  See [breadth](breadth.md).
 
 ## Live trading screens (Phase 19 wave 1)
 
@@ -1236,6 +1254,18 @@ flowchart LR
 - `TableColumn.display` gives a column its own text (a unit per column) while sorting still uses `value`.
 - `provideFakeCalendars()` (`src/testing/fake-calendars.ts`) keeps specs of pages that embed a calendar piece free of calendar calls.
 
+## Smaller comforts (23.17)
+
+| Page | Route | What it does |
+|---|---|---|
+| Demo portfolio | `/demo` | Open, look around in and remove a sample book of made-up holdings and prices |
+| Import a CSV statement | `/connections/import` | Map a broker's CSV onto trades, dividends and cash flows, preview, import and undo |
+
+- **Privacy mode.** `PrivacyService` (`core/privacy/`) holds one switch per device (localStorage). While on, `formatMoney` returns a mask, so the money pipe, tables, tiles and chart axes hide amounts. Percentages, counts and dates stay. `html[data-privacy="on"]` is there for a figure a page formats itself. The eye button in the top bar and the sidebar, the palette, `h` and Alt+Shift+H (always on) toggle it, and Settings has a check box.
+- **Demo portfolio.** `pages/demo/demo.page.ts`. Every view says Sample data in a note above the tiles. The instruments end in `.DEMO`. The welcome page and the setup card link to it.
+- **Screen alerts.** `<app-screen-alerts>` (`pages/screener/screen-alerts.ts`) sits under Your screens. A When select per screen turns an alert on (Daily, or Weekly on a weekday), Remove asks first, and the newest finds list below. The Screen alerts row in the notification settings decides where alerts reach you.
+- **CSV import.** `pages/connections/statement-import.page.ts`, linked from Broker connections. The first Preview sends no mapping and fills the column selects from the server's guess. Preview and import are silent calls, and a refusal shows under the buttons. Pure helpers live in `statement-mapping.ts`.
+
 ## Options research (17.6)
 
 | Page | Route | What it does |
@@ -1329,7 +1359,7 @@ flowchart LR
 | `FeatureFlagsService` | `core/features/` | Hide a page whose feature is off (the assistant) |
 | `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few: a radio group with arrow keys, 44px on phones |
 | `<app-no-book>`, `bookState()` | `shared/ui/no-book.ts` | A money page for someone with no portfolio |
-| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Orders, New order, Fills, Trading runs and Trade costs, one tap apart. On phones a cut tab fades at the edge |
+| `<app-orders-tabs>` | `pages/orders/orders-tabs.ts` | Orders, New order, Fills, Trading runs, Trade costs and Journal, one tap apart. On phones a cut tab fades at the edge |
 | `<app-segmented>` | `shared/ui/segmented.ts` | One choice out of a few. `emphasis="strong"` fills the picked option solid, for Buy or Sell and the order type on the manual ticket |
 | `<app-copy-button>`, `copyText()`, `downloadText()` | `shared/ui/copy-button.ts` | Copy with a visible message when the clipboard is blocked |
 | `JobResult`, `<app-job-progress [result]>` | `shared/ui/job-progress.ts` | A job's result read with an inline error and Try again |
@@ -1416,6 +1446,7 @@ about the same thing.
 | Strategies | `/api/strategies` | `stonks registry` | `*_strategy`, `list_strategies` |
 | Follow a strategy | `POST /api/subscriptions` | none | `subscribe` |
 | Trade costs | `/api/tca` | `stonks tca` | `get_tca_summary`, `list_trade_journal`, `get_order_tca` |
+| Journal | `/api/journal` | `stonks journal` | `list_round_trips`, `get_round_trip`, `get_pnl_calendar`, `get_journal_breakdown`, `list_playbooks` |
 | Stop trading (the kill switch), "Stop new buys only" | `POST /api/halts/kill`, `buys_only` | `halts kill --buys-only` | `engage_kill_switch` (`buys_only`) |
 | Update data, Data updates | `/api/ingest/*`, `ingest_runs` | `stonks ingest` | `run_ingest` |
 | Full robustness tests (Go-live suite) | preset `promotion` | `--preset promotion` | `run_lab` (`preset`) |

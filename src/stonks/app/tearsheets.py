@@ -36,7 +36,7 @@ from stonks.reporting.factor_attribution import (
     render_factor_attribution_section,
     returns_from_curve,
 )
-from stonks.reporting.forecast_weights import strategy_report_sections
+from stonks.reporting.sections import strategy_report_sections
 from stonks.reporting.tearsheet import TearSheet, render_tear_sheet_page
 
 __all__ = ["TearSheetWindow", "render_backtest_tear_sheet", "tear_sheet_request"]

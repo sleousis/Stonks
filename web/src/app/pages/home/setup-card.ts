@@ -49,6 +49,7 @@ import { STEP_COPY, progressText } from '../welcome/welcome-steps';
         </div>
         <div class="actions">
           <a routerLink="/welcome" class="btn btn-primary">Continue setup</a>
+          <a routerLink="/demo" class="btn">See a demo</a>
           <button type="button" class="btn btn-ghost" [disabled]="hiding()" (click)="hide()">
             Hide
           </button>

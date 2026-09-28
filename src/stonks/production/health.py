@@ -8,7 +8,10 @@ Checks:
   ``stuck_tick_minutes`` (a crashed or hung tick);
 - ``stuck_ingest_runs``: same for ``ingest_runs`` with ``stuck_ingest_minutes``;
 - ``ingest_failures``: no ingest run with status ``error`` started within
-  ``ingest_failure_lookback_hours``.
+  ``ingest_failure_lookback_hours``;
+- ``price_check`` and ``price_gap``: the newest second-source price check
+  (roadmap 23.6). A systematic gap fails ``price_check`` and keeps the
+  operational halt open; held tickers fail ``price_gap``.
 
 A check that itself crashes (missing table, locked file) is reported as
 failed rather than raised: a health command that dies is not a healthy one.
@@ -66,6 +69,7 @@ def check_health(
     checks.extend(_guard("var_violations", lambda: [_var_violations(state, now)]))
     checks.extend(_guard("lab_queue", lambda: [_lab_queue(state, config, now)]))
     checks.extend(_guard("broker", lambda: _broker_gateways(state)))
+    checks.extend(_guard("price_check", lambda: _price_check(state)))
     report = HealthReport(checks=checks, checked_at=now)
     _log.info(
         "health.checked",
@@ -99,6 +103,14 @@ def _broker_gateways(state: SqliteState) -> list[HealthCheck]:
     from stonks.production.broker_health import gateway_health_checks
 
     return gateway_health_checks(state)
+
+
+def _price_check(state: SqliteState) -> list[HealthCheck]:
+    """``price_check`` and ``price_gap`` from the newest second-source price
+    check (roadmap 23.6). A systematic gap keeps the operational halt open."""
+    from stonks.production.price_check import price_check_health
+
+    return price_check_health(state)
 
 
 def _guard(name: str, fn: Callable[[], list[HealthCheck]]) -> list[HealthCheck]:

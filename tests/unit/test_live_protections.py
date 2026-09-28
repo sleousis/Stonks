@@ -194,3 +194,67 @@ def test_count_losses_merges_towards_counting():
     always = tighter_rule_settings(auto, {"stop_guard": {"count_losses": True}})
     assert always.stop_guard.count_losses is True
     assert tighter_rule_settings(always, {"stop_guard": {"count_losses": False}}) == always
+
+
+# ---- 23.15: the per-ticker loss breaker ----------------------------------------------
+
+
+def notional_trade(ticker, days_ago, pnl, notional, strategy="s1"):
+    return replace(trade(ticker, days_ago, pnl, strategy), notional=notional)
+
+
+def test_closed_trades_carry_the_entry_notional_they_closed():
+    d = date(2026, 9, 1)
+    fills = [
+        FillRow("s1", "A.US", "buy", 10.0, 10.0, d),
+        FillRow("s1", "A.US", "sell", 4.0, 9.0, date(2026, 9, 2)),
+        FillRow("s1", "A.US", "sell", 6.0, 12.0, date(2026, 9, 3)),
+    ]
+    out = closed_from_fills(fills)
+    assert [t.notional for t in out] == [pytest.approx(40.0), pytest.approx(60.0)]
+
+
+def test_loss_breaker_locks_a_ticker_after_its_realised_loss_passes_the_limit():
+    # -6 on 100 of notional: 6% lost, over a 5% limit
+    trades = [notional_trade("A.US", 10, -8.0, 50.0), notional_trade("A.US", 3, 2.0, 50.0)]
+    ctx = ctx_with(trades, losing_lock={"max_loss_pct": 0.05, "lock_days": 30})
+    assert rule("losing_lock").enabled(ctx.policy)
+    kept, adj = rule("losing_lock").apply([strat(buy("A.US", 1.0)), strat(buy("B.US", 1.0))], ctx)
+    assert [o.ticker for o in kept] == ["B.US"]
+    assert "6.0%" in adj[0].reason and "5.0%" in adj[0].reason
+
+
+def test_loss_breaker_stays_open_under_the_limit_and_after_the_window():
+    small = [notional_trade("A.US", 3, -4.0, 100.0)]
+    ctx = ctx_with(small, losing_lock={"max_loss_pct": 0.05})
+    assert rule("losing_lock").apply([strat(buy("A.US", 1.0))], ctx)[0]
+    old = [notional_trade("A.US", 60, -40.0, 100.0)]
+    ctx = ctx_with(old, losing_lock={"max_loss_pct": 0.05, "loss_window_days": 30})
+    assert rule("losing_lock").apply([strat(buy("A.US", 1.0))], ctx)[0]
+
+
+def test_loss_breaker_counts_only_the_strategy_of_the_order():
+    trades = [notional_trade("A.US", 3, -10.0, 100.0, strategy="s2")]
+    ctx = ctx_with(trades, losing_lock={"max_loss_pct": 0.05})
+    assert rule("losing_lock").apply([strat(buy("A.US", 1.0))], ctx)[0]
+    assert rule("losing_lock").apply([strat(buy("A.US", 1.0), "s2")], ctx)[0] == []
+
+
+def test_loss_breaker_never_blocks_a_close():
+    book = Portfolio(cash=0.0, positions={"A.US": 5.0})
+    ctx = ctx_with(
+        [notional_trade("A.US", 1, -50.0, 100.0)], book=book, losing_lock={"max_loss_pct": 0.01}
+    )
+    close = strat(sell("A.US", 5.0))
+    assert rule("losing_lock").apply([close], ctx) == ([close], [])
+
+
+def test_loss_breaker_merges_tighter():
+    from stonks.production.rules.settings import RuleSettings, tighter_rule_settings
+
+    base = RuleSettings.model_validate({"losing_lock": {"max_loss_pct": 0.1}})
+    tight = tighter_rule_settings(base, {"losing_lock": {"max_loss_pct": 0.05}})
+    assert tight.losing_lock.max_loss_pct == 0.05
+    assert tighter_rule_settings(tight, {"losing_lock": {"max_loss_pct": 0.2}}) == tight
+    longer = tighter_rule_settings(tight, {"losing_lock": {"loss_window_days": 365}})
+    assert longer.losing_lock.loss_window_days == 365

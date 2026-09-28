@@ -6,9 +6,11 @@ import { type PageTab, PageTabs } from '../../shared/ui/page-tabs';
 export const ORDERS_TABS = [
   { path: '/orders', label: 'Orders', exact: true },
   { path: '/orders/new', label: 'New order', exact: true },
+  { path: '/orders/rebalance', label: 'Rebalance', exact: true },
   { path: '/orders/fills', label: 'Fills', exact: false },
   { path: '/orders/ticks', label: 'Trading runs', exact: false },
   { path: '/trades', label: 'Trade costs', exact: true },
+  { path: '/journal', label: 'Journal', exact: false },
 ] as const;
 
 /**

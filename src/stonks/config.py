@@ -20,6 +20,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from stonks.assistant.settings import AssistantConfig
 from stonks.backtest.costs import CostModelSettings
 from stonks.backtest.fills import ExecutionSettings
+from stonks.breadth.settings import BreadthSettings
 from stonks.core.types import AssetClass
 from stonks.engine.settings import EngineSettings
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
@@ -29,14 +30,19 @@ from stonks.ingest.quality_config import DataQualityConfig, FallbackConfig
 from stonks.lab.offload.settings import LabOffloadSettings
 from stonks.lab.parallel import ParallelSettings
 from stonks.lab.survival.walk_forward import WalkForwardConfig
+from stonks.lab.verify_settings import LabVerifySettings
 from stonks.lifecycle.settings import ModelLifecycleSettings
 from stonks.ops.config import BackupConfig
 from stonks.options.live.settings import OptionsLiveSettings
+from stonks.portfolio.lots import LotSettings
 from stonks.portfolio.settings import ConstructionSettings
 from stonks.production.decay import DecaySettings
+from stonks.production.decisions_settings import DecisionSettings
+from stonks.production.feature_drift_settings import FeatureDriftSettings
 from stonks.production.intraday_pnl_settings import IntradayPnlSettings
 from stonks.production.live.settings import LiveSettings
 from stonks.production.monitor_settings import RiskMonitorSettings
+from stonks.production.price_check_settings import PriceCheckSettings
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.rules.settings import RuleSettings
 from stonks.scheduling.config import SchedulerConfig
@@ -44,6 +50,7 @@ from stonks.screener.settings import ScreenerSettings
 from stonks.store.audit import AuditTolerances
 from stonks.store.bars import BarBackend
 from stonks.streaming.settings import StreamingSettings
+from stonks.tax.settings import TaxConfig
 from stonks.telegram.settings import TelegramConfig
 
 DEFAULT_CONFIG_PATH = Path("config/default.toml")
@@ -94,11 +101,34 @@ class IbkrBorrowSourceConfig(BaseModel):
     markets: tuple[str, ...] = ("usa",)
 
 
+class EdgarSourceConfig(BaseModel):
+    """SEC EDGAR filings (``stonks ingest edgar``, roadmap 23.13). Free and
+    keyless, but the SEC's fair access rules ask every client to name
+    itself: set ``user_agent`` to a name and a contact address, for example
+    ``"Jane Trader jane@example.com"`` (or ``STONKS_EDGAR_USER_AGENT``). It
+    is not a secret. The SEC allows at most 10 requests a second; the
+    default spacing stays under that."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_agent: str = ""
+    base_url: str = "https://www.sec.gov"
+    data_url: str = "https://data.sec.gov"
+    timeout_seconds: float = 30.0
+    max_retries: int = Field(default=3, ge=0, le=10)
+    retry_backoff_seconds: float = Field(default=1.0, ge=0.0)
+    #: At least this long between two requests (0.125 s = 8 a second).
+    min_request_interval_seconds: float = Field(default=0.125, ge=0.1)
+    #: Forms ``stonks ingest edgar --kinds filings`` keeps.
+    forms: tuple[str, ...] = ("8-K", "8-K/A", "10-Q", "10-K", "10-K/A")
+
+
 class SourcesConfig(BaseModel):
     eodhd: EodhdSourceConfig = EodhdSourceConfig()
     yahoo: YahooSourceConfig = YahooSourceConfig()
     defillama: DefiLlamaSourceConfig = DefiLlamaSourceConfig()
     ibkr_borrow: IbkrBorrowSourceConfig = IbkrBorrowSourceConfig()
+    edgar: EdgarSourceConfig = EdgarSourceConfig()
 
 
 def _env_secret(name: str) -> SecretStr | None:
@@ -295,8 +325,18 @@ class ProductionConfig(BaseModel):
     risk_monitor: RiskMonitorSettings = RiskMonitorSettings()
     # ``[production.decay]``: the alpha-decay check per strategy sleeve.
     decay: DecaySettings = DecaySettings()
+    # ``[production.feature_drift]`` (roadmap 23.10): PSI of model
+    # strategies' live features against their training profile, warn only.
+    feature_drift: FeatureDriftSettings = FeatureDriftSettings()
+
+    # ``[production.decisions]``: why a ticker did or did not trade, per
+    # tick and book (roadmap 23.7).
+    decisions: DecisionSettings = DecisionSettings()
     # ``[production.live]``: live trading at a real broker (roadmap 19).
     live: LiveSettings = LiveSettings()
+    # ``[production.price_check]``: the second-source price check before
+    # the tick (roadmap 23.6). Off by default.
+    price_check: PriceCheckSettings = PriceCheckSettings()
     # ``[production.options]``: live options at a real broker (roadmap
     # 17.8). Off by default.
     options: OptionsLiveSettings = OptionsLiveSettings()
@@ -506,6 +546,9 @@ class BacktestSettings(BaseModel):
     #: production construction pipeline (``None``: each strategy decides
     #: alone, today's behaviour).
     construction: ConstructionSettings | None = None
+    #: ``[backtest.lots]``: round order sizes to tradable lots in backtests,
+    #: the lab and paper books (roadmap 23.1, ``fractional`` by default).
+    lots: LotSettings = LotSettings()
 
 
 class LabSettings(BaseModel):
@@ -533,6 +576,8 @@ class LabSettings(BaseModel):
     #: ``[lab.offload]``: run heavy lab jobs in a separate worker process
     #: (roadmap 14.9). Env: ``STONKS_LAB_EXECUTOR``.
     offload: LabOffloadSettings = LabOffloadSettings()
+    #: ``[lab.verify]``: reruns from the stored manifest (roadmap 23.9).
+    verify: LabVerifySettings = LabVerifySettings()
 
 
 class AuditConfig(BaseModel):
@@ -598,6 +643,10 @@ class Settings(BaseSettings):
     screener: ScreenerSettings = Field(default_factory=ScreenerSettings)
     # ``[engine]``: the intraday engine process (roadmap 21.2.5). Off by default.
     engine: EngineSettings = Field(default_factory=EngineSettings)
+    # ``[breadth]``: the market breadth card on Today (roadmap 23.14).
+    breadth: BreadthSettings = Field(default_factory=BreadthSettings)
+    # ``[tax]``: estimated tax rates per jurisdiction (roadmap 23.5).
+    tax: TaxConfig = TaxConfig()
 
 
 #: Secrets read straight from the environment by blocks that keep their own
@@ -690,6 +739,10 @@ def _overlay_env(data: dict) -> None:
     api_key = os.environ.get("EODHD_API_KEY")
     if api_key:
         data.setdefault("sources", {}).setdefault("eodhd", {})["api_key"] = api_key
+
+    edgar_agent = os.environ.get("STONKS_EDGAR_USER_AGENT")
+    if edgar_agent:
+        data.setdefault("sources", {}).setdefault("edgar", {})["user_agent"] = edgar_agent
 
     webhook_url = os.environ.get("STONKS_NOTIFY_WEBHOOK_URL")
     if webhook_url:

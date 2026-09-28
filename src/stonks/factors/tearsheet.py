@@ -22,6 +22,10 @@ For any :class:`~stonks.factors.base.Factor` over a universe and window:
 - **Monthly IC heatmap**: mean IC per calendar month at the main horizon.
 - **Turnover**: one minus the rank autocorrelation of factor values, and
   the share of the top bucket replaced between sampled dates.
+- **Periods** (roadmap 23.13): for a factor with a
+  :class:`~stonks.factors.base.Provenance`, the IC and top-minus-bottom
+  spread at the main horizon split into the paper's sample, the years after
+  it and before publication, and the years after publication.
 
 Values are reported raw: a factor with ``direction = -1`` shows a negative
 IC when it works. Only the alpha book uses the direction.
@@ -62,6 +66,7 @@ __all__ = [
     "GroupIC",
     "HorizonSummary",
     "MonthlyIC",
+    "PeriodIC",
     "QuantileCurves",
     "TearSheetOptions",
     "factor_tearsheet",
@@ -159,6 +164,21 @@ class MonthlyIC:
 
 
 @dataclass(frozen=True)
+class PeriodIC:
+    """The main-horizon IC over one period of a published factor's life."""
+
+    #: ``pre_sample``, ``in_sample``, ``post_sample`` or ``post_publication``.
+    period: str
+    #: First and last sampled date in the period.
+    start: str
+    end: str
+    n_dates: int
+    mean_ic: float
+    t_stat_hac: float
+    spread_mean: float
+
+
+@dataclass(frozen=True)
 class FactorTearSheet:
     factor: dict[str, Any]
     window: tuple[str, str]
@@ -184,6 +204,8 @@ class FactorTearSheet:
     monthly_ic: list[MonthlyIC] = field(default_factory=list)
     score_turnover: float = math.nan
     top_quantile_turnover: float = math.nan
+    #: The IC by period against the factor's paper; empty without one.
+    periods: list[PeriodIC] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Plain JSON types; NaN and infinities become ``None``."""
@@ -335,6 +357,48 @@ def _horizon_summary(
         spread_t_hac=_ratio(s_mean, s_se),
     )
     return summary, ic
+
+
+def _periods(
+    factor: Factor,
+    scores: pd.DataFrame,
+    fwd: pd.DataFrame,
+    ic: pd.Series,
+    opts: TearSheetOptions,
+    lags: int,
+) -> list[PeriodIC]:
+    """The IC and spread at the main horizon per period of the factor's
+    paper (module doc)."""
+    provenance = factor.provenance
+    if provenance is None:
+        return []
+    stamps = pd.DatetimeIndex(scores.index)
+    labels = np.array([provenance.period_of(d.date()) for d in stamps])
+    q = _quantile_returns(
+        scores.to_numpy(float), fwd.to_numpy(float), opts.n_quantiles, opts.min_names
+    )
+    spread = q[:, -1] - q[:, 0]
+    x = ic.reindex(stamps).to_numpy(float)
+    out: list[PeriodIC] = []
+    for period in ("pre_sample", "in_sample", "post_sample", "post_publication"):
+        mask = labels == period
+        if not mask.any():
+            continue
+        mean, _, _, se = _mean_se(x[mask], lags)
+        s_mean = _mean_se(spread[mask], lags)[0]
+        days = [pd.Timestamp(d) for d in stamps[mask]]
+        out.append(
+            PeriodIC(
+                period=period,
+                start=str(days[0].date()),
+                end=str(days[-1].date()),
+                n_dates=int(np.isfinite(x[mask]).sum()),
+                mean_ic=mean,
+                t_stat_hac=_ratio(mean, se),
+                spread_mean=s_mean,
+            )
+        )
+    return out
 
 
 def _group_ics(
@@ -564,4 +628,5 @@ def factor_tearsheet(
         monthly_ic=_monthly(main_ic),
         score_turnover=score_turnover,
         top_quantile_turnover=top_turnover,
+        periods=_periods(factor, scores, main_fwd, main_ic, opts, lags),
     )

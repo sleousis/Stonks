@@ -85,6 +85,9 @@ SUITE_PRESETS: dict[str, tuple[str, ...]] = {
         # 9.5.2 and 9.5.5: combinatorial purged CV, named crisis windows
         "cpcv",
         "crisis",
+        # 23.9: White's Reality Check, Hansen's SPA and Romano-Wolf over the
+        # trial family. One bootstrap matrix product, well under a second.
+        "data_snooping",
     ),
 }
 

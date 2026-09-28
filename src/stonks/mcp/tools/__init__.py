@@ -7,11 +7,14 @@ from stonks.mcp.tools import (
     calendars,
     cash_flows,
     connections,
+    decisions,
+    execution,
     factors,
     guarded,
     halts,
     insights,
     jobs,
+    journal,
     live,
     model_versions,
     notifications,
@@ -21,6 +24,7 @@ from stonks.mcp.tools import (
     reads,
     research,
     risk,
+    screen_alerts,
     screener,
     studio,
     subscriptions,
@@ -40,25 +44,40 @@ MODULES = (
     connections,
     halts,
     orders,
+    execution,
     price_alerts,
     universes,
     tca,
+    journal,
     tax,
     cash_flows,
     factors,
     subscriptions,
     insights,
     risk,
+    decisions,
     notifications,
     workspace,
     research,
     calendars,
     screener,
+    screen_alerts,
     live,
     options,
 )
 
 
-def register_all(t: ToolContext) -> None:
+def register_all(t: ToolContext) -> dict[str, str]:
+    """Register every module; returns each tool's group (its module name),
+    the unit of a token's MCP toolsets (roadmap 23.8)."""
+    groups: dict[str, str] = {}
     for module in MODULES:
+        before = _names(t)
         module.register(t)
+        group = module.__name__.rsplit(".", 1)[-1]
+        groups.update(dict.fromkeys(_names(t) - before, group))
+    return groups
+
+
+def _names(t: ToolContext) -> set[str]:
+    return {tool.name for tool in t.server._tool_manager.list_tools()}

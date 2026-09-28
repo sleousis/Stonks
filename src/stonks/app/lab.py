@@ -96,7 +96,7 @@ ObjectiveName = Literal[
     "cv_cagr",
     "cv_final_return",
 ]
-CostModelName = Literal["zero", "realistic"]
+CostModelName = Literal["zero", "realistic", "ibkr_tiered", "ibkr_fixed"]
 
 #: API names kept from before the survival-test registry (BL-10).
 _LEGACY_TEST_NAMES: dict[str, str] = {"permutation": "mcpt"}
@@ -156,12 +156,30 @@ _OBJECTIVES: dict[str, Callable[[], Objective]] = {
     "cv_cagr": lambda: CVObjective(CAGRObjective()),
     "cv_final_return": lambda: CVObjective(FinalReturnObjective()),
 }
+
+
+def lab_objectives() -> dict[str, Callable[[], Objective]]:
+    """Every objective a lab request can name, by name (also what ``lab
+    verify`` rescores with)."""
+    return dict(_OBJECTIVES)
+
+
 _COST_MODELS: dict[str, tuple[str, Callable[[], CostModelSettings]]] = {
     "zero": ("No fees, spread or impact.", CostModelSettings),
     "realistic": (
         "Fees and spreads like a retail broker's for each asset class, plus the price "
         "impact of large orders.",
         CostModelSettings.realistic,
+    ),
+    "ibkr_tiered": (
+        "Realistic spreads and impact with IBKR Pro Tiered commissions and US sell fees "
+        "on equities.",
+        lambda: CostModelSettings.ibkr("tiered"),
+    ),
+    "ibkr_fixed": (
+        "Realistic spreads and impact with IBKR Pro Fixed commissions and US sell fees "
+        "on equities.",
+        lambda: CostModelSettings.ibkr("fixed"),
     ),
 }
 
@@ -332,6 +350,25 @@ class TradeView(BaseModel):
     is_open: bool
 
 
+class LotView(BaseModel):
+    """What lot rounding did in a backtest (roadmap 23.1)."""
+
+    #: The lot profile the orders were sized with (``[backtest.lots]``).
+    profile: str
+    orders: int = 0
+    rounded: int = 0
+    skipped: int = 0
+    skipped_share: FiniteFloat = None
+    skipped_notional: FiniteFloat = None
+    #: Mean and largest weight of the book lost to rounding per decision.
+    mean_drift: FiniteFloat = None
+    max_drift: FiniteFloat = None
+    #: Smallest book at which 95% of opening orders buy one whole lot.
+    min_capital: FiniteFloat = None
+    #: The profile the minimum capital is measured against.
+    min_capital_profile: str = "whole_shares"
+
+
 class BacktestResult(BaseModel):
     strategy_id: str
     interval: str
@@ -367,6 +404,8 @@ class BacktestResult(BaseModel):
     #: The benchmark's buy-and-hold value on the strategy's equity
     #: timestamps, starting at the same capital.
     benchmark_equity: list[EquityPoint] = Field(default_factory=list)
+    #: Lot rounding and the minimum capital (roadmap 23.1).
+    lots: LotView | None = None
 
 
 class LabRunOptions(BaseModel):
@@ -844,6 +883,7 @@ def lab_dataset(
             execution=settings.backtest.execution,
             construction=settings.backtest.construction,
             universe_id=request.universe_id,
+            lots=getattr(settings.backtest, "lots", None),
         )
     except ValueError as exc:  # e.g. [lab] embargo_bars leaves no validation window
         raise ValidationError(str(exc)) from None
@@ -927,6 +967,7 @@ def backtest_report(
         # Load every name of the window, trade each only while a member
         # (point in time, P14, BE-07).
         universe_id=universe_id,
+        lots=getattr(settings.backtest, "lots", None),
     )
     report = Backtester(strategies=[strategy], broker=broker, lake=lake, config=config).run()
     report = with_trades(report, broker.fills, reference_price=broker.reference_price)
@@ -1004,6 +1045,7 @@ def backtest_result(report: BacktestReport, interval: Interval, request: Any) ->
         es_95=finite(report.es_95),
         skew=finite(report.skew),
         kurtosis=finite(report.kurtosis),
+        lots=LotView.model_validate(report.lots.to_dict()) if report.lots is not None else None,
         fitness=finite(report.fitness),
         benchmark=BenchmarkStatsView.of(bench) if bench is not None else None,
         benchmark_equity=(

@@ -36,6 +36,20 @@ dependencies = [
     "websockets>=15.0",
 ]
 
+[project.optional-dependencies]
+# Forecasting models (roadmap 23.11), never in the default install or CI.
+# docs/forecasting.md says how to pick one and fetch its weights.
+chronos = ["chronos-forecasting>=2.2,<3"]
+timesfm = ["timesfm[torch]>=2.0,<4"]
+kronos = [
+    "torch>=2.2",
+    "einops>=0.8",
+    "huggingface-hub>=0.33",
+    "safetensors>=0.6",
+    "tqdm>=4.66",
+]
+forecasters = ["stonks[chronos,timesfm,kronos]"]
+
 [project.scripts]
 stonks = "stonks.cli:app"
 

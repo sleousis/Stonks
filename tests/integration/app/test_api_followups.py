@@ -101,6 +101,8 @@ def test_golive_schema_names_are_an_enum(client):
         "excess_cagr",
         "premortem",
         "hypothesis",
+        "min_capital",
+        "lot_skipped_share",
     }
 
 

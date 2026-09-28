@@ -30,7 +30,9 @@ BUILTIN = {
     "report",
     "universes_refresh",
     "price_alerts",
+    "screen_alerts",
     "calendars_refresh",
+    "price_check",
 }
 
 
@@ -47,12 +49,14 @@ def test_default_jobs_build():
         "universes_refresh",
         "ingest_metadata",
         "price_alerts",
+        "screen_alerts",
         "broker_health",
         "ibkr_reauth_reminder",
         "live_sod_check",
         "live_eod_check",
         "calendars_refresh",
         "model_retrain",
+        "lab_verify",
         "live_submit",
         "live_stops",
         "options_live",
@@ -62,6 +66,10 @@ def test_default_jobs_build():
         "engine_start",
         "engine_stop",
         "live_margin",
+        "price_check",
+        "briefing_pre_open",
+        "briefing_post_close",
+        "algo_slices",
     }
     tick = by_name["tick"]
     # 21.2.5: the engine runs from before the open to after the close
@@ -77,6 +85,8 @@ def test_default_jobs_build():
     stops = by_name["live_stops"]
     assert stops.trigger == SessionTrigger("XNYS", "open", timedelta(minutes=30))
     assert stops.catch_up == "none"
+    # 23.16: child slices of Stonks-worked algos every few minutes, never caught up
+    assert by_name["algo_slices"].catch_up == "none"
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))
     # 17.8: live options plan after the tick, and watch expiry before the close
     assert by_name["options_live"].trigger.offset > tick.trigger.offset
@@ -96,6 +106,11 @@ def test_default_jobs_build():
     assert by_name["ingest_metadata"].trigger.offset < tick.trigger.offset
     # price alerts check the closes the ingest just stored (roadmap 20.2)
     assert ingest_at < by_name["price_alerts"].trigger.offset
+    # screen alerts run the saved screens on the same closes (roadmap 23.17)
+    assert ingest_at < by_name["screen_alerts"].trigger.offset < tick.trigger.offset
+    # 23.6: the price check reads the stored closes and runs before the tick
+    check_at = by_name["price_check"].trigger.offset
+    assert ingest_at < check_at < tick.trigger.offset
     # reconciliation (roadmap 19.5): before the open, and after the close
     # but before the tick decides
     sod = by_name["live_sod_check"].trigger

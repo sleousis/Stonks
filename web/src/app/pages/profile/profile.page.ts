@@ -10,7 +10,7 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { RouterLink } from '@angular/router';
 
 import { AuthService } from '../../api/auth.service';
-import type { ApiScope, TokenView } from '../../api/models';
+import type { ApiScope, TokenView, ToolsetView } from '../../api/models';
 import { PASSWORD_MAX, PASSWORD_MIN, sameAs } from '../../core/auth/passwords';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
@@ -150,6 +150,10 @@ export class ProfilePage {
     lab_worker: [false],
     expires: ['90'],
   });
+  /** MCP tool groups a token can be limited to (roadmap 23.8), read on first open. */
+  protected readonly toolsetOptions = signal<ToolsetView[] | null>(null);
+  protected readonly pickedToolsets = signal<string[]>([]);
+  private loadingToolsets = false;
   protected readonly createdToken = signal<string | null>(null);
   protected readonly creatingToken = signal(false);
   protected readonly revoking = signal<string | null>(null);
@@ -191,6 +195,24 @@ export class ProfilePage {
     }
   }
 
+  protected async loadToolsets(open: boolean): Promise<void> {
+    if (!open || this.toolsetOptions() !== null || this.loadingToolsets) return;
+    this.loadingToolsets = true;
+    try {
+      this.toolsetOptions.set(await this.authApi.toolsets());
+    } catch {
+      this.toolsetOptions.set([]);
+    } finally {
+      this.loadingToolsets = false;
+    }
+  }
+
+  protected pickToolset(name: string, checked: boolean): void {
+    this.pickedToolsets.update((names) =>
+      checked ? [...new Set([...names, name])] : names.filter((n) => n !== name),
+    );
+  }
+
   protected async createToken(): Promise<void> {
     const v = this.tokenForm.getRawValue();
     const scopes = this.scopes()
@@ -206,7 +228,9 @@ export class ProfilePage {
         name: v.name.trim(),
         scopes,
         expires_in_days: v.expires === 'never' ? null : Number(v.expires),
+        toolsets: this.pickedToolsets().length ? this.pickedToolsets() : null,
       });
+      this.pickedToolsets.set([]);
       this.createdToken.set(created.token);
       this.tokenForm.reset();
       this.tokens.reload();

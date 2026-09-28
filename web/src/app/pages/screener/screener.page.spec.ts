@@ -65,6 +65,10 @@ describe('ScreenerPage', () => {
       page([{ id: 'sp500', name: 'S&P 500', kind: 'index', spec: {} }]),
     );
     await settle(fixture);
+    // the screen alerts panel under your screens (roadmap 23.17)
+    (await nextRequest(http, '/api/screener/alerts')).flush(page([]));
+    (await nextRequest(http, '/api/screener/alerts/events')).flush(page([]));
+    await settle(fixture);
     return fixture;
   }
 

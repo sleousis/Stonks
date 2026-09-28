@@ -261,6 +261,10 @@ def _evaluate_one(
                 else None
             ),
         )
+        # 23.1: model books size to lots as a backtest does (P21)
+        sized = settings.lot_rule(external=False).size(
+            risk_result.orders, portfolio.positions, prices, asset_classes
+        )
         orders = [
             replace(
                 o,
@@ -270,7 +274,7 @@ def _evaluate_one(
                     as_of=as_of, strategy_id=strategy_id, ticker=o.ticker, side=o.side
                 ),
             )
-            for o in _one_per_side(risk_result.orders)
+            for o in _one_per_side(sized.orders)
         ]
 
     results: list[tuple[Order, Fill | None]]

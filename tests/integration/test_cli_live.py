@@ -117,3 +117,19 @@ def test_preview_of_a_portfolio_without_a_live_book(runner, home):
     got = runner.invoke(app, ["live", "preview", "pf_default"])
     assert got.exit_code == 1
     assert "no live book" in got.output
+
+
+def test_journal_lists_the_recorded_gateway_calls(runner, tmp_path):
+    from stonks.execution.brokers.ibkr.journal import FileJournal, JournalingIbClient
+    from tests.fakes.ib_gateway import FakeIbGateway
+
+    client = JournalingIbClient(FakeIbGateway(), FileJournal(tmp_path / "j"))
+    client.connect()
+    client.managed_accounts()
+    got = runner.invoke(app, ["live", "journal", str(tmp_path / "j")])
+    assert got.exit_code == 0, got.output
+    assert "managed_accounts" in got.output and "2 events, 0 errors" in got.output
+    only = runner.invoke(app, ["live", "journal", str(tmp_path / "j"), "--kind", "error"])
+    assert "0 events" in only.output
+    none = runner.invoke(app, ["live", "journal", str(tmp_path / "nothing.jsonl")])
+    assert none.exit_code != 0

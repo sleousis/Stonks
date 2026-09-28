@@ -61,6 +61,8 @@ async def test_retrain_preview_check_and_swap(mcp):
     assert [c["book_id"] for c in candidates["items"]] == ["mf@v2"]
     check = await call(mcp, "check_model_swap", {"strategy_id": "mf", "version": 2})
     assert check["passed"] is False
+    calib = await call(mcp, "get_model_calibration", {"strategy_id": "mf", "version": 2})
+    assert calib["n_forecasts"] == 0 and calib["brier"] is None
 
     preview = await call(mcp, "swap_model_version", {"strategy_id": "mf", "version": 2})
     assert preview["preview"] is True and preview["warnings"] == ["the swap check fails"]

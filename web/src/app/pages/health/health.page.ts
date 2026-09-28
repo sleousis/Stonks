@@ -47,6 +47,7 @@ import {
   splitChecks,
   worstLevel,
 } from './health-state';
+import { PriceCheckPanel } from './price-check-panel';
 import { ReconcilePanel } from './reconcile-panel';
 
 const RECENT_FAILURES = 10;
@@ -72,6 +73,7 @@ const RECENT_FAILURES = 10;
     AlertsPanel,
     GatewayPanel,
     ReconcilePanel,
+    PriceCheckPanel,
     PermissionNote,
     UpdatedAgo,
   ],
@@ -110,6 +112,7 @@ export class HealthPage {
   private readonly alertsPanel = viewChild(AlertsPanel);
   private readonly gatewayPanel = viewChild(GatewayPanel);
   private readonly reconcilePanel = viewChild(ReconcilePanel);
+  private readonly priceCheckPanel = viewChild(PriceCheckPanel);
   protected readonly auto = autoRefresh(() => [
     this.report,
     this.version,
@@ -291,5 +294,6 @@ export class HealthPage {
     this.alertsPanel()?.reload();
     this.gatewayPanel()?.reload();
     this.reconcilePanel()?.reload();
+    this.priceCheckPanel()?.reload();
   }
 }

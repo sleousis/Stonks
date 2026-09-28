@@ -37,6 +37,17 @@ ML hygiene (BL-45):
 - With ``cv_folds >= 2`` the fit also scores the forest on purged k-fold
   out-of-fold predictions (``cv_accuracy``, ``cv_brier`` in the fitted
   state). This is a diagnostic: the model is still fitted on all trades.
+- ``calibration`` (``isotonic`` or ``platt``, roadmap 23.10) maps the
+  forest's vote share to a probability, and ``conformal_alpha`` (above 0)
+  skips a trade whose conformal prediction set is ambiguous. Both are
+  fitted on the purged out-of-fold predictions of the training trades
+  (:class:`~stonks.features.calibration.ProbabilityPolicy`), so they need
+  ``cv_folds >= 2``. The calibrated probability feeds the threshold and
+  bet sizing. ``calibration`` is tunable: each choice tried is a trial.
+- The fit keeps the training distribution of each feature
+  (:class:`~stonks.features.feature_profile.FeatureProfile`) for the live
+  ``feature_drift`` hook, and ``load`` refuses a model whose feature names
+  or order differ from today's code.
 
 ``estimate_return``: replays the base signal over the last
 ``3 * hold_period`` bars (flat start, bars ``<= as_of`` only). If a base
@@ -91,14 +102,17 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from stonks.core.forecasts import ProbabilityForecast
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
+from stonks.features.calibration import ProbabilityPolicy, purged_oof_proba
+from stonks.features.feature_profile import FeatureProfile, check_feature_schema
 from stonks.features.indicators import atr, true_range
 from stonks.features.labels import avg_uniqueness
 from stonks.features.library import fit_trendlines_single
 from stonks.features.ml import ForestClassifier, bet_size, break_even_probability
-from stonks.lab.cv import PurgedKFold
+from stonks.lab.importance import TrainingSet
 from stonks.strategies._common import LakeBarCaches, iso
 from stonks.strategies._wrapping import INTERVALS
 from stonks.strategies.base import BaseStrategy
@@ -244,6 +258,23 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
                 description="Purged k-fold folds of the fit diagnostic (0 or 1 turns it off).",
             ),
             ParameterSpec(
+                name="calibration",
+                kind="categorical",
+                default="none",
+                bounds=["none", "isotonic", "platt"],
+                description="How P(win) is calibrated on purged out-of-fold "
+                "predictions before the threshold and bet sizing.",
+            ),
+            ParameterSpec(
+                name="conformal_alpha",
+                kind="float",
+                default=0.0,
+                bounds=(0.0, 0.5),
+                tunable=False,
+                description="Conformal miss rate. Above 0, a trade whose "
+                "prediction set holds both outcomes is skipped (0 turns it off).",
+            ),
+            ParameterSpec(
                 name="n_estimators",
                 kind="int",
                 default=300,
@@ -296,6 +327,8 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
     def __init__(self, params: Any) -> None:
         super().__init__(params)
         self._classifier: Any = None
+        self._policy: ProbabilityPolicy | None = None
+        self._profile: FeatureProfile | None = None
         self._state: dict[str, Any] = {}
         self.training_trades: list[BaseTrade] = []
         self._bar_caches = LakeBarCaches()
@@ -408,7 +441,9 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
     def is_fitted(self) -> bool:
         return self._classifier is not None
 
-    def fit(self, dataset: Any) -> None:
+    def _training_trades(self, dataset: Any) -> tuple[list[BaseTrade], list[tuple[int, int]], int]:
+        """The completed base trades of every training segment, their bar
+        spans (positions across the segments) and the segment count."""
         interval = Interval.parse(self.params["interval"])
         segments = train_bar_segments(
             dataset, self.params["ticker"], interval, caches=self._bar_caches
@@ -431,27 +466,69 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
                 f"only {len(trades)} complete base trades in the training window; "
                 f"need at least {_MIN_TRADES}"
             )
+        return trades, spans, len(segments)
+
+    def training_set(self, dataset: Any) -> TrainingSet:
+        """The training trades as a :class:`~stonks.lab.importance.TrainingSet`
+        (training window only), read by ``stonks lab importance``."""
+        trades, spans, _ = self._training_trades(dataset)
+        return TrainingSet(
+            x=np.array([t.features for t in trades], dtype=float),
+            y=np.array([t.label for t in trades], dtype=int),
+            t0=np.array([t.entry_ts for t in trades], dtype="datetime64[ns]"),
+            t1=np.array([t.exit_ts for t in trades], dtype="datetime64[ns]"),
+            feature_names=FEATURE_NAMES,
+            sample_weight=avg_uniqueness([a for a, _ in spans], [b for _, b in spans]),
+        )
+
+    def fit(self, dataset: Any) -> None:
+        trades, spans, n_segments = self._training_trades(dataset)
         x = np.array([t.features for t in trades], dtype=float)
         y = np.array([t.label for t in trades], dtype=int)
         weights = avg_uniqueness([a for a, _ in spans], [b for _, b in spans])
-        clf = self._new_classifier()
+        diagnostic, oof = self._cv_diagnostic(trades, x, y, weights)
+        policy = self._fit_policy(oof, y, weights)
+        clf = self.new_classifier()
         clf.fit(x, y, sample_weight=weights)
         self._classifier = clf
+        self._policy = policy
+        self._profile = FeatureProfile.build(x, FEATURE_NAMES)
         self._prob_memo = {}
         self._sizes = {}
         self.training_trades = trades
         self._state = {
             "feature_names": list(FEATURE_NAMES),
             "n_trades": len(trades),
-            "n_segments": len(segments),
+            "n_segments": n_segments,
             "win_rate": float(y.mean()),
             "mean_uniqueness": float(weights.mean()),
             "first_entry": trades[0].entry_ts.isoformat(),
             "last_exit": trades[-1].exit_ts.isoformat(),
-            **self._cv_diagnostic(trades, x, y, weights),
+            **diagnostic,
         }
+        if policy is not None:
+            self._state["probability"] = policy.to_dict()
 
-    def _new_classifier(self) -> ForestClassifier:
+    def _fit_policy(
+        self, oof: np.ndarray | None, y: np.ndarray, weights: np.ndarray
+    ) -> ProbabilityPolicy | None:
+        """The calibration and abstention policy, fitted on the purged
+        out-of-fold predictions (``None`` when both are off)."""
+        kind = str(self.params["calibration"])
+        alpha = float(self.params["conformal_alpha"])
+        if kind == "none" and alpha <= 0:
+            return None
+        if oof is None:
+            raise ValueError(
+                "calibration and conformal abstention need purged out-of-fold "
+                "predictions: set cv_folds >= 2 and train on at least 2 * cv_folds trades"
+            )
+        return ProbabilityPolicy.fit(
+            kind, oof, y, conformal_alpha=alpha if alpha > 0 else None, sample_weight=weights
+        )
+
+    def new_classifier(self) -> ForestClassifier:
+        """A fresh, unfitted forest with this strategy's settings."""
         return ForestClassifier(
             n_estimators=int(self.params["n_estimators"]),
             max_depth=int(self.params["max_depth"]),
@@ -460,34 +537,43 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
 
     def _cv_diagnostic(
         self, trades: list[BaseTrade], x: np.ndarray, y: np.ndarray, weights: np.ndarray
-    ) -> dict[str, float]:
+    ) -> tuple[dict[str, float], np.ndarray | None]:
         """Purged k-fold out-of-fold accuracy and Brier score of the
-        forest over the training trades (empty when turned off or when
-        there are too few trades)."""
+        forest over the training trades, and the out-of-fold predictions
+        (empty and ``None`` when turned off or when there are too few
+        trades)."""
         folds = int(self.params["cv_folds"])
         if folds < 2 or len(trades) < 2 * folds:
-            return {}
+            return {}, None
         t0 = np.array([t.entry_ts for t in trades], dtype="datetime64[ns]")
         t1 = np.array([t.exit_ts for t in trades], dtype="datetime64[ns]")
-        oof = np.full(len(trades), np.nan)
-        for train, test in PurgedKFold(folds, embargo_pct=0.0).split(t0, t1):
-            if len(train) == 0:
-                continue
-            clf = self._new_classifier()
-            clf.fit(x[train], y[train], sample_weight=weights[train])
-            oof[test] = clf.predict_proba(x[test])
+        oof = purged_oof_proba(
+            self.new_classifier, x, y, t0, t1, folds=folds, sample_weight=weights
+        )
         scored = np.isfinite(oof)
         if not scored.any():
-            return {}
+            return {}, None
         hits = (oof[scored] > 0.5).astype(int) == y[scored]
         return {
             "cv_folds": float(folds),
             "cv_accuracy": float(hits.mean()),
             "cv_brier": float(np.mean((oof[scored] - y[scored]) ** 2)),
-        }
+        }, oof
 
     def fitted_state(self) -> dict[str, Any]:
         return dict(self._state)
+
+    def feature_profile(self) -> FeatureProfile | None:
+        """The training distribution of each feature (``None`` unfitted)."""
+        return self._profile
+
+    def model_feature_row(self, ticker: str, as_of: Any, lake: Any) -> dict[str, float] | None:
+        """The model's input row at ``as_of`` in training order, or ``None``
+        when there is no base trade to score (read by ``feature_drift``)."""
+        trade = self.open_trade(ticker, as_of, lake)
+        if trade is None:
+            return None
+        return dict(zip(FEATURE_NAMES, trade.features, strict=True))
 
     def predict_proba(self, x: np.ndarray) -> np.ndarray:
         if self._classifier is None:
@@ -508,7 +594,37 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
         _done, still_open = self._simulate(bars)
         return still_open
 
-    def _probability(self, features: tuple[float, ...]) -> float:
+    # ---- probability forecasts (roadmap 23.9, lifecycle calibration) -----------
+
+    def forecast_probability(
+        self, ticker: str, as_of: Any, lake: Any
+    ) -> ProbabilityForecast | None:
+        """``P(win)`` of the base trade open at ``as_of``, keyed by its entry."""
+        if not self.is_fitted:
+            return None
+        trade = self.open_trade(ticker, as_of, lake)
+        if trade is None:
+            return None
+        p = min(max(self._probability(trade.features), 0.0), 1.0)
+        return ProbabilityForecast(event_key=iso(trade.entry_ts), probability=p)
+
+    def forecast_outcome(self, ticker: str, event_key: str, as_of: Any, lake: Any) -> bool | None:
+        """Whether the base trade that entered at ``event_key`` closed above
+        its entry (its meta-label), once it has closed by ``as_of``."""
+        if lake is None or ticker != self.params["ticker"]:
+            return None
+        interval = Interval.parse(self.params["interval"])
+        n = self.feature_tail + 3 * int(self.params["hold_period"])
+        bars = self._bar_caches.for_lake(lake).last_n_bars(ticker, interval, as_of, n)
+        if len(bars) < self.feature_tail + 1:
+            return None
+        done, _still_open = self._simulate(bars)
+        for trade in done:
+            if iso(trade.entry_ts) == event_key:
+                return trade.label
+        return None
+
+    def _raw_probability(self, features: tuple[float, ...]) -> float:
         p = self._prob_memo.get(features)
         if p is None:
             p = float(self.predict_proba(np.array([features]))[0])
@@ -516,6 +632,17 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
                 self._prob_memo.clear()
             self._prob_memo[features] = p
         return p
+
+    def _decision(self, features: tuple[float, ...]) -> tuple[float, bool]:
+        """(calibrated ``P(win)``, abstain) for a base trade's features."""
+        raw = self._raw_probability(features)
+        if self._policy is None:
+            return raw, False
+        decision = self._policy.apply(np.array([raw]))
+        return float(decision.probability[0]), bool(decision.abstain[0])
+
+    def _probability(self, features: tuple[float, ...]) -> float:
+        return self._decision(features)[0]
 
     @property
     def threshold(self) -> float:
@@ -531,8 +658,8 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
         trade = self.open_trade(ticker, as_of, lake)
         if trade is None:
             return None
-        p = self._probability(trade.features)
-        if not p > self.threshold:
+        p, abstain = self._decision(trade.features)
+        if abstain or not p > self.threshold:
             return None
         if self.params["bet_sizing"]:
             size = float(bet_size(p))
@@ -584,6 +711,8 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
         path = Path(path)
         self._classifier.save(path / _MODEL_DIR)
         (path / _STATE_FILE).write_text(json.dumps(self._state, indent=2, sort_keys=True))
+        if self._profile is not None:
+            self._profile.save(path)
 
     @classmethod
     def load(cls, path: Path) -> TrendlineMetaLabelStrategy:
@@ -592,8 +721,13 @@ class TrendlineMetaLabelStrategy(BaseStrategy):
         state_file = path / _STATE_FILE
         if state_file.exists():
             state = json.loads(state_file.read_text())
-            if state.get("feature_names") != list(FEATURE_NAMES):
-                raise ValueError("saved model was trained on different features")
+            check_feature_schema(state.get("feature_names") or [], FEATURE_NAMES)
+            profile = FeatureProfile.load_if_present(path)
+            if profile is not None:
+                check_feature_schema(profile.names, FEATURE_NAMES)
             instance._classifier = ForestClassifier.load(path / _MODEL_DIR)
             instance._state = state
+            instance._profile = profile
+            if state.get("probability") is not None:
+                instance._policy = ProbabilityPolicy.from_dict(state["probability"])
         return instance

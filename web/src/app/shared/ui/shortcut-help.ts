@@ -60,7 +60,7 @@ interface Row {
               [checked]="shortcuts.singleKeys()"
               (change)="shortcuts.setSingleKeys($any($event.target).checked)"
             />
-            Single-key shortcuts (/, ?, g, n)
+            Single-key shortcuts (/, ?, g, n, h)
           </label>
           <p class="hint">
             Turn these off if you use speech input or they get in the way. {{ mod }}+K always works.
@@ -140,6 +140,8 @@ export class ShortcutHelp {
       { keys: [this.mod, 'K'], label: 'Search and run commands' },
       { keys: ['/'], label: 'Search' },
       { keys: ['?'], label: 'Show this list' },
+      { keys: ['h'], label: 'Hide or show money amounts' },
+      { keys: ['Alt', 'Shift', 'H'], label: 'Hide or show money amounts (always on)' },
       { keys: ['Esc'], label: 'Close a dialog or the menu' },
     ];
     const toRow = (s: (typeof seqs)[number]): Row => ({

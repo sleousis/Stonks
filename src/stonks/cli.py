@@ -666,6 +666,86 @@ def ingest_borrow(
     _print_result(result)
 
 
+@ingest_app.command("funds")
+def ingest_funds(
+    tickers: str = typer.Option(..., "--tickers", help="comma-separated funds, e.g. SPY.US,QQQ.US"),
+    source_id: str = typer.Option(
+        DEFAULT_SOURCE_ID,
+        "--source",
+        help=f"data source ({'|'.join(SOURCE_IDS)})",
+        callback=_validate_source,
+    ),
+) -> None:
+    """Pull each fund's latest holdings (an ETF's stocks and their weights)
+    into ``fund_holdings``. Insights then show your real
+    weight in a name across the funds you hold. Each fund is one unit of
+    the ``ingest_runs`` row, and a re-run is idempotent."""
+    settings = _settings()
+    source = _build_source(settings, source_id)
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        pipeline = build_ingest_pipeline(settings, source, lake)
+        result = pipeline.run_fund_holdings(_parse_tickers(tickers))
+    _print_result(result)
+
+
+@ingest_app.command("edgar")
+def ingest_edgar(
+    tickers: str | None = typer.Option(
+        None, "--tickers", help="US tickers for filings and insider trades, e.g. AAPL.US"
+    ),
+    filers: str | None = typer.Option(
+        None, "--filers", help="manager CIKs for 13F holdings, e.g. 1067983"
+    ),
+    kinds: str = typer.Option(
+        "filings,insiders", "--kinds", help="comma-separated: filings, insiders, holdings"
+    ),
+    since: str | None = typer.Option(
+        None, "--since", help="earliest acceptance day (YYYY-MM-DD)", callback=_validate_iso_date
+    ),
+    until: str | None = typer.Option(
+        None, "--until", help="latest acceptance day (YYYY-MM-DD)", callback=_validate_iso_date
+    ),
+) -> None:
+    """Pull SEC EDGAR filings into the lake: filings with
+    their acceptance time and 8-K items, Form 4 insider trades and 13F
+    holdings. Needs \\[sources.edgar] user_agent (a name and an email)."""
+    from stonks.ingest.sources.base import DataSourceError
+    from stonks.ingest.sources.edgar import EdgarDataSource
+
+    chosen = {k.strip() for k in kinds.split(",") if k.strip()}
+    unknown = chosen - {"filings", "insiders", "holdings"}
+    if unknown or not chosen:
+        raise typer.BadParameter(
+            "--kinds takes filings, insiders and holdings", param_hint="--kinds"
+        )
+    names = _parse_tickers(tickers) if tickers else []
+    ciks = [c.strip() for c in (filers or "").split(",") if c.strip()]
+    if chosen & {"filings", "insiders"} and not names:
+        raise typer.BadParameter("name --tickers for filings or insiders", param_hint="--tickers")
+    if "holdings" in chosen and not ciks:
+        raise typer.BadParameter("name --filers for holdings", param_hint="--filers")
+    if not all(c.isdigit() for c in ciks):
+        raise typer.BadParameter("a filer is a numeric CIK", param_hint="--filers")
+    settings = _settings()
+    try:
+        source = EdgarDataSource.from_config(settings.sources.edgar)
+    except DataSourceError as exc:
+        raise typer.BadParameter(str(exc)) from None
+    since_d = date.fromisoformat(since) if since else None
+    until_d = date.fromisoformat(until) if until else None
+    with _open_lake(settings.lake.path) as lake:
+        lake.migrate()
+        pipeline = build_ingest_pipeline(settings, source, lake)
+        if "filings" in chosen:
+            forms = list(settings.sources.edgar.forms) or None
+            _print_result(pipeline.run_filings(names, since=since_d, until=until_d, forms=forms))
+        if "insiders" in chosen:
+            _print_result(pipeline.run_insider_filings(names, since=since_d, until=until_d))
+        if "holdings" in chosen:
+            _print_result(pipeline.run_institutional_holdings(ciks, since=since_d, until=until_d))
+
+
 @ingest_app.command("aggregate")
 def ingest_aggregate(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated tickers"),
@@ -1458,6 +1538,25 @@ def lab_ic(ctx: typer.Context) -> None:
     raise typer.Exit(code=signal_eval.main(list(ctx.args), prog="stonks lab ic"))
 
 
+@lab_app.command(
+    "importance",
+    context_settings={
+        "allow_extra_args": True,
+        "ignore_unknown_options": True,
+        "help_option_names": [],
+    },
+    add_help_option=False,
+)
+def lab_importance(ctx: typer.Context) -> None:
+    """Feature importance of a model strategy under purged CV (MDA, SFI,
+    clustered MDA): --strategy ID --tickers A --start --end
+    [--train-end --params JSON --folds 5 --json F --html F];
+    ``stonks lab importance --help`` for all options."""
+    from stonks.lab import importance
+
+    raise typer.Exit(code=importance.main(list(ctx.args), prog="stonks lab importance"))
+
+
 _LAB_TUNERS = ("grid", "random", "optuna")
 _LAB_SAMPLERS = ("tpe", "nsga2", "random")
 _LAB_OBJECTIVES = (
@@ -1472,7 +1571,7 @@ _LAB_OBJECTIVES = (
     "cv_cagr",
     "cv_final_return",
 )
-_LAB_COST_MODELS = ("config", "zero", "realistic")
+_LAB_COST_MODELS = ("config", "zero", "realistic", "ibkr_tiered", "ibkr_fixed")
 
 
 def _heatmap_option(spec: str | None, grid: int, full: bool) -> Any:
@@ -2244,16 +2343,27 @@ def halts_resume(
     halt_id: int = typer.Argument(..., help="the kill switch's halt id"),
     reason: str = typer.Option(..., "--reason", help="why trading may resume (audited)"),
     user: str | None = _HALT_USER,
+    override_checks: bool = typer.Option(
+        False, "--override-checks", help="resume although a resume check failed (audited)"
+    ),
 ) -> None:
-    """Turn a kill switch off. Asks you to type RESUME TRADING."""
+    """Turn a kill switch off. Shows the resume checks, then asks you to
+    type RESUME TRADING."""
     from stonks.app.halts import RESUME_PHRASE, ResumeRequest
 
     context, service = _halt_service()
     who = _halt_scope(context, user)
+    checks = _halt_call(lambda: service.resume_checks(who, halt_id))
+    for c in checks.checks:
+        mark = {True: "[green]ok[/green]", False: "[red]FAIL[/red]", None: "[yellow]?[/yellow]"}
+        where = f" {c.portfolio_id}" if c.portfolio_id else ""
+        console.print(f"{mark[c.passed]} {c.name}{where}: {c.detail}")
+    if not checks.passed and not override_checks:
+        console.print("[red]resume checks failed[/red]: fix them or pass --override-checks")
+        raise typer.Exit(code=1)
     typed = typer.prompt(f"Type {RESUME_PHRASE} to resume trading")
-    view = _halt_call(
-        lambda: service.resume_kill(who, halt_id, ResumeRequest(confirmation=typed, reason=reason))
-    )
+    body = ResumeRequest(confirmation=typed, reason=reason, override_checks=override_checks)
+    view = _halt_call(lambda: service.resume_kill(who, halt_id, body))
     console.print(f"[green]trading resumed[/green]: halt #{view.id} cleared")
 
 
@@ -2283,6 +2393,12 @@ app.add_typer(reconcile_app, name="reconcile")
 from stonks.cli_tca import app as tca_app  # noqa: E402
 
 app.add_typer(tca_app, name="tca")
+
+# ---- the round-trip journal (roadmap 23.3) --------------------------------------
+
+from stonks.cli_journal import app as journal_app  # noqa: E402
+
+app.add_typer(journal_app, name="journal")
 
 # ---- options research (Phase 17) -----------------------------------------------
 
@@ -2508,6 +2624,13 @@ from stonks.cli_tickets import app as tickets_app  # noqa: E402
 
 app.add_typer(tickets_app, name="tickets")
 
+# ---- execution algos and the rebalancing planner (roadmap 23.16) ---------------
+
+from stonks.cli_execution import algos_app, plan_app  # noqa: E402
+
+app.add_typer(algos_app, name="algos")
+app.add_typer(plan_app, name="plan")
+
 # ---- price alerts -------------------------------------------------------------
 
 from stonks.cli_price_alerts import app as price_alerts_app  # noqa: E402
@@ -2532,11 +2655,23 @@ from stonks.cli_cash_flows import app as cash_flows_app  # noqa: E402
 
 app.add_typer(cash_flows_app, name="cash-flows")
 
+# ---- CSV statement imports (roadmap 23.17) --------------------------------------
+
+from stonks.cli_statement_imports import app as statement_imports_app  # noqa: E402
+
+app.add_typer(statement_imports_app, name="imports")
+
 # ---- model versions (roadmap 22.6) ---------------------------------------------
 
 from stonks.cli_model_versions import register as _register_model_versions  # noqa: E402
 
 _register_model_versions(registry_app)
+
+# ---- lab verify (roadmap 23.9) --------------------------------------------------
+
+from stonks.cli_lab_verify import register as _register_lab_verify  # noqa: E402
+
+_register_lab_verify(lab_app)
 
 # ---- going live: stages, preview, soak report and kill switch drill ----------
 

@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { SessionService } from '../../core/auth/session.service';
 import { formatLongDay } from '../../core/format/format';
 import { type Reloadable, autoRefresh } from '../../shared/auto-refresh';
+import { BreadthCard } from './breadth-card';
 import { FillsTape } from './fills-tape';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PortfolioCard } from './portfolio-card';
@@ -17,7 +18,7 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
 /**
  * Today, the trader's home: my portfolio with a tape of today's fills,
  * today's signals and runs in time order, and my strategies with their
- * switches. Admins see their own portfolio first too, with the totals
+ * switches, and the market's breadth. Admins see their own portfolio first too, with the totals
  * across traders under it (M3, F23). The left column flows on its own, so
  * a tall strategies list never leaves a hole beside it.
  */
@@ -34,6 +35,7 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
     StrategiesCard,
     SetupCard,
     WatchlistFilter,
+    BreadthCard,
   ],
   template: `
     <app-page-header [title]="greeting()" [description]="dateLine()">
@@ -59,6 +61,7 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
       </div>
       <app-signals-card class="signals" />
       <app-strategies-card class="strategies" />
+      <app-breadth-card class="breadth" />
     </div>
   `,
   styles: `
@@ -68,14 +71,18 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
       display: grid;
       gap: var(--space-4);
       grid-template-columns: minmax(0, 1fr);
-      grid-template-areas: 'portfolio' 'tape' 'signals' 'strategies';
+      grid-template-areas: 'portfolio' 'tape' 'signals' 'strategies' 'breadth';
 
       @include bp.from-desktop {
         grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-        grid-template-areas: 'tape tape' 'portfolio strategies' 'signals strategies';
-        /* The last row is flexible, so a tall strategies column grows it and
-           never stretches the portfolio row into a gap (M3). */
-        grid-template-rows: auto auto 1fr;
+        grid-template-areas:
+          'tape tape'
+          'portfolio strategies'
+          'signals strategies'
+          'signals breadth';
+        /* The strategies row is flexible, so a tall strategies column grows it
+           and never stretches the portfolio row into a gap (M3). */
+        grid-template-rows: auto auto 1fr auto;
         align-items: start;
       }
     }
@@ -94,6 +101,9 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
     }
     .strategies {
       grid-area: strategies;
+    }
+    .breadth {
+      grid-area: breadth;
     }
     .setup:not(:empty) {
       margin-bottom: var(--space-4);

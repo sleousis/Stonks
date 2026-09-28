@@ -290,6 +290,7 @@ CASES: dict[str, Case] = {
     "search_instruments": _c("GET", "/api/market/instruments"),
     "get_bars": _c("GET", "/api/market/bars", lambda i: {"ticker": "UP.US"}),
     "get_coverage": _c("GET", "/api/market/coverage"),
+    "get_market_breadth": _c("GET", "/api/market/breadth"),
     "list_orders": _c("GET", "/api/orders", lambda i: {"portfolio_id": i["portfolio"]}),
     "list_fills": _c("GET", "/api/orders/fills", lambda i: {"portfolio_id": i["portfolio"]}),
     "list_ticks": _c("GET", "/api/ticks"),
@@ -312,6 +313,7 @@ CASES: dict[str, Case] = {
     "list_risk_snapshots": _c(
         "GET", "/api/risk/snapshots", lambda i: {"portfolio_id": i["portfolio"]}
     ),
+    "list_trade_decisions": _c("GET", "/api/decisions", lambda i: {"portfolio_id": i["portfolio"]}),
     "list_intraday_snapshots": _c(
         "GET", "/api/risk/intraday", lambda i: {"portfolio_id": i["portfolio"]}
     ),
@@ -343,6 +345,7 @@ CASES: dict[str, Case] = {
         "GET", "/api/shadow/strategies/{strategy_id}/pnl", lambda i: {"strategy_id": "bah_shadow"}
     ),
     "get_health_report": _c("GET", "/api/health/report"),
+    "get_price_check": _c("GET", "/api/health/price-check"),
     "get_stream_status": _c("GET", "/api/stream/status"),
     "get_broker": _c("GET", "/api/brokers"),
     "list_sources": _c("GET", "/api/sources"),
@@ -369,6 +372,17 @@ CASES: dict[str, Case] = {
     "get_tca_summary": _c("GET", "/api/tca/summary", lambda i: {"portfolio_id": i["portfolio"]}),
     "list_trade_journal": _c("GET", "/api/tca/journal", lambda i: {"portfolio_id": i["portfolio"]}),
     "get_order_tca": _c("GET", "/api/tca/orders/{client_id}", lambda i: {"client_id": "nope"}),
+    "list_round_trips": _c(
+        "GET", "/api/journal/trades", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
+    "get_round_trip": _c("GET", "/api/journal/trades/{trade_id}", lambda i: {"trade_id": 999999}),
+    "get_pnl_calendar": _c(
+        "GET", "/api/journal/calendar", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
+    "get_journal_breakdown": _c(
+        "GET", "/api/journal/breakdown", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
+    "list_playbooks": _c("GET", "/api/journal/playbooks", lambda i: {}),
     "add_journal_note": _c(
         "POST",
         "/api/tca/orders/{client_id}/notes",
@@ -399,6 +413,12 @@ CASES: dict[str, Case] = {
         "GET", "/api/insights/agreement", lambda i: {"portfolio_id": i["portfolio"]}
     ),
     "get_insights_totals": _c("GET", "/api/insights/totals"),
+    "get_look_through": _c(
+        "GET", "/api/insights/look-through", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
+    "get_behaviour_report": _c(
+        "GET", "/api/insights/behaviour", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
     "get_chart": _c(
         "GET",
         "/api/charts/{ticker}",
@@ -441,6 +461,19 @@ CASES: dict[str, Case] = {
         "/api/screener/screens/{screen_id}",
         lambda i: {"screen_id": i["screen"], "confirm": True},
     ),
+    # screen alerts (roadmap 23.17)
+    "list_screen_alerts": _c("GET", "/api/screener/alerts"),
+    "list_screen_alert_events": _c("GET", "/api/screener/alerts/events"),
+    "set_screen_alert": _c(
+        "PUT",
+        "/api/screener/screens/{screen_id}/alert",
+        lambda i: {"screen_id": i["screen"], "cadence": "daily"},
+    ),
+    "delete_screen_alert": _c(
+        "DELETE",
+        "/api/screener/screens/{screen_id}/alert",
+        lambda i: {"screen_id": i["screen"], "confirm": True},
+    ),
     "save_screen_as_universe": _c(
         "POST",
         "/api/screener/universes",
@@ -468,6 +501,7 @@ CASES: dict[str, Case] = {
         "/api/lab/signal-ic",
         lambda i: {"universe": ["UP.US"], "strategy_id": "bah_active"} | _WINDOW,
     ),
+    "verify_lab_results": _c("POST", "/api/lab/verify", lambda i: {"targets": ["nope"]}),
     "run_factor_tearsheet": _c(
         "POST",
         "/api/factors/tearsheets",
@@ -557,6 +591,11 @@ CASES: dict[str, Case] = {
     "check_model_swap": _c(
         "GET",
         "/api/strategies/{strategy_id}/versions/{version}/check",
+        lambda i: {"strategy_id": "bah_active", "version": 1},
+    ),
+    "get_model_calibration": _c(
+        "GET",
+        "/api/strategies/{strategy_id}/versions/{version}/calibration",
         lambda i: {"strategy_id": "bah_active", "version": 1},
     ),
     "retrain_models": _c(
@@ -681,6 +720,18 @@ CASES: dict[str, Case] = {
     "list_tax_lot_picks": _c(
         "GET", "/api/tax/lots/picks", lambda i: {"portfolio_id": i["portfolio"]}
     ),
+    "preview_trade_tax": _c(
+        "GET",
+        "/api/tax/preview",
+        lambda i: {
+            "portfolio_id": i["portfolio"],
+            "ticker": "UP.US",
+            "side": "sell",
+            "quantity": 1,
+            "price": 100.0,
+        },
+    ),
+    "get_tax_year": _c("GET", "/api/tax/year", lambda i: {"portfolio_id": i["portfolio"]}),
     "get_fx_rate": _c("GET", "/api/fx/rate", lambda i: {"base": "EUR", "quote": "USD"}),
     "list_cash_flows": _c(
         "GET",
@@ -734,6 +785,39 @@ CASES: dict[str, Case] = {
             "quantity": 1,
             "reason": "by hand",
             "retry_key": "perm-1",
+        },
+    ),
+    # execution algos and the planner (roadmap 23.16)
+    "list_execution_algos": _c("GET", "/api/execution/algos"),
+    "get_execution_algo_settings": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/execution-algos",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    "list_algo_parents": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/algo-parents",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    "set_execution_algo": _c(
+        "PUT",
+        "/api/portfolios/{portfolio_id}/execution-algos",
+        lambda i: {"portfolio_id": i["portfolio"], "algo": "twap", "confirm": True},
+    ),
+    "plan_rebalance": _c(
+        "POST",
+        "/api/planner/plan",
+        lambda i: {"portfolio_id": i["portfolio"], "source": "targets", "targets": {"UP.US": 0.5}},
+    ),
+    "confirm_rebalance": _c(
+        "POST",
+        "/api/planner/confirm",
+        lambda i: {
+            "portfolio_id": i["portfolio"],
+            "source": "targets",
+            "reason": "rebalance",
+            "targets": {"UP.US": 0.5},
+            "confirm": True,
         },
     ),
     # manual orders (roadmap 20.1): a stale price answers 409 once permitted

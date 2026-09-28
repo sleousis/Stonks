@@ -306,6 +306,21 @@ class IngestPipeline:
             units=[({"ticker": m, "market": m}, partial(ingest, m)) for m in markets],
         )
 
+    def run_fund_holdings(self, funds: Sequence[str]) -> IngestRunResult:
+        """Pull each fund's latest holdings into ``fund_holdings`` (roadmap
+        23.14). One fund is one unit of soft-fail accounting."""
+
+        def ingest(fund: str) -> dict[str, Any]:
+            rows = list(self._source.fetch_fund_holdings(fund))
+            self._lake.upsert_fund_holdings(_rows_to_df(rows))
+            return {"rows": len(rows)}
+
+        return self._run_units(
+            kind="funds",
+            event="fund",
+            units=[({"ticker": f}, partial(ingest, f)) for f in funds],
+        )
+
     def run_calendars(
         self,
         start: date,
@@ -345,6 +360,72 @@ class IngestPipeline:
             kind="calendars",
             event="calendar",
             units=[({"ticker": k, "calendar": k}, work[k]) for k in kinds],
+        )
+
+    # ---- regulatory filings (roadmap 23.13) ---------------------------------------
+
+    def run_filings(
+        self,
+        tickers: Sequence[str],
+        since: date | None = None,
+        until: date | None = None,
+        forms: Sequence[str] | None = None,
+    ) -> IngestRunResult:
+        """Pull each ticker's filings (acceptance time, form, current report
+        items) into ``corporate_filings``. One ticker is one unit."""
+        sid = self._source.source_id
+
+        def ingest(ticker: str) -> dict[str, Any]:
+            rows = list(self._source.fetch_filings(ticker, since=since, until=until, forms=forms))
+            frame = _rows_to_df(rows)
+            if not frame.empty:
+                frame["source"] = sid
+            return {"rows": self._lake.upsert_corporate_filings(frame)}
+
+        return self._run_units(
+            kind="filings", units=[({"ticker": t}, partial(ingest, t)) for t in tickers]
+        )
+
+    def run_insider_filings(
+        self, tickers: Sequence[str], since: date | None = None, until: date | None = None
+    ) -> IngestRunResult:
+        """Pull each ticker's insider trades from ownership reports, with the
+        report's acceptance time as ``known_at``, into
+        ``insider_transactions``. One ticker is one unit."""
+
+        def ingest(ticker: str) -> dict[str, Any]:
+            rows = list(self._source.fetch_insider_filings(ticker, since=since, until=until))
+            return {"rows": self._lake.upsert_insider_transactions(_rows_to_df(rows))}
+
+        return self._run_units(
+            kind="insider_filings", units=[({"ticker": t}, partial(ingest, t)) for t in tickers]
+        )
+
+    def run_institutional_holdings(
+        self, filers: Sequence[str], since: date | None = None, until: date | None = None
+    ) -> IngestRunResult:
+        """Pull each manager's quarterly holdings reports into
+        ``institutional_holdings``, naming each CUSIP's ticker when the
+        lake knows it. One filer (a CIK) is one unit."""
+
+        def ingest(filer: str) -> dict[str, Any]:
+            rows = list(self._source.fetch_institutional_holdings(filer, since=since, until=until))
+            known = self._lake.tickers_by_cusip([r.cusip for r in rows if r.ticker is None])
+            rows = [
+                r.model_copy(update={"ticker": known[r.cusip]})
+                if r.ticker is None and r.cusip in known
+                else r
+                for r in rows
+            ]
+            frame = _rows_to_df(rows)
+            if not frame.empty:
+                frame["source"] = self._source.source_id
+            return {"rows": self._lake.upsert_institutional_holdings(frame)}
+
+        return self._run_units(
+            kind="institutional_holdings",
+            event="filer",
+            units=[({"ticker": f, "filer": f}, partial(ingest, f)) for f in filers],
         )
 
     def run_metadata(self, tickers: Sequence[str]) -> IngestRunResult:

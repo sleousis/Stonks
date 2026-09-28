@@ -179,10 +179,70 @@ describe('HaltsPage', () => {
       expect(el.querySelector('app-page-header')!.classList).toContain('kill-on');
     });
 
+    it('shows the resume checks and needs an override when one failed (23.15)', async () => {
+      button('Resume trading')!.click();
+      await settle();
+      const checks = await nextRequest(http, '/api/halts/1/resume-checks');
+      checks.flush({
+        halt_id: 1,
+        passed: false,
+        checks: [
+          {
+            name: 'gateway_up',
+            passed: false,
+            detail: 'the broker did not answer',
+            portfolio_id: 'pf_default',
+          },
+          {
+            name: 'last_reconcile_clean',
+            passed: null,
+            detail: 'no reconcile report yet',
+            portfolio_id: 'pf_default',
+          },
+        ],
+      });
+      await settle();
+      const form = el.querySelector<HTMLFormElement>('app-resume-sheet form')!;
+      expect(form.textContent).toContain('Gateway up');
+      expect(form.textContent).toContain('the broker did not answer');
+      const type = (sel: string, text: string) => {
+        const input = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(sel)!;
+        input.value = text;
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+      };
+      const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+      type('#resume-reason', 'Gateway restarting');
+      type('#resume-typed', 'RESUME TRADING');
+      expect(submit.disabled).toBe(true);
+      const override = form.querySelector<HTMLInputElement>('#resume-override')!;
+      override.checked = true;
+      override.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      expect(submit.disabled).toBe(false);
+      submit.click();
+      fixture.detectChanges();
+      const post = await nextRequest(http, '/api/halts/1/resume', 'POST');
+      expect(post.request.body).toEqual({
+        confirmation: 'RESUME TRADING',
+        reason: 'Gateway restarting',
+        override_checks: true,
+      });
+      post.flush({ ...KILL, active: false, cleared_by: 'usr_owner' });
+      await flushAll([BREAKER]);
+    });
+
     it('resumes only with the typed words and after a step-up', async () => {
       button('Resume trading')!.click();
       await settle();
+      (await nextRequest(http, '/api/halts/1/resume-checks')).flush({
+        halt_id: 1,
+        passed: true,
+        checks: [],
+      });
+      await settle();
       const form = el.querySelector<HTMLFormElement>('app-resume-sheet form')!;
+      expect(form.textContent).toContain('Nothing to check');
       // A ticket: scope, what starts again, and the stamp.
       const ticket = form.querySelector('[aria-label="Resume trading"]')!;
       expect(ticket.textContent).toContain('Every portfolio');

@@ -18,6 +18,8 @@ The actions call the same services as the CLI:
 - ``backup``: ``run_configured_backup`` (``[backup]`` target and retention);
 - ``price_alerts``: every person's price alert rules checked against the
   latest closes (roadmap 20.2);
+- ``screen_alerts``: every due saved-screen alert run on the day's data,
+  names that newly match sent to their owner (roadmap 23.17);
 - ``connections_sync``: every due broker connection synced as
   ``service:scheduler`` (state DB only, so every backend runs it here);
 - ``broker_health``: probes each IB Gateway, stores its status, alerts and
@@ -30,7 +32,9 @@ The actions call the same services as the CLI:
 - ``live_stops``: protective stops for the entries the opening auction
   filled, at every live book that turns them on (roadmap 19.10);
 - ``live_margin``: the margin cushion of every margin account listed on
-  an IB Gateway, with an alert when it is thin (roadmap 19.13).
+  an IB Gateway, with an alert when it is thin (roadmap 19.13);
+- ``algo_slices``: sends the due child slices of the parent orders Stonks
+  works itself (TWAP and VWAP at a broker without them, roadmap 23.16).
 
 ``ingest_prices`` and ``tick`` are skipped when no instrument in the
 universe trades on the fire's date (asset classes read from the lake).
@@ -333,6 +337,78 @@ def price_alerts_action(ctx: RunContext) -> JobOutcome:
     return JobOutcome("succeeded", out.as_dict())
 
 
+@register_action("screen_alerts")
+def screen_alerts_action(ctx: RunContext) -> JobOutcome:
+    """Every due screen alert of every person, run in this process on the
+    lake, sent through the notification router (roadmap 23.17)."""
+    from stonks.app.context import AppContext
+    from stonks.app.screen_alerts import ScreenAlertService
+
+    out = ScreenAlertService(AppContext(ctx.settings)).evaluate(as_of=ctx.fire.as_of)
+    return JobOutcome("succeeded", out.as_dict())
+
+
+@register_action("price_check")
+def price_check_action(ctx: RunContext) -> JobOutcome:
+    """The second-source price check before the tick (roadmap 23.6). Skips
+    while ``[production.price_check] enabled = false``."""
+    from stonks.app.price_checks import PriceCheckRunView, _view, run_configured_price_check
+    from stonks.production.price_check import latest_check
+    from stonks.store.lake import DuckDBLake
+    from stonks.store.state import SqliteState
+
+    if not ctx.settings.production.price_check.enabled:
+        return JobOutcome("skipped", {"reason": "disabled"})
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        with DuckDBLake(ctx.settings.lake.path) as lake:
+            report, reason = run_configured_price_check(
+                ctx.settings, state, lake, ctx.fire.as_of, now=ctx.now
+            )
+        view = PriceCheckRunView(
+            ran=report is not None,
+            reason=reason,
+            check=_view(latest_check(state, ctx.fire.as_of)) if report is not None else None,
+        )
+    finally:
+        state.close()
+    return price_check_outcome(ctx, view.model_dump(mode="json"))
+
+
+def price_check_outcome(ctx: RunContext, view: dict[str, Any]) -> JobOutcome:
+    """A ``PriceCheckRunView`` as JSON onto the run's outcome: skipped, or
+    succeeded, with the operator alerted when tickers were held."""
+    from stonks.notify import Notification
+
+    if not view.get("ran"):
+        return JobOutcome("skipped", {"reason": view.get("reason")})
+    check = view.get("check") or {}
+    status = check.get("status")
+    detail = {
+        "status": status,
+        "compared": check.get("tickers_compared"),
+        "held": check.get("held", []),
+    }
+    if status not in ("gaps", "systematic"):
+        return JobOutcome("succeeded", detail)
+    ctx.notifier.notify(
+        Notification(
+            level="error" if status == "systematic" else "warning",
+            title=f"price check: {status}",
+            message=f"{check.get('detail')}. Held: {', '.join(check.get('held', [])[:10])}",
+            fields=detail,
+        )
+    )
+    return JobOutcome("succeeded", detail, alerted=True)
+
+
+@register_action("briefings")
+def briefings_action(ctx: RunContext) -> JobOutcome:
+    """Briefings run the assistant over the API's tools, so only the api
+    and in_process backends send them (roadmap 23.8)."""
+    return JobOutcome("skipped", {"reason": "briefings run in the API server"})
+
+
 @register_action("model_retrain")
 def model_retrain_action(ctx: RunContext) -> JobOutcome:
     """Refit in this process, opening the stores like the CLI does."""
@@ -348,6 +424,24 @@ def model_retrain_action(ctx: RunContext) -> JobOutcome:
     finally:
         context.close()
     return retrain_outcome(result.model_dump(mode="json"))
+
+
+@register_action("lab_verify")
+def lab_verify_action(ctx: RunContext) -> JobOutcome:
+    """Rerun active strategies from their manifests in this process."""
+    from stonks.app.context import AppContext
+    from stonks.app.lab import lab_objectives
+    from stonks.app.lab_verify import LabVerifyService, VerifyRequest
+    from stonks.scheduling.jobs import verify_body, verify_outcome
+
+    context = AppContext(ctx.settings)
+    try:
+        result = LabVerifyService(context, objectives=lab_objectives()).verify(
+            VerifyRequest.model_validate(verify_body(ctx))
+        )
+    finally:
+        context.close()
+    return verify_outcome(result.model_dump(mode="json"))
 
 
 @register_action("connections_sync")
@@ -542,6 +636,26 @@ def _read_only_lake(settings: Any) -> Any:
         return DuckDBLake(settings.lake.path, read_only=True)
     except Exception:
         return None
+
+
+@register_action("algo_slices")
+def algo_slices_action(ctx: RunContext) -> JobOutcome:
+    """Send the child slices that are due, skip those past their window,
+    and settle each parent from its children (roadmap 23.16). Skips while
+    no parent order is working."""
+    from stonks.production.algo_slices import open_parent_count, work_parents
+    from stonks.production.settings_builder import submit_broker_opener
+    from stonks.store.state import SqliteState
+
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        if not open_parent_count(state):
+            return JobOutcome("skipped", {"reason": "no_working_parents"})
+        result = work_parents(state, submit_broker_opener(ctx.settings, state))
+    finally:
+        state.close()
+    detail = result.detail()
+    return JobOutcome("failed" if result.failed or result.errors else "succeeded", detail)
 
 
 def submit_detail(result: Any) -> dict[str, Any]:

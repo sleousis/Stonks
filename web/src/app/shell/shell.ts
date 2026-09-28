@@ -27,6 +27,7 @@ import { StepUpDialog } from '../core/auth/step-up-dialog';
 import { StepUpService } from '../core/auth/step-up.service';
 import { ShortcutsService } from '../core/commands/shortcuts.service';
 import { HaltStateService } from '../core/halts/halt-state.service';
+import { PrivacyService } from '../core/privacy/privacy.service';
 import { ConnectivityService } from '../core/pwa/connectivity.service';
 import { ThemeService } from '../core/theme/theme.service';
 import { NotificationBell } from '../shared/ui/notification-bell';
@@ -74,6 +75,8 @@ import { registerShellCommands } from './shell-commands';
 })
 export class Shell {
   protected readonly theme = inject(ThemeService);
+  /** Privacy mode (23.17): one switch hides money amounts on this device. */
+  protected readonly privacy = inject(PrivacyService);
   protected readonly auth = inject(AuthTokenService);
   protected readonly session = inject(SessionService);
   /** The halt state: the rail turns red while a kill switch is on (UX-51). */

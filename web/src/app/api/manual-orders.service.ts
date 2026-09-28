@@ -8,12 +8,14 @@ import {
   cancelOrder,
   changeManualOrder,
   placeManualOrder,
+  planManualOrder,
   previewManualOrder,
 } from './generated/sdk.gen';
 import type {
   ManualOrderChange,
   ManualOrderRequest,
   OrderCancelRequest,
+  TradePlanRequest,
 } from './generated/types.gen';
 
 /**
@@ -32,6 +34,11 @@ export class ManualOrdersService {
 
   preview(body: ManualOrderRequest) {
     return unwrap(previewManualOrder({ body: this.withPortfolio(body), headers: SILENT_HEADERS }));
+  }
+
+  /** A whole-share size from the chosen risk and the stop. Nothing is placed. */
+  plan(body: TradePlanRequest) {
+    return unwrap(planManualOrder({ body: this.withPortfolio(body), headers: SILENT_HEADERS }));
   }
 
   place(body: ManualOrderRequest) {

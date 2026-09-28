@@ -14,6 +14,7 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
 import { nextRequest, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
 import { answerDialog } from '../../../testing/status-dialog';
+import { provideFakeTax } from '../../../testing/fake-tax';
 import { SuggestedOrders, draftSource, draftStatus } from './suggested-orders';
 
 function draft(over: Partial<OrderDraftView> = {}): OrderDraftView {
@@ -64,6 +65,7 @@ describe('SuggestedOrders', () => {
         provideRouter([]),
         ...provideApi(),
         provideHttpClientTesting(),
+        provideFakeTax(),
         {
           provide: PortfolioContextService,
           useValue: { options: computed(() => options()), query: () => ({}) },

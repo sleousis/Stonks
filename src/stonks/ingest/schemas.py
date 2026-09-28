@@ -403,6 +403,9 @@ class InsiderTransactionRow(FrozenRow):
     value: float | None = None  # derived: shares * price
     post_transaction_amount: float | None = None
     sec_link: str | None = None  # URL to the underlying Form 4
+    #: When the regulator accepted the filing (naive UTC), for sources that
+    #: know it (roadmap 23.13). ``None``: only ``filing_date`` is known.
+    known_at: datetime | None = None
 
 
 class NewsArticleRow(FrozenRow):
@@ -966,6 +969,27 @@ class BorrowRateRow(FrozenRow):
     available_shares: float | None = Field(default=None, ge=0.0)
     currency: str | None = Field(default=None, pattern=r"^[A-Z]{3}$")
     isin: str | None = None
+    source: str = Field(min_length=1)
+
+
+class FundHoldingRow(FrozenRow):
+    """One holding of a fund (an ETF) on one day (roadmap 23.14).
+
+    ``fund`` and ``holding`` are our tickers (``SPY.US``, ``AAPL.US``) when
+    the vendor names a listing, else the vendor's own code. ``weight`` is
+    the holding's share of the fund's assets as a fraction (0.07 = 7 %).
+    ``as_of`` is the day the vendor says the list describes, never after
+    the day it was fetched. ``country`` is ISO 3166-1 alpha-2, like
+    ``instruments.country_iso``; adapters map vendor country names and
+    leave unknown ones empty. ``source`` is the ``DataSource.source_id``."""
+
+    fund: str = Field(min_length=1)
+    holding: str = Field(min_length=1)
+    as_of: date
+    weight: float = Field(ge=0.0)
+    name: str | None = None
+    sector: str | None = None
+    country: str | None = Field(default=None, pattern=r"^[A-Z]{2}$")
     source: str = Field(min_length=1)
 
 

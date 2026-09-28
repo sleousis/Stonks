@@ -72,7 +72,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -442,6 +444,87 @@
       },
       "name": "compare_tickers",
       "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Write one order ticket per trade of the plan. Each waits for the\nperson's approval with a fresh second factor in the web app, so\nnothing is sent from here. Without confirm=true returns the plan.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "min_trade_value": {
+            "default": 0.0,
+            "minimum": 0,
+            "title": "Min Trade Value",
+            "type": "number"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "reason": {
+            "description": "why (audited)",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "strategy",
+              "targets"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Id"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "your own targets, ticker to weight, e.g. {\"AAPL.US\": 0.3}",
+            "title": "Targets"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "source",
+          "reason"
+        ],
+        "title": "confirm_rebalanceArguments",
+        "type": "object"
+      },
+      "name": "confirm_rebalance",
+      "needs_confirm": true
     },
     {
       "annotations": {
@@ -885,6 +968,36 @@
         "type": "object"
       },
       "name": "delete_screen",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Remove the alert from one of your saved screens (the screen\nstays). Without confirm=true returns the alert and removes nothing.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "screen_id": {
+            "title": "Screen Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "screen_id"
+        ],
+        "title": "delete_screen_alertArguments",
+        "type": "object"
+      },
+      "name": "delete_screen_alert",
       "needs_confirm": true
     },
     {
@@ -1367,6 +1480,50 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "How you trade by hand in one of your portfolios: manual and synced\nbroker trades as round trips, with P&L by holding time and weekday,\nwin rate, the disposition effect, overtrading, revenge trades after\na loss, and what trading against the active strategies cost.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Since"
+          }
+        },
+        "title": "get_behaviour_reportArguments",
+        "type": "object"
+      },
+      "name": "get_behaviour_report",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "The broker production ticks trade through: kind (simulated/alpaca), paper, allow_live and whether credentials are configured (keys are never shown). Read-only.",
       "input_schema": {
         "properties": {},
@@ -1757,6 +1914,30 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "How one of your portfolio's orders are worked: its own algo and\neach strategy's override. Empty: plain limit orders.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id"
+        ],
+        "title": "get_execution_algo_settingsArguments",
+        "type": "object"
+      },
+      "name": "get_execution_algo_settings",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One library factor: formula, family, direction, hypothesis and\nwarm-up in bars.",
       "input_schema": {
         "properties": {
@@ -2049,6 +2230,108 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Win rate, P&L, profit factor, average R and exit efficiency per\ngroup: by sleeve, tag, mistake, playbook, or followed versus broke\nplan.",
+      "input_schema": {
+        "properties": {
+          "by": {
+            "default": "all",
+            "description": "how to group the trades",
+            "enum": [
+              "all",
+              "sleeve",
+              "origin",
+              "ticker",
+              "side",
+              "exit_trigger",
+              "tag",
+              "mistake",
+              "playbook",
+              "plan"
+            ],
+            "title": "By",
+            "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "enum": [
+                  "strategy",
+                  "manual"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "strategy or manual orders",
+            "title": "Origin"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "sleeve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sleeve"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Until"
+          }
+        },
+        "title": "get_journal_breakdownArguments",
+        "type": "object"
+      },
+      "name": "get_journal_breakdown",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Every strategy ranked by its risk-adjusted paper result (the\nmodel book the tick keeps for it): total return, CAGR, Sharpe,\nSortino, worst drawdown, trades in the model book and in real books,\nsurvival tests passed and the go-live verdict.",
       "input_schema": {
         "properties": {
@@ -2257,6 +2540,107 @@
         "type": "object"
       },
       "name": "get_live_stage",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Look-through exposure of one of your portfolios: each held fund\n(an ETF) split into what it holds, then summed by sector, country\nand single name. Your real Apple weight counts AAPL plus its share\nof SPY and QQQ. Funds without a holdings list stay whole.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "top": {
+            "default": 20,
+            "description": "single names to list",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Top",
+            "type": "integer"
+          }
+        },
+        "title": "get_look_throughArguments",
+        "type": "object"
+      },
+      "name": "get_look_through",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Market breadth from the lake, display only: advances and declines,\nthe share of stocks above their 50 and 200 day averages, new one year\nhighs and lows, and distribution days on the index (falls of 0.2% or\nmore on higher volume), each with a plain sentence.",
+      "input_schema": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "description": "YYYY-MM-DD",
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "As Of"
+          }
+        },
+        "title": "get_market_breadthArguments",
+        "type": "object"
+      },
+      "name": "get_market_breadth",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Live calibration of a classifier version's probability forecasts:\nBrier score against the base rate, skill, expected calibration error\nand the reliability table. Empty for a model with no forecasts.",
+      "input_schema": {
+        "properties": {
+          "strategy_id": {
+            "title": "Strategy Id",
+            "type": "string"
+          },
+          "version": {
+            "description": "the model version number",
+            "minimum": 1,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "strategy_id",
+          "version"
+        ],
+        "title": "get_model_calibrationArguments",
+        "type": "object"
+      },
+      "name": "get_model_calibration",
       "needs_confirm": false
     },
     {
@@ -2665,6 +3049,90 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Realised P&L of closed trades by exit day, with weekly and\nmonthly totals, in the portfolio's base currency.",
+      "input_schema": {
+        "properties": {
+          "origin": {
+            "anyOf": [
+              {
+                "enum": [
+                  "strategy",
+                  "manual"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "strategy or manual orders",
+            "title": "Origin"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "sleeve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sleeve"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Until"
+          }
+        },
+        "title": "get_pnl_calendarArguments",
+        "type": "object"
+      },
+      "name": "get_pnl_calendar",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Current portfolio: cash, positions valued at the latest stored closes,\nweights and total value, from the latest snapshot.",
       "input_schema": {
         "properties": {
@@ -2703,6 +3171,22 @@
         "type": "object"
       },
       "name": "get_portfolio_totals",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "The newest second-source price check: each held and signalled\nticker's vendor close and adjusted return against a second source,\nand the tickers whose opening orders the tick holds (`held`). Null\nbefore the first check.",
+      "input_schema": {
+        "properties": {},
+        "title": "get_price_checkArguments",
+        "type": "object"
+      },
+      "name": "get_price_check",
       "needs_confirm": false
     },
     {
@@ -2770,6 +3254,44 @@
         "type": "object"
       },
       "name": "get_risk_policy",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One trade with every leg (each partial exit) and its review.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "trade_id": {
+            "description": "the id of the opening fill",
+            "minimum": 1,
+            "title": "Trade Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "trade_id"
+        ],
+        "title": "get_round_tripArguments",
+        "type": "object"
+      },
+      "name": "get_round_trip",
       "needs_confirm": false
     },
     {
@@ -3015,6 +3537,51 @@
         "type": "object"
       },
       "name": "get_tax_settings",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "The gains one of your portfolios realised this year (or ``year``)\nand the estimated tax owed on them, in its base currency.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2200,
+                "minimum": 1900,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Year"
+          }
+        },
+        "title": "get_tax_yearArguments",
+        "type": "object"
+      },
+      "name": "get_tax_year",
       "needs_confirm": false
     },
     {
@@ -3441,7 +4008,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -3699,6 +4268,30 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Parent orders Stonks works as child slices (TWAP, VWAP at a broker\nwithout them), with each slice's state.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id"
+        ],
+        "title": "list_algo_parentsArguments",
+        "type": "object"
+      },
+      "name": "list_algo_parents",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Every deposit and withdrawal of one of your portfolios, oldest\nfirst: recorded ones and those a broker sync brought in. Returns take\nthem out, so a deposit is never profit.",
       "input_schema": {
         "properties": {
@@ -3809,6 +4402,22 @@
         "type": "object"
       },
       "name": "list_event_alert_kinds",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Every execution algo (Adaptive, TWAP, VWAP): its parameters,\ndefaults, whether Stonks can slice it at brokers without it, and the\ncosts the backtest assumes for it.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_execution_algosArguments",
+        "type": "object"
+      },
+      "name": "list_execution_algos",
       "needs_confirm": false
     },
     {
@@ -4513,6 +5122,28 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Your playbooks: the setups you trade, with their rules.",
+      "input_schema": {
+        "properties": {
+          "include_archived": {
+            "default": false,
+            "title": "Include Archived",
+            "type": "boolean"
+          }
+        },
+        "title": "list_playbooksArguments",
+        "type": "object"
+      },
+      "name": "list_playbooks",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Portfolio history: one snapshot per production tick, newest first.",
       "input_schema": {
         "properties": {
@@ -4778,6 +5409,245 @@
         "type": "object"
       },
       "name": "list_risk_snapshots",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your round trips built from fills, open first then newest exit\nfirst: entry and exit, holding days, P&L, adverse and favourable\nexcursion, R multiple (when a stop is known), exit efficiency, and\nyour tags, mistakes and playbook.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "mistake": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Mistake"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "enum": [
+                  "strategy",
+                  "manual"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "strategy or manual orders",
+            "title": "Origin"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "enum": [
+                  "followed",
+                  "broke",
+                  "not_said"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "whether the plan was followed",
+            "title": "Plan"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "sleeve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one strategy id, or manual",
+            "title": "Sleeve"
+          },
+          "status": {
+            "default": "all",
+            "description": "all, open or closed",
+            "enum": [
+              "all",
+              "open",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tag"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Until"
+          }
+        },
+        "title": "list_round_tripsArguments",
+        "type": "object"
+      },
+      "name": "list_round_trips",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "When your screens found names that newly match, newest first.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "screen_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Screen Id"
+          }
+        },
+        "title": "list_screen_alert_eventsArguments",
+        "type": "object"
+      },
+      "name": "list_screen_alert_events",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your screen alerts: which saved screens alert, daily or weekly,\nthe last day each ran and how many names it matched.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 100,
+            "description": "page size",
+            "maximum": 500,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "description": "rows to skip",
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "title": "list_screen_alertsArguments",
+        "type": "object"
+      },
+      "name": "list_screen_alerts",
       "needs_confirm": false
     },
     {
@@ -5280,6 +6150,103 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Why a ticker did or did not trade in one of your portfolios,\nnewest first. Each row names the step that kept it out or trimmed\nit: universe, rank (another pick won), constructor (no weight),\nbuffer (inside the no-trade band), stale_price, risk_rule (with the\nrule and the quantities), lots (rounded to tradable lots or\nskipped below one lot), scope, external, halt, held or traded.\nAsk with a ticker to answer \"why didn't we buy X\".",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 20,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "rows this strategy owned or scored",
+            "title": "Strategy Id"
+          },
+          "tick_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one tick",
+            "title": "Tick Id"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one ticker, e.g. AAPL.US",
+            "title": "Ticker"
+          }
+        },
+        "title": "list_trade_decisionsArguments",
+        "type": "object"
+      },
+      "name": "list_trade_decisions",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Your orders, newest first: why each was placed (trigger, signal\nscore and rank), the outcome (shortfall, next-day move) and notes.",
       "input_schema": {
         "properties": {
@@ -5612,6 +6579,172 @@
       },
       "name": "place_order",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "The trades that move one of your portfolios to a strategy's model\nweights (source=strategy) or your own targets (source=targets): whole\nshares, costs, turnover and a tax preview. Writes and sends nothing.",
+      "input_schema": {
+        "properties": {
+          "long_term_rate": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "tax rate as a fraction",
+            "title": "Long Term Rate"
+          },
+          "min_trade_value": {
+            "default": 0.0,
+            "minimum": 0,
+            "title": "Min Trade Value",
+            "type": "number"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "short_term_rate": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "tax rate as a fraction",
+            "title": "Short Term Rate"
+          },
+          "source": {
+            "enum": [
+              "strategy",
+              "targets"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Id"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "your own targets, ticker to weight, e.g. {\"AAPL.US\": 0.3}",
+            "title": "Targets"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "source"
+        ],
+        "title": "plan_rebalanceArguments",
+        "type": "object"
+      },
+      "name": "plan_rebalance",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Before a trade in one of your portfolios: the lots a sell closes\nunder your lot method, the realised gain and holding period, the\nestimated tax at the configured rate, the after-tax proceeds and a\nUS wash sale warning. An estimate, not tax advice. Places nothing.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one of your portfolios (not found otherwise); default: your own book",
+            "title": "Portfolio Id"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Default: latest close",
+            "title": "Price"
+          },
+          "quantity": {
+            "exclusiveMinimum": 0,
+            "maximum": 1000000000.0,
+            "title": "Quantity",
+            "type": "number"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "ticker": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._\\-^=]{0,31}$",
+            "title": "Ticker",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ticker",
+          "side",
+          "quantity"
+        ],
+        "title": "preview_trade_taxArguments",
+        "type": "object"
+      },
+      "name": "preview_trade_tax",
+      "needs_confirm": false
     },
     {
       "annotations": {
@@ -6004,7 +7137,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -6159,7 +7294,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -6286,7 +7423,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -7049,7 +8188,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -7648,7 +8789,9 @@
               {
                 "enum": [
                   "zero",
-                  "realistic"
+                  "realistic",
+                  "ibkr_tiered",
+                  "ibkr_fixed"
                 ],
                 "type": "string"
               },
@@ -8257,6 +9400,128 @@
       },
       "name": "set_event_alerts",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Work a portfolio's orders (or one strategy's) with an algo from the\nnext tickets on. Without confirm=true returns the current settings and\nchanges nothing.",
+      "input_schema": {
+        "properties": {
+          "algo": {
+            "enum": [
+              "adaptive",
+              "twap",
+              "vwap"
+            ],
+            "title": "Algo",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the algo's parameters",
+            "title": "Params"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "only this strategy's orders",
+            "title": "Strategy Id"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "algo"
+        ],
+        "title": "set_execution_algoArguments",
+        "type": "object"
+      },
+      "name": "set_execution_algo",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Turn on (or change) the alert of a saved screen. It runs after\neach data refresh and notifies you about names that newly match,\nthrough your notification channels. Notify only: nothing trades.\nThe first run stores the matches and sends nothing.",
+      "input_schema": {
+        "properties": {
+          "cadence": {
+            "default": "daily",
+            "description": "run on every trading day, or weekly",
+            "enum": [
+              "daily",
+              "weekly"
+            ],
+            "title": "Cadence",
+            "type": "string"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "screen_id": {
+            "description": "one of your saved screens",
+            "title": "Screen Id",
+            "type": "string"
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "maximum": 6,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "weekly: the day it runs, 0 = Monday",
+            "title": "Weekday"
+          }
+        },
+        "required": [
+          "screen_id"
+        ],
+        "title": "set_screen_alertArguments",
+        "type": "object"
+      },
+      "name": "set_screen_alert",
+      "needs_confirm": false
     },
     {
       "annotations": {
@@ -9240,6 +10505,53 @@
         "type": "object"
       },
       "name": "validate_rule_spec",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": false,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Queue a rerun of lab results from their stored manifests: per\ntarget the stored and rerun objective score, whether it moved beyond\nthe tolerance, and the tickers whose bars or corporate actions changed\nsince (vendor restatements). Returns the job; use wait_for_job for the\nresult. Research only: writes nothing.",
+      "input_schema": {
+        "properties": {
+          "targets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "lab run ids or strategy ids (default: every active strategy)",
+            "title": "Targets"
+          },
+          "tolerance": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "allowed score drift (default [lab.verify] tolerance)",
+            "title": "Tolerance"
+          }
+        },
+        "title": "verify_lab_resultsArguments",
+        "type": "object"
+      },
+      "name": "verify_lab_results",
       "needs_confirm": false
     },
     {

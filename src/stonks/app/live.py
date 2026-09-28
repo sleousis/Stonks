@@ -46,7 +46,7 @@ from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.execution.brokers.base import AccountReader, LiveAccountState
 from stonks.production.live.allocation import AllocationError, get_allocation, set_allocation
-from stonks.production.live.gates import GateFacts, GateReport, gate_days, gate_report
+from stonks.production.live.gates import GateCheck, GateFacts, GateReport, gate_days, gate_report
 from stonks.production.live.preview import LivePreview, PreviewError, live_book, run_preview
 from stonks.production.live.stages import (
     LiveStage,
@@ -785,10 +785,22 @@ class LiveService:
             or (portfolio.id == DEFAULT_PORTFOLIO_ID and settings.brokers.kind != "simulated"),
             allocation_set=get_allocation(state, portfolio.id) is not None,
             profile_set=get_profile(state, portfolio.id) is not None,
+            extra_checks=(self._replay(state, portfolio.id),),
         )
         return gate_report(
             state, portfolio.id, facts=facts, settings=settings.production.live.stages
         )
+
+    def _replay(self, state: SqliteState, portfolio_id: str) -> GateCheck:
+        """Roadmap 23.15: the book's strategies replayed over the last
+        sessions. Blocks on no decision or all errors, never on P&L."""
+        from stonks.app.replay import book_strategies, replay_gate_check, run_replay
+
+        try:
+            report = run_replay(self._ctx, state, book_strategies(state, portfolio_id))
+        except Exception as exc:  # a replay that cannot run is shown, not hidden
+            return GateCheck("recent_replay", False, f"the replay could not run: {exc}")
+        return replay_gate_check(report)
 
     @staticmethod
     def _portfolio(state: SqliteState, principal: Principal, portfolio_id: str) -> Portfolio:

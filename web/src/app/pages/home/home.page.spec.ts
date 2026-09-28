@@ -84,6 +84,7 @@ describe('HomePage', () => {
     (await nextRequest(controller, '/api/notifications')).flush({ items: [], unread_count: 0 });
     (await nextRequest(controller, '/api/subscriptions')).flush(page([]));
     (await nextRequest(controller, '/api/ticks')).flush(page([]));
+    (await nextRequest(controller, '/api/market/breadth')).flush(EMPTY_BREADTH);
   }
 
   /** Signed-in people also get their watchlists and the first-run guide. */
@@ -101,6 +102,28 @@ describe('HomePage', () => {
     (await nextRequest(controller, '/api/orders/fills')).flush(page([]));
     (await nextRequest(controller, '/api/orders')).flush(page([]));
   }
+
+  const EMPTY_BREADTH = {
+    universe: 'every stock in the lake',
+    breadth: {
+      as_of: null,
+      members: 0,
+      advancers: 0,
+      decliners: 0,
+      unchanged: 0,
+      advance_decline_ratio: null,
+      above_50: { days: 50, count: 0, eligible: 0, pct: null },
+      above_200: { days: 200, count: 0, eligible: 0, pct: null },
+      new_highs: 0,
+      new_lows: 0,
+      high_low_window: 252,
+      index: 'SPY.US',
+      distribution_days: null,
+      distribution_dates: [],
+      distribution_window: 25,
+      lines: [{ key: 'empty', text: 'No price data yet.', tone: 'neutral' }],
+    },
+  };
 
   function page<T>(items: T[]) {
     return { items, total: items.length, limit: 500, offset: 0 };
@@ -125,7 +148,12 @@ describe('HomePage', () => {
     expect(el.querySelector('h1')?.textContent).toContain('Hello, Ann');
     expect(el.querySelector('app-fills-tape')?.textContent).toContain('No fills this week');
     const headings = [...el.querySelectorAll('h2')].map((h) => h.textContent?.trim());
-    expect(headings).toEqual(['My portfolio', "Today's signals and runs", 'My strategies']);
+    expect(headings).toEqual([
+      'My portfolio',
+      "Today's signals and runs",
+      'My strategies',
+      'Market breadth',
+    ]);
     expect(el.textContent).toContain('$76,750.00');
     expect(el.textContent).toContain('-$1,250.00');
     // Biggest holding first.
@@ -161,6 +189,7 @@ describe('HomePage', () => {
       'All traders',
       "Today's signals and runs",
       'My strategies',
+      'Market breadth',
     ]);
     expect(el.textContent).toContain('$76,750.00');
     expect(el.textContent).toContain('$250,000.00');

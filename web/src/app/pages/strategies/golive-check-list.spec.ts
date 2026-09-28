@@ -57,6 +57,8 @@ function report(passed: boolean, presetPassed = true): GoLiveReport {
       dsr: 0.972,
       pbo: null,
       excess_cagr: 0.031,
+      min_capital: 4200,
+      lot_skipped_share: null,
       hypothesis: 'Recent winners keep winning for a while.',
       premortem: null,
     },
@@ -118,6 +120,8 @@ describe('GoliveCheckList', () => {
       'Deflated Sharpe 0.972',
       'PBO n/a',
       'Excess CAGR +3.10%',
+      'Minimum capital $4.2K',
+      'Skipped by whole shares n/a',
       'Hypothesis Recent winners keep winning for a while.',
       'Premortem Not recorded',
     ]);

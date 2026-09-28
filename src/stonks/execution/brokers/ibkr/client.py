@@ -128,6 +128,10 @@ class IbOrderRequest:
     #: order reduces the others by the same quantity, with overfill blocked.
     oca_group: str | None = None
     oca_type: int | None = None
+    #: An IBKR algo (roadmap 23.16): ``algoStrategy`` (``Adaptive``,
+    #: ``Vwap``, ``Twap``) and its ``algoParams`` as tag and value strings.
+    algo_strategy: str | None = None
+    algo_params: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)

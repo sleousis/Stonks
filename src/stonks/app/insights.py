@@ -39,18 +39,21 @@ from stonks.insights import (
     Exposure,
     Holding,
     HoldingAgreement,
+    LookThrough,
     PeriodPnl,
     RiskStats,
     allocation,
     beta,
     concentration,
     exposure,
+    look_through,
     period_pnl,
     realized_risk,
     returns_risk,
     strategy_agreement,
     weighted_returns,
 )
+from stonks.insights.behaviour import BehaviourFill, behaviour_report
 from stonks.insights.flows import flows_or_missing, lake_fx_loader
 from stonks.insights.models import MonthlyReturn
 from stonks.insights.returns import monthly_twr, mwr, net_flows
@@ -126,6 +129,18 @@ class InsightsView(BaseModel):
     )
 
 
+class LookThroughView(BaseModel):
+    """A portfolio's exposure with each held fund split into what it holds
+    (roadmap 23.14)."""
+
+    portfolio_id: str
+    as_of: date = Field(description="Fund holdings are the lists known on this day.")
+    currency: str = Field(description="Reporting currency. Amounts are not FX-converted.")
+    total_value: float
+    look_through: LookThrough
+    notes: list[str]
+
+
 class AgreementView(BaseModel):
     portfolio_id: str
     as_of: date | None = Field(description="The price day the strategies scored.")
@@ -154,6 +169,58 @@ class _Loaded:
     book: Book
     taken_at: datetime | None
     source: Source | None
+
+
+class BehaviourBucketView(BaseModel):
+    label: str
+    trades: int
+    pnl: float
+    win_rate: float | None
+
+
+class DispositionView(BaseModel):
+    avg_days_winners: float | None
+    avg_days_losers: float | None
+    ratio: float | None = Field(description="Losers held this many times longer than winners.")
+    present: bool = Field(description="Losers are held clearly longer than winners.")
+
+
+class OvertradingView(BaseModel):
+    active_days: int
+    entries_per_active_day: float | None
+    max_entries_in_a_day: int
+    busy_days: int = Field(description="Days with many entries (5 or more).")
+    busy_day_pnl: float
+    other_day_pnl: float
+
+
+class BehaviourView(BaseModel):
+    """How you trade by hand: your manual orders and the trades a broker
+    sync brought in, paired into round trips (FIFO, fees in)."""
+
+    portfolio_id: str
+    since: date | None
+    trades: int = Field(description="Closed round trips.")
+    open_positions: int
+    win_rate: float | None
+    total_pnl: float
+    avg_win: float | None
+    avg_loss: float | None
+    by_holding: list[BehaviourBucketView]
+    by_weekday: list[BehaviourBucketView] = Field(description="By the weekday of the entry.")
+    disposition: DispositionView
+    overtrading: OvertradingView
+    revenge: BehaviourBucketView = Field(
+        description="Entries within a day of a losing exit, and how they did."
+    )
+    versus_strategies: list[BehaviourBucketView] = Field(
+        description="Trades with, against or without a view of the active strategies' "
+        "signals at the entry."
+    )
+    against_strategies_cost: float | None = Field(
+        description="P&L of the trades against the strategies (negative: what it cost)."
+    )
+    sources: dict[str, int] = Field(description="Fills by source: manual or broker.")
 
 
 class InsightsService:
@@ -257,6 +324,54 @@ class InsightsService:
         total, missing = sum_in_base(amounts, base, fx, datetime.now(UTC).date())
         return (None if total is None else book.cash + total), missing
 
+    def look_through(
+        self, portfolio_id: str, *, top: int = 20, as_of: date | None = None
+    ) -> LookThroughView:
+        """Sector, country and single-name exposure of one portfolio with
+        its funds split by their latest holdings known on ``as_of``
+        (default today)."""
+        from stonks.funds import load_fund_snapshots
+
+        day = as_of or datetime.now(UTC).date()
+        book = self._load(portfolio_id).book
+        tickers = sorted({h.ticker for h in book.priced if h.ticker})
+        with self._ctx.lake() as lake:
+            funds = load_fund_snapshots(lake, tickers, day)
+            direct = [t for t in tickers if t not in funds]
+            df = (
+                lake.sql(
+                    "SELECT id, name, country_iso FROM instruments WHERE id = ANY(?)", [direct]
+                )
+                if direct
+                else pd.DataFrame(columns=["id", "name", "country_iso"])
+            )
+        rows = df.to_dict("records")
+        countries = {str(r["id"]): (_text(r["country_iso"]) or "").upper() or None for r in rows}
+        names = {str(r["id"]): _text(r["name"]) for r in rows}
+        result = look_through(book, funds, countries=countries, names=names, top=top)
+        notes: list[str] = []
+        if not funds:
+            notes.append(
+                "no fund in this portfolio has a holdings list yet, so this matches the "
+                "plain allocation"
+            )
+        if result.fund_value and result.listed_fund_value < result.fund_value:
+            share = 1.0 - result.listed_fund_value / result.fund_value
+            notes.append(
+                f"{share:.0%} of your fund value is in holdings the lists leave out "
+                "(shown as not listed)"
+            )
+        if book.unpriced:
+            notes.append(f"{len(book.unpriced)} holding(s) have no price and are left out")
+        return LookThroughView(
+            portfolio_id=portfolio_id,
+            as_of=day,
+            currency=book.base_currency,
+            total_value=book.total_value,
+            look_through=result,
+            notes=notes,
+        )
+
     def agreement(self, portfolio_id: str) -> AgreementView:
         """For each holding, what every active strategy's latest signal says."""
         book = self._load(portfolio_id).book
@@ -281,6 +396,130 @@ class InsightsService:
             skipped=skipped,
             holdings=rows,
         )
+
+    def behaviour(self, portfolio_id: str, *, since: date | None = None) -> BehaviourView:
+        """The behaviour report of the portfolio's manual and synced trades."""
+        fills = self._behaviour_fills(portfolio_id, since)
+        stance = self._stance_at_entry(sorted({f.ticker for f in fills}))
+        report = behaviour_report(fills, stance=stance)
+
+        def bucket(b: Any) -> BehaviourBucketView:
+            return BehaviourBucketView(
+                label=b.label, trades=b.trades, pnl=b.pnl, win_rate=b.win_rate
+            )
+
+        return BehaviourView(
+            portfolio_id=portfolio_id,
+            since=since,
+            trades=report.trades,
+            open_positions=report.open_positions,
+            win_rate=report.win_rate,
+            total_pnl=report.total_pnl,
+            avg_win=report.avg_win,
+            avg_loss=report.avg_loss,
+            by_holding=[bucket(b) for b in report.by_holding],
+            by_weekday=[bucket(b) for b in report.by_weekday],
+            disposition=DispositionView(**vars(report.disposition)),
+            overtrading=OvertradingView(**vars(report.overtrading)),
+            revenge=bucket(report.revenge),
+            versus_strategies=[bucket(b) for b in report.versus_strategies],
+            against_strategies_cost=report.against_strategies_cost,
+            sources=report.sources,
+        )
+
+    def _behaviour_fills(self, portfolio_id: str, since: date | None) -> list[BehaviourFill]:
+        """Manual fills, plus synced broker trades that no Stonks fill of the
+        book explains (a strategy's or a manual order sent to that broker)."""
+        start = (since or date(1900, 1, 1)).isoformat()
+        with self._ctx.state() as state:
+            manual = state.sql(
+                "SELECT f.id, f.ticker, f.quantity, f.price, f.fee, f.filled_at, o.side"
+                " FROM fills f JOIN orders o ON o.client_id = f.order_client_id"
+                " WHERE f.portfolio_id = ? AND o.origin = 'manual' AND f.filled_at >= ?",
+                [portfolio_id, start],
+            )
+            own = state.sql(
+                "SELECT f.ticker, f.quantity, substr(f.filled_at, 1, 10) AS day, o.side"
+                " FROM fills f JOIN orders o ON o.client_id = f.order_client_id"
+                " WHERE f.portfolio_id = ?",
+                [portfolio_id],
+            )
+            synced = state.sql(
+                "SELECT id, ticker, quantity, price, fee, trade_date FROM broker_activities"
+                " WHERE portfolio_id = ? AND kind = 'trade' AND ticker IS NOT NULL"
+                " AND quantity IS NOT NULL AND price IS NOT NULL AND trade_date >= ?",
+                [portfolio_id, start],
+            )
+        out = [
+            BehaviourFill(
+                id=f"fill:{r['id']}",
+                ticker=r["ticker"],
+                side=r["side"],
+                quantity=float(r["quantity"]),
+                price=float(r["price"]),
+                fee=float(r["fee"] or 0.0),
+                filled_at=_utc_time(r["filled_at"]),
+                source="manual",
+            )
+            for r in manual
+        ]
+        known = {(r["ticker"], r["side"], round(float(r["quantity"]), 6), r["day"]) for r in own}
+        for r in synced:
+            qty = float(r["quantity"])
+            side = "buy" if qty > 0 else "sell"
+            day = str(r["trade_date"])[:10]
+            if abs(qty) <= 1e-9 or (r["ticker"], side, round(abs(qty), 6), day) in known:
+                continue
+            out.append(
+                BehaviourFill(
+                    id=f"activity:{r['id']}",
+                    ticker=r["ticker"],
+                    side=side,
+                    quantity=abs(qty),
+                    price=float(r["price"]),
+                    fee=abs(float(r["fee"] or 0.0)),
+                    filled_at=_utc_time(str(r["trade_date"])),
+                    source="broker",
+                )
+            )
+        return out
+
+    def _stance_at_entry(self, tickers: list[str]) -> Any:
+        """``(ticker, day, direction) -> stance`` from the stored signals of
+        the strategies active now: the mean score of each strategy's latest
+        signal in the week up to the entry. A positive mean agrees with a
+        long entry, a negative one with a short entry."""
+        by_ticker: dict[str, list[tuple[date, str, float]]] = {}
+        if tickers:
+            marks = ",".join("?" for _ in tickers)
+            with self._ctx.state() as state:
+                rows = state.sql(
+                    "SELECT s.ticker, s.as_of, s.strategy_id, s.score FROM signals s"
+                    " JOIN strategies st ON st.id = s.strategy_id"
+                    f" WHERE st.status = 'active' AND s.score IS NOT NULL AND s.ticker IN ({marks})"
+                    " ORDER BY s.as_of",
+                    tickers,
+                )
+            for r in rows:
+                by_ticker.setdefault(r["ticker"], []).append(
+                    (date.fromisoformat(str(r["as_of"])[:10]), r["strategy_id"], float(r["score"]))
+                )
+
+        def stance(ticker: str, day: date, direction: int) -> Literal["with", "against", "no_view"]:
+            start = day - timedelta(days=7)
+            latest = {
+                sid: score
+                for as_of, sid, score in by_ticker.get(ticker, [])
+                if start <= as_of <= day
+            }
+            if not latest:
+                return "no_view"
+            mean = sum(latest.values()) / len(latest)
+            if abs(mean) <= 1e-12:
+                return "no_view"
+            return "with" if (mean > 0) == (direction > 0) else "against"
+
+        return stance
 
     # ---- admins ----------------------------------------------------------------
 
@@ -470,6 +709,15 @@ class InsightsService:
         frame = returns[list(weights)].dropna()
         series = {t: frame[t].tolist() for t in weights}
         return returns_risk(weighted_returns(weights, series))
+
+
+def _utc_time(value: str) -> datetime:
+    """A fill time or a trade day (at 16:00 UTC, after the US close) in UTC."""
+    raw = str(value)
+    if len(raw) <= 10:
+        return datetime.fromisoformat(raw[:10]).replace(hour=16, tzinfo=UTC)
+    parsed = datetime.fromisoformat(raw)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
 
 
 def _day(value: Any) -> date | None:

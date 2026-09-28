@@ -73,6 +73,10 @@ class Order:
     #: stop and the exits of the same position share one, so a fill of one
     #: shrinks the others and the position is never sold twice.
     oca_group: str | None = None
+    #: How the order is worked (roadmap 23.16): ``None`` for a plain order,
+    #: else ``{"name": ..., "params": {...}}`` naming a registered execution
+    #: algo (``stonks.execution.algos``). JSON-safe values only.
+    algo: Mapping[str, Any] | None = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         if self.quantity <= 0:
