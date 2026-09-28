@@ -484,8 +484,11 @@ def _score_permutation(scorer: PermutationScorer, seed: int) -> float:
 
 def permutation_p_value(real: float, permuted: list[float], *, minimize: bool = False) -> float:
     """+1-smoothed share of permuted scores at least as good as ``real``:
-    ``(count + 1) / (n + 1)`` — a conservative estimator."""
-    at_least_as_good = sum(1 for s in permuted if (s <= real if minimize else s >= real))
+    ``(count + 1) / (n + 1)`` — a conservative estimator. A NaN permuted
+    score counts as at least as good: it is no evidence against the null."""
+    at_least_as_good = sum(
+        1 for s in permuted if math.isnan(s) or (s <= real if minimize else s >= real)
+    )
     return (at_least_as_good + 1) / (len(permuted) + 1)
 
 

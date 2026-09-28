@@ -27,3 +27,10 @@ def test_seeds_are_deterministic_and_distinct():
     assert len(set(permutation_seeds(50, 1))) == 50
     # a longer run extends a shorter one: seed i doesn't depend on n
     assert permutation_seeds(8, 3)[:5] == permutation_seeds(5, 3)
+
+
+def test_a_nan_permuted_score_counts_against_the_real_one():
+    """A permutation that scored NaN is no evidence the real score beat it:
+    counting it as worse would push the p-value under the gate."""
+    assert permutation_p_value(0.5, [float("nan")] * 19) == pytest.approx(1.0)
+    assert permutation_p_value(0.5, [float("nan"), 0.9], minimize=True) == pytest.approx(2 / 3)
