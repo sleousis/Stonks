@@ -51,7 +51,9 @@ def _load(config_path: Path | None, transport: Any = None) -> _Loaded:
     from stonks.scheduling.backends import build_executor
 
     load_dotenv(override=False)
-    settings = load_settings(config_path)
+    from stonks.config_overrides import with_overrides
+
+    settings = with_overrides(load_settings(config_path))
     configure_logging(level=settings.logging.level)
     config = scheduler_config_from(settings, config_path)
     executor = build_executor(config, transport=transport)

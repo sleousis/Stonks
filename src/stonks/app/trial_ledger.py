@@ -23,7 +23,6 @@ from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.lab.trials import TrialLedger
 
-
 #: The run's robustness outcome, apart from how its trials ran (visual audit
 #: M5): ``survived`` or ``did_not_survive`` the robustness tests, ``error``
 #: when the run crashed, ``running`` while it goes, ``stopped`` when it

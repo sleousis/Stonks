@@ -124,7 +124,10 @@ def _settings() -> Settings:
     load_dotenv(override=False)
     settings = load_settings()
     configure_logging(level=settings.logging.level)
-    return settings
+    # the admin's console overrides (stonks.config_overrides) on top of TOML
+    from stonks.config_overrides import with_overrides
+
+    return with_overrides(settings)
 
 
 def _validate_source(value: str) -> str:
@@ -2538,6 +2541,12 @@ _register_drill(halts_app)
 from stonks.cli_assistant import app as assistant_app  # noqa: E402
 
 app.add_typer(assistant_app, name="assistant")
+
+# ---- system settings the console edits (complexity audit F61) ---------------
+
+from stonks.cli_settings import app as settings_app  # noqa: E402
+
+app.add_typer(settings_app, name="settings")
 
 if __name__ == "__main__":
     app()
