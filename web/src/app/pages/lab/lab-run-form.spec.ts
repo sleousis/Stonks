@@ -123,7 +123,9 @@ describe('LabRunFormView', () => {
     presets = [{ name: 'quick', tests: ['oos', 'drift'], options: {} }];
     await create();
     presets = [];
-    expect(el.querySelector('.suite-tests')?.textContent ?? el.textContent).toContain('Drift in the data');
+    expect(el.querySelector('.suite-tests')?.textContent ?? el.textContent).toContain(
+      'Drift in the data',
+    );
   });
 
   it('offers all 22 robustness tests for a custom suite, each with what it guards against', async () => {

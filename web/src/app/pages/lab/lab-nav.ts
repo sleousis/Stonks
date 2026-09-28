@@ -59,6 +59,12 @@ export const LAB_SECTIONS: readonly LabSection[] = [
   `,
   styles: `
     @use 'breakpoints' as bp;
+    // A grid or flex item that never widens the page: the row scrolls instead.
+    :host {
+      display: block;
+      min-width: 0;
+      max-width: 100%;
+    }
     .lab-nav {
       margin-bottom: var(--space-4);
       border-bottom: 1px solid var(--color-border);

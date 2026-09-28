@@ -80,6 +80,7 @@ def test_a_trader_builds_edits_and_fills_a_universe_then_an_admin_deletes_it(
 
     # The lab run form links the picked universe to its page.
     page = v.go("/lab")
+    page.locator("#lab-view-advanced").click()
     page.get_by_role("tab", name="Lab run").click()
     page.locator("#lr-universe").select_option(uid)
     link = page.get_by_role("link", name="See its members")

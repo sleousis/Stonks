@@ -80,3 +80,15 @@ One word per state, on every page.
 ## Where to add a word
 
 Add a new term here first, then in the console glossary (`web/src/app/core/help/`), then in the page. A term that is not here does not ship.
+
+## Research words
+
+| Old words | New words |
+|---|---|
+| Survival tests | Robustness tests (22, each named in plain words with what it guards against) |
+| Go-live suite (the `promotion` preset) | Full suite |
+| Verdict (of a lab run) | Robustness verdict: Passed or Failed |
+| A trial that ran, a trial that broke | Done, Error (a trial is one setting the search tried, never a test) |
+| Start paper trading if it passes | Put it on trial if it passes |
+| Strategy class, parameters | Strategy, settings |
+| Waiting for a worker | Queued |

@@ -34,7 +34,7 @@ import type { FormErrors, WindowForm } from './lab-requests';
         }
       </div>
     }
-    <div class="row">
+    <div class="row" [class.two]="!showInterval()">
       <div class="field">
         <label [for]="p + '-start'">Start</label>
         <input
@@ -113,6 +113,13 @@ import type { FormErrors, WindowForm } from './lab-requests';
       .row > :last-child {
         grid-column: auto;
       }
+    }
+    // Start and End only (no interval): two equal columns everywhere.
+    .row.two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .row.two > :last-child {
+      grid-column: auto;
     }
     .field {
       align-content: start;

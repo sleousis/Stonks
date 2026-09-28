@@ -540,7 +540,7 @@ describe('LabPage', () => {
     const names = [...el.querySelectorAll('app-sweep-result tbody tr .name')].map((n) =>
       n.textContent!.trim(),
     );
-    expect(names).toEqual(['momentum', 'buy_and_hold', 'macro_regime']);
+    expect(names).toEqual(['Momentum', 'Buy and hold', 'Economy filter']);
     expect(el.querySelector('app-sweep-result')!.textContent).toContain('n/a');
   });
 

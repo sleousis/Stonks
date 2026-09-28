@@ -277,7 +277,7 @@
                 <app-lab-run-result [result]="s.result" />
               }
               @case ('lab_sweep') {
-                <app-sweep-result [result]="s.result" />
+                <app-sweep-result [result]="s.result" [titles]="titlesById()" />
               }
               @case ('signal_ic') {
                 <app-signal-ic-result [result]="s.result" />

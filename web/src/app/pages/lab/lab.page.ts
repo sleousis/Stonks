@@ -280,6 +280,16 @@ export class LabPage {
         ]),
       ),
   );
+  /** Strategy id (`momentum`) to its plain name, for sweep rows. */
+  protected readonly titlesById = computed(
+    () =>
+      new Map(
+        (this.classes.hasValue() ? this.classes.value() : []).map((c) => [
+          c.name,
+          strategyTitle(c),
+        ]),
+      ),
+  );
   /** The saved strategy being tested again, by name. */
   protected readonly presetName = computed(() => {
     const p = this.strategyPreset();

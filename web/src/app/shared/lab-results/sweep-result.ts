@@ -5,6 +5,7 @@ import { formatNumber } from '../../core/format/format';
 import { NA } from '../metrics';
 import { DataTable, TableCell, type TableColumn } from '../ui/data-table/data-table';
 import { StatTile } from '../ui/stat-tile';
+import { humanize } from '../ui/param-form/param-spec';
 import { StatusPill } from '../ui/status-pill';
 import { numOrNa } from './result-figures';
 
@@ -80,7 +81,7 @@ export function rankSweepRows(rows: readonly SweepRowView[]): RankedSweepRow[] {
         [pageSize]="25"
       >
         <ng-template appCell="strategy" [appCellOf]="rows()" let-row>
-          <span class="name">{{ row.strategy }}</span>
+          <span class="name">{{ name(row.strategy) }}</span>
           @if (row.ticker) {
             <span class="muted ticker">{{ row.ticker }}</span>
           }
@@ -136,13 +137,30 @@ export function rankSweepRows(rows: readonly SweepRowView[]): RankedSweepRow[] {
 })
 export class SweepResult {
   readonly result = input.required<SweepResultView>();
+  /** Strategy id to its plain name (the catalog's titles); unknown ids read in words. */
+  readonly titles = input<ReadonlyMap<string, string>>(new Map());
+
+  protected name(id: string): string {
+    return this.titles().get(id) ?? humanize(id);
+  }
 
   protected readonly rows = computed(() => rankSweepRows(this.result().rows));
   protected readonly rowKey = (r: RankedSweepRow) => `${r.strategy}|${r.ticker ?? ''}`;
   protected readonly columns: TableColumn<RankedSweepRow>[] = [
     { key: 'rank', label: 'Rank', format: 'number', mobile: 'hide', help: false },
-    { key: 'strategy', label: 'Strategy', mobile: 'title', help: false },
-    { key: 'verdict', label: 'Verdict', value: (r) => VERDICT_ORDER[r.verdict], help: false },
+    {
+      key: 'strategy',
+      label: 'Strategy',
+      mobile: 'title',
+      help: false,
+      value: (r) => this.name(r.strategy),
+    },
+    {
+      key: 'verdict',
+      label: 'Robustness verdict',
+      value: (r) => VERDICT_ORDER[r.verdict],
+      help: 'lab_verdict',
+    },
     { key: 'best_score', label: 'Best score', align: 'end', help: false },
     {
       key: 'tests',

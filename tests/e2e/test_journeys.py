@@ -171,13 +171,30 @@ def test_build_universe_from_csv_and_view_members(browse, stack, viewport, tmp_p
     expect(page.get_by_role("link", name=uid)).to_be_visible()
 
 
+def test_lab_opens_on_a_simple_test_in_plain_words(browse, stack, viewport):
+    v = browse(stack.trader)
+    page = v.go("/lab")
+    simple = page.locator("#lab-simple")
+    expect(simple).to_be_visible()
+    expect(simple.locator(".steps li")).to_have_count(3)
+    # Plain names and summaries, never code docstrings or class names.
+    expect(simple).not_to_contain_text(":meth:")
+    expect(simple).not_to_contain_text("BuyAndHold")
+    expect(simple.get_by_role("radio", name=re.compile(r"^Moving average trend\b"))).to_be_visible()
+    # One button; a missing choice is named in plain words.
+    simple.get_by_role("button", name="Test it").click()
+    expect(simple).to_contain_text("Pick a strategy.")
+    v.check_page("lab-simple-test")
+
+
 def test_lab_run_with_quick_preset_shows_results(browse, stack, viewport):
     v = browse(stack.trader)
     page = v.go("/lab")
+    page.locator("#lab-view-advanced").click()
     page.get_by_role("tab", name="Lab run").click()
     form = page.locator("#lab-panel-lab_run")
     expect(form).to_be_visible()
-    form.get_by_role("radio", name=re.compile(r"^momentum\b")).check()
+    form.get_by_role("radio", name=re.compile(r"^Momentum\b")).check()
     page.locator("#lr-tickers").fill("AAA.US,BBB.US,CCC.US")
     start = stack.market_end.replace(year=stack.market_end.year - 1)
     page.locator("#lr-start").fill(start.isoformat())
@@ -189,6 +206,9 @@ def test_lab_run_with_quick_preset_shows_results(browse, stack, viewport):
 
     result = page.locator("section", has=page.get_by_role("heading", name="Result"))
     expect(result).to_contain_text(re.compile("pass|fail", re.I), timeout=180_000)
+    # The verdict in words, and trials are not tests.
+    expect(result).to_contain_text(re.compile("It held up|It did not hold up"))
+    expect(result).to_contain_text("A trial only says a setting ran")
     v.check_page("lab-run-result")
 
 

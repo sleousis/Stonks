@@ -185,7 +185,9 @@ import {
       } @else if (run.result(); as r) {
         <section class="result" aria-labelledby="obt-result-title">
           <div class="result-head">
-            <h3 id="obt-result-title">{{ r.strategy }} on {{ r.underlyings.join(', ') }}</h3>
+            <h3 id="obt-result-title">
+              {{ strategyName(r.strategy) }} on {{ r.underlyings.join(', ') }}
+            </h3>
             @if (r.verdict !== 'not_run') {
               <app-status-pill
                 [status]="r.verdict"
@@ -434,7 +436,7 @@ export class OptionsBacktest {
   }
 
   protected chartSummary(r: OptionsBacktestView): string {
-    return `Equity of ${r.strategy} over ${r.days} days, ending at a return of ${this.pct(r.final_return)}.`;
+    return `Equity of ${optionsStrategyName(r.strategy)} over ${r.days} days, ending at a return of ${this.pct(r.final_return)}.`;
   }
 
   async start(): Promise<void> {
@@ -455,7 +457,7 @@ export class OptionsBacktest {
     } finally {
       this.starting.set(false);
     }
-    this.toasts.success(`Started the options backtest of ${body.strategy}.`);
+    this.toasts.success(`Started the options backtest of ${optionsStrategyName(body.strategy)}.`);
     await this.run.follow(jobId);
   }
 }

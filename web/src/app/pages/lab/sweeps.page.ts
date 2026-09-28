@@ -22,6 +22,7 @@ import { JobProgress } from '../../shared/ui/job-progress';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { JobFollower } from './job-follower';
+import { strategyTitle } from './lab-requests';
 import { LabNav } from './lab-nav';
 import { SweepFormView } from './sweep-form';
 
@@ -108,7 +109,7 @@ import { SweepFormView } from './sweep-form';
             } @else if (run.loading()) {
               <app-loading-state label="Loading the sweep result" [rows]="6" />
             } @else if (run.result(); as r) {
-              <app-sweep-result [result]="r" />
+              <app-sweep-result [result]="r" [titles]="titles()" />
             }
           } @else {
             <app-empty-state
@@ -143,6 +144,16 @@ export class SweepsPage {
 
   protected readonly canRun = computed(() => this.session.can('lab.run'));
   protected readonly classes = resource({ loader: () => this.system.strategyClasses() });
+  /** Strategy id to its plain name, for the result rows. */
+  protected readonly titles = computed(
+    () =>
+      new Map(
+        (this.classes.hasValue() ? this.classes.value() : []).map((c) => [
+          c.name,
+          strategyTitle(c),
+        ]),
+      ),
+  );
   private readonly intervals = resource({ loader: () => this.system.intervals() });
   private readonly universes = resource({ loader: () => this.universesApi.list() });
   protected readonly intervalList = computed(() =>
