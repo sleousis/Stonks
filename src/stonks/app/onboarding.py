@@ -14,7 +14,8 @@ marked it done, **skipped** when they skipped it, else **todo**. Progress is
 stored per user (``onboarding_steps``, migration 026), so it follows the
 person across devices. Closing the guide stores ``dismissed_at``.
 
-Admins also get a system checklist: a data source key, a first ingest, a
+Admins also get a system checklist: a data source key, a first ingest,
+strategies to follow (the starter set, ``POST /api/starter/install``), a
 backup on disk and a running scheduler. It is read only: each item says
 what to do, and the console links to the page that does it.
 """
@@ -42,7 +43,7 @@ _log = get_logger("stonks.app.onboarding")
 
 StepId = Literal["account", "portfolio", "data", "follow", "alerts"]
 StepState = Literal["done", "skipped", "todo"]
-SystemCheckId = Literal["data_source", "first_ingest", "backup", "scheduler"]
+SystemCheckId = Literal["data_source", "first_ingest", "strategies", "backup", "scheduler"]
 
 STEPS: tuple[StepId, ...] = get_args(StepId)
 
@@ -175,6 +176,7 @@ class OnboardingService:
         checks = [
             self._data_source(),
             self._first_ingest(),
+            self._strategies(),
             self._backup(),
             self._scheduler(now),
         ]
@@ -205,6 +207,26 @@ class OnboardingService:
         return SystemCheckView(
             id="first_ingest", done=True, detail=f"{n} {_plural(n, 'data load')} with prices"
         )
+
+    def _strategies(self) -> SystemCheckView:
+        with self._ctx.state() as state:
+            rows = state.sql(
+                "SELECT status, COUNT(*) AS n FROM strategies"
+                " WHERE status != 'retired' GROUP BY status"
+            )
+        counts = {r["status"]: int(r["n"]) for r in rows}
+        if not counts:
+            return SystemCheckView(
+                id="strategies",
+                done=False,
+                detail="no strategy yet: install the starter set to put three simple ones on trial",
+            )
+        parts = [
+            f"{counts[s]} {label}"
+            for s, label in (("active", "approved"), ("shadow", "on trial"))
+            if counts.get(s)
+        ]
+        return SystemCheckView(id="strategies", done=True, detail=", ".join(parts))
 
     def _backup(self) -> SystemCheckView:
         from stonks.ops.backup import configured_target

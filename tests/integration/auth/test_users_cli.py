@@ -38,6 +38,11 @@ def test_bootstrap_then_list_then_reset(state_path, monkeypatch):
         (row,) = state.sql("SELECT password_hash FROM users WHERE id = ?", [DEFAULT_OWNER_ID])
     assert owner.email == "owner@example.com"
     assert FAST_HASHER.verify(row["password_hash"], PASSWORD)
+    # the starter set goes On trial with the first admin (complexity audit F19)
+    assert "on trial: starter_buy_and_hold" in result.output
+    with SqliteState(state_path) as state:
+        statuses = {r["status"] for r in state.sql("SELECT status FROM strategies")}
+    assert statuses == {"shadow"}
 
     again = _run("bootstrap", "--email", "owner@example.com")
     assert again.exit_code == 1 and "already has a password" in again.output

@@ -47,6 +47,7 @@ from stonks.api.routers import (
     shadow,
     signals,
     sources,
+    starter,
     statements,
     strategies,
     stream,
@@ -116,6 +117,7 @@ API_ROUTERS: list[APIRouter] = [
     live.router,
     calendars.router,
     screener.router,
+    starter.router,
     stream.router,
     system_settings.router,
 ]
