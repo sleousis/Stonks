@@ -159,3 +159,12 @@ describe('factor display helpers', () => {
     expect(divergingColor(0.025, 0.05)).toContain('var(--color-gain) 30%');
   });
 });
+
+describe('default factor windows on a leap day', () => {
+  it('starts on a real date', () => {
+    const leap = new Date(2028, 1, 29);
+    expect(defaultTearsheetForm(leap).start).toBe('2025-02-28');
+    expect(defaultFactorRunForm(MOM, leap).start).toBe('2023-02-28');
+    expect(defaultTearsheetForm(new Date(2026, 8, 26)).start).toBe('2023-09-26');
+  });
+});

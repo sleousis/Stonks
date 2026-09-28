@@ -96,8 +96,16 @@ export interface TearsheetForm {
 
 export function defaultTearsheetForm(today?: Date): TearsheetForm {
   const { end } = defaultWindow(today);
-  const start = `${Number(end.slice(0, 4)) - 3}${end.slice(4)}`;
+  const start = yearsBefore(end, 3);
   return { basket: defaultBasket(), start, end, horizons: '1, 5, 21', quantiles: 5 };
+}
+
+/** The same day `years` earlier ("YYYY-MM-DD"); a leap day falls back to February 28. */
+function yearsBefore(day: string, years: number): string {
+  const year = Number(day.slice(0, 4)) - years;
+  const rest = day.slice(4);
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  return rest === '-02-29' && !leap ? `${year}-02-28` : `${year}${rest}`;
 }
 
 export function tearsheetErrors(
@@ -153,7 +161,7 @@ export interface FactorRunForm {
 /** A library factor's own hypothesis starts the form; a formula starts blank (P1). */
 export function defaultFactorRunForm(factor: FactorView | null, today?: Date): FactorRunForm {
   const { end } = defaultWindow(today);
-  const start = `${Number(end.slice(0, 4)) - 5}${end.slice(4)}`;
+  const start = yearsBefore(end, 5);
   return {
     basket: defaultBasket(),
     start,
