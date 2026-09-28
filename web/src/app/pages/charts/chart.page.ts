@@ -22,6 +22,7 @@ import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
 import { SideTag } from '../../shared/ui/side-tag';
+import { strategyDisplayName } from '../../shared/strategy-names';
 import { NoBook } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { WatchlistFilter } from '../../shared/ui/watchlist-filter';
@@ -205,12 +206,17 @@ export class ChartPage {
     { key: 'side', label: 'Side', sortable: false },
     { key: 'quantity', label: 'Qty', value: (f) => Math.abs(f.quantity), format: 'number' },
     { key: 'price', label: 'Price', format: 'money' },
-    { key: 'strategy_id', label: 'Strategy', value: (f) => f.strategy_id ?? '', mobile: 'hide' },
+    {
+      key: 'strategy_id',
+      label: 'Strategy',
+      value: (f) => (f.strategy_id ? strategyDisplayName(f.strategy_id) : ''),
+      mobile: 'hide',
+    },
   ];
   protected readonly signalColumns: TableColumn<ChartSignalView>[] = [
     { key: 'as_of', label: 'Date', format: 'date', mobile: 'title' },
     { key: 'kind', label: 'Signal', value: (s) => SIGNAL_WORDS[s.kind] ?? s.kind },
-    { key: 'strategy_id', label: 'Strategy' },
+    { key: 'strategy_id', label: 'Strategy', value: (s) => strategyDisplayName(s.strategy_id) },
     { key: 'reason', label: 'Why', value: (s) => s.reason ?? '', sortable: false },
   ];
   protected readonly fillKey = (f: ChartFillView) => `${f.order_client_id}-${f.filled_at}`;

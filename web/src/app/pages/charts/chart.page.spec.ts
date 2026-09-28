@@ -40,11 +40,17 @@ function view(days: number): ChartView {
         quantity: 10,
         price: 120,
         order_client_id: 'o1',
-        strategy_id: 'mom',
+        strategy_id: 'momentum_3fa9c21b',
       },
     ],
     signals: [
-      { as_of: last, strategy_id: 'mom', kind: 'entry', strength: 0.5, reason: 'trend is up' },
+      {
+        as_of: last,
+        strategy_id: 'momentum_3fa9c21b',
+        kind: 'entry',
+        strength: 0.5,
+        reason: 'trend is up',
+      },
     ],
   };
 }
@@ -144,6 +150,9 @@ describe('ChartPage', () => {
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('h1')?.textContent).toContain('UP.US');
     expect(el.textContent).toContain('trend is up');
+    // Strategies by name, never by raw id (UX-27).
+    expect(el.textContent).toContain('Momentum 3fa9');
+    expect(el.textContent).not.toContain('momentum_3fa9c21b');
     expect(el.querySelector('app-side-tag')).not.toBeNull();
 
     // Toggles redraw without a new request.
