@@ -9,7 +9,7 @@ import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
-import { OPTIONS_OFF } from './live-options-card.spec';
+import { OPTIONS_OFF } from '../../../testing/fake-options-live';
 import {
   LiveSettingsPage,
   allocationErrors,
