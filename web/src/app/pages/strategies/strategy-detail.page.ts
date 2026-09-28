@@ -53,7 +53,7 @@ import { MonthlyReturns } from '../../shared/ui/monthly-returns';
 import { humanize } from '../../shared/ui/param-form/param-spec';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
-import { Segmented } from '../../shared/ui/segmented';
+import { type PageTab, PageTabs } from '../../shared/ui/page-tabs';
 import { SideTag } from '../../shared/ui/side-tag';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { ErrorState, EmptyState, LoadingState } from '../../shared/ui/states';
@@ -235,7 +235,7 @@ const NA = 'n/a';
     ModelVersionsPanel,
     MonthlyReturns,
     PermissionNote,
-    Segmented,
+    PageTabs,
     StatTile,
     TimeSeriesChart,
     DataTable,
@@ -270,12 +270,13 @@ export class StrategyDetailPage {
   protected readonly canSeeVersions = computed(
     () => this.session.can('lab.run') || this.session.can('strategy.promote'),
   );
-  protected readonly tabs = computed(() => [
-    { value: 'overview' as const, label: 'Overview' },
-    { value: 'results' as const, label: 'Results' },
-    { value: 'review' as const, label: 'Review' },
-    { value: 'details' as const, label: 'Details' },
-    ...(this.canSeeVersions() ? [{ value: 'versions' as const, label: 'Model versions' }] : []),
+  /** The page's sections, in the console's one tab style (`<app-page-tabs>`, M4). */
+  protected readonly tabs = computed<PageTab[]>(() => [
+    { id: 'overview', label: 'Overview' },
+    { id: 'results', label: 'Results' },
+    { id: 'review', label: 'Review' },
+    { id: 'details', label: 'Details' },
+    ...(this.canSeeVersions() ? [{ id: 'versions', label: 'Model versions' }] : []),
   ]);
   protected readonly shownTab = linkedSignal<DetailTab>(() => asTab(this.tab()));
 

@@ -229,7 +229,7 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     expect(page.locator("app-strategy-verdict")).to_be_visible()
     expect(page.get_by_role("button", name="Approve", exact=True)).to_have_count(0)
     expect(page.get_by_role("button", name="Override…")).to_have_count(0)
-    page.locator("app-segmented").get_by_role("radio", name="Review", exact=True).click()
+    page.locator("app-page-tabs").get_by_role("tab", name="Review", exact=True).click()
     expect(page.get_by_role("button", name="Retire", exact=True)).to_be_disabled()
     expect(page.locator("app-permission-note").first).to_be_visible()
     refused = trader.api("POST", f"/api/strategies/{sid}/promote", data={"reason": "trader tries"})

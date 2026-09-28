@@ -285,7 +285,7 @@ describe('StrategyDetailPage', () => {
   }
 
   async function openTab(label: string): Promise<void> {
-    Array.from(el.querySelectorAll<HTMLButtonElement>('app-segmented button'))
+    Array.from(el.querySelectorAll<HTMLButtonElement>('app-page-tabs button'))
       .find((b) => b.textContent?.trim() === label)!
       .click();
     await settle();
@@ -599,7 +599,7 @@ describe('StrategyDetailPage', () => {
     it('hides the Model versions tab from those who cannot run the Lab (F29)', async () => {
       allowed.set(false);
       await load();
-      const tabs = [...el.querySelectorAll('app-segmented button')].map((b) =>
+      const tabs = [...el.querySelectorAll('app-page-tabs button')].map((b) =>
         b.textContent?.trim(),
       );
       expect(tabs).toEqual(['Overview', 'Results', 'Review', 'Details']);

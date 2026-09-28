@@ -30,6 +30,7 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { SideTag } from '../../shared/ui/side-tag';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { type PageTab, PageTabs } from '../../shared/ui/page-tabs';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { RejectSheet } from './reject-sheet';
 import { SuggestedOrders } from './suggested-orders';
@@ -62,6 +63,7 @@ interface Group {
   selector: 'app-tickets-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    PageTabs,
     RouterLink,
     PageHeader,
     UpdatedAgo,
@@ -86,32 +88,20 @@ interface Group {
       <app-updated-ago [at]="auto.updatedAt()" />
     </app-page-header>
 
-    <div class="tabs" role="tablist" aria-label="Approvals views">
-      @for (v of views; track v.value) {
-        <button
-          type="button"
-          role="tab"
-          class="tab"
-          [id]="'tab-' + v.value"
-          [attr.aria-selected]="view() === v.value"
-          [attr.aria-controls]="'panel-' + v.value"
-          [tabIndex]="view() === v.value ? 0 : -1"
-          (click)="view.set(v.value)"
-          (keydown)="onTabKey($event)"
-        >
-          {{ v.label }}
-          @if (v.value === 'waiting' && waitingCount() > 0) {
-            <span class="count num">{{ waitingCount() }}</span>
-          }
-        </button>
-      }
-    </div>
+    <app-page-tabs
+      #tabBar
+      idPrefix="approvals"
+      label="Approvals views"
+      [tabs]="tabs()"
+      [selected]="view()"
+      (selectedChange)="pickView($event)"
+    />
 
     <div
       class="view"
       role="tabpanel"
-      [id]="'panel-' + view()"
-      [attr.aria-labelledby]="'tab-' + view()"
+      [id]="tabBar.panelId(view())"
+      [attr.aria-labelledby]="tabBar.tabId(view())"
     >
       @if (list.error(); as err) {
         <app-error-state
@@ -330,63 +320,6 @@ interface Group {
     .lead {
       color: var(--color-ink-2);
     }
-    .tabs {
-      display: flex;
-      gap: var(--space-1);
-      margin-top: calc(-1 * var(--space-2));
-      border-bottom: 1px solid var(--color-border);
-      overflow-x: auto;
-      scrollbar-width: none;
-    }
-    .tab {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      min-height: 36px;
-      padding: 0 var(--space-3);
-      margin-bottom: -1px;
-      border: 0;
-      border-bottom: 2px solid transparent;
-      background: transparent;
-      color: var(--color-ink-2);
-      font: inherit;
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
-      white-space: nowrap;
-      cursor: pointer;
-    }
-    .tab:hover,
-    .tab[aria-selected='true'] {
-      color: var(--color-ink);
-    }
-    .tab[aria-selected='true'] {
-      border-bottom-color: var(--color-accent);
-    }
-    .tab:focus-visible {
-      outline: 2px solid var(--color-focus);
-      outline-offset: -2px;
-    }
-    .count {
-      min-width: 1.25rem;
-      padding: 0 var(--space-1);
-      border-radius: var(--radius-pill, 999px);
-      background: var(--color-ink);
-      color: var(--color-surface);
-      font-size: var(--text-xs);
-      text-align: center;
-    }
-    @include bp.phone {
-      .tab {
-        flex: 1 1 auto;
-        justify-content: center;
-        min-height: var(--touch-min);
-      }
-    }
-    @include bp.coarse {
-      .tab {
-        min-height: var(--touch-min);
-      }
-    }
     .view {
       display: grid;
       gap: var(--space-5);
@@ -521,6 +454,14 @@ export class TicketsPage {
     { value: 'history', label: 'History' },
   ];
   protected readonly view = signal<View>('waiting');
+  /** The tab bar, with the count of orders waiting beside its tab. */
+  protected readonly tabs = computed<PageTab[]>(() =>
+    this.views.map((v) => ({
+      id: v.value,
+      label: v.label,
+      badge: v.value === 'waiting' ? this.waitingCount() : null,
+    })),
+  );
   /** Approving needs a signed-in browser with a fresh code. */
   protected readonly canApprove = computed(() => this.session.can('orders.approve'));
   protected readonly canReject = computed(() => this.session.can('portfolio.trade'));
@@ -615,20 +556,9 @@ export class TicketsPage {
     return typeof value === 'number' ? formatNumber(value, { digits: 2 }) : null;
   }
 
-  /** Arrow keys move between the two tabs (the WAI-ARIA tabs pattern). */
-  protected onTabKey(event: KeyboardEvent): void {
-    const order = this.views.map((v) => v.value);
-    const at = order.indexOf(this.view());
-    let next: number;
-    if (event.key === 'ArrowRight') next = (at + 1) % order.length;
-    else if (event.key === 'ArrowLeft') next = (at - 1 + order.length) % order.length;
-    else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = order.length - 1;
-    else return;
-    event.preventDefault();
-    this.view.set(order[next]);
-    const host = (event.currentTarget as HTMLElement).parentElement;
-    host?.querySelector<HTMLButtonElement>(`#tab-${order[next]}`)?.focus();
+  /** A tab picked in the tab bar (arrow keys included, the WAI-ARIA tabs pattern). */
+  protected pickView(value: string | null): void {
+    if (value === 'waiting' || value === 'history') this.view.set(value);
   }
 
   protected async approve(group: Group, tickets: readonly TicketView[]): Promise<void> {

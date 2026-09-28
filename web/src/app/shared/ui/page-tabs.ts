@@ -20,6 +20,8 @@ export interface PageTab {
   queryParams?: Record<string, string>;
   /** A section of this page: the tab is a button in a tablist. */
   id?: string;
+  /** A count beside the label ("Waiting for you 2"); hidden when null or 0. */
+  badge?: number | null;
 }
 
 /**
@@ -75,6 +77,9 @@ export interface PageTab {
             (keydown)="onKey($event, i)"
           >
             {{ t.label }}
+            @if (t.badge) {
+              <span class="badge num">{{ t.badge }}</span>
+            }
           </button>
         }
       </div>
@@ -120,6 +125,16 @@ export interface PageTab {
     }
     .tab:last-child {
       margin-right: 24px;
+    }
+    .badge {
+      min-width: 1.25rem;
+      margin-left: var(--space-2);
+      padding: 0 var(--space-1);
+      border-radius: var(--radius-pill, 999px);
+      background: var(--color-ink);
+      color: var(--color-surface);
+      font-size: var(--text-xs);
+      text-align: center;
     }
     .tab:hover {
       color: var(--color-ink);

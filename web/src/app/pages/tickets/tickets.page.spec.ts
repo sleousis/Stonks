@@ -223,9 +223,9 @@ describe('TicketsPage', () => {
       ticket({ status: 'filled', hold: null, decided_by: 'service:system' }),
       { ...MSFT, status: 'expired' },
     ]);
-    el.querySelector<HTMLButtonElement>('#tab-history')!.click();
+    el.querySelector<HTMLButtonElement>('#approvals-tab-history')!.click();
     fixture.detectChanges();
-    expect(el.querySelector('#tab-history')!.getAttribute('aria-selected')).toBe('true');
+    expect(el.querySelector('#approvals-tab-history')!.getAttribute('aria-selected')).toBe('true');
     expect(el.textContent).toContain('Filled');
     expect(el.textContent).toContain('Expired');
     expect(el.textContent).toContain('Auto');
@@ -235,13 +235,13 @@ describe('TicketsPage', () => {
     const count = TestBed.inject(TicketCountService);
     const el = await render([ticket()], [draft(), draft({ id: 'od_2', status: 'placed' })]);
     expect(el.textContent).toContain('2 orders wait for you');
-    expect(el.querySelector('#tab-waiting .count')!.textContent!.trim()).toBe('2');
+    expect(el.querySelector('#approvals-tab-waiting .badge')!.textContent!.trim()).toBe('2');
     const headings = [...el.querySelectorAll('h2')].map((h) => h.textContent!.trim());
     expect(headings.some((h) => h.startsWith('From strategies you follow'))).toBe(true);
     expect(headings.some((h) => h.startsWith('Suggested orders'))).toBe(true);
     expect(el.querySelector('app-suggested-orders')!.textContent).toContain('Suggested by');
     expect(count.waiting()).toBe(2);
-    el.querySelector<HTMLButtonElement>('#tab-history')!.click();
+    el.querySelector<HTMLButtonElement>('#approvals-tab-history')!.click();
     fixture.detectChanges();
     expect(el.querySelector('app-suggested-orders')!.textContent).toContain('Placed');
   });
@@ -255,12 +255,12 @@ describe('TicketsPage', () => {
 
   it('moves between the tabs with the arrow keys', async () => {
     const el = await render([]);
-    const waiting = el.querySelector<HTMLButtonElement>('#tab-waiting')!;
+    const waiting = el.querySelector<HTMLButtonElement>('#approvals-tab-waiting')!;
     waiting.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
     fixture.detectChanges();
-    expect(el.querySelector('#tab-history')!.getAttribute('aria-selected')).toBe('true');
+    expect(el.querySelector('#approvals-tab-history')!.getAttribute('aria-selected')).toBe('true');
     expect(el.querySelector('[role="tabpanel"]')!.getAttribute('aria-labelledby')).toBe(
-      'tab-history',
+      'approvals-tab-history',
     );
   });
 });
