@@ -197,7 +197,7 @@ sequenceDiagram
 3. Watch **Release**, then **Deploy**, in the Actions tab.
 4. On the server, run `docker compose run --rm api stonks users bootstrap --email you@example.com` once. Then open `https://stonks.<tailnet>.ts.net`, sign in and set up the second factor. Every call needs a sign-in or a token. Behind Caddy the API trusts forwarded client IPs only from the Compose network (`STONKS_DOCKER_SUBNET`).
 
-The release fails on purpose if the tag does not match `pyproject.toml`.
+The release fails on purpose if the tag does not match `pyproject.toml`, or if the tagged commit is not on `main`.
 
 ## 4. Updates
 

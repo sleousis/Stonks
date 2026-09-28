@@ -27,6 +27,16 @@ jobs:
       image: ${{ steps.version.outputs.image }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # A release deploys itself, so it must be code that went through a
+      # reviewed pull request and CI on the protected main branch.
+      - name: Tagged commit is on main
+        run: |
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "::error::Tag ${GITHUB_REF_NAME} points at a commit that is not on main. Merge first, then tag on main."
+            exit 1
+          fi
       - name: Tag matches pyproject.toml version
         id: version
         run: |

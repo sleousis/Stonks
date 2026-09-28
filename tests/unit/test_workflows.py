@@ -46,3 +46,12 @@ def test_third_party_actions_are_pinned_to_a_commit(path):
             continue
         ref = uses.rsplit("@", 1)[1]
         assert SHA.match(ref), f"{path.name}: pin {uses} to a full commit SHA"
+
+
+def test_a_release_only_ships_commits_that_are_on_main():
+    """The Release run feeds the automatic deploy, so a tag on an unmerged
+    branch must fail before anything is built."""
+    release = _load(Path(__file__).parents[2] / ".github" / "workflows" / "release.yml")
+    steps = release["jobs"]["verify"]["steps"]
+    assert steps[0]["with"]["fetch-depth"] == 0
+    assert any("merge-base --is-ancestor" in step.get("run", "") for step in steps)
