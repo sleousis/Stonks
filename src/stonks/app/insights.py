@@ -38,12 +38,14 @@ from stonks.insights import (
     Exposure,
     Holding,
     HoldingAgreement,
+    LookThrough,
     PeriodPnl,
     RiskStats,
     allocation,
     beta,
     concentration,
     exposure,
+    look_through,
     period_pnl,
     realized_risk,
     returns_risk,
@@ -119,6 +121,18 @@ class InsightsView(BaseModel):
         description="Time-weighted return of each month from the daily values, oldest first: "
         "deposits and withdrawals are left out. Empty when a flow has no FX rate.",
     )
+
+
+class LookThroughView(BaseModel):
+    """A portfolio's exposure with each held fund split into what it holds
+    (roadmap 23.14)."""
+
+    portfolio_id: str
+    as_of: date = Field(description="Fund holdings are the lists known on this day.")
+    currency: str = Field(description="Reporting currency. Amounts are not FX-converted.")
+    total_value: float
+    look_through: LookThrough
+    notes: list[str]
 
 
 class AgreementView(BaseModel):
@@ -240,6 +254,54 @@ class InsightsService:
                 fx = load_fx_rates(lake, {c for _, c in amounts if c} | {base})
         total, missing = sum_in_base(amounts, base, fx, datetime.now(UTC).date())
         return (None if total is None else book.cash + total), missing
+
+    def look_through(
+        self, portfolio_id: str, *, top: int = 20, as_of: date | None = None
+    ) -> LookThroughView:
+        """Sector, country and single-name exposure of one portfolio with
+        its funds split by their latest holdings known on ``as_of``
+        (default today)."""
+        from stonks.funds import load_fund_snapshots
+
+        day = as_of or datetime.now(UTC).date()
+        book = self._load(portfolio_id).book
+        tickers = sorted({h.ticker for h in book.priced if h.ticker})
+        with self._ctx.lake() as lake:
+            funds = load_fund_snapshots(lake, tickers, day)
+            direct = [t for t in tickers if t not in funds]
+            df = (
+                lake.sql(
+                    "SELECT id, name, country_iso FROM instruments WHERE id = ANY(?)", [direct]
+                )
+                if direct
+                else pd.DataFrame(columns=["id", "name", "country_iso"])
+            )
+        rows = df.to_dict("records")
+        countries = {str(r["id"]): (_text(r["country_iso"]) or "").upper() or None for r in rows}
+        names = {str(r["id"]): _text(r["name"]) for r in rows}
+        result = look_through(book, funds, countries=countries, names=names, top=top)
+        notes: list[str] = []
+        if not funds:
+            notes.append(
+                "no fund in this portfolio has a holdings list yet, so this matches the "
+                "plain allocation"
+            )
+        if result.fund_value and result.listed_fund_value < result.fund_value:
+            share = 1.0 - result.listed_fund_value / result.fund_value
+            notes.append(
+                f"{share:.0%} of your fund value is in holdings the lists leave out "
+                "(shown as not listed)"
+            )
+        if book.unpriced:
+            notes.append(f"{len(book.unpriced)} holding(s) have no price and are left out")
+        return LookThroughView(
+            portfolio_id=portfolio_id,
+            as_of=day,
+            currency=book.base_currency,
+            total_value=book.total_value,
+            look_through=result,
+            notes=notes,
+        )
 
     def agreement(self, portfolio_id: str) -> AgreementView:
         """For each holding, what every active strategy's latest signal says."""

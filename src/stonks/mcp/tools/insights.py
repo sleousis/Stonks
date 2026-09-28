@@ -43,6 +43,17 @@ def register(t: ToolContext) -> None:
         return await t.get("/api/insights", {"portfolio_id": portfolio_id, "benchmark": benchmark})
 
     @server.tool(annotations=READ)
+    async def get_look_through(
+        portfolio_id: PortfolioId = None,
+        top: Annotated[int, Field(ge=1, le=100, description="single names to list")] = 20,
+    ) -> dict[str, Any]:
+        """Look-through exposure of one of your portfolios: each held fund
+        (an ETF) split into what it holds, then summed by sector, country
+        and single name. Your real Apple weight counts AAPL plus its share
+        of SPY and QQQ. Funds without a holdings list stay whole."""
+        return await t.get("/api/insights/look-through", {"portfolio_id": portfolio_id, "top": top})
+
+    @server.tool(annotations=READ)
     async def get_strategy_agreement(portfolio_id: PortfolioId = None) -> dict[str, Any]:
         """For each holding of one of your portfolios: whether each active
         strategy's latest signal agrees or disagrees with it, and why."""

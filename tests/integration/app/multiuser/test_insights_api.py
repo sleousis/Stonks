@@ -155,3 +155,50 @@ def test_admins_get_totals_without_holdings(client, people, alice_book, settings
 
 def test_insights_need_a_credential(client, alice_book):
     assert client.get("/api/insights").status_code == 401
+
+
+def test_look_through_splits_a_held_fund(client, settings, people):
+    """Alice holds UP.US and FLAT.US, and FLAT.US is a fund that owns half
+    UP.US (roadmap 23.14)."""
+    from datetime import date, datetime
+
+    import pandas as pd
+
+    from stonks.store.lake import DuckDBLake
+
+    pid = _portfolio(settings.state.path, people["alice"]["id"], "Alice funds")
+    _snapshot(settings.state.path, pid, "2026-03-31", 0.0, '{"UP.US": 10, "FLAT.US": 100}', 1.0)
+    lake = DuckDBLake(settings.lake.path)
+    lake.upsert_fund_holdings(
+        pd.DataFrame(
+            [
+                {
+                    "fund": "FLAT.US",
+                    "holding": "UP.US",
+                    "as_of": date(2026, 3, 1),
+                    "source": "fake",
+                    "weight": 0.5,
+                    "sector": "Technology",
+                    "country": "US",
+                },
+            ]
+        ),
+        known_at=datetime(2026, 3, 2),
+    )
+    lake.close()
+    alice = people["alice"]["headers"]
+    res = client.get("/api/insights/look-through", params={"portfolio_id": pid}, headers=alice)
+    assert res.status_code == 200, res.text
+    body = res.json()
+    lt = body["look_through"]
+    up = next(n for n in lt["names"] if n["key"] == "UP.US")
+    flat_value = lt["funds"][0]["value"]
+    assert lt["funds"][0]["fund"] == "FLAT.US"
+    assert up["fund_value"] == pytest.approx(flat_value * 0.5)
+    assert up["funds"] == ["FLAT.US"]
+    assert any(s["key"] == "not listed" for s in lt["sector"])
+    assert any("not listed" in n for n in body["notes"])
+    # Bob may not read Alice's book.
+    bob = people["bob"]["headers"]
+    other = client.get("/api/insights/look-through", params={"portfolio_id": pid}, headers=bob)
+    assert other.status_code == 404
