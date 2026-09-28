@@ -5,6 +5,36 @@ export type ClientOptions = {
 };
 
 /**
+ * AboveAverage
+ */
+export type AboveAverage = {
+    /**
+     * Count
+     *
+     * Stocks closing above it.
+     */
+    count: number;
+    /**
+     * Days
+     *
+     * The average's length in sessions.
+     */
+    days: number;
+    /**
+     * Eligible
+     *
+     * Stocks with enough bars to have the average.
+     */
+    eligible: number;
+    /**
+     * Pct
+     *
+     * count / eligible; null when none is eligible.
+     */
+    pct: number | null;
+};
+
+/**
  * AccountProfileBody
  */
 export type AccountProfileBody = {
@@ -849,6 +879,117 @@ export type BorrowSettings = {
      * None
      */
     none?: Array<string>;
+};
+
+/**
+ * Breadth
+ */
+export type Breadth = {
+    above_200: AboveAverage;
+    above_50: AboveAverage;
+    /**
+     * Advance Decline Ratio
+     *
+     * advancers / decliners; null without decliners.
+     */
+    advance_decline_ratio: number | null;
+    /**
+     * Advancers
+     */
+    advancers: number;
+    /**
+     * As Of
+     *
+     * The last day with bars; null for an empty lake.
+     */
+    as_of: string | null;
+    /**
+     * Decliners
+     */
+    decliners: number;
+    /**
+     * Distribution Dates
+     */
+    distribution_dates: Array<string>;
+    /**
+     * Distribution Days
+     *
+     * Null without index bars.
+     */
+    distribution_days: number | null;
+    /**
+     * Distribution Window
+     */
+    distribution_window: number;
+    /**
+     * High Low Window
+     *
+     * Sessions in the high and low window.
+     */
+    high_low_window: number;
+    /**
+     * Index
+     *
+     * The index distribution days are counted on.
+     */
+    index: string | null;
+    /**
+     * Lines
+     *
+     * What the numbers mean, in plain words.
+     */
+    lines: Array<BreadthLine>;
+    /**
+     * Members
+     *
+     * Stocks with a close on as_of and the day before.
+     */
+    members: number;
+    /**
+     * New Highs
+     */
+    new_highs: number;
+    /**
+     * New Lows
+     */
+    new_lows: number;
+    /**
+     * Unchanged
+     */
+    unchanged: number;
+};
+
+/**
+ * BreadthLine
+ */
+export type BreadthLine = {
+    /**
+     * Key
+     */
+    key: 'advance_decline' | 'above_average' | 'highs_lows' | 'distribution' | 'empty';
+    /**
+     * Text
+     *
+     * One plain sentence.
+     */
+    text: string;
+    /**
+     * Tone
+     */
+    tone: 'good' | 'neutral' | 'bad';
+};
+
+/**
+ * BreadthView
+ */
+export type BreadthView = {
+    breadth: Breadth;
+    /**
+     * Universe
+     *
+     * What was measured, in words.
+     */
+    universe: string;
 };
 
 /**
@@ -3053,6 +3194,44 @@ export type FillView = {
      * Ticker
      */
     ticker: string;
+};
+
+/**
+ * FundCoverage
+ */
+export type FundCoverage = {
+    /**
+     * As Of
+     *
+     * The day the fund's holdings list describes.
+     */
+    as_of: string;
+    /**
+     * Covered
+     *
+     * Share of the fund the listed holdings explain (0 to 1).
+     */
+    covered: number;
+    /**
+     * Fund
+     */
+    fund: string;
+    /**
+     * Holdings
+     *
+     * Holdings listed for the fund.
+     */
+    holdings: number;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Value
+     *
+     * Market value of the fund in the book.
+     */
+    value: number;
 };
 
 /**
@@ -5369,6 +5548,160 @@ export type LoginView = {
      * User Id
      */
     user_id: string;
+};
+
+/**
+ * LookThrough
+ */
+export type LookThrough = {
+    /**
+     * Country
+     */
+    country: Array<LookThroughSlice>;
+    /**
+     * Fund Value
+     *
+     * Value of every held fund with a holdings list.
+     */
+    fund_value: number;
+    /**
+     * Funds
+     *
+     * Held funds with a holdings list.
+     */
+    funds: Array<FundCoverage>;
+    /**
+     * Listed Fund Value
+     *
+     * Part of fund_value the listed holdings explain. The rest shows as 'not listed'.
+     */
+    listed_fund_value: number;
+    /**
+     * Names
+     *
+     * Largest single names, funds split.
+     */
+    names: Array<LookThroughName>;
+    /**
+     * Sector
+     */
+    sector: Array<LookThroughSlice>;
+};
+
+/**
+ * LookThroughName
+ *
+ * One company with its direct and fund holdings added up (23.14).
+ */
+export type LookThroughName = {
+    /**
+     * Direct Value
+     */
+    direct_value: number;
+    /**
+     * Fund Value
+     */
+    fund_value: number;
+    /**
+     * Funds
+     *
+     * Held funds that own this name.
+     */
+    funds: Array<string>;
+    /**
+     * Key
+     *
+     * The ticker, or the fund's own code for the holding.
+     */
+    key: string;
+    /**
+     * Name
+     */
+    name: string | null;
+    /**
+     * Value
+     *
+     * Direct value plus each fund's value times its weight.
+     */
+    value: number;
+    /**
+     * Weight
+     *
+     * value / the book's total value.
+     */
+    weight: number | null;
+};
+
+/**
+ * LookThroughSlice
+ *
+ * One sector or country with funds split into what they hold (23.14).
+ */
+export type LookThroughSlice = {
+    /**
+     * Direct Value
+     *
+     * Part held directly, not through a fund.
+     */
+    direct_value: number;
+    /**
+     * Fund Value
+     *
+     * Part held through funds.
+     */
+    fund_value: number;
+    /**
+     * Key
+     *
+     * A sector, an ISO country code, cash, not listed or unknown.
+     */
+    key: string;
+    /**
+     * Value
+     *
+     * Market value in the group, funds split by weight.
+     */
+    value: number;
+    /**
+     * Weight
+     *
+     * value / the book's total value.
+     */
+    weight: number | null;
+};
+
+/**
+ * LookThroughView
+ *
+ * A portfolio's exposure with each held fund split into what it holds
+ * (roadmap 23.14).
+ */
+export type LookThroughView = {
+    /**
+     * As Of
+     *
+     * Fund holdings are the lists known on this day.
+     */
+    as_of: string;
+    /**
+     * Currency
+     *
+     * Reporting currency. Amounts are not FX-converted.
+     */
+    currency: string;
+    look_through: LookThrough;
+    /**
+     * Notes
+     */
+    notes: Array<string>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Total Value
+     */
+    total_value: number;
 };
 
 /**
@@ -11030,6 +11363,10 @@ export type ScreenUniverseView = {
  * SectorCapSettings
  */
 export type SectorCapSettings = {
+    /**
+     * Look Through
+     */
+    look_through?: boolean;
     /**
      * Max Weight Per Sector
      */
@@ -18605,6 +18942,60 @@ export type GetStrategyAgreementResponses = {
 
 export type GetStrategyAgreementResponse = GetStrategyAgreementResponses[keyof GetStrategyAgreementResponses];
 
+export type GetLookThroughData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Top
+         *
+         * Single names to list.
+         */
+        top?: number;
+        /**
+         * Portfolio Id
+         *
+         * One of your portfolios (404 otherwise). Default: your own book.
+         */
+        portfolio_id?: string | null;
+    };
+    url: '/api/insights/look-through';
+};
+
+export type GetLookThroughErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetLookThroughError = GetLookThroughErrors[keyof GetLookThroughErrors];
+
+export type GetLookThroughResponses = {
+    /**
+     * Successful Response
+     */
+    200: LookThroughView;
+};
+
+export type GetLookThroughResponse = GetLookThroughResponses[keyof GetLookThroughResponses];
+
 export type GetInsightsTotalsData = {
     body?: never;
     path?: never;
@@ -19890,6 +20281,54 @@ export type GetBarsResponses = {
 };
 
 export type GetBarsResponse = GetBarsResponses[keyof GetBarsResponses];
+
+export type GetMarketBreadthData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * As Of
+         *
+         * Measure on this day. Default: the last day with bars.
+         */
+        as_of?: string | null;
+    };
+    url: '/api/market/breadth';
+};
+
+export type GetMarketBreadthErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetMarketBreadthError = GetMarketBreadthErrors[keyof GetMarketBreadthErrors];
+
+export type GetMarketBreadthResponses = {
+    /**
+     * Successful Response
+     */
+    200: BreadthView;
+};
+
+export type GetMarketBreadthResponse = GetMarketBreadthResponses[keyof GetMarketBreadthResponses];
 
 export type ListCoverageData = {
     body?: never;

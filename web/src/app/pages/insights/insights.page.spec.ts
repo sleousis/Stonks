@@ -11,7 +11,7 @@ import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { tick } from '../../../testing/http';
-import { AGREEMENT, INSIGHTS, SNAPSHOTS, TOTALS } from './insights.fixtures';
+import { AGREEMENT, INSIGHTS, LOOK_THROUGH, SNAPSHOTS, TOTALS } from './insights.fixtures';
 import { InsightsPage, agreementLine } from './insights.page';
 
 describe('InsightsPage', () => {
@@ -70,6 +70,8 @@ describe('InsightsPage', () => {
         return req.flush(INSIGHTS);
       case '/api/insights/agreement':
         return req.flush(AGREEMENT);
+      case '/api/insights/look-through':
+        return req.flush(LOOK_THROUGH);
       case '/api/insights/totals':
         return req.flush(totalsBody);
       case '/api/portfolio/snapshots':

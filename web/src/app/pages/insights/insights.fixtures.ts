@@ -2,6 +2,7 @@ import type {
   AgreementView,
   InsightsTotalsView,
   InsightsView,
+  LookThroughView,
   Page,
   RiskPolicy,
   RiskSnapshotView,
@@ -240,4 +241,53 @@ export const RISK_HISTORY: Page<RiskSnapshotView> = {
   total: 2,
   limit: 20,
   offset: 0,
+};
+
+/** A book holding AAPL and SPY, with SPY split into what it owns (23.14). */
+export const LOOK_THROUGH: LookThroughView = {
+  portfolio_id: 'pf_1',
+  as_of: '2026-09-28',
+  currency: 'USD',
+  total_value: 10_000,
+  notes: ['90% of your fund value is in holdings the lists leave out (shown as not listed)'],
+  look_through: {
+    fund_value: 5_000,
+    listed_fund_value: 500,
+    funds: [
+      {
+        fund: 'SPY.US',
+        as_of: '2026-09-25',
+        source: 'eodhd',
+        value: 5_000,
+        holdings: 2,
+        covered: 0.1,
+      },
+    ],
+    names: [
+      {
+        key: 'AAPL.US',
+        name: 'Apple Inc',
+        value: 2_350,
+        weight: 0.235,
+        direct_value: 2_000,
+        fund_value: 350,
+        funds: ['SPY.US'],
+      },
+      {
+        key: 'JPM.US',
+        name: null,
+        value: 150,
+        weight: 0.015,
+        direct_value: 0,
+        fund_value: 150,
+        funds: ['SPY.US'],
+      },
+    ],
+    sector: [
+      { key: 'not listed', value: 4_500, weight: 0.45, direct_value: 0, fund_value: 4_500 },
+      { key: 'Technology', value: 2_350, weight: 0.235, direct_value: 2_000, fund_value: 350 },
+      { key: 'cash', value: 3_000, weight: 0.3, direct_value: 3_000, fund_value: 0 },
+    ],
+    country: [{ key: 'US', value: 2_500, weight: 0.25, direct_value: 2_000, fund_value: 500 }],
+  },
 };

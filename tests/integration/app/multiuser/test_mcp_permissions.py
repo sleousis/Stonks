@@ -290,6 +290,7 @@ CASES: dict[str, Case] = {
     "search_instruments": _c("GET", "/api/market/instruments"),
     "get_bars": _c("GET", "/api/market/bars", lambda i: {"ticker": "UP.US"}),
     "get_coverage": _c("GET", "/api/market/coverage"),
+    "get_market_breadth": _c("GET", "/api/market/breadth"),
     "list_orders": _c("GET", "/api/orders", lambda i: {"portfolio_id": i["portfolio"]}),
     "list_fills": _c("GET", "/api/orders/fills", lambda i: {"portfolio_id": i["portfolio"]}),
     "list_ticks": _c("GET", "/api/ticks"),
@@ -399,6 +400,9 @@ CASES: dict[str, Case] = {
         "GET", "/api/insights/agreement", lambda i: {"portfolio_id": i["portfolio"]}
     ),
     "get_insights_totals": _c("GET", "/api/insights/totals"),
+    "get_look_through": _c(
+        "GET", "/api/insights/look-through", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
     "get_chart": _c(
         "GET",
         "/api/charts/{ticker}",

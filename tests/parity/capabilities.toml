@@ -31,10 +31,10 @@ mcp = "run_ingest"
 [[capability]]
 id = "ingest.bulk"
 domain = "data"
-title = "Ingest macro, DeFi TVL, exchanges and stock borrow rates, derive intervals"
+title = "Ingest macro, DeFi TVL, exchanges, fund holdings and stock borrow rates, derive intervals"
 routes = []
 console = { limited = "operator bulk jobs, run by the scheduler" }
-cli = ["stonks ingest macro", "stonks ingest tvl", "stonks ingest exchanges", "stonks ingest borrow", "stonks ingest aggregate", "stonks ingest all-intervals"]
+cli = ["stonks ingest macro", "stonks ingest tvl", "stonks ingest funds", "stonks ingest exchanges", "stonks ingest borrow", "stonks ingest aggregate", "stonks ingest all-intervals"]
 mcp = { limited = "operator bulk jobs, run by the scheduler" }
 
 [[capability]]
@@ -81,6 +81,15 @@ routes = ["GET /api/market/coverage"]
 console = "listCoverage"
 cli = "stonks db info"
 mcp = "get_coverage"
+
+[[capability]]
+id = "market.breadth"
+domain = "data"
+title = "Market breadth: advances, averages, highs and lows, distribution days"
+routes = ["GET /api/market/breadth"]
+console = "getMarketBreadth"
+cli = { limited = "a display card read live in the console and MCP" }
+mcp = "get_market_breadth"
 
 [[capability]]
 id = "catalog"
@@ -691,6 +700,15 @@ routes = ["GET /api/insights/agreement"]
 console = "getStrategyAgreement"
 cli = { limited = "trader reads live in the console and MCP" }
 mcp = "get_strategy_agreement"
+
+[[capability]]
+id = "insights.look_through"
+domain = "insights"
+title = "Look-through exposure: funds split into what they hold"
+routes = ["GET /api/insights/look-through"]
+console = "getLookThrough"
+cli = { limited = "trader reads live in the console and MCP" }
+mcp = "get_look_through"
 
 [[capability]]
 id = "insights.totals"

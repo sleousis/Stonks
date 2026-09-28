@@ -1,6 +1,45 @@
 {
   "components": {
     "schemas": {
+      "AboveAverage": {
+        "properties": {
+          "count": {
+            "description": "Stocks closing above it.",
+            "title": "Count",
+            "type": "integer"
+          },
+          "days": {
+            "description": "The average's length in sessions.",
+            "title": "Days",
+            "type": "integer"
+          },
+          "eligible": {
+            "description": "Stocks with enough bars to have the average.",
+            "title": "Eligible",
+            "type": "integer"
+          },
+          "pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "count / eligible; null when none is eligible.",
+            "title": "Pct"
+          }
+        },
+        "required": [
+          "days",
+          "count",
+          "eligible",
+          "pct"
+        ],
+        "title": "AboveAverage",
+        "type": "object"
+      },
       "AccountProfileBody": {
         "additionalProperties": false,
         "properties": {
@@ -1535,6 +1574,189 @@
           }
         },
         "title": "BorrowSettings",
+        "type": "object"
+      },
+      "Breadth": {
+        "properties": {
+          "above_200": {
+            "$ref": "#/components/schemas/AboveAverage"
+          },
+          "above_50": {
+            "$ref": "#/components/schemas/AboveAverage"
+          },
+          "advance_decline_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "advancers / decliners; null without decliners.",
+            "title": "Advance Decline Ratio"
+          },
+          "advancers": {
+            "title": "Advancers",
+            "type": "integer"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The last day with bars; null for an empty lake.",
+            "title": "As Of"
+          },
+          "decliners": {
+            "title": "Decliners",
+            "type": "integer"
+          },
+          "distribution_dates": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Distribution Dates",
+            "type": "array"
+          },
+          "distribution_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null without index bars.",
+            "title": "Distribution Days"
+          },
+          "distribution_window": {
+            "title": "Distribution Window",
+            "type": "integer"
+          },
+          "high_low_window": {
+            "description": "Sessions in the high and low window.",
+            "title": "High Low Window",
+            "type": "integer"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The index distribution days are counted on.",
+            "title": "Index"
+          },
+          "lines": {
+            "description": "What the numbers mean, in plain words.",
+            "items": {
+              "$ref": "#/components/schemas/BreadthLine"
+            },
+            "title": "Lines",
+            "type": "array"
+          },
+          "members": {
+            "description": "Stocks with a close on as_of and the day before.",
+            "title": "Members",
+            "type": "integer"
+          },
+          "new_highs": {
+            "title": "New Highs",
+            "type": "integer"
+          },
+          "new_lows": {
+            "title": "New Lows",
+            "type": "integer"
+          },
+          "unchanged": {
+            "title": "Unchanged",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "as_of",
+          "members",
+          "advancers",
+          "decliners",
+          "unchanged",
+          "advance_decline_ratio",
+          "above_50",
+          "above_200",
+          "new_highs",
+          "new_lows",
+          "high_low_window",
+          "index",
+          "distribution_days",
+          "distribution_dates",
+          "distribution_window",
+          "lines"
+        ],
+        "title": "Breadth",
+        "type": "object"
+      },
+      "BreadthLine": {
+        "properties": {
+          "key": {
+            "enum": [
+              "advance_decline",
+              "above_average",
+              "highs_lows",
+              "distribution",
+              "empty"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "text": {
+            "description": "One plain sentence.",
+            "title": "Text",
+            "type": "string"
+          },
+          "tone": {
+            "enum": [
+              "good",
+              "neutral",
+              "bad"
+            ],
+            "title": "Tone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "text",
+          "tone"
+        ],
+        "title": "BreadthLine",
+        "type": "object"
+      },
+      "BreadthView": {
+        "properties": {
+          "breadth": {
+            "$ref": "#/components/schemas/Breadth"
+          },
+          "universe": {
+            "description": "What was measured, in words.",
+            "title": "Universe",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe",
+          "breadth"
+        ],
+        "title": "BreadthView",
         "type": "object"
       },
       "BrokerInfo": {
@@ -5648,6 +5870,49 @@
           "filled_at"
         ],
         "title": "FillView",
+        "type": "object"
+      },
+      "FundCoverage": {
+        "properties": {
+          "as_of": {
+            "description": "The day the fund's holdings list describes.",
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "covered": {
+            "description": "Share of the fund the listed holdings explain (0 to 1).",
+            "title": "Covered",
+            "type": "number"
+          },
+          "fund": {
+            "title": "Fund",
+            "type": "string"
+          },
+          "holdings": {
+            "description": "Holdings listed for the fund.",
+            "title": "Holdings",
+            "type": "integer"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "value": {
+            "description": "Market value of the fund in the book.",
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "fund",
+          "as_of",
+          "source",
+          "value",
+          "holdings",
+          "covered"
+        ],
+        "title": "FundCoverage",
         "type": "object"
       },
       "FxRateView": {
@@ -10119,6 +10384,215 @@
           "csrf_token"
         ],
         "title": "LoginView",
+        "type": "object"
+      },
+      "LookThrough": {
+        "properties": {
+          "country": {
+            "items": {
+              "$ref": "#/components/schemas/LookThroughSlice"
+            },
+            "title": "Country",
+            "type": "array"
+          },
+          "fund_value": {
+            "description": "Value of every held fund with a holdings list.",
+            "title": "Fund Value",
+            "type": "number"
+          },
+          "funds": {
+            "description": "Held funds with a holdings list.",
+            "items": {
+              "$ref": "#/components/schemas/FundCoverage"
+            },
+            "title": "Funds",
+            "type": "array"
+          },
+          "listed_fund_value": {
+            "description": "Part of fund_value the listed holdings explain. The rest shows as 'not listed'.",
+            "title": "Listed Fund Value",
+            "type": "number"
+          },
+          "names": {
+            "description": "Largest single names, funds split.",
+            "items": {
+              "$ref": "#/components/schemas/LookThroughName"
+            },
+            "title": "Names",
+            "type": "array"
+          },
+          "sector": {
+            "items": {
+              "$ref": "#/components/schemas/LookThroughSlice"
+            },
+            "title": "Sector",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sector",
+          "country",
+          "names",
+          "funds",
+          "fund_value",
+          "listed_fund_value"
+        ],
+        "title": "LookThrough",
+        "type": "object"
+      },
+      "LookThroughName": {
+        "description": "One company with its direct and fund holdings added up (23.14).",
+        "properties": {
+          "direct_value": {
+            "title": "Direct Value",
+            "type": "number"
+          },
+          "fund_value": {
+            "title": "Fund Value",
+            "type": "number"
+          },
+          "funds": {
+            "description": "Held funds that own this name.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Funds",
+            "type": "array"
+          },
+          "key": {
+            "description": "The ticker, or the fund's own code for the holding.",
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "value": {
+            "description": "Direct value plus each fund's value times its weight.",
+            "title": "Value",
+            "type": "number"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "value / the book's total value.",
+            "title": "Weight"
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "value",
+          "weight",
+          "direct_value",
+          "fund_value",
+          "funds"
+        ],
+        "title": "LookThroughName",
+        "type": "object"
+      },
+      "LookThroughSlice": {
+        "description": "One sector or country with funds split into what they hold (23.14).",
+        "properties": {
+          "direct_value": {
+            "description": "Part held directly, not through a fund.",
+            "title": "Direct Value",
+            "type": "number"
+          },
+          "fund_value": {
+            "description": "Part held through funds.",
+            "title": "Fund Value",
+            "type": "number"
+          },
+          "key": {
+            "description": "A sector, an ISO country code, cash, not listed or unknown.",
+            "title": "Key",
+            "type": "string"
+          },
+          "value": {
+            "description": "Market value in the group, funds split by weight.",
+            "title": "Value",
+            "type": "number"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "value / the book's total value.",
+            "title": "Weight"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "weight",
+          "direct_value",
+          "fund_value"
+        ],
+        "title": "LookThroughSlice",
+        "type": "object"
+      },
+      "LookThroughView": {
+        "description": "A portfolio's exposure with each held fund split into what it holds\n(roadmap 23.14).",
+        "properties": {
+          "as_of": {
+            "description": "Fund holdings are the lists known on this day.",
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "currency": {
+            "description": "Reporting currency. Amounts are not FX-converted.",
+            "title": "Currency",
+            "type": "string"
+          },
+          "look_through": {
+            "$ref": "#/components/schemas/LookThrough"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "total_value": {
+            "title": "Total Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "as_of",
+          "currency",
+          "total_value",
+          "look_through",
+          "notes"
+        ],
+        "title": "LookThroughView",
         "type": "object"
       },
       "LosingLockSettings": {
@@ -18925,7 +19399,9 @@
               "risk_per_position": {
                 "atr_multiple": 3.0
               },
-              "sector_cap": {},
+              "sector_cap": {
+                "look_through": false
+              },
               "short_caps": {},
               "short_option_guard": {
                 "approval_level": 2,
@@ -19583,7 +20059,9 @@
           },
           "sector_cap": {
             "$ref": "#/components/schemas/SectorCapSettings",
-            "default": {}
+            "default": {
+              "look_through": false
+            }
           },
           "short_caps": {
             "$ref": "#/components/schemas/ShortCapsSettings",
@@ -20474,6 +20952,11 @@
       "SectorCapSettings": {
         "additionalProperties": false,
         "properties": {
+          "look_through": {
+            "default": false,
+            "title": "Look Through",
+            "type": "boolean"
+          },
           "max_weight_per_sector": {
             "anyOf": [
               {
@@ -35389,6 +35872,119 @@
         ]
       }
     },
+    "/api/insights/look-through": {
+      "get": {
+        "description": "Exposure by sector, country and single name with each held fund\n(an ETF) split into what it holds, from the latest holdings lists. Your\nreal weight in Apple counts AAPL plus its share of SPY and QQQ.",
+        "operationId": "getLookThrough",
+        "parameters": [
+          {
+            "description": "Single names to list.",
+            "in": "query",
+            "name": "top",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Single names to list.",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Top",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "One of your portfolios (404 otherwise). Default: your own book.",
+            "in": "query",
+            "name": "portfolio_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "One of your portfolios (404 otherwise). Default: your own book.",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LookThroughView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Look Through",
+        "tags": [
+          "insights"
+        ],
+        "x-permission": "data.read"
+      }
+    },
     "/api/insights/totals": {
       "get": {
         "description": "Admins: asset-class allocation and exposure summed over every active\nportfolio. No tickers and no per-person numbers.",
@@ -38061,6 +38657,105 @@
         "tags": [
           "market"
         ]
+      }
+    },
+    "/api/market/breadth": {
+      "get": {
+        "description": "How many stocks take part in the market's move: advances and\ndeclines, the share above the 50 and 200 day averages, new one year\nhighs and lows, and distribution days on the index, with plain words.\nDisplay only.",
+        "operationId": "getMarketBreadth",
+        "parameters": [
+          {
+            "description": "Measure on this day. Default: the last day with bars.",
+            "in": "query",
+            "name": "as_of",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Measure on this day. Default: the last day with bars.",
+              "title": "As Of"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BreadthView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Breadth",
+        "tags": [
+          "market"
+        ],
+        "x-permission": "data.read"
       }
     },
     "/api/market/coverage": {

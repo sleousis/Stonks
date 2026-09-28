@@ -3,7 +3,12 @@ import { Injectable, inject } from '@angular/core';
 import { PortfolioContextService } from '../core/portfolio/portfolio-context.service';
 
 import { unwrap } from './api-call';
-import { getInsights, getInsightsTotals, getStrategyAgreement } from './generated/sdk.gen';
+import {
+  getInsights,
+  getInsightsTotals,
+  getLookThrough,
+  getStrategyAgreement,
+} from './generated/sdk.gen';
 import type { GetInsightsData } from './models';
 
 /**
@@ -22,6 +27,14 @@ export class InsightsService {
 
   agreement() {
     return unwrap(getStrategyAgreement({ query: this.ctx.query() }));
+  }
+
+  /**
+   * Exposure with each held fund split into what it holds (roadmap 23.14):
+   * your real weight in a sector, a country or one name.
+   */
+  lookThrough(top?: number) {
+    return unwrap(getLookThrough({ query: { ...this.ctx.query(), top } }));
   }
 
   /** Admins: asset-class allocation and exposure summed over every book. */
