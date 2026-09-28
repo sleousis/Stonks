@@ -31,6 +31,7 @@ BUILTIN = {
     "universes_refresh",
     "price_alerts",
     "calendars_refresh",
+    "price_check",
 }
 
 
@@ -62,6 +63,7 @@ def test_default_jobs_build():
         "engine_start",
         "engine_stop",
         "live_margin",
+        "price_check",
     }
     tick = by_name["tick"]
     # 21.2.5: the engine runs from before the open to after the close
@@ -96,6 +98,9 @@ def test_default_jobs_build():
     assert by_name["ingest_metadata"].trigger.offset < tick.trigger.offset
     # price alerts check the closes the ingest just stored (roadmap 20.2)
     assert ingest_at < by_name["price_alerts"].trigger.offset
+    # 23.6: the price check reads the stored closes and runs before the tick
+    check_at = by_name["price_check"].trigger.offset
+    assert ingest_at < check_at < tick.trigger.offset
     # reconciliation (roadmap 19.5): before the open, and after the close
     # but before the tick decides
     sod = by_name["live_sod_check"].trigger

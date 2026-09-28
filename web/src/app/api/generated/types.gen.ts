@@ -5380,9 +5380,17 @@ export type LosingLockSettings = {
      */
     lock_days?: number;
     /**
+     * Loss Window Days
+     */
+    loss_window_days?: number;
+    /**
      * Max Consecutive Losses
      */
     max_consecutive_losses?: number | null;
+    /**
+     * Max Loss Pct
+     */
+    max_loss_pct?: number | null;
 };
 
 /**
@@ -9408,6 +9416,123 @@ export type PriceBandSettings = {
 };
 
 /**
+ * PriceCheckItemView
+ */
+export type PriceCheckItemView = {
+    /**
+     * Adjustment Gap
+     */
+    adjustment_gap?: number | null;
+    /**
+     * Close Gap
+     */
+    close_gap?: number | null;
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Second Close
+     */
+    second_close?: number | null;
+    /**
+     * Source
+     */
+    source?: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Vendor Close
+     */
+    vendor_close?: number | null;
+    /**
+     * Vendor Date
+     */
+    vendor_date?: string | null;
+};
+
+/**
+ * PriceCheckRunBody
+ */
+export type PriceCheckRunBody = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
+};
+
+/**
+ * PriceCheckRunView
+ */
+export type PriceCheckRunView = {
+    check?: PriceCheckView | null;
+    /**
+     * Ran
+     */
+    ran: boolean;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+};
+
+/**
+ * PriceCheckView
+ */
+export type PriceCheckView = {
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Checked At
+     */
+    checked_at: string;
+    /**
+     * Detail
+     */
+    detail?: string | null;
+    /**
+     * Halt Id
+     */
+    halt_id?: number | null;
+    /**
+     * Held
+     */
+    held: Array<string>;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Items
+     */
+    items: Array<PriceCheckItemView>;
+    /**
+     * Source
+     */
+    source: string;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Tickers Checked
+     */
+    tickers_checked: number;
+    /**
+     * Tickers Compared
+     */
+    tickers_compared: number;
+};
+
+/**
  * ProbeView
  */
 export type ProbeView = {
@@ -10120,6 +10245,50 @@ export type RestoreResultView = {
 };
 
 /**
+ * ResumeCheckView
+ */
+export type ResumeCheckView = {
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Passed
+     */
+    passed: boolean | null;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id?: string | null;
+};
+
+/**
+ * ResumeChecksView
+ *
+ * What is checked before a kill switch resume (roadmap 23.15): per
+ * portfolio at a real broker, the gateway, the last reconcile, the
+ * account and the equity cover of the largest position.
+ */
+export type ResumeChecksView = {
+    /**
+     * Checks
+     */
+    checks: Array<ResumeCheckView>;
+    /**
+     * Halt Id
+     */
+    halt_id: number;
+    /**
+     * Passed
+     */
+    passed: boolean;
+};
+
+/**
  * ResumeRequest
  */
 export type ResumeRequest = {
@@ -10127,6 +10296,10 @@ export type ResumeRequest = {
      * Confirmation
      */
     confirmation: string;
+    /**
+     * Override Checks
+     */
+    override_checks?: boolean;
     /**
      * Reason
      */
@@ -18201,6 +18374,52 @@ export type ResumeKillSwitchResponses = {
 
 export type ResumeKillSwitchResponse = ResumeKillSwitchResponses[keyof ResumeKillSwitchResponses];
 
+export type GetResumeChecksData = {
+    body?: never;
+    path: {
+        /**
+         * Halt Id
+         */
+        halt_id: number;
+    };
+    query?: never;
+    url: '/api/halts/{halt_id}/resume-checks';
+};
+
+export type GetResumeChecksErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetResumeChecksError = GetResumeChecksErrors[keyof GetResumeChecksErrors];
+
+export type GetResumeChecksResponses = {
+    /**
+     * Successful Response
+     */
+    200: ResumeChecksView;
+};
+
+export type GetResumeChecksResponse = GetResumeChecksResponses[keyof GetResumeChecksResponses];
+
 export type GetHealthData = {
     body?: never;
     path?: never;
@@ -18241,6 +18460,90 @@ export type GetLivenessResponses = {
 };
 
 export type GetLivenessResponse = GetLivenessResponses[keyof GetLivenessResponses];
+
+export type GetPriceCheckData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/health/price-check';
+};
+
+export type GetPriceCheckErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetPriceCheckError = GetPriceCheckErrors[keyof GetPriceCheckErrors];
+
+export type GetPriceCheckResponses = {
+    /**
+     * Response Getpricecheck
+     *
+     * Successful Response
+     */
+    200: PriceCheckView | null;
+};
+
+export type GetPriceCheckResponse = GetPriceCheckResponses[keyof GetPriceCheckResponses];
+
+export type RunPriceCheckData = {
+    body: PriceCheckRunBody;
+    path?: never;
+    query?: never;
+    url: '/api/health/price-check/run';
+};
+
+export type RunPriceCheckErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RunPriceCheckError = RunPriceCheckErrors[keyof RunPriceCheckErrors];
+
+export type RunPriceCheckResponses = {
+    /**
+     * Successful Response
+     */
+    200: PriceCheckRunView;
+};
+
+export type RunPriceCheckResponse = RunPriceCheckResponses[keyof RunPriceCheckResponses];
 
 export type GetReadinessData = {
     body?: never;

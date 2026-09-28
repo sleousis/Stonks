@@ -343,6 +343,7 @@ CASES: dict[str, Case] = {
         "GET", "/api/shadow/strategies/{strategy_id}/pnl", lambda i: {"strategy_id": "bah_shadow"}
     ),
     "get_health_report": _c("GET", "/api/health/report"),
+    "get_price_check": _c("GET", "/api/health/price-check"),
     "get_stream_status": _c("GET", "/api/stream/status"),
     "get_broker": _c("GET", "/api/brokers"),
     "list_sources": _c("GET", "/api/sources"),

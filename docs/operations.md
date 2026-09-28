@@ -70,6 +70,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `ingest_prices`: last 7 days of daily bars for `[production].universe` | close + 30 min | 60 min |
 | `ingest_borrow`: IBKR's short stock files into `borrow_rates` (`[sources.ibkr_borrow] markets`) | close + 35 min | none |
 | `price_alerts`: every person's price alerts against the new closes | close + 40 min | none |
+| `price_check`: held and signalled tickers against a second source (see Second-source price check) | close + 42 min | none |
 | `tick` | close + 45 min | 60 min |
 | `report`: `reports/latest.html` next to the state DB | close + 90 min | none |
 | `health`: checks, and opens or clears the operational halt | every 4 hours | none |
@@ -90,7 +91,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `engine_start`: start the intraday engine process (see [intraday](design/intraday.md)) | open - 15 min | none |
 | `engine_stop`: ask the intraday engine to stop, and wait for it | close + 10 min | none |
 
-Session jobs run on NYSE trading days. The two engine jobs skip while `[engine] enabled = false`. The two options jobs skip while `[production.options] live = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio, and `live_margin` while no portfolio has a margin profile). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
+Session jobs run on NYSE trading days. `price_check` skips while `[production.price_check] enabled = false`. The two engine jobs skip while `[engine] enabled = false`. The two options jobs skip while `[production.options] live = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio, and `live_margin` while no portfolio has a margin profile). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
 
 The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 
@@ -268,6 +269,37 @@ Every `ingest prices` and `ingest intraday` batch is checked before it is stored
 - **Adjustment basis**: a daily batch whose `adj_close / close` differs from the stored bars it overlaps means a split or dividend. The older stored bars are scaled onto the new basis, and the summary lists the ticker under `readjusted` (see [universes.md](universes.md)).
 
 Each run stores a summary in `ingest_runs.quality_json` and alerts when it quarantines a bar, when 5 or more tickers warn, or when a fallback source supplied data. Set the thresholds under `[ingest.quality]`. Set a fallback source per primary under `[ingest.fallback]`, for example `sources = { eodhd = "yahoo" }`. Every ingest command, the scheduled ingest and the ensurer use both. Triage: [runbooks/data-stale.md](runbooks/data-stale.md).
+
+### Second-source price check
+
+Before the tick, the `price_check` job compares the vendor's latest close of every held and signalled ticker with a second source (roadmap 23.6). It also compares the adjusted return over the last `adjustment_window_days`, so a split or dividend one source applied and the other missed shows up.
+
+```mermaid
+flowchart LR
+  L[(lake closes)] --> C{compare}
+  Y[second source: Yahoo] --> C
+  M[IBKR marks for held tickers] --> C
+  C -->|one ticker off| H[its new buys held today, alert]
+  C -->|most tickers off| O[operational halt]
+  C --> R[(price_checks)]
+```
+
+- A gap on one ticker holds its opening orders for that day and alerts the operator. Sells and covers still go out.
+- When at least `systematic_share` of the compared tickers gap (and at least `min_systematic_tickers` were compared), the vendor is off: the global operational halt opens. The `price_check` health check keeps it open until a later check agrees, then the next health run clears it.
+- Held tickers of a portfolio on an IB Gateway are checked against IBKR's marks (closes only) with `use_broker_marks`. The rest go to `source`, Yahoo by default.
+- A ticker neither source prices is shown as unknown and never held.
+- Every run is a `price_checks` row. Health shows the newest one, `GET /api/health/price-check` and the MCP tool `get_price_check` read it, and `POST /api/health/price-check/run` runs it (admins).
+
+```toml
+[production.price_check]
+enabled = true
+source = "yahoo"
+max_close_gap = 0.02        # 2% off the second source's close
+max_adjustment_gap = 0.05   # adjusted returns 5% apart
+adjustment_window_days = 30
+systematic_share = 0.5
+min_systematic_tickers = 3
+```
 
 ## Alerts
 
@@ -543,6 +575,7 @@ flowchart LR
 - The IBKR adapter only sends an opening order to a live gateway when the portfolio is at `live_small` or up. Closes and cancels still go out, so a book moved down can wind down.
 - `live_gate_days` records, for every portfolio past `sim_paper`: orders sent, filled, rejected, refused by our own rules and stuck, fills with no commission, the TCA gap, the book's and its model book's return, and drift. A session is clean with no drift, no stuck order, every commission booked and under 2% rejected. A week that is not clean sends the owner an alert. It never changes the stage or the allocation.
 - Thresholds sit under `[production.live.stages]`: 20 paper days for gate 1, 20 clean sessions in `broker_paper` for gate 2, 40 sessions with the last 30 clean and 30 filled orders for gate 3, whose TCA gap interval must include zero or sit below it.
+- Every promotion also replays the book's strategies over the last `[production.live.replay] sessions` (5) sessions, point in time (`recent_replay`). It blocks when a strategy made no decision at all, failed on every call or did not load. It never looks at profit or loss. Switching a subscription to approve or auto, or turning a paused or disabled one back on, runs the same replay first. With no universe or no bars it shows as unavailable and does not block.
 - Checks with no data yet (drift before reconciliation lands, the kill switch drill before 19.11, tracking error without model books) show as "no data yet" and do not block. Tracking error needs `[production] model_books = "all"`.
 - The preview runs the live book's decision as a dry run through every rule and the broker's what-if. It never sends an order and needs trade rights only.
 
@@ -609,6 +642,16 @@ These risk rules act only on intraday books, on each event of the intraday engin
 - Overrides only tighten. A longer loss window is tighter, because it sees a higher peak.
 - The engine checks the halts on every event (`production.intraday_halts.event_verdict`), so a kill switch stops the next order, not the next day. A stop-all kill switch also cancels the book's working orders at the broker. The engine run summary counts halted orders, tripped halts and cancelled orders.
 - Clearing an `intraday_loss` halt needs a reason, like every halt.
+
+### Broker event journal
+
+With `[brokers.ibkr.journal] enabled = true`, every call the IBKR adapter makes to a gateway is written to disk with its raw answer or error: order status, executions, errors and the rest (roadmap 23.15). One JSON line per event under `<dir>/<gateway>/<role>/<UTC day>.jsonl`. An answer equal to the one before is stored as `unchanged`. Account ids are replaced by a short hash that keeps the `DU` or `U` prefix. It holds no credentials.
+
+```
+uv run stonks live journal data/broker_journal/paper/tick [--kind error] [--json]
+```
+
+To replay an incident in a test, read the files with `ReplayIbClient.from_files(paths)` and drive an `IbkrBroker` over it with the same calls: it answers as the gateway did then, errors included.
 
 ### Order states
 
@@ -689,6 +732,7 @@ flowchart LR
 - Engaging stop-all while a buys-only kill switch is on escalates it to stop everything. The old row closes with "escalated to all" and a new one opens. Engaging buys-only never weakens a stop-all.
 - Engaging also cancels the orders your portfolios still have working at an external broker (only buys with `buys_only`), and books the result. A failed cancel is logged and audited but never undoes the halt. Engage again to retry.
 - Resume the kill switch with `POST /api/halts/{id}/resume` and the text `RESUME TRADING`. Clear other halts with `POST /api/halts/{id}/clear` and a reason.
+- Before the phrase, the console, `stonks halts resume` and `GET /api/halts/{id}/resume-checks` show the resume checks for each covered portfolio at a real broker: the gateway answers, the last reconcile was clean, the account reads, and net liquidation is at least `[production.live.resume] min_equity_multiple` (1.5) times the largest position. A failed check refuses the resume unless you override it (`override_checks`, `--override-checks`). The audit row keeps the checks and the override. An unknown answer is shown and never blocks.
 - Every action writes an `audit_log` row. Every clear also writes a `risk_reset` row in `status_changes`.
 - A trip sends a `risk` notification to the portfolio owner, or to the admins for a global halt.
 - A halt on a broker portfolio also stops its paper account.

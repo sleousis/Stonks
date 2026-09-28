@@ -402,6 +402,14 @@ def register(t: ToolContext) -> None:
         return await t.get("/api/health/report", {"tickers": tickers})
 
     @server.tool(annotations=READ)
+    async def get_price_check() -> dict[str, Any] | None:
+        """The newest second-source price check: each held and signalled
+        ticker's vendor close and adjusted return against a second source,
+        and the tickers whose opening orders the tick holds (`held`). Null
+        before the first check."""
+        return await t.get("/api/health/price-check")
+
+    @server.tool(annotations=READ)
     async def get_stream_status() -> dict[str, Any]:
         """The live intraday engine: live or not, its market, the dead-man
         (`silent` after no bar close for `deadman_minutes` in market hours), the

@@ -333,6 +333,60 @@ def price_alerts_action(ctx: RunContext) -> JobOutcome:
     return JobOutcome("succeeded", out.as_dict())
 
 
+@register_action("price_check")
+def price_check_action(ctx: RunContext) -> JobOutcome:
+    """The second-source price check before the tick (roadmap 23.6). Skips
+    while ``[production.price_check] enabled = false``."""
+    from stonks.app.price_checks import PriceCheckRunView, _view, run_configured_price_check
+    from stonks.production.price_check import latest_check
+    from stonks.store.lake import DuckDBLake
+    from stonks.store.state import SqliteState
+
+    if not ctx.settings.production.price_check.enabled:
+        return JobOutcome("skipped", {"reason": "disabled"})
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        with DuckDBLake(ctx.settings.lake.path) as lake:
+            report, reason = run_configured_price_check(
+                ctx.settings, state, lake, ctx.fire.as_of, now=ctx.now
+            )
+        view = PriceCheckRunView(
+            ran=report is not None,
+            reason=reason,
+            check=_view(latest_check(state, ctx.fire.as_of)) if report is not None else None,
+        )
+    finally:
+        state.close()
+    return price_check_outcome(ctx, view.model_dump(mode="json"))
+
+
+def price_check_outcome(ctx: RunContext, view: dict[str, Any]) -> JobOutcome:
+    """A ``PriceCheckRunView`` as JSON onto the run's outcome: skipped, or
+    succeeded, with the operator alerted when tickers were held."""
+    from stonks.notify import Notification
+
+    if not view.get("ran"):
+        return JobOutcome("skipped", {"reason": view.get("reason")})
+    check = view.get("check") or {}
+    status = check.get("status")
+    detail = {
+        "status": status,
+        "compared": check.get("tickers_compared"),
+        "held": check.get("held", []),
+    }
+    if status not in ("gaps", "systematic"):
+        return JobOutcome("succeeded", detail)
+    ctx.notifier.notify(
+        Notification(
+            level="error" if status == "systematic" else "warning",
+            title=f"price check: {status}",
+            message=f"{check.get('detail')}. Held: {', '.join(check.get('held', [])[:10])}",
+            fields=detail,
+        )
+    )
+    return JobOutcome("succeeded", detail, alerted=True)
+
+
 @register_action("model_retrain")
 def model_retrain_action(ctx: RunContext) -> JobOutcome:
     """Refit in this process, opening the stores like the CLI does."""

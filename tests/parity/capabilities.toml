@@ -789,9 +789,9 @@ mcp = "engage_kill_switch"
 [[capability]]
 id = "halts.resume"
 domain = "risk"
-title = "Resume the kill switch"
-routes = ["POST /api/halts/{halt_id}/resume"]
-console = "resumeKillSwitch"
+title = "Resume the kill switch, after its resume checks"
+routes = ["POST /api/halts/{halt_id}/resume", "GET /api/halts/{halt_id}/resume-checks"]
+console = ["resumeKillSwitch", "getResumeChecks"]
 cli = "stonks halts resume"
 mcp = { limited = "step-up: a token cannot pass a second factor" }
 
@@ -1254,6 +1254,24 @@ title = "Run health checks now (opens or clears the operational halt)"
 routes = ["POST /api/health/run"]
 console = "runHealthChecks"
 cli = "stonks health"
+mcp = { limited = "changing a safety stop stays with a person" }
+
+[[capability]]
+id = "health.price_check"
+domain = "health"
+title = "Second-source price check: vendor closes against a second source, held tickers"
+routes = ["GET /api/health/price-check"]
+console = "getPriceCheck"
+cli = { limited = "the scheduler's price_check job runs it, stonks health shows the result" }
+mcp = "get_price_check"
+
+[[capability]]
+id = "health.price_check_run"
+domain = "health"
+title = "Run the price check now (a systematic gap opens the operational halt)"
+routes = ["POST /api/health/price-check/run"]
+console = { limited = "run by the scheduler before the tick" }
+cli = { limited = "run by the scheduler before the tick" }
 mcp = { limited = "changing a safety stop stays with a person" }
 
 [[capability]]

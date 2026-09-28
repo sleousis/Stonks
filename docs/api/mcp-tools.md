@@ -68,6 +68,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_pnl`](#get_pnl) | read | no |
 | [`get_portfolio`](#get_portfolio) | read | no |
 | [`get_portfolio_totals`](#get_portfolio_totals) | read | no |
+| [`get_price_check`](#get_price_check) | read | no |
 | [`get_reconcile_report`](#get_reconcile_report) | read | no |
 | [`get_research_session`](#get_research_session) | read | no |
 | [`get_risk_policy`](#get_risk_policy) | read | no |
@@ -689,6 +690,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 ### `get_portfolio_totals`
 
 Admins only: cash and value summed across every active portfolio (no holdings).
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
+### `get_price_check`
+
+The newest second-source price check: each held and signalled
+ticker's vendor close and adjusted return against a second source,
+and the tickers whose opening orders the tick holds (`held`). Null
+before the first check.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 

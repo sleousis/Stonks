@@ -220,7 +220,8 @@ export class HaltsPage {
   }
 
   async resume(h: HaltView): Promise<void> {
-    const reason = await this.resumeSheet().open({
+    const sheet = this.resumeSheet();
+    const opened = sheet.open({
       live: this.liveFor(h.scope, h.portfolio_id),
       lines: [
         { label: 'Scope', value: this.scopeText(h) },
@@ -229,13 +230,23 @@ export class HaltsPage {
         { label: 'Why it stopped', value: h.reason || 'None given' },
       ],
     });
-    if (reason === null) return;
+    // Roadmap 23.15: the resume checks show above the typed words.
+    this.api.resumeChecks(h.id).then(
+      (checks) => sheet.setChecks(checks),
+      () => sheet.setChecks('error'),
+    );
+    const answer = await opened;
+    if (answer === null) return;
     if (!(await this.stepUp.ensure('Resume trading'))) return;
     this.busyId.set(h.id);
     try {
       // A stale second factor comes back as 403 step_up_required: the session
       // interceptor prompts for a code and retries once.
-      await this.api.resume(h.id, { confirmation: RESUME_CONFIRMATION, reason });
+      await this.api.resume(h.id, {
+        confirmation: RESUME_CONFIRMATION,
+        reason: answer.reason,
+        ...(answer.overrideChecks ? { override_checks: true } : {}),
+      });
       this.toasts.success('Resumed trading.');
       await this.reload();
     } catch {
