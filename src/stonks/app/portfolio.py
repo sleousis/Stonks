@@ -9,6 +9,7 @@ portfolio that isn't yours, admins included). Admins get
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
@@ -21,9 +22,11 @@ from stonks.app.context import AppContext
 from stonks.app.cost_basis import FillLot, average_costs
 from stonks.app.errors import NotFoundError, ValidationError
 from stonks.app.pagination import Page
+from stonks.app.serialize import finite
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.production.ledger import ledger_filter
+from stonks.production.pnl import day_change
 
 #: Reporting currency when the held instruments don't agree on one (or the
 #: book is empty, or the lake has no currency for them).
@@ -108,6 +111,36 @@ class SnapshotView(BaseModel):
     cash: float
     positions: dict[str, float]
     total_value: float
+
+
+class DayChangeView(BaseModel):
+    """A book's headline value and change on its latest day. ``/api/pnl``
+    and ``/api/insights`` both carry it from
+    :func:`stonks.production.pnl.day_change`, so every page shows the same
+    number: format ``change_pct`` with one formatter everywhere."""
+
+    day: date = Field(description="The trading day of the latest snapshot.")
+    previous_day: date | None = Field(
+        description="The day the change is measured from (null with one day of history or "
+        "across a gap longer than a long weekend)."
+    )
+    value: float = Field(description="The book's value at the latest snapshot.")
+    change: float | None
+    change_pct: float | None = Field(description="change / the previous value (0.01 = +1%).")
+
+    @classmethod
+    def of(cls, rows: Sequence[Any]) -> DayChangeView | None:
+        """From ``load_pnl`` rows (``None`` without rows)."""
+        found = day_change(rows)
+        if found is None:
+            return None
+        return cls(
+            day=found.day,
+            previous_day=found.previous_day,
+            value=float(found.value),
+            change=finite(found.change),
+            change_pct=finite(found.change_pct),
+        )
 
 
 class LastRunTotalsView(BaseModel):

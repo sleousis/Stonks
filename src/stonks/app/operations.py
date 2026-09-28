@@ -13,6 +13,7 @@ from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError
 from stonks.app.pagination import Page
+from stonks.app.portfolio import DayChangeView
 from stonks.app.serialize import finite
 from stonks.config import HealthConfig, RiskPolicy
 from stonks.insights.flows import flows_or_missing, lake_fx_loader
@@ -56,6 +57,9 @@ class PnlSeries(BaseModel):
     twr: float | None = None
     #: Money-weighted return over the rows, annualized (XIRR).
     mwr: float | None = None
+    #: The headline value and day change (real portfolios), the same one
+    #: ``/api/insights`` carries.
+    day_change: DayChangeView | None = None
 
 
 class ShadowPnlSummary(BaseModel):
@@ -169,6 +173,7 @@ class OperationsService:
             net_flows=net_flows(points, flows),
             twr=None if flow_missing else twr(points, flows),
             mwr=None if flow_missing else mwr(points, flows),
+            day_change=DayChangeView.of(rows),
         )
 
     def _base_rows(

@@ -164,3 +164,28 @@ def test_gap_limit_compares_rows_up_to_and_including_the_limit():
     assert rows[1].daily_change == pytest.approx(10.0)
     assert rows[2].days_elapsed == 4
     assert rows[2].daily_change is None
+
+
+# ---- the headline day change (one source for Dashboard and Insights) ----------
+
+
+def test_day_change_is_the_last_row_against_the_one_before():
+    from stonks.production.pnl import day_change
+
+    change = day_change(daily_pnl([(date(2026, 9, 23), 10_150.0), (date(2026, 9, 24), 10_143.91)]))
+    assert change is not None
+    assert change.day == date(2026, 9, 24)
+    assert change.previous_day == date(2026, 9, 23)
+    assert change.value == pytest.approx(10_143.91)
+    assert change.change == pytest.approx(-6.09)
+    assert change.change_pct == pytest.approx(-6.09 / 10_150.0)
+
+
+def test_day_change_is_empty_across_a_gap_and_before_two_rows():
+    from stonks.production.pnl import day_change
+
+    assert day_change([]) is None
+    one = day_change(daily_pnl([(date(2026, 9, 24), 100.0)]))
+    assert one is not None and one.change is None and one.previous_day is None
+    gap = day_change(daily_pnl([(date(2026, 9, 1), 100.0), (date(2026, 9, 24), 90.0)]))
+    assert gap is not None and gap.change is None and gap.change_pct is None

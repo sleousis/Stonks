@@ -155,3 +155,36 @@ def test_admins_get_totals_without_holdings(client, people, alice_book, settings
 
 def test_insights_need_a_credential(client, alice_book):
     assert client.get("/api/insights").status_code == 401
+
+
+def test_dashboard_and_insights_share_one_day_change(client, people, alice_book):
+    """Visual audit M2: the P&L series (Dashboard, Today) and Insights read
+    the headline value and day change from one service, so they agree."""
+    alice = people["alice"]["headers"]
+    pnl = client.get("/api/pnl", params={"portfolio_id": alice_book}, headers=alice).json()
+    insights = client.get(
+        "/api/insights", params={"portfolio_id": alice_book}, headers=alice
+    ).json()
+    assert pnl["day_change"] == insights["day_change"]
+    assert insights["day_change"] == {
+        "day": "2026-03-31",
+        "previous_day": "2026-03-30",
+        "value": 8_000.0,
+        "change": 3_000.0,
+        "change_pct": pytest.approx(0.6),
+    }
+    one_d = {p["period"]: p for p in insights["pnl"]}["1d"]
+    assert one_d["change"] == insights["day_change"]["change"]
+    assert one_d["change_pct"] == insights["day_change"]["change_pct"]
+
+
+def test_the_day_change_is_empty_on_both_across_a_gap(client, settings, people):
+    pid = _portfolio(settings.state.path, people["alice"]["id"], "Gappy")
+    _snapshot(settings.state.path, pid, "2026-03-01", 100.0, "{}", 100.0)
+    _snapshot(settings.state.path, pid, "2026-03-31", 90.0, "{}", 90.0)
+    alice = people["alice"]["headers"]
+    pnl = client.get("/api/pnl", params={"portfolio_id": pid}, headers=alice).json()
+    insights = client.get("/api/insights", params={"portfolio_id": pid}, headers=alice).json()
+    assert pnl["day_change"] == insights["day_change"]
+    assert insights["day_change"]["change"] is None
+    assert {p["period"]: p for p in insights["pnl"]}["1d"]["change"] is None
