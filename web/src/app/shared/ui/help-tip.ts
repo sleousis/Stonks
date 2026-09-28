@@ -96,12 +96,13 @@ let nextId = 0;
       color: var(--color-ink-3);
       cursor: help;
     }
-    /* A 44px hit area on touch without changing the layout. */
-    @media (pointer: coarse) {
-      .trigger::after {
-        content: '';
-        position: absolute;
-        inset: -10px;
+    /* Phones and touch screens: the button itself is 44px (M12), and
+       negative margins keep the line as tall as the 24px icon made it. */
+    @media (pointer: coarse), (max-width: 767.98px) {
+      .trigger {
+        width: var(--touch-min);
+        height: var(--touch-min);
+        margin: -13px -10px;
       }
     }
     .trigger:hover,

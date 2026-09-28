@@ -4,7 +4,7 @@ export default [
   { path: '', pathMatch: 'full', redirectTo: 'glossary' },
   {
     path: 'glossary',
-    title: 'Glossary',
+    title: 'Help',
     loadComponent: () => import('./glossary.page').then((m) => m.GlossaryPage),
   },
 ] satisfies Routes;
