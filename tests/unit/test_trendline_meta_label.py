@@ -323,3 +323,32 @@ def test_bet_sizing_scales_the_entry(lake):
     s._classifier = _FixedProb(0.52)  # admitted, but the bet size rounds to 0
     s._prob_memo.clear()
     assert s.estimate_return("X.US", as_of, lake) is None
+
+
+# ---- probability forecasts (roadmap 23.9) ----------------------------------------
+
+
+def test_forecasts_and_resolves_its_open_trades(lake):
+    from stonks.core.forecasts import ProbabilityForecaster
+
+    s = _strategy()
+    s.fit(_dataset(lake))
+    assert isinstance(s, ProbabilityForecaster)
+    as_of = _open_trade_day(s, lake)
+    forecast = s.forecast_probability("X.US", as_of, lake)
+    assert forecast is not None and 0.0 <= forecast.probability <= 1.0
+    trade = s.open_trade("X.US", as_of, lake)
+    assert forecast.event_key.startswith(str(trade.entry_ts.date()))
+    assert s.forecast_outcome("X.US", forecast.event_key, as_of, lake) is None  # still open
+    later = next(
+        d.to_pydatetime()
+        for d in DATES[DATES.get_loc(pd.Timestamp(as_of)) + 1 :]
+        if s.forecast_outcome("X.US", forecast.event_key, d.to_pydatetime(), lake) is not None
+    )
+    outcome = s.forecast_outcome("X.US", forecast.event_key, later, lake)
+    assert isinstance(outcome, bool)
+    assert s.forecast_probability("OTHER.US", as_of, lake) is None
+
+
+def test_unfitted_strategy_forecasts_nothing(lake):
+    assert _strategy().forecast_probability("X.US", DATES[600].to_pydatetime(), lake) is None

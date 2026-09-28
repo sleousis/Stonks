@@ -14,6 +14,7 @@ from stonks.api.routers._jobs_common import JOB_CREATED, accepted
 from stonks.app.jobs import Job
 from stonks.app.model_versions import (
     RETRAIN_JOB,
+    CalibrationView,
     ModelVersionView,
     RetrainRequest,
     RetrainResultView,
@@ -62,6 +63,17 @@ def check_swap(strategy_id: str, version: Version, services: ServicesDep) -> Swa
     """The swap check of a candidate against the live version
     (``[lifecycle.swap]``). Reports only."""
     return services.model_versions.check(strategy_id, version)
+
+
+@router.get(
+    "/api/strategies/{strategy_id}/versions/{version}/calibration",
+    response_model=CalibrationView,
+    operation_id="getModelCalibration",
+)
+def model_calibration(strategy_id: str, version: Version, services: ServicesDep) -> CalibrationView:
+    """Live calibration of a classifier version's forecasts (roadmap 23.9):
+    Brier score, base rate and reliability table."""
+    return services.model_versions.calibration(strategy_id, version)
 
 
 @router.post(

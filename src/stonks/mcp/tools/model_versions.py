@@ -74,6 +74,15 @@ def register(t: ToolContext) -> None:
         swap_model_version: an override skips exactly these checks."""
         return await t.get(f"/api/strategies/{seg(strategy_id)}/versions/{int(version)}/check")
 
+    @server.tool(annotations=READ)
+    async def get_model_calibration(strategy_id: str, version: Version) -> dict[str, Any]:
+        """Live calibration of a classifier version's probability forecasts:
+        Brier score against the base rate, skill, expected calibration error
+        and the reliability table. Empty for a model with no forecasts."""
+        return await t.get(
+            f"/api/strategies/{seg(strategy_id)}/versions/{int(version)}/calibration"
+        )
+
     @server.tool(annotations=JOB)
     async def retrain_models(
         confirm: Confirm = False,
