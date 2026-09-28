@@ -124,7 +124,10 @@ def _settings() -> Settings:
     load_dotenv(override=False)
     settings = load_settings()
     configure_logging(level=settings.logging.level)
-    return settings
+    # the admin's console overrides (stonks.config_overrides) on top of TOML
+    from stonks.config_overrides import with_overrides
+
+    return with_overrides(settings)
 
 
 def _validate_source(value: str) -> str:
@@ -1275,14 +1278,24 @@ def _users_call(fn: Any) -> Any:
 @users_app.command("bootstrap")
 def users_bootstrap(
     email: str = typer.Option(..., "--email", help="the first admin's sign-in email"),
+    starter: bool = typer.Option(
+        True, "--starter/--no-starter", help="install the starter strategies (On trial)"
+    ),
 ) -> None:
     """Give the bootstrap admin an email and a password so the first sign-in
-    works. The second factor is set up at that sign-in."""
+    works. The second factor is set up at that sign-in. Also installs the
+    starter set (three simple strategies On trial and a small trading
+    universe) unless ``--no-starter``."""
     from stonks.auth.prompt import read_new_password
 
-    svc = _auth_service(_settings())
+    settings = _settings()
+    svc = _auth_service(settings)
     user = _users_call(lambda: svc.bootstrap_admin(email, read_new_password()))
     console.print(f"bootstrap admin {user.id} can now sign in as {user.email}")
+    if starter:
+        from stonks.cli_starter import install_and_print
+
+        install_and_print(settings)
 
 
 @users_app.command("reset-password")
@@ -2538,6 +2551,18 @@ _register_drill(halts_app)
 from stonks.cli_assistant import app as assistant_app  # noqa: E402
 
 app.add_typer(assistant_app, name="assistant")
+
+# ---- system settings the console edits (complexity audit F61) ---------------
+
+from stonks.cli_settings import app as settings_app  # noqa: E402
+
+app.add_typer(settings_app, name="settings")
+
+# ---- the starter set (complexity audit F19) ----------------------------------
+
+from stonks.cli_starter import app as starter_app  # noqa: E402
+
+app.add_typer(starter_app, name="starter")
 
 if __name__ == "__main__":
     app()

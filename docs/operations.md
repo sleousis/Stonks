@@ -20,6 +20,20 @@ flowchart LR
 
 Run `uv run stonks db init` after every upgrade, before the first tick. It applies new migrations to both stores.
 
+### First run: the starter set
+
+A fresh install has no strategy, so invited traders would have nothing to follow. `stonks users bootstrap` also installs the starter set (skip it with `--no-starter`). `stonks starter install` does the same later, and so does `POST /api/starter/install` (admins). It is safe to run again.
+
+| Starter | What it does |
+|---------|--------------|
+| `starter_buy_and_hold` | Buys SPY once and holds it: the yardstick. |
+| `starter_trend` | Carver's EWMAC trend following over the universe. |
+| `starter_momentum` | Holds the fund that rose most over six months, skipping the last month. |
+
+Each starter is registered **On trial**, like any lab result. It runs its own test book every trading run and needs the go-live check (or an audited override) before it is approved. Traders can follow a starter in Alerts only or Paper mode right away. The strategy list marks each one with a `starter` title and summary.
+
+When no trading universe is set, the install also sets `production.universe` to ten liquid ETFs (SPY, QQQ, IWM, EFA, EEM, TLT, IEF, GLD, VNQ, XLE) as a console override. Load about two years of their prices once, for example `uv run stonks ingest prices --tickers SPY.US,QQQ.US,... --since 2024-10-01`. The daily ingest keeps them fresh.
+
 Every step is safe to rerun: ingest upserts, the tick reuses client ids for the same `as_of` and skips orders already placed (and model books already evaluated), and health only opens or clears the operational halt. Times are UTC. `tick` defaults `--as-of` to today's UTC date and refuses a date older than its latest snapshot.
 
 - `stonks tick --tickers ...` (or `--asset-class`) runs a scoped tick. It trades only those tickers and leaves every other holding alone, not even selling it. A tick over `[production].universe` still sells a holding that left the universe. Add `--full` to trade the whole book over those tickers. The CLI and the API tick job run the same code.
@@ -656,6 +670,29 @@ Risk rules run between construction and the broker, configured under `[productio
 
 Weights use portfolio value before the tick's orders. Sells are never blocked, only clipped to the held quantity, and go before buys. Portfolio and subscription overrides can only tighten the policy. The rules are a registry (`production/rules/`); the newer ones (`risk_per_position`, `portfolio_vol`, `drawdown_scaling`, `liquidity`, `sector_cap`, `max_holding`, `circuit_breaker`, `operational_halt`, `style_exposure`, and the [intraday rules](#intraday-risk)) are set under `[production.risk.rules.<name>]` and stay off until a limit is set there (see `config/default.toml`).
 
+### Safe defaults
+
+The shipped `config/default.toml` turns on three protections for a new install. The pydantic defaults stay permissive, so backtests and the library behave as before.
+
+| Setting | Shipped value | What it does |
+|---------|---------------|--------------|
+| `[production.risk] max_weight_per_ticker` | `0.25` | One ticker holds at most 25% of a portfolio. A single-winner strategy leaves the rest in cash. |
+| `[production.risk.rules.circuit_breaker]` | `max_month_loss = 0.06`, `max_week_loss = 0.04`, `max_drawdown_halt = 0.20` | Halts new buys after a 6% month loss, a 4% loss over five runs, or a 20% drop from the peak (held until cleared). Sells always pass. |
+| `[production.risk.rules.drawdown_scaling]` | `schedule = [[0.10, 0.5], [0.20, 0.0]]` | Half-size new buys from 10% down, none from 20% down. |
+
+There is no one-day loss limit: the shortest breaker is the week loss over `week_sessions` runs (set it to 1 for a day). An existing install that keeps its own config file keeps its own values. To loosen a protection, change it in the file or in the console (below); a portfolio or follow can only tighten it.
+
+### System settings in the console
+
+Admins change the common operational settings in Settings, System, without editing TOML or restarting. The API is `GET /api/settings/system`, `PUT /api/settings/system/{key}` and `POST /api/settings/system/{key}/reset`; the shell has `stonks settings list|set|reset`.
+
+- **What:** risk limits (the per-ticker cap, open positions, cash buffer, smallest order, the circuit breaker, the drawdown scaler, sector cap, longest hold, stale data halt), the trading universe, test books, starting cash, the oldest usable price, the alert level and backends, and per scheduler job its on switch and time.
+- **Never:** secrets, store paths, the API, sign-in and broker settings. They stay in the environment and TOML.
+- **How it is stored:** each change is one row in `settings_overrides` (state DB) laid over the TOML values, plus an `audit_log` row with the old value, the new value and the reason. Reset drops the row, so the TOML value applies again.
+- **Checks:** a value is validated like the config file (422 when it would not load). A stored value a newer release no longer accepts is skipped and shown with a `problem`.
+- **When it applies:** `next_run` settings (risk, universe, test books, alerts) apply from the next trading run or job, without a restart: the server re-reads the overrides at most every two seconds. `restart` settings (the schedule) apply when the scheduler restarts.
+- **Who:** reading needs `settings.read`, changing needs `settings.manage` with a fresh second factor (admins).
+
 ## Halts and the kill switch
 
 A halt stops new orders before they reach the broker. Every halt is a row in `risk_halts`, and the tick checks global, user and portfolio halts for each book.
@@ -786,7 +823,7 @@ IBKR debits the real borrow fee itself. So the book's P&L sees it the day it is 
 
 ## Model books (shadow mode)
 
-`shadow` strategies are scored each tick and never traded. Each runs alone against a virtual portfolio seeded with `initial_cash`, with the same risk policy, always on a simulated broker:
+`shadow` strategies are scored each tick and never traded. With `[production] model_books = "all"` (the default) approved (`active`) strategies keep their test book too, so an approved strategy's own record stays visible on its page. It reuses the run's signal scores, so each approved strategy adds one decision and simulated fills per run. Set `"shadow"` to keep test books for strategies on trial only. Each runs alone against a virtual portfolio seeded with `initial_cash`, with the same risk policy, always on a simulated broker:
 
 - `shadow_decisions`: one row per hypothetical order.
 - `shadow_portfolio_snapshots`: one row per strategy per `as_of`.
@@ -808,6 +845,8 @@ uv run stonks registry history <id>
 With `[golive] incubation = true` the gate needs at least 63 days (or MinTRL, capped at 252), 20 trades, live results inside the Monte Carlo band, no quit-rule breach, stored reports for every `promotion` preset test, non-zero costs, a recorded hypothesis, and at least 30 backtest trades. The gate never changes status; `registry promote` does, and refuses without a pass or an override.
 
 ## Reading P&L
+
+Every page shows one headline for a portfolio's value and day change: `day_change` on `GET /api/pnl` and `GET /api/insights` (`day`, `previous_day`, `value`, `change`, `change_pct`), both from `production.pnl.day_change`. It compares the latest daily snapshot with the one before, and is empty across a gap longer than a long weekend. The Insights `1d` row carries the same numbers. Format `change_pct` with one formatter everywhere.
 
 ```bash
 uv run stonks pnl                      # the default portfolio, from inception

@@ -247,3 +247,11 @@ def test_strategy_agreement_without_a_date_has_no_views():
     rows = strategy_agreement(_book(), {"trend": _Fixed({})}, None, None)
     aaa = next(r for r in rows if r.symbol == "AAA.US")
     assert aaa.opinions[0].stance == "no_view" and "no prices" in aaa.opinions[0].reason
+
+
+def test_period_pnl_1d_matches_the_daily_pnl_gap_rule():
+    """The 1d row and the headline day change use one rule: no change
+    across a gap longer than a long weekend."""
+    points = [(date(2026, 9, 1), 100.0), (date(2026, 9, 24), 90.0)]
+    rows = {r.period: r for r in period_pnl(points)}
+    assert rows["1d"].change is None and rows["1d"].start_day is None

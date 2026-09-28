@@ -1659,6 +1659,45 @@ export type DataSourceInfo = {
 };
 
 /**
+ * DayChangeView
+ *
+ * A book's headline value and change on its latest day. ``/api/pnl``
+ * and ``/api/insights`` both carry it from
+ * :func:`stonks.production.pnl.day_change`, so every page shows the same
+ * number: format ``change_pct`` with one formatter everywhere.
+ */
+export type DayChangeView = {
+    /**
+     * Change
+     */
+    change: number | null;
+    /**
+     * Change Pct
+     *
+     * change / the previous value (0.01 = +1%).
+     */
+    change_pct: number | null;
+    /**
+     * Day
+     *
+     * The trading day of the latest snapshot.
+     */
+    day: string;
+    /**
+     * Previous Day
+     *
+     * The day the change is measured from (null with one day of history or across a gap longer than a long weekend).
+     */
+    previous_day: string | null;
+    /**
+     * Value
+     *
+     * The book's value at the latest snapshot.
+     */
+    value: number;
+};
+
+/**
  * DisconnectView
  */
 export type DisconnectView = {
@@ -4072,6 +4111,10 @@ export type InsightsView = {
      * Reporting currency. Amounts are not FX-converted.
      */
     currency: string;
+    /**
+     * The headline value and day change, the same one /api/pnl carries.
+     */
+    day_change?: DayChangeView | null;
     exposure: Exposure;
     /**
      * Fx Missing
@@ -4762,6 +4805,10 @@ export type LabRunView = {
      */
     registered_strategy_id: string | null;
     /**
+     * Robustness
+     */
+    robustness?: 'survived' | 'did_not_survive';
+    /**
      * Run Id
      */
     run_id?: string;
@@ -4773,6 +4820,38 @@ export type LabRunView = {
      * Verdict
      */
     verdict: 'pass' | 'fail';
+};
+
+/**
+ * LastRunTotalsView
+ *
+ * Counts of one trading run over every book, for admins only.
+ */
+export type LastRunTotalsView = {
+    /**
+     * Fills
+     *
+     * Null when the totals are suppressed.
+     */
+    fills: number | null;
+    /**
+     * Finished At
+     */
+    finished_at: string | null;
+    /**
+     * Orders Placed
+     *
+     * Null when the totals are suppressed.
+     */
+    orders_placed: number | null;
+    /**
+     * Status
+     */
+    status: string;
+    /**
+     * Tick Id
+     */
+    tick_id: string;
 };
 
 /**
@@ -4923,6 +5002,12 @@ export type LedgerRunDetail = {
      */
     premortem: string | null;
     /**
+     * Robustness
+     *
+     * The run's status: did the strategy survive the robustness tests. Independent of the trial counts.
+     */
+    robustness: 'running' | 'survived' | 'did_not_survive' | 'error' | 'stopped';
+    /**
      * Seed
      */
     seed: number | null;
@@ -4948,6 +5033,18 @@ export type LedgerRunDetail = {
      * Trials
      */
     trials: Array<LedgerTrialView>;
+    /**
+     * Trials Errored
+     *
+     * Trials that ended with no score (same as n_failed).
+     */
+    trials_errored: number;
+    /**
+     * Trials Ran
+     *
+     * Trials that ran to a score.
+     */
+    trials_ran: number;
     /**
      * Tuner
      */
@@ -5019,6 +5116,12 @@ export type LedgerRunView = {
      */
     premortem: string | null;
     /**
+     * Robustness
+     *
+     * The run's status: did the strategy survive the robustness tests. Independent of the trial counts.
+     */
+    robustness: 'running' | 'survived' | 'did_not_survive' | 'error' | 'stopped';
+    /**
      * Seed
      */
     seed: number | null;
@@ -5041,6 +5144,18 @@ export type LedgerRunView = {
      */
     tickers?: number;
     /**
+     * Trials Errored
+     *
+     * Trials that ended with no score (same as n_failed).
+     */
+    trials_errored: number;
+    /**
+     * Trials Ran
+     *
+     * Trials that ran to a score.
+     */
+    trials_ran: number;
+    /**
      * Tuner
      */
     tuner: string | null;
@@ -5062,6 +5177,12 @@ export type LedgerTrialView = {
      * N Bars
      */
     n_bars: number | null;
+    /**
+     * Outcome
+     *
+     * How the trial ran (ran or error); not a robustness verdict.
+     */
+    outcome: 'ran' | 'error';
     /**
      * Params
      */
@@ -8571,6 +8692,7 @@ export type PnlSeries = {
      * Base Rows
      */
     base_rows?: Array<PnlRowView> | null;
+    day_change?: DayChangeView | null;
     /**
      * Fx Missing
      */
@@ -8773,6 +8895,10 @@ export type PortfolioTotalsView = {
      * Cash
      */
     cash: number;
+    /**
+     * The latest finished trading run's order and fill counts across every book (null before the first run). Traders see only their own books' counts on the runs list; this is the one place with the whole run.
+     */
+    last_run?: LastRunTotalsView | null;
     /**
      * Owners
      *
@@ -11637,6 +11763,97 @@ export type StartPortalRequest = {
 };
 
 /**
+ * StarterInstallView
+ */
+export type StarterInstallView = {
+    /**
+     * Next Steps
+     */
+    next_steps: Array<string>;
+    /**
+     * Registered
+     *
+     * Starters put On trial by this call.
+     */
+    registered: Array<string>;
+    /**
+     * Skipped
+     *
+     * Starters that were already registered.
+     */
+    skipped: Array<string>;
+    /**
+     * Universe
+     *
+     * The trading universe this call set, or null when one was configured.
+     */
+    universe: Array<string> | null;
+};
+
+/**
+ * StarterLabelView
+ *
+ * Set on a strategy of the starter set (``stonks starter install``):
+ * a simple reference shipped with Stonks, On trial like any other.
+ */
+export type StarterLabelView = {
+    /**
+     * Summary
+     */
+    summary: string;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * StarterStrategyView
+ */
+export type StarterStrategyView = {
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Status
+     *
+     * Its status when registered (shadow = On trial), null when not installed.
+     */
+    status: string | null;
+    /**
+     * Summary
+     */
+    summary: string;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * StarterView
+ */
+export type StarterView = {
+    /**
+     * Installed
+     *
+     * Every starter is registered (in any status).
+     */
+    installed: boolean;
+    /**
+     * Strategies
+     */
+    strategies: Array<StarterStrategyView>;
+    /**
+     * Universe
+     *
+     * The starter trading universe.
+     */
+    universe: Array<string>;
+};
+
+/**
  * StatementFlagView
  */
 export type StatementFlagView = {
@@ -11843,6 +12060,10 @@ export type StrategyDetail = {
         [key: string]: unknown;
     };
     /**
+     * Set for a starter strategy: its plain title and summary.
+     */
+    starter?: StarterLabelView | null;
+    /**
      * Status
      */
     status: 'active' | 'shadow' | 'retired';
@@ -11965,6 +12186,10 @@ export type StrategySummary = {
     params: {
         [key: string]: unknown;
     };
+    /**
+     * Set for a starter strategy: its plain title and summary.
+     */
+    starter?: StarterLabelView | null;
     /**
      * Status
      */
@@ -12616,7 +12841,7 @@ export type SystemCheckView = {
     /**
      * Id
      */
-    id: 'data_source' | 'first_ingest' | 'backup' | 'scheduler';
+    id: 'data_source' | 'first_ingest' | 'strategies' | 'backup' | 'scheduler';
 };
 
 /**
@@ -12631,6 +12856,114 @@ export type SystemChecklistView = {
      * Complete
      */
     complete: boolean;
+};
+
+/**
+ * SystemSettingChange
+ */
+export type SystemSettingChange = {
+    /**
+     * Reason
+     *
+     * Why, kept in the audit log.
+     */
+    reason: string;
+    /**
+     * Value
+     *
+     * The new value; null turns an optional limit off.
+     */
+    value: unknown;
+};
+
+/**
+ * SystemSettingReset
+ */
+export type SystemSettingReset = {
+    /**
+     * Reason
+     */
+    reason: string;
+};
+
+/**
+ * SystemSettingView
+ */
+export type SystemSettingView = {
+    /**
+     * Applies
+     *
+     * next_run: the next trading run or job uses it. restart: the scheduler picks it up when it restarts.
+     */
+    applies: 'next_run' | 'restart';
+    /**
+     * Choices
+     *
+     * The allowed values for a choice field (null: free input). For production.universe, the ids of the stored universes; a ticker list is also accepted.
+     */
+    choices?: Array<string> | null;
+    /**
+     * Default
+     *
+     * The value from the TOML config and environment.
+     */
+    default: unknown;
+    /**
+     * Group
+     */
+    group: 'risk' | 'trading' | 'notifications' | 'schedule';
+    /**
+     * Help
+     */
+    help: string;
+    /**
+     * Key
+     *
+     * Dotted path in the config, e.g. production.risk.max_weight_per_ticker.
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Overridden
+     */
+    overridden: boolean;
+    /**
+     * Problem
+     *
+     * Set when the stored override no longer validates and is skipped.
+     */
+    problem?: string | null;
+    /**
+     * Reason
+     */
+    reason?: string | null;
+    /**
+     * Updated At
+     */
+    updated_at?: string | null;
+    /**
+     * Updated By
+     */
+    updated_by?: string | null;
+    /**
+     * Value
+     *
+     * The value in effect now.
+     */
+    value: unknown;
+};
+
+/**
+ * SystemSettingsView
+ */
+export type SystemSettingsView = {
+    /**
+     * Items
+     */
+    items: Array<SystemSettingView>;
 };
 
 /**
@@ -24115,6 +24448,185 @@ export type SaveScreenAsUniverseResponses = {
 
 export type SaveScreenAsUniverseResponse = SaveScreenAsUniverseResponses[keyof SaveScreenAsUniverseResponses];
 
+export type ListSystemSettingsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/settings/system';
+};
+
+export type ListSystemSettingsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListSystemSettingsError = ListSystemSettingsErrors[keyof ListSystemSettingsErrors];
+
+export type ListSystemSettingsResponses = {
+    /**
+     * Successful Response
+     */
+    200: SystemSettingsView;
+};
+
+export type ListSystemSettingsResponse = ListSystemSettingsResponses[keyof ListSystemSettingsResponses];
+
+export type GetSystemSettingData = {
+    body?: never;
+    path: {
+        /**
+         * Key
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/api/settings/system/{key}';
+};
+
+export type GetSystemSettingErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetSystemSettingError = GetSystemSettingErrors[keyof GetSystemSettingErrors];
+
+export type GetSystemSettingResponses = {
+    /**
+     * Successful Response
+     */
+    200: SystemSettingView;
+};
+
+export type GetSystemSettingResponse = GetSystemSettingResponses[keyof GetSystemSettingResponses];
+
+export type ChangeSystemSettingData = {
+    body: SystemSettingChange;
+    path: {
+        /**
+         * Key
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/api/settings/system/{key}';
+};
+
+export type ChangeSystemSettingErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ChangeSystemSettingError = ChangeSystemSettingErrors[keyof ChangeSystemSettingErrors];
+
+export type ChangeSystemSettingResponses = {
+    /**
+     * Successful Response
+     */
+    200: SystemSettingView;
+};
+
+export type ChangeSystemSettingResponse = ChangeSystemSettingResponses[keyof ChangeSystemSettingResponses];
+
+export type ResetSystemSettingData = {
+    body: SystemSettingReset;
+    path: {
+        /**
+         * Key
+         */
+        key: string;
+    };
+    query?: never;
+    url: '/api/settings/system/{key}/reset';
+};
+
+export type ResetSystemSettingErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ResetSystemSettingError = ResetSystemSettingErrors[keyof ResetSystemSettingErrors];
+
+export type ResetSystemSettingResponses = {
+    /**
+     * Successful Response
+     */
+    200: SystemSettingView;
+};
+
+export type ResetSystemSettingResponse = ResetSystemSettingResponses[keyof ResetSystemSettingResponses];
+
 export type ListShadowDecisionsData = {
     body?: never;
     path?: never;
@@ -24328,6 +24840,88 @@ export type ListDataSourcesResponses = {
 };
 
 export type ListDataSourcesResponse = ListDataSourcesResponses[keyof ListDataSourcesResponses];
+
+export type GetStarterSetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/starter';
+};
+
+export type GetStarterSetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type GetStarterSetError = GetStarterSetErrors[keyof GetStarterSetErrors];
+
+export type GetStarterSetResponses = {
+    /**
+     * Successful Response
+     */
+    200: StarterView;
+};
+
+export type GetStarterSetResponse = GetStarterSetResponses[keyof GetStarterSetResponses];
+
+export type InstallStarterSetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/starter/install';
+};
+
+export type InstallStarterSetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type InstallStarterSetError = InstallStarterSetErrors[keyof InstallStarterSetErrors];
+
+export type InstallStarterSetResponses = {
+    /**
+     * Successful Response
+     */
+    200: StarterInstallView;
+};
+
+export type InstallStarterSetResponse = InstallStarterSetResponses[keyof InstallStarterSetResponses];
 
 export type ListStatementFlagsData = {
     body?: never;

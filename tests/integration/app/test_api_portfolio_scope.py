@@ -131,6 +131,35 @@ def test_admins_see_aggregate_totals_only(app, people, settings):
         assert c.get("/api/portfolio/totals", headers=people["alice"]).status_code == 403
 
 
+def test_admin_totals_carry_the_last_runs_order_and_fill_counts(app, people, settings):
+    """M15: the whole run's counts live in the admin totals, not on Today."""
+    carol = add_user(settings.state.path, "carol@example.com")
+    _book(settings.state.path, carol, "Carol", 333.0, {"FLAT.US": 2})
+    with SqliteState(settings.state.path) as state:
+        state.execute(
+            "INSERT INTO tick_runs (id, started_at, finished_at, status, summary_json)"
+            " VALUES ('tick_2099-01-02_x', '2099-01-02T21:00:00', '2099-01-02T21:01:00',"
+            " 'ok', ?)",
+            [json.dumps({"orders_placed": 5, "fills": 4, "portfolios": {}})],
+        )
+    with TestClient(app, client=REMOTE, base_url=BASE) as c:
+        body = c.get("/api/portfolio/totals", headers=AUTH).json()
+    assert body["last_run"] == {
+        "tick_id": "tick_2099-01-02_x",
+        "status": "ok",
+        "finished_at": "2099-01-02T21:01:00",
+        "orders_placed": 5,
+        "fills": 4,
+    }
+
+
+def test_admin_totals_hide_run_counts_when_money_is_suppressed(app, people):
+    with TestClient(app, client=REMOTE, base_url=BASE) as c:
+        body = c.get("/api/portfolio/totals", headers=AUTH).json()
+    assert body["suppressed"] is True
+    assert body["last_run"] is None or body["last_run"]["orders_placed"] is None
+
+
 def test_portfolio_reads_need_a_credential_even_on_loopback(app):
     with TestClient(app, client=LOOPBACK, base_url=BASE) as c:
         for url in READS:

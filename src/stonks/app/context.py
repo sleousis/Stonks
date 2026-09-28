@@ -6,10 +6,18 @@ shared: a DuckDB or sqlite3 connection must stay on the thread that uses it,
 and transports run operations on worker threads. While the context is
 started it keeps one anchor lake connection open so DuckDB's in-process
 database instance stays warm and per-operation connects are cheap.
+
+``settings`` is the TOML base with the admin's console overrides laid on
+top (:mod:`stonks.config_overrides`). It is re-read at most every
+:data:`OVERRIDES_TTL_SECONDS`, and at once after a change made through this
+context, so blocks that read settings per run pick a change up without a
+restart.
 """
 
 from __future__ import annotations
 
+import threading
+import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 
@@ -31,12 +39,70 @@ _log = get_logger("stonks.app.context")
 
 SourceFactory = Callable[[], DataSource]
 
+#: Longest time a process keeps using settings before it re-reads the
+#: console overrides another process may have written.
+OVERRIDES_TTL_SECONDS = 2.0
+
 
 class AppContext:
     def __init__(self, settings: Settings, *, source_factory: SourceFactory | None = None) -> None:
-        self.settings = settings
+        self._base = settings
+        self._effective: Settings | None = None
+        self._read_at = 0.0
+        self._override_problems: dict[str, str] = {}
+        self._lock = threading.Lock()
         self._source_factory = source_factory
         self._anchor: DuckDBLake | None = None
+
+    # ---- settings ----------------------------------------------------------
+
+    @property
+    def settings(self) -> Settings:
+        """The effective settings: the base with the console overrides."""
+        with self._lock:
+            now = time.monotonic()
+            if self._effective is None or now - self._read_at >= OVERRIDES_TTL_SECONDS:
+                self._effective = self._with_overrides()
+                self._read_at = now
+            return self._effective
+
+    @settings.setter
+    def settings(self, value: Settings) -> None:
+        self._base = value
+        self.invalidate_settings()
+
+    @property
+    def base_settings(self) -> Settings:
+        """The TOML and env settings, without the console overrides."""
+        return self._base
+
+    @property
+    def override_problems(self) -> dict[str, str]:
+        """Stored overrides skipped because they no longer validate."""
+        _ = self.settings
+        return dict(self._override_problems)
+
+    def invalidate_settings(self) -> None:
+        """Re-read the overrides on the next access (after a change)."""
+        with self._lock:
+            self._effective = None
+
+    def _with_overrides(self) -> Settings:
+        from stonks.config_overrides import apply_overrides, load_override_values
+
+        try:
+            values = load_override_values(self._base.state.path)
+        except Exception:  # a locked or broken state file never takes the app down
+            _log.warning("app.context.overrides_unreadable", exc_info=True)
+            return self._effective or self._base
+        if not values:
+            self._override_problems = {}
+            return self._base
+        effective, problems = apply_overrides(self._base, values)
+        if problems and problems != self._override_problems:
+            _log.warning("app.context.overrides_skipped", keys=sorted(problems))
+        self._override_problems = problems
+        return effective
 
     # ---- lifecycle ---------------------------------------------------------
 

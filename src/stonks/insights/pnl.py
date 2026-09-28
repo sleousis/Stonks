@@ -46,12 +46,23 @@ def _row(
     )
 
 
-def period_pnl(points: Sequence[tuple[date, float]], flows: Sequence[Flow] = ()) -> list[PeriodPnl]:
+#: Longest gap in calendar days the ``1d`` row spans (a long weekend). The
+#: app passes ``production.pnl.DEFAULT_MAX_GAP_DAYS`` so the ``1d`` row and
+#: the headline day change follow one rule.
+MAX_1D_GAP_DAYS = 4
+
+
+def period_pnl(
+    points: Sequence[tuple[date, float]],
+    flows: Sequence[Flow] = (),
+    *,
+    max_gap_days: int = MAX_1D_GAP_DAYS,
+) -> list[PeriodPnl]:
     """For each period, the change from the last value on or before the
     period's start to the latest value, and the time-weighted return with
     ``flows`` (deposits and withdrawals) taken out. ``points`` are
     ``(day, value)``, oldest first. A period longer than the history has no
-    start."""
+    start, and ``1d`` has none across a gap longer than ``max_gap_days``."""
     if not points:
         return []
     days = [d for d, _ in points]
@@ -64,7 +75,10 @@ def period_pnl(points: Sequence[tuple[date, float]], flows: Sequence[Flow] = ())
     def row(period: Period, start: tuple[date, float] | None) -> PeriodPnl:
         return _row(period, start, end, points, flows)
 
-    rows = [row("1d", points[-2] if len(points) > 1 else None)]
+    before = points[-2] if len(points) > 1 else None
+    if before is not None and (end[0] - before[0]).days > max_gap_days:
+        before = None
+    rows = [row("1d", before)]
     for period in ("1w", "1m", "3m"):
         rows.append(row(period, on_or_before(end[0] - timedelta(days=_DAYS[period]))))
     rows.append(row("ytd", on_or_before(date(end[0].year - 1, 12, 31))))

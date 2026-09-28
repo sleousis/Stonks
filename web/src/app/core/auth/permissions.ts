@@ -53,6 +53,8 @@ export const POLICY: Readonly<Record<Permission, Rule>> = {
   'orders.approve': { roles: TRADERS, scopes: ['trade'], sessionOnly: true },
   'live.manage': { roles: TRADERS, scopes: ['trade'] },
   'lab.worker': { roles: ADMINS, scopes: ['lab_worker'] },
+  'settings.read': { roles: ADMINS, scopes: ['admin'] },
+  'settings.manage': { roles: ADMINS, scopes: ['admin'] },
 };
 
 /** True when `me` holds `permission` (false when nobody is signed in). */

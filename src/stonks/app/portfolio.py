@@ -9,6 +9,7 @@ portfolio that isn't yours, admins included). Admins get
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
@@ -21,9 +22,11 @@ from stonks.app.context import AppContext
 from stonks.app.cost_basis import FillLot, average_costs
 from stonks.app.errors import NotFoundError, ValidationError
 from stonks.app.pagination import Page
+from stonks.app.serialize import finite
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.production.ledger import ledger_filter
+from stonks.production.pnl import day_change
 
 #: Reporting currency when the held instruments don't agree on one (or the
 #: book is empty, or the lake has no currency for them).
@@ -110,6 +113,46 @@ class SnapshotView(BaseModel):
     total_value: float
 
 
+class DayChangeView(BaseModel):
+    """A book's headline value and change on its latest day. ``/api/pnl``
+    and ``/api/insights`` both carry it from
+    :func:`stonks.production.pnl.day_change`, so every page shows the same
+    number: format ``change_pct`` with one formatter everywhere."""
+
+    day: date = Field(description="The trading day of the latest snapshot.")
+    previous_day: date | None = Field(
+        description="The day the change is measured from (null with one day of history or "
+        "across a gap longer than a long weekend)."
+    )
+    value: float = Field(description="The book's value at the latest snapshot.")
+    change: float | None
+    change_pct: float | None = Field(description="change / the previous value (0.01 = +1%).")
+
+    @classmethod
+    def of(cls, rows: Sequence[Any]) -> DayChangeView | None:
+        """From ``load_pnl`` rows (``None`` without rows)."""
+        found = day_change(rows)
+        if found is None:
+            return None
+        return cls(
+            day=found.day,
+            previous_day=found.previous_day,
+            value=float(found.value),
+            change=finite(found.change),
+            change_pct=finite(found.change_pct),
+        )
+
+
+class LastRunTotalsView(BaseModel):
+    """Counts of one trading run over every book, for admins only."""
+
+    tick_id: str
+    status: str
+    finished_at: str | None
+    orders_placed: int | None = Field(description="Null when the totals are suppressed.")
+    fills: int | None = Field(description="Null when the totals are suppressed.")
+
+
 class PortfolioTotalsView(BaseModel):
     """Sums over every active portfolio's latest snapshot, for admins. No
     tickers and no per-person numbers (decision 2026-09-26)."""
@@ -122,6 +165,12 @@ class PortfolioTotalsView(BaseModel):
         default=False,
         description="True when too few other people own books for the sums to hide anyone's "
         "numbers: cash and value then read 0.",
+    )
+    last_run: LastRunTotalsView | None = Field(
+        default=None,
+        description="The latest finished trading run's order and fill counts across every "
+        "book (null before the first run). Traders see only their own books' counts on "
+        "the runs list; this is the one place with the whole run.",
     )
 
 
@@ -136,6 +185,23 @@ TOTALS_PORTFOLIOS_SQL = (
     " AND EXISTS (SELECT 1 FROM portfolio_snapshots s WHERE s.portfolio_id = p.id)"
     " ORDER BY p.id"
 )
+
+
+def _last_run(row: Any, hidden: bool) -> LastRunTotalsView:
+    """The run's whole-tick counts (``None`` each while ``hidden``)."""
+    summary = json.loads(row["summary_json"]) if row["summary_json"] else {}
+
+    def count(key: str) -> int | None:
+        value = summary.get(key)
+        return None if hidden or value is None else int(value)
+
+    return LastRunTotalsView(
+        tick_id=row["id"],
+        status=row["status"],
+        finished_at=row["finished_at"],
+        orders_placed=count("orders_placed"),
+        fills=count("fills"),
+    )
 
 
 def totals_suppressed(owner_ids: set[str], viewer_id: str) -> bool:
@@ -341,6 +407,10 @@ class PortfolioService:
                  WHERE p.status = 'active' AND p.paper_of IS NULL
                 """
             )[0]
+            runs = state.sql(
+                "SELECT id, status, finished_at, summary_json FROM tick_runs"
+                " WHERE finished_at IS NOT NULL ORDER BY finished_at DESC, rowid DESC LIMIT 1"
+            )
         owners = {str(r["owner_id"]) for r in books}
         hidden = totals_suppressed(owners, principal.user_id)
         return PortfolioTotalsView(
@@ -349,6 +419,7 @@ class PortfolioService:
             cash=0.0 if hidden else float(row["cash"]),
             total_value=0.0 if hidden else float(row["total"]),
             suppressed=hidden,
+            last_run=_last_run(runs[0], hidden) if runs else None,
         )
 
     def current(self, portfolio_id: str = DEFAULT_PORTFOLIO_ID) -> PortfolioView:
