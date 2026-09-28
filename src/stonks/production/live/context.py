@@ -7,13 +7,20 @@ backtests stay identical.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
 from stonks.accounts.rules import AccountRuleInputs, InstrumentFacts
-from stonks.execution.brokers.base import AccountReader, LiveAccountState, Quote, QuoteSource
+from stonks.execution.borrow import BorrowSource
+from stonks.execution.brokers.base import (
+    AccountReader,
+    LiveAccountState,
+    MarginPreviewer,
+    Quote,
+    QuoteSource,
+)
 from stonks.fx import FxRates
 from stonks.logging import get_logger
 from stonks.production.ledger import ledger_columns
@@ -59,6 +66,68 @@ class LiveContext:
 
 
 # ---- building one ----------------------------------------------------------------
+
+
+class LocateMap(Mapping[str, float | None]):
+    """The broker's locate as the account rules read it (roadmap 19.13):
+    ``ticker in m`` when the broker can lend the ticker today, ``m[ticker]``
+    the shares it can lend (``None``: no stated limit). The broker is asked
+    only for the tickers a rule looks up, once each. No answer is no
+    locate, so no short."""
+
+    def __init__(self, source: BorrowSource, day: date) -> None:
+        self._source = source
+        self._day = day
+        self._answers: dict[str, tuple[bool, float | None]] = {}
+
+    def _answer(self, ticker: str) -> tuple[bool, float | None]:
+        if ticker not in self._answers:
+            try:
+                quote = self._source.quote(ticker, self._day)
+            except Exception as exc:  # no answer: no locate
+                _log.warning("live.locate_failed", ticker=ticker, error=str(exc))
+                quote = None
+            if quote is None or not quote.shortable:
+                self._answers[ticker] = (False, None)
+            else:
+                self._answers[ticker] = (True, quote.available_shares)
+        return self._answers[ticker]
+
+    def __getitem__(self, ticker: str) -> float | None:
+        ok, shares = self._answer(ticker)
+        if not ok:
+            raise KeyError(ticker)
+        return shares
+
+    def __contains__(self, ticker: object) -> bool:
+        return isinstance(ticker, str) and self._answer(ticker)[0]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter([t for t, (ok, _) in self._answers.items() if ok])
+
+    def __len__(self) -> int:
+        return sum(1 for ok, _ in self._answers.values() if ok)
+
+
+def _broker_today(broker: object, fallback: date) -> date:
+    from stonks.core.clock import today
+
+    clock = getattr(broker, "clock", None)
+    return today(clock) if clock is not None else fallback
+
+
+def margin_capabilities(
+    broker: object | None, lake: Any, as_of: date
+) -> tuple[Any, Mapping[str, float | None] | None]:
+    """``(what-if, locate)`` of a margin account's broker: its what-if
+    margin preview and its locate (with the lake's borrow fees), each
+    ``None`` when the broker has none (roadmap 19.13)."""
+    from stonks.production.financing import broker_borrow_source
+
+    preview = broker.what_if if isinstance(broker, MarginPreviewer) else None
+    source = broker_borrow_source(broker, lake)
+    locate = LocateMap(source, _broker_today(broker, as_of)) if source is not None else None
+    return preview, locate
 
 
 def sent_notional_today(
@@ -159,6 +228,7 @@ def build_live_context(
     fails leaves the field empty: the rules then refuse to open. ``stage``
     defaults to the portfolio's stored stage."""
     from stonks.accounts.rules.inputs import load_account_inputs
+    from stonks.accounts.rules.profiles import get_profile
     from stonks.production.live.allocation import get_allocation
 
     account: LiveAccountState | None = None
@@ -175,6 +245,14 @@ def build_live_context(
             _log.warning("live.quotes_unreadable", portfolio_id=portfolio_id, error=str(exc))
     allocation = get_allocation(state, portfolio_id)
     fx = _fee_fx(state, portfolio_id, as_of, lake)
+    margin_preview = None
+    profile = get_profile(state, portfolio_id)
+    if profile is not None and profile.account_type == "margin":
+        # 19.13: a margin book's buying power comes from the broker's
+        # what-if and its short sales from the broker's locate
+        margin_preview, locate = margin_capabilities(broker, lake, as_of)
+        if shortable is None and profile.allow_short:
+            shortable = locate
     inputs = load_account_inputs(
         state,
         portfolio_id,
@@ -184,6 +262,7 @@ def build_live_context(
         instruments=instrument_facts(lake, tickers),
         shortable=shortable,
         fx=fx,
+        margin_preview=margin_preview,
     )
     return LiveContext(
         portfolio_id=portfolio_id,

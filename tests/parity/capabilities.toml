@@ -1665,11 +1665,11 @@ mcp = ["start_research", "list_research_sessions", "get_research_session"]
 [[capability]]
 id = "live.settings.read"
 domain = "trading"
-title = "Read a live portfolio's allocation, account profile and live rules"
-routes = ["GET /api/portfolios/{portfolio_id}/live/allocation", "GET /api/portfolios/{portfolio_id}/live/account-profile", "GET /api/portfolios/{portfolio_id}/live/rules"]
-console = ["getLiveAllocation", "getAccountProfile", "getLiveRules"]
+title = "Read a live portfolio's allocation, account profile, live rules, buying power and margin use"
+routes = ["GET /api/portfolios/{portfolio_id}/live/allocation", "GET /api/portfolios/{portfolio_id}/live/account-profile", "GET /api/portfolios/{portfolio_id}/live/rules", "GET /api/portfolios/{portfolio_id}/live/margin"]
+console = ["getLiveAllocation", "getAccountProfile", "getLiveRules", "getLiveMargin"]
 cli = { limited = "owner settings live in the console, the API has them now" }
-mcp = ["get_live_allocation", "get_live_rules"]
+mcp = ["get_live_allocation", "get_live_rules", "get_live_margin"]
 
 [[capability]]
 id = "live.settings.write"

@@ -15,7 +15,9 @@ broker account itself.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict
+from typing import Any
 
 from stonks.accounts.audit import AuditLog
 from stonks.accounts.rules import AccountProfile
@@ -79,8 +81,11 @@ def set_profile(
     *,
     actor: str,
     clock: Clock = SYSTEM_CLOCK,
+    details: Mapping[str, Any] | None = None,
 ) -> AccountProfile:
-    """Insert or replace the portfolio's profile and audit the change. The
+    """Insert or replace the portfolio's profile and audit the change
+    (``details`` joins the audit row: the broker's answer for a margin
+    profile, say). The
     jurisdiction goes to the tax settings and the base currency to the
     portfolio (their one home). ``wash_sales`` is read, never written here:
     it is a tax setting."""
@@ -124,7 +129,11 @@ def set_profile(
             "portfolio",
             profile.portfolio_id,
             portfolio_id=profile.portfolio_id,
-            details={"profile": asdict(profile), "previous": None if old is None else asdict(old)},
+            details={
+                **(details or {}),
+                "profile": asdict(profile),
+                "previous": None if old is None else asdict(old),
+            },
         )
     got = get_profile(state, profile.portfolio_id)
     assert got is not None

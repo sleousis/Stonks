@@ -10,13 +10,14 @@ tick after an upgrade still charges the days since the book last traded."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from datetime import UTC, date, datetime
+from collections.abc import Mapping, Sequence
+from datetime import UTC, date, datetime, time
 from typing import TYPE_CHECKING, Any
 
 from stonks.store.state import SqliteState
 
 if TYPE_CHECKING:
+    from stonks.backtest.simulated_broker import FinancingEvent
     from stonks.config import RiskPolicy
     from stonks.execution.borrow import BorrowSource
     from stonks.execution.margin import MarginModel
@@ -49,6 +50,43 @@ def broker_borrow_source(broker: Any, lake: Any) -> BorrowSource | None:
         return None
     fees = LakeBorrowSource(lake) if callable(getattr(lake, "borrow_rate", None)) else None
     return broker.borrow_source(fees)
+
+
+def live_short_financing(
+    positions: Mapping[str, float],
+    prices: Mapping[str, float],
+    as_of: date,
+    *,
+    since: date | None,
+    borrow: BorrowSource,
+    asset_classes: Mapping[str, str] | None = None,
+) -> list[FinancingEvent]:
+    """The borrow fees a short book at a real broker pays (roadmap 19.13):
+    each own short, at the broker's borrow rate for ``as_of`` (IBKR's, with
+    the lake's ``borrow_rates`` from its short stock files), for the
+    calendar days since ``since``. The broker debits the real fee. These
+    rows put it in the book's P&L the day it is owed. Nothing without a
+    start date, a new day, a price or a quote."""
+    from stonks.backtest.simulated_broker import FinancingEvent
+    from stonks.execution.borrow import daily_fee
+
+    if since is None or as_of <= since:
+        return []
+    days = (as_of - since).days
+    stamp = datetime.combine(as_of, time(), UTC)
+    classes = asset_classes or {}
+    events: list[FinancingEvent] = []
+    for ticker, qty in sorted(positions.items()):
+        price = prices.get(ticker)
+        if qty >= 0 or not price or price <= 0:
+            continue
+        quote = borrow.quote(ticker, as_of, classes.get(ticker, "equity"))  # type: ignore[arg-type]
+        if quote is None or not quote.shortable:
+            continue
+        fee = daily_fee(qty, price, quote, days)
+        if fee > 0:
+            events.append(FinancingEvent(stamp, ticker, "borrow_fee", -fee, days))
+    return events
 
 
 def last_accrual(state: SqliteState, portfolio_id: str) -> date | None:

@@ -713,6 +713,11 @@ CASES: dict[str, Case] = {
         "/api/portfolios/{portfolio_id}/live/rules",
         lambda i: {"portfolio_id": i["portfolio"]},
     ),
+    "get_live_margin": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/live/margin",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
     "get_broker_gateways": _c("GET", "/api/brokers/gateways"),
     "draft_order": _c(
         "POST",

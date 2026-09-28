@@ -42,7 +42,7 @@ from datetime import date
 from typing import Any, ClassVar, Literal
 
 from stonks.core.types import Order
-from stonks.execution.brokers.base import AccountType, LiveAccountState
+from stonks.execution.brokers.base import AccountType, LiveAccountState, MarginPreview
 from stonks.production.rules._account_settings import AccountRulesSettings
 
 __all__ = [
@@ -84,7 +84,7 @@ class AccountProfile:
     base_currency: str = "USD"
     fx_policy: FxPolicy = "refuse"
     wash_sale_mode: WashSaleMode = "warn"
-    #: Shorts need a margin account (a later Phase 19 follow-up).
+    #: Shorts need a margin account (roadmap 19.13, off by default).
     allow_short: bool = False
     #: Whether wash sales apply at all: the tax setting
     #: (``portfolio_tax_settings.wash_sales``). ``wash_sale_mode`` is what
@@ -155,6 +155,9 @@ class AccountRuleInputs:
     shortable: Mapping[str, float | None] = field(default_factory=dict[str, float | None])
     #: Tickers under the short sale price test (US Rule 201).
     short_sale_restricted: frozenset[str] = frozenset()
+    #: The broker's what-if margin for one order (margin accounts, roadmap
+    #: 19.13). ``None``: no preview, so a margin account opens nothing.
+    margin_preview: Callable[[Order], MarginPreview] | None = None
 
     def unsettled_sales(self) -> float:
         """Sale proceeds not settled yet on ``as_of`` (base currency)."""
@@ -197,8 +200,20 @@ class AccountBook:
     positions: dict[str, float]
     day_trades_used: int = 0
     base_currency: str = "USD"
+    #: Margin in use, as the allowed orders leave it (margin accounts).
+    initial_margin: float = 0.0
+    maintenance_margin: float = 0.0
+    #: Per client id: the what-if margin change per share (initial,
+    #: maintenance) that ``commit`` adds for the quantity allowed.
+    margin_per_share: dict[str, tuple[float, float]] = field(
+        default_factory=dict[str, tuple[float, float]]
+    )
 
     def commit(self, view: OrderView, qty: float) -> None:
+        rates = self.margin_per_share.get(view.order.client_id or "")
+        if rates is not None:
+            self.initial_margin += qty * rates[0]
+            self.maintenance_margin += qty * rates[1]
         signed = qty if view.side == "buy" else -qty
         held = self.positions.get(view.ticker, 0.0) + signed
         if abs(held) <= EPS:
@@ -305,6 +320,8 @@ def open_book(inputs: AccountRuleInputs, positions: Mapping[str, float]) -> Acco
         positions=dict(positions),
         day_trades_used=len(inputs.day_trades),
         base_currency=inputs.profile.base_currency,
+        initial_margin=account.initial_margin if account is not None else 0.0,
+        maintenance_margin=account.maintenance_margin if account is not None else 0.0,
     )
 
 

@@ -158,6 +158,11 @@ def _either(a: bool, b: bool) -> bool:
     return a or b
 
 
+def _both(a: bool, b: bool) -> bool:
+    """Allowing something (margin accounts) needs both to allow it."""
+    return a and b
+
+
 def _more_counting(a: bool | None, b: bool | None) -> bool | None:
     """``count_losses``: always counting losses (``True``) is the tightest,
     then the automatic choice (``None``), then never (``False``)."""
@@ -213,7 +218,15 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "cooldown": _stricter_cooldown,
     },
     "operational_halt": {"max_bar_age_days": _min_optional},
-    "margin_call": {"enabled": _either, "margin": _keep_base, "buffer": max},
+    "margin_call": {
+        "enabled": _either,
+        "margin": _keep_base,
+        "buffer": max,
+        # 19.13: a higher cushion alerts and reduces earlier
+        "warn_cushion": max,
+        "reduce_cushion": max,
+        "restore_cushion": max,
+    },
     "squeeze_guard": {
         "max_borrow_fee": _min_optional,
         "max_adverse_pct": _min_optional,
@@ -268,6 +281,9 @@ MERGE_RULES: dict[str, dict[str, Callable[[Any, Any], Any]]] = {
         "pdt_window_days": max,
         "wash_sale_window_days": max,
         "short_disclosure_threshold": min,
+        # 19.13: an override may turn margin accounts off, never on.
+        "margin_accounts": _both,
+        "margin_buffer": max,
     },
     "stop_cooldown": {"cooldown_days": _max_optional, "count_losses": _more_counting},
     "stop_guard": {"max_stops": _min_optional, "window_days": max, "count_losses": _more_counting},

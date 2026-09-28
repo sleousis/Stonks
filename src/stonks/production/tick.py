@@ -80,6 +80,7 @@ from stonks.execution.borrow import BorrowSource
 from stonks.execution.brokers.base import (
     BrokerKind,
     BrokerMode,
+    LiveAccountState,
     MarginPreviewer,
     OrderRejectedError,
     OrderStateSource,
@@ -132,6 +133,7 @@ from stonks.production.decay import DecaySettings
 from stonks.production.financing import (
     broker_borrow_source,
     last_accrual,
+    live_short_financing,
     record_accrual,
     short_account,
 )
@@ -1242,6 +1244,8 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
             risk_context = replace(
                 risk_context, margin=margin, borrow=borrow or risk_context.borrow
             )
+    #: The broker's own borrow source (19.14), read once per book.
+    located: BorrowSource | None = None
     if external:
         # 19.8: a book at a real broker gives the live safeguards and the
         # account rules its live context (the account, quotes, the owner's
@@ -1585,8 +1589,16 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 ).prices
             )
         stop_summary = sync_stops(own_view(after), (), halt)
+        if book.spec.allow_short:
+            # 19.13: the book's own shorts owe the broker's borrow fee since
+            # the last accrual, booked so the P&L sees it the day it is owed
+            financing = _live_financing(
+                run, book, located, own_view(after), marks, since, asset_classes
+            )
         with state.transaction():
             persist_corporate_actions()
+            if financing is not None:
+                record_accrual(state, portfolio_id, as_of, financing, tick_id=tick_id)
             _snapshot_portfolio(state, tick_id, after, marks, as_of, portfolio_id=scope)
             hook_summary = hooks(after, marks)
     elif not dry_run:
@@ -1689,7 +1701,7 @@ def _live_context(
     from stonks.production.rules._common import settings_of
 
     try:
-        return build_live_context(
+        live = build_live_context(
             run.state,
             book.portfolio_id,
             run.as_of,
@@ -1702,6 +1714,58 @@ def _live_context(
     except Exception as exc:
         run.log.error("tick.live_context_failed", portfolio_id=book.portfolio_id, error=str(exc))
         return LiveContext(portfolio_id=book.portfolio_id)
+    account = live.account
+    # an external broker without our account type (Alpaca) is not a margin book
+    if (
+        isinstance(account, LiveAccountState)
+        and account.account_type == "margin"
+        and not run.dry_run
+    ):
+        _check_margin(run, book, account)
+    return live
+
+
+def _live_financing(
+    run: _TickRun,
+    book: TickBook,
+    source: BorrowSource | None,
+    positions: Mapping[str, float],
+    prices: Mapping[str, float],
+    snapshot_since: date | None,
+    asset_classes: Mapping[str, str],
+) -> list[FinancingEvent] | None:
+    """19.13: the borrow fees a short book at a real broker owes since its
+    last accrual (else its last snapshot), at the broker's borrow rates.
+    ``None`` when the broker has no borrow source or it fails: the clock
+    then stays where it is and the next run charges the days."""
+    if source is None:
+        return None
+    try:
+        return live_short_financing(
+            positions,
+            prices,
+            run.as_of,
+            since=last_accrual(run.state, book.portfolio_id) or snapshot_since,
+            borrow=source,
+            asset_classes=asset_classes,
+        )
+    except Exception as exc:
+        run.log.error("tick.live_financing_failed", portfolio_id=book.portfolio_id, error=str(exc))
+        return None
+
+
+def _check_margin(run: _TickRun, book: TickBook, account: LiveAccountState) -> None:
+    """19.13: record a live margin account's cushion and alert when thin.
+    The ``margin_call`` rule then reduces the book when it is too thin."""
+    from stonks.production.live.margin import check_margin
+    from stonks.production.rules._common import settings_of
+    from stonks.production.rules.margin_call import MarginCallSettings
+
+    settings = settings_of(book.spec.risk, "margin_call") or MarginCallSettings()
+    try:
+        check_margin(run.state, book.portfolio_id, account, settings, source="tick")
+    except Exception as exc:  # a failed record never stops the book
+        run.log.error("tick.margin_check_failed", portfolio_id=book.portfolio_id, error=str(exc))
 
 
 def _unreconciled(run: _TickRun, book: TickBook, unresolved: Sequence[str]) -> BookResult:

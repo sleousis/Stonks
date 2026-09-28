@@ -2157,6 +2157,31 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Buying power and margin use of a live portfolio, read from the\nbroker now: equity, available funds, initial and maintenance margin,\nthe margin cushion and its level (ok, warn, reduce, call), the\nsafety buffer, and whether the pattern day trader rule binds. A\nmargin account is chosen in the web app with a fresh second factor,\nnever here.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "description": "a portfolio id of yours (pf_...)",
+            "title": "Portfolio Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id"
+        ],
+        "title": "get_live_marginArguments",
+        "type": "object"
+      },
+      "name": "get_live_margin",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One of your portfolios on its latest tick day: one-day 95% and\n99% VaR and expected shortfall (fractions of value, loss positive),\nthe rolling VaR violation ratio (1.0 is right, outside 0.5 to 1.5\nmeans the risk model is off) with its Kupiec p-value, and per\nstrategy sleeve the same plus the alpha-decay check against the\nbacktest's IR.",
       "input_schema": {
         "properties": {

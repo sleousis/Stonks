@@ -109,6 +109,8 @@ class FakeIbGateway:
         self.reject_next: tuple[int, str] | None = None
         self.what_if_timeout = False
         self.what_if_result: IbWhatIf | None = None
+        #: conId -> (initial, maintenance margin per share, warning)
+        self.what_if_rates: dict[int, tuple[float, float, str | None]] = {}
         self.snapshot_data: dict[int, IbSnapshot] = {}
         #: the shortable ticks by conId (roadmap 19.3)
         self.shortable_data: dict[int, IbShortability] = {}
@@ -298,6 +300,75 @@ class FakeIbGateway:
             else:
                 rows.append(IbAccountValue(acct, tag, value, "USD"))
 
+    # ---- a margin account (roadmap 19.13) ----------------------------------------------
+
+    def margin_account(
+        self,
+        *,
+        equity: float,
+        excess_liquidity: float | None = None,
+        initial: float = 0.0,
+        maintenance: float = 0.0,
+        available_funds: float | None = None,
+        buying_power: float | None = None,
+        cash: float | None = None,
+        day_trades_remaining: int = -1,
+        trading_type: str = "STKMRGN",
+        account: str | None = None,
+    ) -> None:
+        """Account values of a Reg T margin account, replacing any set
+        before. Excess liquidity defaults to equity minus maintenance."""
+        acct = account or self.accounts[0]
+        self.values_by_account[acct] = []
+        excess = equity - maintenance if excess_liquidity is None else excess_liquidity
+        available = equity - initial if available_funds is None else available_funds
+        self.set_values(
+            acct,
+            NetLiquidation=f"{equity}",
+            TotalCashValue=f"{equity if cash is None else cash}",
+            SettledCash=f"{equity if cash is None else cash}",
+            AvailableFunds=f"{available}",
+            BuyingPower=f"{available * 4 if buying_power is None else buying_power}",
+            ExcessLiquidity=f"{excess}",
+            FullInitMarginReq=f"{initial}",
+            FullMaintMarginReq=f"{maintenance}",
+            DayTradesRemaining=f"{day_trades_remaining}",
+            **{"TradingType-S": (trading_type, "")},
+        )
+
+    def margin_call(self, *, excess_liquidity: float, account: str | None = None) -> None:
+        """The market moved against the account: excess liquidity falls to
+        ``excess_liquidity`` (below 0: IBKR may liquidate), the maintenance
+        requirement grows by the same amount."""
+        acct = account or self.accounts[0]
+        rows = self.values_by_account.get(acct, [])
+        old = next(float(v.value) for v in rows if v.tag == "ExcessLiquidity")
+        maint = next(float(v.value) for v in rows if v.tag == "FullMaintMarginReq")
+        grown = maint + (old - excess_liquidity)
+        self.values_by_account[acct] = [
+            replace(v, value=f"{excess_liquidity}")
+            if v.tag == "ExcessLiquidity"
+            else replace(v, value=f"{grown}")
+            if v.tag == "FullMaintMarginReq"
+            else v
+            for v in rows
+        ]
+
+    def what_if_margin(
+        self,
+        contract: IbContractDetails,
+        *,
+        initial_per_share: float,
+        maintenance_per_share: float,
+        warning: str | None = None,
+    ) -> None:
+        """What-if answers for ``contract`` that scale with the quantity."""
+        self.what_if_rates[contract.contract.con_id] = (
+            initial_per_share,
+            maintenance_per_share,
+            warning,
+        )
+
     def _perm(self) -> int:
         self._next_perm += 1
         return self._next_perm
@@ -460,6 +531,20 @@ class FakeIbGateway:
             raise TimeoutError("what-if timed out")
         if self.what_if_result is not None:
             return self.what_if_result
+        rates = self.what_if_rates.get(contract.con_id)
+        if rates is not None:
+            initial, maintenance, warning = rates
+            rows = self.values_by_account.get(order.account or self.accounts[0], [])
+            equity = next((float(v.value) for v in rows if v.tag == "NetLiquidation"), 0.0)
+            qty = order.total_quantity
+            return IbWhatIf(
+                init_margin_change=initial * qty,
+                maint_margin_change=maintenance * qty,
+                equity_with_loan_after=equity,
+                commission=1.0,
+                commission_currency="USD",
+                warning=warning,
+            )
         return IbWhatIf(
             init_margin_change=0.0,
             maint_margin_change=0.0,

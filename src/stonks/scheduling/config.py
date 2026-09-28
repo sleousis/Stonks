@@ -111,7 +111,9 @@ def default_jobs() -> list[JobConfig]:
     records the live stages' gate metrics and skips while no portfolio is
     past ``sim_paper``. ``engine_start`` (open minus 15 minutes) and
     ``engine_stop`` (close plus 10 minutes) run the intraday engine process
-    and skip while ``[engine] enabled = false``."""
+    and skip while ``[engine] enabled = false``. ``live_margin`` (every 30
+    minutes) reads the margin cushion of each margin account and skips
+    while there is none (the default)."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -242,6 +244,14 @@ def default_jobs() -> list[JobConfig]:
             name="live_gate_days",
             action="live_gate_days",
             trigger=SessionTriggerConfig(offset_minutes=75),
+        ),
+        # The margin cushion of every margin account (roadmap 19.13), with
+        # an alert when it is thin. Skips while no margin profile exists.
+        JobConfig(
+            name="live_margin",
+            action="live_margin",
+            trigger=IntervalTriggerConfig(every_minutes=30),
+            catch_up="none",
         ),
         # The intraday engine process (roadmap 21.2.5). Both skip while
         # [engine] is off. A missed start is not caught up: a late start

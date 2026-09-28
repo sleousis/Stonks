@@ -59,6 +59,7 @@ def test_default_jobs_build():
         "ingest_borrow",
         "engine_start",
         "engine_stop",
+        "live_margin",
     }
     tick = by_name["tick"]
     # 21.2.5: the engine runs from before the open to after the close

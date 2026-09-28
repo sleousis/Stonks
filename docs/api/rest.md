@@ -238,6 +238,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/portfolios/{portfolio_id}/live/allocation` | Get Live Allocation | sign-in |  | [LiveAllocationView](#liveallocationview) |
 | PUT | `/api/portfolios/{portfolio_id}/live/allocation` | Set Live Allocation | `live.manage` | [LiveAllocationUpdate](#liveallocationupdate) | [LiveAllocationView](#liveallocationview) |
 | GET | `/api/portfolios/{portfolio_id}/live/gate-report` | Get Live Gate Report | `data.read` |  | [GateReportView](#gatereportview) |
+| GET | `/api/portfolios/{portfolio_id}/live/margin` | Get Live Margin | `data.read` |  | [MarginView](#marginview) |
 | POST | `/api/portfolios/{portfolio_id}/live/preview` | Preview Live Orders | `portfolio.trade` |  | [LivePreviewView](#livepreviewview) |
 | GET | `/api/portfolios/{portfolio_id}/live/rules` | Get Live Rules | `data.read` |  | [LiveRulesView](#liverulesview) |
 | GET | `/api/portfolios/{portfolio_id}/live/stage` | Get Live Stage | `data.read` |  | [LiveStageView](#livestageview) |
@@ -545,6 +546,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `account_type` | "cash" \| "margin" | no |  |
+| `acknowledge_margin_risks` | boolean | no |  |
 | `allow_short` | boolean | no |  |
 | `base_currency` | string | no |  |
 | `client_class` | "retail" \| "professional" | no |  |
@@ -577,6 +579,8 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `enabled` | boolean | no |  |
+| `margin_accounts` | boolean | no |  |
+| `margin_buffer` | number | no |  |
 | `pdt_equity_threshold` | number | no |  |
 | `pdt_max_day_trades` | integer | no |  |
 | `pdt_window_days` | integer | no |  |
@@ -2564,6 +2568,28 @@ One order you place by hand. It goes through the kill switch, every halt and eve
 | `status` | "preview" \| "pending" \| "filled" \| "partially_filled" \| "rejected" \| "cancelled" | yes |  |
 | `ticker` | string | yes |  |
 
+### MarginAccountView
+
+The account as the broker reports it now.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `account_type` | "cash" \| "margin" | yes |  |
+| `available_funds` | number | yes |  |
+| `buying_power` | number | yes |  |
+| `cash` | number | yes |  |
+| `currency` | string | yes |  |
+| `cushion` | number \| null | yes |  |
+| `day_trades_remaining` | integer \| null | yes |  |
+| `equity` | number | yes |  |
+| `excess_liquidity` | number \| null | yes |  |
+| `initial_margin` | number | yes |  |
+| `level` | "ok" \| "warn" \| "reduce" \| "call" \| null | yes |  |
+| `maintenance_margin` | number | yes |  |
+| `margin_room` | number \| null | yes |  |
+| `margin_use` | number \| null | yes |  |
+| `reported_type` | "cash" \| "margin" \| null | yes |  |
+
 ### MarginCallSettings
 
 | Field | Type | Required | Description |
@@ -2571,6 +2597,20 @@ One order you place by hand. It goes through the kill switch, every halt and eve
 | `buffer` | number | no |  |
 | `enabled` | boolean | no |  |
 | `margin` | [MarginSettings](#marginsettings) | no |  |
+| `reduce_cushion` | number | no |  |
+| `restore_cushion` | number | no |  |
+| `warn_cushion` | number | no |  |
+
+### MarginCheckView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `checked_at` | date-time | yes |  |
+| `cushion` | number \| null | yes |  |
+| `equity` | number | yes |  |
+| `level` | "ok" \| "warn" \| "reduce" \| "call" | yes |  |
+| `maintenance_margin` | number | yes |  |
+| `source` | "tick" \| "monitor" | yes |  |
 
 ### MarginRates
 
@@ -2593,6 +2633,22 @@ Which margin model a book uses, and its rates.
 | `model` | "cash" \| "reg_t" | no |  |
 | `overrides` | dict[str, [MarginRates](#marginrates)] | no |  |
 | `rates` | [MarginRates](#marginrates) | no |  |
+
+### MarginView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `account` | [MarginAccountView](#marginaccountview) \| null | yes |  |
+| `buffer` | number | yes |  |
+| `latest_check` | [MarginCheckView](#margincheckview) \| null | yes |  |
+| `margin_accounts_on` | boolean | yes |  |
+| `pdt` | [PdtView](#pdtview) | yes |  |
+| `portfolio_id` | string | yes |  |
+| `profile_type` | "cash" \| "margin" \| null | yes |  |
+| `read_error` | string \| null | yes |  |
+| `reduce_cushion` | number | yes |  |
+| `restore_cushion` | number | yes |  |
+| `warn_cushion` | number | yes |  |
 
 ### MarkReadRequest
 
@@ -3571,6 +3627,16 @@ The model book's result. Every figure is null without two days.
 |-------|------|----------|-------------|
 | `profit` | number | yes |  |
 | `spot` | number | yes |  |
+
+### PdtView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `applies` | boolean | yes |  |
+| `day_trades_remaining` | integer \| null | yes |  |
+| `equity_threshold` | number | yes |  |
+| `max_day_trades` | integer | yes |  |
+| `window_days` | integer | yes |  |
 
 ### PendingActionView
 

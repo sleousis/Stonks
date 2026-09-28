@@ -213,11 +213,35 @@
               <li>{{ n }}</li>
             }
           </ul>
+          @if (toMargin()) {
+            <div class="margin-risks" role="group" aria-labelledby="margin-risks-title">
+              <h3 id="margin-risks-title">What margin means</h3>
+              <ul>
+                @for (r of marginRisks; track r) {
+                  <li>{{ r }}</li>
+                }
+              </ul>
+              <p class="muted">
+                Stonks only saves a margin profile when the broker reports a margin account, and
+                your admin has turned margin accounts on.
+              </p>
+              <label class="ack">
+                <input
+                  type="checkbox"
+                  data-testid="margin-ack"
+                  [disabled]="!canManage()"
+                  [checked]="acknowledged()"
+                  (change)="acknowledged.set($any($event.target).checked)"
+                />
+                <span>I understand these risks.</span>
+              </label>
+            </div>
+          }
           <div class="actions">
             <button
               type="button"
               class="btn btn-danger"
-              [disabled]="!canManage() || savingProfile() || !profileChanged()"
+              [disabled]="!canManage() || savingProfile() || !canSaveProfile()"
               [attr.aria-busy]="savingProfile()"
               (click)="saveProfile()"
             >
@@ -228,6 +252,9 @@
         }
       </div>
     </section>
+
+    <!-- Buying power and margin (19.13) ------------------------------------->
+    <app-live-margin-panel class="span-12" [portfolioId]="portfolio()!.id" />
 
     <!-- Live safeguards (read only) ----------------------------------------->
     <section class="panel span-6" aria-labelledby="safeguards-title">

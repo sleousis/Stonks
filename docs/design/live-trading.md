@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 19. It takes Stonks from simulated paper trading to real orders at Interactive Brokers (IBKR), in stages, with a gate between each stage.
 
-Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2), the IBKR connection and borrow (19.3), reconciliation (19.5), tickets, approve mode and submit (19.8), stages, gates and preview (19.9), protective stops (19.10), live tests, drills and runbooks (19.11), and 19.14 to 19.18 (the live pieces connected, deeper reconciliation, broker edge cases, the API's own session, review leftovers). Planned: 19.12 (run the stages with real money) and 19.13 (margin accounts).
+Status: wave 1 built (19.1 broker seam, 19.4 gateway deployment, 19.6 live safeguards, 19.7 account rules), then the IBKR adapter (19.2), the IBKR connection and borrow (19.3), reconciliation (19.5), tickets, approve mode and submit (19.8), stages, gates and preview (19.9), protective stops (19.10), live tests, drills and runbooks (19.11), 19.14 to 19.18 (the live pieces connected, deeper reconciliation, broker edge cases, the API's own session, review leftovers), and 19.13 (margin accounts, built and off by default, section 23). Planned: 19.12 (run the stages with real money).
 
 Owner decisions (2026-09-27):
 
@@ -16,7 +16,7 @@ Later owner decisions (2026-09-27), which this page now follows:
 
 - No mandatory approve stage. Auto may place live orders once the broker paper stage passes. Approve each trade stays an optional mode, not a gate.
 - The broker account is shared with the owner's own manual trading. Stonks only trades the positions it opened itself (ownership by attribution, `production/ownership.py`). It never touches, counts against, or sells the owner's own positions, and reconciliation does not treat them as drift. Manual trades are allowed by default.
-- The first live account is a cash account, long only. The account rules enforce settled cash only, no free-riding, no shorts and no margin. Margin with longs and shorts is a later Phase 19 follow-up, and the seams stay ready for it.
+- The first live account is a cash account, long only. The account rules enforce settled cash only, no free-riding, no shorts and no margin. Margin with longs and shorts comes after the cash account runs well. It is built (19.13) and stays off until the owner turns it on (section 23).
 - The owner sets, by hand, the amount Stonks may trade per live portfolio. There are no automatic ramp steps or suggestions. Changing it needs a fresh second factor and is audited. A bad week (TCA gap, drift, rejections) raises an alert but does not cut the amount. The kill switch and the halts still stop trading.
 
 Non-goals for this phase: options (Phase 17), futures, crypto at IBKR, advisor and family sub-accounts, intraday strategies, and a second live broker.
@@ -482,7 +482,7 @@ flowchart LR
 **Account profile.** `account_profiles (portfolio_id, account_type, client_class, fx_policy, wash_sale_mode, allow_short, updated_at, updated_by)`, plus the jurisdiction from `portfolio_tax_settings` and the base currency from `portfolios` (their one home since migration 040), set in the console (`PUT /api/portfolios/{id}/live/account-profile`, step-up, audited):
 
 - `jurisdiction` in {`us`, `eu`, `uk`}. It follows the IBKR entity that holds the account, not the owner's passport.
-- `account_type` in {`cash`, `margin`}, default `cash`. The owner's first live account is a cash account, long only. Shorts need `margin` (`allow_short` is refused on a cash profile, by the service and by the table). Margin with longs and shorts is a later follow-up.
+- `account_type` in {`cash`, `margin`}, default `cash`. The owner's first live account is a cash account, long only. Shorts need `margin` (`allow_short` is refused on a cash profile, by the service and by the table). A margin profile also needs margin accounts on and IBKR reporting a margin account (section 23).
 - `client_class` in {`retail`, `professional`}. It decides the product restrictions.
 - The profile is checked against IBKR's `AccountType` at connect. A mismatch refuses to trade.
 - Changing a profile needs a step-up and an audit row. It can only be set before the first live stage, or with the book in `broker_paper`.
@@ -496,7 +496,9 @@ flowchart LR
 | `short_permission` | Drops every short sale on a cash account, and on a margin account whose profile does not allow shorts. |
 | `account_known` | With no account state from the broker, nothing opens. |
 | `settled_cash` | Cash accounts: buys use settled cash only, net of the other buys of the run. Sale proceeds never count until they settle, so the account never buys with money it has not received yet (no free-riding, no margin). |
-| `buying_power` | Margin accounts: buys fit `AvailableFunds`, net of the other buys of the run. The what-if answer wins when it is stricter (19.2). |
+| `buying_power` | Margin accounts: buys fit `AvailableFunds`, net of the other buys of the run. |
+| `margin_allowed` | Margin accounts: nothing new opens while margin accounts are off, or while IBKR does not report a margin account (19.13). |
+| `margin_what_if` | Margin accounts, last: IBKR's what-if margin of each new order, with the run's other orders, stays within `1 - margin_buffer` of equity (19.13). |
 | `fx_funding` | A buy in a currency the account does not hold enough of is clipped to what it holds. `convert` (a separate FX order before the buy) is not built yet, so both policies only spend what is held. A cash account never borrows a currency. |
 
 ### US rules
@@ -685,7 +687,7 @@ Waves:
 ## Open questions
 
 1. Where will the account be (US, EU or UK)? Everything else follows from this.
-2. Answered: a cash account, long only, for now. Margin with shorts is a later follow-up.
+2. Answered: a cash account, long only, for now. Margin with shorts is built (19.13) and off by default.
 3. Answered: approve mode is optional, not a stage.
 4. Answered: no ramp steps. The owner sets the allocation by hand.
 5. Answered: yes, the account is shared. Stonks only trades its own positions.
@@ -924,3 +926,32 @@ flowchart LR
 - **The kill switch while a tick runs.** Single cancels of the tick's orders fail then. A stop-all kill that covers every portfolio of the gateway (a global kill, or one naming all of them) falls back to one `reqGlobalCancel` and syncs the failed rows again. It also cancels orders placed by hand in TWS, as stop-all always meant. A buys-only kill never cancels everything: its failures are audited, and pressing again once the tick is done cancels them one by one.
 - **Closed after use.** The kill switch and each manual order request close the broker they built, so the next request can open client id 16 again.
 - **Tests.** `FakeIbGateway` models ownership: `session(client_id)` opens another client of the same gateway, a busy id answers 326, `open_trades` holds a client's own orders (every order for the master), and `cancel_order` of another client's order answers 10147 unless the caller is the master. No migration.
+
+## 23. What 19.13 built
+
+Margin accounts, longs and shorts at IBKR. Built complete, never on by default: the owner's first live account is a cash account, and margin comes after it runs well.
+
+```mermaid
+flowchart LR
+  P[margin profile] -->|needs| ON[margin_accounts on<br/>account_rules and margin_call on]
+  P -->|needs| ACK[risks acknowledged<br/>fresh second factor]
+  P -->|needs| REP[IBKR reports margin]
+  T[tick] --> CTX[live context]
+  CTX --> WI[what-if per order]
+  CTX --> LOC[locate per short]
+  CTX --> CHK[margin check row<br/>alert when thin]
+  J[live_margin job<br/>every 30 min] --> CHK
+  CHK -->|below reduce_cushion| MC[margin_call rule<br/>drops opens, sells own positions]
+```
+
+- **Off switch.** `[production.risk.rules.account_rules] margin_accounts = false` by default. An override may turn it off, never on (`MERGE_RULES`). While off, the `margin_allowed` account rule drops every opening order of a margin book, and a margin profile cannot be chosen.
+- **Choosing margin.** `PUT /api/portfolios/{id}/live/account-profile` with `account_type = "margin"` needs `live.manage` (a fresh second factor), margin accounts on, the `account_rules` and `margin_call` rules on, and `acknowledge_margin_risks` on a switch from cash. The service then reads the account through the portfolio's broker. The gateway must be set up as a margin account (`[brokers.ibkr.gateways.<name>] account_type = "margin"`) and IBKR must report a margin type. The audit row records IBKR's answer. The console shows the risks in plain words and asks for a tick first.
+- **The margin type IBKR reports.** `LiveAccountState.reported_type` comes from the account values (`reported_account_type`): `TradingType-S` (`STKMRGN`, `STKCASH`), `TradingType`, `MarginType` or `AccountType` when it names the type. A tag that says cash wins, and no tag means unknown, so a doubt never reads as margin. The live contract test `test_live_account_reports_its_margin_type` records which tag a real account sends.
+- **Buying power from the what-if.** The account rules get the broker's `what_if` (`AccountRuleInputs.margin_preview`). `margin_what_if` runs last, so IBKR prices the quantity every other rule left. The initial margin in use plus the order's change must stay within `1 - margin_buffer` of the equity with loan after it, and the maintenance margin within the same share of equity. The run's earlier orders count (`AccountBook.initial_margin`, `maintenance_margin`). An order is clipped to fit (margin is taken as linear in the quantity) or dropped. A what-if that fails, times out or warns drops it. A market order is priced at the run's reference price.
+- **Locates.** For a margin profile with shorts, `build_live_context` passes a `LocateMap` over the broker's borrow source (IBKR's shortable ticks with the lake's `borrow_rates` fee) as the Reg SHO locate. It asks IBKR only for the tickers a rule looks up, once each. No answer is no short. Hard to borrow names still wait for a person as tickets (19.16).
+- **Pattern day trader.** The `pdt` rule already binds US margin accounts under 25,000 USD. The margin view shows the broker's count.
+- **Monitoring.** The cushion is excess liquidity over equity (`LiveAccountState.cushion`). Levels from `[production.risk.rules.margin_call]`: `warn_cushion` 0.15 (a normal alert), `reduce_cushion` 0.10 (an urgent alert), `restore_cushion` 0.20, and `call` at 0. The tick of a live margin book and the `live_margin` job each write a `margin_checks` row (SQLite migration 045) and alert the owner once per level and day. The job reads each gateway's margin accounts on the reconcile client id and skips while there is none.
+- **Reducing before IBKR liquidates.** For a live margin account the `margin_call` rule reads IBKR's cushion instead of its model. Below `reduce_cushion` it drops opening orders and adds forced closes of the book's own positions, the largest maintenance first, until the cushion is back at `restore_cushion`. Above it, the what-if governs new orders and the model check is skipped. The owner's own positions are never sold. The reduction goes out with the next run, so the monitor's urgent alert is the call to act between runs.
+- **Financing.** Each tick of a short book at IBKR books the borrow fee of its own shorts since the last accrual (`live_short_financing`), at IBKR's rate for the day, into `financing_charges`. IBKR debits the real fee. The row puts it in the book's P&L the day it is owed. Debit interest is left to the broker's statement.
+- **Console.** Live settings shows the risks before a switch to margin, and a Buying power and margin panel: equity, buying power, available funds, the new margin still allowed, a margin use meter, the cushion and its level, the buffer and the thresholds, the day trade state and the last check (`GET /api/portfolios/{id}/live/margin`, MCP `get_live_margin`).
+- **Tests.** `FakeIbGateway` models a margin account (`margin_account`), what-if margin per share (`what_if_margin`) and a margin call (`margin_call`). The rules, the context, the tick, the job and the API are tested against it. No network.
