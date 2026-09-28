@@ -28,6 +28,7 @@ from stonks.tax import (
     GAINS_COLUMNS,
     OPEN_LOT_COLUMNS,
     DividendEvent,
+    OpenLot,
     TaxFill,
     TaxSettings,
     TaxSplit,
@@ -426,6 +427,12 @@ class TaxService:
         currencies = {lot.currency for lot in lots if lot.currency}
         fx = self._fx(currencies, inputs.base)
         return to_csv(OPEN_LOT_COLUMNS, open_lot_rows(lots, day, inputs.base, fx, prices))
+
+    def open_lots(self, portfolio_id: str, as_of: date) -> list[OpenLot]:
+        """The lots still open at the end of ``as_of`` (the planner's tax
+        preview, roadmap 23.16). The caller has resolved the portfolio."""
+        inputs = self._lot_inputs(portfolio_id)
+        return open_lots(inputs.fills, as_of, inputs.settings, inputs.picks, inputs.splits)
 
     def _lot_inputs(self, portfolio_id: str) -> _LotInputs:
         """The portfolio's fills (fees in the trade currency), lot picks,

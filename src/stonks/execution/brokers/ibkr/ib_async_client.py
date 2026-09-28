@@ -32,7 +32,7 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from ib_async import IB, ComboLeg, Contract
+from ib_async import IB, ComboLeg, Contract, TagValue
 from ib_async import Order as IbAsyncOrder
 
 from stonks.execution.brokers.ibkr.client import (
@@ -497,6 +497,9 @@ def to_order(req: IbOrderRequest) -> IbAsyncOrder:
     if req.oca_group:
         order.ocaGroup = req.oca_group
         order.ocaType = req.oca_type or 2
+    if req.algo_strategy:  # roadmap 23.16
+        order.algoStrategy = req.algo_strategy
+        order.algoParams = [TagValue(tag, value) for tag, value in req.algo_params]
     return order
 
 

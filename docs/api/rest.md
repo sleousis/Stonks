@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [demo](#demo-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [journal](#journal-endpoints) · [lab](#lab-endpoints) · [lab-worker](#lab-worker-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statement-imports](#statement-imports-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [demo](#demo-endpoints) · [execution](#execution-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [journal](#journal-endpoints) · [lab](#lab-endpoints) · [lab-worker](#lab-worker-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statement-imports](#statement-imports-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -135,6 +135,18 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/demo` | Get Demo | sign-in |  | [DemoPortfolioView](#demoportfolioview) |
 | POST | `/api/demo` | Open Demo | `data.read` |  | [DemoPortfolioView](#demoportfolioview) |
 | DELETE | `/api/demo` | Remove Demo | `data.read` |  |  |
+
+## execution endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| GET | `/api/execution/algos` | List Execution Algos | sign-in |  | [AlgoList](#algolist) |
+| POST | `/api/planner/confirm` | Confirm Rebalance | `portfolio.trade` | [PlanConfirm](#planconfirm) | [PlanConfirmResult](#planconfirmresult) |
+| POST | `/api/planner/plan` | Plan Rebalance | `data.read` | [PlanRequest](#planrequest) | [RebalancePlanView](#rebalanceplanview) |
+| GET | `/api/portfolios/{portfolio_id}/algo-parents` | List Algo Parents | sign-in |  | [ParentOrderList](#parentorderlist) |
+| GET | `/api/portfolios/{portfolio_id}/execution-algos` | List Execution Algo Settings | sign-in |  | [AlgoSettingList](#algosettinglist) |
+| PUT | `/api/portfolios/{portfolio_id}/execution-algos` | Set Execution Algo | `portfolio.manage` | [AlgoSettingUpdate](#algosettingupdate) | [AlgoSettingView](#algosettingview) |
+| DELETE | `/api/portfolios/{portfolio_id}/execution-algos` | Clear Execution Algo | `portfolio.manage` |  |  |
 
 ## exports endpoints
 
@@ -687,6 +699,49 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | `level` | "info" \| "warning" \| "error" | yes |  |
 | `message` | string | yes |  |
 | `title` | string | yes |  |
+
+### AlgoInfo
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cost_assumption` | dict[str, number] | yes | spread_factor, impact_factor and timing_bps the backtest assumes. |
+| `defaults` | object | yes |  |
+| `description` | string | yes |  |
+| `name` | string | yes |  |
+| `params_schema` | object | yes |  |
+| `sliceable` | boolean | yes | Stonks can send it as child orders at other brokers. |
+| `title` | string | yes |  |
+
+### AlgoList
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[AlgoInfo](#algoinfo)] | yes |  |
+
+### AlgoSettingList
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[AlgoSettingView](#algosettingview)] | yes |  |
+
+### AlgoSettingUpdate
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `algo` | string | yes |  |
+| `params` | object | no |  |
+| `strategy_id` | string \| null | no |  |
+
+### AlgoSettingView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `algo` | string | yes |  |
+| `params` | object | yes |  |
+| `portfolio_id` | string | yes |  |
+| `strategy_id` | string \| null | yes | Empty: the portfolio's own setting. |
+| `updated_at` | date-time | yes |  |
+| `updated_by` | string \| null | yes |  |
 
 ### AllocationSlice
 
@@ -1380,6 +1435,7 @@ Settings for ``AssetClassCostModel``. Zero costs by default; ``CostModelSettings
 | `asset_classes` | dict[str, [AssetClassCosts](#assetclasscosts)] | no |  |
 | `commissions` | [CommissionSettings](#commissionsettings) | no |  |
 | `default` | [AssetClassCosts](#assetclasscosts) | no |  |
+| `exec_algo` | [ExecAlgoAssumption](#execalgoassumption) \| null | no |  |
 | `half_spread_model` | "class" \| "corwin_schultz" \| "abdi_ranaldo" | no |  |
 | `impact_bps` | number | no |  |
 | `impact_gamma` | number | no |  |
@@ -1784,6 +1840,15 @@ An exchange our instruments name, for the exchange picker.
 | `exchange` | string | yes |  |
 | `instruments` | integer | yes |  |
 | `listed` | integer | yes |  |
+
+### ExecAlgoAssumption
+
+``[backtest.costs.exec_algo]``: the execution algo the fills assume.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes |  |
+| `params` | object | no |  |
 
 ### Exposure
 
@@ -3020,6 +3085,17 @@ The lots one sell fill closes. An empty list clears the picks.
 | `picks` | list[[LotPick](#lotpick)] | no |  |
 | `sell_fill_id` | integer | yes |  |
 
+### LotSaleView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `acquired` | date | yes |  |
+| `cost_basis` | number | yes |  |
+| `gain` | number | yes |  |
+| `holding_period` | "short" \| "long" | yes |  |
+| `proceeds` | number | yes |  |
+| `quantity` | number | yes |  |
+
 ### LotView
 
 What lot rounding did in a backtest (roadmap 23.1).
@@ -4229,6 +4305,30 @@ The model book's result. Every figure is null without two days.
 | `name` | string | yes |  |
 | `tunable` | boolean | yes |  |
 
+### ParentOrderList
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `items` | list[[ParentOrderView](#parentorderview)] | yes |  |
+
+### ParentOrderView
+
+A parent order Stonks works as child slices.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `algo` | string | yes |  |
+| `client_id` | string | yes |  |
+| `filled` | number | yes |  |
+| `portfolio_id` | string | yes |  |
+| `quantity` | number | yes |  |
+| `side` | "buy" \| "sell" | yes |  |
+| `slices` | list[[SliceView](#sliceview)] | yes |  |
+| `state` | string | yes |  |
+| `ticker` | string | yes |  |
+| `window_end` | date-time | yes |  |
+| `window_start` | date-time | yes |  |
+
 ### PasswordChangeRequest
 
 | Field | Type | Required | Description |
@@ -4317,6 +4417,77 @@ The model book's result. Every figure is null without two days.
 | `start_day` | date \| null | yes | Day of the start value; null without history. |
 | `start_value` | number \| null | yes |  |
 | `twr` | number \| null | no | Time-weighted return over the period: deposits and withdrawals taken out, so a deposit is never profit. Null without a start value. |
+
+### PlanConfirm
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | string \| null | no | Idempotency key. Default: one from the plan's trades. |
+| `long_term_rate` | number \| null | no |  |
+| `min_trade_value` | number | no |  |
+| `portfolio_id` | string | yes |  |
+| `reason` | string | yes |  |
+| `short_term_rate` | number \| null | no |  |
+| `source` | "strategy" \| "targets" | yes | strategy: the strategy's latest model book weights; targets: your list. |
+| `strategy_id` | string \| null | no |  |
+| `targets` | list[[PlanTarget](#plantarget)] | no |  |
+
+### PlanConfirmResult
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `key` | string | yes |  |
+| `plan` | [RebalancePlanView](#rebalanceplanview) | yes |  |
+| `ticket_ids` | list[string] | yes |  |
+| `written` | integer | yes | New tickets. A repeat of the same key writes none. |
+
+### PlanLineView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cost` | number | yes |  |
+| `cost_bps` | number \| null | yes |  |
+| `current_quantity` | number | yes |  |
+| `current_weight` | number | yes |  |
+| `price` | number \| null | yes |  |
+| `quantity` | number | yes |  |
+| `side` | "buy" \| "sell" \| null | yes |  |
+| `skipped` | string \| null | yes |  |
+| `target_quantity` | number | yes |  |
+| `target_weight` | number | yes |  |
+| `tax` | [PlanTaxView](#plantaxview) \| null | yes |  |
+| `ticker` | string | yes |  |
+| `value` | number | yes |  |
+| `weight_after` | number | yes |  |
+
+### PlanRequest
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `long_term_rate` | number \| null | no |  |
+| `min_trade_value` | number | no |  |
+| `portfolio_id` | string | yes |  |
+| `short_term_rate` | number \| null | no |  |
+| `source` | "strategy" \| "targets" | yes | strategy: the strategy's latest model book weights; targets: your list. |
+| `strategy_id` | string \| null | no |  |
+| `targets` | list[[PlanTarget](#plantarget)] | no |  |
+
+### PlanTarget
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `ticker` | string | yes |  |
+| `weight` | number | yes |  |
+
+### PlanTaxView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `estimated_tax` | number \| null | yes |  |
+| `gain` | number | yes |  |
+| `long_term_gain` | number | yes |  |
+| `lots` | list[[LotSaleView](#lotsaleview)] | yes |  |
+| `short_term_gain` | number | yes |  |
 
 ### PlateauOverlayView
 
@@ -4869,6 +5040,28 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 |-------|------|----------|-------------|
 | `end` | string \| null | no |  |
 | `start` | string \| null | no |  |
+
+### RebalancePlanView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `algo` | object \| null | yes | The execution algo the trades would use. |
+| `as_of` | date | yes |  |
+| `buys` | number | yes |  |
+| `cash_after` | number | yes |  |
+| `cash_before` | number | yes |  |
+| `cash_weight_after` | number | yes |  |
+| `equity` | number | yes |  |
+| `lines` | list[[PlanLineView](#planlineview)] | yes |  |
+| `max_drift_after` | number | yes |  |
+| `notes` | list[string] | yes |  |
+| `portfolio_id` | string | yes |  |
+| `sells` | number | yes |  |
+| `source` | "strategy" \| "targets" | yes |  |
+| `strategy_id` | string \| null | yes |  |
+| `tax_total` | number \| null | yes |  |
+| `total_cost` | number | yes |  |
+| `turnover` | number | yes | Traded value over the book's value. |
 
 ### ReconcileReportView
 
@@ -5595,6 +5788,19 @@ Implementation shortfall of one order. Costs are positive, in bps of the filled 
 | `top_quantile_turnover` | number \| null | no |  |
 | `window` | list[any] | yes |  |
 
+### SliceView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `client_id` | string | yes |  |
+| `filled` | number | yes |  |
+| `order_state` | string \| null | yes |  |
+| `quantity` | number | yes |  |
+| `send_after` | date-time | yes |  |
+| `seq` | integer | yes |  |
+| `status` | "planned" \| "sent" \| "skipped" | yes |  |
+| `status_reason` | string \| null | yes |  |
+
 ### SmokeCheck
 
 | Field | Type | Required | Description |
@@ -6218,7 +6424,7 @@ A group's money figures in the portfolio's base currency (roadmap 20.5), each or
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `base_currency` | string \| null | no |  |
-| `by` | "all" \| "strategy" \| "ticker" \| "portfolio" \| "day" \| "week" \| "month" | yes |  |
+| `by` | "all" \| "strategy" \| "ticker" \| "portfolio" \| "algo" \| "day" \| "week" \| "month" | yes |  |
 | `fx_missing` | list[string] | no |  |
 | `groups` | list[[TcaGroupView](#tcagroupview)] | yes |  |
 | `groups_base` | list[[TcaMoneyView](#tcamoneyview)] | no |  |

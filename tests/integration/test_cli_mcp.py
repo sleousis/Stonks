@@ -67,8 +67,11 @@ async def test_stdio_session_reports_unreachable_api(tmp_path, closed_port):
     )
     async with Client(params) as client:
         names = {t.name for t in (await client.list_tools()).tools}
-        assert {"get_portfolio", "run_tick", "wait_for_job"} <= names
-        result = await client.call_tool("get_portfolio", {})
+        # The API cannot say which tool groups the token may use (roadmap
+        # 23.8), so only whoami stays: a limited token never gets more
+        # tools by accident. whoami still names the unreachable API.
+        assert names == {"whoami"}
+        result = await client.call_tool("whoami", {})
     assert result.is_error
     text = result.content[0].text
     assert "stonks serve" in text

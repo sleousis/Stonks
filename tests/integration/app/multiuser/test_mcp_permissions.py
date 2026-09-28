@@ -781,6 +781,39 @@ CASES: dict[str, Case] = {
             "retry_key": "perm-1",
         },
     ),
+    # execution algos and the planner (roadmap 23.16)
+    "list_execution_algos": _c("GET", "/api/execution/algos"),
+    "get_execution_algo_settings": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/execution-algos",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    "list_algo_parents": _c(
+        "GET",
+        "/api/portfolios/{portfolio_id}/algo-parents",
+        lambda i: {"portfolio_id": i["portfolio"]},
+    ),
+    "set_execution_algo": _c(
+        "PUT",
+        "/api/portfolios/{portfolio_id}/execution-algos",
+        lambda i: {"portfolio_id": i["portfolio"], "algo": "twap", "confirm": True},
+    ),
+    "plan_rebalance": _c(
+        "POST",
+        "/api/planner/plan",
+        lambda i: {"portfolio_id": i["portfolio"], "source": "targets", "targets": {"UP.US": 0.5}},
+    ),
+    "confirm_rebalance": _c(
+        "POST",
+        "/api/planner/confirm",
+        lambda i: {
+            "portfolio_id": i["portfolio"],
+            "source": "targets",
+            "reason": "rebalance",
+            "targets": {"UP.US": 0.5},
+            "confirm": True,
+        },
+    ),
     # manual orders (roadmap 20.1): a stale price answers 409 once permitted
     "place_order": _c(
         "POST",

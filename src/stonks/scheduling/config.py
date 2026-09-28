@@ -118,7 +118,10 @@ def default_jobs() -> list[JobConfig]:
     minutes) reads the margin cushion of each margin account and skips
     while there is none (the default). ``briefing_pre_open`` (open minus 45
     minutes) and ``briefing_post_close`` (close plus 100 minutes) send the
-    research-only briefings and skip while ``[assistant.briefings]`` is off."""
+    research-only briefings and skip while ``[assistant.briefings]`` is off.
+    ``algo_slices`` (every 5 minutes) sends the due child slices of TWAP and
+    VWAP parents at a broker that does not run them, and skips while no
+    parent is working."""
     return [
         JobConfig(
             name="universes_refresh",
@@ -300,6 +303,14 @@ def default_jobs() -> list[JobConfig]:
         ),
         # The margin cushion of every margin account (roadmap 19.13), with
         # an alert when it is thin. Skips while no margin profile exists.
+        # Child slices of execution algos Stonks works itself (roadmap
+        # 23.16). Skips while no parent order is working.
+        JobConfig(
+            name="algo_slices",
+            action="algo_slices",
+            trigger=IntervalTriggerConfig(every_minutes=5),
+            catch_up="none",
+        ),
         JobConfig(
             name="live_margin",
             action="live_margin",

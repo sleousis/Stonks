@@ -5,6 +5,7 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
 export const ORDERS_TABS = [
   { path: '/orders', label: 'Orders', exact: true },
   { path: '/orders/new', label: 'New order', exact: true },
+  { path: '/orders/rebalance', label: 'Rebalance', exact: true },
   { path: '/orders/drafts', label: 'Drafts', exact: true },
   { path: '/orders/fills', label: 'Fills', exact: false },
   { path: '/orders/ticks', label: 'Trading runs', exact: false },

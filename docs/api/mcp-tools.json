@@ -447,6 +447,87 @@
     },
     {
       "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Write one order ticket per trade of the plan. Each waits for the\nperson's approval with a fresh second factor in the web app, so\nnothing is sent from here. Without confirm=true returns the plan.",
+      "input_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "min_trade_value": {
+            "default": 0.0,
+            "minimum": 0,
+            "title": "Min Trade Value",
+            "type": "number"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "reason": {
+            "description": "why (audited)",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "strategy",
+              "targets"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Id"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "your own targets, ticker to weight, e.g. {\"AAPL.US\": 0.3}",
+            "title": "Targets"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "source",
+          "reason"
+        ],
+        "title": "confirm_rebalanceArguments",
+        "type": "object"
+      },
+      "name": "confirm_rebalance",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
         "destructive": false,
         "idempotent": false,
         "open_world": false,
@@ -1824,6 +1905,30 @@
         "type": "object"
       },
       "name": "get_earnings_warnings",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "How one of your portfolio's orders are worked: its own algo and\neach strategy's override. Empty: plain limit orders.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id"
+        ],
+        "title": "get_execution_algo_settingsArguments",
+        "type": "object"
+      },
+      "name": "get_execution_algo_settings",
       "needs_confirm": false
     },
     {
@@ -4132,6 +4237,30 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Parent orders Stonks works as child slices (TWAP, VWAP at a broker\nwithout them), with each slice's state.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "portfolio_id"
+        ],
+        "title": "list_algo_parentsArguments",
+        "type": "object"
+      },
+      "name": "list_algo_parents",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Every deposit and withdrawal of one of your portfolios, oldest\nfirst: recorded ones and those a broker sync brought in. Returns take\nthem out, so a deposit is never profit.",
       "input_schema": {
         "properties": {
@@ -4242,6 +4371,22 @@
         "type": "object"
       },
       "name": "list_event_alert_kinds",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Every execution algo (Adaptive, TWAP, VWAP): its parameters,\ndefaults, whether Stonks can slice it at brokers without it, and the\ncosts the backtest assumes for it.",
+      "input_schema": {
+        "properties": {},
+        "title": "list_execution_algosArguments",
+        "type": "object"
+      },
+      "name": "list_execution_algos",
       "needs_confirm": false
     },
     {
@@ -6403,6 +6548,103 @@
       },
       "name": "place_order",
       "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "The trades that move one of your portfolios to a strategy's model\nweights (source=strategy) or your own targets (source=targets): whole\nshares, costs, turnover and a tax preview. Writes and sends nothing.",
+      "input_schema": {
+        "properties": {
+          "long_term_rate": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "tax rate as a fraction",
+            "title": "Long Term Rate"
+          },
+          "min_trade_value": {
+            "default": 0.0,
+            "minimum": 0,
+            "title": "Min Trade Value",
+            "type": "number"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "short_term_rate": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "tax rate as a fraction",
+            "title": "Short Term Rate"
+          },
+          "source": {
+            "enum": [
+              "strategy",
+              "targets"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Strategy Id"
+          },
+          "targets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "your own targets, ticker to weight, e.g. {\"AAPL.US\": 0.3}",
+            "title": "Targets"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "source"
+        ],
+        "title": "plan_rebalanceArguments",
+        "type": "object"
+      },
+      "name": "plan_rebalance",
+      "needs_confirm": false
     },
     {
       "annotations": {
@@ -9126,6 +9368,73 @@
         "type": "object"
       },
       "name": "set_event_alerts",
+      "needs_confirm": true
+    },
+    {
+      "annotations": {
+        "destructive": true,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": false
+      },
+      "description": "Work a portfolio's orders (or one strategy's) with an algo from the\nnext tickets on. Without confirm=true returns the current settings and\nchanges nothing.",
+      "input_schema": {
+        "properties": {
+          "algo": {
+            "enum": [
+              "adaptive",
+              "twap",
+              "vwap"
+            ],
+            "title": "Algo",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "must be true to apply; false (default) returns a preview only",
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "the algo's parameters",
+            "title": "Params"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "strategy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "only this strategy's orders",
+            "title": "Strategy Id"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "algo"
+        ],
+        "title": "set_execution_algoArguments",
+        "type": "object"
+      },
+      "name": "set_execution_algo",
       "needs_confirm": true
     },
     {

@@ -15,6 +15,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`check_factor_expression`](#check_factor_expression) | read | no |
 | [`check_model_swap`](#check_model_swap) | read | no |
 | [`compare_tickers`](#compare_tickers) | read | no |
+| [`confirm_rebalance`](#confirm_rebalance) | guarded | yes |
 | [`create_draft`](#create_draft) | job | no |
 | [`create_price_alert`](#create_price_alert) | job | no |
 | [`create_screen`](#create_screen) | job | no |
@@ -43,6 +44,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`get_coverage`](#get_coverage) | read | no |
 | [`get_draft`](#get_draft) | read | no |
 | [`get_earnings_warnings`](#get_earnings_warnings) | read | no |
+| [`get_execution_algo_settings`](#get_execution_algo_settings) | read | no |
 | [`get_factor`](#get_factor) | read | no |
 | [`get_factor_values`](#get_factor_values) | read | no |
 | [`get_fx_rate`](#get_fx_rate) | read | no |
@@ -102,11 +104,13 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`import_index_history`](#import_index_history) | guarded | yes |
 | [`lab_run_draft`](#lab_run_draft) | guarded | yes |
 | [`list_alerts`](#list_alerts) | read | no |
+| [`list_algo_parents`](#list_algo_parents) | read | no |
 | [`list_cash_flows`](#list_cash_flows) | read | no |
 | [`list_connections`](#list_connections) | read | no |
 | [`list_cost_models`](#list_cost_models) | read | no |
 | [`list_drafts`](#list_drafts) | read | no |
 | [`list_event_alert_kinds`](#list_event_alert_kinds) | read | no |
+| [`list_execution_algos`](#list_execution_algos) | read | no |
 | [`list_factors`](#list_factors) | read | no |
 | [`list_fills`](#list_fills) | read | no |
 | [`list_halts`](#list_halts) | read | no |
@@ -157,6 +161,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`mark_notifications_read`](#mark_notifications_read) | job | no |
 | [`order_tca`](#order_tca) | read | no |
 | [`place_order`](#place_order) | guarded | yes |
+| [`plan_rebalance`](#plan_rebalance) | read | no |
 | [`preview_trade_tax`](#preview_trade_tax) | read | no |
 | [`promote_strategy`](#promote_strategy) | guarded | yes |
 | [`refresh_universe`](#refresh_universe) | guarded | yes |
@@ -179,6 +184,7 @@ safety model: [docs/mcp.md](https://github.com/sleousis/Stonks/blob/main/docs/mc
 | [`save_screen_as_universe`](#save_screen_as_universe) | guarded | yes |
 | [`search_instruments`](#search_instruments) | read | no |
 | [`set_event_alerts`](#set_event_alerts) | guarded | yes |
+| [`set_execution_algo`](#set_execution_algo) | guarded | yes |
 | [`set_screen_alert`](#set_screen_alert) | job | no |
 | [`shadow_strategy`](#shadow_strategy) | guarded | yes |
 | [`start_research`](#start_research) | job | no |
@@ -389,6 +395,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `tickers` | list[string] | yes |  |  |
+
+### `get_execution_algo_settings`
+
+How one of your portfolio's orders are worked: its own algo and
+each strategy's override. Empty: plain limit orders.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  |  |
 
 ### `get_factor`
 
@@ -1073,6 +1090,17 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 | `limit` | integer | no | `50` | page size |
 | `offset` | integer | no | `0` | rows to skip |
 
+### `list_algo_parents`
+
+Parent orders Stonks works as child slices (TWAP, VWAP at a broker
+without them), with each slice's state.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  |  |
+
 ### `list_cash_flows`
 
 Every deposit and withdrawal of one of your portfolios, oldest
@@ -1119,6 +1147,16 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
 The upcoming-event alert kinds (earnings, ex-dividend) and how
 many days ahead each looks by default.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+No inputs.
+
+### `list_execution_algos`
+
+Every execution algo (Adaptive, TWAP, VWAP): its parameters,
+defaults, whether Stonks can slice it at brokers without it, and the
+costs the backtest assumes for it.
 
 Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 
@@ -1711,6 +1749,24 @@ Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
 |-------|------|----------|---------|-------------|
 | `client_id` | string | yes |  |  |
 
+### `plan_rebalance`
+
+The trades that move one of your portfolios to a strategy's model
+weights (source=strategy) or your own targets (source=targets): whole
+shares, costs, turnover and a tax preview. Writes and sends nothing.
+
+Safety: read-only, non-destructive, idempotent, closed world. Needs confirm: no.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  |  |
+| `source` | "strategy" \| "targets" | yes |  |  |
+| `strategy_id` | string \| null | no | `null` |  |
+| `targets` | object \| null | no | `null` | your own targets, ticker to weight, e.g. {"AAPL.US": 0.3} |
+| `min_trade_value` | number | no | `0.0` |  |
+| `short_term_rate` | number \| null | no | `null` | tax rate as a fraction |
+| `long_term_rate` | number \| null | no | `null` | tax rate as a fraction |
+
 ### `preview_trade_tax`
 
 Before a trade in one of your portfolios: the lots a sell closes
@@ -2294,6 +2350,24 @@ Safety: writes, destructive, not idempotent, closed world. Needs confirm: **yes*
 | `allow_reduce` | boolean | no | `false` |  |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
+### `confirm_rebalance`
+
+Write one order ticket per trade of the plan. Each waits for the
+person's approval with a fresh second factor in the web app, so
+nothing is sent from here. Without confirm=true returns the plan.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  |  |
+| `source` | "strategy" \| "targets" | yes |  |  |
+| `reason` | string | yes |  | why (audited) |
+| `strategy_id` | string \| null | no | `null` |  |
+| `targets` | object \| null | no | `null` | your own targets, ticker to weight, e.g. {"AAPL.US": 0.3} |
+| `min_trade_value` | number | no | `0.0` |  |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
 ### `create_universe`
 
 Store a universe definition. It has no members until refreshed
@@ -2729,6 +2803,22 @@ Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
 | `economic_countries` | list[string] \| null | no | `null` | countries for economic release alerts, such as US, EU, DE |
 | `economic_default_countries` | boolean | no | `false` | true: follow your portfolios' base currencies again |
 | `economic_importance` | "low" \| "medium" \| "high" \| null | no | `null` | the lowest importance of release that alerts you |
+| `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
+
+### `set_execution_algo`
+
+Work a portfolio's orders (or one strategy's) with an algo from the
+next tickets on. Without confirm=true returns the current settings and
+changes nothing.
+
+Safety: writes, destructive, idempotent, closed world. Needs confirm: **yes**.
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `portfolio_id` | string | yes |  |  |
+| `algo` | "adaptive" \| "twap" \| "vwap" | yes |  |  |
+| `params` | object \| null | no | `null` | the algo's parameters |
+| `strategy_id` | string \| null | no | `null` | only this strategy's orders |
 | `confirm` | boolean | no | `false` | must be true to apply; false (default) returns a preview only |
 
 ### `shadow_strategy`

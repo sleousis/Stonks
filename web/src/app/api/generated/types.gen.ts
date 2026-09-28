@@ -275,6 +275,124 @@ export type AlertView = {
 };
 
 /**
+ * AlgoInfo
+ */
+export type AlgoInfo = {
+    /**
+     * Cost Assumption
+     *
+     * spread_factor, impact_factor and timing_bps the backtest assumes.
+     */
+    cost_assumption: {
+        [key: string]: number;
+    };
+    /**
+     * Defaults
+     */
+    defaults: {
+        [key: string]: unknown;
+    };
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Params Schema
+     */
+    params_schema: {
+        [key: string]: unknown;
+    };
+    /**
+     * Sliceable
+     *
+     * Stonks can send it as child orders at other brokers.
+     */
+    sliceable: boolean;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * AlgoList
+ */
+export type AlgoList = {
+    /**
+     * Items
+     */
+    items: Array<AlgoInfo>;
+};
+
+/**
+ * AlgoSettingList
+ */
+export type AlgoSettingList = {
+    /**
+     * Items
+     */
+    items: Array<AlgoSettingView>;
+};
+
+/**
+ * AlgoSettingUpdate
+ */
+export type AlgoSettingUpdate = {
+    /**
+     * Algo
+     */
+    algo: string;
+    /**
+     * Params
+     */
+    params?: {
+        [key: string]: unknown;
+    };
+    /**
+     * Strategy Id
+     */
+    strategy_id?: string | null;
+};
+
+/**
+ * AlgoSettingView
+ */
+export type AlgoSettingView = {
+    /**
+     * Algo
+     */
+    algo: string;
+    /**
+     * Params
+     */
+    params: {
+        [key: string]: unknown;
+    };
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Strategy Id
+     *
+     * Empty: the portfolio's own setting.
+     */
+    strategy_id: string | null;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    /**
+     * Updated By
+     */
+    updated_by: string | null;
+};
+
+/**
  * AllocationSlice
  */
 export type AllocationSlice = {
@@ -2128,6 +2246,7 @@ export type CostModelSettings = {
     };
     commissions?: CommissionSettings;
     default?: AssetClassCosts;
+    exec_algo?: ExecAlgoAssumption | null;
     /**
      * Half Spread Model
      */
@@ -3238,6 +3357,24 @@ export type ExchangeView = {
      * Listed
      */
     listed: number;
+};
+
+/**
+ * ExecAlgoAssumption
+ *
+ * ``[backtest.costs.exec_algo]``: the execution algo the fills assume.
+ */
+export type ExecAlgoAssumption = {
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Params
+     */
+    params?: {
+        [key: string]: unknown;
+    };
 };
 
 /**
@@ -6755,6 +6892,36 @@ export type LotPicksUpdate = {
 };
 
 /**
+ * LotSaleView
+ */
+export type LotSaleView = {
+    /**
+     * Acquired
+     */
+    acquired: string;
+    /**
+     * Cost Basis
+     */
+    cost_basis: number;
+    /**
+     * Gain
+     */
+    gain: number;
+    /**
+     * Holding Period
+     */
+    holding_period: 'short' | 'long';
+    /**
+     * Proceeds
+     */
+    proceeds: number;
+    /**
+     * Quantity
+     */
+    quantity: number;
+};
+
+/**
  * LotView
  *
  * What lot rounding did in a backtest (roadmap 23.1).
@@ -9896,6 +10063,68 @@ export type ParameterInfo = {
 };
 
 /**
+ * ParentOrderList
+ */
+export type ParentOrderList = {
+    /**
+     * Items
+     */
+    items: Array<ParentOrderView>;
+};
+
+/**
+ * ParentOrderView
+ *
+ * A parent order Stonks works as child slices.
+ */
+export type ParentOrderView = {
+    /**
+     * Algo
+     */
+    algo: string;
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Filled
+     */
+    filled: number;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell';
+    /**
+     * Slices
+     */
+    slices: Array<SliceView>;
+    /**
+     * State
+     */
+    state: string;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Window End
+     */
+    window_end: string;
+    /**
+     * Window Start
+     */
+    window_start: string;
+};
+
+/**
  * PasswordChangeRequest
  */
 export type PasswordChangeRequest = {
@@ -10135,6 +10364,208 @@ export type PeriodPnl = {
      * Time-weighted return over the period: deposits and withdrawals taken out, so a deposit is never profit. Null without a start value.
      */
     twr?: number | null;
+};
+
+/**
+ * PlanConfirm
+ */
+export type PlanConfirm = {
+    /**
+     * Key
+     *
+     * Idempotency key. Default: one from the plan's trades.
+     */
+    key?: string | null;
+    /**
+     * Long Term Rate
+     */
+    long_term_rate?: number | null;
+    /**
+     * Min Trade Value
+     */
+    min_trade_value?: number;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Short Term Rate
+     */
+    short_term_rate?: number | null;
+    /**
+     * Source
+     *
+     * strategy: the strategy's latest model book weights; targets: your list.
+     */
+    source: 'strategy' | 'targets';
+    /**
+     * Strategy Id
+     */
+    strategy_id?: string | null;
+    /**
+     * Targets
+     */
+    targets?: Array<PlanTarget>;
+};
+
+/**
+ * PlanConfirmResult
+ */
+export type PlanConfirmResult = {
+    /**
+     * Key
+     */
+    key: string;
+    plan: RebalancePlanView;
+    /**
+     * Ticket Ids
+     */
+    ticket_ids: Array<string>;
+    /**
+     * Written
+     *
+     * New tickets. A repeat of the same key writes none.
+     */
+    written: number;
+};
+
+/**
+ * PlanLineView
+ */
+export type PlanLineView = {
+    /**
+     * Cost
+     */
+    cost: number;
+    /**
+     * Cost Bps
+     */
+    cost_bps: number | null;
+    /**
+     * Current Quantity
+     */
+    current_quantity: number;
+    /**
+     * Current Weight
+     */
+    current_weight: number;
+    /**
+     * Price
+     */
+    price: number | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Side
+     */
+    side: 'buy' | 'sell' | null;
+    /**
+     * Skipped
+     */
+    skipped: string | null;
+    /**
+     * Target Quantity
+     */
+    target_quantity: number;
+    /**
+     * Target Weight
+     */
+    target_weight: number;
+    tax: PlanTaxView | null;
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Value
+     */
+    value: number;
+    /**
+     * Weight After
+     */
+    weight_after: number;
+};
+
+/**
+ * PlanRequest
+ */
+export type PlanRequest = {
+    /**
+     * Long Term Rate
+     */
+    long_term_rate?: number | null;
+    /**
+     * Min Trade Value
+     */
+    min_trade_value?: number;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Short Term Rate
+     */
+    short_term_rate?: number | null;
+    /**
+     * Source
+     *
+     * strategy: the strategy's latest model book weights; targets: your list.
+     */
+    source: 'strategy' | 'targets';
+    /**
+     * Strategy Id
+     */
+    strategy_id?: string | null;
+    /**
+     * Targets
+     */
+    targets?: Array<PlanTarget>;
+};
+
+/**
+ * PlanTarget
+ */
+export type PlanTarget = {
+    /**
+     * Ticker
+     */
+    ticker: string;
+    /**
+     * Weight
+     */
+    weight: number;
+};
+
+/**
+ * PlanTaxView
+ */
+export type PlanTaxView = {
+    /**
+     * Estimated Tax
+     */
+    estimated_tax: number | null;
+    /**
+     * Gain
+     */
+    gain: number;
+    /**
+     * Long Term Gain
+     */
+    long_term_gain: number;
+    /**
+     * Lots
+     */
+    lots: Array<LotSaleView>;
+    /**
+     * Short Term Gain
+     */
+    short_term_gain: number;
 };
 
 /**
@@ -11649,6 +12080,86 @@ export type QuietHoursUpdate = {
      * Start
      */
     start?: string | null;
+};
+
+/**
+ * RebalancePlanView
+ */
+export type RebalancePlanView = {
+    /**
+     * Algo
+     *
+     * The execution algo the trades would use.
+     */
+    algo: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * As Of
+     */
+    as_of: string;
+    /**
+     * Buys
+     */
+    buys: number;
+    /**
+     * Cash After
+     */
+    cash_after: number;
+    /**
+     * Cash Before
+     */
+    cash_before: number;
+    /**
+     * Cash Weight After
+     */
+    cash_weight_after: number;
+    /**
+     * Equity
+     */
+    equity: number;
+    /**
+     * Lines
+     */
+    lines: Array<PlanLineView>;
+    /**
+     * Max Drift After
+     */
+    max_drift_after: number;
+    /**
+     * Notes
+     */
+    notes: Array<string>;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Sells
+     */
+    sells: number;
+    /**
+     * Source
+     */
+    source: 'strategy' | 'targets';
+    /**
+     * Strategy Id
+     */
+    strategy_id: string | null;
+    /**
+     * Tax Total
+     */
+    tax_total: number | null;
+    /**
+     * Total Cost
+     */
+    total_cost: number;
+    /**
+     * Turnover
+     *
+     * Traded value over the book's value.
+     */
+    turnover: number;
 };
 
 /**
@@ -13592,6 +14103,44 @@ export type SignalIcView = {
 };
 
 /**
+ * SliceView
+ */
+export type SliceView = {
+    /**
+     * Client Id
+     */
+    client_id: string;
+    /**
+     * Filled
+     */
+    filled: number;
+    /**
+     * Order State
+     */
+    order_state: string | null;
+    /**
+     * Quantity
+     */
+    quantity: number;
+    /**
+     * Send After
+     */
+    send_after: string;
+    /**
+     * Seq
+     */
+    seq: number;
+    /**
+     * Status
+     */
+    status: 'planned' | 'sent' | 'skipped';
+    /**
+     * Status Reason
+     */
+    status_reason: string | null;
+};
+
+/**
  * SmokeCheck
  */
 export type SmokeCheck = {
@@ -15317,7 +15866,7 @@ export type TcaSummaryView = {
     /**
      * By
      */
-    by: 'all' | 'strategy' | 'ticker' | 'portfolio' | 'day' | 'week' | 'month';
+    by: 'all' | 'strategy' | 'ticker' | 'portfolio' | 'algo' | 'day' | 'week' | 'month';
     /**
      * Fx Missing
      */
@@ -20498,6 +21047,47 @@ export type OpenDemoPortfolioResponses = {
 
 export type OpenDemoPortfolioResponse = OpenDemoPortfolioResponses[keyof OpenDemoPortfolioResponses];
 
+export type ListExecutionAlgosData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/execution/algos';
+};
+
+export type ListExecutionAlgosErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListExecutionAlgosError = ListExecutionAlgosErrors[keyof ListExecutionAlgosErrors];
+
+export type ListExecutionAlgosResponses = {
+    /**
+     * Successful Response
+     */
+    200: AlgoList;
+};
+
+export type ListExecutionAlgosResponse = ListExecutionAlgosResponses[keyof ListExecutionAlgosResponses];
+
 export type ExportFillsData = {
     body?: never;
     path?: never;
@@ -25505,6 +26095,88 @@ export type ChangeManualOrderResponses = {
 
 export type ChangeManualOrderResponse = ChangeManualOrderResponses[keyof ChangeManualOrderResponses];
 
+export type ConfirmRebalanceData = {
+    body: PlanConfirm;
+    path?: never;
+    query?: never;
+    url: '/api/planner/confirm';
+};
+
+export type ConfirmRebalanceErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ConfirmRebalanceError = ConfirmRebalanceErrors[keyof ConfirmRebalanceErrors];
+
+export type ConfirmRebalanceResponses = {
+    /**
+     * Successful Response
+     */
+    200: PlanConfirmResult;
+};
+
+export type ConfirmRebalanceResponse = ConfirmRebalanceResponses[keyof ConfirmRebalanceResponses];
+
+export type PlanRebalanceData = {
+    body: PlanRequest;
+    path?: never;
+    query?: never;
+    url: '/api/planner/plan';
+};
+
+export type PlanRebalanceErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type PlanRebalanceError = PlanRebalanceErrors[keyof PlanRebalanceErrors];
+
+export type PlanRebalanceResponses = {
+    /**
+     * Successful Response
+     */
+    200: RebalancePlanView;
+};
+
+export type PlanRebalanceResponse = PlanRebalanceResponses[keyof PlanRebalanceResponses];
+
 export type GetPnlData = {
     body?: never;
     path?: never;
@@ -25895,6 +26567,52 @@ export type RenamePortfolioResponses = {
 
 export type RenamePortfolioResponse = RenamePortfolioResponses[keyof RenamePortfolioResponses];
 
+export type ListAlgoParentsData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/algo-parents';
+};
+
+export type ListAlgoParentsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListAlgoParentsError = ListAlgoParentsErrors[keyof ListAlgoParentsErrors];
+
+export type ListAlgoParentsResponses = {
+    /**
+     * Successful Response
+     */
+    200: ParentOrderList;
+};
+
+export type ListAlgoParentsResponse = ListAlgoParentsResponses[keyof ListAlgoParentsResponses];
+
 export type ListCashFlowsData = {
     body?: never;
     path: {
@@ -25997,6 +26715,149 @@ export type RecordCashFlowResponses = {
 };
 
 export type RecordCashFlowResponse = RecordCashFlowResponses[keyof RecordCashFlowResponses];
+
+export type ClearExecutionAlgoData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: {
+        /**
+         * Strategy Id
+         */
+        strategy_id?: string | null;
+    };
+    url: '/api/portfolios/{portfolio_id}/execution-algos';
+};
+
+export type ClearExecutionAlgoErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ClearExecutionAlgoError = ClearExecutionAlgoErrors[keyof ClearExecutionAlgoErrors];
+
+export type ClearExecutionAlgoResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type ClearExecutionAlgoResponse = ClearExecutionAlgoResponses[keyof ClearExecutionAlgoResponses];
+
+export type ListExecutionAlgoSettingsData = {
+    body?: never;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/execution-algos';
+};
+
+export type ListExecutionAlgoSettingsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListExecutionAlgoSettingsError = ListExecutionAlgoSettingsErrors[keyof ListExecutionAlgoSettingsErrors];
+
+export type ListExecutionAlgoSettingsResponses = {
+    /**
+     * Successful Response
+     */
+    200: AlgoSettingList;
+};
+
+export type ListExecutionAlgoSettingsResponse = ListExecutionAlgoSettingsResponses[keyof ListExecutionAlgoSettingsResponses];
+
+export type SetExecutionAlgoData = {
+    body: AlgoSettingUpdate;
+    path: {
+        /**
+         * Portfolio Id
+         */
+        portfolio_id: string;
+    };
+    query?: never;
+    url: '/api/portfolios/{portfolio_id}/execution-algos';
+};
+
+export type SetExecutionAlgoErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type SetExecutionAlgoError = SetExecutionAlgoErrors[keyof SetExecutionAlgoErrors];
+
+export type SetExecutionAlgoResponses = {
+    /**
+     * Successful Response
+     */
+    200: AlgoSettingView;
+};
+
+export type SetExecutionAlgoResponse = SetExecutionAlgoResponses[keyof SetExecutionAlgoResponses];
 
 export type GetAccountProfileData = {
     body?: never;
@@ -31307,9 +32168,9 @@ export type GetTcaSummaryData = {
         /**
          * By
          *
-         * group by strategy, ticker, portfolio, day, week or month
+         * group by strategy, ticker, portfolio, algo, day, week or month
          */
-        by?: 'all' | 'strategy' | 'ticker' | 'portfolio' | 'day' | 'week' | 'month';
+        by?: 'all' | 'strategy' | 'ticker' | 'portfolio' | 'algo' | 'day' | 'week' | 'month';
         /**
          * Since
          *

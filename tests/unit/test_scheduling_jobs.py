@@ -68,6 +68,7 @@ def test_default_jobs_build():
         "price_check",
         "briefing_pre_open",
         "briefing_post_close",
+        "algo_slices",
     }
     tick = by_name["tick"]
     # 21.2.5: the engine runs from before the open to after the close
@@ -83,6 +84,8 @@ def test_default_jobs_build():
     stops = by_name["live_stops"]
     assert stops.trigger == SessionTrigger("XNYS", "open", timedelta(minutes=30))
     assert stops.catch_up == "none"
+    # 23.16: child slices of Stonks-worked algos every few minutes, never caught up
+    assert by_name["algo_slices"].catch_up == "none"
     assert tick.trigger == SessionTrigger("XNYS", "close", timedelta(minutes=45))
     # 17.8: live options plan after the tick, and watch expiry before the close
     assert by_name["options_live"].trigger.offset > tick.trigger.offset

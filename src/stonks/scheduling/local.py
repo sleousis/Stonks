@@ -32,7 +32,9 @@ The actions call the same services as the CLI:
 - ``live_stops``: protective stops for the entries the opening auction
   filled, at every live book that turns them on (roadmap 19.10);
 - ``live_margin``: the margin cushion of every margin account listed on
-  an IB Gateway, with an alert when it is thin (roadmap 19.13).
+  an IB Gateway, with an alert when it is thin (roadmap 19.13);
+- ``algo_slices``: sends the due child slices of the parent orders Stonks
+  works itself (TWAP and VWAP at a broker without them, roadmap 23.16).
 
 ``ingest_prices`` and ``tick`` are skipped when no instrument in the
 universe trades on the fire's date (asset classes read from the lake).
@@ -616,6 +618,26 @@ def _read_only_lake(settings: Any) -> Any:
         return DuckDBLake(settings.lake.path, read_only=True)
     except Exception:
         return None
+
+
+@register_action("algo_slices")
+def algo_slices_action(ctx: RunContext) -> JobOutcome:
+    """Send the child slices that are due, skip those past their window,
+    and settle each parent from its children (roadmap 23.16). Skips while
+    no parent order is working."""
+    from stonks.production.algo_slices import open_parent_count, work_parents
+    from stonks.production.settings_builder import submit_broker_opener
+    from stonks.store.state import SqliteState
+
+    state = SqliteState(ctx.settings.state.path)
+    try:
+        if not open_parent_count(state):
+            return JobOutcome("skipped", {"reason": "no_working_parents"})
+        result = work_parents(state, submit_broker_opener(ctx.settings, state))
+    finally:
+        state.close()
+    detail = result.detail()
+    return JobOutcome("failed" if result.failed or result.errors else "succeeded", detail)
 
 
 def submit_detail(result: Any) -> dict[str, Any]:

@@ -89,6 +89,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `options_expiry_watch`: alert on a short option still in the money on its expiry day (see Live options) | close - 60 min | none |
 | `live_gate_days`: the live stages' gate metrics for the session (see Live trading) | close + 75 min | none |
 | `live_margin`: the margin cushion of each margin account, with an alert when it is thin (see Margin accounts) | every 30 minutes | none |
+| `algo_slices`: sends the due child slices of TWAP and VWAP orders Stonks works itself (see [execution algos](execution-algos.md)) | every 5 minutes | none |
 | `engine_start`: start the intraday engine process (see [intraday](design/intraday.md)) | open - 15 min | none |
 | `engine_stop`: ask the intraday engine to stop, and wait for it | close + 10 min | none |
 

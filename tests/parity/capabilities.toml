@@ -1793,6 +1793,38 @@ cli = ["stonks tickets list", "stonks tickets show", "stonks tickets approve", "
 mcp = ["list_tickets", "get_ticket"]
 
 [[capability]]
+id = "execution.algos"
+domain = "trading"
+title = "Execution algos: how a portfolio's or a strategy's orders are worked (plain, Adaptive, TWAP, VWAP)"
+routes = [
+  "GET /api/execution/algos",
+  "GET /api/portfolios/{portfolio_id}/execution-algos",
+  "PUT /api/portfolios/{portfolio_id}/execution-algos",
+  "DELETE /api/portfolios/{portfolio_id}/execution-algos",
+]
+console = ["listExecutionAlgos", "listExecutionAlgoSettings", "setExecutionAlgo", "clearExecutionAlgo"]
+cli = ["stonks algos list", "stonks algos show", "stonks algos set", "stonks algos clear"]
+mcp = ["list_execution_algos", "get_execution_algo_settings", "set_execution_algo"]
+
+[[capability]]
+id = "execution.parents"
+domain = "trading"
+title = "Parent orders Stonks works as child slices, with each slice"
+routes = ["GET /api/portfolios/{portfolio_id}/algo-parents"]
+console = "listAlgoParents"
+cli = "stonks algos parents"
+mcp = "list_algo_parents"
+
+[[capability]]
+id = "orders.rebalance"
+domain = "trading"
+title = "Rebalancing planner: the trades to reach target weights with costs, turnover and a tax preview, confirmed into tickets"
+routes = ["POST /api/planner/plan", "POST /api/planner/confirm"]
+console = ["planRebalance", "confirmRebalance"]
+cli = ["stonks plan preview", "stonks plan confirm"]
+mcp = ["plan_rebalance", "confirm_rebalance"]
+
+[[capability]]
 id = "orders.tickets.submit"
 domain = "trading"
 title = "Send the approved order tickets inside their window now"
