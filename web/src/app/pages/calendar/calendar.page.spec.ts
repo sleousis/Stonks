@@ -130,6 +130,58 @@ describe('CalendarPage', () => {
     expect(radio(el, 'Ex-dividend').textContent).toContain('(1)');
   });
 
+  it('shows SEC filings with a link to each document', async () => {
+    const fixture = await render();
+    (await nextRequest(http, '/api/calendars')).flush(
+      view({
+        filings: [
+          {
+            ticker: 'AAPL.US',
+            name: 'Apple',
+            form: '8-K',
+            accepted_at: '2026-09-20T20:05:00Z',
+            items: ['2.02', '9.01'],
+            item_names: ['Results of operations', 'Financial statements'],
+            url: 'https://www.sec.gov/Archives/edgar/data/320193/x.htm',
+          },
+          {
+            ticker: 'MSFT.US',
+            form: '8-K',
+            accepted_at: '2026-09-21T12:00:00Z',
+            items: ['5.02'],
+            item_names: [],
+            url: 'javascript:alert(1)',
+          },
+        ],
+      }),
+    );
+    await settle(fixture);
+    const el: HTMLElement = fixture.nativeElement;
+    expect(radio(el, 'Filings').textContent).toContain('(2)');
+    radio(el, 'Filings').click();
+    fixture.detectChanges();
+    expect(el.querySelector('h2#cal-events-title')?.textContent).toContain('SEC filings');
+    expect(el.textContent).toContain('Results of operations');
+    expect(el.textContent).toContain('Item 5.02');
+    const links = [...el.querySelectorAll<HTMLAnchorElement>('a.filing-link')];
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      'https://www.sec.gov/Archives/edgar/data/320193/x.htm',
+    ]);
+    expect(links[0].getAttribute('rel')).toContain('noopener');
+    expect(links[0].getAttribute('target')).toBe('_blank');
+  });
+
+  it('says why filings are empty: they are past events', async () => {
+    const fixture = await render();
+    (await nextRequest(http, '/api/calendars')).flush(view({ filings: [] }));
+    await settle(fixture);
+    const el: HTMLElement = fixture.nativeElement;
+    radio(el, 'Filings').click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('No filings in these days');
+    expect(el.textContent).toContain('earlier From date');
+  });
+
   it('switches to ex-dividend dates and economic releases, and filters countries', async () => {
     const fixture = await render();
     (await nextRequest(http, '/api/calendars')).flush(view());
