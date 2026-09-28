@@ -1382,12 +1382,13 @@ def users_bootstrap(
 def users_reset_password(
     email: str = typer.Option(..., "--email", help="the person's sign-in email"),
 ) -> None:
-    """Set a new password for a person and sign them out everywhere."""
+    """Set a new password for a person, sign them out everywhere and revoke
+    their API tokens."""
     from stonks.auth.prompt import read_new_password
 
     svc = _auth_service(_settings())
     user = _users_call(lambda: svc.set_password_by_email(email, read_new_password()))
-    console.print(f"password reset for {user.id}; their sessions were signed out")
+    console.print(f"password reset for {user.id}; sessions signed out, API tokens revoked")
 
 
 _ROLES = ("viewer", "trader", "admin")

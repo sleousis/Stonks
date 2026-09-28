@@ -1113,6 +1113,7 @@ class AuthService:
             except NotFound:
                 raise NotFoundError("no user with that email") from None
             self._set_password(state, user.id, new_hash)
+            self._revoke_tokens(state, user.id)
             self._drop_telegram(state, user.id, actor=actor, reason="password_reset")
             AuditLog(state).record(actor, "auth.password.reset", "user", user.id)
             return user

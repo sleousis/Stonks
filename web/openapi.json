@@ -66644,7 +66644,7 @@
     },
     "/api/universes/index-history": {
       "post": {
-        "description": "Import an index's constituents and changes (CSV or JSON) for\n``index`` universes to rebuild membership from.",
+        "description": "Import an index's constituents and changes (CSV or JSON) for\n``index`` universes to rebuild membership from. The index the trading\nuniverse follows needs ``strategy.promote``.",
         "operationId": "importIndexHistory",
         "requestBody": {
           "content": {
@@ -66992,7 +66992,7 @@
         ]
       },
       "put": {
-        "description": "Replace the definition. The members stay as they are until the next\nrefresh.",
+        "description": "Replace the definition. The members stay as they are until the next\nrefresh. The trading universe (``[production].universe``) needs\n``strategy.promote``.",
         "operationId": "updateUniverse",
         "parameters": [
           {
