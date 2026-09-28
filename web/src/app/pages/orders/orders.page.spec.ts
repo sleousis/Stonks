@@ -4,6 +4,7 @@ import { Router, provideRouter } from '@angular/router';
 
 import { tick } from '../../../testing/http';
 import { OrdersPage } from './orders.page';
+import routes from './orders.routes';
 
 @Component({ template: '' })
 class Blank {}
@@ -44,6 +45,15 @@ describe('OrdersPage', () => {
     const tab = el.querySelector<HTMLAnchorElement>('nav.tabs a[href="/orders/ticks"]');
     expect(tab?.textContent?.trim()).toBe('Trading runs');
     expect(el.textContent).not.toContain('Run tick');
+  });
+
+  it('has no Drafts tab: suggested orders wait in Approvals (F9)', async () => {
+    const el = await at('/orders');
+    const nav = el.querySelector('nav.tabs')!;
+    const tabs = [...nav.querySelectorAll('a')].map((a) => a.textContent?.trim());
+    expect(tabs).toEqual(['Orders', 'New order', 'Fills', 'Trading runs', 'Trade costs']);
+    const drafts = routes[0].children?.find((r) => r.path === 'drafts');
+    expect(drafts?.redirectTo).toBe('/tickets');
   });
 
   it('shows the tabs on the trading runs tab too', async () => {

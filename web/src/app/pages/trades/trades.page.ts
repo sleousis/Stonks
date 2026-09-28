@@ -19,9 +19,10 @@ import { TradeJournal } from './trade-journal';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [PageHeader, OrdersTabs, TcaSummary, TradeJournal, ExportButton, NoBook, LoadingState],
   template: `
+    <!-- M2: the Orders title stays on every Orders tab; this tab is Trade costs. -->
     <app-page-header
-      title="Trade costs"
-      description="What your orders cost against the price when they were decided, and a journal of every trade."
+      title="Orders"
+      description="Trade costs: what your orders cost against the price when they were decided, and a journal of every trade."
     >
       @if (book() === 'ready') {
         <app-export-button actions kind="journal" label="Journal CSV" [ghost]="true" />

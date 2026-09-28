@@ -265,10 +265,10 @@ def run_real_tick(v: Visit, as_of: str, ticker: str) -> None:
     page.get_by_label("Dry run").uncheck()
     page.get_by_label("As of").fill(as_of)
     page.get_by_role("textbox", name="Tickers", exact=True).fill(ticker)
-    page.get_by_role("button", name="Start trading run", exact=True).click()
+    page.get_by_role("button", name="Start paper run", exact=True).click()
     dialog = page.get_by_role("dialog", name="Trading run ticket")
     dialog.get_by_role("textbox").fill("simulated")
-    dialog.get_by_role("button", name="Start trading run").click()
+    dialog.get_by_role("button", name="Start paper run").click()
 
 
 def tick_result(v: Visit):
