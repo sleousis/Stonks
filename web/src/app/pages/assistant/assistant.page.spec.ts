@@ -226,6 +226,42 @@ describe('AssistantPage', () => {
     expect(el.querySelector('#assistant-message-hint')?.textContent).toContain('Ctrl+Enter');
   });
 
+  it('closes a waiting action when you send a new message instead', async () => {
+    api.send.mockImplementationOnce(() =>
+      stream([
+        { kind: 'tool_call', data: { id: 't1', name: 'engage_kill_switch', arguments: {} } },
+        {
+          kind: 'confirm_required',
+          data: {
+            action_id: 'a1',
+            tool: 'engage_kill_switch',
+            description: 'Stop new orders',
+            arguments: { scope: 'user' },
+            preview: {},
+          },
+        },
+        { kind: 'done', data: { steps: 1, pending_action_id: 'a1' } },
+      ]),
+    );
+    api.send.mockImplementationOnce(() =>
+      stream([
+        { kind: 'text', data: { delta: 'Fine, not stopping.' } },
+        { kind: 'done', data: { steps: 1, pending_action_id: null } },
+      ]),
+    );
+    await render('c1');
+    type('Stop trading');
+    submit();
+    await settle(10);
+    expect(button('Approve and run')).toBeTruthy();
+    // The server rejects the waiting action when a new message comes in.
+    type('Never mind');
+    submit();
+    await settle(10);
+    expect(el.textContent).toContain('Fine, not stopping.');
+    expect(button('Approve and run')).toBeUndefined();
+  });
+
   it('shows a refused turn as an error in the chat', async () => {
     api.send.mockImplementation(async function* () {
       await tick();
