@@ -411,7 +411,11 @@ export class SystemSettings {
   protected edit(f: SettingField, raw: Raw): void {
     this.edits.update((e) => ({ ...e, [f.key]: raw }));
     if (this.serverErrors()[f.key]) {
-      this.serverErrors.update(({ [f.key]: _gone, ...rest }) => rest);
+      this.serverErrors.update((errors) => {
+        const rest = { ...errors };
+        delete rest[f.key];
+        return rest;
+      });
     }
   }
 
