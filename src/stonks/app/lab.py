@@ -341,6 +341,25 @@ class TradeView(BaseModel):
     is_open: bool
 
 
+class LotView(BaseModel):
+    """What lot rounding did in a backtest (roadmap 23.1)."""
+
+    #: The lot profile the orders were sized with (``[backtest.lots]``).
+    profile: str
+    orders: int = 0
+    rounded: int = 0
+    skipped: int = 0
+    skipped_share: FiniteFloat = None
+    skipped_notional: FiniteFloat = None
+    #: Mean and largest weight of the book lost to rounding per decision.
+    mean_drift: FiniteFloat = None
+    max_drift: FiniteFloat = None
+    #: Smallest book at which 95% of opening orders buy one whole lot.
+    min_capital: FiniteFloat = None
+    #: The profile the minimum capital is measured against.
+    min_capital_profile: str = "whole_shares"
+
+
 class BacktestResult(BaseModel):
     strategy_id: str
     interval: str
@@ -376,6 +395,8 @@ class BacktestResult(BaseModel):
     #: The benchmark's buy-and-hold value on the strategy's equity
     #: timestamps, starting at the same capital.
     benchmark_equity: list[EquityPoint] = Field(default_factory=list)
+    #: Lot rounding and the minimum capital (roadmap 23.1).
+    lots: LotView | None = None
 
 
 class LabRunOptions(BaseModel):
@@ -1010,6 +1031,7 @@ def backtest_result(report: BacktestReport, interval: Interval, request: Any) ->
         es_95=finite(report.es_95),
         skew=finite(report.skew),
         kurtosis=finite(report.kurtosis),
+        lots=LotView.model_validate(report.lots.to_dict()) if report.lots is not None else None,
         fitness=finite(report.fitness),
         benchmark=BenchmarkStatsView.of(bench) if bench is not None else None,
         benchmark_equity=(

@@ -67,6 +67,11 @@ class PromotionChecklistView(BaseModel):
     excess_cagr: FiniteFloat = None
     premortem: str | None = None
     hypothesis: str | None = None
+    #: Smallest book at which 95% of the out-of-sample backtest's opening
+    #: orders buy at least one whole share (roadmap 23.1).
+    min_capital: FiniteFloat = None
+    #: Share of the out-of-sample backtest's orders whole shares skipped.
+    lot_skipped_share: FiniteFloat = None
 
 
 class CostComparisonView(BaseModel):

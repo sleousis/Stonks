@@ -382,6 +382,16 @@ def test_report_carries_the_checklist_fields(env):
         SurvivalReport(test_id="pbo", passed=True, metrics={"pbo": 0.12}),
         SurvivalReport(test_id="benchmark_relative", passed=True, metrics={"excess_cagr": 0.03}),
     ]
+    reports = [
+        SurvivalReport(
+            test_id="oos",
+            passed=r.passed,
+            metrics={**r.metrics, "min_capital": 4_200.0, "lot_skipped_share": 0.1},
+        )
+        if r.test_id == "oos"
+        else r
+        for r in reports
+    ]
     sid = _seed(env, reports=reports, n_trials_total=42, premortem="Fails if rates spike.")
     checklist = _evaluate(env, sid).checklist
     assert checklist == {
@@ -391,6 +401,8 @@ def test_report_carries_the_checklist_fields(env):
         "excess_cagr": 0.03,
         "premortem": "Fails if rates spike.",
         "hypothesis": HYPOTHESIS,
+        "min_capital": 4_200.0,
+        "lot_skipped_share": 0.1,
     }
 
 
@@ -405,6 +417,8 @@ def test_checklist_fields_are_none_when_absent(env, monkeypatch):
         "excess_cagr",
         "premortem",
         "hypothesis",
+        "min_capital",
+        "lot_skipped_share",
     }
     assert all(v is None for v in checklist.values())
 
