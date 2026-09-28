@@ -5,13 +5,14 @@ included); admins get totals across every book, never holdings."""
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Query
 
 from stonks.api.deps import PortfolioIdDep, PrincipalDep, ServicesDep, needs
 from stonks.api.errors import PROBLEM_RESPONSES
-from stonks.app.insights import AgreementView, InsightsTotalsView, InsightsView
+from stonks.app.insights import AgreementView, BehaviourView, InsightsTotalsView, InsightsView
 from stonks.auth import Permission
 
 router = APIRouter(prefix="/api/insights", tags=["insights"], responses=PROBLEM_RESPONSES)
@@ -41,6 +42,19 @@ def get_agreement(services: ServicesDep, portfolio_id: PortfolioIdDep) -> Agreem
     """For each holding, whether every active strategy's latest signal
     agrees or disagrees with it, and why."""
     return services.insights.agreement(portfolio_id)
+
+
+@router.get("/behaviour", response_model=BehaviourView, operation_id="getBehaviourReport")
+def get_behaviour(
+    services: ServicesDep,
+    portfolio_id: PortfolioIdDep,
+    since: Annotated[date | None, Query(description="First day to include, YYYY-MM-DD")] = None,
+) -> BehaviourView:
+    """How you trade by hand: your manual orders and synced broker trades as
+    round trips. P&L by holding time and weekday, win rate, the disposition
+    effect, overtrading, revenge trades after a loss, and what trading
+    against the active strategies cost."""
+    return services.insights.behaviour(portfolio_id, since=since)
 
 
 @router.get(

@@ -155,3 +155,47 @@ def test_admins_get_totals_without_holdings(client, people, alice_book, settings
 
 def test_insights_need_a_credential(client, alice_book):
     assert client.get("/api/insights").status_code == 401
+
+
+def _manual_fill(path, pid: str, cid: str, side: str, qty: float, price: float, at: str) -> None:
+    with SqliteState(path) as state:
+        state.execute(
+            "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status,"
+            " created_at, updated_at, portfolio_id, origin) VALUES (?, 'UP.US', ?, ?, 'market',"
+            " 'filled', ?, ?, ?, 'manual')",
+            [cid, side, qty, at, at, pid],
+        )
+        state.execute(
+            "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at,"
+            " portfolio_id) VALUES (?, 'UP.US', ?, ?, 0, ?, ?)",
+            [cid, qty, price, at, pid],
+        )
+
+
+def test_behaviour_report_of_manual_trades(client, people, settings, alice_book):
+    path = settings.state.path
+    _manual_fill(path, alice_book, "manual:a:1", "buy", 10, 100.0, "2026-03-02T15:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:a:2", "sell", 10, 90.0, "2026-03-04T15:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:a:3", "buy", 5, 90.0, "2026-03-04T16:00:00+00:00")
+    _manual_fill(path, alice_book, "manual:a:4", "sell", 5, 95.0, "2026-03-05T15:00:00+00:00")
+    alice = people["alice"]["headers"]
+    r = client.get("/api/insights/behaviour", params={"portfolio_id": alice_book}, headers=alice)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["trades"] == 2 and body["win_rate"] == 0.5
+    assert body["total_pnl"] == -100.0 + 25.0
+    assert body["revenge"]["trades"] == 1
+    assert body["sources"] == {"manual": 4}
+    assert {b["label"] for b in body["versus_strategies"]} == {"with", "against", "no_view"}
+    later = client.get(
+        "/api/insights/behaviour",
+        params={"portfolio_id": alice_book, "since": "2026-03-05"},
+        headers=alice,
+    ).json()
+    assert later["trades"] == 0
+    bob = client.get(
+        "/api/insights/behaviour",
+        params={"portfolio_id": alice_book},
+        headers=people["bob"]["headers"],
+    )
+    assert bob.status_code == 404
