@@ -91,7 +91,10 @@ def test_a_trader_sets_live_allocation_and_profile(browse, stack, viewport):
     expect(page.get_by_text("two trading days later")).to_be_visible()
     page.get_by_role("button", name="Save profile").click()
     page.get_by_role("dialog").get_by_role("button", name="Save profile").click()
-    expect(page.get_by_text("UK, cash account, retail client")).to_be_visible()
+    # The confirm sheet shows the same words, so wait for the saved line and
+    # the toast: checking earlier races the save and its rising toast.
+    expect(page.get_by_text("Saved: UK, cash account, retail client")).to_be_visible()
+    expect(page.get_by_role("status").filter(has_text="Saved the account profile")).to_be_visible()
 
     safeguards = page.locator("section[aria-labelledby='safeguards-title']")
     expect(safeguards).to_contain_text("Allocation cap")

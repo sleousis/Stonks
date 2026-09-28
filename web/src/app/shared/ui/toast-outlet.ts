@@ -121,10 +121,11 @@ import { ToastService } from '../../core/notify/toast.service';
     .close {
       flex: none;
     }
+    /* Motion only, no fade: the text is at full contrast from the first
+       frame, for readers and for axe scans alike. */
     @keyframes rise {
       from {
-        opacity: 0;
-        transform: translateY(6px);
+        transform: translateY(8px);
       }
     }
   `,
