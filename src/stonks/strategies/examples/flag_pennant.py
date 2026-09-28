@@ -234,6 +234,8 @@ def replay_bull_flag(
 
 class FlagPennantStrategy(SingleTickerLongFlat):
     id = "flag_pennant"
+    title = "Flag and pennant"
+    summary = "Buys when a short, tight pause after a sharp rise breaks upward."
     hypothesis = (
         "After a sharp rise a short, tight pause (a flag or pennant) "
         "resolves upward more often than not, as buyers who missed the "

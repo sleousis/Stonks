@@ -75,8 +75,18 @@ describe('LivePage', () => {
 
   it('says when no engine runs and when intraday is off', async () => {
     const el = await render(status({ engines: [], streaming_enabled: false }));
-    expect(el.textContent).toContain('No live engine running');
+    expect(el.textContent).toContain('No intraday engine running');
     expect(el.textContent).toContain('Intraday trading is off');
+    // Inside a panel like every other empty state, and never called live.
+    expect(el.querySelector('section.panel app-empty-state')).not.toBeNull();
+    expect(el.querySelector('h1')!.textContent).toContain('Intraday engine');
+    expect(el.textContent).not.toMatch(/live engine/i);
+  });
+
+  it('points to the schedule when minute prices are on but no engine reported', async () => {
+    const el = await render(status({ engines: [], streaming_enabled: true }));
+    const link = el.querySelector<HTMLAnchorElement>('a[href="/ops/schedule"]')!;
+    expect(link.textContent).toContain('Open schedule');
   });
 
   it('says when intraday P&L is not kept, and reads no rows', async () => {
@@ -129,7 +139,7 @@ describe('LivePage', () => {
     (await nextRequest(http, '/api/stream/status')).flush(status({ engines: [] }));
     await tick();
     fixture.detectChanges();
-    expect(el.textContent).toContain('No live engine running');
+    expect(el.textContent).toContain('No intraday engine running');
   });
 
   it('shows an error with a retry', async () => {
@@ -142,7 +152,7 @@ describe('LivePage', () => {
     await tick();
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).textContent).toContain(
-      'Could not load the live engine',
+      'Could not load the intraday engine',
     );
   });
 });

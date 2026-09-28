@@ -16,6 +16,8 @@ import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { AgoPipe } from '../../shared/format.pipes';
+import { STAGES, STAGE_WORDS } from '../../shared/live-stages';
+import { HelpTip } from '../../shared/ui/help-tip';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -28,6 +30,7 @@ import {
   providerFlow,
   providerGives,
   providerName,
+  providerReach,
 } from './connection-labels';
 
 /** A connection with how many accounts it found (null when that read failed). */
@@ -40,9 +43,12 @@ interface ConnectionRow {
 export const CALLBACK_PATH = '/connections/callback';
 
 /**
- * The trader's broker connections (read-only sync of positions, cash and
- * activity) and the providers an admin turned on. Connecting takes API keys
- * typed here, or a hosted sign-in on the provider's site.
+ * The trader's broker connections (sync of positions, cash and activity)
+ * and the providers an admin turned on. Connecting takes API keys typed
+ * here, or a hosted sign-in on the provider's site. "When Stonks trades"
+ * says exactly when a connection that can trade places orders (F53): only
+ * for Approve each trade and Automatic follows, manual orders and approved
+ * suggestions in the linked portfolio, at the portfolio's stage.
  */
 @Component({
   selector: 'app-connections-page',
@@ -56,6 +62,7 @@ export const CALLBACK_PATH = '/connections/callback';
     StatusPill,
     RouterLink,
     AgoPipe,
+    HelpTip,
   ],
   templateUrl: './connections.page.html',
   styleUrl: './connections.page.scss',
@@ -87,6 +94,9 @@ export class ConnectionsPage {
   protected readonly statusLabel = CONNECTION_STATUS_LABEL;
   protected readonly gives = providerGives;
   protected readonly flow = providerFlow;
+  protected readonly reach = providerReach;
+  /** Where an order goes at each portfolio stage, for "When Stonks trades". */
+  protected readonly stages = STAGES.map((stage) => ({ stage, ...STAGE_WORDS[stage] }));
   protected readonly fieldLabel = fieldLabel;
   protected readonly offersPaper = offersPaper;
 

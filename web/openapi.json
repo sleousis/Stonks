@@ -2980,6 +2980,35 @@
         "title": "CoverageRow",
         "type": "object"
       },
+      "DataCoverage": {
+        "description": "Which kinds of data the lake holds at all. Calendars, news,\nfundamentals and option chains need a paid data plan, so an empty page\ncan say \"needs a data plan\" instead of looking broken (audit F49).",
+        "properties": {
+          "calendars": {
+            "title": "Calendars",
+            "type": "boolean"
+          },
+          "fundamentals": {
+            "title": "Fundamentals",
+            "type": "boolean"
+          },
+          "news": {
+            "title": "News",
+            "type": "boolean"
+          },
+          "options": {
+            "title": "Options",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "fundamentals",
+          "calendars",
+          "news",
+          "options"
+        ],
+        "title": "DataCoverage",
+        "type": "object"
+      },
       "DataSourceInfo": {
         "properties": {
           "configured": {
@@ -3017,6 +3046,67 @@
           "configured"
         ],
         "title": "DataSourceInfo",
+        "type": "object"
+      },
+      "DayChangeView": {
+        "description": "A book's headline value and change on its latest day. ``/api/pnl``\nand ``/api/insights`` both carry it from\n:func:`stonks.production.pnl.day_change`, so every page shows the same\nnumber: format ``change_pct`` with one formatter everywhere.",
+        "properties": {
+          "change": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change"
+          },
+          "change_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "change / the previous value (0.01 = +1%).",
+            "title": "Change Pct"
+          },
+          "day": {
+            "description": "The trading day of the latest snapshot.",
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "previous_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The day the change is measured from (null with one day of history or across a gap longer than a long weekend).",
+            "title": "Previous Day"
+          },
+          "value": {
+            "description": "The book's value at the latest snapshot.",
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "day",
+          "previous_day",
+          "value",
+          "change",
+          "change_pct"
+        ],
+        "title": "DayChangeView",
         "type": "object"
       },
       "DisconnectView": {
@@ -7488,6 +7578,17 @@
             "title": "Currency",
             "type": "string"
           },
+          "day_change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DayChangeView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The headline value and day change, the same one /api/pnl carries."
+          },
           "exposure": {
             "$ref": "#/components/schemas/Exposure"
           },
@@ -8897,6 +8998,15 @@
             ],
             "title": "Registered Strategy Id"
           },
+          "robustness": {
+            "default": "did_not_survive",
+            "enum": [
+              "survived",
+              "did_not_survive"
+            ],
+            "title": "Robustness",
+            "type": "string"
+          },
           "run_id": {
             "default": "",
             "title": "Run Id",
@@ -8927,6 +9037,63 @@
           "registered_strategy_id"
         ],
         "title": "LabRunView",
+        "type": "object"
+      },
+      "LastRunTotalsView": {
+        "description": "Counts of one trading run over every book, for admins only.",
+        "properties": {
+          "fills": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the totals are suppressed.",
+            "title": "Fills"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "orders_placed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when the totals are suppressed.",
+            "title": "Orders Placed"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tick_id": {
+            "title": "Tick Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tick_id",
+          "status",
+          "finished_at",
+          "orders_placed",
+          "fills"
+        ],
+        "title": "LastRunTotalsView",
         "type": "object"
       },
       "LatencyView": {
@@ -9213,6 +9380,18 @@
             ],
             "title": "Premortem"
           },
+          "robustness": {
+            "description": "The run's status: did the strategy survive the robustness tests. Independent of the trial counts.",
+            "enum": [
+              "running",
+              "survived",
+              "did_not_survive",
+              "error",
+              "stopped"
+            ],
+            "title": "Robustness",
+            "type": "string"
+          },
           "seed": {
             "anyOf": [
               {
@@ -9256,6 +9435,16 @@
             },
             "title": "Trials",
             "type": "array"
+          },
+          "trials_errored": {
+            "description": "Trials that ended with no score (same as n_failed).",
+            "title": "Trials Errored",
+            "type": "integer"
+          },
+          "trials_ran": {
+            "description": "Trials that ran to a score.",
+            "title": "Trials Ran",
+            "type": "integer"
           },
           "tuner": {
             "anyOf": [
@@ -9310,6 +9499,9 @@
           "verdict",
           "n_trials",
           "n_failed",
+          "robustness",
+          "trials_ran",
+          "trials_errored",
           "best_score",
           "trials",
           "n_trials_class"
@@ -9424,6 +9616,18 @@
             ],
             "title": "Premortem"
           },
+          "robustness": {
+            "description": "The run's status: did the strategy survive the robustness tests. Independent of the trial counts.",
+            "enum": [
+              "running",
+              "survived",
+              "did_not_survive",
+              "error",
+              "stopped"
+            ],
+            "title": "Robustness",
+            "type": "string"
+          },
           "seed": {
             "anyOf": [
               {
@@ -9459,6 +9663,16 @@
             "default": 0,
             "description": "Tickers in the dataset.",
             "title": "Tickers",
+            "type": "integer"
+          },
+          "trials_errored": {
+            "description": "Trials that ended with no score (same as n_failed).",
+            "title": "Trials Errored",
+            "type": "integer"
+          },
+          "trials_ran": {
+            "description": "Trials that ran to a score.",
+            "title": "Trials Ran",
             "type": "integer"
           },
           "tuner": {
@@ -9514,6 +9728,9 @@
           "verdict",
           "n_trials",
           "n_failed",
+          "robustness",
+          "trials_ran",
+          "trials_errored",
           "best_score"
         ],
         "title": "LedgerRunView",
@@ -9531,6 +9748,15 @@
               }
             ],
             "title": "N Bars"
+          },
+          "outcome": {
+            "description": "How the trial ran (ran or error); not a robustness verdict.",
+            "enum": [
+              "ran",
+              "error"
+            ],
+            "title": "Outcome",
+            "type": "string"
           },
           "params": {
             "additionalProperties": true,
@@ -9567,7 +9793,8 @@
           "params",
           "score",
           "n_bars",
-          "status"
+          "status",
+          "outcome"
         ],
         "title": "LedgerTrialView",
         "type": "object"
@@ -15607,6 +15834,16 @@
             ],
             "title": "Base Rows"
           },
+          "day_change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DayChangeView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "fx_missing": {
             "default": [],
             "items": {
@@ -15953,6 +16190,17 @@
           "cash": {
             "title": "Cash",
             "type": "number"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LastRunTotalsView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The latest finished trading run's order and fill counts across every book (null before the first run). Traders see only their own books' counts on the runs list; this is the one place with the whole run."
           },
           "owners": {
             "description": "People who own those portfolios.",
@@ -19823,6 +20071,11 @@
             },
             "title": "Recent",
             "type": "array"
+          },
+          "running": {
+            "default": false,
+            "title": "Running",
+            "type": "boolean"
           }
         },
         "required": [
@@ -19867,6 +20120,22 @@
               }
             ],
             "title": "Next Run At"
+          },
+          "off_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "engine_off",
+                  "options_off",
+                  "no_gateway"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Off Reason"
           },
           "trigger": {
             "title": "Trigger",
@@ -19950,6 +20219,16 @@
           },
           "job_name": {
             "title": "Job Name",
+            "type": "string"
+          },
+          "origin": {
+            "default": "schedule",
+            "enum": [
+              "schedule",
+              "run_now",
+              "outside"
+            ],
+            "title": "Origin",
             "type": "string"
           },
           "run_key": {
@@ -21303,6 +21582,19 @@
       },
       "SnapshotView": {
         "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trading day the snapshot is for (null on old rows).",
+            "title": "As Of"
+          },
           "cash": {
             "title": "Cash",
             "type": "number"
@@ -21616,6 +21908,142 @@
         "title": "StartPortalRequest",
         "type": "object"
       },
+      "StarterInstallView": {
+        "properties": {
+          "next_steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Next Steps",
+            "type": "array"
+          },
+          "registered": {
+            "description": "Starters put On trial by this call.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Registered",
+            "type": "array"
+          },
+          "skipped": {
+            "description": "Starters that were already registered.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "universe": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The trading universe this call set, or null when one was configured.",
+            "title": "Universe"
+          }
+        },
+        "required": [
+          "registered",
+          "skipped",
+          "universe",
+          "next_steps"
+        ],
+        "title": "StarterInstallView",
+        "type": "object"
+      },
+      "StarterLabelView": {
+        "description": "Set on a strategy of the starter set (``stonks starter install``):\na simple reference shipped with Stonks, On trial like any other.",
+        "properties": {
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "summary"
+        ],
+        "title": "StarterLabelView",
+        "type": "object"
+      },
+      "StarterStrategyView": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its status when registered (shadow = On trial), null when not installed.",
+            "title": "Status"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "summary",
+          "status"
+        ],
+        "title": "StarterStrategyView",
+        "type": "object"
+      },
+      "StarterView": {
+        "properties": {
+          "installed": {
+            "description": "Every starter is registered (in any status).",
+            "title": "Installed",
+            "type": "boolean"
+          },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/StarterStrategyView"
+            },
+            "title": "Strategies",
+            "type": "array"
+          },
+          "universe": {
+            "description": "The starter trading universe.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Universe",
+            "type": "array"
+          }
+        },
+        "required": [
+          "strategies",
+          "universe",
+          "installed"
+        ],
+        "title": "StarterView",
+        "type": "object"
+      },
       "StatementFlagView": {
         "properties": {
           "check_id": {
@@ -21878,6 +22306,11 @@
       },
       "StrategyClassInfo": {
         "properties": {
+          "alpha_family": {
+            "default": "other",
+            "title": "Alpha Family",
+            "type": "string"
+          },
           "applicable_asset_classes": {
             "items": {
               "type": "string"
@@ -21893,6 +22326,11 @@
             "title": "Description",
             "type": "string"
           },
+          "is_wrapper": {
+            "default": false,
+            "title": "Is Wrapper",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -21906,6 +22344,11 @@
           },
           "source": {
             "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
             "type": "string"
           }
         },
@@ -21948,6 +22391,17 @@
             "additionalProperties": true,
             "title": "Params",
             "type": "object"
+          },
+          "starter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StarterLabelView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set for a starter strategy: its plain title and summary."
           },
           "status": {
             "enum": [
@@ -22134,6 +22588,17 @@
             "additionalProperties": true,
             "title": "Params",
             "type": "object"
+          },
+          "starter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StarterLabelView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set for a starter strategy: its plain title and summary."
           },
           "status": {
             "enum": [
@@ -23415,6 +23880,7 @@
             "enum": [
               "data_source",
               "first_ingest",
+              "strategies",
               "backup",
               "scheduler"
             ],
@@ -23449,6 +23915,178 @@
           "complete"
         ],
         "title": "SystemChecklistView",
+        "type": "object"
+      },
+      "SystemSettingChange": {
+        "properties": {
+          "reason": {
+            "description": "Why, kept in the audit log.",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "description": "The new value; null turns an optional limit off.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "value",
+          "reason"
+        ],
+        "title": "SystemSettingChange",
+        "type": "object"
+      },
+      "SystemSettingReset": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "SystemSettingReset",
+        "type": "object"
+      },
+      "SystemSettingView": {
+        "properties": {
+          "applies": {
+            "description": "next_run: the next trading run or job uses it. restart: the scheduler picks it up when it restarts.",
+            "enum": [
+              "next_run",
+              "restart"
+            ],
+            "title": "Applies",
+            "type": "string"
+          },
+          "choices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The allowed values for a choice field (null: free input). For production.universe, the ids of the stored universes; a ticker list is also accepted.",
+            "title": "Choices"
+          },
+          "default": {
+            "description": "The value from the TOML config and environment.",
+            "title": "Default"
+          },
+          "group": {
+            "enum": [
+              "risk",
+              "trading",
+              "notifications",
+              "schedule"
+            ],
+            "title": "Group",
+            "type": "string"
+          },
+          "help": {
+            "title": "Help",
+            "type": "string"
+          },
+          "key": {
+            "description": "Dotted path in the config, e.g. production.risk.max_weight_per_ticker.",
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "overridden": {
+            "title": "Overridden",
+            "type": "boolean"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the stored override no longer validates and is skipped.",
+            "title": "Problem"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "value": {
+            "description": "The value in effect now.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "key",
+          "group",
+          "label",
+          "help",
+          "applies",
+          "value",
+          "default",
+          "overridden"
+        ],
+        "title": "SystemSettingView",
+        "type": "object"
+      },
+      "SystemSettingsView": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SystemSettingView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "SystemSettingsView",
         "type": "object"
       },
       "TaxSettingsUpdate": {
@@ -23528,6 +24166,12 @@
             ],
             "title": "Jurisdiction",
             "type": "string"
+          },
+          "locked": {
+            "default": false,
+            "description": "True while the portfolio trades real money: the base currency and jurisdiction are the live account profile's too and cannot change.",
+            "title": "Locked",
+            "type": "boolean"
           },
           "lot_method": {
             "description": "fifo, or specific: your picks first, then FIFO for the rest.",
@@ -38204,6 +38848,83 @@
         ]
       }
     },
+    "/api/market/data-coverage": {
+      "get": {
+        "description": "Which kinds of data are stored at all: fundamentals, calendars, news\nand option chains (each needs a data plan that includes it).",
+        "operationId": "getDataCoverage",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataCoverage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Data Coverage",
+        "tags": [
+          "market"
+        ]
+      }
+    },
     "/api/market/instruments": {
       "get": {
         "operationId": "listInstruments",
@@ -46927,6 +47648,375 @@
         "x-permission": "lab.run"
       }
     },
+    "/api/settings/system": {
+      "get": {
+        "description": "Every setting an admin may change here, with the value in effect, the\nTOML value, and who changed it last and why.",
+        "operationId": "listSystemSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettingsView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List System Settings",
+        "tags": [
+          "system-settings"
+        ],
+        "x-permission": "settings.read"
+      }
+    },
+    "/api/settings/system/{key}": {
+      "get": {
+        "description": "One editable setting (404 for a key that is not editable).",
+        "operationId": "getSystemSetting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettingView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get System Setting",
+        "tags": [
+          "system-settings"
+        ],
+        "x-permission": "settings.read"
+      },
+      "put": {
+        "description": "Change one setting. The value is validated like the TOML config (422\nwhen it would not load), stored with an audit row, and used from the\nnext run on (``applies``). Needs a fresh second factor.",
+        "operationId": "changeSystemSetting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemSettingChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettingView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change System Setting",
+        "tags": [
+          "system-settings"
+        ],
+        "x-permission": "settings.manage"
+      }
+    },
+    "/api/settings/system/{key}/reset": {
+      "post": {
+        "description": "Drop the override, so the TOML value applies again. Audited.",
+        "operationId": "resetSystemSetting",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_.-]+$",
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemSettingReset"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettingView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reset System Setting",
+        "tags": [
+          "system-settings"
+        ],
+        "x-permission": "settings.manage"
+      }
+    },
     "/api/shadow/decisions": {
       "get": {
         "description": "Virtual orders shadow strategies placed, newest first.",
@@ -47395,6 +48485,161 @@
         "tags": [
           "sources"
         ]
+      }
+    },
+    "/api/starter": {
+      "get": {
+        "description": "The starter strategies, whether each is registered, and the starter\ntrading universe.",
+        "operationId": "getStarterSet",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StarterView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Starter Set",
+        "tags": [
+          "starter"
+        ]
+      }
+    },
+    "/api/starter/install": {
+      "post": {
+        "description": "Register the missing starters On trial (never approved: they go\nthrough the go-live check like any strategy) and set the trading\nuniverse when none is configured. Safe to call again.",
+        "operationId": "installStarterSet",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StarterInstallView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Install Starter Set",
+        "tags": [
+          "starter"
+        ],
+        "x-permission": "operations.run"
       }
     },
     "/api/statements/flags": {
@@ -53370,7 +54615,7 @@
     },
     "/api/ticks": {
       "get": {
-        "description": "Every tick run, newest first. Summaries keep the global outcome\nand the parts about your own portfolios only.",
+        "description": "Every tick run, newest first. Summaries keep the global outcome\nand the parts about your own portfolios only: ``orders_placed`` and\n``fills`` count your own books and are null when none took part.\nAdmins find a run's whole counts in ``/api/portfolio/totals``.",
         "operationId": "listTicks",
         "parameters": [
           {

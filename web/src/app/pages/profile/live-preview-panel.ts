@@ -5,6 +5,7 @@ import type { LivePreviewView, PreviewOrderView } from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { formatDate, formatMoney } from '../../core/format/format';
 import { stageWords } from '../../shared/live-stages';
+import { rememberPreview } from '../going-live/preview-memory';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { SideTag } from '../../shared/ui/side-tag';
@@ -95,7 +96,10 @@ export class LivePreviewPanel {
     this.running.set(true);
     this.failed.set(null);
     try {
-      this.result.set(await this.live.preview(this.portfolioId()));
+      const result = await this.live.preview(this.portfolioId());
+      this.result.set(result);
+      // The Going live checklist counts a preview that ran as its step done.
+      if (result.status !== 'error') rememberPreview(this.portfolioId());
     } catch (err) {
       this.failed.set(err);
     } finally {

@@ -83,6 +83,15 @@ cli = "stonks db info"
 mcp = "get_coverage"
 
 [[capability]]
+id = "market.data_coverage"
+domain = "data"
+title = "Which paid data kinds are stored (fundamentals, calendars, news, option chains)"
+routes = ["GET /api/market/data-coverage"]
+console = "getDataCoverage"
+cli = "stonks db info"
+mcp = { limited = "the console's empty pages say when a data plan is missing; MCP reads the data itself" }
+
+[[capability]]
 id = "catalog"
 domain = "data"
 title = "Strategy classes, intervals and asset classes"
@@ -1286,6 +1295,29 @@ routes = ["GET /api/onboarding", "PUT /api/onboarding", "PUT /api/onboarding/ste
 console = ["getOnboarding", "updateOnboarding", "updateOnboardingStep"]
 cli = { limited = "the first-run guide is a console flow for people" }
 mcp = { limited = "the first-run guide is a console flow for people" }
+
+[[capability]]
+id = "settings.system"
+domain = "ops"
+title = "System settings an admin edits: risk limits, universe, schedule, notification defaults"
+routes = [
+  "GET /api/settings/system",
+  "GET /api/settings/system/{key}",
+  "PUT /api/settings/system/{key}",
+  "POST /api/settings/system/{key}/reset",
+]
+console = ["listSystemSettings", "getSystemSetting", "changeSystemSetting", "resetSystemSetting"]
+cli = ["stonks settings list", "stonks settings set", "stonks settings reset"]
+mcp = { limited = "changes need a fresh second factor in the browser; get_risk_policy shows the policy in effect" }
+
+[[capability]]
+id = "starter.set"
+domain = "strategies"
+title = "The starter set: simple strategies On trial and a small trading universe"
+routes = ["GET /api/starter", "POST /api/starter/install"]
+console = ["getStarterSet", "installStarterSet"]
+cli = ["stonks starter install", "stonks starter list"]
+mcp = { limited = "an install step for the admin, run once by stonks users bootstrap" }
 
 [[capability]]
 id = "onboarding.system"

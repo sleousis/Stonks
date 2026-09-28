@@ -1,6 +1,6 @@
 <app-page-header
   title="Schedule and backups"
-  description="The jobs that run the daily loop, and backups of the stores."
+  description="When each job runs, how recent runs ended, and backups of the system's data."
 >
   <app-updated-ago [at]="auto.updatedAt()" />
   <button
@@ -20,12 +20,19 @@
   <section class="panel span-12" aria-labelledby="jobs-title">
     <div class="panel-head">
       <h2 id="jobs-title">Scheduled jobs</h2>
-      @if (schedule.hasValue()) {
-        <span class="muted">
-          {{ schedule.value().hosted ? 'Runs inside the server' : 'Runs on its own' }}
-        </span>
-      }
     </div>
+    @if (scheduler(); as s) {
+      <p class="scheduler-state" [attr.data-running]="s.running" role="status">
+        <span class="lamp" aria-hidden="true"></span>
+        <span>{{ s.text }}</span>
+        @if (!s.running && canRun()) {
+          <span class="muted">
+            Start the scheduler service on the server (see Operations in the docs), or let the
+            server host it.
+          </span>
+        }
+      </p>
+    }
     @if (schedule.error(); as err) {
       <app-error-state
         title="Could not load the schedule"
@@ -34,11 +41,18 @@
       />
     } @else if (!schedule.hasValue()) {
       <app-loading-state label="Loading the schedule" [rows]="4" />
-    } @else if (jobRows().length === 0) {
-      <app-empty-state
-        title="No scheduled jobs"
-        message="Nothing runs on a timetable yet. Ask your admin to set up the daily jobs: the data update, the trading run, the report and the health check."
-      />
+    } @else if (jobRows().length === 0 && offJobs().length === 0) {
+      @if (canRun()) {
+        <app-empty-state
+          title="No scheduled jobs"
+          message="The server's schedule lists no jobs, so nothing runs on a timetable. Add the daily jobs (data update, trading run, report, health check) to the scheduler settings on the server and restart it. The Operations guide in the docs lists them."
+        />
+      } @else {
+        <app-empty-state
+          title="No scheduled jobs"
+          message="Nothing runs on a timetable yet. An admin sets up the daily jobs: the data update, the trading run, the report and the health check."
+        />
+      }
     } @else {
       <app-permission-note permission="operations.run" />
       <app-data-table
@@ -60,7 +74,7 @@
         </ng-template>
         <ng-template appCell="last_status" [appCellOf]="jobRows()" let-j>
           @if (j.last_status) {
-            <app-status-pill [status]="j.last_status" />
+            <app-status-pill [status]="j.last_status" [label]="runWord(j.last_status)" />
           } @else {
             <span class="muted">Never</span>
           }
@@ -68,7 +82,7 @@
         <ng-template appCell="run" [appCellOf]="jobRows()" let-j>
           <button
             type="button"
-            class="btn"
+            class="btn btn-ghost btn-run"
             [disabled]="running() === j.name"
             [attr.aria-busy]="running() === j.name"
             [attr.aria-label]="'Run now: ' + jobName(j)"
@@ -78,6 +92,22 @@
           </button>
         </ng-template>
       </app-data-table>
+      @if (offJobs().length) {
+        <details class="off-jobs">
+          <summary>Waiting on a feature that is off ({{ offJobs().length }})</summary>
+          <p class="muted off-intro">
+            These jobs fire on schedule but skip until their feature is turned on.
+          </p>
+          <ul>
+            @for (j of offJobs(); track j.name) {
+              <li>
+                <span class="off-name">{{ jobName(j) }}</span>
+                <span class="muted">{{ offReason(j) }}</span>
+              </li>
+            }
+          </ul>
+        </details>
+      }
     }
   </section>
 
@@ -93,19 +123,32 @@
     } @else if (schedule.value().recent.length === 0) {
       <app-empty-state
         title="No runs yet"
-        message="Each scheduled or manual run is listed here with its status."
+        [message]="
+          canRun()
+            ? 'Scheduled runs, Run now and trading runs started from Orders show here with how they ended. Use Run now above to try a job.'
+            : 'Scheduled runs and trading runs started by hand show here with how they ended.'
+        "
       />
     } @else {
       @let recent = schedule.value().recent;
       <app-data-table
-        caption="Recent scheduled runs"
+        caption="Recent runs: scheduled, Run now and trading runs started by hand"
         [rows]="recent"
         [columns]="runColumns"
         [rowKey]="runKey"
         [initialSort]="{ key: 'started_at', dir: 'desc' }"
       >
+        <ng-template appCell="job_name" [appCellOf]="recent" let-r>
+          @if (tickLink(r); as link) {
+            <a class="cell-link" [routerLink]="link">{{
+              jobName({ action: r.action, name: r.job_name })
+            }}</a>
+          } @else {
+            {{ jobName({ action: r.action, name: r.job_name }) }}
+          }
+        </ng-template>
         <ng-template appCell="status" [appCellOf]="recent" let-r>
-          <app-status-pill [status]="r.status" />
+          <app-status-pill [status]="r.status" [label]="runWord(r.status)" />
         </ng-template>
       </app-data-table>
     }
@@ -138,11 +181,13 @@
       <div class="outcome" role="status" [attr.data-ok]="v.ok">
         @if (v.ok) {
           <p>
-            <strong>Backup {{ v.backup_id }} checks out.</strong> Every file matches its record.
+            <strong>The backup from {{ verifiedWhen() }} checks out.</strong> Every file matches its
+            record.
           </p>
         } @else {
           <p>
-            <strong>Backup {{ v.backup_id }} has problems.</strong> Do not restore from it.
+            <strong>The backup from {{ verifiedWhen() }} has problems.</strong> Do not restore from
+            it.
           </p>
           <ul>
             @for (problem of v.problems; track $index) {
@@ -155,8 +200,8 @@
     @if (restored.value(); as r) {
       <div class="outcome" role="status" data-ok="true">
         <p>
-          <strong>Restored backup {{ r.backup_id }} into a new folder.</strong> The live data was
-          not touched.
+          <strong>Restored the backup from {{ backupWhen(r.backup_id) }} into a new folder.</strong>
+          The live data was not touched.
         </p>
         <p>
           Restored copy: <code>{{ r.data_dir }}</code>
@@ -183,7 +228,7 @@
     } @else if (backupRows().length === 0) {
       <app-empty-state
         title="No backups on the server yet"
-        message="Backups made here, by the nightly backup job or by an operator are listed with their size."
+        message="Make the first one now with Back up now. After that the nightly backup job adds one each night, and every backup is listed here with its size, Verify and Restore."
       />
     } @else {
       <app-data-table
@@ -199,7 +244,7 @@
               type="button"
               class="btn"
               [disabled]="busyBackup() !== null"
-              [attr.aria-label]="'Verify backup ' + b.id"
+              [attr.aria-label]="'Verify the backup from ' + when(b.created_at)"
               (click)="verify(b)"
             >
               Verify
@@ -208,7 +253,7 @@
               type="button"
               class="btn btn-danger"
               [disabled]="busyBackup() !== null || !canRestore()"
-              [attr.aria-label]="'Restore backup ' + b.id"
+              [attr.aria-label]="'Restore the backup from ' + when(b.created_at)"
               (click)="restore(b)"
             >
               Restore

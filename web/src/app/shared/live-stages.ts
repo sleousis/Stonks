@@ -20,7 +20,7 @@ export interface StageWords {
 
 export const STAGE_WORDS: Record<LiveStage, StageWords> = {
   sim_paper: {
-    label: 'Simulated paper',
+    label: 'Simulated',
     means: 'Stonks fills orders itself. Nothing reaches a broker.',
     live: false,
   },
@@ -30,13 +30,13 @@ export const STAGE_WORDS: Record<LiveStage, StageWords> = {
     live: false,
   },
   live_small: {
-    label: 'Live, small',
-    means: 'Real money, within the allocation you set by hand.',
+    label: 'Real money, small',
+    means: 'Real money, within the allocation you set and tight caps.',
     live: true,
   },
   live_scale: {
-    label: 'Live, scaled',
-    means: 'Real money. You raise the allocation by hand when you are ready.',
+    label: 'Real money, full',
+    means: 'Real money at your full allocation. Only you raise it, by hand.',
     live: true,
   },
 };
@@ -45,21 +45,29 @@ export function stageWords(stage: string): StageWords {
   return STAGE_WORDS[stage as LiveStage] ?? { label: stage, means: '', live: false };
 }
 
-/** Plain names of the gate checks, by the name the API gives them. */
+/** A server sentence with stage ids ("live_small") put in trader words ("Real money, small"). */
+export function stageText(text: string): string {
+  return text.replace(
+    /\b(sim_paper|broker_paper|live_small|live_scale)\b/g,
+    (id) => stageWords(id).label,
+  );
+}
+
+/** Plain names of the gate checks, by the name the API gives them (F57). */
 const CHECK_LABELS: Record<string, string> = {
   broker_linked: 'Linked to a broker',
   subscriptions: 'Strategies follow it',
   paper_days: 'Paper days done',
-  strategies_active: 'Strategies active',
-  sessions: 'Sessions at this stage',
-  clean_sessions: 'Clean sessions in a row',
-  reconciliation: 'Broker records match',
+  strategies_active: 'Its strategies are approved',
+  sessions: 'Trading days at this stage',
+  clean_sessions: 'Trouble-free days in a row',
+  reconciliation: 'Stonks and the broker agree on what you hold',
   allocation_set: 'Allocation set',
   account_profile_set: 'Account profile saved',
-  kill_switch_drill: 'Kill switch drill',
-  tracking_error: 'Tracks the model book',
-  filled_orders: 'Filled live orders',
-  tca_gap: 'Costs as the model expects',
+  kill_switch_drill: 'Stop trading tested',
+  tracking_error: "Trades like the strategy's test book",
+  filled_orders: 'Real-money orders filled',
+  tca_gap: 'Costs close to what was expected',
   top_stage: 'Top stage',
 };
 
@@ -69,7 +77,7 @@ export function checkLabel(name: string): string {
 
 export type CheckState = 'pass' | 'fail' | 'none';
 
-/** Pass, fail, or no data yet (not blocking). */
+/** Passed, failed, or not enough data yet (not blocking): the vocabulary's check words. */
 export function checkState(check: Pick<GateCheckView, 'passed'>): CheckState {
   if (check.passed === true) return 'pass';
   if (check.passed === false) return 'fail';
@@ -77,9 +85,9 @@ export function checkState(check: Pick<GateCheckView, 'passed'>): CheckState {
 }
 
 export const CHECK_STATE_WORDS: Record<CheckState, string> = {
-  pass: 'Met',
-  fail: 'Not met',
-  none: 'No data yet',
+  pass: 'Passed',
+  fail: 'Failed',
+  none: 'Not enough data yet',
 };
 
 /** Why a session was not clean, in plain words (empty: clean). */

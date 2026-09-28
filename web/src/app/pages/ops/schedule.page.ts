@@ -8,6 +8,8 @@ import {
   signal,
 } from '@angular/core';
 
+import { RouterLink } from '@angular/router';
+
 import type {
   BackupView,
   RestoreResultView,
@@ -25,6 +27,7 @@ import { formatDate, formatDateTime, formatNumber } from '../../core/format/form
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { TRADING_RUN_ACTION, jobLabel } from '../../core/schedule/job-labels';
+import { runWord } from '../../core/schedule/run-status';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { JobProgress, JobResult } from '../../shared/ui/job-progress';
@@ -58,6 +61,33 @@ export function formatSize(bytes: number | null | undefined): string {
   return `${formatNumber(value, { digits: unit === 0 ? 0 : 1 })} ${units[unit]}`;
 }
 
+/** Why a job has nothing to do on this install, in words. */
+export const OFF_REASONS: Readonly<Record<string, string>> = {
+  engine_off: 'Intraday trading is off.',
+  options_off: 'Live options are off.',
+  no_gateway: 'No Interactive Brokers gateway is set up.',
+};
+
+/** Who started a run. */
+export const RUN_ORIGINS: Readonly<Record<string, string>> = {
+  schedule: 'Schedule',
+  run_now: 'Run now',
+  outside: 'By hand',
+};
+
+/** The scheduler's state in one line, and what an admin can do about it. */
+export function schedulerState(view: { hosted: boolean; running?: boolean }): {
+  running: boolean;
+  text: string;
+} {
+  if (view.hosted) return { running: true, text: 'The scheduler runs inside the server.' };
+  if (view.running) return { running: true, text: 'The scheduler runs as its own service.' };
+  return {
+    running: false,
+    text: 'No scheduler is running, so jobs do not fire on their own. Trading runs and other jobs only start with Run now or from their pages.',
+  };
+}
+
 export function jobRows(jobs: readonly ScheduledJobView[], recent: readonly ScheduledRunView[]) {
   return jobs.map<JobRow>((j) => {
     // `recent` comes newest first.
@@ -89,6 +119,7 @@ export function passedRun(jobs: readonly ScheduledJobView[], now: number): strin
   selector: 'app-schedule-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    RouterLink,
     PageHeader,
     DataTable,
     TableCell,
@@ -141,11 +172,26 @@ export class SchedulePage {
   /** The passed next run the page already reloaded for. */
   private reloadedFor: string | null = null;
 
-  protected readonly jobRows = computed(() =>
+  private readonly allJobRows = computed(() =>
     this.schedule.hasValue()
       ? jobRows(this.schedule.value().jobs, this.schedule.value().recent)
       : [],
   );
+  /** Jobs with work to do on this install. */
+  protected readonly jobRows = computed(() => this.allJobRows().filter((j) => !j.off_reason));
+  /** Jobs for features that are off: listed apart, with no Run now (M16). */
+  protected readonly offJobs = computed(() => this.allJobRows().filter((j) => !!j.off_reason));
+  protected readonly scheduler = computed(() =>
+    this.schedule.hasValue() ? schedulerState(this.schedule.value()) : null,
+  );
+  protected readonly offReason = (j: JobRow) => OFF_REASONS[j.off_reason ?? ''] ?? 'Turned off.';
+  protected readonly origin = (r: ScheduledRunView) => RUN_ORIGINS[r.origin ?? 'schedule'];
+  protected readonly runWord = runWord;
+  /** The trading run page a run from the Orders page or the schedule links to. */
+  protected tickLink(r: ScheduledRunView): string[] | null {
+    const id = r.detail?.['tick_id'];
+    return r.action === TRADING_RUN_ACTION && typeof id === 'string' ? ['/orders/ticks', id] : null;
+  }
   protected readonly backupRows = computed<BackupView[]>(() =>
     this.backups.hasValue() ? this.backups.value().items : [],
   );
@@ -156,6 +202,8 @@ export class SchedulePage {
   /** The backup being checked or restored (its buttons wait). */
   protected readonly busyBackup = signal<string | null>(null);
   protected readonly verified = signal<VerifyView | null>(null);
+  /** The checked backup named by when it was made, never by its id. */
+  protected readonly verifiedWhen = computed(() => this.backupWhen(this.verified()?.backup_id));
   protected readonly restoreRun = signal<JobHandle | null>(null);
   /** Where the restore went; a failed read offers Try again. */
   protected readonly restored = new JobResult<RestoreResultView>();
@@ -174,7 +222,7 @@ export class SchedulePage {
       value: (j) => j.trigger_text || j.trigger,
     },
     { key: 'next_run_at', label: 'Next run' },
-    { key: 'last_status', label: 'Last run' },
+    { key: 'last_status', label: 'Last run', value: (j) => runWord(j.last_status) },
   ];
   /** Run now only for those who may use it. */
   protected readonly jobColumns = computed<TableColumn<JobRow>[]>(() =>
@@ -183,8 +231,13 @@ export class SchedulePage {
       : this.baseJobColumns,
   );
 
-  protected readonly jobName = (j: JobRow) => jobLabel(j);
+  protected readonly jobName = (j: Pick<JobRow, 'action' | 'name'>) => jobLabel(j);
   protected readonly when = (iso: string | null | undefined) => formatDateTime(iso);
+  /** "2026-09-28 02:00" for a backup id in the list; the id only when it is not listed. */
+  protected backupWhen(id: string | null | undefined): string {
+    const backup = this.backupRows().find((b) => b.id === id);
+    return backup ? this.when(backup.created_at) : (id ?? '');
+  }
   protected untilNext(iso: string | null | undefined): string | null {
     if (!iso) return null;
     const left = countdown(Date.parse(iso) - this.now());
@@ -206,14 +259,13 @@ export class SchedulePage {
       value: (r) => jobLabel({ action: r.action, name: r.job_name }),
       mobile: 'title',
     },
-    { key: 'status', label: 'Status' },
+    { key: 'status', label: 'Status', value: (r) => runWord(r.status) },
     { key: 'as_of', label: 'For', format: 'date' },
     { key: 'started_at', label: 'Started', format: 'datetime' },
-    { key: 'finished_at', label: 'Finished', format: 'datetime', mobile: 'hide' },
     {
-      key: 'catch_up',
-      label: 'Catch-up',
-      value: (r) => (r.catch_up ? 'Yes' : 'No'),
+      key: 'origin',
+      label: 'Started by',
+      value: (r) => (r.catch_up ? 'Schedule, caught up' : RUN_ORIGINS[r.origin ?? 'schedule']),
       mobile: 'hide',
     },
     { key: 'error', label: 'Error', sortable: false, value: (r) => r.error ?? '' },

@@ -64,7 +64,7 @@ describe('screen form', () => {
       limit: '0',
     };
     expect(toSpec(form, METRICS).errors).toEqual([
-      'Minimum price must be a number, zero or more.',
+      'Lowest price must be a number, zero or more.',
       'Pick a metric for each filter, or remove the empty one.',
       'P/E: give a minimum, a maximum or both.',
       '12-month return: the minimum is above the maximum.',

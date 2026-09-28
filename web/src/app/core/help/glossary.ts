@@ -8,6 +8,8 @@
 // an entry below (the compiler insists), and any labels or API keys it
 // appears under as `aliases`.
 
+import { RESEARCH_GLOSSARY, RESEARCH_KEYS, type ResearchKey } from './research-glossary';
+
 /** The in-app glossary page. Each term has an anchor named after its key. */
 export const GLOSSARY_PATH = '/help/glossary';
 
@@ -108,6 +110,8 @@ export const TRADING_KEYS = [
   'signals_only',
   'auto',
   'approve',
+  'suggested_order',
+  'signal_score',
   'kill_switch',
   'buys_only',
   'circuit_breaker',
@@ -119,15 +123,79 @@ export const TRADING_KEYS = [
 ] as const;
 
 export type TradingKey = (typeof TRADING_KEYS)[number];
-export type GlossaryKey = MetricKey | TradingKey;
 
-/** Every key, trading words first. */
-export const GLOSSARY_KEYS: readonly GlossaryKey[] = [...TRADING_KEYS, ...METRIC_KEYS];
+/**
+ * The product itself (F5): what a strategy, a follow and a portfolio are,
+ * the three ladders of docs/design/vocabulary.md (a strategy's status, how
+ * you follow it, your portfolio's stage), one set of words each, and the
+ * pages and things a trader meets around them.
+ */
+export const PRODUCT_KEYS = [
+  'strategy',
+  'follow',
+  'portfolio',
+  'draft',
+  'on_trial',
+  'approved',
+  'retired',
+  'test_book',
+  'go_live_check',
+  'strategy_review',
+  'trial_results',
+  'verdict',
+  'portfolio_stage',
+  'simulated',
+  'broker_paper',
+  'real_money_small',
+  'real_money_full',
+  'strategy_part',
+  'signal',
+  'watchlist',
+  'trade_costs',
+] as const;
+
+export type ProductKey = (typeof PRODUCT_KEYS)[number];
+
+/**
+ * The words of the money pages and alerts: exposure, tax lots, base
+ * currency, price alerts and quiet hours. The strategy's part of a
+ * portfolio is a product word, above.
+ */
+export const MONEY_KEYS = [
+  'gross_exposure',
+  'net_exposure',
+  'beta_coverage',
+  'base_currency',
+  'lot',
+  'fifo',
+  'specific_lots',
+  'cost_basis',
+  'wash_sale',
+  'long_term',
+  'cash_flow',
+  'price_alert',
+  'quiet_hours',
+] as const;
+
+export type MoneyKey = (typeof MONEY_KEYS)[number];
+export type GlossaryKey = MetricKey | TradingKey | ProductKey | MoneyKey | ResearchKey;
+
+/** Every key: product words, trading words, money words, figures, then research words. */
+export const GLOSSARY_KEYS: readonly GlossaryKey[] = [
+  ...PRODUCT_KEYS,
+  ...TRADING_KEYS,
+  ...MONEY_KEYS,
+  ...METRIC_KEYS,
+  ...RESEARCH_KEYS,
+];
 
 /** The glossary page's sections, in order. */
 export const GLOSSARY_GROUPS: readonly { title: string; keys: readonly GlossaryKey[] }[] = [
+  { title: 'How Stonks works', keys: PRODUCT_KEYS },
   { title: 'Trading words', keys: TRADING_KEYS },
+  { title: 'Your money and alerts', keys: MONEY_KEYS },
   { title: 'Figures', keys: METRIC_KEYS },
+  { title: 'Research words', keys: RESEARCH_KEYS },
 ];
 
 export interface GlossaryEntry {
@@ -137,45 +205,59 @@ export interface GlossaryEntry {
   short: string;
   /** Other labels or API keys this term appears under. Matched loosely. */
   aliases?: readonly string[];
+  /** A worked example in numbers, shown on the glossary page. */
+  example?: string;
 }
 
 export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   // Trading words ------------------------------------------------------------
   paper_trading: {
-    term: 'Paper trading',
+    term: 'Paper',
     short:
-      'Trading with pretend money on real prices, to see how a strategy does before real money. Also called shadow.',
-    aliases: ['Paper', 'Shadow', 'Paper mode'],
+      'A way to follow a strategy: it trades your paper portfolio with pretend money on real prices. No real money moves.',
+    aliases: ['Paper trading', 'Paper mode', 'Paper portfolio', 'Paper days', 'Practice'],
   },
   live: {
-    term: 'Live',
+    term: 'Real money',
     short:
-      'Real money: orders go to your broker and fill for real. A strategy goes live after it passes the checks.',
-    aliases: ['Go live', 'Real money'],
+      'Orders go to your broker and fill for real. Only a portfolio at a real-money stage trades real money. Also called live.',
+    aliases: ['Live', 'Live trading'],
   },
   signals_only: {
-    term: 'Signals only',
+    term: 'Alerts only',
     short:
-      'You get a notification for each trade a strategy wants and place the order yourself. Also called notify.',
-    aliases: ['Notify', 'Signals only mode'],
+      'A way to follow a strategy: you get an alert for each trade it wants and nothing trades. Also called notify.',
+    aliases: ['Signals only', 'Notify', 'Signals only mode'],
   },
   auto: {
-    term: 'Auto',
+    term: 'Automatic',
     short:
-      'Orders go to your broker by themselves at each trading run. It opens after enough paper trading days.',
-    aliases: ['Auto mode', 'Automatic'],
+      'A way to follow a strategy: its trades go to your broker without asking. It unlocks after enough paper days.',
+    aliases: ['Auto', 'Auto mode'],
   },
   approve: {
     term: 'Approve each trade',
     short:
-      'Real orders wait for you as tickets after each trading run. You approve each one with a code before the open.',
-    aliases: ['Approve mode', 'Approve', 'Approvals', 'Order ticket', 'Order tickets'],
+      'A way to follow a strategy: each trade waits for you as a ticket after the trading run. You approve it with a code before the open.',
+    aliases: ['Approve mode', 'Approvals', 'Order ticket', 'Order tickets'],
+  },
+  suggested_order: {
+    term: 'Suggested order',
+    short:
+      'An order the assistant proposed. It waits in Approvals and nothing is placed until you approve it with a code.',
+    aliases: ['Suggested orders', 'Order draft', 'Order drafts'],
+  },
+  signal_score: {
+    term: 'Signal score',
+    short:
+      "The strategy's score for this ticker when it decided. Higher means a stronger case; the scale depends on the strategy.",
+    aliases: ['Signal strength'],
   },
   kill_switch: {
-    term: 'Kill switch',
+    term: 'Stop trading',
     short:
-      'Stops new orders at once, for one portfolio, all yours or everyone. No position is closed. Also called a halt.',
-    aliases: ['Stop trading', 'Halt', 'Halts'],
+      'Stops new orders at once, for one portfolio, all yours or everyone. No position is closed. Also called the kill switch or a halt.',
+    aliases: ['Kill switch', 'Halt', 'Halts'],
   },
   buys_only: {
     term: 'Stop new buys only',
@@ -216,6 +298,132 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     short:
       'A one-time code that signs you in if you lose your authenticator app. Keep them somewhere safe.',
     aliases: ['Recovery codes'],
+  },
+  // How Stonks works -----------------------------------------------------------
+  strategy: {
+    term: 'Strategy',
+    short: 'A set of rules that looks at prices after each close and decides what to buy and sell.',
+    aliases: ['Strategies'],
+  },
+  follow: {
+    term: 'Follow',
+    short:
+      'Linking a strategy to one of your portfolios: Alerts only, Paper, Approve each trade or Automatic. Also called a subscription.',
+    aliases: ['Following', 'Follows', 'Subscription', 'Subscriptions', 'Follow mode'],
+  },
+  portfolio: {
+    term: 'Portfolio',
+    short:
+      'Your cash and holdings in one place: a paper portfolio in Stonks or an account at your broker.',
+    aliases: ['Portfolios'],
+  },
+  draft: {
+    term: 'Draft',
+    short: 'A strategy being built in the Studio. The system has not tested it yet.',
+    aliases: ['Drafts', 'Strategy draft'],
+  },
+  on_trial: {
+    term: 'On trial',
+    short:
+      'A strategy status: the system trades it on its own test book every run. Nobody can follow it for trades yet. Also called shadow.',
+    aliases: ['Shadow', 'Trial', 'Put on trial', 'Back on trial'],
+  },
+  approved: {
+    term: 'Approved',
+    short:
+      'A strategy status: it passed the go-live check, so people can follow it. It does not mean real money. Also called active.',
+    aliases: ['Active', 'Approve a strategy', 'Approved strategy'],
+  },
+  retired: {
+    term: 'Retired',
+    short:
+      'A strategy status: it no longer decides anything. Its history stays, and positions it holds are not closed.',
+    aliases: ['Retire'],
+  },
+  test_book: {
+    term: 'Test book',
+    short:
+      "A strategy's own practice portfolio, run by the system while it is on trial. Also called a model book or shadow book.",
+    aliases: ['Model book', 'Shadow book', 'Paper book', 'Test books'],
+  },
+  go_live_check: {
+    term: 'Go-live check',
+    short:
+      'The checks a strategy on trial must pass before it can be approved: enough days and trades, small drops, robustness tests.',
+    aliases: ['Go-live', 'Go-live gate', 'Go-live checks'],
+  },
+  strategy_review: {
+    term: 'Strategy review',
+    short:
+      'The admin page listing strategies on trial and whether each passes the go-live check and is ready to approve.',
+    aliases: ['Go-live review'],
+  },
+  trial_results: {
+    term: 'Trial results',
+    short: 'How strategies do on their own test books, next to your portfolio over the same days.',
+  },
+  verdict: {
+    term: 'Verdict',
+    short:
+      'One plain answer per strategy: Worth following, Promising, needs more data, or Not good enough yet.',
+    aliases: ['Worth following', 'Promising, needs more data', 'Not good enough yet'],
+  },
+  portfolio_stage: {
+    term: 'Portfolio stage',
+    short:
+      'How far a portfolio is on the way to real money, from Simulated to Real money, full. Only the stage decides if real money moves.',
+    aliases: ['Stage', 'Live stage'],
+  },
+  simulated: {
+    term: 'Simulated',
+    short:
+      'A portfolio stage: Stonks fills orders itself. Nothing reaches a broker. No real money.',
+    aliases: ['Simulated paper'],
+  },
+  broker_paper: {
+    term: 'Broker paper',
+    short: "A portfolio stage: orders go to the broker's paper account. No real money.",
+  },
+  real_money_small: {
+    term: 'Real money, small',
+    short:
+      'A portfolio stage: real money, with the allocation you set and tight caps on each order.',
+    aliases: ['Live small', 'Live, small'],
+  },
+  real_money_full: {
+    term: 'Real money, full',
+    short: 'A portfolio stage: real money at your full allocation.',
+    aliases: ['Live scaled', 'Live scale', 'Live, scaled'],
+  },
+  strategy_part: {
+    term: "The strategy's part of your portfolio",
+    short:
+      'The part of your portfolio one followed strategy trades. Each part gets its own value and risk readings. Also called a sleeve.',
+    aliases: [
+      "Strategy's part",
+      'Strategy parts',
+      'Sleeve',
+      'Sleeves',
+      'Strategy sleeve',
+      'Strategy sleeves',
+    ],
+  },
+  signal: {
+    term: 'Signal',
+    short:
+      'What a strategy wants after a close: buy, sell or hold a ticker, with how strongly it thinks so.',
+    aliases: ['Signals'],
+  },
+  watchlist: {
+    term: 'Watchlist',
+    short: 'Your own list of tickers to keep an eye on. Today and the calendar can show only them.',
+    aliases: ['Watchlists'],
+  },
+  trade_costs: {
+    term: 'Trade costs',
+    short:
+      'What trading really cost: fees, the spread and how far the fill price moved from the decision price.',
+    aliases: ['Trade cost', 'Shortfall'],
   },
   // Figures ------------------------------------------------------------------
   total_return: {
@@ -324,7 +532,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   exposure: {
     term: 'Exposure',
     short: 'Share of the account invested rather than held as cash.',
-    aliases: ['Gross exposure', 'Net exposure', 'time_in_market'],
+    aliases: ['time_in_market'],
   },
   slippage: {
     term: 'Slippage',
@@ -378,7 +586,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   },
   best_score: {
     term: 'Best score',
-    short: 'The best objective value the tuner found (for example Sharpe), before survival tests.',
+    short: 'The best score the search found (for example Sharpe), before the robustness tests.',
   },
   out_of_sample: {
     term: 'Out of sample (OOS)',
@@ -567,13 +775,89 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     short:
       'How the investments did, with deposits and withdrawals taken out, so adding money is never profit.',
     aliases: ['TWR', 'Return (time-weighted)'],
+    example:
+      'You start with 10,000. It rises 10%, you add 10,000, then it falls 10%. The time-weighted return is about -1%: up 10%, then down 10%.',
   },
   mwr: {
     term: 'Money-weighted return',
     short:
       'The yearly rate your money earned, counting when you added or took it out. Also called XIRR.',
     aliases: ['MWR', 'XIRR', 'Money-weighted, per year'],
+    example:
+      'Same start: more of your money was in during the 10% fall than during the 10% rise, so the money-weighted return is worse than -1%.',
   },
+  // Your money and alerts ----------------------------------------------------
+  gross_exposure: {
+    term: 'Gross exposure',
+    short:
+      'Long plus short positions as a share of value. 100% is fully invested; above 100% means borrowing or shorts.',
+    example: 'Value 10,000 with 6,000 held long and 2,000 sold short: gross exposure is 80%.',
+  },
+  net_exposure: {
+    term: 'Net exposure',
+    short:
+      'Long minus short positions as a share of value: which way the portfolio leans, and how far.',
+    example: 'Value 10,000 with 6,000 held long and 2,000 sold short: net exposure is 40%.',
+  },
+  beta_coverage: {
+    term: 'Beta coverage',
+    short:
+      'The share of your holdings with enough price history to measure beta. The rest is left out of it.',
+  },
+  base_currency: {
+    term: 'Base currency',
+    short:
+      'The currency your portfolio is valued in. Profit and loss and the tax files use it too.',
+  },
+  lot: {
+    term: 'Lot',
+    short:
+      'The shares one buy got you, with its own price and date. A sale closes one or more lots.',
+    aliases: ['Lots', 'Tax lot', 'Open lots'],
+  },
+  fifo: {
+    term: 'Oldest first (FIFO)',
+    short: 'A sale closes the oldest shares first: first in, first out.',
+    aliases: ['FIFO', 'First in, first out', 'Oldest first'],
+  },
+  specific_lots: {
+    term: 'Specific lots',
+    short:
+      'You pick which earlier buys each sale closes. Shares you do not pick close oldest first.',
+    aliases: ['Lot picks'],
+  },
+  cost_basis: {
+    term: 'Cost basis',
+    short: 'What a lot cost you, fees included. The gain is the sale price less the cost basis.',
+  },
+  wash_sale: {
+    term: 'Wash sale',
+    short:
+      'A US rule: a loss is put off when you buy the same ticker within 30 days before or after the sale.',
+    aliases: ['Wash sales', 'Wash sale adjustment'],
+  },
+  long_term: {
+    term: 'Long term',
+    short: 'A lot held more than one year before it is sold. Anything shorter is short term.',
+    aliases: ['Short term', 'Holding period'],
+  },
+  cash_flow: {
+    term: 'Cash flow',
+    short:
+      'Money you put in (a deposit) or took out (a withdrawal). Returns leave it out, so it is never profit.',
+    aliases: ['Cash flows', 'Net deposits'],
+  },
+  price_alert: {
+    term: 'Price alert',
+    short:
+      "A rule on a ticker's price. It checks each day's close after the evening data update, not live prices.",
+    aliases: ['Price alerts'],
+  },
+  quiet_hours: {
+    term: 'Quiet hours',
+    short: 'Hours when alerts wait for a morning summary. Risk alerts always come through.',
+  },
+  ...RESEARCH_GLOSSARY,
 };
 
 export interface GlossaryMatch {

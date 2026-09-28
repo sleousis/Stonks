@@ -14,6 +14,7 @@ import { MarketService } from '../../api/market.service';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { assetClassLabel } from './data-labels';
 
 type AssetClass = NonNullable<NonNullable<ListInstrumentsData['query']>['asset_class']>;
 
@@ -60,7 +61,7 @@ const DEBOUNCE_MS = 250;
           >
             <option value="">All classes</option>
             @for (c of assetClasses; track c) {
-              <option [value]="c">{{ c }}</option>
+              <option [value]="c">{{ classLabel(c) }}</option>
             }
           </select>
         </div>
@@ -119,6 +120,7 @@ export class InstrumentSearch {
   readonly picked = output<string>();
 
   protected readonly assetClasses = ASSET_CLASSES;
+  protected readonly classLabel = assetClassLabel;
   protected readonly pageSize = PAGE_SIZE;
   protected readonly text = signal('');
   protected readonly q = signal('');
@@ -140,7 +142,7 @@ export class InstrumentSearch {
   protected readonly columns: TableColumn<InstrumentView>[] = [
     { key: 'id', label: 'Ticker', mobile: 'title' },
     { key: 'name', label: 'Name' },
-    { key: 'asset_class', label: 'Class' },
+    { key: 'asset_class', label: 'Class', value: (r) => assetClassLabel(r.asset_class) },
     { key: 'exchange', label: 'Exchange', mobile: 'hide' },
   ];
   protected readonly key = (r: InstrumentView) => r.id;

@@ -19,6 +19,12 @@
   }
 }
 
+// Panels keep their own height, so a short chart never stretches to match the
+// health list beside it and leaves a blank block (m1).
+.page-grid {
+  align-items: start;
+}
+
 .panel-link {
   font-size: var(--text-sm);
   display: inline-flex;
@@ -51,7 +57,7 @@
 
   li {
     display: grid;
-    grid-template-columns: 4.5rem minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
     gap: var(--space-2);
     padding: var(--space-2) 0;

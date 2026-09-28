@@ -1,12 +1,14 @@
 <app-page-header
   title="Options research"
-  description="Read stored option chains with implied vol and Greeks, draw the payoff of a structure, and test the options strategies on past chains."
+  description="Read stored option chains with implied volatility and Greeks, draw the payoff of a structure, and test the options strategies on past chains."
 />
+<app-data-plan-note kind="options" />
 
 <p class="research-note" role="note">
   <strong>Research only, nothing on this page trades options.</strong>
-  No orders, no paper books and no live books use anything here. Options live is off by default:
-  each real-money portfolio shows its options state on its Live settings page.
+  No orders, paper portfolios or real-money portfolios use anything here. Trading options with real
+  money is off by default: each real-money portfolio shows whether it is on in its Real-money
+  settings.
 </p>
 
 @if (underlyings.error(); as err) {
@@ -20,7 +22,11 @@
 } @else if (underlyings.value().length === 0) {
   <app-empty-state
     title="No option chains stored yet"
-    message="An admin loads end-of-day option chains with the options data update. They show up here once stored."
+    [message]="
+      isAdmin()
+        ? 'Load end-of-day option chains from a data plan that includes them, with the options data update. They show up here once stored.'
+        : 'Your admin loads end-of-day option chains from a data plan that includes them. They show up here once stored.'
+    "
   />
 } @else {
   <div class="page-grid">
@@ -107,8 +113,8 @@
             [pageSize]="0"
           />
           <p class="hint">
-            IV is our implied vol. Theta is money per share per day and vega money per share per vol
-            point, from the {{ c.models.join(', ') }} pricing model.
+            IV is the implied volatility we work out from the price. Theta is money per share per
+            day and vega money per share per point of volatility, from {{ modelsText(c.models) }}.
           </p>
         }
       </div>
@@ -200,7 +206,7 @@
           <ul class="strategies">
             @for (s of strategies.value(); track s.id) {
               <li>
-                <h3>{{ s.id }}</h3>
+                <h3>{{ strategyName(s.id) }}</h3>
                 <p class="structures">{{ structureList(s.structures) }}</p>
                 <p class="hypothesis">{{ s.hypothesis }}</p>
               </li>

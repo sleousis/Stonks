@@ -18,7 +18,7 @@ export interface Look {
 
 /** How each version status looks (docs/model-lifecycle.md). */
 export const VERSION_LOOKS: Readonly<Record<string, Look>> = {
-  live: { label: 'Live model', tone: 'positive', form: 'lamp' },
+  live: { label: 'Model in use', tone: 'positive', form: 'lamp' },
   candidate: { label: 'Candidate', tone: 'info', form: 'lamp' },
   archived: { label: 'Archived', tone: 'neutral', form: 'receipt' },
   rejected: { label: 'Rejected', tone: 'negative', form: 'receipt' },
@@ -46,9 +46,9 @@ export function eventWords(kind: string): string {
 /** Plain names for the swap check (src/stonks/lifecycle/check.py). */
 const CHECK_LABELS: Readonly<Record<string, string>> = {
   candidate: 'Still a candidate',
-  min_days: 'Model book days',
-  max_drawdown: 'Model book drawdown',
-  vs_live: 'Against the live model',
+  min_days: 'Test book days',
+  max_drawdown: 'Test book drawdown',
+  vs_live: 'Against the model in use',
 };
 
 export interface SwapCheckRow {
@@ -91,7 +91,7 @@ export function trainWindow(v: Pick<ModelVersionView, 'train_start' | 'train_end
   return `${formatDate(v.train_start)} to ${formatDate(v.train_end)}`;
 }
 
-/** The candidate against the live model, over the same days. */
+/** The candidate against the model in use, over the same days. */
 export interface BookComparison {
   days: number;
   candidate: number | null;

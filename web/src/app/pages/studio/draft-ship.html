@@ -3,7 +3,7 @@
   <div class="panel-head">
     <h2 id="ship-title">Ship</h2>
     @if (stage() === 'draft') {
-      <app-status-pill status="draft" label="Not started" />
+      <app-status-pill status="draft" label="Draft" />
     } @else {
       <app-status-pill [status]="stage()" />
     }
@@ -15,8 +15,8 @@
     @switch (stage()) {
       @case ('draft') {
         <p>
-          Start paper trading the saved rules. It decides on real data every run without real
-          orders, so you can watch it before it trades.
+          Put the saved rules on trial. The system paper-tests them on their own test book every
+          run, with no real money, so you can watch them before anyone follows them.
         </p>
         <div>
           <button
@@ -33,16 +33,16 @@
       }
       @case ('retired') {
         <p>
-          It was stopped on the strategy page and cannot go live from here.
+          It was retired on the strategy page and cannot be approved from here.
           <a [routerLink]="['/strategies', strategyId()]">Open the strategy</a>
         </p>
       }
       @default {
         <p>
           @if (enabled()) {
-            It is <strong>live</strong> and places orders on every run.
+            It is <strong>approved</strong>: people can follow it.
           } @else {
-            It is <strong>paper trading</strong>: it decides on every run, no real orders.
+            It is <strong>on trial</strong>: the system paper-tests it every run. No real money.
           }
         </p>
         <div class="actions">
@@ -50,7 +50,6 @@
             type="button"
             class="btn"
             [class.btn-primary]="!enabled()"
-            [class.btn-danger]="enabled()"
             [disabled]="busy() || !canShip()"
             [attr.aria-busy]="busy()"
             (click)="enabled() ? disable() : enable()"
@@ -62,14 +61,19 @@
         <p class="hint">
           {{
             enabled()
-              ? 'It stops placing orders. You will be asked for a reason.'
+              ? 'People can no longer follow it for trades. You will be asked for a reason.'
               : 'You will see the go-live check, give a reason and hold to confirm.'
           }}
         </p>
         <div class="links">
-          <a class="btn btn-ghost" routerLink="/paper">Watch paper trading</a>
           <a class="btn btn-ghost" [routerLink]="['/strategies', strategyId()]"
             >Open the strategy</a
+          >
+          <a
+            class="btn btn-ghost"
+            [routerLink]="['/strategies', strategyId()]"
+            [queryParams]="{ tab: 'results' }"
+            >See its trial results</a
           >
         </div>
       }

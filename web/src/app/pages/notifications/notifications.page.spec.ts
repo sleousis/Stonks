@@ -74,7 +74,6 @@ describe('NotificationsPage', () => {
     fixture.detectChanges();
     const req = await nextRequest(http, '/api/notifications');
     req.flush(feed);
-    (await nextRequest(http, '/api/push/subscriptions')).flush([]);
     await tick();
     fixture.detectChanges();
     return { el: fixture.nativeElement as HTMLElement, req };

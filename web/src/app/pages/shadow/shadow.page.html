@@ -1,6 +1,6 @@
 <app-page-header
-  title="Paper trading"
-  description="Strategies that trade simulated money next to your portfolio. Compare them over the same days before one goes live."
+  title="Trial results"
+  description="How each strategy does on its own test book, with paper money, next to your portfolio over the same days."
 >
   <p class="yours">Your portfolio <app-mode-stamp [live]="live()" /></p>
   <app-updated-ago [at]="auto.updatedAt()" />
@@ -17,18 +17,18 @@
 </app-page-header>
 
 <!-- Tiles ------------------------------------------------------------------>
-<section class="tiles" aria-label="Paper trading summary">
+<section class="tiles" aria-label="Trial results summary">
   <app-stat-tile
-    label="On paper"
+    label="On trial"
     [loading]="!summaries.hasValue() && !summaries.error()"
     [value]="summaries.hasValue() ? '' + summaries.value().total : '–'"
     [detail]="
-      summaries.hasValue() && summaries.value().total ? 'Strategies trading on paper' : null
+      summaries.hasValue() && summaries.value().total ? 'Strategies with a test book' : null
     "
   />
   <app-stat-tile
     class="tile-leader"
-    label="Leading vs your portfolio"
+    label="Best against your portfolio"
     featured
     [loading]="!seriesReady() && !series.error() && !summaries.error()"
     [value]="leader()?.name ?? '–'"
@@ -39,7 +39,7 @@
     label="Compared since"
     [loading]="!seriesReady() && !series.error() && !summaries.error()"
     [value]="baseDayText() ?? '–'"
-    [detail]="chartDays() ? chartDays() + ' days on the chart' : null"
+    [detail]="chartDays() ? chartDays() + ' days of your portfolio on the chart' : null"
   />
 </section>
 
@@ -47,7 +47,7 @@
   <!-- Chart ---------------------------------------------------------------->
   <section class="panel span-12" aria-labelledby="compare-title">
     <div class="panel-head">
-      <h2 id="compare-title">Paper strategies vs your portfolio</h2>
+      <h2 id="compare-title">Test books against your portfolio</h2>
       @if ((strategyIds()?.length ?? 0) > 1) {
         <div class="head-tools">
           <label for="compare-focus">Show</label>
@@ -57,7 +57,7 @@
             [value]="focus()"
             (change)="focus.set($any($event.target).value)"
           >
-            <option value="">All paper strategies</option>
+            <option value="">All strategies</option>
             @for (id of strategyIds(); track id) {
               <option [value]="id" [selected]="id === focus()">{{ name(id) }}</option>
             }
@@ -68,7 +68,7 @@
     <div class="panel-body">
       @if (summaries.error(); as err) {
         <app-error-state
-          title="Could not load paper strategies"
+          title="Could not load the trial results"
           [error]="err"
           (retry)="summaries.reload()"
         />
@@ -79,17 +79,21 @@
           (retry)="real.reload()"
         />
       } @else if (series.error(); as err) {
-        <app-error-state title="Could not load paper P&L" [error]="err" (retry)="series.reload()" />
+        <app-error-state
+          title="Could not load the test books"
+          [error]="err"
+          (retry)="series.reload()"
+        />
       } @else if (
         !summaries.hasValue() ||
         !real.hasValue() ||
         (!seriesReady() && summaries.value().items.length > 0)
       ) {
-        <app-loading-state label="Loading paper P&L" [rows]="6" />
+        <app-loading-state label="Loading the test books" [rows]="6" />
       } @else if (chartSeries().length === 0) {
         <app-empty-state
           title="Nothing to compare yet"
-          message="Start paper trading a strategy from its page. Its paper P&L starts with the next trading run."
+          message="Put a strategy on trial from its page. Its test book starts with the next trading run."
         >
           <a class="btn" routerLink="/strategies">Open strategies</a>
         </app-empty-state>
@@ -98,7 +102,7 @@
           [ariaLabel]="
             focus()
               ? 'Your portfolio and ' + name(focus()) + ', with its drawdown below'
-              : 'Your portfolio and paper strategies'
+              : 'Your portfolio and the test books'
           "
           [summary]="chartSummary()"
           [series]="chartSeries()"
@@ -125,22 +129,22 @@
   <!-- Summary table -------------------------------------------------------->
   <section class="panel span-12" aria-labelledby="summary-title">
     <div class="panel-head">
-      <h2 id="summary-title">Paper strategies</h2>
+      <h2 id="summary-title">Strategies and their test books</h2>
     </div>
     @if (summaries.error()) {
-      <p class="panel-body muted">The list is unavailable until paper strategies load.</p>
+      <p class="panel-body muted">The list shows once the trial results load.</p>
     } @else if (!summaries.hasValue()) {
-      <app-loading-state label="Loading paper strategies" [rows]="4" />
+      <app-loading-state label="Loading trial results" [rows]="4" />
     } @else if (rows().length === 0) {
       <app-empty-state
-        title="No strategies on paper"
-        message="A paper strategy decides on every trading run without real orders. Start paper trading one from its strategy page."
+        title="No strategies on trial"
+        message="A strategy on trial is paper-tested on its own test book every trading run. Put one on trial from its strategy page."
       >
         <a class="btn" routerLink="/strategies">Open strategies</a>
       </app-empty-state>
     } @else {
       <app-data-table
-        caption="Paper strategies against your portfolio over the same days"
+        caption="Test books against your portfolio over the same days"
         [rows]="rows()"
         [columns]="summaryColumns"
         [rowKey]="summaryKey"
@@ -156,10 +160,10 @@
         <ng-template appCell="go_live" [appCellOf]="rows()" let-r>
           <a
             class="btn go-live"
-            routerLink="/go-live"
-            [queryParams]="{ strategy: r.strategy_id }"
-            [attr.aria-label]="'Go-live check for ' + r.name"
-            >Check <span aria-hidden="true">→</span></a
+            [routerLink]="['/strategies', r.strategy_id]"
+            [queryParams]="{ tab: 'review' }"
+            [attr.aria-label]="'Review ' + r.name"
+            >Review <span aria-hidden="true">→</span></a
           >
         </ng-template>
       </app-data-table>
@@ -169,7 +173,7 @@
   <!-- Decisions ------------------------------------------------------------>
   <section class="panel span-12" aria-labelledby="decisions-title">
     <div class="panel-head">
-      <h2 id="decisions-title">Paper decisions</h2>
+      <h2 id="decisions-title">Test book decisions</h2>
       @if (decisionsPageShown(); as dp) {
         <span class="count num">{{ dp.total }} matching</span>
       }
@@ -177,7 +181,7 @@
     <form
       class="filters"
       role="search"
-      aria-label="Filter paper decisions"
+      aria-label="Filter test book decisions"
       (submit)="$event.preventDefault()"
     >
       <div class="field">
@@ -188,7 +192,7 @@
           [value]="decisionStrategy()"
           (change)="decisionStrategy.set($any($event.target).value)"
         >
-          <option value="">All paper strategies</option>
+          <option value="">All strategies</option>
           @if (summaries.hasValue()) {
             @for (s of summaries.value().items; track s.strategy_id) {
               <option [value]="s.strategy_id" [selected]="s.strategy_id === decisionStrategy()">
@@ -213,21 +217,21 @@
     @let dp = decisionsPageShown();
     @if (decisions.error(); as err) {
       <app-error-state
-        title="Could not load paper decisions"
+        title="Could not load test book decisions"
         [error]="err"
         (retry)="decisions.reload()"
       />
     } @else if (!dp) {
-      <app-loading-state label="Loading paper decisions" [rows]="5" />
+      <app-loading-state label="Loading test book decisions" [rows]="5" />
     } @else if (dp.items.length === 0) {
       <app-empty-state
-        title="No paper decisions yet"
-        message="Each trading run records what every paper strategy would have traded. They appear here after the next run."
+        title="No test book decisions yet"
+        message="Each trading run records what every test book would have traded. They appear here after the next run."
       />
     } @else {
       @for (k of [decisionKey()]; track k) {
         <app-data-table
-          caption="What paper strategies would have traded, newest first"
+          caption="What the test books would have traded, newest first"
           [rows]="dp.items"
           [columns]="decisionColumns"
           [rowKey]="decisionRowKey"

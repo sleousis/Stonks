@@ -11,13 +11,17 @@ const GENERATED_ID = /^(.+?)_([0-9a-f]{8})$/;
 export interface DisplayNameHints {
   /** The Studio draft's own name, when the strategy came from a draft. */
   draftName?: string | null;
+  /** A starter strategy's plain title and summary (`starter` on the API's views). */
+  starter?: { title: string; summary?: string } | null;
 }
 
 /**
- * `stocks_on_the_move_3fa9c21b` -> `Stocks on the move 3fa9`. A draft name
- * wins when known. An id without the generated suffix is shown as it is.
+ * `stocks_on_the_move_3fa9c21b` -> `Stocks on the move 3fa9`. A starter's
+ * title, then a draft name, wins when known. An id without the generated suffix is shown as it is.
  */
 export function strategyDisplayName(id: string, hints: DisplayNameHints = {}): string {
+  const starter = hints.starter?.title.trim();
+  if (starter) return starter;
   const draft = hints.draftName?.trim();
   if (draft) return draft;
   const match = GENERATED_ID.exec(id);

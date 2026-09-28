@@ -112,6 +112,8 @@ def _ratio(num: float | None, den: float | None) -> float | None:
 
 class QualityValue(BaseStrategy):
     id = "quality_value"
+    title = "Quality and value"
+    summary = "Holds cheap, profitable companies with little debt."
     hypothesis = (
         "Cheap, profitable, low-debt firms beat the market because "
         "investors overpay for exciting stories and neglect dull good "

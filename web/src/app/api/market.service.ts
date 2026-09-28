@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 
 import { unwrap } from './api-call';
-import { getBars, listCoverage, listInstruments } from './generated/sdk.gen';
+import { getBars, getDataCoverage, listCoverage, listInstruments } from './generated/sdk.gen';
 import type { GetBarsData, ListCoverageData, ListInstrumentsData } from './models';
 
 /** Market data in the lake: bars, instruments, and coverage/freshness. */
@@ -17,5 +17,10 @@ export class MarketService {
 
   coverage(query?: ListCoverageData['query']) {
     return unwrap(listCoverage({ query }));
+  }
+
+  /** Which paid data kinds (fundamentals, calendars, news, options) are stored at all. */
+  dataCoverage() {
+    return unwrap(getDataCoverage());
   }
 }

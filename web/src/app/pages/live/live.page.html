@@ -1,5 +1,5 @@
 <app-page-header
-  title="Live engine"
+  title="Intraday engine"
   description="The intraday engine: its price stream, how fast it decides, and the alarm that goes off when it falls silent."
 >
   <app-updated-ago [at]="auto.updatedAt()" />
@@ -16,19 +16,32 @@
 </app-page-header>
 
 @if (status.error(); as err) {
-  <app-error-state title="Could not load the live engine" [error]="err" (retry)="status.reload()" />
+  <app-error-state
+    title="Could not load the intraday engine"
+    [error]="err"
+    (retry)="status.reload()"
+  />
 } @else if (!status.hasValue()) {
-  <app-loading-state label="Loading the live engine" [rows]="3" />
+  <app-loading-state label="Loading the intraday engine" [rows]="3" />
 } @else {
   @if (engines().length === 0) {
-    <app-empty-state
-      title="No live engine running"
-      [message]="
-        status.value().streaming_enabled
-          ? 'Live prices are on, but no engine has reported yet. It starts before the market opens.'
-          : 'Intraday trading is off. When the engine runs, its price stream, speed and alarms show here.'
-      "
-    />
+    <section class="panel no-engine" aria-labelledby="no-engine-title">
+      <div class="panel-head">
+        <h2 id="no-engine-title">Engines</h2>
+      </div>
+      <app-empty-state
+        title="No intraday engine running"
+        [message]="
+          status.value().streaming_enabled
+            ? 'Minute prices are on, but no engine has reported yet. The scheduler starts it 15 minutes before the market opens; check Schedule if it does not appear.'
+            : 'Intraday trading is off, which is the default. Daily trading runs do not need it. To trade during the day, an admin sets up intraday portfolios and minute prices on the server (Intraday trading in the docs). Its price stream, speed and alarms then show here.'
+        "
+      >
+        @if (status.value().streaming_enabled) {
+          <a class="btn" routerLink="/ops/schedule">Open schedule</a>
+        }
+      </app-empty-state>
+    </section>
   } @else {
     @if (troubled(); as n) {
       <p class="banner" role="status">
@@ -36,7 +49,7 @@
         a look. New entries wait while an engine is silent.
       </p>
     }
-    <ul class="engines" aria-label="Live engines">
+    <ul class="engines" aria-label="Intraday engines">
       @for (e of engines(); track e.engine_id) {
         <li class="engine" [attr.data-tone]="state(e).tone">
           <section [attr.aria-labelledby]="'engine-' + e.engine_id">

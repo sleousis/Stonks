@@ -133,6 +133,8 @@ def test_portfolio_routes(client):
     assert body["positions"][0]["ticker"] == "UP.US"
     snaps = client.get("/api/portfolio/snapshots", headers=AUTH).json()
     assert snaps["total"] == 1
+    # The trading day it is for, next to the wall-clock time it was taken.
+    assert "as_of" in snaps["items"][0]
 
 
 def test_strategy_routes(client, seeded):
@@ -172,6 +174,8 @@ def test_market_routes(client):
     )
     cov = client.get("/api/market/coverage").json()
     assert cov["total"] == 3
+    kinds = client.get("/api/market/data-coverage").json()
+    assert kinds == {"fundamentals": False, "calendars": False, "news": False, "options": False}
 
 
 def test_orders_ticks_routes(client, seeded):

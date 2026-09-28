@@ -85,6 +85,37 @@ def daily_pnl(
     return rows
 
 
+@dataclass(frozen=True)
+class DayChange:
+    """The headline "value and change on the day" of a book: its last daily
+    row against the one before. The one source for every page that shows
+    a book's day change (Today, Dashboard, Insights), so they never differ."""
+
+    day: date
+    value: float
+    #: ``None`` with a single row or across a gap (see :func:`daily_pnl`).
+    previous_day: date | None
+    change: float | None
+    change_pct: float | None
+
+
+def day_change(rows: Sequence[PnlRow]) -> DayChange | None:
+    """The day change of the last of ``rows`` (``None`` without rows)."""
+    if not rows:
+        return None
+    last = rows[-1]
+    previous = None
+    if last.daily_change is not None and last.days_elapsed is not None:
+        previous = date.fromordinal(last.day.toordinal() - last.days_elapsed)
+    return DayChange(
+        day=last.day,
+        value=last.total_value,
+        previous_day=previous,
+        change=last.daily_change,
+        change_pct=last.daily_return if last.daily_change is not None else None,
+    )
+
+
 def load_pnl(
     state: SqliteState,
     since: date | None = None,

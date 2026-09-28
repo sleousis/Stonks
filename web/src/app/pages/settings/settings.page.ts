@@ -3,11 +3,14 @@ import {
   Component,
   computed,
   inject,
+  linkedSignal,
   resource,
   signal,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { map } from 'rxjs';
 
 import { IngestService } from '../../api/ingest.service';
 import { AuthService } from '../../api/auth.service';
@@ -16,15 +19,15 @@ import type { AssetClassCosts, CostModelPreset, RiskPolicy } from '../../api/mod
 import { SystemService } from '../../api/system.service';
 import { AuthTokenService } from '../../core/auth/auth-token.service';
 import { SessionService } from '../../core/auth/session.service';
+import { FeatureFlagsService } from '../../core/features/feature-flags.service';
 import { formatDateTime, formatMoney, formatNumber, formatPercent } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { type ThemeMode, ThemeService } from '../../core/theme/theme.service';
 import { DisplayPrefs } from '../../shared/ui/display-prefs';
-import { NotificationPrefs } from '../../shared/ui/notification-prefs';
-import { TelegramLink } from './telegram-link';
-import { NotificationSettings } from '../../shared/ui/notification-settings';
+import { SystemSettings } from './system-settings';
 import { RiskLimitsPanel } from '../../shared/ui/risk-limits-panel';
 import { PageHeader } from '../../shared/ui/page-header';
+import { type PageTab, PageTabs } from '../../shared/ui/page-tabs';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { StatusPill } from '../../shared/ui/status-pill';
@@ -42,16 +45,31 @@ interface CostRow {
   flat: string;
 }
 
+/** The sections of Settings, in order. System is for admins. */
+export type SettingsSection = 'account' | 'alerts' | 'display' | 'risk' | 'system';
+
+const SECTION_WORDS: Record<SettingsSection, string> = {
+  account: 'Sign-in, security and API tokens.',
+  alerts: 'Where alerts reach you and which ones you get.',
+  display: 'Theme, numbers and dates, and keyboard shortcuts.',
+  risk: 'The limits every order in your portfolios must pass.',
+  system: 'How the server is set up. Only admins see this.',
+};
+
+/**
+ * Settings, one section at a time (M14): Account, Alerts, Display, Risk
+ * limits, and System for admins. The section is in the address
+ * (`/settings?tab=alerts`), so other pages can link straight to it.
+ */
 @Component({
   selector: 'app-settings-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    SystemSettings,
     DisplayPrefs,
     RiskLimitsPanel,
-    NotificationPrefs,
-    TelegramLink,
-    NotificationSettings,
     PageHeader,
+    PageTabs,
     ReactiveFormsModule,
     RouterLink,
     ModeStamp,
@@ -73,6 +91,41 @@ export class SettingsPage {
   private readonly labApi = inject(LabService);
   protected readonly theme = inject(ThemeService);
   private readonly fb = inject(NonNullableFormBuilder);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+
+  // Sections ------------------------------------------------------------------
+  protected readonly sections = computed<PageTab[]>(() => [
+    { id: 'account', label: 'Account' },
+    { id: 'alerts', label: 'Alerts' },
+    { id: 'display', label: 'Display' },
+    { id: 'risk', label: 'Risk limits' },
+    ...(this.showSystem() ? [{ id: 'system', label: 'System' }] : []),
+  ]);
+  private readonly tabParam = toSignal(
+    this.route.queryParamMap.pipe(map((params) => params.get('tab'))),
+    { initialValue: null },
+  );
+  /** The section on screen: the address's `tab`, when it names one this person may see. */
+  protected readonly section = linkedSignal<SettingsSection>(() => {
+    const tab = this.tabParam();
+    return this.sections().some((s) => s.id === tab) ? (tab as SettingsSection) : 'account';
+  });
+  protected readonly description = computed(() => SECTION_WORDS[this.section()]);
+
+  protected pick(id: string | null): void {
+    const section = (id ?? 'account') as SettingsSection;
+    this.section.set(section);
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { tab: section === 'account' ? null : section },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
+  /** The assistant has no model server: System says how to turn it on (F42). */
+  protected readonly assistantOff = inject(FeatureFlagsService).assistantOff;
 
   // Token -------------------------------------------------------------------
   protected readonly hasToken = this.auth.hasToken;

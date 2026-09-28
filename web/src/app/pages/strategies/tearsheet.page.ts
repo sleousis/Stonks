@@ -23,18 +23,20 @@ import { SideTag } from '../../shared/ui/side-tag';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
-import { className } from '../lab/ledger.page';
+import { StrategyVerdict } from '../../shared/ui/strategy-verdict';
+import { type Verdict, strategyVerdict } from '../../shared/strategy-verdict';
 import { goliveLabel } from './leaderboard.page';
 import { curveSeries, curveSummary } from './tearsheet-data';
 import { testLabel } from '../../shared/lab-results/survival-tests';
-import { strategyDisplayName } from '../../shared/strategy-names';
+import { strategyDisplayName, strategyKindName } from '../../shared/strategy-names';
 
 const NA = 'n/a';
 
 /**
- * One strategy on one page: its paper result (figures, value curve and
- * drawdown, monthly returns), recent model-book trades, the survival
- * verdicts from its lab run, the go-live check and its status history.
+ * One strategy on one page, printable: its verdict, its trial result (figures, value curve and
+ * drawdown, monthly returns), recent test book trades, the robustness
+ * tests from its lab run, the go-live check and its status history. The
+ * strategy page shows the same on its tabs; this is the version to print.
  * "Download PDF" prints it through the browser (Save as PDF) with the print
  * stylesheet: content only, on white.
  */
@@ -51,6 +53,7 @@ const NA = 'n/a';
     TableCell,
     SideTag,
     StatusPill,
+    StrategyVerdict,
     LoadingState,
     EmptyState,
     ErrorState,
@@ -69,8 +72,9 @@ export class TearsheetPage {
     loader: ({ params }) => this.api.tearSheet(params.id),
   });
 
+  /** The kind as a name ("Buy and hold"), never the class ("BuyAndHold", M6). */
   protected readonly cls = computed(() =>
-    this.sheet.hasValue() ? className(this.sheet.value().strategy.class_path) : '',
+    this.sheet.hasValue() ? strategyKindName(this.sheet.value().strategy.class_path) : '',
   );
   protected readonly statusWord = computed(() =>
     this.sheet.hasValue() ? STATUS_WORDS[this.sheet.value().strategy.status] : '',
@@ -89,7 +93,7 @@ export class TearsheetPage {
       { label: 'Sortino', value: num(p.sortino), help: 'sortino' },
       { label: 'Max drawdown', value: pct(p.max_drawdown), help: 'max_drawdown' },
       { label: 'Volatility', value: pct(p.volatility), help: 'volatility' },
-      { label: 'Days on paper', value: formatNumber(p.days), help: false as const },
+      { label: 'Days on trial', value: formatNumber(p.days), help: false as const },
       {
         label: 'Trades',
         value: formatNumber(p.trades + this.sheet.value().book_trades),
@@ -123,6 +127,24 @@ export class TearsheetPage {
   protected readonly golive = computed(() =>
     goliveLabel(this.sheet.hasValue() ? this.sheet.value().golive?.passed : null),
   );
+  /** One plain verdict on top, like the strategy page (F33). */
+  protected readonly verdict = computed<Verdict | null>(() => {
+    if (!this.sheet.hasValue()) return null;
+    const s = this.sheet.value();
+    const reports = s.strategy.survival_reports;
+    return strategyVerdict({
+      status: s.strategy.status,
+      golive: s.golive,
+      trial: {
+        total_return: s.paper.total_return ?? null,
+        max_drawdown: s.paper.max_drawdown ?? null,
+        days: s.paper.days,
+      },
+      tests: reports.length
+        ? { passed: reports.filter((r) => r.passed).length, total: reports.length }
+        : null,
+    });
+  });
   protected readonly history = computed<StatusChangeView[]>(() =>
     this.sheet.hasValue() ? [...this.sheet.value().status_history].reverse() : [],
   );

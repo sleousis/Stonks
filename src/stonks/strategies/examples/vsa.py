@@ -49,6 +49,10 @@ from stonks.strategies.examples._nt888_base import SingleTickerLongFlat, common_
 
 class VSAStrategy(SingleTickerLongFlat):
     id = "vsa"
+    title = "Volume and range"
+    summary = (
+        "Buys when a narrow day on heavy volume suggests large buyers are soaking up the selling."
+    )
     hypothesis = (
         "A small range on heavy volume shows large players absorbing "
         "selling, so price turns up next. Fails when volume is noise or "

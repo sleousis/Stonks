@@ -61,6 +61,8 @@ def select_top(values: Mapping[str, float], direction: int, top_pct: float) -> d
 
 class FactorStrategy(BaseStrategy):
     id = "factor"
+    title = "Factor portfolio"
+    summary = "Holds the top slice of names ranked by a factor you pick, rebalanced each month."
     hypothesis = (
         "The chosen factor ranks next-month returns across the universe, for the "
         "reason its own hypothesis states (see stonks factors show). The top slice, "

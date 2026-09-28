@@ -1,6 +1,6 @@
 <app-page-header [title]="displayName()" [description]="description()">
   @if (detail()?.status === 'active' && realMoney()) {
-    <p class="title-stamp"><app-mode-stamp [live]="true" /> Trades real money</p>
+    <p class="title-stamp"><app-mode-stamp [live]="true" /> Followers trade real money</p>
   }
   @for (a of actions(); track a.key) {
     <button
@@ -8,7 +8,6 @@
       type="button"
       class="btn"
       [class.btn-primary]="a.primary"
-      [class.btn-danger]="a.danger"
       [disabled]="busy() !== null || !canPromote()"
       [attr.aria-busy]="busy() === a.key"
       (click)="run(a.key)"
@@ -27,9 +26,8 @@
   <a routerLink="/strategies" class="related-link"
     ><span aria-hidden="true">←</span> All strategies</a
   >
-  <a [routerLink]="['/strategies', id(), 'tearsheet']" class="related-link">Tear sheet</a>
-  <a routerLink="/lab" [queryParams]="{ strategy: id() }" class="related-link">Re-run in Lab</a>
-  <a routerLink="/go-live" [queryParams]="{ strategy: id() }" class="related-link">Go-live check</a>
+  <a routerLink="/leaderboard" class="related-link">Compare on the Leaderboard</a>
+  <a routerLink="/lab" [queryParams]="{ strategy: id() }" class="related-link">Test again in Lab</a>
 </nav>
 
 @if (strategy.error(); as err) {
@@ -41,334 +39,557 @@
     />
   </section>
 } @else if (detail(); as s) {
-  <app-stage-bar
-    [strategyId]="s.id"
-    [status]="s.status"
-    [golivePassed]="golivePassed()"
-    [report]="goliveReport()"
-  />
+  <app-stage-bar [strategyId]="s.id" [status]="s.status" [golivePassed]="golivePassed()" />
 
-  <app-segmented
+  <app-page-tabs
+    #tabBar
     class="tabs"
-    label="Show"
-    [options]="tabs"
-    [value]="shownTab()"
-    (valueChange)="setTab($event)"
+    idPrefix="strategy"
+    label="Strategy sections"
+    [tabs]="tabs()"
+    [selected]="shownTab()"
+    (selectedChange)="setTab($event ?? 'overview')"
   />
 
-  @if (shownTab() === 'versions') {
-    <app-model-versions-panel [strategyId]="s.id" />
-  } @else {
-    <div class="page-grid">
-      @if (s.status !== 'retired') {
-        <app-follow-panel class="span-12" [strategyId]="s.id" />
+  <div
+    class="tab-panel"
+    role="tabpanel"
+    [id]="tabBar.panelId(shownTab())"
+    [attr.aria-labelledby]="tabBar.tabId(shownTab())"
+  >
+    @switch (shownTab()) {
+      <!-- Results: the tear sheet's figures ------------------------------------>
+      @case ('results') {
+        @if (sheet.error(); as err) {
+          <section class="panel">
+            <app-error-state
+              title="Could not load its results"
+              [error]="err"
+              (retry)="sheet.reload()"
+            />
+          </section>
+        } @else if (!sheet.hasValue()) {
+          <section class="panel"><app-loading-state label="Loading results" [rows]="6" /></section>
+        } @else {
+          @let r = sheet.value();
+          <p class="results-lead">
+            Results from its own test book: the system paper-tests it on every trading run. No real
+            money.
+            <a class="related-link" [routerLink]="['/strategies', s.id, 'tearsheet']"
+              >Printable tear sheet</a
+            >
+          </p>
+          <section class="tiles" aria-label="Trial result">
+            @for (t of tiles(); track t.label) {
+              <app-stat-tile [label]="t.label" [value]="t.value" [help]="t.help" />
+            }
+          </section>
+          <div class="page-grid">
+            <section class="panel span-12" aria-labelledby="curve-title">
+              <div class="panel-head">
+                <h2 id="curve-title">Test book value</h2>
+                @if (r.paper.latest_day) {
+                  <span class="muted num">to {{ date(r.paper.latest_day) }}</span>
+                }
+              </div>
+              <div class="panel-body">
+                @if (r.curve.length < 2) {
+                  <app-empty-state
+                    title="Not enough trial days"
+                    message="Each trading run adds a point to this curve."
+                  />
+                } @else {
+                  <app-time-series-chart
+                    ariaLabel="Test book value, with drawdown below"
+                    [summary]="resultsSummary()"
+                    [series]="chartSeries()"
+                    [height]="300"
+                  />
+                }
+              </div>
+            </section>
+
+            <section class="panel span-12" aria-labelledby="months-title">
+              <div class="panel-head">
+                <h2 id="months-title">Monthly returns</h2>
+              </div>
+              @if (r.monthly_returns.length === 0) {
+                <p class="panel-body muted">No full month on trial yet.</p>
+              } @else {
+                <app-monthly-returns caption="Trial return by month" [months]="r.monthly_returns" />
+              }
+            </section>
+
+            <section class="panel span-12" aria-labelledby="trades-title">
+              <div class="panel-head">
+                <h2 id="trades-title">Recent test book trades</h2>
+              </div>
+              @if (r.recent_trades.length === 0) {
+                <p class="panel-body muted">No test book trades yet.</p>
+              } @else {
+                <app-data-table
+                  caption="Recent test book trades of this strategy"
+                  [rows]="r.recent_trades"
+                  [columns]="tradeColumns"
+                  [rowKey]="tradeKey"
+                  [pageSize]="10"
+                >
+                  <ng-template appCell="side" [appCellOf]="r.recent_trades" let-d>
+                    <app-side-tag [side]="d.side" />
+                  </ng-template>
+                </app-data-table>
+              }
+            </section>
+          </div>
+        }
       }
 
-      <!-- Performance ------------------------------------------------------->
-      <section class="panel span-7" aria-labelledby="perf-title">
-        <div class="panel-head">
-          <h2 id="perf-title">Paper value</h2>
-        </div>
-        @if (s.status !== 'shadow') {
-          <app-empty-state
-            title="No paper value to show"
-            [message]="
-              s.status === 'active'
-                ? 'It trades live now. Its orders are listed below and its money is in the portfolio.'
-                : 'It is stopped. A value chart shows here while it paper trades.'
-            "
-          />
-        } @else if (pnl.error(); as err) {
-          <app-error-state
-            title="Could not load the paper value"
-            [error]="err"
-            (retry)="pnl.reload()"
-          />
-        } @else if (!pnl.hasValue()) {
-          <app-loading-state label="Loading paper value" [rows]="4" />
-        } @else if (!performance()) {
-          <app-empty-state
-            title="No paper days yet"
-            message="Its paper book gets a value after the next trading run."
-          />
-        } @else {
-          @let p = performance()!;
-          <dl class="perf">
-            <div>
-              <dt>Return</dt>
-              <dd
-                class="num"
-                [class.gain]="(p.totalReturn ?? 0) > 0"
-                [class.loss]="(p.totalReturn ?? 0) < 0"
-              >
-                {{ pct(p.totalReturn, true) }}
-              </dd>
-            </div>
-            <div>
-              <dt>Max drawdown <app-help-tip term="max_drawdown" /></dt>
-              <dd class="num">{{ pct(p.maxDrawdown) }}</dd>
-            </div>
-            <div>
-              <dt>Days on paper</dt>
-              <dd class="num">{{ p.days }}</dd>
-            </div>
-          </dl>
-          <div class="chart">
-            <app-time-series-chart
-              ariaLabel="Paper value, with drawdown below"
-              [summary]="chartSummary()"
-              [series]="chartSeries()"
-              [height]="260"
-            />
-          </div>
-        }
-      </section>
-
-      <!-- Recent orders ----------------------------------------------------->
-      <section class="panel span-5" aria-labelledby="orders-title">
-        <div class="panel-head">
-          <h2 id="orders-title">Recent orders</h2>
-          <a routerLink="/orders" class="related-link">All orders</a>
-        </div>
-        @if (orders.error(); as err) {
-          <app-error-state
-            title="Could not load its orders"
-            [error]="err"
-            (retry)="orders.reload()"
-          />
-        } @else if (!orders.hasValue()) {
-          <app-loading-state label="Loading orders" [rows]="4" />
-        } @else if (orders.value().items.length === 0) {
-          <app-empty-state
-            title="No orders yet"
-            message="Orders show here once it is live and a trading run places them."
-          />
-        } @else {
-          <app-data-table
-            caption="Recent orders from this strategy"
-            [rows]="orders.value().items"
-            [columns]="orderColumns"
-            [rowKey]="orderKey"
-            [initialSort]="{ key: 'created_at', dir: 'desc' }"
-            [pageSize]="10"
-          >
-            <ng-template appCell="side" [appCellOf]="orders.value().items" let-o>
-              <app-side-tag [side]="o.side" />
-            </ng-template>
-            <ng-template appCell="status" [appCellOf]="orders.value().items" let-o>
-              <app-order-status [status]="o.status" [state]="o.state" [showNote]="false" />
-            </ng-template>
-          </app-data-table>
-        }
-      </section>
-
-      <!-- Overview ---------------------------------------------------------->
-      <section class="panel span-5" aria-labelledby="overview-title">
-        <div class="panel-head">
-          <h2 id="overview-title">Overview</h2>
-          <app-status-pill [status]="s.status" />
-        </div>
-        <dl class="facts">
-          <div>
-            <dt>Kind</dt>
-            <dd>
-              <span class="class-name">{{ kindName() }}</span>
-              <details class="tech">
-                <summary>Technical details</summary>
-                <span class="class-path">Id {{ s.id }}</span>
-                <span class="class-path">{{ s.class_path }}</span>
-              </details>
-            </dd>
-          </div>
-          <div>
-            <dt>Asset classes</dt>
-            <dd>
-              <ul class="chips" aria-label="Applicable asset classes">
-                @for (a of s.applicable_asset_classes; track a) {
-                  <li class="chip">{{ a }}</li>
-                } @empty {
-                  <li class="muted">None declared</li>
-                }
-              </ul>
-            </dd>
-          </div>
-          <div>
-            <dt>Added</dt>
-            <dd class="num">{{ date(s.created_at) }}</dd>
-          </div>
-          <div>
-            <dt>Last changed</dt>
-            <dd class="num">{{ dateTime(s.updated_at) }}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <!-- Research card ----------------------------------------------------->
-      @if (research(); as r) {
-        <section class="panel span-7" aria-labelledby="research-title">
-          <div class="panel-head">
-            <h2 id="research-title">Why it should work</h2>
-          </div>
-          <div class="research panel-body">
-            <div class="hypothesis">
-              <p class="research-label">Hypothesis <app-help-tip term="hypothesis" /></p>
-              @if (r.hypothesis) {
-                <blockquote>{{ r.hypothesis }}</blockquote>
-              } @else {
-                <p class="muted">
-                  Not recorded. Add one when you next run it in Lab: the go-live gate asks for it.
-                </p>
+      <!-- Review: the go-live check and status changes -------------------------->
+      @case ('review') {
+        <div class="page-grid">
+          <section class="panel span-12" aria-labelledby="check-title">
+            <div class="panel-head">
+              <h2 id="check-title">Go-live check</h2>
+              @if (goliveReport(); as g) {
+                <app-status-pill
+                  [status]="g.passed ? 'pass' : 'fail'"
+                  [label]="
+                    s.status === 'active'
+                      ? g.passed
+                        ? 'Still passes'
+                        : 'No longer passes'
+                      : g.passed
+                        ? 'Ready to approve'
+                        : 'Not ready yet'
+                  "
+                />
               }
             </div>
-            <dl class="facts compact">
-              <div>
-                <dt>Alpha family</dt>
-                <dd>{{ r.family }}</dd>
+            @if (sheet.error(); as err) {
+              <app-error-state
+                title="Could not run the go-live check"
+                [error]="err"
+                (retry)="sheet.reload()"
+              />
+            } @else if (!sheet.hasValue()) {
+              <app-loading-state label="Running the go-live check" [rows]="6" />
+            } @else if (goliveReport(); as g) {
+              <app-golive-check-list [report]="g" />
+            } @else {
+              <app-empty-state
+                title="Not checked"
+                message="A retired strategy is not checked. Put it on trial to check it again."
+              />
+            }
+          </section>
+
+          @if (backActions().length) {
+            <section class="panel span-5" aria-labelledby="status-title">
+              <div class="panel-head">
+                <h2 id="status-title">Change its status</h2>
               </div>
-              <div>
-                <dt>Premise</dt>
-                <dd>{{ r.premise }}</dd>
+              <div class="panel-body back">
+                <p class="muted">
+                  {{ meaning() }} Stepping back takes effect from the next trading run and never
+                  closes positions it already holds.
+                </p>
+                <div class="back-actions">
+                  @for (a of backActions(); track a.key) {
+                    <button
+                      type="button"
+                      class="btn"
+                      [disabled]="busy() !== null || !canPromote()"
+                      [attr.aria-busy]="busy() === a.key"
+                      (click)="run(a.key)"
+                    >
+                      {{ busy() === a.key ? 'Working…' : a.label }}
+                    </button>
+                  }
+                </div>
+                @if (!canPromote()) {
+                  <app-permission-note permission="strategy.promote" />
+                }
               </div>
-              <div>
-                <dt>Horizon <app-help-tip term="label_horizon" /></dt>
-                <dd class="num">{{ r.horizon }} bars</dd>
-              </div>
-              <div>
-                <dt>History needed</dt>
-                <dd class="num">{{ r.history }} bars</dd>
-              </div>
-            </dl>
-          </div>
-        </section>
+            </section>
+          }
+
+          <section
+            class="panel"
+            [class.span-7]="backActions().length"
+            [class.span-12]="!backActions().length"
+            aria-labelledby="history-title"
+          >
+            <div class="panel-head">
+              <h2 id="history-title">Status history</h2>
+              @if (history.hasValue()) {
+                <span class="muted num">{{ timeline().length }}</span>
+              }
+            </div>
+            @if (history.error(); as err) {
+              <app-error-state
+                title="Could not load the status history"
+                [error]="err"
+                (retry)="history.reload()"
+              />
+            } @else if (!history.hasValue()) {
+              <app-loading-state label="Loading status history" [rows]="4" />
+            } @else if (timeline().length === 0) {
+              <app-empty-state
+                title="No status changes yet"
+                message="Every move on trial, to approved and to retired is recorded here with who did it and why."
+              />
+            } @else {
+              <ol class="timeline" aria-label="Status changes, newest first">
+                @for (h of timeline(); track h.id) {
+                  <li [class.override]="h.override">
+                    <span class="dot" aria-hidden="true"></span>
+                    <div class="entry">
+                      <p class="entry-head">
+                        @if (h.to) {
+                          <span class="move">
+                            @if (h.from) {
+                              <app-status-pill [status]="h.from" />
+                              <span class="arrow" aria-label="to">→</span>
+                            }
+                            <app-status-pill [status]="h.to" />
+                          </span>
+                        } @else {
+                          <span class="kind">{{ h.kind }}</span>
+                        }
+                        <time class="num muted" [attr.datetime]="h.when">{{
+                          dateTime(h.when)
+                        }}</time>
+                      </p>
+                      <p class="reason">{{ h.reason || 'No reason given.' }}</p>
+                      <p class="entry-meta">
+                        <span>By {{ h.actor }}</span>
+                        @if (h.golive !== null) {
+                          <app-status-pill
+                            [status]="h.golive ? 'pass' : 'fail'"
+                            [label]="h.golive ? 'Go-live check passed' : 'Go-live check failed'"
+                          />
+                        }
+                        @if (h.override) {
+                          <app-status-pill status="warn" label="Check overridden" />
+                        }
+                      </p>
+                    </div>
+                  </li>
+                }
+              </ol>
+            }
+          </section>
+        </div>
       }
 
-      <!-- Parameters -------------------------------------------------------->
-      <section class="panel span-5" aria-labelledby="params-title">
-        <div class="panel-head">
-          <h2 id="params-title">Parameters</h2>
-          <span class="muted num">{{ params().length }}</span>
+      <!-- Details: research, parameters, robustness tests ----------------------->
+      @case ('details') {
+        <div class="page-grid">
+          @if (research(); as r) {
+            <section class="panel span-7" aria-labelledby="research-title">
+              <div class="panel-head">
+                <h2 id="research-title">Why it should work</h2>
+              </div>
+              <div class="research panel-body">
+                <div class="hypothesis">
+                  <p class="research-label">Hypothesis <app-help-tip term="hypothesis" /></p>
+                  @if (r.hypothesis) {
+                    <blockquote>{{ r.hypothesis }}</blockquote>
+                  } @else {
+                    <p class="muted">
+                      Not recorded. Add one when you next run it in Lab: the go-live check asks for
+                      it.
+                    </p>
+                  }
+                </div>
+                <dl class="facts compact">
+                  <div>
+                    <dt>Alpha family</dt>
+                    <dd>{{ r.family }}</dd>
+                  </div>
+                  <div>
+                    <dt>Premise</dt>
+                    <dd>{{ r.premise }}</dd>
+                  </div>
+                  <div>
+                    <dt>Horizon <app-help-tip term="label_horizon" /></dt>
+                    <dd class="num">{{ r.horizon }} periods</dd>
+                  </div>
+                  <div>
+                    <dt>History needed</dt>
+                    <dd class="num">{{ r.history }} periods</dd>
+                  </div>
+                </dl>
+              </div>
+            </section>
+          }
+
+          <section class="panel span-5" aria-labelledby="params-title">
+            <div class="panel-head">
+              <h2 id="params-title">Parameters</h2>
+              <span class="muted num">{{ params().length }}</span>
+            </div>
+            @if (params().length === 0) {
+              <app-empty-state
+                title="No parameters"
+                message="It runs with its defaults. A Lab run records tuned values here."
+              />
+            } @else {
+              <dl class="params">
+                @for (p of params(); track p.key) {
+                  <div>
+                    <dt [title]="p.key">{{ p.label }}</dt>
+                    <dd class="num">{{ p.value }}</dd>
+                  </div>
+                }
+              </dl>
+            }
+            <details class="tech panel-body">
+              <summary>Technical details</summary>
+              <span class="class-path">Id {{ s.id }}</span>
+              <span class="class-path">{{ s.class_path }}</span>
+            </details>
+          </section>
+
+          <section class="panel span-12" aria-labelledby="survival-title">
+            <div class="panel-head">
+              <h2 id="survival-title">Robustness tests</h2>
+              @if (reportSummary(); as sum) {
+                <app-status-pill [status]="sum.allPassed ? 'pass' : 'fail'" [label]="sum.label" />
+              }
+            </div>
+            @if (s.survival_reports.length === 0) {
+              <app-empty-state
+                title="No robustness tests yet"
+                message="Results are saved when a Lab run tests this strategy (out of sample, period stability, perturbation, drift). Test it again in Lab to add them."
+              >
+                <a routerLink="/lab" [queryParams]="{ strategy: s.id }" class="btn"
+                  >Test again in Lab</a
+                >
+              </app-empty-state>
+            } @else {
+              <ul class="reports">
+                @for (r of reports(); track r.test_id + $index) {
+                  <li class="report" [class.failed]="!r.passed">
+                    <div class="report-head">
+                      <h3>{{ r.label }} <app-help-tip [term]="r.test_id" /></h3>
+                      <app-status-pill [status]="r.passed ? 'pass' : 'fail'" />
+                    </div>
+                    @if (r.notes) {
+                      <p class="notes">{{ r.notes }}</p>
+                    }
+                    @if (r.metricList.length) {
+                      <dl class="metrics">
+                        @for (m of r.metricList; track m.key) {
+                          <div>
+                            <dt>{{ m.label }} <app-help-tip [term]="m.key" /></dt>
+                            <dd class="num">{{ m.value }}</dd>
+                          </div>
+                        }
+                      </dl>
+                    }
+                  </li>
+                }
+              </ul>
+            }
+          </section>
         </div>
-        @if (params().length === 0) {
-          <app-empty-state
-            title="No parameters"
-            message="This strategy runs with its class defaults; a lab run records tuned values here."
-          />
-        } @else {
-          <dl class="params">
-            @for (p of params(); track p.key) {
-              <div>
-                <dt [title]="p.key">{{ p.label }}</dt>
-                <dd class="num">{{ p.value }}</dd>
+      }
+
+      @case ('versions') {
+        @if (canSeeVersions()) {
+          <app-model-versions-panel [strategyId]="s.id" />
+        }
+      }
+
+      <!-- Overview: the verdict, its trial result and how to follow it ---------->
+      @default {
+        <div class="page-grid">
+          <section class="panel span-12 verdict-panel" aria-label="Verdict">
+            @if (sheet.error(); as err) {
+              <app-error-state
+                title="Could not judge it yet"
+                [error]="err"
+                (retry)="sheet.reload()"
+              />
+            } @else if (verdict(); as v) {
+              <app-strategy-verdict [verdict]="v" details>
+                <div details class="verdict-details">
+                  @if (verdictChecks().length) {
+                    <ul class="mini-checks" aria-label="Go-live checks, value against limit">
+                      @for (c of verdictChecks(); track c.name) {
+                        <li>
+                          <app-status-pill
+                            [status]="c.passed ? 'pass' : 'fail'"
+                            [label]="c.label"
+                          />
+                          @if (c.name !== 'status') {
+                            <span class="num muted">{{ c.value }} against {{ c.limit }}</span>
+                          }
+                        </li>
+                      }
+                    </ul>
+                  }
+                  @if (reportSummary(); as sum) {
+                    <p class="muted">Robustness tests: {{ sum.label }}.</p>
+                  }
+                  <button type="button" class="btn btn-ghost" (click)="setTab('review')">
+                    Open the full go-live check
+                  </button>
+                </div>
+              </app-strategy-verdict>
+            } @else {
+              <app-loading-state label="Judging it" [rows]="2" />
+            }
+          </section>
+
+          @if (s.status !== 'retired') {
+            <app-follow-panel
+              class="span-12"
+              [strategyId]="s.id"
+              [strategyName]="displayName()"
+              [status]="s.status"
+            />
+          }
+
+          <section class="panel span-7" aria-labelledby="perf-title">
+            <div class="panel-head">
+              <h2 id="perf-title">Trial results</h2>
+              <span class="muted">Its own test book. No real money.</span>
+            </div>
+            @if (sheet.error(); as err) {
+              <app-error-state
+                title="Could not load its trial results"
+                [error]="err"
+                (retry)="sheet.reload()"
+              />
+            } @else if (!sheet.hasValue()) {
+              <app-loading-state label="Loading trial results" [rows]="4" />
+            } @else if (!performance()) {
+              <app-empty-state
+                [title]="s.status === 'shadow' ? 'No trial days yet' : 'No trial record'"
+                [message]="
+                  s.status === 'shadow'
+                    ? 'Its test book gets a value after the next trading run.'
+                    : s.status === 'active'
+                      ? 'It was approved before its test book recorded a day. Follow it on Paper to see how it does in your own portfolio.'
+                      : 'It was retired before its test book recorded a day.'
+                "
+              />
+            } @else {
+              @let p = performance()!;
+              <dl class="perf">
+                <div>
+                  <dt>Return</dt>
+                  <dd
+                    class="num"
+                    [class.gain]="(p.totalReturn ?? 0) > 0"
+                    [class.loss]="(p.totalReturn ?? 0) < 0"
+                  >
+                    {{ pct(p.totalReturn, true) }}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Worst drop <app-help-tip term="max_drawdown" /></dt>
+                  <dd class="num">{{ pct(p.maxDrawdown) }}</dd>
+                </div>
+                <div>
+                  <dt>Days on trial</dt>
+                  <dd class="num">{{ p.days }}</dd>
+                </div>
+              </dl>
+              <div class="chart">
+                <app-time-series-chart
+                  ariaLabel="Test book value, with drawdown below"
+                  [summary]="chartSummary()"
+                  [series]="chartSeries()"
+                  [height]="260"
+                />
               </div>
             }
-          </dl>
-        }
-      </section>
+          </section>
 
-      <!-- Status history ---------------------------------------------------->
-      <section class="panel span-7" aria-labelledby="history-title">
-        <div class="panel-head">
-          <h2 id="history-title">Status history</h2>
-          @if (history.hasValue()) {
-            <span class="muted num">{{ timeline().length }}</span>
-          }
-        </div>
-        @if (history.error(); as err) {
-          <app-error-state
-            title="Could not load the status history"
-            [error]="err"
-            (retry)="history.reload()"
-          />
-        } @else if (!history.hasValue()) {
-          <app-loading-state label="Loading status history" [rows]="4" />
-        } @else if (timeline().length === 0) {
-          <app-empty-state
-            title="No status changes yet"
-            message="Every move to paper trading, going live and stopping is recorded here with who did it and why."
-          />
-        } @else {
-          <ol class="timeline" aria-label="Status changes, newest first">
-            @for (h of timeline(); track h.id) {
-              <li [class.override]="h.override">
-                <span class="dot" aria-hidden="true"></span>
-                <div class="entry">
-                  <p class="entry-head">
-                    @if (h.to) {
-                      <span class="move">
-                        @if (h.from) {
-                          <app-status-pill [status]="h.from" />
-                          <span class="arrow" aria-label="to">→</span>
-                        }
-                        <app-status-pill [status]="h.to" />
-                      </span>
-                    } @else {
-                      <span class="kind">{{ h.kind }}</span>
-                    }
-                    <time class="num muted" [attr.datetime]="h.when">{{ dateTime(h.when) }}</time>
-                  </p>
-                  <p class="reason">{{ h.reason || 'No reason given.' }}</p>
-                  <p class="entry-meta">
-                    <span>By {{ h.actor }}</span>
-                    @if (h.golive !== null) {
-                      <app-status-pill
-                        [status]="h.golive ? 'pass' : 'fail'"
-                        [label]="h.golive ? 'Go-live passed' : 'Go-live failed'"
-                      />
-                    }
-                    @if (h.override) {
-                      <app-status-pill status="warn" label="Gate overridden" />
-                    }
-                  </p>
-                </div>
-              </li>
+          <section class="panel span-5" aria-labelledby="orders-title">
+            <div class="panel-head">
+              <h2 id="orders-title">Orders in this portfolio</h2>
+              <a routerLink="/orders" class="related-link">All orders</a>
+            </div>
+            @if (orders.error(); as err) {
+              <app-error-state
+                title="Could not load its orders"
+                [error]="err"
+                (retry)="orders.reload()"
+              />
+            } @else if (!orders.hasValue()) {
+              <app-loading-state label="Loading orders" [rows]="4" />
+            } @else if (orders.value().items.length === 0) {
+              <app-empty-state
+                title="No orders yet"
+                [message]="
+                  s.status === 'active'
+                    ? 'Orders show here once you follow it on Paper, Approve each trade or Automatic and a trading run places them.'
+                    : 'It places no orders for anyone until it is approved. Its test book trades are under Results.'
+                "
+              />
+            } @else {
+              <app-data-table
+                caption="Recent orders from this strategy"
+                [rows]="orders.value().items"
+                [columns]="orderColumns"
+                [rowKey]="orderKey"
+                [initialSort]="{ key: 'created_at', dir: 'desc' }"
+                [pageSize]="10"
+              >
+                <ng-template appCell="side" [appCellOf]="orders.value().items" let-o>
+                  <app-side-tag [side]="o.side" />
+                </ng-template>
+                <ng-template appCell="status" [appCellOf]="orders.value().items" let-o>
+                  <app-order-status [status]="o.status" [state]="o.state" [showNote]="false" />
+                </ng-template>
+              </app-data-table>
             }
-          </ol>
-        }
-      </section>
+          </section>
 
-      <!-- Robustness tests -------------------------------------------------->
-      <section class="panel span-12" aria-labelledby="survival-title">
-        <div class="panel-head">
-          <h2 id="survival-title">Robustness tests</h2>
-          @if (reportSummary(); as sum) {
-            <app-status-pill [status]="sum.allPassed ? 'pass' : 'fail'" [label]="sum.label" />
-          }
-        </div>
-        @if (s.survival_reports.length === 0) {
-          <app-empty-state
-            title="No robustness tests yet"
-            message="Results are saved when a Lab run tests this strategy (out of sample, period stability, perturbation, drift). Re-run it in Lab to add them."
-          >
-            <a routerLink="/lab" [queryParams]="{ strategy: s.id }" class="btn">Re-run in Lab</a>
-          </app-empty-state>
-        } @else {
-          <ul class="reports">
-            @for (r of reports(); track r.test_id + $index) {
-              <li class="report" [class.failed]="!r.passed">
-                <div class="report-head">
-                  <h3>{{ r.label }} <app-help-tip [term]="r.test_id" /></h3>
-                  <app-status-pill [status]="r.passed ? 'pass' : 'fail'" />
-                </div>
-                @if (r.notes) {
-                  <p class="notes">{{ r.notes }}</p>
-                }
-                @if (r.metricList.length) {
-                  <dl class="metrics">
-                    @for (m of r.metricList; track m.key) {
-                      <div>
-                        <dt>{{ m.label }} <app-help-tip [term]="m.key" /></dt>
-                        <dd class="num">{{ m.value }}</dd>
-                      </div>
+          <section class="panel span-12" aria-labelledby="about-title">
+            <div class="panel-head">
+              <h2 id="about-title">About it</h2>
+            </div>
+            <dl class="facts">
+              <div>
+                <dt>Status</dt>
+                <dd class="status-line">
+                  <app-status-pill [status]="s.status" />
+                  <span class="muted">{{ meaning() }}</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Kind</dt>
+                <dd>
+                  <span class="class-name">{{ kindName() }}</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Trades</dt>
+                <dd>
+                  <ul class="chips" aria-label="Asset classes it trades">
+                    @for (a of s.applicable_asset_classes; track a) {
+                      <li class="chip">{{ a }}</li>
+                    } @empty {
+                      <li class="muted">None declared</li>
                     }
-                  </dl>
-                }
-              </li>
-            }
-          </ul>
-        }
-      </section>
-    </div>
-  }
+                  </ul>
+                </dd>
+              </div>
+              <div>
+                <dt>Added</dt>
+                <dd class="num">{{ date(s.created_at) }}</dd>
+              </div>
+            </dl>
+          </section>
+        </div>
+      }
+    }
+  </div>
 } @else {
   <section class="panel">
     <app-loading-state label="Loading strategy" [rows]="6" />

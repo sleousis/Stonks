@@ -171,13 +171,30 @@ def test_build_universe_from_csv_and_view_members(browse, stack, viewport, tmp_p
     expect(page.get_by_role("link", name=uid)).to_be_visible()
 
 
+def test_lab_opens_on_a_simple_test_in_plain_words(browse, stack, viewport):
+    v = browse(stack.trader)
+    page = v.go("/lab")
+    simple = page.locator("#lab-simple")
+    expect(simple).to_be_visible()
+    expect(simple.locator(".steps li")).to_have_count(3)
+    # Plain names and summaries, never code docstrings or class names.
+    expect(simple).not_to_contain_text(":meth:")
+    expect(simple).not_to_contain_text("BuyAndHold")
+    expect(simple.get_by_role("radio", name=re.compile(r"^Moving average trend\b"))).to_be_visible()
+    # One button; a missing choice is named in plain words.
+    simple.get_by_role("button", name="Test it").click()
+    expect(simple).to_contain_text("Pick a strategy.")
+    v.check_page("lab-simple-test")
+
+
 def test_lab_run_with_quick_preset_shows_results(browse, stack, viewport):
     v = browse(stack.trader)
     page = v.go("/lab")
+    page.locator("#lab-view-advanced").click()
     page.get_by_role("tab", name="Lab run").click()
     form = page.locator("#lab-panel-lab_run")
     expect(form).to_be_visible()
-    form.get_by_role("radio", name=re.compile(r"^momentum\b")).check()
+    form.get_by_role("radio", name=re.compile(r"^Momentum\b")).check()
     page.locator("#lr-tickers").fill("AAA.US,BBB.US,CCC.US")
     start = stack.market_end.replace(year=stack.market_end.year - 1)
     page.locator("#lr-start").fill(start.isoformat())
@@ -189,6 +206,9 @@ def test_lab_run_with_quick_preset_shows_results(browse, stack, viewport):
 
     result = page.locator("section", has=page.get_by_role("heading", name="Result"))
     expect(result).to_contain_text(re.compile("pass|fail", re.I), timeout=180_000)
+    # The verdict in words, and trials are not tests.
+    expect(result).to_contain_text(re.compile("It held up|It did not hold up"))
+    expect(result).to_contain_text("A trial only says a setting ran")
     v.check_page("lab-run-result")
 
 
@@ -198,15 +218,19 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     sid = SHADOW_IDS[viewport]
     promote_url = rf"/api/strategies/{sid}/promote$"
 
-    # A strategy that has not passed the go-live check offers no Go live
-    # (UX-23). A trader sees why they cannot act, and the server refuses the
-    # call anyway.
+    # A strategy that has not passed the go-live check offers no Approve
+    # (UX-23). It opens on a plain verdict (F33). On the Review tab a trader
+    # sees why they cannot change its status, and the server refuses the call
+    # anyway.
     trader = browse(stack.trader)
     trader.guard.expect_refusal(403, promote_url, "traders cannot promote")
     page = trader.go(f"/strategies/{sid}")
     expect(page.get_by_role("heading", level=1)).to_contain_text(sid)
-    expect(page.get_by_role("button", name="Go live")).to_have_count(0)
+    expect(page.locator("app-strategy-verdict")).to_be_visible()
+    expect(page.get_by_role("button", name="Approve", exact=True)).to_have_count(0)
     expect(page.get_by_role("button", name="Override…")).to_have_count(0)
+    page.locator("app-page-tabs").get_by_role("tab", name="Review", exact=True).click()
+    expect(page.get_by_role("button", name="Retire", exact=True)).to_be_disabled()
     expect(page.locator("app-permission-note").first).to_be_visible()
     refused = trader.api("POST", f"/api/strategies/{sid}/promote", data={"reason": "trader tries"})
     assert refused.status == 403
@@ -217,19 +241,23 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     page = admin.go(f"/strategies/{sid}")
     admin.check_page("strategy-detail")
     # An admin gets "Override…", which asks for the override straight away,
-    # on the go-live ticket with the failed check.
-    expect(page.get_by_role("button", name="Go live")).to_have_count(0)
+    # on the approval ticket with the failed check. On paper money its words
+    # say so and its button is not red (B2).
+    expect(page.get_by_role("button", name="Approve", exact=True)).to_have_count(0)
     page.get_by_role("button", name="Override…").click()
     dialog = page.locator("dialog[open]")
     expect(dialog).to_contain_text("without passing the check")
     expect(dialog.locator("app-mode-stamp")).to_contain_text("PAPER")
+    expect(dialog).to_contain_text("No real money moves")
+    expect(dialog).not_to_contain_text("real orders")
 
-    override = page.get_by_role("button", name="Override and go live")
+    override = page.get_by_role("button", name="Override and approve")
     expect(override).to_be_visible()
+    expect(override).not_to_have_class(re.compile(r"\bbtn-danger\b"))
     admin.check_page("strategy-promote-override")
     dialog = page.locator("dialog[open]")
     fill_status_dialog(dialog, "override", "Seeded e2e strategy, override recorded on purpose.")
-    # The page always shows the lifecycle ladder, "Live" step included, so
+    # The page always shows the status ladder, "Approved" step included, so
     # wait for the promote call itself before reading the audit trail.
     with page.expect_response(
         lambda r: r.request.method == "POST" and re.search(promote_url, r.url) is not None
@@ -265,10 +293,10 @@ def run_real_tick(v: Visit, as_of: str, ticker: str) -> None:
     page.get_by_label("Dry run").uncheck()
     page.get_by_label("As of").fill(as_of)
     page.get_by_role("textbox", name="Tickers", exact=True).fill(ticker)
-    page.get_by_role("button", name="Start trading run", exact=True).click()
+    page.get_by_role("button", name="Start paper run", exact=True).click()
     dialog = page.get_by_role("dialog", name="Trading run ticket")
     dialog.get_by_role("textbox").fill("simulated")
-    dialog.get_by_role("button", name="Start trading run").click()
+    dialog.get_by_role("button", name="Start paper run").click()
 
 
 def tick_result(v: Visit):
@@ -337,9 +365,13 @@ def test_kill_switch_blocks_orders_until_resumed_with_a_fresh_code(
     v = browse(stack.admin)
     page = v.go("/ops/halts")
     v.check_page("halts")
-    page.get_by_label("Reason").fill(f"e2e kill switch drill ({viewport})")
-    page.get_by_role("button", name="Engage kill switch").click()
-    page.locator("dialog[open]").get_by_role("button", name="Engage kill switch").click()
+    # M7: the Halts page opens the same Stop trading sheet as the strip.
+    page.get_by_role("button", name="Stop trading…").click()
+    sheet = page.get_by_role("dialog", name="Stop trading")
+    expect(sheet.get_by_role("group", name="Stop trading ticket")).to_be_visible()
+    sheet.get_by_role("radio", name="Every portfolio, for every trader").check()
+    sheet.get_by_label("Reason").fill(f"e2e kill switch drill ({viewport})")
+    sheet.get_by_role("button", name="Stop trading").click()
     strip = page.locator("app-session-strip .strip")
     expect(strip).not_to_have_attribute("data-tone", "calm")
     expect(page.get_by_role("region", name="Trading halted")).to_be_visible()
@@ -384,14 +416,17 @@ def test_stop_trading_from_the_strip_halts_the_picked_portfolio(
     expect(sheet).to_be_visible()
     expect(sheet.get_by_role("radio", name="Trader paper book")).to_be_checked()
     expect(sheet.get_by_role("radio", name="All new orders")).to_be_checked()
-    expect(sheet.get_by_role("group", name="Kill switch")).to_contain_text("PAPER")
+    expect(sheet.get_by_role("group", name="Stop trading ticket")).to_contain_text("PAPER")
     v.check_page("kill-sheet")
     sheet.get_by_label("Reason").fill(f"e2e stop from the strip ({viewport})")
     sheet.get_by_role("button", name="Stop trading").click()
 
     expect(strip).to_have_attribute("data-tone", "kill")
     expect(page.get_by_role("region", name="Trading halted")).to_contain_text("Trader paper book")
-    expect(strip.get_by_role("link", name="Resume trading on the Halts page")).to_be_visible()
+    # A trader resumes from the strip itself: the Halts page is an admin page (F11).
+    halted = page.get_by_role("region", name="Trading halted")
+    expect(halted.get_by_role("button", name="Resume")).to_be_visible()
+    expect(strip.locator('a[href="/ops/halts"]')).to_have_count(0)
     v.check_page("kill-strip")
 
     halts = v.api("GET", "/api/halts").json()
@@ -425,10 +460,9 @@ def test_trader_cannot_see_the_admins_portfolio(browse, stack, viewport):
     assert v.api("GET", "/api/portfolio").json()["cash"] == pytest.approx(stack_cash())
 
     # The admin's tick bought AAA.US and BBB.US; none of it shows to the trader.
+    # The Dashboard is an admin page: the trader gets the one No access page.
     page = v.go(f"/dashboard?portfolio_id={admin_pf}")
-    main = page.locator("main")
-    expect(main).to_contain_text("$4,321.00")
-    expect(main).to_contain_text("0 positions")
+    expect(page.get_by_role("heading", level=1)).to_have_text("No access")
     v.check_page("dashboard-trader")
     page = v.go("/orders")
     expect(page.locator("main")).to_contain_text("No orders yet")

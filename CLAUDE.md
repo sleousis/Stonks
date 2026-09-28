@@ -106,9 +106,11 @@ uv run stonks mcp                # MCP server over the running API
 # Operations
 uv run stonks schedule run|next|runs|run-now JOB|check|metrics
 uv run stonks backup backup|verify|restore|list|prune
+uv run stonks settings list|set KEY VALUE|reset KEY --reason "..."   # console-editable system settings (overrides on TOML)
+uv run stonks starter install|list   # three simple strategies On trial and a small universe
 
 # People (the shell is admin, and passwords come from a no-echo prompt)
-uv run stonks users bootstrap|reset-password|list
+uv run stonks users bootstrap|reset-password|list   # bootstrap also installs the starter set (--no-starter)
 uv run stonks users create --email E --name N [--role viewer|trader|admin]
 uv run stonks users set-role|disable|enable|reset-2fa --email E   # reset-2fa: sole-admin lockout
 
@@ -155,6 +157,8 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - **`accounts/`**: users and roles (viewer, trader, admin), portfolios, subscriptions with modes `notify`/`paper`/`approve`/`auto`, `BookSpec` with tighten-only merges, `Scope` ownership checks, `audit_log`, paper accounts for broker portfolios (`paper.py`). Existing installs map to `usr_owner` and `pf_default`, and `default_book.py` subscribes `pf_default` to every strategy that turns active (paper, or auto at an external broker).
 - **`connections/`**: `BrokerConnection` seam for broker sync (positions, cash, activities) and, for auto books, trading. Providers `alpaca`, `snaptrade`, `ibkr` (an IB Gateway named in `[brokers.ibkr.gateways]`, sync plus `trader()`, optional Flex activities), `fake`, `fake_portal` and `fake_trading`; none enabled by default. Credentials sealed with `security/`.
 - **`insights/`**: portfolio insights for any portfolio you own, a synced broker account too: allocation, exposure, P&L, risk, and which active strategies agree with each holding (`/api/insights`, service in `app/insights.py`).
+- **`config_overrides/`**: the console-editable settings catalog (`catalog.py`: risk limits, universe, test books, alerts, schedule jobs; never secrets), `apply.py` (validated overrides per section), `store.py` (`settings_overrides` plus `audit_log`). `AppContext.settings` is the TOML base with the overrides (re-read every 2 s); the CLI and scheduler apply them at load. Service `app/system_settings.py`, `/api/settings/system`, `stonks settings`.
+- **`starter/`**: the starter set (`starter_buy_and_hold`, `starter_trend`, `starter_momentum`) registered On trial, never approved, plus the starter universe as a `production.universe` override when none is set. `stonks starter install`, `/api/starter`, run by `stonks users bootstrap`.
 - **`security/`**: AES-GCM envelope encryption (`SecretBox`) with master keys from `STONKS_SECRET_KEYS`.
 - **`notify/`**: `Notifier` seam for operator alerts (log, store, webhook) and the per-user notification router, outbox, delivery worker with retries, quiet hours and preferences, and channels (Web Push via VAPID, SMTP email, the user's own webhook).
 - **`scheduling/`**: built-in scheduler with exchange calendars, session/daily/interval triggers, catch-up, run records, dead-man deadlines and pings, Prometheus metrics, and `api`, `in_process` and `local` backends.
@@ -195,7 +199,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - `borrow_rates (ticker, as_of, source, currency, isin, available_shares, fee_rate_annual, rebate_rate_annual; PK (ticker, as_of, source))` (021): daily stock borrow terms, rates as yearly fractions. Read through `execution.borrow.LakeBorrowSource`.
 - `instrument_sector_versions (ticker, sector, gic_sector, known_at)` (022): every sector label an instrument has had, with the time Stonks first saw it. Factor attribution reads the label known on each day (`factors.style.sector_labels`).
 
-**State (SQLite, migrations 001-047):**
+**State (SQLite, migrations 001-048):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -233,6 +237,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - 045: `margin_checks (portfolio_id, checked_at, source, currency, equity, initial_margin, maintenance_margin, excess_liquidity, available_funds, buying_power, cushion, level, reported_type)`: each read of a margin account's cushion by the tick or the `live_margin` job, level in {ok, warn, reduce, call} (roadmap 19.13, margin accounts, off by default).
 - 046: `option_approvals` (per-portfolio options approval level), `option_events` (assignments, exercises, expiries, append only), and `order_tickets.hold` also takes `options` (roadmap 17.8).
 - 047: `shadow_decisions` and `model_version_decisions` statuses gain `working` and `expired`, plus `filled_on` (paper and model books fill at the next open).
+- 048: `settings_overrides (key, value_json, updated_at, updated_by, reason)`: system settings an admin changed in the console, laid over TOML by `config_overrides/` (catalog allowlist, never secrets), each change audited.
 
 ## Conventions to match
 

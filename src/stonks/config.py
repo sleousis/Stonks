@@ -266,8 +266,10 @@ class ProductionConfig(BaseModel):
     # ``portfolio.pipeline`` and, through it, ``production.risk``).
     construction: ConstructionSettings = Field(default_factory=ConstructionSettings)
     # Which strategies keep a model book: "shadow" (only shadow strategies)
-    # or "all" non-retired ones (design section 5).
-    model_books: Literal["shadow", "all"] = "shadow"
+    # or "all" non-retired ones (design section 5). "all" keeps an approved
+    # strategy's own record visible (complexity audit F28); it reuses the
+    # signal phase's scores, so it costs one decision per active strategy.
+    model_books: Literal["shadow", "all"] = "all"
     # How paper books and model books fill (P21): "next_open" keeps an order
     # working and fills it at the next session's open through
     # [backtest.execution] and [backtest.costs], as a backtest does.

@@ -9,7 +9,7 @@ import {
   type StatusChangeTicket,
 } from './ui/status-change-dialog';
 
-/** The go-live gate refused to go live (the API answers 409). */
+/** The go-live check refused the approval (the API answers 409). */
 export function isGoLiveRefusal(err: unknown): err is ApiError {
   return err instanceof ApiError && err.status === 409;
 }
@@ -37,6 +37,7 @@ export function goLiveTicket(
   broker: BrokerInfo | null,
 ): StatusChangeTicket {
   return {
+    kind: 'Approval ticket',
     live: broker ? isRealMoneyBroker(broker) : null,
     lines: [
       { label: 'Strategy', value: name },
@@ -54,12 +55,15 @@ export function goLiveTicket(
   };
 }
 
-/** One sentence on where the money is, so a paper broker never oversells. */
-function moneyLine(broker: BrokerInfo | null): string {
-  if (!broker) return 'The broker could not be read. Check it on the go-live page first.';
+/**
+ * One sentence on where the money is, built from the same broker as the
+ * ticket's stamp (B2): PAPER never says real orders, LIVE always does.
+ */
+export function moneyLine(broker: BrokerInfo | null): string {
+  if (!broker) return 'The broker could not be read. Check it on the Strategy review page first.';
   return isRealMoneyBroker(broker)
-    ? 'Real money: orders go to your live broker account.'
-    : 'The broker trades paper money, so no real money moves.';
+    ? 'Real money: portfolios that follow it send real orders to your broker from the next trading run.'
+    : 'Portfolios that follow it place paper orders from the next trading run. No real money moves.';
 }
 
 export interface PromotionSteps<T> {
@@ -94,14 +98,14 @@ export interface PromotionSteps<T> {
 }
 
 /**
- * Go live with the go-live gate in front:
+ * Approve with the go-live check in front:
  * 1. load the go-live report, the broker and the followers, then show the
  *    ticket and the report with a reason field and a hold-to-confirm button
  *    (typing the name instead when real money moves);
- * 2. go live; on a 409 (gate refused) show the failing checks and offer an
+ * 2. approve; on a 409 (gate refused) show the failing checks and offer an
  *    override that needs a reason of at least 20 characters and the typed
  *    word "override";
- * 3. go live again with `override: true`.
+ * 3. approve again with `override: true`.
  * Resolves to the API's answer, or `null` when cancelled or failed (other
  * errors are toasted here).
  */
@@ -123,7 +127,7 @@ export async function promoteThroughGate<T>(steps: PromotionSteps<T>): Promise<T
     else {
       note =
         `Could not run the go-live check first (${errorMessage(gate.reason)}). ` +
-        'The server still applies it when you go live.';
+        'The server still applies it when you approve it.';
     }
     if (steps.broker) {
       broker = brokerRead.status === 'fulfilled' ? brokerRead.value : null;
@@ -168,13 +172,16 @@ export async function promoteThroughGate<T>(steps: PromotionSteps<T>): Promise<T
 
   const override = await dialog.open({
     title: steps.overrideFirst
-      ? `Go live with ${name} without passing the check?`
-      : `The go-live gate refused ${name}`,
+      ? `Approve ${name} without passing the check?`
+      : `The go-live check refused ${name}`,
     message:
-      `${refusal ? `${refusal} ` : ''}Going live anyway puts it on real orders without the ` +
-      'evidence the gate asks for. The override and your reason are recorded.',
-    confirmLabel: 'Override and go live',
-    tone: 'danger',
+      `${refusal ? `${refusal} ` : ''}Approving anyway lets people follow it without the ` +
+      'evidence the check asks for. ' +
+      (ticket ? `${moneyLine(broker)} ` : '') +
+      'The override and your reason are recorded.',
+    confirmLabel: 'Override and approve',
+    // Red only when real money moves (B2): a paper override is a quiet choice.
+    tone: realMoney ? 'danger' : 'default',
     minReason: OVERRIDE_MIN_REASON,
     typedConfirmation: 'override',
     override: true,
@@ -199,28 +206,27 @@ export async function promoteThroughGate<T>(steps: PromotionSteps<T>): Promise<T
 export const HELD_POSITIONS_LINE = 'Positions it already holds are not closed.';
 
 /**
- * The dialog for Back to paper trading (`pause`) and Stop (`stop`), shared by
- * the strategy page and Studio so both read the same (UX-24).
+ * The dialog for Back on trial (`pause`) and Retire (`stop`), shared by the
+ * strategy page and Studio so both read the same (UX-24). Neither is red:
+ * red belongs to the kill switch alone (M9).
  */
 export function demoteOptions(action: 'pause' | 'stop', name: string): StatusChangeOptions {
   if (action === 'stop') {
     return {
-      title: `Stop ${name}?`,
+      title: `Retire ${name}?`,
       message:
-        `It stops trading and stops paper decisions from the next run. ${HELD_POSITIONS_LINE} ` +
-        'Its reports and history stay.',
+        `It no longer decides from the next trading run: no orders for its followers and no test ` +
+        `book. ${HELD_POSITIONS_LINE} Its reports and history stay.`,
       confirmLabel: LIFECYCLE.stop.label,
-      tone: 'danger',
       minReason: 1,
     };
   }
   return {
-    title: `Move ${name} back to paper trading?`,
+    title: `Put ${name} back on trial?`,
     message:
-      'It keeps deciding on every run but places no new orders from the next run. ' +
+      'People can no longer follow it for trades. Its test book keeps deciding on every run. ' +
       HELD_POSITIONS_LINE,
     confirmLabel: LIFECYCLE.pause.label,
-    tone: 'danger',
     minReason: 1,
   };
 }

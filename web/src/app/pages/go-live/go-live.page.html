@@ -1,187 +1,67 @@
 <app-page-header
-  title="Go-live"
-  description="Checks a strategy's paper period must pass before someone takes it live."
+  title="Strategy review"
+  description="Strategies on trial and whether each is ready to approve. Read a strategy's Review tab, then approve it there with a reason."
 />
 
 <div class="page-grid">
-  <!-- Strategy picker ------------------------------------------------------>
-  <section class="panel span-12" aria-labelledby="pick-title">
+  <section class="panel span-8" aria-labelledby="queue-title">
     <div class="panel-head">
-      <h2 id="pick-title">Strategy</h2>
+      <h2 id="queue-title">To review</h2>
+      @if (board.hasValue()) {
+        <span class="muted num" aria-live="polite"
+          >{{ readyCount() }} ready to approve, {{ onTrial() }} on trial</span
+        >
+      }
     </div>
-    @if (strategies.error(); as err) {
+    @if (board.error(); as err) {
       <app-error-state
-        title="Could not load strategies"
+        title="Could not load the strategies"
         [error]="err"
-        (retry)="strategies.reload()"
+        (retry)="board.reload()"
       />
-    } @else if (!strategies.hasValue()) {
-      <app-loading-state label="Loading strategies" [rows]="2" />
-    } @else if (strategies.value().items.length === 0) {
+    } @else if (!board.hasValue()) {
+      <app-loading-state label="Loading the strategies" [rows]="5" />
+    } @else if (rows().length === 0) {
       <app-empty-state
         title="No strategies yet"
-        message="Test one in Lab and start paper trading it. Paper trading strategies are the ones that can go live."
+        message="Test one in Lab and put it on trial. Strategies on trial are the ones that can be approved."
       >
         <a routerLink="/lab" class="btn">Open Lab</a>
       </app-empty-state>
     } @else {
-      <div class="picker panel-body">
-        <div class="field">
-          <label for="golive-strategy">Strategy to check</label>
-          <select
-            id="golive-strategy"
-            class="input"
-            aria-describedby="golive-strategy-hint"
-            [value]="selectedId()"
-            (change)="onSelect($event)"
+      <app-data-table
+        caption="Strategies to review, the ones ready to approve first"
+        [rows]="rows()"
+        [columns]="columns"
+        [rowKey]="rowKey"
+        [pageSize]="25"
+      >
+        <ng-template appCell="strategy_id" [appCellOf]="rows()" let-r>
+          <a class="name" [routerLink]="['/strategies', r.strategy_id]">
+            <span class="id">{{ name(r.strategy_id) }}</span>
+            <span class="cls muted">{{ kind(r.class_path) }}</span>
+          </a>
+        </ng-template>
+        <ng-template appCell="status" [appCellOf]="rows()" let-r>
+          <app-status-pill [status]="r.status" />
+        </ng-template>
+        <ng-template appCell="verdict" [appCellOf]="rows()" let-r>
+          <app-strategy-verdict compact [verdict]="verdict(r)" />
+        </ng-template>
+        <ng-template appCell="review" [appCellOf]="rows()" let-r>
+          <a
+            class="btn review"
+            [class.btn-primary]="r.status === 'shadow' && r.golive_passed"
+            [routerLink]="['/strategies', r.strategy_id]"
+            [queryParams]="{ tab: 'review' }"
+            [attr.aria-label]="'Review ' + name(r.strategy_id)"
+            >Review <span aria-hidden="true">→</span></a
           >
-            <option value="" [selected]="!selectedId()">Choose a strategy…</option>
-            @for (g of groups(); track g.label) {
-              <optgroup [label]="g.label">
-                @for (s of g.items; track s.id) {
-                  <option [value]="s.id" [selected]="s.id === selectedId()">
-                    {{ displayName(s.id) }}
-                  </option>
-                }
-              </optgroup>
-            }
-          </select>
-          <span id="golive-strategy-hint" class="hint"
-            >Paper trading strategies are listed first: they are the ones building a record.</span
-          >
-        </div>
-
-        @if (selected(); as s) {
-          <div class="selected">
-            <app-status-pill [status]="s.status" />
-            <span class="selected-class">{{ kindName(s.class_path) }}</span>
-            <a class="selected-link" [routerLink]="['/strategies', s.id]">Open strategy</a>
-          </div>
-        }
-      </div>
+        </ng-template>
+      </app-data-table>
     }
   </section>
 
-  <!-- Go-live check -------------------------------------------------------->
-  <section class="panel span-8" aria-labelledby="check-title">
-    <div class="panel-head">
-      <h2 id="check-title">Go-live check</h2>
-      @if (selected() && report.hasValue()) {
-        <app-status-pill
-          class="verdict"
-          [status]="report.value().passed ? 'pass' : 'fail'"
-          [label]="report.value().passed ? 'Ready to go live' : 'Not ready'"
-        />
-      }
-    </div>
-
-    @if (!selectedId()) {
-      <app-empty-state
-        title="Pick a strategy"
-        message="The check compares its paper period with the go-live limits set for this server."
-      />
-    } @else if (unknownId(); as missing) {
-      <app-empty-state
-        title="Strategy not found"
-        [message]="'No strategy has the id “' + missing + '”. Pick one from the list above.'"
-      />
-    } @else if (report.error(); as err) {
-      <app-error-state
-        title="Could not run the go-live check"
-        [error]="err"
-        (retry)="report.reload()"
-      />
-    } @else if (!report.hasValue()) {
-      <app-loading-state label="Running the go-live check" [rows]="6" />
-    } @else {
-      @let r = report.value();
-      @if (r.passed && r.status !== 'active') {
-        <div class="ready panel-body" role="status">
-          <p class="ready-title">Ready for someone to take it live</p>
-          <p>
-            All {{ rows().length }} checks passed. Nothing goes live on its own: read the checklist
-            below, then use {{ goLiveLabel }} on the strategy page with a reason.
-          </p>
-          <a class="btn btn-primary" [routerLink]="['/strategies', r.strategy_id]"
-            >Review and go live</a
-          >
-        </div>
-      }
-      <p class="summary panel-body">
-        @if (r.passed) {
-          All {{ rows().length }} checks passed.
-          @if (r.status === 'active') {
-            It is already live.
-          }
-        } @else {
-          {{ failedCount() }} of {{ rows().length }} checks failed.
-        }
-        <span class="source"
-          >Paper P&amp;L from
-          {{
-            r.source === 'shadow'
-              ? 'its paper book'
-              : r.source === 'portfolio'
-                ? 'the shared portfolio'
-                : 'nowhere (no paper period)'
-          }}.</span
-        >
-      </p>
-      <ul class="checks" aria-label="Go-live checks">
-        @for (c of rows(); track c.name) {
-          <li [class.failed]="!c.passed">
-            <div class="check-head">
-              <span class="check-label">{{ c.label }}</span>
-              <app-status-pill [status]="c.passed ? 'pass' : 'fail'" />
-            </div>
-            @if (c.name !== 'status') {
-              <dl class="check-figures">
-                <div>
-                  <dt>Value</dt>
-                  <dd class="num check-value">{{ c.value }}</dd>
-                </div>
-                <div>
-                  <dt>Limit</dt>
-                  <dd class="num check-limit">{{ c.limit }}</dd>
-                </div>
-              </dl>
-            }
-            <p class="check-detail">{{ c.detail }}</p>
-            <p class="check-measures">{{ c.measures }}</p>
-            @if (c.fix; as f) {
-              <p class="check-fix">
-                {{ f.text }}
-                @if (f.link; as l) {
-                  <a [routerLink]="l.commands" [queryParams]="l.query ?? null">{{ l.label }}</a>
-                }
-              </p>
-            }
-          </li>
-        }
-      </ul>
-      <section class="checklist panel-body" aria-labelledby="checklist-title">
-        <h3 id="checklist-title">Before you go live</h3>
-        <p class="muted checklist-lead">
-          What a reviewer reads before going live. It does not change the verdict.
-        </p>
-        <dl class="checklist-grid">
-          @for (item of checklist(); track item.key) {
-            <div [class.text]="item.text" [class.missing]="!item.recorded">
-              <dt>
-                {{ item.label }}
-                @if (item.help) {
-                  <app-help-tip [term]="item.help" />
-                }
-              </dt>
-              <dd [class.num]="!item.text">{{ item.value }}</dd>
-            </div>
-          }
-        </dl>
-      </section>
-    }
-  </section>
-
-  <!-- Broker and risk ------------------------------------------------------>
   <div class="aside span-4">
     <section class="panel" aria-labelledby="broker-title">
       <div class="panel-head">
@@ -199,47 +79,40 @@
         @let b = broker.value();
         <dl class="facts">
           <div>
-            <dt>Kind</dt>
-            <dd>{{ b.kind === 'alpaca' ? 'Alpaca' : 'Simulated' }}</dd>
+            <dt>Broker</dt>
+            <dd>{{ brokerName(b) }}</dd>
           </div>
           <div>
             <dt>Account</dt>
             <dd><app-mode-stamp [live]="realMoney(b)" /></dd>
           </div>
           <div>
-            <dt>Live trading</dt>
+            <dt>Real-money trading</dt>
             <dd>{{ b.allow_live ? 'Allowed' : 'Not allowed' }}</dd>
           </div>
           <div>
             <dt>Credentials</dt>
-            <dd>{{ b.credentials_configured ? 'Configured' : 'Not configured' }}</dd>
+            <dd>{{ b.credentials_configured ? 'Saved' : 'Not saved' }}</dd>
           </div>
         </dl>
+        <p class="panel-body muted note">
+          @if (realMoney(b)) {
+            Approving a strategy lets portfolios at this broker send real orders for it.
+          } @else {
+            Approving a strategy moves no real money here: this broker trades paper money.
+          }
+        </p>
       }
     </section>
 
-    <section class="panel" aria-labelledby="risk-title">
+    <section class="panel" aria-labelledby="limits-title">
       <div class="panel-head">
-        <h2 id="risk-title">Risk policy</h2>
+        <h2 id="limits-title">Risk limits</h2>
       </div>
-      @if (risk.error(); as err) {
-        <app-error-state
-          title="Could not load the risk policy"
-          [error]="err"
-          (retry)="risk.reload()"
-        />
-      } @else if (!risk.hasValue()) {
-        <app-loading-state label="Loading risk policy" [rows]="4" />
-      } @else {
-        <dl class="facts">
-          @for (row of riskRows(); track row.label) {
-            <div>
-              <dt>{{ row.label }}</dt>
-              <dd class="num">{{ row.value }}</dd>
-            </div>
-          }
-        </dl>
-      }
+      <p class="panel-body muted note">
+        Every order an approved strategy sends passes the risk limits first. They are set in one
+        place: <a routerLink="/settings">Settings</a>.
+      </p>
     </section>
   </div>
 </div>

@@ -159,7 +159,8 @@ export const SNAPSHOTS: Page<SnapshotView> = {
     {
       id: 7,
       tick_id: 't7',
-      taken_at: '2026-09-25T21:00:00Z',
+      taken_at: '2026-09-28T12:03:00Z',
+      as_of: '2026-09-25',
       cash: 20_000,
       positions: { 'AAPL.US': 100, 'MSFT.US': 70 },
       total_value: 100_000,

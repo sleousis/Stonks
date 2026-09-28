@@ -33,9 +33,11 @@ shadow_enabled = true
 # Fraction of each cash dividend withheld as tax in the tick and shadow
 # books (0 = credited in full; e.g. 0.15 for a treaty withholding rate).
 dividend_withholding_rate = 0.0
-# Which strategies keep a model book each tick: "shadow" (shadow strategies
-# only) or "all" non-retired strategies.
-model_books = "shadow"
+# Which strategies keep a test book (model book) each tick: "shadow" (on
+# trial only) or "all" non-retired strategies. "all" keeps an approved
+# strategy's own record visible on its page. It reuses the run's signal
+# scores, so each approved strategy adds one decision and simulated fills.
+model_books = "all"
 # How paper and model books fill (principle P21). "next_open": an order
 # decided at the close stays working and fills at the next session's open
 # through [backtest.execution] and [backtest.costs], as a backtest does. The
@@ -59,17 +61,27 @@ min_trade_weight = 0.005
 [production.risk]
 # Risk layer between strategy.decide and the broker. Sells are never blocked.
 # Weights are fractions of portfolio value before the tick's orders.
+# Protective defaults for a new install (docs/operations.md, "Safe
+# defaults"): one ticker holds at most 25%, the circuit breaker and the
+# drawdown scaler below are on. Portfolio and follow overrides can only
+# tighten them; an admin changes the system values here or in Settings.
 enabled = true
 # max_open_positions = 10          # omit for unlimited
-max_weight_per_ticker = 1.0
+max_weight_per_ticker = 0.25       # 1.0 lets one ticker take the whole book
 cash_buffer_fraction = 0.0
 min_order_notional = 0.0
 
 [production.risk.max_weight_per_asset_class]
 # crypto = 0.2                     # classes not listed are uncapped
 
-# History-aware risk rules (BL-27), all off by default. Portfolio and
-# subscription overrides can only tighten them. Examples:
+# History-aware risk rules (BL-27). The drawdown scaler is on; the others
+# are off. Portfolio and subscription overrides can only tighten them.
+[production.risk.rules.drawdown_scaling]
+# Size new buys by the drawdown from the peak: half size from 10% down,
+# no new buys from 20% down (the circuit breaker also halts there).
+schedule = [[0.10, 0.5], [0.20, 0.0]]
+
+# Examples of the rules that stay off:
 # [production.risk.rules.max_holding]
 # max_holding_bars = 60            # force-sell positions held 60+ bars
 # [production.risk.rules.sector_cap]
@@ -80,8 +92,6 @@ min_order_notional = 0.0
 # vol_cap = 0.20                   # scale buys down above 20% forecast vol
 # [production.risk.rules.risk_per_position]
 # max_risk = 0.01                  # k * ATR risk per position, fraction of equity
-# [production.risk.rules.drawdown_scaling]
-# schedule = [[0.10, 0.5], [0.20, 0.0]]   # size by drawdown from peak
 # [production.risk.rules.style_exposure]
 # max_abs_exposure = 0.5           # net style lean in z-score units (roadmap 22.4)
 # styles = ["momentum", "size", "value", "volatility"]
@@ -120,13 +130,14 @@ min_order_notional = 0.0
 # reduce_cushion = 0.10            # sell own positions below 10 % ...
 # restore_cushion = 0.20           # ... until the cushion is back at 20 %
 
-# Circuit breaker (BL-28): halts new buys after a loss. Off until a limit is
-# set. Recommended values below. A trip opens a risk_halts row the owner
-# sees and clears (`stonks halts list`, `stonks halts clear ID --reason ...`).
+# Circuit breaker (BL-28): halts new buys after a loss. On with the
+# recommended limits (comment a limit out to turn it off). A trip opens a
+# risk_halts row the owner sees and clears (`stonks halts list`,
+# `stonks halts clear ID --reason ...`). Sells and exits always pass.
 [production.risk.rules.circuit_breaker]
-# max_month_loss = 0.06            # loss from the month's first snapshot
-# max_week_loss = 0.04             # loss over week_sessions snapshots
-# max_drawdown_halt = 0.20         # drawdown from the peak, held until cleared
+max_month_loss = 0.06              # loss from the month's first snapshot
+max_week_loss = 0.04               # loss over week_sessions snapshots
+max_drawdown_halt = 0.20           # drawdown from the peak, held until cleared
 week_sessions = 5
 cooldown = "rest_of_month"         # or "none": lift once the loss is made back
 

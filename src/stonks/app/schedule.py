@@ -14,11 +14,12 @@ text; the API decides status codes and auth.
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -64,6 +65,12 @@ class RunNowView(BaseModel):
     status: str = "started"
 
 
+#: Why a job has nothing to do on this install: the intraday engine is off,
+#: live options are off, or no IB Gateway is set up. The job still fires and
+#: skips; the console groups it apart and offers no Run now.
+JobOffReason = Literal["engine_off", "options_off", "no_gateway"]
+
+
 class ScheduledJobView(BaseModel):
     name: str
     action: str
@@ -73,6 +80,12 @@ class ScheduledJobView(BaseModel):
     trigger_text: str = ""
     next_run_at: datetime | None
     next_as_of: date | None
+    off_reason: JobOffReason | None = None
+
+
+#: Who started a run: a trigger, Run now, or someone outside the scheduler
+#: (a trading run from the console's Orders page, the API or the CLI).
+RunOrigin = Literal["schedule", "run_now", "outside"]
 
 
 class ScheduledRunView(BaseModel):
@@ -82,16 +95,74 @@ class ScheduledRunView(BaseModel):
     run_key: str
     scheduled_for: datetime
     as_of: str | None
+    #: ``running``, ``succeeded``, ``skipped`` or ``failed``; a trading run
+    #: from outside the scheduler can also be ``partial``.
     status: str
     catch_up: bool
     started_at: datetime
     finished_at: datetime | None
     detail: dict[str, Any] | None
     error: str | None
+    origin: RunOrigin = "schedule"
 
     @classmethod
     def of(cls, r: RunRecord) -> ScheduledRunView:
-        return cls(**{f: getattr(r, f) for f in cls.model_fields})
+        fields = {f: getattr(r, f) for f in cls.model_fields if f != "origin"}
+        origin: RunOrigin = "run_now" if r.run_key.startswith(MANUAL_PREFIX) else "schedule"
+        return cls(**fields, origin=origin)
+
+
+#: ``tick_runs.status`` in the scheduled runs' words.
+_TICK_RUN_STATUS: dict[str, str] = {"ok": "succeeded", "partial": "partial", "error": "failed"}
+
+
+def _utc_datetime(value: str) -> datetime:
+    parsed = datetime.fromisoformat(value)
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+
+
+def outside_trading_runs(state: Any, *, job_name: str, limit: int) -> list[ScheduledRunView]:
+    """Trading runs no scheduled run started (the console, the API, the
+    CLI), newest first, as schedule rows. Only the status, the day and the
+    tick id: order and fill counts stay on the Trading runs page, which
+    scopes them to the reader's portfolios."""
+    from stonks.app.ticks import _AS_OF_SQL, _as_of
+
+    rows = state.sql(
+        f"SELECT t.*, {_AS_OF_SQL} FROM tick_runs t WHERE t.id NOT IN ("
+        " SELECT json_extract(detail_json, '$.tick_id') FROM scheduled_runs"
+        " WHERE action = 'tick' AND json_extract(detail_json, '$.tick_id') IS NOT NULL)"
+        " AND NOT (t.status = 'running' AND EXISTS ("
+        "  SELECT 1 FROM scheduled_runs WHERE action = 'tick' AND status = 'running'))"
+        " ORDER BY t.started_at DESC, t.rowid DESC LIMIT ?",
+        [limit],
+    )
+    views = []
+    for row in rows:
+        summary = json.loads(row["summary_json"]) if row["summary_json"] else {}
+        started = _utc_datetime(row["started_at"])
+        as_of = _as_of(row)
+        detail: dict[str, Any] = {"tick_id": row["id"]}
+        if "dry_run" in summary:
+            detail["dry_run"] = bool(summary["dry_run"])
+        views.append(
+            ScheduledRunView(
+                id=row["id"],
+                job_name=job_name,
+                action="tick",
+                run_key=f"outside:{row['id']}",
+                scheduled_for=started,
+                as_of=as_of.isoformat() if as_of else None,
+                status=_TICK_RUN_STATUS.get(row["status"]) or str(row["status"]),
+                catch_up=False,
+                started_at=started,
+                finished_at=_utc_datetime(row["finished_at"]) if row["finished_at"] else None,
+                detail=detail,
+                error=summary.get("error"),
+                origin="outside",
+            )
+        )
+    return views
 
 
 #: The console's "market opens soon" window starts this long before the open.
@@ -122,6 +193,8 @@ class ScheduleView(BaseModel):
     backend: str
     #: True while this API process hosts the scheduler loop.
     hosted: bool
+    #: A scheduler (here or on its own) heartbeated lately or is running a job.
+    running: bool = False
     jobs: list[ScheduledJobView]
     recent: list[ScheduledRunView]
     #: Market session times from the calendar (null if it cannot be read).
@@ -226,16 +299,61 @@ class ScheduleService:
                     trigger_text=spec.trigger.plain(),
                     next_run_at=fire.scheduled_for if fire else None,
                     next_as_of=fire.as_of if fire else None,
+                    off_reason=self._off_reason(spec.action),
                 )
             )
-        recent = self._store().recent(limit=min(limit, RECENT_RUNS_MAX))
+        limit = min(limit, RECENT_RUNS_MAX)
+        store = self._store()
+        recent = [ScheduledRunView.of(r) for r in store.recent(limit=limit)]
+        recent = sorted(
+            recent + self._outside_runs(jobs, limit), key=lambda r: r.started_at, reverse=True
+        )[:limit]
         return ScheduleView(
             backend=resolve_backend(self.config, os.environ),
             hosted=self.handle is not None,
+            running=self._scheduler_running(store, recent, now),
             jobs=jobs,
-            recent=[ScheduledRunView.of(r) for r in recent],
+            recent=recent,
             market=self.market_sessions(now),
         )
+
+    def _off_reason(self, action: str) -> JobOffReason | None:
+        settings = self._ctx.settings
+        if action in ("engine_start", "engine_stop") and not settings.engine.enabled:
+            return "engine_off"
+        if action == "options_live" and not settings.production.options.live:
+            return "options_off"
+        if (
+            action in ("broker_health", "ibkr_reauth_reminder", "ingest_borrow")
+            and not settings.brokers.ibkr.gateways
+        ):
+            return "no_gateway"
+        return None
+
+    def _outside_runs(self, jobs: list[ScheduledJobView], limit: int) -> list[ScheduledRunView]:
+        """Trading runs started outside the scheduler, named after the
+        trading run job so its Last run counts them too."""
+        job_name = next((j.name for j in jobs if j.action == "tick"), "tick")
+        try:
+            with self._ctx.state() as state:
+                return outside_trading_runs(state, job_name=job_name, limit=limit)
+        except Exception as exc:  # the schedule still renders without them
+            _log.warning("schedule.outside_runs_failed", error_type=type(exc).__name__)
+            return []
+
+    def _scheduler_running(
+        self, store: RunStore, recent: list[ScheduledRunView], now: datetime
+    ) -> bool:
+        """A fresh heartbeat, or a scheduled run in progress (the heartbeat
+        is written between jobs, so a long trading run is not a silence)."""
+        if any(r.status == "running" and r.origin != "outside" for r in recent):
+            return True
+        silence = max(timedelta(minutes=5), timedelta(seconds=3 * self.config.watchdog_seconds))
+        try:
+            return scheduler_liveness(store, now=now, max_silence=silence).ok
+        except Exception as exc:
+            _log.warning("schedule.liveness_failed", error_type=type(exc).__name__)
+            return False
 
     def market_sessions(self, now: datetime | None = None) -> MarketSessionsView | None:
         """Pre-open, open and close for today and the next session, from

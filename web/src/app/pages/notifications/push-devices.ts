@@ -7,7 +7,6 @@ import {
   resource,
   signal,
 } from '@angular/core';
-import { RouterLink } from '@angular/router';
 import { SwPush } from '@angular/service-worker';
 import { firstValueFrom } from 'rxjs';
 
@@ -72,15 +71,15 @@ export function isThisBrowser(
 @Component({
   selector: 'app-push-devices',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatusPill, PermissionNote, LoadingState, EmptyState, ErrorState],
+  imports: [StatusPill, PermissionNote, LoadingState, EmptyState, ErrorState],
   template: `
     <section class="panel" aria-labelledby="devices-title">
       <div class="panel-head">
-        <h2 id="devices-title">Your devices</h2>
+        <h3 id="devices-title">Your devices</h3>
       </div>
       <p class="lead">
-        These browsers and apps get push notifications. To turn push on in this browser, go to
-        <a routerLink="/settings">Settings</a>.
+        These browsers and apps get push notifications. Turn push on in each browser or phone with
+        Push on this device, above.
       </p>
       @if (devices.error(); as err) {
         <app-error-state title="Could not load devices" [error]="err" (retry)="devices.reload()" />
@@ -89,10 +88,8 @@ export function isThisBrowser(
       } @else if (devices.value().length === 0) {
         <app-empty-state
           title="No devices yet"
-          message="Turn on notifications in Settings on each phone or computer you use. It shows here once it is set up."
-        >
-          <a class="btn" routerLink="/settings">Open Settings</a>
-        </app-empty-state>
+          message="Turn on push above, on each phone or computer you use. Each one shows here once it is set up."
+        />
       } @else {
         <ul class="devices">
           @for (d of devices.value(); track d.id) {
@@ -225,7 +222,7 @@ export class PushDevices implements OnInit {
     const ok = await this.confirm.confirm({
       title: `Remove ${name}?`,
       message: self
-        ? 'This browser stops getting push notifications. You can turn them on again in Settings.'
+        ? 'This browser stops getting push notifications. You can turn them on again on this page.'
         : 'That device stops getting push notifications. Everything still shows here in the feed.',
       confirmLabel: 'Remove device',
       tone: 'danger',

@@ -15,11 +15,8 @@ export default [
         title: 'New order',
         loadComponent: () => import('./manual-ticket.page').then((m) => m.ManualTicketPage),
       },
-      {
-        path: 'drafts',
-        title: 'Order drafts',
-        loadComponent: () => import('./order-drafts.page').then((m) => m.OrderDraftsPage),
-      },
+      // Suggested orders wait in the one Approvals inbox now (F9).
+      { path: 'drafts', redirectTo: '/tickets' },
       {
         path: 'fills',
         title: 'Fills',

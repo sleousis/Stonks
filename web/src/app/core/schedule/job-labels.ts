@@ -15,14 +15,41 @@ export const JOB_LABELS: Readonly<Record<string, string>> = {
   health: 'Health check',
   report: 'Daily report',
   backup: 'Backup',
+  broker_health: 'Broker gateway check',
+  ibkr_reauth_reminder: 'Broker sign-in reminder',
+  ingest_borrow: 'Borrow rates update',
+  price_alerts: 'Price alerts',
+  model_retrain: 'Model retraining',
+  live_reconcile: 'Broker check',
+  calendars_refresh: 'Calendar update',
+  live_submit: 'Send approved orders',
+  live_stops: 'Protective stops',
+  options_live: 'Options expiries and rolls',
+  live_gate_days: 'Stage progress',
+  live_margin: 'Margin check',
+  engine_start: 'Intraday engine start',
+  engine_stop: 'Intraday engine stop',
+};
+
+/**
+ * Words for default jobs that share an action, so the two broker checks
+ * and the two options jobs never read alike.
+ */
+export const JOB_NAME_LABELS: Readonly<Record<string, string>> = {
+  live_sod_check: 'Broker check before the open',
+  live_eod_check: 'Broker check after the close',
+  options_expiry_watch: 'Options expiry watch',
 };
 
 /** The action that places orders. */
 export const TRADING_RUN_ACTION = 'tick';
 
-/** "Trading run" for a tick job, else the action's label, else the job name humanized. */
+/**
+ * A default job's own words, else "Trading run" for a tick job or the
+ * action's label, else the job name humanized. Never an id.
+ */
 export function jobLabel(job: Pick<ScheduledJobView, 'action' | 'name'>): string {
-  return JOB_LABELS[job.action] ?? humanize(job.name);
+  return JOB_NAME_LABELS[job.name] ?? JOB_LABELS[job.action] ?? humanize(job.name);
 }
 
 /**

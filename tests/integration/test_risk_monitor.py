@@ -165,7 +165,19 @@ def test_health_passes_without_enough_scored_days(state, market):
     _book(state, days[-1], 10.0)
     record_risk_snapshots(state, lake, days[-1], [PF])
     health = check_health(state, lake, [], HealthConfig(), now=datetime(2027, 1, 1, tzinfo=UTC))
-    assert {c.name: c.ok for c in health.checks}["var_violations"] is True
+    check = {c.name: c for c in health.checks}["var_violations"]
+    # Passing for lack of data says so, so the console can show "Not enough data yet".
+    assert check.ok is True and check.detail == "not enough days yet"
+
+
+def test_health_says_the_ratio_is_in_the_band_once_judged(state, market):
+    lake, days, _ = market
+    for day in days[-80:]:
+        _book(state, day, 10.0, cash=0.0)
+        record_risk_snapshots(state, lake, day, [PF])
+    health = check_health(state, lake, [], HealthConfig(), now=datetime(2027, 1, 1, tzinfo=UTC))
+    check = {c.name: c for c in health.checks}["var_violations"]
+    assert check.ok is True and check.detail == "within band"
 
 
 def test_decay_alerts_when_the_sleeve_loses_money_for_weeks(state, lake):

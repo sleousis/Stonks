@@ -42,10 +42,12 @@ import { StatusPill } from '../../shared/ui/status-pill';
 import { BacktestFormView } from './backtest-form';
 import { BacktestResultView } from '../../shared/lab-results/backtest-result';
 import { LabRunFormView } from './lab-run-form';
-import { LabRunResultView } from '../../shared/lab-results/lab-run-result';
+import { SimpleTestFormView } from './simple-test-form';
+import { LabRunResultView, heldUp } from '../../shared/lab-results/lab-run-result';
 import { SignalIcResult } from '../../shared/lab-results/signal-ic-result';
 import { testLabel } from '../../shared/lab-results/survival-tests';
-import { type LabRunForm, SUITES, formFromRequest } from './lab-requests';
+import { type LabRunForm, SUITES, formFromRequest, strategyTitle } from './lab-requests';
+import { strategyDisplayName } from '../../shared/strategy-names';
 import { SweepResult } from '../../shared/lab-results/sweep-result';
 import { LabNav } from './lab-nav';
 import { type StrategyPreset, presetFromStrategy } from './strategy-preset';
@@ -77,12 +79,18 @@ export function nextStep(result: LabRunView): NextStep {
   if (result.registered_strategy_id) {
     return { kind: 'paper', strategyId: result.registered_strategy_id };
   }
-  if (result.verdict === 'pass') return { kind: 'passed' };
+  if (heldUp(result)) return { kind: 'passed' };
   return {
     kind: 'failed',
     failed: result.survival_reports.filter((r) => !r.passed).map((r) => testLabel(r.test_id)),
     total: result.survival_reports.length,
   };
+}
+
+/** "It failed 1 of 3 robustness tests: Walk-forward." */
+export function failedText(n: Extract<NextStep, { kind: 'failed' }>): string {
+  const head = `It failed ${n.failed.length} of ${n.total} robustness ${n.total === 1 ? 'test' : 'tests'}`;
+  return n.failed.length ? `${head}: ${n.failed.join(', ')}.` : `${head}.`;
 }
 
 const SUITE_PARAMS = new Set(['quick', 'standard', 'promotion']);
@@ -104,18 +112,27 @@ export function kindLabel(kind: string): string {
   return KIND_LABELS[kind] ?? kind;
 }
 
-/** Strategy a lab job ran, from its stored request: class name or strategy id. */
-export function jobStrategy(job: Pick<Job, 'params'>): string {
+/**
+ * Strategy a lab job ran, from its stored request: the catalog's plain name
+ * for its class (when `titles` knows it), else the class name, or a saved
+ * strategy's display name.
+ */
+export function jobStrategy(
+  job: Pick<Job, 'params'>,
+  titles: ReadonlyMap<string, string> = new Map(),
+): string {
+  const name = (classPath: string) =>
+    titles.get(classPath) ?? classPath.split(':').at(-1) ?? classPath;
   if (!('strategy' in job.params) && 'start' in job.params) {
     // A sweep: its strategy list, or every strategy.
     const list = job.params['strategies'] as string[] | null | undefined;
     if (!list?.length) return 'All strategies';
-    return list.length === 1 ? (list[0].split(':').at(-1) ?? list[0]) : `${list.length} strategies`;
+    return list.length === 1 ? name(list[0]) : `${list.length} strategies`;
   }
   const ref = job.params['strategy'] as
     { class_path?: string | null; strategy_id?: string | null } | undefined;
-  if (ref?.strategy_id) return ref.strategy_id;
-  if (ref?.class_path) return ref.class_path.split(':').at(-1) ?? ref.class_path;
+  if (ref?.strategy_id) return strategyDisplayName(ref.strategy_id);
+  if (ref?.class_path) return name(ref.class_path);
   return '–';
 }
 
@@ -138,6 +155,7 @@ export function canCancel(kind: string, status: string | null | undefined): bool
     ErrorState,
     BacktestFormView,
     LabRunFormView,
+    SimpleTestFormView,
     BacktestResultView,
     LabRunResultView,
     SweepResult,
@@ -154,6 +172,7 @@ export class LabPage {
   private readonly session = inject(SessionService);
   /** Starting and cancelling lab jobs needs `lab.run`. */
   protected readonly canRun = computed(() => this.session.can('lab.run'));
+  protected readonly isAdmin = computed(() => this.session.isAdmin());
   private readonly system = inject(SystemService);
   private readonly universesApi = inject(UniversesService);
   private readonly strategiesApi = inject(StrategiesService);
@@ -181,6 +200,14 @@ export class LabPage {
   readonly universe = input<string | undefined>();
   protected readonly mode = linkedSignal<FormKind>(() =>
     this.suiteParam() || this.universe() ? 'lab_run' : 'backtest',
+  );
+  /**
+   * Simple (pick, run, read a plain verdict) or Advanced (every setting).
+   * A saved strategy or a suite from a link opens Advanced; otherwise the
+   * viewer's last choice, simple at first.
+   */
+  protected readonly view = linkedSignal<LabView>(() =>
+    this.strategy() || this.suiteParam() ? 'advanced' : readView(),
   );
   /** Fields the lab-run form starts from: the query's suite and universe, or a re-run. */
   protected readonly prefill = linkedSignal<Partial<LabRunForm> | null>(() => {
@@ -235,6 +262,39 @@ export class LabPage {
   protected readonly costModelList = computed(() =>
     this.costModels.hasValue() ? this.costModels.value() : [],
   );
+  /** How many tests the Standard suite runs, from the server's presets. */
+  private readonly presets = resource({ loader: () => this.lab.survivalPresets() });
+  protected readonly standardCount = computed(() => {
+    const standard = this.presets.hasValue()
+      ? this.presets.value().find((p) => p.name === 'standard')
+      : undefined;
+    return standard?.tests.length ?? SUITES.find((s) => s.id === 'standard')!.tests.length;
+  });
+  /** Class path to the catalog's plain name, for toasts and the history. */
+  private readonly titles = computed(
+    () =>
+      new Map(
+        (this.classes.hasValue() ? this.classes.value() : []).map((c) => [
+          c.class_path,
+          strategyTitle(c),
+        ]),
+      ),
+  );
+  /** Strategy id (`momentum`) to its plain name, for sweep rows. */
+  protected readonly titlesById = computed(
+    () =>
+      new Map(
+        (this.classes.hasValue() ? this.classes.value() : []).map((c) => [
+          c.name,
+          strategyTitle(c),
+        ]),
+      ),
+  );
+  /** The saved strategy being tested again, by name. */
+  protected readonly presetName = computed(() => {
+    const p = this.strategyPreset();
+    return p ? strategyDisplayName(p.strategyId) : '';
+  });
 
   // History ---------------------------------------------------------------
   protected readonly history = resource({
@@ -252,7 +312,7 @@ export class LabPage {
   protected readonly historyColumns: TableColumn<Job>[] = [
     { key: 'created_at', label: 'Started', format: 'datetime', mobile: 'title' },
     { key: 'kind', label: 'Kind', value: (j) => kindLabel(j.kind) },
-    { key: 'strategy', label: 'Strategy', value: (j) => jobStrategy(j) },
+    { key: 'strategy', label: 'Strategy', value: (j) => jobStrategy(j, this.titles()) },
     { key: 'status', label: 'Status' },
     {
       key: 'progress',
@@ -290,9 +350,27 @@ export class LabPage {
   protected readonly canRerun = computed(() => !!this.followed()?.params);
 
   protected readonly kindLabel = kindLabel;
-  protected readonly jobStrategy = jobStrategy;
+  protected readonly jobStrategy = (job: Pick<Job, 'params'>) => jobStrategy(job, this.titles());
+  protected readonly displayName = strategyDisplayName;
+  protected readonly failedText = failedText;
   protected readonly canCancel = canCancel;
   protected readonly isTerminal = isTerminal;
+
+  protected setView(view: LabView): void {
+    this.view.set(view);
+    writeView(view);
+  }
+
+  /** The simple form's run: a lab run on the Standard suite, never on trial. */
+  async startSimpleTest(request: LabRunRequest): Promise<void> {
+    await this.start(
+      'lab_run',
+      this.nameOf(request.strategy.class_path),
+      () => this.lab.startLabRun(request),
+      'Started a test',
+      request,
+    );
+  }
 
   protected selectMode(mode: FormKind, focus = false): void {
     this.mode.set(mode);
@@ -307,7 +385,7 @@ export class LabPage {
 
   /** A backtest is research: it starts at once, no confirmation (UX-29). */
   async startBacktest(request: BacktestRequest): Promise<void> {
-    const name = shortName(request.strategy.class_path);
+    const name = this.nameOf(request.strategy.class_path);
     await this.start(
       'backtest',
       name,
@@ -323,24 +401,24 @@ export class LabPage {
    * typed words (those are for overrides and real money).
    */
   async startLabRun(request: LabRunRequest): Promise<void> {
-    const name = shortName(request.strategy.class_path);
+    const name = this.nameOf(request.strategy.class_path);
     const always = !!request.register_strategy;
     if (always || request.register_if_passes) {
       const suiteLabel = SUITES.find((s) => s.id === request.preset)?.label;
       const suite = suiteLabel
         ? `the ${suiteLabel} suite`
-        : `${request.survival_tests?.length ?? 0} survival tests`;
+        : `${request.survival_tests?.length ?? 0} robustness tests`;
       const fetchFirst = request.ensure_data ? 'Fetches missing data first, then runs ' : 'Runs ';
       const ok = await this.confirm.confirm({
         title: always
-          ? `Start paper trading ${name} whatever the verdict?`
-          : `Start paper trading ${name} if it passes?`,
+          ? `Put ${name} on trial whatever the verdict?`
+          : `Put ${name} on trial if it passes?`,
         message:
           `${fetchFirst}${suite} on ${basket(request)}. ` +
           (always
-            ? 'When the run finishes, the fitted strategy trades on paper even if a test failed.'
-            : 'If every test passes, the fitted strategy trades on paper.') +
-          ' It decides on every trading run and places no real orders.',
+            ? 'When the run finishes, the fitted strategy goes on trial even if a test failed.'
+            : 'If every test passes, the fitted strategy goes on trial.') +
+          ' On trial, Stonks tests it on paper at every trading run. It places no real orders.',
         confirmLabel: 'Start the run',
       });
       if (!ok) return;
@@ -356,8 +434,8 @@ export class LabPage {
 
   /**
    * Fill the lab-run form from the followed run's request and bring it into
-   * view. `startPaper` ticks "Start paper trading if it passes" (on the
-   * go-live suite when the run used the quick one).
+   * view. `startPaper` ticks "Put it on trial if it passes" (on the full
+   * suite when the run used the quick one).
    */
   protected rerun(startPaper: boolean): void {
     const params = this.followed()?.params;
@@ -369,6 +447,7 @@ export class LabPage {
       if (!form.suite || form.suite === 'quick') form.suite = 'promotion';
     }
     this.prefill.set(form);
+    this.view.set('advanced');
     this.mode.set('lab_run');
     const el = this.formPanel()?.nativeElement;
     el?.scrollIntoView?.({ block: 'start' });
@@ -378,7 +457,7 @@ export class LabPage {
 
   /** Follow a job from the history table (running or finished). */
   protected open(job: Job): void {
-    void this.follow(job.id, job.kind as LabKind, jobStrategy(job), job.params);
+    void this.follow(job.id, job.kind as LabKind, this.jobStrategy(job), job.params);
     this.revealResult();
   }
 
@@ -387,7 +466,7 @@ export class LabPage {
     const ok = await this.confirm.confirm({
       title: `Cancel this ${kindLabel(kind).toLowerCase()}?`,
       message: running
-        ? `${label} stops after the current tuning trial or survival test. Nothing starts paper trading.`
+        ? `${label} stops after the current trial or robustness test. Nothing goes on trial.`
         : `${label} has not started yet and will not run.`,
       confirmLabel: 'Cancel job',
       cancelLabel: 'Keep running',
@@ -409,6 +488,12 @@ export class LabPage {
   protected reloadResult(): void {
     const f = this.followed();
     if (f) void this.loadResult(f.jobId, f.kind);
+  }
+
+  /** The catalog's plain name for a class, else its class name. */
+  private nameOf(classPath: string | null | undefined): string {
+    if (!classPath) return 'the strategy';
+    return this.titles().get(classPath) ?? classPath.split(':').at(-1) ?? classPath;
   }
 
   private async start(
@@ -497,8 +582,24 @@ export class LabPage {
   }
 }
 
-function shortName(classPath: string | null | undefined): string {
-  return classPath?.split(':').at(-1) ?? 'the strategy';
+export type LabView = 'simple' | 'advanced';
+const VIEW_KEY = 'stonks.lab.view';
+
+/** The viewer's last Lab view, kept in this browser only; simple when unknown. */
+function readView(): LabView {
+  try {
+    return globalThis.localStorage?.getItem(VIEW_KEY) === 'advanced' ? 'advanced' : 'simple';
+  } catch {
+    return 'simple';
+  }
+}
+
+function writeView(view: LabView): void {
+  try {
+    globalThis.localStorage?.setItem(VIEW_KEY, view);
+  } catch {
+    // Storage blocked: the choice lasts for this visit only.
+  }
 }
 
 /** "3 tickers" or "the sp500 universe", for confirmations. */

@@ -67,6 +67,8 @@ def vol_breakout_states(
 
 class VolatilityHawkesStrategy(SingleTickerLongFlat):
     id = "volatility_hawkes"
+    title = "Volatility burst"
+    summary = "Joins a new move that starts with a burst of volatility after a calm spell."
     hypothesis = (
         "A burst of volatility after calm often starts a new move, and "
         "joining in the direction of that move pays. Fails when bursts "

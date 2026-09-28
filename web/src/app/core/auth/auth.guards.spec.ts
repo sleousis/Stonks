@@ -3,6 +3,7 @@ import {
   type ActivatedRouteSnapshot,
   type CanActivateFn,
   type RouterStateSnapshot,
+  RedirectCommand,
   Router,
   UrlTree,
   provideRouter,
@@ -64,8 +65,12 @@ describe('auth guards', () => {
       expect(await run(adminGuard, fakeSession('signed-in', ADMIN))).toBe(true);
     });
 
-    it('sends everyone else home', async () => {
-      expect(serialize(await run(adminGuard, fakeSession('signed-in', TRADER)))).toBe('/');
+    it('shows everyone else the No access page, keeping the address (m10)', async () => {
+      const result = await run(adminGuard, fakeSession('signed-in', TRADER));
+      expect(result).toBeInstanceOf(RedirectCommand);
+      const command = result as RedirectCommand;
+      expect(serialize(command.redirectTo)).toBe('/no-access');
+      expect(command.navigationBehaviorOptions?.skipLocationChange).toBe(true);
     });
   });
 

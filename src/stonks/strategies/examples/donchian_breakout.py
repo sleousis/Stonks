@@ -40,6 +40,8 @@ from stonks.strategies.base import BaseStrategy
 
 class DonchianBreakout(BaseStrategy):
     id = "donchian_breakout"
+    title = "Channel breakout"
+    summary = "Buys when the close tops the highest close of recent weeks and rides the trend."
     applicable_asset_classes = ("commodity", "crypto", "bond")
     hypothesis = (
         "A close above the highest close of the last N bars starts a trend "

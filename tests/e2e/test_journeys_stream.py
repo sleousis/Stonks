@@ -1,4 +1,4 @@
-"""Live engine journey (roadmap 21.3.4): the admin opens the Live engine
+"""Intraday engine journey (roadmap 21.3.4): the admin opens the Intraday engine
 page from the nav. With no engine it says intraday trading is off. Then two
 engines report: one running on an always-open market, one silent for ten
 minutes. The page shows each with its stream, speed, failed steps and the
@@ -63,9 +63,9 @@ def test_the_admin_watches_the_live_engine(browse, stack, viewport):
     page = v.page
 
     v.open_nav()
-    page.get_by_role("link", name="Live engine").click()
-    expect(page.get_by_role("heading", level=1)).to_have_text("Live engine")
-    expect(page.get_by_text("No live engine running")).to_be_visible()
+    page.get_by_role("link", name="Intraday engine").click()
+    expect(page.get_by_role("heading", level=1)).to_have_text("Intraday engine")
+    expect(page.get_by_text("No intraday engine running")).to_be_visible()
     expect(page.get_by_text("Intraday trading is off")).to_be_visible()
     expect(page.get_by_role("heading", name="Intraday P&L by portfolio")).to_be_visible()
     v.check_page("live engine, none running")

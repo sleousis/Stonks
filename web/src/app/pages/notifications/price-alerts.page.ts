@@ -40,7 +40,7 @@ import { alertTitle, conditionText, targetText } from './price-alert-text';
   template: `
     <app-page-header
       title="Price alerts"
-      description="Get told when a price crosses a level or moves fast. Checked after each day's prices arrive."
+      description="Get told when a price crosses a level or moves fast. Alerts check each day's closing price after the evening data update, not live prices, so one fires the evening after the move."
     />
     <app-notifications-tabs />
 
@@ -66,7 +66,7 @@ import { alertTitle, conditionText, targetText } from './price-alert-text';
         } @else if (alerts.value().length === 0) {
           <app-empty-state
             title="No price alerts yet"
-            message="Make one with the form. It fires into your feed and on the channels you turned on."
+            message="Make one with the form. It fires into your feed and on the channels you turned on in Alert settings."
           />
         } @else {
           <ul class="alerts">

@@ -47,7 +47,7 @@ export function pointTime(bar: BarView, interval: string): string {
           }
         </h2>
         @if (bars.hasValue() && bars.value().truncated) {
-          <span class="muted count">Showing the latest {{ bars.value().bars.length }} bars</span>
+          <span class="muted count">Showing the latest {{ bars.value().bars.length }} prices</span>
         }
       </div>
       <form class="filters" (submit)="$event.preventDefault(); apply(tickerInput.value)">
@@ -109,12 +109,12 @@ export function pointTime(bar: BarView, interval: string): string {
           message="Pick one from Instruments or Coverage, or type it above."
         />
       } @else if (bars.error(); as err) {
-        <app-error-state title="Could not load bars" [error]="err" (retry)="bars.reload()" />
+        <app-error-state title="Could not load prices" [error]="err" (retry)="bars.reload()" />
       } @else if (!bars.hasValue()) {
-        <app-loading-state label="Loading bars" [rows]="6" />
+        <app-loading-state label="Loading prices" [rows]="6" />
       } @else if (bars.value().bars.length === 0) {
         <app-empty-state
-          [title]="'No ' + interval() + ' bars for ' + ticker() + ' in this range'"
+          [title]="'No ' + interval() + ' prices for ' + ticker() + ' in this range'"
           message="Widen the dates, choose another interval, or update this ticker's data below."
         />
       } @else {
@@ -241,7 +241,7 @@ export class PricePanel {
     if (!first || !last || !s) return null;
     return (
       `${this.ticker()} ${this.interval()} closes from ${first.time.slice(0, 10)} to ${last.time.slice(0, 10)}: ` +
-      `${formatMoney(first.close)} to ${s.last} (${s.change}), high ${s.high}, low ${s.low}, ${s.count} bars.`
+      `${formatMoney(first.close)} to ${s.last} (${s.change}), high ${s.high}, low ${s.low}, ${s.count} prices.`
     );
   });
 

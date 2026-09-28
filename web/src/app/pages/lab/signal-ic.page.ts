@@ -50,8 +50,9 @@ import { SignalIcFormView } from './signal-ic-form';
         </div>
         <div class="panel-body">
           <p class="lead">
-            The strategy scores every ticker on each date. We then compare its ranking with the
-            moves that followed. Research only: nothing trades and nothing starts paper trading.
+            Checks whether a strategy's scores pick the tickers that go on to do best. It scores
+            every ticker on each date, then compares that ranking with the moves that followed.
+            Nothing trades and nothing goes on trial.
           </p>
           @if (classes.error(); as err) {
             <app-error-state

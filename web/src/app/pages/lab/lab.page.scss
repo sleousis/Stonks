@@ -7,7 +7,8 @@
   max-width: 60ch;
 }
 
-// Segmented tabs in the form panel head.
+// Simple or Advanced, in the form panel head; Backtest or Lab run inside Advanced.
+.view-switch,
 .tabs {
   display: inline-flex;
   padding: 2px;
@@ -33,7 +34,8 @@
       color: var(--color-ink);
     }
 
-    &[aria-selected='true'] {
+    &[aria-selected='true'],
+    &[aria-pressed='true'] {
       background: var(--color-surface);
       color: var(--color-ink);
       box-shadow:
@@ -56,6 +58,14 @@
     button {
       min-height: var(--touch-min);
     }
+  }
+}
+
+.adv-intro {
+  padding-bottom: 0;
+
+  .lead {
+    margin-bottom: var(--space-3);
   }
 }
 

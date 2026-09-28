@@ -6,7 +6,7 @@ import type { LeaderboardRow, LeaderboardView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { nextRequest, tick } from '../../../testing/http';
 import { paper } from '../../../testing/strategy-fixtures';
-import { LeaderboardPage, goliveLabel, stageLabel } from './leaderboard.page';
+import { LeaderboardPage, goliveLabel, rowVerdict, stageLabel } from './leaderboard.page';
 
 function row(id: string, rank: number, extra: Partial<LeaderboardRow> = {}): LeaderboardRow {
   return {
@@ -34,14 +34,17 @@ const BOARD: LeaderboardView = {
 };
 
 describe('leaderboard labels', () => {
-  it('names the stage from the status and the go-live verdict', () => {
-    expect(stageLabel({ status: 'shadow', golive_passed: true })).toBe('Ready');
-    expect(stageLabel({ status: 'shadow', golive_passed: false })).toBe('Paper');
-    expect(stageLabel({ status: 'active', golive_passed: null })).toBe('Live');
-    expect(stageLabel({ status: 'retired', golive_passed: null })).toBe('Stopped');
+  it('names the status in ladder words, never Live (B1)', () => {
+    expect(stageLabel({ status: 'shadow' })).toBe('On trial');
+    expect(rowVerdict(row('a', 1, { golive_passed: true, survival_passed: 4 })).label).toBe(
+      'Worth following',
+    );
+    expect(stageLabel({ status: 'active' })).toBe('Approved');
+    expect(stageLabel({ status: 'retired' })).toBe('Retired');
+    expect(rowVerdict(row('b', 1)).label).toBe('Not good enough yet');
     expect(goliveLabel(true)).toBe('Passed');
-    expect(goliveLabel(false)).toBe('Not yet');
-    expect(goliveLabel(null)).toBe('–');
+    expect(goliveLabel(false)).toBe('Failed');
+    expect(goliveLabel(null)).toBe('Not checked');
   });
 });
 
@@ -57,7 +60,7 @@ describe('LeaderboardPage', () => {
 
   afterEach(() => http.verify());
 
-  it('ranks strategies and links each to its tear sheet', async () => {
+  it('ranks strategies and links each to its strategy page (F27)', async () => {
     const fixture = TestBed.createComponent(LeaderboardPage);
     fixture.detectChanges();
     const req = await nextRequest(http, '/api/strategies/leaderboard');
@@ -67,9 +70,13 @@ describe('LeaderboardPage', () => {
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
     const links = [...el.querySelectorAll('a.name')].map((a) => a.getAttribute('href'));
-    expect(links).toEqual(['/strategies/mom_v2/tearsheet', '/strategies/value_v1/tearsheet']);
-    expect(el.textContent).toContain('Ready');
-    expect(el.textContent).toContain('Live');
+    expect(links).toEqual(['/strategies/mom_v2', '/strategies/value_v1']);
+    expect(el.textContent).toContain('On trial');
+    expect(el.textContent).toContain('Momentum');
+    expect(el.textContent).not.toContain(':Momentum');
+    expect(el.textContent).toContain('Approved');
+    expect(el.textContent).not.toMatch(/\bLive\b/);
+    expect(el.querySelectorAll('app-strategy-verdict').length).toBe(2);
     expect(el.textContent).toContain('3 of 4');
     expect(el.textContent).toContain('+3.00%');
 

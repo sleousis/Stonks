@@ -34,9 +34,9 @@ import {
 } from './factor-requests';
 
 const SUITES: readonly { id: FactorSuite; label: string }[] = [
-  { id: 'quick', label: 'Quick: held-out data and each sub-period' },
-  { id: 'standard', label: 'Standard: adds noise, walk-forward and costs' },
-  { id: 'promotion', label: 'Go-live suite: every check, slow' },
+  { id: 'quick', label: 'Quick: unseen data and each sub-period' },
+  { id: 'standard', label: 'Standard: adds noisy prices, walk-forward and higher costs' },
+  { id: 'promotion', label: 'Full: every test the approval check asks for, slow' },
 ];
 
 /**

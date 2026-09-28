@@ -224,6 +224,11 @@ def select_magic_formula(metrics: Mapping[str, Mapping[str, Any]], *, n: int) ->
 
 class QuantValue(BaseStrategy):
     id = "quant_value"
+    title = "Deep value"
+    summary = (
+        "Holds the cheapest stocks by earnings, after screening out firms with weak accounts "
+        "or signs of distress."
+    )
     hypothesis = (
         "Systematic value beats behavioural mispricing: investors overextrapolate "
         "poor recent results, so cheap stocks by EBIT/TEV are priced too low and "

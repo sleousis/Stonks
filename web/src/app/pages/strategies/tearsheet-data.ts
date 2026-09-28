@@ -10,12 +10,12 @@ export {
   yearRows,
 } from '../../shared/ui/monthly-returns';
 
-/** The paper value as a line with its drawdown below (paper: never brass). */
+/** The test book value as a line with its drawdown below (paper money: never brass). */
 export function curveSeries(curve: readonly PnlRowView[]): ChartSeries[] {
   return [
     {
       id: 'value',
-      label: 'Paper value',
+      label: 'Test book value',
       kind: 'line',
       color: 'primary',
       format: 'money',
@@ -36,10 +36,10 @@ export function curveSeries(curve: readonly PnlRowView[]): ChartSeries[] {
 export function curveSummary(curve: readonly PnlRowView[]): string {
   const first = curve[0];
   const last = curve.at(-1);
-  if (!first || !last) return 'No paper history yet.';
+  if (!first || !last) return 'No trial history yet.';
   const worst = Math.min(...curve.map((r) => r.drawdown));
   return (
-    `Paper value from ${formatDate(first.day)} to ${formatDate(last.day)}: ` +
+    `Test book value from ${formatDate(first.day)} to ${formatDate(last.day)}: ` +
     `${formatPercent(last.cumulative_return ?? 0, { signed: true })}. ` +
     `Worst drawdown ${formatPercent(worst)}.`
   );

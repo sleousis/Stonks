@@ -156,3 +156,55 @@
   color: var(--color-ink-2);
   font-size: var(--text-xs);
 }
+
+.explain {
+  margin: 0 0 var(--space-4);
+  font-size: var(--text-sm);
+
+  summary::before {
+    content: '▸';
+    margin-right: var(--space-2);
+    color: var(--color-ink-3);
+    transition: transform 0.15s ease;
+  }
+
+  &[open] summary::before {
+    transform: rotate(90deg);
+  }
+
+  summary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    color: var(--color-ink-2);
+    cursor: pointer;
+
+    @include bp.phone {
+      min-height: var(--touch-min);
+    }
+  }
+}
+
+.explain-list {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  margin: var(--space-2) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+
+  dt {
+    font-weight: var(--weight-semibold);
+  }
+
+  dd {
+    margin: var(--space-1) 0 0;
+    color: var(--color-ink-2);
+  }
+}
+
+.hint.example {
+  margin-top: var(--space-2);
+}

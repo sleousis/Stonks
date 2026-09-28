@@ -3,30 +3,35 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource } from '
 import { PortfolioService } from '../../api/portfolio.service';
 import { formatMoney, formatNumber } from '../../core/format/format';
 import { StatTile } from '../../shared/ui/stat-tile';
-import { ErrorState, LoadingState } from '../../shared/ui/states';
+import { ErrorState } from '../../shared/ui/states';
 
-/** Admins: totals across every trader. Never anyone's holdings. */
+/**
+ * Admins: totals across every trader, under their own portfolio on Today.
+ * Never anyone's holdings. Too few traders with real money to sum without
+ * showing someone's: one quiet line, not an empty panel (M3).
+ */
 @Component({
   selector: 'app-totals-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StatTile, LoadingState, ErrorState],
+  imports: [StatTile, ErrorState],
   template: `
-    <section class="panel" aria-labelledby="home-totals">
-      <div class="panel-head">
-        <h2 id="home-totals">All traders</h2>
-      </div>
-      @if (totals.error(); as err) {
-        <app-error-state title="Could not load totals" [error]="err" (retry)="totals.reload()" />
-      } @else if (!totals.hasValue()) {
-        <app-loading-state label="Loading totals" [rows]="3" />
-      } @else if (suppressed()) {
-        <div class="panel-body body">
-          <p class="note">Totals appear once three or more traders have live money.</p>
-          <p class="hint">
-            Paper accounts are left out, and sums of fewer people would show theirs.
-          </p>
+    @if (suppressed()) {
+      <p class="line">
+        All traders: totals appear once three or more traders have real money. Paper accounts are
+        left out, and sums of fewer people would show theirs.
+      </p>
+    } @else if (totals.error(); as err) {
+      <section class="panel" aria-labelledby="home-totals">
+        <div class="panel-head">
+          <h2 id="home-totals">All traders</h2>
         </div>
-      } @else {
+        <app-error-state title="Could not load totals" [error]="err" (retry)="totals.reload()" />
+      </section>
+    } @else if (totals.hasValue()) {
+      <section class="panel" aria-labelledby="home-totals">
+        <div class="panel-head">
+          <h2 id="home-totals">All traders</h2>
+        </div>
         <div class="panel-body body">
           <div class="tiles">
             <app-stat-tile
@@ -43,8 +48,8 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
           </div>
           <p class="hint">Sums only. Admins never see anyone's holdings.</p>
         </div>
-      }
-    </section>
+      </section>
+    }
   `,
   styles: `
     :host {
@@ -66,9 +71,11 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
         grid-column: 1 / -1;
       }
     }
-    .note {
+    .line {
       margin: 0;
-      font-weight: var(--weight-medium);
+      padding: 0 var(--space-1);
+      font-size: var(--text-xs);
+      color: var(--color-ink-3);
     }
     .hint {
       font-size: var(--text-xs);

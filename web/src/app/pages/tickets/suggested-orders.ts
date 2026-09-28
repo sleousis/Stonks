@@ -3,7 +3,8 @@ import {
   Component,
   computed,
   inject,
-  resource,
+  input,
+  output,
   signal,
   viewChild,
 } from '@angular/core';
@@ -18,26 +19,13 @@ import { formatAgo, formatDateTime, formatMoney, formatNumber } from '../../core
 import { ApiError, errorMessage } from '../../core/http/api-error';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
-import { autoRefresh } from '../../shared/auto-refresh';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
-import { PermissionNote } from '../../shared/ui/permission-note';
-import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
 import { SideTag } from '../../shared/ui/side-tag';
-import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusChangeDialog } from '../../shared/ui/status-change-dialog';
 import { StatusPill, type PillTone } from '../../shared/ui/status-pill';
-import { refusalOf } from './order-refusal';
+import { refusalOf } from '../orders/order-refusal';
 
 type DraftStatus = OrderDraftView['status'];
-type Filter = DraftStatus | 'all';
-
-const FILTERS: SegmentOption<Filter>[] = [
-  { value: 'pending', label: 'Waiting' },
-  { value: 'placed', label: 'Placed' },
-  { value: 'rejected', label: 'Rejected' },
-  { value: 'expired', label: 'Expired' },
-  { value: 'all', label: 'All' },
-];
 
 const STATUS: Record<DraftStatus, { label: string; tone: PillTone }> = {
   pending: { label: 'Waiting for you', tone: 'progress' },
@@ -48,139 +36,106 @@ const STATUS: Record<DraftStatus, { label: string; tone: PillTone }> = {
 };
 
 const SOURCES: Record<OrderDraftView['source'], string> = {
-  assistant: 'The assistant',
-  console: 'You, in the console',
-  mcp: 'An agent tool',
+  assistant: 'the assistant',
+  console: 'you, in the console',
+  mcp: 'an agent tool',
 };
 
+/** A suggested order's status in trader words, with its pill tone. */
 export function draftStatus(status: DraftStatus): { label: string; tone: PillTone } {
   return STATUS[status] ?? { label: status, tone: 'neutral' };
 }
 
+/** Who suggested the order, in lower case to sit inside a sentence. */
 export function draftSource(source: OrderDraftView['source']): string {
   return SOURCES[source] ?? source;
 }
 
 /**
- * Orders the assistant proposed, waiting for you. Nothing trades until you
- * approve one here: approving asks for a fresh code, shows the order ticket,
- * then places it as a manual order through every halt and risk rule. A
- * refused order leaves the draft rejected with the reason.
+ * Suggested orders (F9): orders the assistant or an agent tool proposed,
+ * shown in the one Approvals inbox next to the strategy tickets. Nothing
+ * trades until the person approves one here: approving asks for a fresh
+ * code, shows the order ticket, then places it as a manual order through
+ * every halt and risk rule. A refused order shows the reason on its card.
+ * The page owns the list; `changed` asks it to read the list again.
  */
 @Component({
-  selector: 'app-order-drafts-page',
+  selector: 'app-suggested-orders',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [
-    RouterLink,
-    Segmented,
-    SideTag,
-    ModeStamp,
-    StatusPill,
-    PermissionNote,
-    LoadingState,
-    EmptyState,
-    ErrorState,
-    StatusChangeDialog,
-  ],
+  imports: [RouterLink, SideTag, ModeStamp, StatusPill, StatusChangeDialog],
   template: `
-    <section class="panel" aria-labelledby="drafts-title">
-      <div class="panel-head">
-        <h2 id="drafts-title">Order drafts</h2>
-        <app-segmented label="Show drafts" [options]="filters" [(value)]="filter" />
-      </div>
-      <p class="lead">
-        Orders the assistant proposed. Nothing trades until you approve one, with a fresh code from
-        your authenticator app.
-      </p>
-
-      @if (drafts.error(); as err) {
-        <app-error-state title="Could not load drafts" [error]="err" (retry)="drafts.reload()" />
-      } @else if (!drafts.hasValue()) {
-        <app-loading-state label="Loading drafts" [rows]="3" />
-      } @else if (drafts.value().length === 0) {
-        <app-empty-state
-          [title]="filter() === 'pending' ? 'Nothing waiting for you' : 'No drafts here'"
-          message="When the assistant proposes an order, it waits here for your approval."
-        />
-      } @else {
-        <ul class="drafts">
-          @for (d of drafts.value(); track d.id) {
-            <li>
-              <article
-                class="ticket"
-                [class.live]="isLive(d)"
-                [attr.aria-labelledby]="'draft-' + d.id"
-              >
-                <p class="ticket-head">
-                  <span class="ticket-kind" [id]="'draft-' + d.id">
-                    {{ d.side === 'buy' ? 'Buy' : 'Sell' }} {{ num(d.quantity) }} {{ d.ticker }}
-                  </span>
-                  <app-side-tag [side]="d.side" />
-                  <app-mode-stamp [live]="isLive(d)" />
-                </p>
-                <dl class="ticket-lines">
-                  @for (line of lines(d); track line.label) {
-                    <div>
-                      <dt>{{ line.label }}</dt>
-                      <dd class="num">{{ line.value }}</dd>
-                    </div>
-                  }
-                </dl>
-                <p class="why"><span class="muted">Why:</span> {{ d.reason }}</p>
-                <p class="meta">
-                  <app-status-pill
-                    [status]="d.status"
-                    [label]="statusOf(d).label"
-                    [tone]="statusOf(d).tone"
-                  />
-                  <span class="muted">
-                    From {{ sourceOf(d) }}, {{ ago(d.created_at) }}.
-                    @if (d.status === 'pending') {
-                      Expires {{ when(d.expires_at) }}.
-                    } @else if (d.decision_note) {
-                      {{ d.decision_note }}
-                    }
-                  </span>
-                </p>
-                @if (problems()[d.id]; as p) {
-                  <p class="failure" role="alert">{{ p }}</p>
-                }
-                @if (d.client_id) {
-                  <a class="btn btn-ghost" [routerLink]="['/trades/orders', d.client_id]"
-                    >Open the order</a
-                  >
-                }
+    <ul class="tickets">
+      @for (d of drafts(); track d.id) {
+        <li>
+          <article class="ticket" [class.live]="isLive(d)" [attr.aria-labelledby]="'draft-' + d.id">
+            <p class="ticket-head">
+              <app-side-tag [side]="d.side" />
+              <span class="ticket-kind" [id]="'draft-' + d.id">
+                <span class="verb">{{ d.side === 'buy' ? 'Buy' : 'Sell' }}</span>
+                <span class="num">{{ num(d.quantity) }}</span>
+                <strong class="num">{{ d.ticker }}</strong>
+              </span>
+              <app-mode-stamp [live]="isLive(d)" />
+            </p>
+            <p class="source"><span class="source-tag">Suggested</span> by {{ sourceOf(d) }}</p>
+            <dl class="ticket-lines">
+              @for (line of lines(d); track line.label) {
+                <div>
+                  <dt>{{ line.label }}</dt>
+                  <dd class="num">{{ line.value }}</dd>
+                </div>
+              }
+            </dl>
+            <p class="why"><span class="muted">Why:</span> {{ d.reason }}</p>
+            <p class="meta">
+              <app-status-pill
+                [status]="d.status"
+                [label]="statusOf(d).label"
+                [tone]="statusOf(d).tone"
+              />
+              <span class="muted">
+                {{ ago(d.created_at) }}.
                 @if (d.status === 'pending') {
-                  <div class="actions">
-                    <button
-                      type="button"
-                      class="btn"
-                      [disabled]="busy() === d.id || !canReject()"
-                      (click)="reject(d)"
-                    >
-                      Reject<span class="visually-hidden"> the draft for {{ d.ticker }}</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="btn"
-                      [class.btn-danger]="isLive(d)"
-                      [class.btn-primary]="!isLive(d)"
-                      [disabled]="busy() === d.id || !canApprove()"
-                      (click)="approve(d)"
-                    >
-                      Approve and place<span class="visually-hidden">
-                        the draft for {{ d.ticker }}</span
-                      >
-                    </button>
-                  </div>
+                  Expires {{ when(d.expires_at) }}.
+                } @else if (d.decision_note) {
+                  {{ d.decision_note }}
                 }
-              </article>
-            </li>
-          }
-        </ul>
-        <div class="note-row"><app-permission-note permission="orders.approve" /></div>
+              </span>
+            </p>
+            @if (problems()[d.id]; as p) {
+              <p class="failure" role="alert">{{ p }}</p>
+            }
+            @if (d.client_id) {
+              <a class="btn btn-ghost" [routerLink]="['/trades/orders', d.client_id]"
+                >Open the order</a
+              >
+            }
+            @if (d.status === 'pending') {
+              <div class="actions">
+                <button
+                  type="button"
+                  class="btn"
+                  [disabled]="busy() === d.id || !canReject()"
+                  (click)="reject(d)"
+                >
+                  Reject<span class="visually-hidden"> the suggested order for {{ d.ticker }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-primary"
+                  [disabled]="busy() === d.id || !canApprove()"
+                  (click)="approve(d)"
+                >
+                  Approve<span class="visually-hidden">
+                    the suggested order for {{ d.ticker }}</span
+                  >
+                </button>
+              </div>
+            }
+          </article>
+        </li>
       }
-    </section>
+    </ul>
     <app-status-change-dialog />
   `,
   styles: `
@@ -189,24 +144,41 @@ export function draftSource(source: OrderDraftView['source']): string {
       display: block;
       min-width: 0;
     }
-    .panel-head {
-      flex-wrap: wrap;
-      gap: var(--space-2);
+    .tickets {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-3);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+
+      @include bp.from-tablet {
+        grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+      }
     }
-    .lead {
-      padding: var(--space-3) var(--space-4) 0;
+    .ticket-kind {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: var(--space-1) var(--space-2);
+      color: var(--color-ink);
+      font-size: var(--text-md);
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .source {
       color: var(--color-ink-2);
       font-size: var(--text-sm);
     }
-    .drafts {
-      display: grid;
-      gap: var(--space-4);
-      margin: 0;
-      padding: var(--space-4);
-      list-style: none;
-      @include bp.from-desktop {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
+    .source-tag {
+      display: inline-block;
+      margin-right: var(--space-1);
+      padding: 0 var(--space-2);
+      border: 1px solid var(--color-border-strong);
+      border-radius: var(--radius-xs);
+      color: var(--color-ink);
+      font-size: var(--text-xs);
+      font-weight: var(--weight-medium);
     }
     .why {
       overflow-wrap: anywhere;
@@ -219,10 +191,15 @@ export function draftSource(source: OrderDraftView['source']): string {
       font-size: var(--text-sm);
     }
     .actions {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: flex-end;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: var(--space-2);
+      padding-top: var(--space-2);
+      border-top: 1px dashed var(--color-border-strong);
+    }
+    .actions .btn {
+      min-height: var(--touch-min);
+      justify-content: center;
     }
     .failure {
       padding: var(--space-2) var(--space-3);
@@ -230,12 +207,9 @@ export function draftSource(source: OrderDraftView['source']): string {
       background: var(--color-loss-soft);
       overflow-wrap: anywhere;
     }
-    .note-row {
-      padding: 0 var(--space-4) var(--space-3);
-    }
   `,
 })
-export class OrderDraftsPage {
+export class SuggestedOrders {
   private readonly api = inject(OrderDraftsService);
   private readonly ctx = inject(PortfolioContextService);
   private readonly session = inject(SessionService);
@@ -244,25 +218,24 @@ export class OrderDraftsPage {
   private readonly toasts = inject(ToastService);
   private readonly dialog = viewChild.required(StatusChangeDialog);
 
-  protected readonly filters = FILTERS;
-  protected readonly filter = signal<Filter>('pending');
-  protected readonly drafts = resource({
-    params: () => ({ status: this.filter() }),
-    loader: ({ params }) => this.api.list(params.status === 'all' ? undefined : params.status),
-  });
-  protected readonly auto = autoRefresh(() => [this.drafts]);
+  /** The suggested orders to show, newest first. */
+  readonly drafts = input.required<readonly OrderDraftView[]>();
+  /** An order was approved or rejected: read the list again. */
+  readonly changed = output<void>();
+
   protected readonly busy = signal<string | null>(null);
-  /** The last failure per draft, shown on its ticket. */
+  /** The last failure per suggested order, shown on its card. */
   protected readonly problems = signal<Record<string, string>>({});
   protected readonly canApprove = computed(() => this.session.can('orders.approve'));
   protected readonly canReject = computed(() => this.session.can('portfolio.trade'));
 
   protected readonly num = (v: number) => formatNumber(v);
-  protected readonly ago = (v: string) => formatAgo(v);
+  protected readonly ago = (v: string) => capitalise(formatAgo(v));
   protected readonly when = (v: string) => formatDateTime(v);
   protected readonly statusOf = (d: OrderDraftView) => draftStatus(d.status);
   protected readonly sourceOf = (d: OrderDraftView) => draftSource(d.source);
 
+  /** Real money: the order's portfolio trades at a real broker. Brass is for this only. */
   protected isLive(d: OrderDraftView): boolean {
     return this.ctx.options().find((p) => p.id === d.portfolio_id)?.trading === 'live';
   }
@@ -308,7 +281,7 @@ export class OrderDraftsPage {
       title: `${d.side === 'buy' ? 'Buy' : 'Sell'} ${formatNumber(d.quantity)} ${d.ticker}?`,
       message: live
         ? 'Approving places this order at your broker with real money, through every check.'
-        : 'Approving places this order in your paper portfolio, through every check.',
+        : 'Approving places this order in your paper portfolio, through every check. No real money moves.',
       confirmLabel: 'Approve and place',
       tone: live ? 'danger' : 'default',
       typedConfirmation: live ? d.ticker : undefined,
@@ -337,29 +310,33 @@ export class OrderDraftsPage {
       }
     } finally {
       this.busy.set(null);
-      this.drafts.reload();
+      this.changed.emit();
     }
   }
 
   protected async reject(d: OrderDraftView): Promise<void> {
     const body = await this.dialog().open({
-      title: `Reject the draft for ${d.ticker}?`,
+      title: `Reject the suggested order for ${d.ticker}?`,
       message: 'Nothing is placed. The assistant sees that you said no.',
-      confirmLabel: 'Reject draft',
+      confirmLabel: 'Reject',
       tone: 'danger',
       minReason: 0,
-      reasonHint: 'Optional. Kept with the draft.',
+      reasonHint: 'Optional. Kept with the suggested order.',
     });
     if (!body) return;
     this.busy.set(d.id);
     try {
       await this.api.reject(d.id, body.reason || undefined);
-      this.toasts.success(`Rejected the draft for ${d.ticker}.`);
-      this.drafts.reload();
+      this.toasts.success(`Rejected the suggested order for ${d.ticker}.`);
+      this.changed.emit();
     } catch {
       // The error interceptor already showed the API's message.
     } finally {
       this.busy.set(null);
     }
   }
+}
+
+function capitalise(text: string): string {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }

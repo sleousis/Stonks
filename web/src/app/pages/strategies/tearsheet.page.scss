@@ -1,5 +1,10 @@
 @use 'breakpoints' as bp;
 
+.verdict-card {
+  margin-bottom: var(--space-4);
+  overflow: hidden;
+}
+
 .tiles {
   display: grid;
   gap: var(--space-3);

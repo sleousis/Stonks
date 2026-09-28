@@ -19,6 +19,8 @@ export type RoutePermission =
   | 'portfolio.totals'
   | 'portfolio.trade'
   | 'risk.reset'
+  | 'settings.manage'
+  | 'settings.read'
   | 'strategy.promote'
   | 'tokens.manage'
   | 'tokens.revoke'
@@ -68,6 +70,8 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'GET /api/reconcile/reports/{report_id}': 'data.read',
   'GET /api/risk/intraday': 'data.read',
   'GET /api/screener/jobs/{job_id}/result': 'data.read',
+  'GET /api/settings/system': 'settings.read',
+  'GET /api/settings/system/{key}': 'settings.read',
   'GET /api/stream/status': 'data.read',
   'GET /api/subscriptions': 'data.read',
   'PATCH /api/auth/users/{user_id}': 'users.manage',
@@ -140,6 +144,8 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'POST /api/screener/screens': 'portfolio.manage',
   'POST /api/screener/size': 'data.read',
   'POST /api/screener/universes': 'lab.run',
+  'POST /api/settings/system/{key}/reset': 'settings.manage',
+  'POST /api/starter/install': 'operations.run',
   'POST /api/strategies/{strategy_id}/promote': 'strategy.promote',
   'POST /api/strategies/{strategy_id}/retire': 'strategy.promote',
   'POST /api/strategies/{strategy_id}/shadow': 'strategy.promote',
@@ -174,6 +180,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'PUT /api/portfolios/{portfolio_id}/live/allocation': 'live.manage',
   'PUT /api/portfolios/{portfolio_id}/live/options/approval': 'live.manage',
   'PUT /api/risk/limits': 'portfolio.manage',
+  'PUT /api/settings/system/{key}': 'settings.manage',
   'PUT /api/tax/lots/picks': 'portfolio.manage',
   'PUT /api/tax/settings': 'portfolio.manage',
   'PUT /api/tca/notes/{note_id}': 'portfolio.manage',

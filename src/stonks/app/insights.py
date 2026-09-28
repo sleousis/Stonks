@@ -25,6 +25,7 @@ from stonks.app.context import AppContext
 from stonks.app.portfolio import (
     DEFAULT_CURRENCY,
     TOTALS_PORTFOLIOS_SQL,
+    DayChangeView,
     PortfolioService,
     totals_suppressed,
 )
@@ -55,7 +56,7 @@ from stonks.insights.models import MonthlyReturn
 from stonks.insights.returns import monthly_twr, mwr, net_flows
 from stonks.logging import get_logger
 from stonks.production.ledger import ledger_filter
-from stonks.production.pnl import load_pnl
+from stonks.production.pnl import DEFAULT_MAX_GAP_DAYS, load_pnl
 
 _log = get_logger("stonks.app.insights")
 
@@ -96,6 +97,10 @@ class InsightsView(BaseModel):
     allocation: AllocationView
     exposure: Exposure
     pnl: list[PeriodPnl]
+    day_change: DayChangeView | None = Field(
+        default=None,
+        description="The headline value and day change, the same one /api/pnl carries.",
+    )
     risk: RiskView
     uncovered: list[str] = Field(description="Broker symbols no ticker maps to.")
     unpriced: list[str] = Field(description="Holdings without a price, left out of the numbers.")
@@ -169,7 +174,8 @@ class InsightsService:
         returns_as_of = _day(returns.index.max()) if not returns.empty else None
         betas = self._betas(book, returns, bench, notes)
         with self._ctx.state() as state:
-            points = [(r.day, r.total_value) for r in load_pnl(state, portfolio_id=portfolio_id)]
+            daily = load_pnl(state, portfolio_id=portfolio_id)
+            points = [(r.day, r.total_value) for r in daily]
             found, flow_missing = flows_or_missing(
                 state, portfolio_id, fx_loader=lake_fx_loader(self._ctx.lake)
             )
@@ -184,7 +190,16 @@ class InsightsService:
             notes.append(
                 f"no FX rate for a {flow_missing} deposit or withdrawal: TWR and MWR are left out"
             )
-        pnl_rows = period_pnl(points, flows)
+        pnl_rows = period_pnl(points, flows, max_gap_days=DEFAULT_MAX_GAP_DAYS)
+        headline = DayChangeView.of(daily)
+        if headline is not None:
+            # the 1d row is the headline, to the last digit
+            pnl_rows = [
+                r.model_copy(update={"change": headline.change, "change_pct": headline.change_pct})
+                if r.period == "1d"
+                else r
+                for r in pnl_rows
+            ]
         if flow_missing:
             pnl_rows = [r.model_copy(update={"twr": None}) for r in pnl_rows]
         if book.uncovered:
@@ -207,6 +222,7 @@ class InsightsService:
             ),
             exposure=exposure(book, betas=betas, benchmark=bench),
             pnl=pnl_rows,
+            day_change=headline,
             risk=RiskView(
                 history=realized_risk([v for _, v in points]),
                 holdings=self._holdings_risk(book, returns),

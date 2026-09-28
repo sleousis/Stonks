@@ -2,7 +2,7 @@ import type { HaltView } from '../../api/models';
 import { killStopsText } from '../../core/halts/kill-ticket';
 
 export const HALT_KIND_LABEL: Record<HaltView['kind'], string> = {
-  kill: 'Kill switch',
+  kill: 'Stop trading',
   month_loss: 'Monthly loss',
   week_loss: 'Weekly loss',
   drawdown: 'Drawdown',

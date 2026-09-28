@@ -1,6 +1,6 @@
 <app-page-header
   title="Risk"
-  description="How close the book is to its limits, how much it could lose on a bad day, and whether the risk model has been right."
+  description="How close your portfolio is to its limits, how much it could lose on a bad day, and whether the risk model has been right."
 >
   <app-updated-ago [at]="auto.updatedAt()" />
 </app-page-header>
@@ -33,10 +33,15 @@
                 @if (r.help) {
                   <app-help-tip [term]="r.help" />
                 }
+                @if (r.yours) {
+                  <span class="yours">Your limit</span>
+                }
               </span>
               <span class="limit-figures num">
                 <span class="visually-hidden">Now </span>{{ r.now }}
-                <span class="muted"> of {{ r.limit }}</span>
+                @if (r.status !== 'none') {
+                  <span class="muted"> of {{ r.limit }}</span>
+                }
               </span>
               <span class="meter" aria-hidden="true">
                 <span [style.width]="meterWidth(r)"></span>
@@ -46,10 +51,23 @@
           }
         </ul>
         <p class="panel-body hint">
-          The limits every book trades under. Your own settings can make them tighter.
+          @if (anyYours()) {
+            Rows marked Your limit follow your own risk limits, stricter than the system's. The
+            others are the system limits every portfolio trades under.
+          } @else {
+            The system limits every portfolio trades under. You have set none of your own that are
+            stricter.
+          }
+          @if (smallestOrder(); as min) {
+            Buys worth less than {{ min }} are skipped.
+          }
+          @if (mine.error()) {
+            Your own limits could not load, so only the system limits show.
+          }
           @if (insights.error() || live.error()) {
             Some readings are missing because a panel below failed to load.
           }
+          <a routerLink="/settings">Change your risk limits</a>
         </p>
       }
     </section>
@@ -70,7 +88,7 @@
         } @else if (!live.value().portfolio) {
           <app-empty-state
             title="No risk readings yet"
-            message="Each trading run measures the book. Readings appear after the first one."
+            message="Each trading run measures the portfolio. Readings appear after the first one."
           >
             <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
           </app-empty-state>
@@ -82,7 +100,7 @@
               <dd class="num">{{ pct(b.var_95) }}</dd>
             </div>
             <div>
-              <dt>VaR 99%</dt>
+              <dt>VaR 99% <app-help-tip term="var" /></dt>
               <dd class="num">{{ pct(b.var_99) }}</dd>
             </div>
             <div>
@@ -90,11 +108,15 @@
               <dd class="num">{{ pct(b.es_95) }}</dd>
             </div>
             <div>
-              <dt>ES 99%</dt>
+              <dt>ES 99% <app-help-tip term="expected_shortfall" /></dt>
               <dd class="num">{{ pct(b.es_99) }}</dd>
             </div>
           </dl>
-          <p class="hint">One-day losses as a share of value, {{ money(b.value) }} today.</p>
+          <p class="hint">
+            One-day losses as a share of value, {{ money(b.value) }} today. VaR 95%: on 19 days out
+            of 20 the loss should be smaller. ES 95%: the average loss on the other, worst days. The
+            99% figures are the same for 99 days out of 100.
+          </p>
           <dl class="misses">
             <div>
               <dt>Beat 95% VaR <app-help-tip term="violation_ratio" /></dt>
@@ -105,7 +127,10 @@
               <dd>{{ violationText(b.violations_99, b.violation_ratio_99, b.kupiec_p_99) }}</dd>
             </div>
           </dl>
-          <p class="hint">Over the last {{ b.window_days }} days.</p>
+          <p class="hint">
+            Over the last {{ b.window_days }} days: how often a real day was worse than VaR said.
+            About 1 day in 20 is expected for 95%, so 1 times the expected rate is right.
+          </p>
           @if (b.ratio_out_of_band) {
             <p class="warning" role="note">
               The model misses far more or far less often than it should. Treat these numbers with
@@ -119,20 +144,20 @@
     <!-- Sleeves ------------------------------------------------------------->
     <section class="panel span-7" aria-labelledby="sleeves-title">
       <div class="panel-head">
-        <h2 id="sleeves-title">Strategy sleeves</h2>
+        <h2 id="sleeves-title">Each strategy's part <app-help-tip term="strategy_part" /></h2>
       </div>
       @if (live.error()) {
-        <p class="panel-body muted">Sleeves show once live risk loads.</p>
+        <p class="panel-body muted">Each strategy's part shows once live risk loads.</p>
       } @else if (!live.hasValue()) {
-        <app-loading-state label="Loading strategy sleeves" [rows]="3" />
+        <app-loading-state label="Loading each strategy's part" [rows]="3" />
       } @else if (live.value().strategies.length === 0) {
         <app-empty-state
-          title="No strategy sleeves"
-          message="Each strategy that trades this book gets its own reading after a trading run."
+          title="No strategy parts yet"
+          message="Each strategy that trades this portfolio gets its own reading after a trading run."
         />
       } @else {
         <app-data-table
-          caption="Risk of each strategy's share of the book"
+          caption="Risk of each strategy's part of the portfolio"
           [rows]="live.value().strategies"
           [columns]="sleeveColumns"
           [rowKey]="sleeveKey"

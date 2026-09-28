@@ -122,6 +122,17 @@ describe('ManualTicketPage', () => {
       (b) => b.textContent?.trim() === name,
     )!;
 
+  it('shows the picked side clearly: a solid choice and a line in words (M13)', async () => {
+    setup();
+    const el = await render();
+    const side = el.querySelector('[role="radiogroup"][aria-label="Side"]')!;
+    expect(side.getAttribute('data-emphasis')).toBe('strong');
+    expect(el.querySelector('.side-now')!.textContent).toContain('You are buying');
+    pick(el, 'Side', 'Sell');
+    expect(el.querySelector('.side-now')!.textContent).toContain('You are selling');
+    expect(el.querySelector('.side-now app-side-tag')!.textContent).toContain('Sell');
+  });
+
   it('says what is missing and sends nothing', async () => {
     setup();
     const el = await render();

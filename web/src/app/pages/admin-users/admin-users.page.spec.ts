@@ -80,6 +80,19 @@ describe('AdminUsersPage', () => {
     expect(button(rowOf(el, 'Ann'), 'Disable').disabled).toBe(false);
   });
 
+  it('says how to add the next person when the admin is alone', async () => {
+    const el = await render([ME]);
+    const note = el.querySelector('.first-run')!;
+    expect(note.textContent).toContain('Only you so far.');
+    expect(note.textContent).toContain('Use Add person');
+    expect(el.textContent).not.toContain('Ask your admin');
+  });
+
+  it('shows no first-run note once others have an account', async () => {
+    const el = await render();
+    expect(el.querySelector('.first-run')).toBeNull();
+  });
+
   it('adds a person', async () => {
     const el = await render();
     button(el, 'Add person').click();
@@ -182,13 +195,13 @@ describe('AdminUsersPage', () => {
 
   it('resets the authenticator', async () => {
     const el = await render();
-    button(rowOf(el, 'Ann'), 'Reset app').click();
+    button(rowOf(el, 'Ann'), 'Reset sign-in app').click();
     (await nextRequest(controller, '/api/auth/users/usr_1/mfa', 'DELETE')).flush(null, {
       status: 204,
       statusText: 'No Content',
     });
     await reload([{ ...ANN, mfa_enrolled: false }, ME]);
-    expect(rowOf(el, 'Ann').textContent).toContain('App not set up');
+    expect(rowOf(el, 'Ann').textContent).toContain('Sign-in app not set up');
   });
 
   it('resets a password after the email is typed', async () => {

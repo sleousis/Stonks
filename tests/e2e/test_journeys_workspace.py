@@ -54,7 +54,7 @@ def test_a_new_trader_walks_the_first_run_guide(browse, stack, viewport):
     step = page.locator(".step.open")
     sid = ACTIVE_IDS["AAA.US"]
     step.get_by_label("Strategy").select_option(sid)
-    step.get_by_label("Signals only").check()
+    step.get_by_label("Alerts only").check()
     step.get_by_role("button", name="Follow", exact=True).click()
     expect(page.locator(".step.open")).to_contain_text("Turn on alerts")
 

@@ -18,6 +18,8 @@ from stonks.strategies.base import BaseStrategy
 
 class BuyAndHold(BaseStrategy):
     id = "buy_and_hold"
+    title = "Buy and hold"
+    summary = "Buys once and holds. The yardstick every other strategy has to beat after costs."
     hypothesis = (
         "The benchmark, not a bet: holding one asset earns its risk "
         "premium. Every other strategy has to beat this after costs. It "

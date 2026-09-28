@@ -60,6 +60,8 @@ Every route that changes something names one permission. A test walks the route 
 | `killswitch.resume` | trader, admin | trade, step-up | turn the kill switch off |
 | `risk.reset` | trader, admin | trade | clear a circuit breaker or other halt |
 | `risk.global` | admin | admin | clear a global halt |
+| `settings.read` | admin | admin | read the system settings the console can change |
+| `settings.manage` | admin | admin, fresh second factor | change or reset one of them (audited; never a secret) |
 | `notifications.manage` | trader, admin | trade | push devices, preferences, quiet hours, webhook, price alerts, the Telegram link |
 | `lab.run` | trader, admin | lab | backtests, lab runs, signal IC, Studio rule drafts, cancel lab jobs |
 | `strategy.promote` | admin | admin | promote, retire, shadow, Studio register, enable, disable, lab runs that register |

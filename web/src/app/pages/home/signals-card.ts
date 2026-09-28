@@ -24,6 +24,7 @@ import { autoRefresh } from '../../shared/auto-refresh';
 import { countdown } from '../../shared/ui/session-strip';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { RUN_WORDS } from '../../shared/status-words';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FEED_LIMIT = 100;
@@ -44,15 +45,31 @@ export function todaysRuns(runs: readonly TickRun[], now = new Date()): TickRun[
   return runs.filter((r) => new Date(r.started_at).getTime() >= since);
 }
 
-/** One line of a trading run: "3 orders, 3 fills" or its error. */
+/**
+ * The orders and fills a trading run made in the reader's own portfolios
+ * (M15), or null when none of them took part. The API scopes the counts to
+ * the reader's books: `orders_placed` and `fills` are null (absent) when
+ * none of them traded, so another book's totals never show as the reader's.
+ */
+export function ownRunCounts(run: TickRun): { orders: number; fills: number } | null {
+  const s = run.summary;
+  if (!s || (s.orders_placed == null && s.fills == null)) return null;
+  return { orders: s.orders_placed ?? 0, fills: s.fills ?? 0 };
+}
+
+/**
+ * One line under a trading run: "3 orders, 3 fills" in your portfolios, or
+ * its error. Nothing when none of your portfolios traded: the title
+ * ("Trading run finished") says it all.
+ */
 export function runDetail(run: TickRun): string {
   const s = run.summary;
   if (run.status === 'running') return 'Deciding and placing orders now.';
   if (s?.error) return s.error;
-  const orders = s?.orders_placed ?? 0;
-  const fills = s?.fills ?? 0;
+  const own = ownRunCounts(run);
+  if (!own) return '';
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-  return `${plural(orders, 'order')}, ${plural(fills, 'fill')}.`;
+  return `${plural(own.orders, 'order')}, ${plural(own.fills, 'fill')} in your portfolios.`;
 }
 
 const RUN_TITLE: Record<TickRun['status'], string> = {
@@ -60,13 +77,6 @@ const RUN_TITLE: Record<TickRun['status'], string> = {
   ok: 'Trading run finished',
   partial: 'Trading run finished with problems',
   error: 'Trading run failed',
-};
-
-const RUN_STATUS: Record<TickRun['status'], string> = {
-  running: 'running',
-  ok: 'succeeded',
-  partial: 'partial',
-  error: 'failed',
 };
 
 interface BlotterRow {
@@ -78,7 +88,7 @@ interface BlotterRow {
   message: string;
   link: string | null;
   unread: boolean;
-  status: string | null;
+  status: { status: string; label: string } | null;
 }
 
 /**
@@ -144,10 +154,12 @@ interface BlotterRow {
                 } @else {
                   <span class="title">{{ r.title }}</span>
                 }
-                <p class="message">{{ r.message }}</p>
+                @if (r.message) {
+                  <p class="message">{{ r.message }}</p>
+                }
               </div>
-              @if (r.status; as status) {
-                <app-status-pill class="status" [status]="status" />
+              @if (r.status; as st) {
+                <app-status-pill class="status" [status]="st.status" [label]="st.label" />
               }
             </li>
           }
@@ -246,7 +258,9 @@ interface BlotterRow {
       min-width: 0;
     }
     .title {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
       font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
@@ -343,7 +357,7 @@ export class SignalsCard {
         message: runDetail(r),
         link: `/orders/ticks/${r.id}`,
         unread: false,
-        status: RUN_STATUS[r.status],
+        status: RUN_WORDS[r.status],
       }),
     );
     return [...signals, ...runs].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));

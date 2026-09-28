@@ -193,9 +193,15 @@ class Visit:
         return req.fetch(self.stack.base_url + path, method=method, headers=headers, **kwargs)
 
     def open_nav(self) -> None:
-        """On phones the navigation sits behind the menu button."""
+        """On phones the navigation sits behind the menu button. The rail's
+        folding groups (More, Advanced, System) open too, so every item a
+        journey clicks is on screen."""
         if self.phone:
             self.page.get_by_role("button", name="Open navigation").click()
+        nav = self.page.locator("#nav-drawer" if self.phone else "aside.sidebar")
+        folds = nav.locator("details.fold:not([open]) > summary")
+        for _ in range(folds.count()):
+            folds.nth(0).click()
 
     def check_page(self, name: str) -> None:
         """What every page must pass: no sideways scroll on phones and no
