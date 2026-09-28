@@ -42,6 +42,7 @@ universe trades on the fire's date (asset classes read from the lake).
 
 from __future__ import annotations
 
+import contextlib
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -617,14 +618,11 @@ def live_stops_action(ctx: RunContext) -> JobOutcome:
         )[0]["n"]
         if not any(b.enabled for b in books) and not working:
             return JobOutcome("skipped", {"reason": "no_live_stops"})
-        lake = _read_only_lake(ctx.settings)
-        try:
+        with contextlib.ExitStack() as stack:
+            lake = _read_lake(ctx, stack)
             result = sync_live_books(
                 state, lake, books, submit_broker_opener(ctx.settings, state), as_of=ctx.fire.as_of
             )
-        finally:
-            if lake is not None:
-                lake.close()
     finally:
         state.close()
     errors = {pid: r["error"] for pid, r in result.items() if "error" in r}
@@ -632,12 +630,23 @@ def live_stops_action(ctx: RunContext) -> JobOutcome:
     return JobOutcome("failed" if errors else "succeeded", detail)
 
 
-def _read_only_lake(settings: Any) -> Any:
-    """The lake opened read only, or ``None`` when another process holds it."""
+def _open_lake_for_reading(ctx: RunContext) -> Any:
+    """A context manager over the lake: the server's own connection when
+    the executor runs inside ``stonks serve`` (a second, read-only open is
+    refused in the process that holds it), else a read-only open."""
+    server_lake = getattr(ctx.executor, "open_lake", None)
+    if server_lake is not None:
+        return server_lake()
     from stonks.store.lake import DuckDBLake
 
+    return DuckDBLake(ctx.settings.lake.path, read_only=True)
+
+
+def _read_lake(ctx: RunContext, stack: contextlib.ExitStack) -> Any:
+    """The lake for reading, kept open on ``stack``, or ``None`` when
+    another process holds it."""
     try:
-        return DuckDBLake(settings.lake.path, read_only=True)
+        return stack.enter_context(_open_lake_for_reading(ctx))
     except Exception:
         return None
 
@@ -729,7 +738,7 @@ def live_reconcile_action(ctx: RunContext) -> JobOutcome:
             kind,
             settings=ctx.settings.production.live,
             clock=FixedClock(ctx.now),
-            actions_for=_lake_actions(ctx.settings),
+            actions_for=_lake_actions(ctx),
             settlement=ctx.settings.production.risk.rules.account_rules,
         )
     finally:
@@ -741,19 +750,18 @@ def live_reconcile_action(ctx: RunContext) -> JobOutcome:
     return JobOutcome("failed" if bad else "succeeded", detail, alerted=bool(bad))
 
 
-def _lake_actions(settings: Any) -> Any:
+def _lake_actions(ctx: RunContext) -> Any:
     """Splits for the reconciliation checks, from the lake when it can be
-    read (the API may hold it). ``None`` otherwise: ownership then counts
-    raw fills."""
+    read (another process may hold it). ``None`` otherwise: ownership then
+    counts raw fills."""
 
     def actions_for(tickers: Any) -> Any:
         from stonks.production.corporate_actions import load_corporate_actions
-        from stonks.store.lake import DuckDBLake
 
         if not tickers:
             return None
         try:
-            with DuckDBLake(settings.lake.path, read_only=True) as lake:
+            with _open_lake_for_reading(ctx) as lake:
                 return load_corporate_actions(lake, tickers)
         except Exception as exc:
             from stonks.logging import get_logger

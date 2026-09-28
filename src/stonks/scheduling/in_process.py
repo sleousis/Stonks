@@ -85,6 +85,12 @@ class InProcessExecutor(JobExecutor):
         """A stored universe's members on ``day`` (``job_universe`` resolver)."""
         return self.services.universes.members(universe_id, day).tickers
 
+    def open_lake(self) -> Any:
+        """The server's own lake connection (a context manager): the jobs
+        that run their action in this process read the lake through it,
+        since the process holding the lake cannot open it again read only."""
+        return self.services.context.lake()
+
     def asset_classes(self, universe: list[str]) -> dict[str, str]:
         with self.services.context.lake() as lake:
             return lake.get_asset_classes(universe)
