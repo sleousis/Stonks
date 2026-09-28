@@ -137,6 +137,34 @@ class JobStore:
             )
         return self.get(job_id)
 
+    def adopt(
+        self,
+        job_id: str,
+        kind: str,
+        params: dict[str, Any],
+        *,
+        owner_id: str | None,
+        created_at: datetime,
+    ) -> Job:
+        """A ``running`` copy of a job claimed on another server, under its
+        own id: a remote lab worker runs it here through
+        :meth:`JobRunner.run_claimed` and reports the outcome back."""
+        now = _now()
+        with self._state() as s:
+            s.execute(
+                "INSERT INTO jobs (id, kind, params_json, status, progress, created_at,"
+                " started_at, owner_id) VALUES (?, ?, ?, 'running', 0, ?, ?, ?)",
+                [
+                    job_id,
+                    kind,
+                    json.dumps(to_jsonable(params), sort_keys=True),
+                    created_at.astimezone(UTC).isoformat(timespec="microseconds"),
+                    now,
+                    owner_id,
+                ],
+            )
+        return self.get(job_id)
+
     def claim(self, job_id: str) -> bool:
         """``queued`` → ``running``; False when the job was cancelled first."""
         with self._state() as s:

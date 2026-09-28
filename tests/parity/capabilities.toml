@@ -914,6 +914,23 @@ console = { limited = "operator process, metrics are scraped by Prometheus" }
 cli = ["stonks schedule run", "stonks schedule check", "stonks schedule metrics"]
 mcp = { limited = "operator process, metrics are scraped by Prometheus" }
 
+[[capability]]
+id = "lab.remote_worker"
+domain = "ops"
+title = "A lab worker on another machine: claim, heartbeat, snapshot download, results"
+routes = [
+  "POST /api/lab/worker/register",
+  "POST /api/lab/worker/claim",
+  "POST /api/lab/worker/jobs/{job_id}/heartbeat",
+  "POST /api/lab/worker/jobs/{job_id}/complete",
+  "POST /api/lab/worker/jobs/{job_id}/release",
+  "POST /api/lab/worker/stop",
+  "GET /api/lab/worker/snapshots/{name}",
+]
+console = { limited = "machine routes for the lab worker process and its lab_worker token" }
+cli = "python -m stonks.lab.offload worker"
+mcp = { limited = "machine routes for the lab worker process and its lab_worker token" }
+
 # ---- backups ---------------------------------------------------------------------------
 
 [[capability]]

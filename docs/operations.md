@@ -194,6 +194,9 @@ python -m stonks.lab.offload worker          # run until SIGTERM (the lab-worker
 python -m stonks.lab.offload worker --once   # at most one job, then exit
 python -m stonks.lab.offload status          # queue and workers as JSON, exit 1 when unhealthy
 python -m stonks.lab.offload snapshot        # publish a lake copy now (only while serve is down)
+
+# on another machine, through the API (token with the lab_worker scope only)
+STONKS_LAB_WORKER_TOKEN=stk_... python -m stonks.lab.offload worker --api https://stonks.example.com
 ```
 
 | Metric | Meaning |
@@ -209,6 +212,9 @@ A useful alert: `stonks_lab_queue_oldest_queued_seconds > 1800 and stonks_lab_wo
 - A worker writes a heartbeat every `heartbeat_seconds` (10). A running job with no heartbeat for `lease_seconds` (120) fails as `worker lost`. The next worker poll does that.
 - Stopping the worker cancels its running job at the next checkpoint. Restarting the API leaves queued worker jobs alone.
 - Snapshots live in `<lake dir>/lab_snapshots`. The newest two are kept, plus any a worker still reads.
+- A remote worker (`--api`) shows up in `status` and the metrics like a local one, with its host as `remote:<name>`. It keeps its own copy of the snapshot in `<data dir>/lab_worker` (`--work-dir`) and fetches a new one only when a claim names it.
+- A remote worker takes lab runs and sweeps. Studio lab runs and lab runs of a registered strategy wait for a worker on the server. If one waits too long, `python -m stonks.lab.offload status` shows it queued; start the `lab-worker` service or run the job with `STONKS_LAB_EXECUTOR=in_process`.
+- Revoke a worker's token in Profile. Its running job then fails after `lease_seconds`, like a lost worker.
 
 ## Backups and restore
 

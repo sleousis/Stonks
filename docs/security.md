@@ -36,9 +36,11 @@ Cookies: `stonks_session` is `HttpOnly; Secure; SameSite=Lax`. `stonks_csrf` is 
 |---|---|
 | viewer | read |
 | trader | read, trade, lab |
-| admin | read, trade, lab, admin |
+| admin | read, trade, lab, admin, lab_worker |
 
-A token never exceeds its user's role. If the role is lowered later, the token shrinks with it. A credential without `trade`, `lab` or `admin` can only read. The one exception is a POST whose permission is `data.read` (a stream token, marking your feed read): it only touches your own things, so viewers may call it.
+A token never exceeds its user's role. If the role is lowered later, the token shrinks with it. A credential without `trade`, `lab` or `admin` can only read.
+
+`lab_worker` is for a lab worker on another machine ([deploy.md](deploy.md#10-lab-offload)). Give that token this scope alone: such a token reaches the `/api/lab/worker/*` routes and nothing else, not even reads. Creating it needs a fresh second factor, like `trade` and `admin`. The one exception is a POST whose permission is `data.read` (a stream token, marking your feed read): it only touches your own things, so viewers may call it.
 
 ## Permissions
 
@@ -66,6 +68,7 @@ Every route that changes something names one permission. A test walks the route 
 | `backups.restore` | admin | admin, step-up | staged restore of a backup (typed `RESTORE <id>`) |
 | `portfolio.totals` | admin | admin | totals across every trader |
 | `users.read`, `users.manage` | admin | admin (manage needs step-up) | people admin |
+| `lab.worker` | admin | lab_worker | a remote lab worker: claim lab jobs, heartbeat, download the lake snapshot, upload results |
 | `tokens.manage` | all | browser session only | create tokens |
 | `tokens.revoke` | all | any | revoke your own token |
 | `password.change`, `mfa.recovery_codes` | all | step-up | your password and recovery codes |
@@ -117,6 +120,10 @@ Each try is counted before the slow check runs, in one locked write. So a burst 
 ## Client IP behind the proxy
 
 In Compose, Caddy sits in front of the API. `stonks serve` believes `X-Forwarded-For` only from `[api].trusted_proxies` (env `STONKS_API_TRUSTED_PROXIES`). Compose sets it to its own Docker network (`STONKS_DOCKER_SUBNET`, default `172.31.250.0/24`). So the login limit and `audit_log` see each visitor's real IP. The header from any other peer is ignored. The default is `127.0.0.1`.
+
+## Allowed hosts
+
+The API answers only requests whose `Host` is a loopback name, `[api].host` (when it names one address, not `0.0.0.0`) or one of `[api].allowed_hosts` (env `STONKS_API_ALLOWED_HOSTS`, comma-separated; `STONKS_API_HOST` sets `[api].host`). Any other host gets `400`. This guards against DNS rebinding. A bare `*` is refused; `*.example.com` allows its subdomains. Caddy passes the real `Host`, and Compose sets the list to `STONKS_DOMAIN` plus `api` (the scheduler's name on the Compose network).
 
 ## Loopback reads
 

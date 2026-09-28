@@ -8,6 +8,7 @@ export type RoutePermission =
   | 'killswitch.resume'
   | 'killswitch.user'
   | 'lab.run'
+  | 'lab.worker'
   | 'live.manage'
   | 'mfa.recovery_codes'
   | 'notifications.manage'
@@ -48,6 +49,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'GET /api/insights/totals': 'portfolio.totals',
   'GET /api/lab/ledger': 'lab.run',
   'GET /api/lab/ledger/{run_id}': 'lab.run',
+  'GET /api/lab/worker/snapshots/{name}': 'lab.worker',
   'GET /api/onboarding/system': 'operations.run',
   'GET /api/options/backtests/{job_id}/result': 'data.read',
   'GET /api/options/chains/{underlying}': 'data.read',
@@ -104,6 +106,12 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'POST /api/lab/runs': 'lab.run',
   'POST /api/lab/signal-ic': 'lab.run',
   'POST /api/lab/sweeps': 'lab.run',
+  'POST /api/lab/worker/claim': 'lab.worker',
+  'POST /api/lab/worker/jobs/{job_id}/complete': 'lab.worker',
+  'POST /api/lab/worker/jobs/{job_id}/heartbeat': 'lab.worker',
+  'POST /api/lab/worker/jobs/{job_id}/release': 'lab.worker',
+  'POST /api/lab/worker/register': 'lab.worker',
+  'POST /api/lab/worker/stop': 'lab.worker',
   'POST /api/model-versions/retrain': 'lab.run',
   'POST /api/notifications/read': 'data.read',
   'POST /api/notifications/test': 'data.read',

@@ -47,6 +47,8 @@ from stonks.logging import get_logger
 _log = get_logger("stonks.api")
 
 _LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "::1", "[::1]"]
+#: Bind addresses that are not a host name a client would send.
+_WILDCARD_BINDS = frozenset({"0.0.0.0", "::", "[::]", ""})
 
 
 def create_app(
@@ -122,7 +124,9 @@ def create_app(
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Last-Event-ID", CSRF_HEADER],
     )
-    allowed = [*_LOOPBACK_HOSTS, cfg.host, *cfg.allowed_hosts]
+    allowed = [*_LOOPBACK_HOSTS, *cfg.allowed_hosts]
+    if cfg.host not in _WILDCARD_BINDS:  # "0.0.0.0" binds every address, names none
+        allowed.append(cfg.host)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=sorted(set(allowed)))
     return app
 

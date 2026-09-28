@@ -17,7 +17,7 @@ session cookie (plus `X-CSRF-Token` on writes) or `Authorization: Bearer stk_...
 The Auth column names the permission a route checks (see `docs/security.md`).
 "sign-in" means any signed-in user.
 
-Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
+Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth](#auth-endpoints) · [backups](#backups-endpoints) · [brokers](#brokers-endpoints) · [calendars](#calendars-endpoints) · [catalog](#catalog-endpoints) · [charts](#charts-endpoints) · [connections](#connections-endpoints) · [exports](#exports-endpoints) · [factors](#factors-endpoints) · [fx](#fx-endpoints) · [halts](#halts-endpoints) · [health](#health-endpoints) · [ingest](#ingest-endpoints) · [insights](#insights-endpoints) · [jobs](#jobs-endpoints) · [lab](#lab-endpoints) · [lab-worker](#lab-worker-endpoints) · [live](#live-endpoints) · [market](#market-endpoints) · [model-versions](#model-versions-endpoints) · [notifications](#notifications-endpoints) · [onboarding](#onboarding-endpoints) · [options](#options-endpoints) · [orders](#orders-endpoints) · [pnl](#pnl-endpoints) · [portfolio](#portfolio-endpoints) · [price-alerts](#price-alerts-endpoints) · [push](#push-endpoints) · [reconcile](#reconcile-endpoints) · [risk](#risk-endpoints) · [schedule](#schedule-endpoints) · [screener](#screener-endpoints) · [shadow](#shadow-endpoints) · [sources](#sources-endpoints) · [statements](#statements-endpoints) · [strategies](#strategies-endpoints) · [stream](#stream-endpoints) · [studio](#studio-endpoints) · [subscriptions](#subscriptions-endpoints) · [tax](#tax-endpoints) · [tca](#tca-endpoints) · [telegram](#telegram-endpoints) · [ticks](#ticks-endpoints) · [universes](#universes-endpoints) · [watchlists](#watchlists-endpoints)
 
 ## alerts endpoints
 
@@ -216,6 +216,18 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/lab/survival-tests` | List Survival Tests | sign-in |  | list[[SurvivalTestInfo](#survivaltestinfo)] |
 | POST | `/api/lab/sweeps` | Start Sweep | `lab.run` | [SweepRequest](#sweeprequest) | [Job](#job) |
 | GET | `/api/lab/sweeps/{job_id}/result` | Get Sweep Result | sign-in |  | [SweepResultView](#sweepresultview) |
+
+## lab-worker endpoints
+
+| Method | Path | Summary | Auth | Request | Response |
+|--------|------|---------|------|---------|----------|
+| POST | `/api/lab/worker/claim` | Claim Job | `lab.worker` | [WorkerRef](#workerref) | [ClaimResult](#claimresult) |
+| POST | `/api/lab/worker/jobs/{job_id}/complete` | Complete Job | `lab.worker` | [WorkerOutcome](#workeroutcome) | [Job](#job) |
+| POST | `/api/lab/worker/jobs/{job_id}/heartbeat` | Heartbeat Job | `lab.worker` | [WorkerHeartbeat](#workerheartbeat) | [HeartbeatReply](#heartbeatreply) |
+| POST | `/api/lab/worker/jobs/{job_id}/release` | Release Job | `lab.worker` | [WorkerRef](#workerref) | [Job](#job) |
+| POST | `/api/lab/worker/register` | Register Worker | `lab.worker` | [WorkerHello](#workerhello) | [WorkerConfig](#workerconfig) |
+| GET | `/api/lab/worker/snapshots/{name}` | Download Snapshot | `lab.worker` |  | `application/x-tar` |
+| POST | `/api/lab/worker/stop` | Stop Worker | `lab.worker` | [WorkerRef](#workerref) | [WorkerStopped](#workerstopped) |
 
 ## live endpoints
 
@@ -653,7 +665,14 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 
 What a credential may do. A token never exceeds its user's role.
 
-Type: "read" \| "trade" \| "lab" \| "admin"
+Type: "read" \| "trade" \| "lab" \| "admin" \| "lab_worker"
+
+### ArtifactFile
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `content_b64` | string | yes |  |
+| `path` | string | yes |  |
 
 ### AssetClassCosts
 
@@ -958,6 +977,24 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `max_month_loss` | number \| null | no |  |
 | `max_week_loss` | number \| null | no |  |
 | `week_sessions` | integer | no |  |
+
+### ClaimResult
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `job` | [ClaimedJob](#claimedjob) \| null | no |  |
+
+### ClaimedJob
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | date-time | yes |  |
+| `id` | string | yes |  |
+| `kind` | string | yes |  |
+| `owner_id` | string \| null | yes |  |
+| `params` | object | yes |  |
+| `seed` | [ResearchRows](#researchrows) | yes |  |
+| `snapshot` | [SnapshotRef](#snapshotref) | yes |  |
 
 ### ClearHaltRequest
 
@@ -1833,6 +1870,13 @@ Thresholds for ``stonks health`` (``[production.health]``).
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `tickers` | list[string] \| null | no |  |
+
+### HeartbeatReply
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cancel_requested` | boolean | yes |  |
+| `running` | boolean | yes |  |
 
 ### HeatmapOptions
 
@@ -4033,6 +4077,18 @@ The browser's ``PushSubscription.toJSON()`` plus its user agent.
 | `validation_start` | date \| null | yes |  |
 | `verdict` | string \| null | yes |  |
 
+### ResearchRows
+
+Rows of the research tables plus the artifact files that go with them.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `files` | list[[ArtifactFile](#artifactfile)] | no |  |
+| `lab_runs` | list[object] | no |  |
+| `lab_trials` | list[object] | no |  |
+| `strategies` | list[object] | no |  |
+| `survival_reports` | list[object] | no |  |
+
 ### ResearchSessionDetailView
 
 | Field | Type | Required | Description |
@@ -4632,6 +4688,16 @@ Implementation shortfall of one order. Costs are positive, in bps of the filled 
 | `ok` | boolean | yes |  |
 | `signals` | integer | yes |  |
 | `tickers` | list[string] | yes |  |
+
+### SnapshotRef
+
+A lake snapshot by folder name; fetch it from ``GET /api/lab/worker/snapshots/{name}``.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `created_at` | date-time | yes |  |
+| `fingerprint` | string | yes |  |
+| `name` | string | yes |  |
 
 ### SnapshotView
 
@@ -5625,6 +5691,58 @@ Your own webhook (a public ``https`` URL). Write-only: responses show its scheme
 | `initial_margin_change` | number | yes |  |
 | `maintenance_margin_change` | number | yes |  |
 | `warning` | string \| null | yes |  |
+
+### WorkerConfig
+
+The server's ``[lab.offload]`` timing, which the worker follows.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `executor` | string | yes |  |
+| `heartbeat_seconds` | number | yes |  |
+| `kinds` | list[string] | yes |  |
+| `lease_seconds` | number | yes |  |
+| `poll_seconds` | number | yes |  |
+
+### WorkerHeartbeat
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `message` | string \| null | no |  |
+| `progress` | number | no |  |
+| `worker_id` | string | yes |  |
+
+### WorkerHello
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cpus` | integer | yes |  |
+| `host` | string | yes |  |
+| `pid` | integer | yes |  |
+| `worker_id` | string | yes |  |
+
+### WorkerOutcome
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `error` | string \| null | no |  |
+| `research` | [ResearchRows](#researchrows) | no |  |
+| `result` | any | no |  |
+| `status` | "succeeded" \| "failed" \| "cancelled" | yes |  |
+| `worker_id` | string | yes |  |
+
+### WorkerRef
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `worker_id` | string | yes |  |
+
+### WorkerStopped
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `stopped` | boolean | yes |  |
+| `worker_id` | string | yes |  |
 
 ### stonks__app__brokers__BrokerAccountView
 

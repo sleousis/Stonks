@@ -20,10 +20,10 @@
 	}
 
 	reverse_proxy api:8000 {
-		# The API's TrustedHostMiddleware accepts loopback names plus
-		# [api].allowed_hosts. Caddy already only answers for STONKS_DOMAIN,
-		# so it presents the request to the API as "localhost".
-		header_up Host localhost
+		# The request keeps its real Host (Caddy's default). The API's
+		# trusted-host check accepts loopback names plus [api].allowed_hosts,
+		# which Compose sets from STONKS_DOMAIN (STONKS_API_ALLOWED_HOSTS), so
+		# a request for any other name is refused there too.
 		# Job event streams (SSE) must not be buffered.
 		flush_interval -1
 	}

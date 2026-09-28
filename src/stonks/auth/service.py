@@ -773,7 +773,7 @@ class AuthService:
             raise PermissionDenied(
                 "scopes beyond your role: " + ", ".join(sorted(s.value for s in extra))
             )
-        if wanted & {ApiScope.TRADE, ApiScope.ADMIN}:
+        if wanted & {ApiScope.TRADE, ApiScope.ADMIN, ApiScope.LAB_WORKER}:
             self._require_step_up(principal)
         if not (name or "").strip():
             raise ValidationError("name must not be blank")

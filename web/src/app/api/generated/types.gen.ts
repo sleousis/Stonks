@@ -339,7 +339,21 @@ export type AlphaBetaView = {
  *
  * What a credential may do. A token never exceeds its user's role.
  */
-export type ApiScope = 'read' | 'trade' | 'lab' | 'admin';
+export type ApiScope = 'read' | 'trade' | 'lab' | 'admin' | 'lab_worker';
+
+/**
+ * ArtifactFile
+ */
+export type ArtifactFile = {
+    /**
+     * Content B64
+     */
+    content_b64: string;
+    /**
+     * Path
+     */
+    path: string;
+};
 
 /**
  * AssetClassCosts
@@ -1176,6 +1190,43 @@ export type CircuitBreakerSettings = {
      * Week Sessions
      */
     week_sessions?: number;
+};
+
+/**
+ * ClaimResult
+ */
+export type ClaimResult = {
+    job?: ClaimedJob | null;
+};
+
+/**
+ * ClaimedJob
+ */
+export type ClaimedJob = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Owner Id
+     */
+    owner_id: string | null;
+    /**
+     * Params
+     */
+    params: {
+        [key: string]: unknown;
+    };
+    seed: ResearchRows;
+    snapshot: SnapshotRef;
 };
 
 /**
@@ -3533,6 +3584,20 @@ export type HealthRunRequest = {
      * Tickers
      */
     tickers?: Array<string> | null;
+};
+
+/**
+ * HeartbeatReply
+ */
+export type HeartbeatReply = {
+    /**
+     * Cancel Requested
+     */
+    cancel_requested: boolean;
+    /**
+     * Running
+     */
+    running: boolean;
 };
 
 /**
@@ -9487,6 +9552,42 @@ export type ResearchProposalView = {
 };
 
 /**
+ * ResearchRows
+ *
+ * Rows of the research tables plus the artifact files that go with them.
+ */
+export type ResearchRows = {
+    /**
+     * Files
+     */
+    files?: Array<ArtifactFile>;
+    /**
+     * Lab Runs
+     */
+    lab_runs?: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Lab Trials
+     */
+    lab_trials?: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Strategies
+     */
+    strategies?: Array<{
+        [key: string]: unknown;
+    }>;
+    /**
+     * Survival Reports
+     */
+    survival_reports?: Array<{
+        [key: string]: unknown;
+    }>;
+};
+
+/**
  * ResearchSessionDetailView
  */
 export type ResearchSessionDetailView = {
@@ -11064,6 +11165,27 @@ export type SmokeCheck = {
      * Tickers
      */
     tickers: Array<string>;
+};
+
+/**
+ * SnapshotRef
+ *
+ * A lake snapshot by folder name; fetch it from
+ * ``GET /api/lab/worker/snapshots/{name}``.
+ */
+export type SnapshotRef = {
+    /**
+     * Created At
+     */
+    created_at: string;
+    /**
+     * Fingerprint
+     */
+    fingerprint: string;
+    /**
+     * Name
+     */
+    name: string;
 };
 
 /**
@@ -13758,6 +13880,121 @@ export type WhatIfView = {
      * Warning
      */
     warning: string | null;
+};
+
+/**
+ * WorkerConfig
+ *
+ * The server's ``[lab.offload]`` timing, which the worker follows.
+ */
+export type WorkerConfig = {
+    /**
+     * Executor
+     */
+    executor: string;
+    /**
+     * Heartbeat Seconds
+     */
+    heartbeat_seconds: number;
+    /**
+     * Kinds
+     */
+    kinds: Array<string>;
+    /**
+     * Lease Seconds
+     */
+    lease_seconds: number;
+    /**
+     * Poll Seconds
+     */
+    poll_seconds: number;
+};
+
+/**
+ * WorkerHeartbeat
+ */
+export type WorkerHeartbeat = {
+    /**
+     * Message
+     */
+    message?: string | null;
+    /**
+     * Progress
+     */
+    progress?: number;
+    /**
+     * Worker Id
+     */
+    worker_id: string;
+};
+
+/**
+ * WorkerHello
+ */
+export type WorkerHello = {
+    /**
+     * Cpus
+     */
+    cpus: number;
+    /**
+     * Host
+     */
+    host: string;
+    /**
+     * Pid
+     */
+    pid: number;
+    /**
+     * Worker Id
+     */
+    worker_id: string;
+};
+
+/**
+ * WorkerOutcome
+ */
+export type WorkerOutcome = {
+    /**
+     * Error
+     */
+    error?: string | null;
+    research?: ResearchRows;
+    /**
+     * Result
+     */
+    result?: unknown;
+    /**
+     * Status
+     */
+    status: 'succeeded' | 'failed' | 'cancelled';
+    /**
+     * Worker Id
+     */
+    worker_id: string;
+};
+
+/**
+ * WorkerRef
+ */
+export type WorkerRef = {
+    /**
+     * Worker Id
+     */
+    worker_id: string;
+};
+
+/**
+ * WorkerStopped
+ */
+export type WorkerStopped = {
+    /**
+     * Stopped
+     */
+    stopped: boolean;
+    /**
+     * Worker Id
+     */
+    worker_id: string;
 };
 
 /**
@@ -19001,6 +19238,313 @@ export type GetSweepResultResponses = {
 };
 
 export type GetSweepResultResponse = GetSweepResultResponses[keyof GetSweepResultResponses];
+
+export type ClaimLabWorkerJobData = {
+    body: WorkerRef;
+    path?: never;
+    query?: never;
+    url: '/api/lab/worker/claim';
+};
+
+export type ClaimLabWorkerJobErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ClaimLabWorkerJobError = ClaimLabWorkerJobErrors[keyof ClaimLabWorkerJobErrors];
+
+export type ClaimLabWorkerJobResponses = {
+    /**
+     * Successful Response
+     */
+    200: ClaimResult;
+};
+
+export type ClaimLabWorkerJobResponse = ClaimLabWorkerJobResponses[keyof ClaimLabWorkerJobResponses];
+
+export type CompleteLabWorkerJobData = {
+    body: WorkerOutcome;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/lab/worker/jobs/{job_id}/complete';
+};
+
+export type CompleteLabWorkerJobErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type CompleteLabWorkerJobError = CompleteLabWorkerJobErrors[keyof CompleteLabWorkerJobErrors];
+
+export type CompleteLabWorkerJobResponses = {
+    /**
+     * Successful Response
+     */
+    200: Job;
+};
+
+export type CompleteLabWorkerJobResponse = CompleteLabWorkerJobResponses[keyof CompleteLabWorkerJobResponses];
+
+export type HeartbeatLabWorkerJobData = {
+    body: WorkerHeartbeat;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/lab/worker/jobs/{job_id}/heartbeat';
+};
+
+export type HeartbeatLabWorkerJobErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type HeartbeatLabWorkerJobError = HeartbeatLabWorkerJobErrors[keyof HeartbeatLabWorkerJobErrors];
+
+export type HeartbeatLabWorkerJobResponses = {
+    /**
+     * Successful Response
+     */
+    200: HeartbeatReply;
+};
+
+export type HeartbeatLabWorkerJobResponse = HeartbeatLabWorkerJobResponses[keyof HeartbeatLabWorkerJobResponses];
+
+export type ReleaseLabWorkerJobData = {
+    body: WorkerRef;
+    path: {
+        /**
+         * Job Id
+         */
+        job_id: string;
+    };
+    query?: never;
+    url: '/api/lab/worker/jobs/{job_id}/release';
+};
+
+export type ReleaseLabWorkerJobErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ReleaseLabWorkerJobError = ReleaseLabWorkerJobErrors[keyof ReleaseLabWorkerJobErrors];
+
+export type ReleaseLabWorkerJobResponses = {
+    /**
+     * Successful Response
+     */
+    200: Job;
+};
+
+export type ReleaseLabWorkerJobResponse = ReleaseLabWorkerJobResponses[keyof ReleaseLabWorkerJobResponses];
+
+export type RegisterLabWorkerData = {
+    body: WorkerHello;
+    path?: never;
+    query?: never;
+    url: '/api/lab/worker/register';
+};
+
+export type RegisterLabWorkerErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type RegisterLabWorkerError = RegisterLabWorkerErrors[keyof RegisterLabWorkerErrors];
+
+export type RegisterLabWorkerResponses = {
+    /**
+     * Successful Response
+     */
+    200: WorkerConfig;
+};
+
+export type RegisterLabWorkerResponse = RegisterLabWorkerResponses[keyof RegisterLabWorkerResponses];
+
+export type DownloadLabSnapshotData = {
+    body?: never;
+    path: {
+        /**
+         * Name
+         */
+        name: string;
+    };
+    query?: never;
+    url: '/api/lab/worker/snapshots/{name}';
+};
+
+export type DownloadLabSnapshotErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type DownloadLabSnapshotError = DownloadLabSnapshotErrors[keyof DownloadLabSnapshotErrors];
+
+export type DownloadLabSnapshotResponses = {
+    /**
+     * The snapshot folder as an uncompressed tar
+     */
+    200: Blob | File;
+};
+
+export type DownloadLabSnapshotResponse = DownloadLabSnapshotResponses[keyof DownloadLabSnapshotResponses];
+
+export type StopLabWorkerData = {
+    body: WorkerRef;
+    path?: never;
+    query?: never;
+    url: '/api/lab/worker/stop';
+};
+
+export type StopLabWorkerErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type StopLabWorkerError = StopLabWorkerErrors[keyof StopLabWorkerErrors];
+
+export type StopLabWorkerResponses = {
+    /**
+     * Successful Response
+     */
+    200: WorkerStopped;
+};
+
+export type StopLabWorkerResponse = StopLabWorkerResponses[keyof StopLabWorkerResponses];
 
 export type GetBarsData = {
     body?: never;

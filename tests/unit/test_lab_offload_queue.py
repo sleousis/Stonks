@@ -183,3 +183,38 @@ def test_requeue_hands_a_running_job_back(path, queue):
     back = store.get(job.id)
     assert back.status == "queued" and back.started_at is None
     assert not queue.requeue(job.id, "w1")  # only a job that worker finished
+
+
+def test_a_portable_claim_skips_jobs_that_name_a_registered_strategy(path, queue):
+    """A remote worker has no server artifacts: it takes catalog classes
+    and sweeps, and leaves registered refs to a worker on the server."""
+    store = JobStore(path)
+    registered = store.create(
+        "lab_run", {"strategy": {"strategy_id": "bah_1", "params": {}}}, executor="worker"
+    )
+    catalog = store.create(
+        "lab_run", {"strategy": {"class_path": "m:C", "strategy_id": None}}, executor="worker"
+    )
+    sweep = store.create("lab_sweep", {"strategies": ["momentum"]}, executor="worker")
+    kinds = ["lab_run", "lab_sweep"]
+    assert queue.claim_next("remote", kinds, portable_only=True) == catalog.id
+    assert queue.claim_next("remote", kinds, portable_only=True) == sweep.id
+    assert queue.claim_next("remote", kinds, portable_only=True) is None
+    assert queue.claim_next("local", kinds) == registered.id
+
+
+def test_release_puts_a_running_job_back_unless_a_cancel_was_asked(path, queue):
+    store = JobStore(path)
+    job = store.create("lab_run", {}, executor="worker")
+    assert queue.claim_next("w1", ["lab_run"]) == job.id
+    assert queue.is_running_on(job.id, "w1")
+    assert not queue.is_running_on(job.id, "w2")
+    assert not queue.release(job.id, "w2")  # not its job
+    assert queue.release(job.id, "w1")
+    requeued = store.get(job.id)
+    assert (requeued.status, requeued.started_at) == ("queued", None)
+    assert not queue.is_running_on(job.id, "w1")
+    assert queue.claim_next("w2", ["lab_run"]) == job.id
+    assert queue.request_cancel(job.id)
+    assert not queue.release(job.id, "w2")  # a user cancel is not undone
+    assert store.get(job.id).status == "running"
