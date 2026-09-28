@@ -35,6 +35,12 @@ try {
   if (!raw) throw err;
 }
 const report = JSON.parse(raw);
+// When the audit endpoint fails, npm still prints JSON, with an "error"
+// and no "vulnerabilities". That is no result, never a clean one.
+if (report.error || !report.vulnerabilities) {
+  console.error(`npm audit returned no result: ${report.message ?? JSON.stringify(report.error)}`);
+  process.exit(2);
+}
 
 // Advisory ids from the "via" objects (GHSA-xxxx is the tail of the URL).
 const findings = [];

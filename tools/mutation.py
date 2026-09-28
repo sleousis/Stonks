@@ -227,7 +227,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--only", help="comma-separated target names")
     parser.add_argument("--summary", type=Path, default=Path("mutation-summary.json"))
     args = parser.parse_args(argv)
-    wanted = set(args.only.split(",")) if args.only else None
+    wanted = {name.strip() for name in args.only.split(",") if name.strip()} if args.only else None
+    unknown = sorted((wanted or set()) - {t.name for t in TARGETS})
+    if unknown:
+        # A typo would otherwise drop that target and still pass the gate.
+        parser.error(f"unknown target(s): {', '.join(unknown)}")
     targets = [t for t in TARGETS if wanted is None or t.name in wanted]
     results = []
     with tempfile.TemporaryDirectory(prefix="stonks-mutation-") as tmp:

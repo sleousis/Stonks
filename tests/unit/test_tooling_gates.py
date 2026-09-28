@@ -82,6 +82,30 @@ def test_gate_main_exits_1_on_new_errors_and_0_on_update(tmp_path, capsys):
     assert pyright_gate.main(["--report", str(report_path), "--baseline", str(baseline)]) == 0
 
 
+def test_gate_fails_when_pyright_analysed_no_files(tmp_path, capsys):
+    """A wrong include or an unreadable config makes pyright check nothing
+    and report zero errors with exit code 0. That must not pass."""
+    report_path = tmp_path / "report.json"
+    report = {"generalDiagnostics": [], "summary": {"filesAnalyzed": 0, "errorCount": 0}}
+    report_path.write_text(json.dumps(report))
+    baseline = tmp_path / "baseline.json"
+    baseline.write_text("{}")
+    assert pyright_gate.main(["--report", str(report_path), "--baseline", str(baseline)]) == 2
+    assert "no files" in capsys.readouterr().out
+
+
+def test_gate_fails_on_a_fatal_pyright_exit_code(monkeypatch):
+    class Proc:
+        returncode = 3
+        stdout = '{"generalDiagnostics": [], "summary": {"filesAnalyzed": 10}}'
+        stderr = "config file could not be parsed"
+
+    monkeypatch.setattr(pyright_gate.subprocess, "run", lambda *a, **k: Proc())
+    with pytest.raises(SystemExit) as exc:
+        pyright_gate._run_pyright()
+    assert exc.value.code == 2
+
+
 def test_strict_paths_come_from_the_pyright_config():
     strict = pyright_gate.strict_paths()
     assert "src/stonks/core" in strict
@@ -231,3 +255,11 @@ def test_config_runs_only_the_target_tests_without_xdist():
     assert "-p no:xdist" in text
     assert all(test in text for test in target.tests)
     assert 'name = "local"' in text
+
+
+def test_mutation_refuses_an_unknown_target_name(capsys):
+    """``--only pnl,fils`` must not quietly run pnl alone and pass."""
+    with pytest.raises(SystemExit) as exc:
+        mutation.main(["--only", "pnl,fils"])
+    assert exc.value.code == 2
+    assert "fils" in capsys.readouterr().err

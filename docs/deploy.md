@@ -197,7 +197,7 @@ sequenceDiagram
 3. Watch **Release**, then **Deploy**, in the Actions tab.
 4. On the server, run `docker compose run --rm api stonks users bootstrap --email you@example.com` once. Then open `https://stonks.<tailnet>.ts.net`, sign in and set up the second factor. Every call needs a sign-in or a token. Behind Caddy the API trusts forwarded client IPs only from the Compose network (`STONKS_DOCKER_SUBNET`).
 
-The release fails on purpose if the tag does not match `pyproject.toml`.
+The release fails on purpose if the tag does not match `pyproject.toml`, or if the tagged commit is not on `main`.
 
 ## 4. Updates
 
@@ -205,7 +205,7 @@ Every release deploys itself. What `deploy.sh` does, in order:
 
 ```mermaid
 flowchart TD
-  P[Pull new image] --> St[Stop api + scheduler]
+  P[Pull new image] --> St[Stop api, scheduler, lab-worker]
   St --> Sn[Local snapshot of /data]
   Sn --> Bk[Off-server restic backup]
   Bk --> M[stonks db init<br/>migrations]
@@ -246,7 +246,7 @@ Use `--with-data` only if the newer version's migrations broke the older one. It
 | Off-server backup (restic, encrypted) | B2 or R2 bucket | 02:30 UTC nightly, and every deploy | 7 daily, 4 weekly, 12 monthly |
 | Restore test | Scratch volume, wiped after | 1st of the month, 04:00 UTC | Result in healthchecks.io. Fails if the state DB is missing or lost rows |
 
-`backup.sh` uses `python -m stonks.ops backup` when the image has it (a consistent copy with no downtime, written to `/data/backups`). Otherwise it stops the api and scheduler for the upload and backs up the whole volume.
+`backup.sh` uses `python -m stonks.ops backup` when the image has it (a consistent copy with no downtime, written to `/data/backups`). Otherwise it stops the writers (api, scheduler and lab-worker) for the upload and backs up the whole volume.
 
 Set up the bucket:
 

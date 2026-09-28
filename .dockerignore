@@ -15,8 +15,8 @@
 htmlcov
 
 # Secrets and local data never go into an image.
-.env
-.env.*
+**/.env
+**/.env.*
 !.env.example
 data
 **/*.duckdb

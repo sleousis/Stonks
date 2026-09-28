@@ -64,7 +64,7 @@ jobs:
 
       - name: Join the tailnet
         if: env.TS_OAUTH_CLIENT_ID != ''
-        uses: tailscale/github-action@v3
+        uses: tailscale/github-action@6cae46e2d796f265265cfcf628b72a32b4d7cade # v3
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
@@ -89,10 +89,14 @@ jobs:
             ServerAliveInterval 30
           EOF
 
-      - name: Copy deploy files (keeps the server's .env and snapshots)
+      - name: Copy deploy files (keeps the server's .env, snapshots and IBKR secret files)
         run: |
+          # The IBKR secret files exist only on the server (git ignores them).
+          # Protect them from --delete, or every deploy would wipe them and
+          # the gateway profiles could no longer start.
           rsync -az --delete \
             --exclude .env --exclude .deployed-tag --exclude .previous-tag --exclude snapshots/ \
+            --filter 'protect /ibkr/secrets/*' \
             deploy/ "stonks:${DEPLOY_DIR}/"
 
       - name: Log the server in to GHCR with this job's token

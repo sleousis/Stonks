@@ -21,6 +21,12 @@ tag="${1:?usage: deploy.sh <tag, e.g. v1.2.3>}"
 	exit 2
 }
 chmod 600 .env
+# The example file's old placeholder is a working credential: this token
+# signs in as the admin.
+if [ "$(env_get STONKS_API_TOKEN)" = "change-me" ]; then
+	log "STONKS_API_TOKEN in .env is still the placeholder 'change-me'; set a real value first"
+	exit 2
+fi
 
 previous="$(cat .deployed-tag 2>/dev/null || true)"
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -46,7 +52,9 @@ rollback() {
 		exit 1
 	fi
 	env_set STONKS_IMAGE_TAG "$previous"
-	compose up -d --remove-orphans
+	# set -e is still on: a failing `up` must not end the script before the
+	# health check below reports the outcome.
+	compose up -d --remove-orphans || log "compose up for $previous failed"
 	if wait_healthy 180; then
 		notify warning "rolled back to $previous after failed deploy of $tag"
 	else
@@ -79,7 +87,11 @@ if ! wait_healthy 180; then
 fi
 trap - ERR
 
-printf '%s\n' "$previous" >.previous-tag
+# A redeploy of the same tag keeps the recorded previous tag, so rollback.sh
+# still goes back to an older version instead of to this one.
+if [ "$previous" != "$tag" ]; then
+	printf '%s\n' "$previous" >.previous-tag
+fi
 printf '%s\n' "$tag" >.deployed-tag
 snapshot_prune 5
 
