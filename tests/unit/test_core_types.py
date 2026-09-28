@@ -45,6 +45,14 @@ def test_order_rejects_non_positive_quantity():
         Order(client_id="x", ticker="AAPL.US", side="buy", quantity=-1.0)
 
 
+@pytest.mark.parametrize("quantity", [float("nan"), float("inf")])
+def test_order_rejects_a_quantity_that_is_not_finite(quantity):
+    # NaN passes a "<= 0" check, and an order of NaN shares would turn the
+    # broker's cash and positions into NaN
+    with pytest.raises(ValueError, match="quantity"):
+        Order(client_id="x", ticker="AAPL.US", side="buy", quantity=quantity)
+
+
 def test_fill_construction_and_signed_quantity():
     f = Fill(
         order_client_id="x",
