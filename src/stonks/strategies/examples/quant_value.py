@@ -486,7 +486,14 @@ class QuantValue(BaseStrategy):
 
         balance = balance or {}
         price = self._pit._price(lake, ticker, as_of, day)
-        shares = self._pit._shares(lake, ticker, known, balance)
+        shares = self._pit._shares(
+            lake,
+            ticker,
+            known,
+            balance,
+            counted_on=self._balance_end(lake, ticker, day) if balance else None,
+            priced_on=day,
+        )
         mcap = price * shares if price is not None and shares is not None else None
         tev = fx.tev(mcap, balance)
         equity = fx.line(balance, "total_stockholder_equity")
@@ -573,6 +580,12 @@ class QuantValue(BaseStrategy):
         if key not in per_lake:
             per_lake[key] = {c: hist.column(c)[i] for c in _TABLE_COLUMNS["balance_sheet"]}
         return per_lake[key]
+
+    def _balance_end(self, lake: Any, ticker: str, day: date) -> date | None:
+        """The period end of the balance sheet :meth:`_latest_balance` reads."""
+        hist = self._pit._history(lake, "balance_sheet", ticker)
+        idx = np.flatnonzero(hist.visible(day))
+        return hist.period_end[int(idx[-1])] if len(idx) else None
 
     def _per_lake(self, lake: Any) -> dict:
         try:

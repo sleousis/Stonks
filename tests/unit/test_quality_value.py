@@ -426,3 +426,36 @@ def test_save_load_round_trip(tmp_path):
     s.save(tmp_path / "a")
     loaded = QualityValue.load(tmp_path / "a")
     assert loaded.params == s.params
+
+
+def test_a_split_after_the_balance_sheet_leaves_market_cap_unchanged(lake):
+    """The raw price is post-split while the filed share count is not: the
+    count must be scaled by the splits since its date, or a 4:1 split reads
+    as a 4x cheaper stock."""
+    _quarter(lake, "SPL.US", list(QUARTERS_2023))
+    days = pd.bdate_range("2023-01-02", "2024-12-31")
+    split_day = date(2024, 2, 15)
+    price = [40.0 if d.date() < split_day else 10.0 for d in days]
+    lake.upsert_prices(
+        pd.DataFrame(
+            {
+                "ticker": "SPL.US",
+                "date": [d.date() for d in days],
+                "open": price,
+                "high": price,
+                "low": price,
+                "close": price,
+                "adj_close": [p / 4.0 if p == 40.0 else p for p in price],
+                "volume": 1_000,
+            }
+        )
+    )
+    lake.upsert_stock_splits(
+        pd.DataFrame({"ticker": ["SPL.US"], "date": [split_day], "ratio": [4.0]})
+    )
+    s = QualityValue({})
+    before = s.extract_features("SPL.US", date(2024, 2, 14), lake).values
+    after = s.extract_features("SPL.US", date(2024, 3, 1), lake).values
+    assert before["market_cap"] == pytest.approx(4_000.0)
+    assert after["market_cap"] == pytest.approx(4_000.0)
+    assert after["earnings_yield"] == pytest.approx(before["earnings_yield"])

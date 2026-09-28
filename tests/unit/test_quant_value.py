@@ -499,3 +499,42 @@ def test_small_backtest_buys_the_selection_after_the_rebalance(lake):
     held = {t for t, q in broker.fetch_portfolio().positions.items() if q > 0}
     assert held == GOOD
     assert len(report.equity_curve) > 30
+
+
+def test_market_cap_follows_a_split_after_the_balance_sheet(tmp_path):
+    """The raw price is post-split; the filed share count must follow it."""
+    from stonks.store.lake import DuckDBLake
+    from stonks.strategies.examples.quant_value import QuantValue
+    from tests.unit.test_quality_value import QUARTERS_2023, _quarter
+
+    lake = DuckDBLake(tmp_path / "lake.duckdb")
+    lake.migrate()
+    try:
+        _quarter(lake, "SPL.US", list(QUARTERS_2023))
+        days = pd.bdate_range("2023-01-02", "2024-12-31")
+        split_day = date(2024, 2, 15)
+        price = [40.0 if d.date() < split_day else 10.0 for d in days]
+        lake.upsert_prices(
+            pd.DataFrame(
+                {
+                    "ticker": "SPL.US",
+                    "date": [d.date() for d in days],
+                    "open": price,
+                    "high": price,
+                    "low": price,
+                    "close": price,
+                    "adj_close": [p / 4.0 if p == 40.0 else p for p in price],
+                    "volume": 1_000,
+                }
+            )
+        )
+        lake.upsert_stock_splits(
+            pd.DataFrame({"ticker": ["SPL.US"], "date": [split_day], "ratio": [4.0]})
+        )
+        s = QuantValue({})
+        before = s.extract_features("SPL.US", date(2024, 2, 14), lake).values
+        after = s.extract_features("SPL.US", date(2024, 3, 1), lake).values
+        assert before["market_cap"] == pytest.approx(4_000.0)
+        assert after["market_cap"] == pytest.approx(4_000.0)
+    finally:
+        lake.close()

@@ -29,15 +29,17 @@ import weakref
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, time, timedelta
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
 
+from stonks.core.corporate_actions import Split
 from stonks.core.interval import Interval
 from stonks.core.params import ParameterSpec
 from stonks.core.types import Features, Order, Portfolio
 from stonks.features.library import ttm_from_quarters
+from stonks.store.corporate_actions import LakeCorporateActions
 from stonks.strategies._common import LakeBarCaches, as_datetime, iso
 from stonks.strategies.base import BaseStrategy
 
@@ -305,7 +307,8 @@ class QualityValue(BaseStrategy):
 
         income = fresh(self._flows(lake, "income_statement", ticker, day, _INCOME_FLOWS))
         cash = fresh(self._flows(lake, "cash_flow_statement", ticker, day, _CASH_FLOWS))
-        balance = fresh(self._balance(lake, ticker, day))
+        balance_snap = self._balance(lake, ticker, day)
+        balance = fresh(balance_snap)
         if not (income or cash or balance):
             return {}
 
@@ -323,7 +326,8 @@ class QualityValue(BaseStrategy):
 
         market_cap = None
         price = self._price(lake, ticker, as_of, day)
-        shares = self._shares(lake, ticker, known, balance)
+        counted_on = balance_snap.period_end if balance and balance_snap is not None else None
+        shares = self._shares(lake, ticker, known, balance, counted_on=counted_on, priced_on=day)
         if price is not None and shares is not None:
             market_cap = price * shares
 
@@ -391,11 +395,22 @@ class QualityValue(BaseStrategy):
         return close
 
     def _shares(
-        self, lake: Any, ticker: str, day: date, balance: Mapping[str, float | None]
+        self,
+        lake: Any,
+        ticker: str,
+        day: date,
+        balance: Mapping[str, float | None],
+        *,
+        counted_on: date | None = None,
+        priced_on: date | None = None,
     ) -> float | None:
+        """The share count, in the shares of ``priced_on`` when given: a
+        count from ``counted_on`` (the balance sheet's period end, or the
+        share-count row's day) is scaled by the splits after it, as the raw
+        price it multiplies already is."""
         shares = balance.get("common_stock_shares_outstanding")
         if shares is not None and shares > 0:
-            return shares
+            return shares * self._split_factor(lake, ticker, counted_on, priced_on)
         # Fallback: the share-count table, lagged like an unfiled statement
         # and subject to the same staleness limit as the statements.
         lag = timedelta(days=int(self.params["missing_filing_lag_days"]))
@@ -404,8 +419,36 @@ class QualityValue(BaseStrategy):
         for d, s in reversed(hist):
             if d + lag <= day:
                 fresh = d >= oldest and s is not None and s > 0
-                return s if fresh else None
+                if not fresh or s is None:
+                    return None
+                return s * self._split_factor(lake, ticker, _as_day(d), priced_on)
         return None
+
+    def _split_factor(
+        self, lake: Any, ticker: str, since: date | None, until: date | None
+    ) -> float:
+        """Product of the split ratios with ``since < ex_date <= until``."""
+        if since is None or until is None:
+            return 1.0
+        since, until = _as_day(since), _as_day(until)
+        if until <= since:
+            return 1.0
+        factor = 1.0
+        for event in self._splits(lake, ticker):
+            if since < event.ex_date <= until:
+                factor *= event.ratio
+        return factor
+
+    def _splits(self, lake: Any, ticker: str) -> list[Split]:
+        try:
+            per_lake = self._histories.setdefault(lake, {})
+        except TypeError:
+            per_lake = {}
+        key = ("splits", ticker)
+        if key not in per_lake:
+            events = LakeCorporateActions(lake).load([ticker]).for_ticker(ticker)
+            per_lake[key] = [e for e in events if isinstance(e, Split)]
+        return per_lake[key]
 
     def _history_shares(self, lake: Any, ticker: str) -> list[tuple[date, float | None]]:
         try:
@@ -417,6 +460,12 @@ class QualityValue(BaseStrategy):
             df = lake.get_shares_outstanding(ticker)
             per_lake[key] = [(d, _finite(s)) for d, s in zip(df["date"], df["shares"], strict=True)]
         return per_lake[key]
+
+
+def _as_day(value: Any) -> date:
+    if type(value) is date:
+        return value
+    return cast(date, pd.Timestamp(value).date())
 
 
 def _is_intraday(as_of: Any) -> bool:
