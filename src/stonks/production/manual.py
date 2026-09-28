@@ -55,6 +55,7 @@ from stonks.execution.order_state import mark_unknown, unknown_orders, write_sta
 from stonks.execution.orders import classify_all
 from stonks.execution.reconcile import NON_TERMINAL_STATUSES, reconcile_order, reconcile_orders
 from stonks.logging import get_logger
+from stonks.production.financing import short_account
 from stonks.production.hooks import GateContext, run_gates
 from stonks.production.live.context import LiveContext
 from stonks.production.prices import load_prices
@@ -245,6 +246,8 @@ def place_manual_order(
                 "and the new position as two orders"
             )
         proposed = legs[0]
+        # the leg's id may carry a side token (``#short``): it names the order
+        client_id = proposed.client_id
 
     verdict = run_gates(
         GateContext(
@@ -380,6 +383,10 @@ def _fill_simulated(
         )
     else:
         broker = tick.simulated_costs.build_broker(portfolio)
+        if book.allow_short:
+            # A short book's paper account trades on margin, as in the tick
+            # (roadmap 16.1): without it every short sale is refused.
+            broker.enable_shorts(*short_account(book.risk))
         broker.set_asset_classes(dict(asset_classes))  # type: ignore[arg-type]
         broker.set_prices(priced.prices, as_of=now.date(), volumes=priced.volumes)
         # The simulated broker fills market orders; a marketable limit
@@ -629,7 +636,13 @@ def _snapshot_marker(state: SqliteState, portfolio_id: str) -> int:
 
 
 def _existing(state: SqliteState, client_id: str) -> Any | None:
-    rows = state.sql("SELECT * FROM orders WHERE client_id = ?", [client_id])
+    """The order ``client_id`` names, or the short book leg placed under it
+    (``<client_id>#<side token>``, see ``execution.orders.retoken``)."""
+    rows = state.sql(
+        "SELECT * FROM orders WHERE client_id = ? OR substr(client_id, 1, ?) = ?"
+        " ORDER BY client_id = ? DESC, created_at LIMIT 1",
+        [client_id, len(client_id) + 1, f"{client_id}#", client_id],
+    )
     return rows[0] if rows else None
 
 
@@ -688,8 +701,7 @@ def _reduces(order: Order, portfolio: Portfolio) -> bool:
 
 def _marketable(order: Order, price: float) -> bool:
     limit = order.limit_price
-    if limit is None:
-        return True
+    assert limit is not None  # only limit orders are checked, and they carry a price
     return price <= limit if order.side == "buy" else price >= limit
 
 

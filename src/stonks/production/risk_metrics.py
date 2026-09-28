@@ -320,9 +320,8 @@ def _previous(state: SqliteState, book: BookState) -> Any:
 
 
 def _scored_history(state: SqliteState, book: BookState, limit: int) -> list[Any]:
-    """The last ``limit`` scored days before ``book.as_of``, oldest first."""
-    if limit <= 0:
-        return []
+    """The last ``limit`` scored days before ``book.as_of``, oldest first
+    (``limit`` is the window or one less, at least 19)."""
     rows = state.sql(
         "SELECT violation_95, violation_99 FROM risk_snapshots"
         " WHERE portfolio_id = ? AND strategy_id = ? AND as_of < ?"
