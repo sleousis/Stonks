@@ -111,6 +111,7 @@ READ_TOOLS = {
     "list_shadow_pnl",
     "get_shadow_pnl",
     "get_health_report",
+    "get_stream_status",
     "get_broker",
     "list_sources",
     "list_cost_models",
@@ -405,6 +406,8 @@ async def test_pnl_and_health_report(mcp):
     report = await call(mcp, "get_health_report", {"tickers": ["UP.US", "DOWN.US"]})
     assert isinstance(report["healthy"], bool)
     assert report["checks"]
+    stream = await call(mcp, "get_stream_status", {})
+    assert stream["engines"] == []
 
 
 @pytest.mark.anyio

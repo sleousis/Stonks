@@ -335,6 +335,12 @@ start_before_open_minutes = 15     # engine_start fires at open minus this
 stop_after_close_minutes = 10      # engine_stop fires, and the process stops, at close plus this
 stale_after_seconds = 180          # no new entries on a ticker with no bar for this long
 stop_timeout_seconds = 60
+[streaming.monitor]
+# Engine monitoring (roadmap 21.3.4): stream and engine metrics on /metrics,
+# the live panel, and the engine dead-man in the scheduler's watchdog.
+deadman_minutes = 5          # alert when no bar close for this long in market hours
+stale_after_seconds = 120    # an engine silent this long counts as down
+publish_seconds = 15         # how often the engine writes its status
 
 [audit]
 # Statement audit tolerances (BL-36): relative gaps above which

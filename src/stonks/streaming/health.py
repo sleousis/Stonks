@@ -11,6 +11,7 @@ metric. Labels carry the source id, never a key or an account.
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
@@ -105,8 +106,57 @@ class StreamHealth:
             "subscriber_errors": self.subscriber_errors,
             "backfills": {"ok": self.backfills_ok, "failed": self.backfills_failed},
             "gaps": [g.as_dict() for g in self.gaps],
+            "gaps_total": dict(self.gaps_total),
             "last_error": self.last_error,
         }
+
+    @classmethod
+    def from_snapshot(cls, data: Mapping[str, Any]) -> StreamHealth:
+        """Back from :meth:`snapshot`, for a process that reads another
+        one's health (the API reads the engine's status row, 21.3.4)."""
+
+        def when(key: str) -> datetime | None:
+            value = data.get(key)
+            return datetime.fromisoformat(value) if isinstance(value, str) else None
+
+        state = data.get("state")
+        backfills = data.get("backfills") or {}
+        health = cls(
+            source=str(data.get("source") or "unknown"),
+            state=state if state in STREAM_STATES else "idle",
+            started_at=when("started_at"),
+            connected_at=when("connected_at"),
+            connects=int(data.get("connects") or 0),
+            disconnects=int(data.get("disconnects") or 0),
+            last_event_at=when("last_event_at"),
+            last_heartbeat_at=when("last_heartbeat_at"),
+            bars_written=int(data.get("bars_written") or 0),
+            late_ticks=int(data.get("late_ticks") or 0),
+            write_errors=int(data.get("write_errors") or 0),
+            subscriber_errors=int(data.get("subscriber_errors") or 0),
+            backfills_ok=int(backfills.get("ok") or 0),
+            backfills_failed=int(backfills.get("failed") or 0),
+            last_error=data.get("last_error"),
+        )
+        health.events.update({str(k): int(v) for k, v in (data.get("events") or {}).items()})
+        health.gaps_total.update(
+            {str(k): int(v) for k, v in (data.get("gaps_total") or {}).items()}
+        )
+        for gap in data.get("gaps") or []:
+            start = gap.get("start")
+            if not isinstance(start, str):
+                continue
+            end = gap.get("end")
+            reason = gap.get("reason")
+            health.gaps.append(
+                Gap(
+                    start=datetime.fromisoformat(start),
+                    end=datetime.fromisoformat(end) if isinstance(end, str) else None,
+                    reason=reason if reason in ("startup", "disconnect", "stale") else "stale",
+                    backfilled=gap.get("backfilled"),
+                )
+            )
+        return health
 
 
 def _ts(when: datetime | None) -> float:

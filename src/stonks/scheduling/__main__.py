@@ -65,6 +65,19 @@ def _store(settings: Any) -> RunStore:
     return store
 
 
+def _watchdog(ld: _Loaded, store: RunStore, notifier: Any) -> Any:
+    """The deadline watchdog plus the engine dead-man (roadmap 21.3.4)."""
+    from stonks.engine.deadman import engine_deadman_from_settings
+    from stonks.scheduling.deadman import DeadlineWatchdog
+
+    return DeadlineWatchdog(
+        ld.specs,
+        store,
+        notifier,
+        extra_checks=[engine_deadman_from_settings(ld.settings, store, notifier)],
+    )
+
+
 def _scheduler(ld: _Loaded, store: RunStore, notifier: Any) -> Any:
     from stonks.scheduling.deadman import HttpPinger
     from stonks.scheduling.scheduler import Scheduler
@@ -82,7 +95,6 @@ def _scheduler(ld: _Loaded, store: RunStore, notifier: Any) -> Any:
 
 def _cmd_run(ld: _Loaded) -> int:
     from stonks.notify import notifier_from_settings
-    from stonks.scheduling.deadman import DeadlineWatchdog
     from stonks.scheduling.delivery import start_delivery_worker
     from stonks.scheduling.scheduler import (
         InstanceLock,
@@ -107,7 +119,7 @@ def _cmd_run(ld: _Loaded) -> int:
             signal.signal(sig, lambda *_: scheduler.request_stop())
         delivery = start_delivery_worker(ld.settings)
         try:
-            scheduler.run_forever(watchdog=DeadlineWatchdog(ld.specs, store, notifier))
+            scheduler.run_forever(watchdog=_watchdog(ld, store, notifier))
         finally:
             if delivery is not None:
                 delivery.stop()
@@ -155,10 +167,10 @@ def _cmd_run_now(ld: _Loaded, job: str, as_of: date | None) -> int:
 
 def _cmd_check(ld: _Loaded, now: datetime) -> int:
     from stonks.notify import notifier_from_settings
-    from stonks.scheduling.deadman import DeadlineWatchdog, missed_deadlines
+    from stonks.scheduling.deadman import missed_deadlines
 
     store = _store(ld.settings)
-    DeadlineWatchdog(ld.specs, store, notifier_from_settings(ld.settings)).check(now)
+    _watchdog(ld, store, notifier_from_settings(ld.settings)).check(now)
     misses = missed_deadlines(ld.specs, store, now, not_before=store.first_started_at())
     for m in misses:
         print(f"MISSED {m.job_name} {m.fire.key}: {m.reason}")

@@ -56,6 +56,7 @@ ADMIN_PAGES = (
     "/orders/drafts",
     "/notifications/price-alerts",
     "/ops/models",
+    "/live",
     f"/strategies/{ACTIVE_IDS['AAA.US']}?tab=versions",
     # merged since: calendars, the screener, factors and the research loop
     "/calendar",

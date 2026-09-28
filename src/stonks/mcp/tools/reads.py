@@ -400,3 +400,11 @@ def register(t: ToolContext) -> None:
         """Operational health (every `stonks health` check): bar freshness, stuck
         ticks and ingest runs, recent ingest failures; see `healthy`."""
         return await t.get("/api/health/report", {"tickers": tickers})
+
+    @server.tool(annotations=READ)
+    async def get_stream_status() -> dict[str, Any]:
+        """The live intraday engine: live or not, its market, the dead-man
+        (`silent` after no bar close for `deadman_minutes` in market hours), the
+        stream (connected, last event age, bars built, late ticks), dispatch lag
+        and event to order latency. `engines` is empty until an engine runs."""
+        return await t.get("/api/stream/status")

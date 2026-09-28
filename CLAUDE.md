@@ -222,6 +222,7 @@ uv run python -m stonks.streaming sources|run|record|replay   # live streams int
 - 041: `engine_runs` (the intraday engine process: status, heartbeat, checkpoint, counts, the run it recovered from, roadmap 21.2.5).
 - 042: halt kind `intraday_loss` on `risk_halts` (rebuilt with `reconcile_reports`, ids and counter kept, roadmap 21.3.2).
 - 043: `intraday_snapshots (portfolio_id, strategy_id, day, at, start_value, value, realised, unrealised, fees, pnl, day_return, high_water_pnl, drawdown, gross_exposure, net_exposure, exposures_json, fills, unmarked, stale_marks, max_mark_age_seconds)`: intraday P&L per book and strategy sleeve every few minutes, unique on `(portfolio_id, strategy_id, at)` (roadmap 21.3.3).
+- 044: `engine_status (engine_id, calendar, state, started_at, updated_at, stopped_at, last_dispatch_at, snapshot_json)`: the engine monitor's status row, read by `/metrics`, `/api/stream/status` and the engine dead-man (roadmap 21.3.4).
 
 ## Conventions to match
 

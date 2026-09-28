@@ -128,6 +128,7 @@ A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_r
 
 - **Deadlines.** A watchdog checks every `watchdog_seconds` that each job with `deadline_minutes` succeeded (or was skipped) in time. A miss sends one error alert, recorded in `scheduler_deadline_alerts` so restarts don't repeat it.
 - **Pings.** With `ping_url_env`, a job POSTs `<url>/start`, then `<url>` or `<url>/fail`. The external monitor alerts when pings stop, which also covers a dead scheduler or server. Logs show only `scheme://host/***`.
+- **Engine dead-man.** The same watchdog checks each live intraday engine. When no bar close was dispatched for `[streaming.monitor] deadman_minutes` (5) while the engine's market is open, it sends one error alert per silent stretch. Silence counts from the last bar close, the engine's start or today's open, whichever is latest. A stopped engine or a closed market never alerts. The alert is recorded in `scheduler_deadline_alerts` as job `engine:<id>`, so restarts don't repeat it. `python -m stonks.scheduling check` runs it once too.
 
 ## Health and metrics
 
@@ -154,6 +155,31 @@ The API serves `GET /api/health` (liveness, used by Docker and Caddy) and `GET /
 `stonks serve` serves the same set, data age included, at `GET /metrics`. Scrapes from a loopback peer need no token. From anywhere else they need the scrape-only bearer token `STONKS_METRICS_TOKEN`. The API token is not accepted there, so Prometheus never holds an admin credential. `STONKS_METRICS_ALLOW_LOOPBACK=false` requires the token on loopback too.
 
 A useful alert: `time() - stonks_scheduled_job_last_success_timestamp_seconds{job="tick"} > 26 * 3600` on weekdays.
+
+### Live engine monitoring
+
+The intraday engine runs in its own process. Its monitor writes one `engine_status` row (SQLite migration 044) every `publish_seconds` (15) and when it stops. `GET /metrics` renders it, labelled by `engine` and `source`, never by key or account:
+
+| Metric | What it tells |
+|---|---|
+| `stonks_stream_up`, `stonks_stream_state` | The stream is connected (0 when the engine stopped reporting) |
+| `stonks_stream_last_event_age_seconds` | Seconds since the last trade, quote or bar |
+| `stonks_stream_bars_written_total`, `stonks_stream_late_ticks_total` | Bars built from the stream, late prices dropped |
+| `stonks_stream_connects_total`, `_disconnects_total`, `_gaps_total`, `_backfills_total` | Connection churn and gap repair |
+| `stonks_engine_up` | The engine runs and reported within `stale_after_seconds` (120) |
+| `stonks_engine_last_dispatch_age_seconds` | Seconds since the last bar close was dispatched |
+| `stonks_engine_bar_closes_total`, `_bars_total`, `_late_bars_total` | Driver counters |
+| `stonks_engine_handler_errors_total{handler}` | Steps that raised on a bar close |
+| `stonks_engine_dispatch_lag_seconds` (histogram) | Clock time from a bar's settle time to its dispatch |
+| `stonks_engine_event_to_order_seconds` (histogram) | Time from a bar close dispatch to the order it caused |
+
+`GET /api/stream/status` (`data.read`) and the MCP tool `get_stream_status` show the same with the dead-man state. The console shows it on Live engine (`/live`). Useful alerts:
+
+- `stonks_engine_up == 0` during market hours.
+- `histogram_quantile(0.95, rate(stonks_engine_event_to_order_seconds_bucket[15m])) > 2`.
+- `rate(stonks_engine_handler_errors_total[5m]) > 0`.
+
+Settings live under `[streaming.monitor]`: `deadman_minutes`, `stale_after_seconds` and `publish_seconds`.
 
 Over HTTP, `GET /api/health/live` (the process, plus the scheduler when `stonks serve` hosts it) and `GET /api/health/ready` (state migrated, lake present) are open to everyone, like `GET /api/health`. They answer 200 with each check's name and `ok`, or 503 naming the failing checks; details go to the log, not the response.
 
