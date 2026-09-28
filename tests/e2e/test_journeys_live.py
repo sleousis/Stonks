@@ -78,8 +78,9 @@ def test_a_trader_sets_live_allocation_and_profile(browse, stack, viewport):
     expect(page.get_by_text("No automatic steps.")).to_be_visible()
     v.check_page("live settings")
 
-    page.get_by_label("Amount").fill("2500")
-    page.get_by_label("Reason").fill("first small slice")
+    allocation = page.locator("section[aria-labelledby='allocation-title']")
+    allocation.get_by_label("Amount").fill("2500")
+    allocation.get_by_label("Reason").fill("first small slice")
     page.get_by_role("button", name="Set allocation").click()
     dialog = page.get_by_role("dialog")
     expect(dialog).to_contain_text("2,500")
