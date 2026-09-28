@@ -11,7 +11,7 @@ import {
 import { RouterLink } from '@angular/router';
 
 import { ManualOrdersService } from '../../api/manual-orders.service';
-import type { ManualOrderRequest, ManualOrderResult } from '../../api/models';
+import type { ManualOrderRequest, ManualOrderResult, TradePlanView } from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService, type TicketLine } from '../../core/confirm/confirm.service';
@@ -27,10 +27,14 @@ import { EarningsWarningLine } from './earnings-warning';
 import { ManualOrdersList } from './manual-orders-list';
 import { OrderRefusalPanel, type OrderRefusal, refusalOf } from './order-refusal';
 import { OrderStatus } from './order-status';
+import { TaxPreviewPanel, type TaxQuestion } from './tax-preview';
 
 type Side = 'buy' | 'sell';
 type OrderType = 'market' | 'limit';
-type TicketErrors = Partial<Record<'ticker' | 'quantity' | 'limit' | 'reason', string>>;
+type RiskMode = 'percent' | 'amount';
+type TicketErrors = Partial<
+  Record<'ticker' | 'quantity' | 'limit' | 'reason' | 'stop' | 'target' | 'risk', string>
+>;
 
 const SIDES: SegmentOption<Side>[] = [
   { value: 'buy', label: 'Buy' },
@@ -40,6 +44,30 @@ const TYPES: SegmentOption<OrderType>[] = [
   { value: 'market', label: 'Market' },
   { value: 'limit', label: 'Limit' },
 ];
+const RISK_MODES: SegmentOption<RiskMode>[] = [
+  { value: 'percent', label: 'Percent of book' },
+  { value: 'amount', label: 'Amount' },
+];
+
+/** An optional positive price field: null when empty, NaN when not a price. */
+function optionalPrice(raw: string): number | null {
+  if (!raw.trim()) return null;
+  const n = Number(raw);
+  return n > 0 ? n : Number.NaN;
+}
+
+/** "Risk 498.00 at the stop, 166 shares, 3.0 to 1" for a worked-out size. */
+export function planText(p: TradePlanView, currency: string): string {
+  if (p.quantity === 0) return p.note ?? 'The risk is too small for one share.';
+  const parts = [
+    `${formatNumber(p.quantity)} shares risk ${formatMoney(p.risk_amount, { currency })} at the stop`,
+  ];
+  if (p.reward_risk !== null && p.reward_risk !== undefined) {
+    parts.push(`${formatNumber(p.reward_risk, { digits: 1 })} to 1 reward to risk`);
+  }
+  if (p.capped_by === 'cash') parts.push('cut to the cash on hand');
+  return parts.join(', ') + '.';
+}
 
 /** A fresh idempotency key: the same key places an order once. */
 function newKey(): string {
@@ -72,6 +100,18 @@ export function orderLines(
         : 'Market, at the next price',
   });
   lines.push({ label: 'Last close', value: formatMoney(r.reference_price, { currency }) });
+  if (r.stop_price !== null && r.stop_price !== undefined) {
+    lines.push({ label: 'Stop', value: formatMoney(r.stop_price, { currency }) });
+  }
+  if (r.target_price !== null && r.target_price !== undefined) {
+    lines.push({ label: 'Target', value: formatMoney(r.target_price, { currency }) });
+  }
+  if (r.reward_risk !== null && r.reward_risk !== undefined) {
+    lines.push({
+      label: 'Reward to risk',
+      value: `${formatNumber(r.reward_risk, { digits: 1 })} to 1`,
+    });
+  }
   lines.push({
     label: 'About',
     value: formatMoney(r.quantity * (r.limit_price ?? r.reference_price), { currency }),
@@ -101,6 +141,7 @@ export function orderLines(
     OrderStatus,
     ManualOrdersList,
     EarningsWarningLine,
+    TaxPreviewPanel,
   ],
   template: `
     <div class="layout">
@@ -201,6 +242,96 @@ export function orderLines(
             </div>
           }
 
+          <fieldset class="plan">
+            <legend>Trade plan <span class="muted">(optional)</span></legend>
+            <div class="plan-grid">
+              <div class="field">
+                <label for="mo-stop">Stop</label>
+                <input
+                  id="mo-stop"
+                  class="input num"
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  step="any"
+                  [value]="stop()"
+                  [attr.aria-invalid]="!!errors().stop"
+                  [attr.aria-describedby]="errors().stop ? 'mo-stop-error' : 'mo-stop-hint'"
+                  (input)="edit(stop, $any($event.target).value)"
+                />
+                @if (errors().stop; as e) {
+                  <span id="mo-stop-error" class="hint error">{{ e }}</span>
+                } @else {
+                  <span id="mo-stop-hint" class="hint">
+                    @if (live()) {
+                      Your broker gets a stop order once the entry fills.
+                    } @else {
+                      Below a buy, above a short sale. Kept with the order.
+                    }
+                  </span>
+                }
+              </div>
+              <div class="field">
+                <label for="mo-target">Target</label>
+                <input
+                  id="mo-target"
+                  class="input num"
+                  type="number"
+                  inputmode="decimal"
+                  min="0"
+                  step="any"
+                  [value]="target()"
+                  [attr.aria-invalid]="!!errors().target"
+                  [attr.aria-describedby]="errors().target ? 'mo-target-error' : null"
+                  (input)="edit(target, $any($event.target).value)"
+                />
+                @if (errors().target; as e) {
+                  <span id="mo-target-error" class="hint error">{{ e }}</span>
+                }
+              </div>
+            </div>
+            <div class="field">
+              <span class="label">Size from risk</span>
+              <app-segmented
+                label="Risk as"
+                [options]="riskModes"
+                [value]="riskMode()"
+                (valueChange)="riskMode.set($any($event)); plan.set(null)"
+              />
+            </div>
+            <div class="risk-row">
+              <label for="mo-risk" class="visually-hidden">
+                {{ riskMode() === 'percent' ? 'Risk, percent of the book' : 'Risk, amount' }}
+              </label>
+              <input
+                id="mo-risk"
+                class="input num"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="any"
+                [placeholder]="riskMode() === 'percent' ? '1 (%)' : '500'"
+                [value]="risk()"
+                [attr.aria-invalid]="!!errors().risk"
+                [attr.aria-describedby]="errors().risk ? 'mo-risk-error' : 'mo-plan-result'"
+                (input)="risk.set($any($event.target).value); plan.set(null)"
+              />
+              <button type="button" class="btn" [disabled]="busy()" (click)="workOutSize()">
+                Work out size
+              </button>
+            </div>
+            @if (errors().risk; as e) {
+              <span id="mo-risk-error" class="hint error">{{ e }}</span>
+            }
+            <p id="mo-plan-result" class="hint" aria-live="polite">
+              @if (plan(); as pl) {
+                {{ planLine(pl) }}
+              } @else {
+                The size whose loss at the stop fits your risk, in whole shares.
+              }
+            </p>
+          </fieldset>
+
           <div class="field">
             <label for="mo-reason">Why this trade</label>
             <textarea
@@ -270,6 +401,8 @@ export function orderLines(
           </div>
         }
 
+        <app-tax-preview [question]="taxQuestion()" />
+
         @if (refusal(); as r) {
           <app-order-refusal
             [refusal]="r"
@@ -290,6 +423,11 @@ export function orderLines(
             </p>
             @if (r.fill_price !== null && r.fill_price !== undefined) {
               <p class="num">Filled at {{ money(r.fill_price) }}</p>
+            }
+            @if (r.protective_stop) {
+              <p>Your stop at {{ money(r.stop_price ?? 0) }} is working at the broker.</p>
+            } @else if (r.stop_price && live()) {
+              <p>The stop goes to your broker once the entry fills.</p>
             }
             <a class="btn btn-ghost" [routerLink]="['/trades/orders', r.client_id]"
               >Open the order</a
@@ -344,6 +482,33 @@ export function orderLines(
     .ticket.blank {
       box-shadow: none;
     }
+    .plan {
+      display: grid;
+      gap: var(--space-3);
+      margin: 0;
+      padding: var(--space-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      min-width: 0;
+    }
+    .plan legend {
+      padding: 0 var(--space-1);
+      font-weight: var(--weight-medium);
+    }
+    .plan-grid {
+      display: grid;
+      gap: var(--space-3);
+      grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+    }
+    .risk-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+    .risk-row .input {
+      flex: 1 1 8rem;
+      min-width: 0;
+    }
     .note {
       font-size: var(--text-sm);
       color: var(--color-ink-2);
@@ -392,6 +557,7 @@ export class ManualTicketPage implements OnInit {
 
   protected readonly sides = SIDES;
   protected readonly types = TYPES;
+  protected readonly riskModes = RISK_MODES;
 
   protected readonly tickerField = signal('');
   protected readonly sideField = signal<Side>('buy');
@@ -400,6 +566,12 @@ export class ManualTicketPage implements OnInit {
   protected readonly limit = signal('');
   protected readonly reason = signal('');
   protected readonly allowReduce = signal(false);
+  protected readonly stop = signal('');
+  protected readonly target = signal('');
+  protected readonly riskMode = signal<RiskMode>('percent');
+  protected readonly risk = signal('');
+  protected readonly plan = signal<TradePlanView | null>(null);
+  private readonly triedPlan = signal(false);
 
   protected readonly busy = signal(false);
   protected readonly tried = signal(false);
@@ -418,6 +590,7 @@ export class ManualTicketPage implements OnInit {
 
   protected readonly errors = computed(() => {
     const out: TicketErrors = {};
+    if (this.triedPlan()) this.planErrors(out);
     if (!this.tried()) return out;
     if (!this.tickerField().trim()) out.ticker = 'Enter a ticker, like AAPL.US.';
     const qty = Number(this.quantity());
@@ -426,7 +599,20 @@ export class ManualTicketPage implements OnInit {
       out.limit = 'Enter a limit price above zero.';
     }
     if (!this.reason().trim()) out.reason = 'Say why, in a few words.';
+    this.planErrors(out);
     return out;
+  });
+
+  /** The tax preview's question: the order once it has been checked. */
+  protected readonly taxQuestion = computed<TaxQuestion | null>(() => {
+    const p = this.preview();
+    if (!p) return null;
+    return {
+      ticker: p.ticker,
+      side: p.side,
+      quantity: p.quantity,
+      price: p.limit_price ?? p.reference_price,
+    };
   });
 
   protected readonly previewLines = computed(() => {
@@ -442,6 +628,56 @@ export class ManualTicketPage implements OnInit {
   }
 
   protected readonly num = (v: number) => formatNumber(v);
+  protected planLine(p: TradePlanView): string {
+    return planText(p, this.currency());
+  }
+
+  private planErrors(out: TicketErrors): void {
+    const stop = optionalPrice(this.stop());
+    const target = optionalPrice(this.target());
+    if (Number.isNaN(stop)) out.stop = 'Enter a stop price above zero, or leave it empty.';
+    if (Number.isNaN(target)) out.target = 'Enter a target above zero, or leave it empty.';
+    if (this.triedPlan()) {
+      if (stop === null) out.stop = 'Enter the stop to size from risk.';
+      if (!(Number(this.risk()) > 0)) out.risk = 'Enter the risk you accept, above zero.';
+    }
+  }
+
+  /** Size the entry from the chosen risk and the stop, then fill the quantity. */
+  async workOutSize(): Promise<void> {
+    this.triedPlan.set(true);
+    const errs = this.errors();
+    const ticker = this.tickerField().trim().toUpperCase();
+    if (!ticker) {
+      this.tried.set(true);
+      this.triedPlan.set(false);
+      return;
+    }
+    if (errs.stop || errs.risk) return;
+    const value = Number(this.risk());
+    const limit = this.orderType() === 'limit' ? Number(this.limit()) : NaN;
+    this.busy.set(true);
+    this.failure.set(null);
+    try {
+      const result = await this.api.plan({
+        ticker,
+        side: this.sideField(),
+        stop_price: Number(this.stop()),
+        target_price: optionalPrice(this.target()),
+        entry_price: limit > 0 ? limit : null,
+        risk_percent: this.riskMode() === 'percent' ? value : null,
+        risk_amount: this.riskMode() === 'amount' ? value : null,
+      });
+      this.triedPlan.set(false);
+      if (result.quantity > 0) this.edit(this.quantity, String(result.quantity));
+      this.plan.set(result);
+    } catch (err) {
+      this.plan.set(null);
+      this.failure.set(errorMessage(err));
+    } finally {
+      this.busy.set(false);
+    }
+  }
   protected money(v: number): string {
     return formatMoney(v, { currency: this.currency() });
   }
@@ -517,6 +753,9 @@ export class ManualTicketPage implements OnInit {
       this.quantity.set('');
       this.reason.set('');
       this.limit.set('');
+      this.stop.set('');
+      this.target.set('');
+      this.plan.set(null);
       this.allowReduce.set(false);
       this.tried.set(false);
       this.key = newKey();
@@ -566,6 +805,8 @@ export class ManualTicketPage implements OnInit {
       reason: this.reason().trim(),
       allow_reduce: this.allowReduce(),
       client_id: this.key,
+      stop_price: optionalPrice(this.stop()),
+      target_price: optionalPrice(this.target()),
     };
   }
 }

@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 
+import { SILENT_HEADERS } from '../core/http/interceptors';
 import { PortfolioContextService } from '../core/portfolio/portfolio-context.service';
 import { toApiError } from '../core/http/api-error';
 
@@ -10,7 +11,9 @@ import {
   exportTaxLots,
   getFxRate,
   getTaxSettings,
+  getTaxYear,
   listTaxLotPicks,
+  previewTradeTax,
   setTaxLotPicks,
   updateTaxSettings,
 } from './generated/sdk.gen';
@@ -44,6 +47,28 @@ export class TaxService {
 
   setPicks(body: LotPicksUpdate) {
     return unwrap(setTaxLotPicks({ query: this.ctx.query(), body }));
+  }
+
+  /** What a trade would realise now: lots, gain, estimated tax, wash sale warning. */
+  preview(
+    ticker: string,
+    side: 'buy' | 'sell',
+    quantity: number,
+    price?: number | null,
+    portfolioId?: string | null,
+  ) {
+    const portfolio = portfolioId ? { portfolio_id: portfolioId } : this.ctx.query();
+    return unwrap(
+      previewTradeTax({
+        query: { ...portfolio, ticker, side, quantity, price: price ?? null },
+        headers: SILENT_HEADERS,
+      }),
+    );
+  }
+
+  /** Gains realised this year (or `year`) and the estimated tax on them. */
+  year(year?: number) {
+    return unwrap(getTaxYear({ query: { ...this.ctx.query(), year: year ?? null } }));
   }
 
   fxRate(base: string, quote: string, day?: string) {

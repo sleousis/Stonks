@@ -7,6 +7,7 @@ export const INSIGHTS_SECTIONS = [
   { path: '/insights/risk', label: 'Risk', exact: false },
   { path: '/insights/cash-flows', label: 'Cash flows', exact: false },
   { path: '/insights/tax', label: 'Tax', exact: false },
+  { path: '/insights/behaviour', label: 'Behaviour', exact: false },
 ] as const;
 
 @Component({

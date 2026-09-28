@@ -27,6 +27,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusChangeDialog } from '../../shared/ui/status-change-dialog';
 import { StatusPill, type PillTone } from '../../shared/ui/status-pill';
 import { refusalOf } from './order-refusal';
+import { TaxPreviewPanel, type TaxQuestion } from './tax-preview';
 
 type DraftStatus = OrderDraftView['status'];
 type Filter = DraftStatus | 'all';
@@ -81,6 +82,7 @@ export function draftSource(source: OrderDraftView['source']): string {
     EmptyState,
     ErrorState,
     StatusChangeDialog,
+    TaxPreviewPanel,
   ],
   template: `
     <section class="panel" aria-labelledby="drafts-title">
@@ -127,6 +129,9 @@ export function draftSource(source: OrderDraftView['source']): string {
                   }
                 </dl>
                 <p class="why"><span class="muted">Why:</span> {{ d.reason }}</p>
+                @if (d.status === 'pending') {
+                  <app-tax-preview [question]="taxOf(d)" />
+                }
                 <p class="meta">
                   <app-status-pill
                     [status]="d.status"
@@ -258,6 +263,17 @@ export class OrderDraftsPage {
   protected readonly canReject = computed(() => this.session.can('portfolio.trade'));
 
   protected readonly num = (v: number) => formatNumber(v);
+
+  /** The tax preview of a draft, asked before you approve it. */
+  protected taxOf(d: OrderDraftView): TaxQuestion {
+    return {
+      ticker: d.ticker,
+      side: d.side,
+      quantity: d.quantity,
+      price: d.limit_price,
+      portfolioId: d.portfolio_id,
+    };
+  }
   protected readonly ago = (v: string) => formatAgo(v);
   protected readonly when = (v: string) => formatDateTime(v);
   protected readonly statusOf = (d: OrderDraftView) => draftStatus(d.status);

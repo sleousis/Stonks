@@ -17,6 +17,11 @@ export default [
     loadComponent: () => import('./cash-flows.page').then((m) => m.CashFlowsPage),
   },
   {
+    path: 'behaviour',
+    title: 'Behaviour',
+    loadComponent: () => import('./behaviour.page').then((m) => m.BehaviourPage),
+  },
+  {
     path: 'tax',
     title: 'Tax',
     loadComponent: () => import('./tax.page').then((m) => m.TaxPage),
