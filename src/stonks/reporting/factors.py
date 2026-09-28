@@ -78,6 +78,45 @@ def _curves(sheet: Any) -> str:
     return f"<h3>Cumulative return, held {e(sheet.every_bars)} bars at a time</h3>{chart}"
 
 
+_PERIOD_NAMES = {
+    "pre_sample": "before the sample",
+    "in_sample": "in sample",
+    "post_sample": "after the sample, before publication",
+    "post_publication": "after publication",
+}
+
+
+def _provenance_section(sheet: Any) -> str:
+    """The factor's paper and its IC per period (roadmap 23.13)."""
+    source = sheet.factor.get("provenance")
+    if not source:
+        return ""
+    t_stat = source.get("t_stat")
+    reported = source["reported"] + (f" (t {t_stat:.2f})" if t_stat is not None else "")
+    rows = (
+        [
+            e(_PERIOD_NAMES.get(p.period, p.period)),
+            e(f"{p.start} to {p.end}"),
+            e(p.n_dates),
+            e(_f(p.mean_ic)),
+            e(_f(p.t_stat_hac, "{:+.2f}")),
+            e(_p(p.spread_mean)),
+        ]
+        for p in sheet.periods
+    )
+    return (
+        f"<h3>Source and decay (h={e(sheet.ic_horizon)})</h3>"
+        f'<p class="muted">{e(source["paper"])}. Sample {e(source["sample_start"])} to '
+        f"{e(source['sample_end'])}, published {e(source['published'])}. Reported: "
+        f"{e(reported)}.</p>"
+        + table(
+            ["period", "dates", "n", "mean IC", "t (HAC)", "top minus bottom"],
+            rows,
+            "no dates in the window",
+        )
+    )
+
+
 def render_factor_section(sheet: Any) -> str:
     """A :class:`~stonks.factors.tearsheet.FactorTearSheet` as one ``<section>``."""
     factor = sheet.factor
@@ -135,6 +174,7 @@ def render_factor_section(sheet: Any) -> str:
         f'<section>{head}<div class="tiles">{tiles}</div>'
         f"<h3>IC per horizon</h3>{ic_table}"
         f"<h3>Mean forward return per bucket (Q1 lowest values)</h3>{q_table}"
+        f"{_provenance_section(sheet)}"
         f"{_curves(sheet)}{alpha}{_group_tables(sheet)}{_monthly_section(sheet)}</section>"
     )
 

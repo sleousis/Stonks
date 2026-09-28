@@ -86,7 +86,9 @@ def _fmt(x: float | None, spec: str = "{:+.4f}") -> str:
 @app.command("list")
 def list_factors(
     family: str | None = typer.Option(None, "--family", help="e.g. momentum, value, kbar"),
-    set_name: str | None = typer.Option(None, "--set", help="alpha158, classic or fundamentals"),
+    set_name: str | None = typer.Option(
+        None, "--set", help="alpha158, classic, fundamentals, published or setups"
+    ),
     kind: str | None = typer.Option(None, "--kind", help="expression or fundamental"),
 ) -> None:
     """Every library factor, or one family, set or kind."""
@@ -121,6 +123,13 @@ def show(factor_id: str = typer.Argument(..., help="a library factor id")) -> No
     console.print(f"asset classes: {', '.join(f.asset_classes)}")
     if f.hypothesis:
         console.print(f"hypothesis: {f.hypothesis}")
+    if f.provenance:
+        p = f.provenance
+        console.print(f"source: {p.paper}")
+        console.print(
+            f"sample {p.sample_start} to {p.sample_end}, published {p.published}; "
+            f"reported: {p.reported}"
+        )
 
 
 @app.command("check")
@@ -238,6 +247,17 @@ def _print_sheet(sheet: Any) -> None:
     for key, groups in sheet.ic_by_group.items():
         parts = ", ".join(f"{g.group} {_fmt(g.mean_ic, '{:+.3f}')}" for g in groups)
         console.print(f"IC by {key.replace('_', ' ')}: {parts}")
+    source = sheet.factor.get("provenance")
+    if source:
+        console.print(
+            f"source: {source['paper']} (sample {source['sample_start']} to "
+            f"{source['sample_end']}, published {source['published']})"
+        )
+        for p in sheet.periods:
+            console.print(
+                f"  {p.period.replace('_', ' ')}: {p.n_dates} dates, mean IC "
+                f"{_fmt(p.mean_ic, '{:+.3f}')}, t {_fmt(p.t_stat_hac, '{:+.2f}')}"
+            )
 
 
 @app.command("dataset")

@@ -3,7 +3,16 @@ the starting points for :class:`FactorStrategy` and tear sheets."""
 
 from __future__ import annotations
 
-from stonks.factors.base import ExpressionFactor, Factor
+from stonks.factors.base import ExpressionFactor, Factor, Provenance
+
+_JEGADEESH_TITMAN = Provenance(
+    "Jegadeesh and Titman (1993), Returns to buying winners and selling losers: "
+    "implications for stock market efficiency, Journal of Finance 48(1)",
+    published=1993,
+    sample_start=1965,
+    sample_end=1989,
+    reported="6-month formation and holding: 12.01% a year compounded",
+)
 
 
 def factors() -> list[Factor]:
@@ -19,6 +28,7 @@ def factors() -> list[Factor]:
                 "last month is skipped for its short-term reversal. Fails in momentum "
                 "crashes, when last year's losers rebound hardest."
             ),
+            provenance=_JEGADEESH_TITMAN,
         ),
         ExpressionFactor(
             "mom_6_1",
@@ -29,6 +39,7 @@ def factors() -> list[Factor]:
                 "The medium-term version of 12-1 momentum: underreaction to slow news. "
                 "Fails in sharp market reversals."
             ),
+            provenance=_JEGADEESH_TITMAN,
         ),
         ExpressionFactor(
             "reversal_1m",
@@ -39,6 +50,15 @@ def factors() -> list[Factor]:
                 "Liquidity providers are paid to absorb one-month overreaction, so last "
                 "month's losers bounce (Jegadeesh 1990). Fails when the moves carry real "
                 "news, and after trading costs in illiquid names."
+            ),
+            provenance=Provenance(
+                "Jegadeesh (1990), Evidence of predictable behavior of security returns, "
+                "Journal of Finance 45(3)",
+                published=1990,
+                sample_start=1934,
+                sample_end=1987,
+                reported="extreme decile portfolios on predicted monthly returns differ "
+                "by about 2.5% a month",
             ),
         ),
         ExpressionFactor(
@@ -52,6 +72,15 @@ def factors() -> list[Factor]:
                 "more per unit of risk (the low-volatility anomaly). Fails in speculative "
                 "rallies led by high-beta names."
             ),
+            provenance=Provenance(
+                "Ang, Hodrick, Xing and Zhang (2006), The cross-section of volatility and "
+                "expected returns, Journal of Finance 61(1)",
+                published=2006,
+                sample_start=1963,
+                sample_end=2000,
+                reported="highest minus lowest idiosyncratic volatility quintile about "
+                "-1% a month (the paper measures volatility net of the Fama-French factors)",
+            ),
         ),
         ExpressionFactor(
             "dist_52w_high",
@@ -62,6 +91,15 @@ def factors() -> list[Factor]:
                 "Investors anchor on the 52-week high and underreact near it, so stocks "
                 "close to their high keep rising (George and Hwang 2004). Fails at "
                 "market tops."
+            ),
+            provenance=Provenance(
+                "George and Hwang (2004), The 52-week high and momentum investing, "
+                "Journal of Finance 59(5)",
+                published=2004,
+                sample_start=1963,
+                sample_end=2001,
+                reported="nearness to the 52-week high explains a large part of momentum "
+                "profits and does not reverse in the long run",
             ),
         ),
         ExpressionFactor(

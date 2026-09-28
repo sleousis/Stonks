@@ -25,7 +25,7 @@ import pandas as pd
 
 from stonks.core.interval import Interval
 from stonks.core.timeutil import day_end, day_start
-from stonks.factors.base import Factor, FactorKind
+from stonks.factors.base import Factor, FactorKind, Provenance
 from stonks.factors.engine import PanelRequest, membership_spans, read_bars
 from stonks.store.pit import PitSession, PointInTimeLake
 
@@ -66,6 +66,7 @@ class FundamentalFactor(Factor):
         direction: int,
         hypothesis: str,
         scorer: Scorer = _quant_value,
+        provenance: Provenance | None = None,
     ) -> None:
         self.id = id
         self.metric = metric
@@ -74,6 +75,7 @@ class FundamentalFactor(Factor):
         self.direction = direction
         self.hypothesis = hypothesis
         self._scorer = scorer
+        self.provenance = provenance
 
     def _values(self, scorer: Any, view: Any, tickers: Sequence[str], as_of: datetime) -> dict:
         out: dict[str, float] = {}
@@ -162,6 +164,14 @@ def factors() -> list[Factor]:
             "The classic value premium (Fama and French): high book-to-market firms earn "
             "more, as pay for distress risk or as a behavioural overreaction. Fails in "
             "long growth-led markets.",
+            provenance=Provenance(
+                "Fama and French (1992), The cross-section of expected stock returns, "
+                "Journal of Finance 47(2)",
+                published=1992,
+                sample_start=1963,
+                sample_end=1990,
+                reported="highest minus lowest book-to-market decile about 1.5% a month",
+            ),
         ),
         f(
             "return_on_capital",
@@ -180,6 +190,15 @@ def factors() -> list[Factor]:
             "Piotroski F-score, 0 to 9",
             "Among cheap stocks, those with improving profitability, liquidity and "
             "efficiency outperform (Piotroski 2000). Fails in junk rallies.",
+            provenance=Provenance(
+                "Piotroski (2000), Value investing: the use of historical financial "
+                "statement information to separate winners from losers, Journal of "
+                "Accounting Research 38",
+                published=2000,
+                sample_start=1976,
+                sample_end=1996,
+                reported="high minus low F-score among value firms about 23% a year",
+            ),
         ),
         f(
             "financial_strength",
@@ -207,6 +226,14 @@ def factors() -> list[Factor]:
             "scaled total accruals",
             "Earnings built on accruals rather than cash reverse, and investors fixate on "
             "earnings, so high-accrual firms underperform (Sloan 1996).",
+            provenance=Provenance(
+                "Sloan (1996), Do stock prices fully reflect information in accruals and "
+                "cash flows about future earnings?, The Accounting Review 71(3)",
+                published=1996,
+                sample_start=1962,
+                sample_end=1991,
+                reported="low minus high accrual hedge about 10% a year",
+            ),
         ),
         f(
             "net_operating_assets",
@@ -216,6 +243,14 @@ def factors() -> list[Factor]:
             "scaled net operating assets",
             "Bloated balance sheets signal past earnings that outran cash flow, so high "
             "net operating assets predict lower returns (Hirshleifer and others 2004).",
+            provenance=Provenance(
+                "Hirshleifer, Hou, Teoh and Zhang (2004), Do investors overvalue firms "
+                "with bloated balance sheets?, Journal of Accounting and Economics 38",
+                published=2004,
+                sample_start=1964,
+                sample_end=2002,
+                reported="net operating assets scaled by lagged assets predict lower returns",
+            ),
         ),
         f(
             "beneish_m",

@@ -40,6 +40,17 @@ MAX_UNIVERSE = 5000
 # ---- views ---------------------------------------------------------------------------
 
 
+class ProvenanceView(BaseModel):
+    """The paper a published factor comes from (roadmap 23.13)."""
+
+    paper: str
+    published: int
+    sample_start: int
+    sample_end: int
+    reported: str
+    t_stat: float | None = None
+
+
 class FactorView(BaseModel):
     id: str
     kind: str
@@ -55,6 +66,8 @@ class FactorView(BaseModel):
     expression: str | None = None
     lookback_bars: int
     asset_classes: list[str]
+    #: The source paper of a published factor, else ``None``.
+    provenance: ProvenanceView | None = None
 
 
 class FactorSetView(BaseModel):
@@ -201,6 +214,16 @@ class MonthlyICView(BaseModel):
     months: list[float | None]
 
 
+class PeriodICView(BaseModel):
+    period: str
+    start: str
+    end: str
+    n_dates: int
+    mean_ic: float | None = None
+    t_stat_hac: float | None = None
+    spread_mean: float | None = None
+
+
 class FactorTearSheetView(BaseModel):
     """:class:`stonks.factors.tearsheet.FactorTearSheet`; NaN is null."""
 
@@ -228,6 +251,9 @@ class FactorTearSheetView(BaseModel):
     monthly_ic: list[MonthlyICView] = Field(default_factory=list)
     score_turnover: float | None = None
     top_quantile_turnover: float | None = None
+    #: The IC per period against the factor's paper (in sample, after the
+    #: sample, after publication); empty for a factor without one.
+    periods: list[PeriodICView] = Field(default_factory=list)
 
 
 # ---- helpers -------------------------------------------------------------------------
