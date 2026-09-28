@@ -39,6 +39,7 @@ import {
   buildLabRunRequest,
   defaultLabRunForm,
   labRunErrors,
+  strategyTitle,
   suiteTests,
   suitesFromPresets,
 } from './lab-requests';
@@ -75,9 +76,9 @@ export function isAdvancedField(key: string): boolean {
 }
 
 /**
- * Tune a strategy class, fit it and run a survival suite; emits the
- * request body. Strategy, data, suite, hypothesis and "Start paper trading
- * if it passes" stay in view; the quant settings sit in one Advanced fold.
+ * Tune a strategy, fit it and run a suite of robustness tests; emits the
+ * request body. Strategy, data, suite, hypothesis and "Put it on trial if
+ * it passes" stay in view; the quant settings sit in one Advanced fold.
  */
 @Component({
   selector: 'app-lab-run-form',
@@ -172,6 +173,7 @@ export class LabRunFormView {
       .map((f) => ({ name: f.name, label: f.label })),
   );
   protected readonly objectives = OBJECTIVES;
+  protected readonly title = strategyTitle;
   protected readonly gridMin = HEATMAP_GRID_MIN;
   protected readonly gridMax = HEATMAP_GRID_MAX;
 
@@ -234,7 +236,7 @@ export class LabRunFormView {
     }));
   }
 
-  /** Starting paper trading defaults to the go-live suite, as the API does. */
+  /** Putting it on trial defaults to the Full suite, as the API does. */
   protected setRegister(on: boolean): void {
     this.form.update((f) => ({
       ...f,
@@ -244,7 +246,7 @@ export class LabRunFormView {
     }));
   }
 
-  /** "Whatever the verdict" (Advanced): start paper trading even when a test fails. */
+  /** "Whatever the verdict" (Advanced): put it on trial even when a test fails. */
   protected setRegisterAlways(on: boolean): void {
     if (on) {
       this.setRegister(true);

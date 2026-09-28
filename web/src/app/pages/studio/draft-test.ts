@@ -27,6 +27,7 @@ import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { BacktestResultView } from '../../shared/lab-results/backtest-result';
 import { LabRunResultView } from '../../shared/lab-results/lab-run-result';
+import { HelpTip } from '../../shared/ui/help-tip';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { CostField } from '../lab/cost-field';
@@ -54,7 +55,7 @@ import { INTERVALS } from './rule-spec';
 @Component({
   selector: 'app-draft-test',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [BacktestResultView, LabRunResultView, StatusPill, PermissionNote, CostField],
+  imports: [BacktestResultView, LabRunResultView, StatusPill, PermissionNote, CostField, HelpTip],
   templateUrl: './draft-test.html',
   styleUrl: './draft-test.scss',
 })

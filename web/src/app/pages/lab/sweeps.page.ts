@@ -56,8 +56,8 @@ import { SweepFormView } from './sweep-form';
         </div>
         <div class="panel-body">
           <p class="lead">
-            Each strategy is tuned and tested on the same data with the suite you pick. Nothing
-            starts paper trading, and every trial is counted.
+            Tests many strategies on the same data with the robustness tests you pick, and ranks
+            them. Nothing goes on trial, and every setting tried is counted.
           </p>
           @if (classes.error(); as err) {
             <app-error-state
@@ -113,7 +113,7 @@ import { SweepFormView } from './sweep-form';
           } @else {
             <app-empty-state
               title="No sweep running"
-              message="Start a sweep and its progress shows here. Finished sweeps can be opened from the history on the Backtest and lab run screen."
+              message="Start a sweep and its progress shows here. Finished sweeps can be opened from the list of recent jobs on the Test a strategy screen."
             />
           }
         </div>

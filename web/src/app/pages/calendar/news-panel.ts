@@ -11,6 +11,8 @@ import { RouterLink } from '@angular/router';
 import { CalendarsService, type NewsQuery } from '../../api/calendars.service';
 import type { NewsItem } from '../../api/models';
 import { formatAgo, formatDate, formatNumber } from '../../core/format/format';
+import { DataPlanNote } from '../../shared/ui/data-plan-note';
+import { HelpTip } from '../../shared/ui/help-tip';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } from './calendar-view';
 
@@ -22,12 +24,13 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
 @Component({
   selector: 'app-news-panel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, LoadingState, ErrorState, EmptyState],
+  imports: [RouterLink, LoadingState, ErrorState, EmptyState, DataPlanNote, HelpTip],
   template: `
     <section class="panel" aria-labelledby="news-title">
       <div class="panel-head">
-        <h2 id="news-title">News and sentiment</h2>
+        <h2 id="news-title">News and sentiment <app-help-tip term="sentiment_score" /></h2>
       </div>
+      <app-data-plan-note class="panel-body" kind="news" />
       @if (!query()) {
         <app-empty-state
           title="Pick whose news to show"
@@ -40,7 +43,7 @@ import { type SentimentSummary, safeUrl, sentimentWord, summarizeSentiment } fro
       } @else if (news.value().items.length === 0 && news.value().sentiment.length === 0) {
         <app-empty-state
           title="No news yet"
-          message="Articles and sentiment arrive with each data update for these tickers."
+          message="Articles and sentiment arrive with each data update for these tickers. Not every ticker has news every day."
         />
       } @else {
         <div class="panel-body body">

@@ -1,6 +1,6 @@
 <app-page-header
   title="Screener"
-  description="Find instruments by price and fundamentals, on the data as it was on a date. Keep a screen, or make it a universe for the lab."
+  description="Find instruments by price and company numbers, on the data as it was on a date. Keep a screen, or save it as a list the lab can test on."
 />
 
 <div class="layout">
@@ -54,7 +54,8 @@
                 (change)="asOf.set($any($event.target).value)"
               />
               <span id="sc-asof-hint" class="hint"
-                >Empty means today. Only data known then counts.</span
+                >Empty means today. Only data known then counts
+                <app-help-tip term="point_in_time" />.</span
               >
             </div>
           </div>
@@ -120,7 +121,9 @@
               />
             </div>
             <div class="field">
-              <label for="sc-min-adv">Lowest daily dollar volume</label>
+              <label for="sc-min-adv"
+                >Lowest daily dollar volume <app-help-tip term="dollar_volume"
+              /></label>
               <input
                 id="sc-min-adv"
                 class="input num"
@@ -139,6 +142,7 @@
 
         <fieldset class="group">
           <legend>Filters</legend>
+          <app-data-plan-note kind="fundamentals" />
           <app-screen-filters
             idPrefix="sc"
             [metrics]="metricList()"
@@ -190,7 +194,15 @@
             />
           }
           <details class="columns">
-            <summary>Also show ({{ form().columns.length }})</summary>
+            <summary>
+              Extra columns
+              @if (form().columns.length) {
+                <span class="summary">{{ form().columns.length }} picked</span>
+              }
+            </summary>
+            <p class="hint">
+              Show these figures next to each match, besides the ones you filter on.
+            </p>
             <div class="checks">
               @for (m of priceMetrics().concat(fundamentalMetrics()); track m.id) {
                 <label class="check">

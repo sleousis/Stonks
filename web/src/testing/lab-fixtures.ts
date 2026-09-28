@@ -45,6 +45,9 @@ export const SPEC: ParameterInfo[] = [
 export const MOMENTUM: StrategyClassInfo = {
   class_path: 'stonks.strategies.examples.momentum:Momentum',
   name: 'momentum',
+  title: 'Momentum',
+  alpha_family: 'trend',
+  is_wrapper: false,
   source: 'builtin',
   description: 'Buys the strongest trailing returns.',
   applicable_asset_classes: ['equity'],
@@ -54,6 +57,9 @@ export const MOMENTUM: StrategyClassInfo = {
 export const BUY_AND_HOLD: StrategyClassInfo = {
   class_path: 'stonks.strategies.examples.buy_and_hold:BuyAndHold',
   name: 'buy_and_hold',
+  title: 'Buy and hold',
+  alpha_family: 'benchmark',
+  is_wrapper: false,
   source: 'builtin',
   description: 'Buys once and holds.',
   applicable_asset_classes: ['equity', 'crypto'],
@@ -63,6 +69,9 @@ export const BUY_AND_HOLD: StrategyClassInfo = {
 export const MACRO: StrategyClassInfo = {
   class_path: 'stonks.strategies.macro_regime:MacroRegime',
   name: 'macro_regime',
+  title: 'Economy filter',
+  alpha_family: 'other',
+  is_wrapper: true,
   source: 'builtin',
   description: 'Risk on or off from macro indicators.',
   applicable_asset_classes: ['equity'],

@@ -1,6 +1,6 @@
 <app-page-header
   title="Lab"
-  description="Backtest a strategy, or tune it and run the survival tests before it goes to paper trading."
+  description="Test whether a strategy would have made money in the past, and whether that result holds up or is luck. Nothing here trades."
 />
 <app-lab-nav />
 
@@ -8,110 +8,144 @@
   <!-- Forms ---------------------------------------------------------------->
   <section #formPanel class="panel form-panel" aria-labelledby="lab-form-title">
     <div class="panel-head">
-      <h2 id="lab-form-title">New run</h2>
-      <div class="tabs" role="tablist" aria-label="Run type">
+      <h2 id="lab-form-title">{{ view() === 'simple' ? 'Test a strategy' : 'Advanced run' }}</h2>
+      <div class="view-switch" role="group" aria-label="Form">
         <button
-          id="lab-tab-backtest"
+          id="lab-view-simple"
           type="button"
-          role="tab"
-          aria-controls="lab-panel-backtest"
-          [attr.aria-selected]="mode() === 'backtest'"
-          [attr.tabindex]="mode() === 'backtest' ? 0 : -1"
-          (click)="selectMode('backtest')"
-          (keydown)="onTabKey($event)"
+          [attr.aria-pressed]="view() === 'simple'"
+          (click)="setView('simple')"
         >
-          Backtest
+          Simple
         </button>
         <button
-          id="lab-tab-lab_run"
+          id="lab-view-advanced"
           type="button"
-          role="tab"
-          aria-controls="lab-panel-lab_run"
-          [attr.aria-selected]="mode() === 'lab_run'"
-          [attr.tabindex]="mode() === 'lab_run' ? 0 : -1"
-          (click)="selectMode('lab_run')"
-          (keydown)="onTabKey($event)"
+          [attr.aria-pressed]="view() === 'advanced'"
+          (click)="setView('advanced')"
         >
-          Lab run
+          Advanced
         </button>
       </div>
     </div>
 
     @if (classes.error(); as err) {
       <app-error-state
-        title="Could not load the strategy catalog"
+        title="Could not load the strategies"
         [error]="err"
         (retry)="classes.reload()"
       />
     } @else if (!classes.hasValue()) {
-      <app-loading-state label="Loading strategy classes" [rows]="6" />
+      <app-loading-state label="Loading strategies" [rows]="6" />
     } @else if (classes.value().length === 0) {
       <app-empty-state
-        title="No strategy classes"
-        message="No strategies are available to test yet. Ask your admin to add some."
+        title="No strategies to test"
+        [message]="
+          isAdmin()
+            ? 'The strategy catalog came back empty. Check that the server started without errors on the Health page.'
+            : 'No strategies are available to test yet. Your admin can check the server on the Health page.'
+        "
       />
     } @else {
-      @if (strategy(); as id) {
-        <div class="preset panel-body" role="status">
-          @if (sourceStrategy.error()) {
-            <p class="preset-warn">Could not load strategy “{{ id }}”, so the forms start empty.</p>
-          } @else if (strategyPreset(); as p) {
-            @if (presetUncatalogued()) {
-              <p class="preset-warn">
-                {{ p.strategyId }} uses a strategy that is not available to test here, so the forms
-                start empty.
-              </p>
-            } @else {
-              <p>
-                Re-running <strong>{{ p.strategyId }}</strong
-                >: its class and saved parameters are filled in. A lab run searches the parameters
-                again.
-              </p>
-            }
-          }
-        </div>
-      }
-      <div
-        id="lab-panel-backtest"
-        class="panel-body"
-        role="tabpanel"
-        aria-labelledby="lab-tab-backtest"
-        [hidden]="mode() !== 'backtest'"
-      >
-        <p class="lead">
-          Replays one parameter set over the window and reports return, risk and the equity curve.
-        </p>
-        <app-backtest-form
+      <div id="lab-simple" class="panel-body" [hidden]="view() !== 'simple'">
+        <app-simple-test-form
           [classes]="classes.value()"
-          [intervals]="intervalList()"
-          [costModels]="costModelList()"
-          [preset]="strategyPreset()"
+          [universes]="universeList()"
           [tickers]="tickerList()"
+          [universe]="universe() ?? null"
+          [testCount]="standardCount()"
           [busy]="starting()"
-          (submitted)="startBacktest($event)"
+          (submitted)="startSimpleTest($event)"
         />
       </div>
-      <div
-        id="lab-panel-lab_run"
-        class="panel-body"
-        role="tabpanel"
-        aria-labelledby="lab-tab-lab_run"
-        [hidden]="mode() !== 'lab_run'"
-      >
-        <p class="lead">
-          Searches the parameter space on the training share, then checks the winner with the
-          survival tests you pick.
-        </p>
-        <app-lab-run-form
-          [classes]="classes.value()"
-          [intervals]="intervalList()"
-          [universes]="universeList()"
-          [preset]="strategyPreset()"
-          [tickers]="tickerList()"
-          [prefill]="prefill()"
-          [busy]="starting()"
-          (submitted)="startLabRun($event)"
-        />
+
+      <div id="lab-advanced" [hidden]="view() !== 'advanced'">
+        <div class="panel-body adv-intro">
+          <p class="lead">
+            Every setting. A backtest replays one set of settings. A lab run searches for good
+            settings, then runs the robustness tests you pick.
+          </p>
+          <div class="tabs" role="tablist" aria-label="Run type">
+            <button
+              id="lab-tab-backtest"
+              type="button"
+              role="tab"
+              aria-controls="lab-panel-backtest"
+              [attr.aria-selected]="mode() === 'backtest'"
+              [attr.tabindex]="mode() === 'backtest' ? 0 : -1"
+              (click)="selectMode('backtest')"
+              (keydown)="onTabKey($event)"
+            >
+              Backtest
+            </button>
+            <button
+              id="lab-tab-lab_run"
+              type="button"
+              role="tab"
+              aria-controls="lab-panel-lab_run"
+              [attr.aria-selected]="mode() === 'lab_run'"
+              [attr.tabindex]="mode() === 'lab_run' ? 0 : -1"
+              (click)="selectMode('lab_run')"
+              (keydown)="onTabKey($event)"
+            >
+              Lab run
+            </button>
+          </div>
+        </div>
+        @if (strategy(); as id) {
+          <div class="preset panel-body" role="status">
+            @if (sourceStrategy.error()) {
+              <p class="preset-warn">Could not load that strategy, so the forms start empty.</p>
+            } @else if (strategyPreset(); as p) {
+              @if (presetUncatalogued()) {
+                <p class="preset-warn">
+                  {{ presetName() }} uses a strategy that is not available to test here, so the
+                  forms start empty.
+                </p>
+              } @else {
+                <p>
+                  Testing <strong>{{ presetName() }}</strong> again: its strategy and saved settings
+                  are filled in. A lab run searches the settings again.
+                </p>
+              }
+            }
+          </div>
+        }
+        <div
+          id="lab-panel-backtest"
+          class="panel-body"
+          role="tabpanel"
+          aria-labelledby="lab-tab-backtest"
+          [hidden]="mode() !== 'backtest'"
+        >
+          <app-backtest-form
+            [classes]="classes.value()"
+            [intervals]="intervalList()"
+            [costModels]="costModelList()"
+            [preset]="strategyPreset()"
+            [tickers]="tickerList()"
+            [busy]="starting()"
+            (submitted)="startBacktest($event)"
+          />
+        </div>
+        <div
+          id="lab-panel-lab_run"
+          class="panel-body"
+          role="tabpanel"
+          aria-labelledby="lab-tab-lab_run"
+          [hidden]="mode() !== 'lab_run'"
+        >
+          <app-lab-run-form
+            [classes]="classes.value()"
+            [intervals]="intervalList()"
+            [universes]="universeList()"
+            [preset]="strategyPreset()"
+            [tickers]="tickerList()"
+            [prefill]="prefill()"
+            [busy]="starting()"
+            (submitted)="startLabRun($event)"
+          />
+        </div>
       </div>
     }
   </section>
@@ -136,7 +170,7 @@
               @if (!f.handle.done()) {
                 <div class="progress">
                   <p class="progress-label" id="lab-progress-label">
-                    <span>{{ f.handle.message() ?? 'Waiting for a worker' }}</span>
+                    <span>{{ f.handle.message() ?? 'Queued' }}</span>
                     <span class="num">{{ f.handle.progress() | pct: { digits: 0 } }}</span>
                   </p>
                   <progress
@@ -188,9 +222,9 @@
                     @switch (n.kind) {
                       @case ('paper') {
                         <p class="next-text">
-                          <strong>It passed and is paper trading</strong> as
-                          <span class="num">{{ n.strategyId }}</span
-                          >. Follow it to get its signals, or paper trade it in your portfolio.
+                          <strong>It passed and is on trial</strong> as
+                          {{ displayName(n.strategyId) }}. Stonks tests it on paper at every trading
+                          run. Follow it to get its signals.
                         </p>
                         <div class="next-actions">
                           <a class="btn btn-primary" [routerLink]="['/strategies', n.strategyId]"
@@ -206,8 +240,8 @@
                       }
                       @case ('passed') {
                         <p class="next-text">
-                          <strong>It passed.</strong> To start paper trading it, run it again with
-                          "Start paper trading if it passes" ticked. The form is filled in for you.
+                          <strong>It passed.</strong> To put it on trial, run it again with "Put it
+                          on trial if it passes" ticked. The form is filled in for you.
                         </p>
                         <div class="next-actions">
                           <button
@@ -216,21 +250,15 @@
                             [disabled]="!canRerun() || !canRun()"
                             (click)="rerun(true)"
                           >
-                            Start paper trading
+                            Put it on trial
                           </button>
                         </div>
                       }
                       @case ('failed') {
                         <p class="next-text">
-                          <strong
-                            >It failed {{ n.failed.length }} of {{ n.total }}
-                            {{ n.total === 1 ? 'test' : 'tests' }}</strong
-                          >
-                          @if (n.failed.length) {
-                            : {{ n.failed.join(', ') }}
-                          }
-                          . Change the window, tickers or suite and run it again. Loosening a test
-                          until it passes is how overfitting sneaks in.
+                          <strong>{{ failedText(n) }}</strong> Change the window, tickers or suite
+                          and run it again. Loosening a test until it passes is how overfitting
+                          sneaks in.
                         </p>
                         <div class="next-actions">
                           <button
@@ -259,7 +287,7 @@
         } @else {
           <app-empty-state
             title="No run open"
-            message="Start a backtest or lab run, or open a finished job from the history below. Progress shows here while it runs."
+            message="Test a strategy, or open a finished job from the list below. Progress shows here while it runs, and a plain verdict when it is done."
           />
         }
       </div>

@@ -22,6 +22,7 @@ import {
   job,
 } from './options-test-fixtures';
 import { OptionsPage } from './options.page';
+import { provideFakeDataCoverage } from '../../../testing/fake-data-coverage';
 
 describe('OptionsPage', () => {
   let fixture: ComponentFixture<OptionsPage>;
@@ -36,6 +37,7 @@ describe('OptionsPage', () => {
     TestBed.configureTestingModule({
       imports: [OptionsPage],
       providers: [
+        provideFakeDataCoverage(),
         ...provideApi(),
         provideHttpClientTesting(),
         provideRouter([]),
@@ -134,7 +136,7 @@ describe('OptionsPage', () => {
     const headers = [...chain.querySelectorAll('th')].map((th) => th.textContent!.trim());
     expect(headers).toContain('Call bid');
     expect(headers).toContain('Put delta');
-    expect(chain.textContent).toContain('american_baw');
+    expect(chain.textContent).toContain('Barone-Adesi Whaley (American)');
     expect(chainQueries).toEqual(['']);
   });
 
@@ -202,7 +204,7 @@ describe('OptionsPage', () => {
   it('lists the strategies with their hypotheses', async () => {
     await open();
     const list = panel('Options strategies');
-    expect(list.textContent).toContain('cash_secured_put');
+    expect(list.textContent).toContain('Cash secured put');
     expect(list.textContent).toContain('Bull call spread, Bear put spread');
     expect(list.textContent).toContain('Momentum picks the direction');
   });

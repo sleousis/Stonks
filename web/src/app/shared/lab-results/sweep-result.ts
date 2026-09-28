@@ -65,8 +65,8 @@ export function rankSweepRows(rows: readonly SweepRowView[]): RankedSweepRow[] {
       />
     </div>
     <p class="lead">
-      Each strategy was tuned and tested on the same data. Nothing started paper trading, and every
-      trial counts in the trial ledger.
+      Each strategy was tuned and tested on the same data. Nothing went on trial, and every setting
+      tried counts in the trial ledger.
     </p>
     @if (rows().length === 0) {
       <p class="muted">The sweep found no strategy to run on this basket.</p>

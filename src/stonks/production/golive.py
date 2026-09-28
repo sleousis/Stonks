@@ -719,7 +719,7 @@ _TEST_NAMES = {
     "benchmark_relative": "Beats the benchmark",
     "mcpt": "Shuffled prices (MCPT)",
     "permutation": "Shuffled prices (MCPT)",
-    "drift": "Data drift",
+    "drift": "Drift in the data",
     "runs_test": "Win and loss streaks",
     "walk_forward_mcpt": "Walk-forward permutation",
     "cpcv": "Many splits (CPCV)",

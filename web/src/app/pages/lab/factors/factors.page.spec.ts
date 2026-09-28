@@ -11,6 +11,7 @@ import type { FactorCatalogView } from '../../../api/models';
 import { provideApi } from '../../../api/provide-api';
 import { FACTOR_CATALOG, PIOTROSKI } from './factor-test-fixtures';
 import { FactorsPage } from './factors.page';
+import { provideFakeDataCoverage } from '../../../../testing/fake-data-coverage';
 
 describe('FactorsPage', () => {
   let fixture: ComponentFixture<FactorsPage>;
@@ -26,7 +27,12 @@ describe('FactorsPage', () => {
     status = 200;
     TestBed.configureTestingModule({
       imports: [FactorsPage],
-      providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
+      providers: [
+        provideFakeDataCoverage(),
+        ...provideApi(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+      ],
     });
     controller = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(FactorsPage);

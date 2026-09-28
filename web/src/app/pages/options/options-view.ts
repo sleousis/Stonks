@@ -14,16 +14,40 @@ export type ChainSide = 'both' | 'calls' | 'puts';
 
 type Field = 'bid' | 'ask' | 'iv' | 'delta' | 'gamma' | 'theta' | 'vega' | 'open_interest';
 
-const FIELDS: readonly { key: Field; label: string; show: (v: number | null) => string }[] = [
-  { key: 'bid', label: 'Bid', show: (v) => formatNumber(v, { digits: 2 }) },
-  { key: 'ask', label: 'Ask', show: (v) => formatNumber(v, { digits: 2 }) },
-  { key: 'iv', label: 'IV', show: (v) => formatPercent(v, { digits: 1 }) },
-  { key: 'delta', label: 'Delta', show: (v) => formatNumber(v, { digits: 2 }) },
-  { key: 'gamma', label: 'Gamma', show: (v) => formatNumber(v, { digits: 3 }) },
-  { key: 'theta', label: 'Theta', show: (v) => formatNumber(v, { digits: 3 }) },
-  { key: 'vega', label: 'Vega', show: (v) => formatNumber(v, { digits: 3 }) },
-  { key: 'open_interest', label: 'Open interest', show: (v) => formatNumber(v, { digits: 0 }) },
+/** A number for a cell; never "-0". */
+function fixed(v: number | null, digits: number): string {
+  return formatNumber(v !== null && Object.is(Math.round(v * 10 ** digits), -0) ? 0 : v, {
+    digits,
+  });
+}
+
+const FIELDS: readonly {
+  key: Field;
+  label: string;
+  /** Glossary key for the column's tip, or false. */
+  help: string | false;
+  show: (v: number | null) => string;
+}[] = [
+  { key: 'bid', label: 'Bid', help: false, show: (v) => fixed(v, 2) },
+  { key: 'ask', label: 'Ask', help: false, show: (v) => fixed(v, 2) },
+  {
+    key: 'iv',
+    label: 'IV',
+    help: 'implied_volatility',
+    show: (v) => formatPercent(v, { digits: 1 }),
+  },
+  { key: 'delta', label: 'Delta', help: 'delta', show: (v) => fixed(v, 2) },
+  { key: 'gamma', label: 'Gamma', help: 'gamma', show: (v) => fixed(v, 3) },
+  { key: 'theta', label: 'Theta', help: 'theta', show: (v) => fixed(v, 3) },
+  { key: 'vega', label: 'Vega', help: 'vega', show: (v) => fixed(v, 3) },
+  { key: 'open_interest', label: 'Open interest', help: 'open_interest', show: (v) => fixed(v, 0) },
 ];
+
+/** "Call IV", "Put delta": short forms stay in capitals. */
+function sideLabel(prefix: string, label: string): string {
+  if (!prefix) return label;
+  return `${prefix} ${label === label.toUpperCase() ? label : label.toLowerCase()}`;
+}
 
 function sideColumns(
   side: 'call' | 'put',
@@ -37,9 +61,9 @@ function sideColumns(
     };
     return {
       key: `${side}:${f.key}`,
-      label: prefix ? `${prefix} ${f.label.toLowerCase()}` : f.label,
+      label: sideLabel(prefix, f.label),
       format: 'number',
-      help: false,
+      help: f.help,
       value: pick,
       display: (row) => f.show(pick(row)),
       mobile: hideOnPhone.includes(f.key) ? 'hide' : 'show',
@@ -70,6 +94,37 @@ export function chainColumns(side: ChainSide): TableColumn<OptionChainRow>[] {
 /** "Bull call spread" from `bull_call_spread`. */
 export function structureLabel(name: string): string {
   return humanize(name);
+}
+
+const STRATEGY_NAMES: Record<string, string> = {
+  vol_premium_condor: 'Volatility premium condor',
+};
+
+/** An options strategy's plain name: "Covered call" from `covered_call`. */
+export function optionsStrategyName(id: string): string {
+  return STRATEGY_NAMES[id] ?? humanize(id);
+}
+
+const MODEL_NAMES: Record<string, string> = {
+  black_scholes: 'Black-Scholes',
+  black76: 'Black 76',
+  american_baw: 'Barone-Adesi Whaley (American)',
+  american_bjerksund: 'Bjerksund-Stensland (American)',
+  american_binomial: 'binomial tree (American)',
+};
+
+/** A pricing model's plain name: "Black-Scholes" from `black_scholes`. */
+export function pricingModelName(id: string): string {
+  return MODEL_NAMES[id] ?? humanize(id);
+}
+
+/** "the Black-Scholes pricing model" or "the Black-Scholes and ... pricing models". */
+export function pricingModelsText(ids: readonly string[]): string {
+  const names = ids.map(pricingModelName);
+  if (!names.length) return 'its pricing model';
+  const list =
+    names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
+  return `the ${list} pricing ${names.length === 1 ? 'model' : 'models'}`;
 }
 
 const PARAM_LABELS: Record<string, string> = {

@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, input, model, signal } from '@angular/core';
 
 import type { StrategyClassInfo } from '../../api/models';
-import { groupStrategies } from './lab-requests';
+import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests';
 
 /**
- * Pick a strategy class from the catalog: a search box over name,
- * description and class path, then radio buttons grouped by package, each
- * with its description. Native radios keep keyboard and screen-reader
+ * Pick a strategy from the catalog: a search box over its plain name and
+ * description, then radio buttons grouped by the kind of idea, each with
+ * one plain line on what it does. Native radios keep keyboard and screen-reader
  * behaviour for free.
  */
 @Component({
@@ -17,14 +17,14 @@ import { groupStrategies } from './lab-requests';
       class="picker"
       [attr.aria-describedby]="error() ? idPrefix() + '-strategy-error' : null"
     >
-      <legend>Strategy class</legend>
+      <legend>Strategy</legend>
       <input
         class="input search"
         type="search"
         autocomplete="off"
         spellcheck="false"
         placeholder="Search by name or description"
-        [attr.aria-label]="'Search ' + classes().length + ' strategy classes'"
+        [attr.aria-label]="'Search ' + classes().length + ' strategies'"
         [attr.aria-controls]="idPrefix() + '-strategy-list'"
         [value]="query()"
         (input)="query.set($any($event.target).value)"
@@ -43,21 +43,21 @@ import { groupStrategies } from './lab-requests';
                   (change)="value.set(c.class_path)"
                 />
                 <span class="text">
-                  <span class="name">{{ c.name }}</span>
+                  <span class="name">{{ title(c) }}</span>
                   @if (c.description) {
                     <span class="desc">{{ c.description }}</span>
                   }
                   <span class="tags">
+                    {{ assets(c.applicable_asset_classes) }} ·
                     {{ c.parameters.length }}
-                    {{ c.parameters.length === 1 ? 'parameter' : 'parameters' }} ·
-                    {{ c.applicable_asset_classes.join(', ') }}
+                    {{ c.parameters.length === 1 ? 'setting' : 'settings' }}
                   </span>
                 </span>
               </label>
             }
           </div>
         } @empty {
-          <p class="muted none">No strategy class matches “{{ query() }}”.</p>
+          <p class="muted none">No strategy matches “{{ query() }}”.</p>
         }
       </div>
       @if (error()) {
@@ -166,4 +166,6 @@ export class StrategyPicker {
 
   protected readonly query = signal('');
   protected readonly groups = computed(() => groupStrategies(this.classes(), this.query()));
+  protected readonly title = strategyTitle;
+  protected readonly assets = assetClassWords;
 }

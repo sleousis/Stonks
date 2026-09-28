@@ -123,7 +123,29 @@ describe('LabRunFormView', () => {
     presets = [{ name: 'quick', tests: ['oos', 'drift'], options: {} }];
     await create();
     presets = [];
-    expect(el.querySelector('.suite-tests')?.textContent ?? el.textContent).toContain('Drift');
+    expect(el.querySelector('.suite-tests')?.textContent ?? el.textContent).toContain('Drift in the data');
+  });
+
+  it('offers all 22 robustness tests for a custom suite, each with what it guards against', async () => {
+    await create();
+    el.querySelector<HTMLInputElement>('input[name="lr-suite"][value="custom"]')!.click();
+    fixture.detectChanges();
+    const items = [...el.querySelectorAll('ul.tests > li')];
+    expect(items).toHaveLength(22);
+    for (const li of items)
+      expect(li.querySelector('.check-hint')!.textContent).toMatch(
+        /Guards against|For information/,
+      );
+    const text = items.map((li) => li.textContent).join(' ');
+    for (const name of [
+      'Many splits (CPCV)',
+      'Past crises',
+      'After each signal',
+      'Adds something new',
+    ])
+      expect(text).toContain(name);
+    // No code ids anywhere.
+    expect(text).not.toMatch(/\b[a-z]+_[a-z_]+\b/);
   });
 
   it('runs on a stored universe and can fetch missing data first', async () => {
@@ -240,11 +262,11 @@ describe('LabRunFormView', () => {
     });
   });
 
-  describe('paper trading choice', () => {
-    it('says it in trader words and picks the go-live suite', async () => {
+  describe('on trial choice', () => {
+    it('says it in trader words and picks the Full suite', async () => {
       await create();
       const label = el.querySelector('#lr-register')!.closest('label')!;
-      expect(label.textContent).toContain('Start paper trading if it passes');
+      expect(label.textContent).toContain('Put it on trial if it passes');
       el.querySelector<HTMLInputElement>('#lr-register')!.click();
       fixture.detectChanges();
       fillBasics();
@@ -253,7 +275,7 @@ describe('LabRunFormView', () => {
       expect(emitted[0]).toMatchObject({ preset: 'promotion', register_if_passes: true });
     });
 
-    it('starts paper trading whatever the verdict only from Advanced', async () => {
+    it('puts it on trial whatever the verdict only from Advanced', async () => {
       await create();
       el.querySelector<HTMLInputElement>('#lr-register-always')!.click();
       fixture.detectChanges();

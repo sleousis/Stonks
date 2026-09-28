@@ -8,6 +8,8 @@
 // an entry below (the compiler insists), and any labels or API keys it
 // appears under as `aliases`.
 
+import { RESEARCH_GLOSSARY, RESEARCH_KEYS, type ResearchKey } from './research-glossary';
+
 /** The in-app glossary page. Each term has an anchor named after its key. */
 export const GLOSSARY_PATH = '/help/glossary';
 
@@ -119,15 +121,20 @@ export const TRADING_KEYS = [
 ] as const;
 
 export type TradingKey = (typeof TRADING_KEYS)[number];
-export type GlossaryKey = MetricKey | TradingKey;
+export type GlossaryKey = MetricKey | TradingKey | ResearchKey;
 
 /** Every key, trading words first. */
-export const GLOSSARY_KEYS: readonly GlossaryKey[] = [...TRADING_KEYS, ...METRIC_KEYS];
+export const GLOSSARY_KEYS: readonly GlossaryKey[] = [
+  ...TRADING_KEYS,
+  ...METRIC_KEYS,
+  ...RESEARCH_KEYS,
+];
 
 /** The glossary page's sections, in order. */
 export const GLOSSARY_GROUPS: readonly { title: string; keys: readonly GlossaryKey[] }[] = [
   { title: 'Trading words', keys: TRADING_KEYS },
   { title: 'Figures', keys: METRIC_KEYS },
+  { title: 'Research words', keys: RESEARCH_KEYS },
 ];
 
 export interface GlossaryEntry {
@@ -378,7 +385,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   },
   best_score: {
     term: 'Best score',
-    short: 'The best objective value the tuner found (for example Sharpe), before survival tests.',
+    short: 'The best score the search found (for example Sharpe), before the robustness tests.',
   },
   out_of_sample: {
     term: 'Out of sample (OOS)',
@@ -574,6 +581,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
       'The yearly rate your money earned, counting when you added or took it out. Also called XIRR.',
     aliases: ['MWR', 'XIRR', 'Money-weighted, per year'],
   },
+  ...RESEARCH_GLOSSARY,
 };
 
 export interface GlossaryMatch {

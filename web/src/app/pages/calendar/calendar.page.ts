@@ -16,6 +16,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { isoDay } from '../../core/format/format';
 import { WatchlistContextService } from '../../core/watchlists/watchlist-context.service';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
+import { DataPlanNote } from '../../shared/ui/data-plan-note';
 import { PageHeader } from '../../shared/ui/page-header';
 import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -64,12 +65,14 @@ const DEFAULT_DAYS = 30;
     ErrorState,
     EmptyState,
     NewsPanel,
+    DataPlanNote,
   ],
   template: `
     <app-page-header
       title="Calendar"
       description="Earnings, ex-dividend dates and economic releases for what you hold or watch, and the news on them."
     />
+    <app-data-plan-note kind="calendars" />
 
     <section class="panel filters" aria-labelledby="cal-filter-title">
       <div class="panel-head">

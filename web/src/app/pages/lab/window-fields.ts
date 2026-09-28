@@ -64,20 +64,22 @@ import type { FormErrors, WindowForm } from './lab-requests';
           <span class="error" [id]="p + '-end-error'">{{ e }}</span>
         }
       </div>
-      <div class="field">
-        <label [for]="p + '-interval'">Interval</label>
-        <select
-          class="input"
-          [id]="p + '-interval'"
-          (change)="patch.emit({ interval: $any($event.target).value })"
-        >
-          @for (i of intervalOptions(); track i.code) {
-            <option [value]="i.code" [selected]="i.code === value().interval">
-              {{ i.code }}{{ i.is_intraday ? ' (intraday)' : '' }}
-            </option>
-          }
-        </select>
-      </div>
+      @if (showInterval()) {
+        <div class="field">
+          <label [for]="p + '-interval'">Interval</label>
+          <select
+            class="input"
+            [id]="p + '-interval'"
+            (change)="patch.emit({ interval: $any($event.target).value })"
+          >
+            @for (i of intervalOptions(); track i.code) {
+              <option [value]="i.code" [selected]="i.code === value().interval">
+                {{ i.code }}{{ i.is_intraday ? ' (intraday)' : '' }}
+              </option>
+            }
+          </select>
+        </div>
+      }
     </div>
   `,
   styles: `
@@ -128,6 +130,8 @@ export class WindowFields {
   readonly idPrefix = input('window');
   /** Hidden when a stored universe replaces the typed tickers. */
   readonly showTickers = input(true);
+  /** Off in the simple test, which always uses daily bars. */
+  readonly showInterval = input(true);
   readonly patch = output<Partial<WindowForm>>();
 
   /** Falls back to daily bars while the catalog loads (or if it failed). */

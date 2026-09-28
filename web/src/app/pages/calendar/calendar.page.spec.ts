@@ -14,6 +14,7 @@ import { TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { CalendarPage } from './calendar.page';
 import { addDays } from './calendar-view';
+import { provideFakeDataCoverage } from '../../../testing/fake-data-coverage';
 
 const TECH: WatchlistView = {
   id: 'wl_1',
@@ -71,7 +72,12 @@ describe('CalendarPage', () => {
 
   beforeEach(async () => {
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+      providers: [
+        provideFakeDataCoverage(),
+        provideRouter([]),
+        ...provideApi(),
+        provideHttpClientTesting(),
+      ],
     });
     http = TestBed.inject(HttpTestingController);
     const session = TestBed.inject(SessionService);

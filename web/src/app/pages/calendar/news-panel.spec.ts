@@ -6,6 +6,7 @@ import type { NewsView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { nextRequest, tick } from '../../../testing/http';
 import { NewsPanel } from './news-panel';
+import { provideFakeDataCoverage } from '../../../testing/fake-data-coverage';
 
 const NEWS: NewsView = {
   tickers: ['AAPL.US'],
@@ -38,7 +39,12 @@ describe('NewsPanel', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideRouter([]), ...provideApi(), provideHttpClientTesting()],
+      providers: [
+        provideFakeDataCoverage(),
+        provideRouter([]),
+        ...provideApi(),
+        provideHttpClientTesting(),
+      ],
     });
     http = TestBed.inject(HttpTestingController);
   });

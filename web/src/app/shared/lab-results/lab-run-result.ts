@@ -4,18 +4,42 @@ import { RouterLink } from '@angular/router';
 import type { LabRunView } from '../../api/models';
 import { formatNumber } from '../../core/format/format';
 import { humanize } from '../ui/param-form/param-spec';
+import { strategyDisplayName, strategyKindName } from '../strategy-names';
 import { splitMetrics } from '../metrics';
 import { HelpTip } from '../ui/help-tip';
 import { StatTile } from '../ui/stat-tile';
 import { StatusPill } from '../ui/status-pill';
 import { ParamHeatmap } from './param-heatmap';
 import { PreflightIssues } from './preflight-issues';
-import { testLabel } from './survival-tests';
+import { testHint, testLabel } from './survival-tests';
 import { FigureGrid, benchmarkFigures, benchmarkName } from './result-figures';
 
 export { formatMetric, metricLabel } from '../metrics';
 
 export { testLabel } from './survival-tests';
+
+/**
+ * "It held up: it passed all 7 robustness tests..." or "It did not hold up:
+ * it failed 2 of 7 robustness tests (Higher costs, Nearby settings)...".
+ */
+export function verdictSentence(r: Pick<LabRunView, 'verdict' | 'survival_reports'>): string {
+  const total = r.survival_reports.length;
+  const tests = total === 1 ? 'test' : 'tests';
+  if (r.verdict === 'pass') {
+    return (
+      `It held up: it passed ${total === 1 ? 'the' : `all ${total}`} robustness ${tests} ` +
+      'on data the search never tuned on. That makes luck less likely, not impossible.'
+    );
+  }
+  const failed = r.survival_reports.filter((t) => !t.passed).map((t) => testLabel(t.test_id));
+  if (!failed.length) {
+    return 'It did not hold up: the run stopped before its robustness tests could pass.';
+  }
+  return (
+    `It did not hold up: it failed ${failed.length} of ${total} robustness ${tests} ` +
+    `(${failed.join(', ')}). The good backtest may be luck or fitted to the past.`
+  );
+}
 
 function paramText(v: unknown): string {
   if (typeof v === 'number') return formatNumber(v);
@@ -24,9 +48,10 @@ function paramText(v: unknown): string {
 }
 
 /**
- * Verdict, trial counts, best parameters, the benchmark comparison and one
- * pass/fail card per survival test (its deciding figures first, the rest
- * folded away).
+ * A plain verdict, trial counts, best settings, the benchmark comparison
+ * and one pass/fail card per robustness test (what it guards against, its
+ * deciding figures first, the rest folded away). The verdict is about the
+ * robustness tests; trials are only the settings the search tried.
  */
 @Component({
   selector: 'app-lab-run-result',
@@ -37,7 +62,8 @@ function paramText(v: unknown): string {
     <div class="summary">
       <app-stat-tile
         class="verdict"
-        label="Verdict"
+        label="Robustness verdict"
+        help="lab_verdict"
         featured
         [value]="r.verdict === 'pass' ? 'Passed' : 'Failed'"
         [detail]="passedText()"
@@ -48,20 +74,28 @@ function paramText(v: unknown): string {
         label="Trials this run"
         help="trials"
         [value]="count(r.n_trials_run)"
-        detail="Tried by the tuner"
+        detail="Settings the search tried"
       />
       <app-stat-tile
-        label="Trials of this class"
+        label="Trials of this strategy"
         help="trials"
         [value]="count(r.n_trials_class)"
         detail="All runs so far"
       />
     </div>
 
+    <div class="plain" [class.failed]="r.verdict !== 'pass'" role="note">
+      <p class="plain-verdict">{{ verdictText() }}</p>
+      <p class="muted">
+        Trials are the settings the search tried. A trial only says a setting ran. The verdict comes
+        from the robustness tests on the best one, so a run can fail with every trial done.
+      </p>
+    </div>
+
     @if (r.registered_strategy_id; as id) {
       <p class="registered">
-        Started paper trading as
-        <a class="num" [routerLink]="['/strategies', id]">{{ id }}</a
+        Put on trial as
+        <a [routerLink]="['/strategies', id]">{{ displayName(id) }}</a
         >.
       </p>
     }
@@ -72,7 +106,7 @@ function paramText(v: unknown): string {
       </p>
     }
     <p class="ledger-link">
-      Every trial is kept in the <a routerLink="/lab/ledger">trial ledger</a>.
+      Every setting tried is kept in the <a routerLink="/lab/ledger">trial ledger</a>.
     </p>
 
     @if (r.preflight) {
@@ -80,7 +114,7 @@ function paramText(v: unknown): string {
     }
 
     <section aria-labelledby="best-params-title">
-      <h3 id="best-params-title">Best parameters</h3>
+      <h3 id="best-params-title">Best settings</h3>
       @if (params().length) {
         <dl class="params">
           @for (p of params(); track p.name) {
@@ -91,7 +125,7 @@ function paramText(v: unknown): string {
           }
         </dl>
       } @else {
-        <p class="muted">The class has no tunable parameters.</p>
+        <p class="muted">It has no settings to tune.</p>
       }
     </section>
 
@@ -111,7 +145,7 @@ function paramText(v: unknown): string {
     }
 
     <section aria-labelledby="survival-title">
-      <h3 id="survival-title">Survival tests</h3>
+      <h3 id="survival-title">Robustness tests <app-help-tip term="robustness_tests" /></h3>
       <ul class="tests">
         @for (t of tests(); track t.id) {
           <li class="test" [class.failed]="!t.passed">
@@ -119,6 +153,9 @@ function paramText(v: unknown): string {
               <span class="test-name">{{ t.label }} <app-help-tip [term]="t.id" /></span>
               <app-status-pill [status]="t.passed ? 'pass' : 'fail'" />
             </div>
+            @if (t.hint) {
+              <p class="hint">{{ t.hint }}</p>
+            }
             @if (t.key.length) {
               <dl class="metrics">
                 @for (m of t.key; track m.key) {
@@ -147,7 +184,7 @@ function paramText(v: unknown): string {
             }
           </li>
         } @empty {
-          <li class="muted">No survival tests ran.</li>
+          <li class="muted">No robustness tests ran.</li>
         }
       </ul>
     </section>
@@ -166,6 +203,27 @@ function paramText(v: unknown): string {
     }
     .verdict {
       grid-column: 1 / -1;
+    }
+    .plain {
+      display: grid;
+      gap: var(--space-1);
+      padding: var(--space-3) var(--space-4);
+      border: 1px solid var(--color-border);
+      border-left: 3px solid var(--color-gain);
+      border-radius: var(--radius-sm);
+      background: var(--color-surface-2);
+      font-size: var(--text-sm);
+      overflow-wrap: anywhere;
+    }
+    .plain.failed {
+      border-left-color: var(--color-loss);
+    }
+    .plain-verdict {
+      font-weight: var(--weight-medium);
+    }
+    .hint {
+      font-size: var(--text-xs);
+      color: var(--color-ink-3);
     }
     .registered,
     .bench-name {
@@ -252,8 +310,13 @@ function paramText(v: unknown): string {
 })
 export class LabRunResultView {
   readonly result = input.required<LabRunView>();
+  /** The strategy's plain name when the page knows it (else read from its class). */
+  readonly strategyName = input<string | null>(null);
 
-  protected readonly className = computed(() => this.result().class_path.split(':').at(-1) ?? null);
+  protected readonly displayName = strategyDisplayName;
+  protected readonly className = computed(
+    () => this.strategyName() ?? strategyKindName(this.result().class_path),
+  );
   protected readonly score = computed(() => {
     const s = this.result().best_score;
     return s === null ? 'n/a' : formatNumber(s, { digits: 3 });
@@ -262,8 +325,11 @@ export class LabRunResultView {
   protected readonly passedText = computed(() => {
     const reports = this.result().survival_reports;
     const passed = reports.filter((r) => r.passed).length;
-    return `${passed} of ${reports.length} tests passed`;
+    return `${passed} of ${reports.length} robustness tests passed`;
   });
+
+  /** The verdict in one plain sentence, naming what failed. */
+  protected readonly verdictText = computed(() => verdictSentence(this.result()));
 
   protected readonly params = computed(() =>
     Object.entries(this.result().best_params).map(([name, value]) => ({
@@ -286,6 +352,7 @@ export class LabRunResultView {
     this.result().survival_reports.map((r) => ({
       id: r.test_id,
       label: testLabel(r.test_id),
+      hint: testHint(r.test_id),
       passed: r.passed,
       notes: r.notes,
       ...splitMetrics(r.test_id, r.metrics),

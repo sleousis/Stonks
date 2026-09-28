@@ -39,6 +39,7 @@ import {
   buildBacktestRequest,
   checkLabel,
   defaultBacktestForm,
+  optionsStrategyName,
 } from './options-view';
 
 /**
@@ -72,7 +73,9 @@ import {
           >
             <option value="" [selected]="!f.strategy">Pick a strategy</option>
             @for (s of strategies(); track s.id) {
-              <option [value]="s.id" [selected]="f.strategy === s.id">{{ s.id }}</option>
+              <option [value]="s.id" [selected]="f.strategy === s.id">
+                {{ strategyName(s.id) }}
+              </option>
             }
           </select>
           @if (errors()['strategy']; as e) {
@@ -348,6 +351,7 @@ export class OptionsBacktest {
   readonly underlyings = input<readonly OptionUnderlyingView[]>([]);
 
   protected readonly canRun = computed(() => this.session.can('lab.run'));
+  protected readonly strategyName = optionsStrategyName;
   protected readonly form = signal<BacktestForm>(defaultBacktestForm());
   protected readonly params = signal<ParamValues>({});
   protected readonly tried = signal(false);
