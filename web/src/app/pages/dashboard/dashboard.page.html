@@ -1,15 +1,6 @@
+<!-- Refreshes itself every minute and after each trading run, so no Refresh button (m2). -->
 <app-page-header title="Dashboard" [description]="asOf()">
   <app-updated-ago [at]="auto.updatedAt()" />
-  <button
-    actions
-    type="button"
-    class="btn"
-    [disabled]="refreshing()"
-    [attr.aria-busy]="refreshing()"
-    (click)="refresh()"
-  >
-    {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
-  </button>
 </app-page-header>
 
 <!-- Summary --------------------------------------------------------------->
@@ -62,8 +53,8 @@
     <app-stat-tile
       label="Strategies"
       [loading]="strategyCounts.isLoading() && !strategyCounts.hasValue()"
-      [value]="strategyCounts.hasValue() ? strategyCounts.value().active + ' live' : '–'"
-      [detail]="strategyCounts.hasValue() ? strategyCounts.value().shadow + ' paper trading' : null"
+      [value]="strategyCounts.hasValue() ? strategyCounts.value().active + ' approved' : '–'"
+      [detail]="strategyCounts.hasValue() ? strategyCounts.value().shadow + ' on trial' : null"
     />
   </section>
 }
@@ -205,7 +196,10 @@
           }}</a>
         </ng-template>
         <ng-template appCell="status" [appCellOf]="ticks.value().items" let-tick>
-          <app-status-pill [status]="tick.status" />
+          <app-status-pill
+            [status]="runWords(tick.status).status"
+            [label]="runWords(tick.status).label"
+          />
         </ng-template>
       </app-data-table>
     }

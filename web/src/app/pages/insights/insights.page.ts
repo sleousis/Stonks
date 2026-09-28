@@ -20,6 +20,7 @@ import type {
 import { PortfolioService } from '../../api/portfolio.service';
 import { SessionService } from '../../core/auth/session.service';
 import { formatDateTime, formatMoney, formatNumber, formatPercent } from '../../core/format/format';
+import { dayChangeLine } from '../../core/format/day-change';
 import { DateTimePipe } from '../../shared/format.pipes';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
@@ -189,7 +190,8 @@ export class InsightsPage {
     if (!this.insights.hasValue()) return null;
     const day = this.insights.value().pnl.find((p) => p.period === '1d');
     if (!day || day.change == null) return null;
-    return `${this.signedMoney(day.change)} today (${this.pct(day.change_pct, true)})`;
+    // One format for the day's change on Today, Dashboard and Insights (M2).
+    return dayChangeLine(day.change, day.change_pct, day.end_day, this.currency());
   });
 
   protected readonly betaDetail = computed(() => {

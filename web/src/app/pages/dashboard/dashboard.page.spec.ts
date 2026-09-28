@@ -197,9 +197,12 @@ describe('DashboardPage', () => {
     expect(text).toContain('$76,750.00');
     expect(text).toContain('$25,000.00');
     expect(text).toContain('32.6% of value');
-    expect(text).toContain('-$1,250.00 (-1.60%) on 2026-09-25');
-    expect(text).toContain('3 live');
-    expect(text).toContain('2 paper trading');
+    // The day's change reads as it does on Today and Insights (M2).
+    expect(text).toMatch(/-\$1,250\.00 \(-1\.60%\) (today|on \w+|last session)/);
+    // Vocabulary: approved and on trial, never "live" for a paper strategy.
+    expect(text).toContain('3 approved');
+    expect(text).toContain('2 on trial');
+    expect(text).not.toContain('3 live');
 
     const positionRows = el.querySelectorAll('section[aria-labelledby="positions-title"] tbody tr');
     expect(positionRows.length).toBe(2);
@@ -208,9 +211,14 @@ describe('DashboardPage', () => {
     expect(positionRows[0].textContent).toContain('$28,700.00');
 
     const tickSection = el.querySelector('section[aria-labelledby="ticks-title"]');
-    expect(tickSection?.textContent).toContain('ok');
-    expect(tickSection?.textContent).toContain('error');
-    expect(tickSection?.textContent).toContain('momentum-v3');
+    // One word per state (M5), and only the columns that fit the panel (M10).
+    expect(tickSection?.textContent).toContain('Done');
+    expect(tickSection?.textContent).toContain('Failed');
+    expect(tickSection?.textContent).not.toContain('momentum-v3');
+    const headers = [...(tickSection?.querySelectorAll('thead th') ?? [])].map((h) =>
+      h.textContent?.trim(),
+    );
+    expect(headers.join(' ')).not.toMatch(/Winner|Took/);
 
     const health = el.querySelector('section[aria-labelledby="health-title"]');
     expect(health?.textContent).toContain('1 check failing');
@@ -280,8 +288,8 @@ describe('DashboardPage', () => {
     expect(controller.match((r) => r.url.split('?')[0] === '/api/strategies').length).toBe(0);
     summary.flush(STRATEGY_COUNTS);
     await flushAll();
-    expect(el.textContent).toContain('3 live');
-    expect(el.textContent).toContain('2 paper trading');
+    expect(el.textContent).toContain('3 approved');
+    expect(el.textContent).toContain('2 on trial');
   });
 
   it('tick row links to its detail', async () => {
@@ -343,8 +351,8 @@ describe('DashboardPage', () => {
     const pnl = row.querySelector('td[data-label="Unrealized P&L"]')!;
     expect(pnl.textContent?.trim()).toBe('+$700.00');
     expect(pnl.classList).toContain('gain');
-    expect(row.querySelector('td[data-label="Avg cost"]')!.textContent?.trim()).toBe('$400.00');
-    expect(row.querySelector('td[data-label="P&L %"]')!.textContent?.trim()).toBe('+2.50%');
+    // Avg cost, priced date and P&L % live on Insights: the panel keeps what fits (M10).
+    expect(row.querySelector('td[data-label="Avg cost"]')).toBeNull();
     const text = el.textContent ?? '';
     expect(text).toContain('€76,750.00');
     expect(text).toContain('2 positions, +€700.00 unrealized');
