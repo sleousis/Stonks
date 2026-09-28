@@ -255,3 +255,11 @@ def test_config_runs_only_the_target_tests_without_xdist():
     assert "-p no:xdist" in text
     assert all(test in text for test in target.tests)
     assert 'name = "local"' in text
+
+
+def test_mutation_refuses_an_unknown_target_name(capsys):
+    """``--only pnl,fils`` must not quietly run pnl alone and pass."""
+    with pytest.raises(SystemExit) as exc:
+        mutation.main(["--only", "pnl,fils"])
+    assert exc.value.code == 2
+    assert "fils" in capsys.readouterr().err
