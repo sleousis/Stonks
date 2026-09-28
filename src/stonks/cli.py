@@ -666,7 +666,12 @@ def ingest_borrow(
 @ingest_app.command("funds")
 def ingest_funds(
     tickers: str = typer.Option(..., "--tickers", help="comma-separated funds, e.g. SPY.US,QQQ.US"),
-    source_id: str = _source_option(),
+    source_id: str = typer.Option(
+        DEFAULT_SOURCE_ID,
+        "--source",
+        help=f"data source ({'|'.join(SOURCE_IDS)})",
+        callback=_validate_source,
+    ),
 ) -> None:
     """Pull each fund's latest holdings (an ETF's stocks and their weights)
     into ``fund_holdings`` (roadmap 23.14). Insights then show your real

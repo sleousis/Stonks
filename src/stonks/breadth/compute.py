@@ -74,7 +74,7 @@ def market_breadth(
     wide = _wide(bars, as_of)
     if wide.empty:
         return _empty(settings)
-    day = wide.index[-1]
+    day = _as_day(wide.index[-1])
     last = wide.iloc[-1]
     prev = wide.ffill().shift(1).iloc[-1]
     counted = last.notna() & prev.notna()
@@ -123,12 +123,18 @@ def _wide(bars: pd.DataFrame, as_of: date | None) -> pd.DataFrame:
     if bars.empty:
         return pd.DataFrame()
     frame = bars[["ticker", "date", "close"]].dropna()
-    frame = frame.assign(date=pd.to_datetime(frame["date"]).dt.date)
+    frame = frame.assign(date=[_as_day(d) for d in frame["date"]])
     if as_of is not None:
         frame = frame[frame["date"] <= as_of]
     if frame.empty:
         return pd.DataFrame()
     return frame.pivot_table(index="date", columns="ticker", values="close", aggfunc="last")
+
+
+def _as_day(value: object) -> date:
+    """A calendar day from a date, a datetime or a pandas timestamp."""
+    stamp = pd.Timestamp(value)  # type: ignore[arg-type]
+    return date(stamp.year, stamp.month, stamp.day)
 
 
 def _above(days: int, count: int, eligible: int) -> AboveAverage:
@@ -143,8 +149,9 @@ def _distribution(
     if index_bars is None or index_bars.empty:
         return None
     frame = index_bars[["date", "close", "volume"]].copy()
-    frame["date"] = pd.to_datetime(frame["date"]).dt.date
-    frame = frame[frame["date"] <= day].sort_values("date").reset_index(drop=True)
+    frame["date"] = [_as_day(d) for d in frame["date"]]
+    kept: pd.DataFrame = frame.loc[frame["date"] <= day]
+    frame = kept.sort_values(by="date").reset_index(drop=True)
     if len(frame) < 2:
         return None
     fell = frame["close"].pct_change(fill_method=None) <= -settings.distribution_drop

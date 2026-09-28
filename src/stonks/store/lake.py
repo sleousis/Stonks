@@ -2114,13 +2114,14 @@ class DuckDBLake:
             if col not in frame.columns:
                 frame[col] = None
         frame = _last_per_key(
-            frame[list(self._FUND_HOLDING_COLS)], ("fund", "holding", "as_of", "source")
+            frame.reindex(columns=list(self._FUND_HOLDING_COLS)),
+            ("fund", "holding", "as_of", "source"),
         )
         stamp = (known_at or datetime.now(UTC)).replace(tzinfo=None)
         frame["known_at"] = stamp
         cols = [*self._FUND_HOLDING_COLS, "known_at"]
         updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in ("weight", "name", "sector", "country"))
-        with self._registered(frame[cols]):
+        with self._registered(frame.reindex(columns=cols)):
             self.con.execute(
                 f"INSERT INTO fund_holdings ({', '.join(cols)}) SELECT {', '.join(cols)} FROM _in"
                 f" ON CONFLICT (fund, holding, as_of, source) DO UPDATE SET {updates}"

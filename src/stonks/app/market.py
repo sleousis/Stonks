@@ -274,4 +274,5 @@ def _last_price_day(lake: Any) -> date | None:
     value = df["d"].iloc[0] if not df.empty else None
     if value is None or pd.isna(value):
         return None
-    return pd.Timestamp(value).date()
+    day = pd.Timestamp(value)
+    return date.fromisoformat(str(day.date()))
