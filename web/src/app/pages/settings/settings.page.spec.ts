@@ -73,8 +73,8 @@ describe('SettingsPage', () => {
       (await nextRequest(http, '/api/risk/policy')).flush(RISK);
       (await nextRequest(http, '/api/sources')).flush(SOURCES);
       (await nextRequest(http, '/api/lab/cost-models')).flush(COSTS);
-      // Editable settings are not in the API contract yet: nothing is asked.
-      http.expectNone('/api/admin/settings');
+      // The System settings form asks only once its tab is open.
+      http.expectNone('/api/settings/system');
     }
     await tick();
     fixture.detectChanges();
@@ -88,20 +88,8 @@ describe('SettingsPage', () => {
     if (!tab) throw new Error(`no "${label}" tab`);
     tab.click();
     fixture.detectChanges();
-    if (label === 'Alerts') {
-      (await nextRequest(http, '/api/notifications/preferences')).flush({
-        channels: ['inapp'],
-        preferences: [],
-        quiet_start: null,
-        quiet_end: null,
-        timezone: 'UTC',
-        webhook: null,
-      });
-      (await nextRequest(http, '/api/telegram/link')).flush({
-        bot_configured: false,
-        bot_enabled: false,
-        linked: false,
-      });
+    if (label === 'System') {
+      (await nextRequest(http, '/api/settings/system')).flush({ items: [] });
     }
     if (label === 'Risk limits') {
       (await nextRequest(http, '/api/risk/limits')).flush(limitsView({}));
@@ -161,6 +149,7 @@ describe('SettingsPage', () => {
 
   it('sends alert settings to their one page instead of hosting them (F39)', async () => {
     await setup(TRADER);
+    await open('Alerts');
     expect(el.querySelector('app-notification-prefs')).toBeNull();
     expect(el.querySelector('app-telegram-link')).toBeNull();
     const link = el.querySelector<HTMLAnchorElement>('a[href="/notifications/settings"]');
@@ -201,8 +190,11 @@ describe('SettingsPage', () => {
   it('keeps alerts, display and risk limits each in their own section', async () => {
     await setup(TRADER);
     await open('Alerts');
-    expect(headings()).toContain('Telegram');
+    // Every alert setting lives on one page (F39): the section links there.
     expect(headings()).toContain('Alert settings');
+    expect(el.querySelector('a[href="/notifications/settings"]')?.textContent).toContain(
+      'Open alert settings',
+    );
     expect(el.querySelector('a[href="/notifications"]')).not.toBeNull();
     await open('Display');
     expect(headings()).toContain('Theme');

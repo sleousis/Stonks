@@ -532,7 +532,7 @@ Tickers open `/data?instrument=<id>`.
 | Data quality | `/ops/data-quality` | Statement audit flags, filtered by ticker and severity |
 | Model versions | `/ops/models` | Candidates across strategies and Retrain all (see Model versions below) |
 | Users | `/admin/users` | People, roles, sign-in app and password resets. Alone, the admin reads how to add the next person |
-| Settings, System | `/settings` | Broker, risk policy, data sources and cost presets, and the Operational settings form when the server offers it |
+| Settings, System | `/settings` | Broker, risk policy, data sources and cost presets, and the System settings form (`/api/settings/system`) |
 | Universes | `/universes`, `/universes/:id` | List, create and edit each kind, index history import, members on a date, membership history, Refresh, Fetch missing data and Delete (see Universes below) |
 
 - `<app-session-strip>` sits above every page: the next trading run with
@@ -618,28 +618,26 @@ Tickers open `/data?instrument=<id>`.
   open), `open` and `close` in UTC. `today` is null on days the market is
   closed.
 
-### Operational settings (admins)
+### System settings (admins)
 
 `<app-system-settings>` (`pages/settings/system-settings.ts`) sits at the
-top of Settings, System. Feature check: it asks for nothing until
-`PUT /api/admin/settings` is in `openapi.json` (through the generated
-`route-permissions.gen.ts`), so no page load ends in a 404. Once the
-route is in the contract it reads `GET /api/admin/settings`
-(`api/admin-settings.service.ts`, silent) and still hides itself if the
-server answers 404. The contract:
+top of Settings, System. It reads `GET /api/settings/system` through
+`SystemService` (`api/system.service.ts`):
 
-- GET returns `{ groups: [{ id, label, description, fields: [...] }],
-  updated_at, updated_by }`. A field has `key` (never shown), `label`,
-  `help`, `type` (`bool`, `int`, `float`, `percent`, `string`, `choice`,
-  `list`), `value`, `default`, `min`, `max`, `unit`, `choices` and
-  `restart`. Percents are fractions on the wire and whole numbers on
-  screen.
-- PUT sends `{ values: { key: value }, reason }` with only the changed
-  keys and returns the new view. A 422 names the bad keys in `errors`
-  (`loc` or `key`, and `msg` or `message`); each shows under its field
-  and the rest in an alert above Save.
-- Values are checked before sending (numbers, bounds, choices). The
-  reason (5 characters or more) goes to the audit log. Secrets never
+- Each item has `key` (never shown), `group` (`risk`, `trading`,
+  `notifications`, `schedule`), `label`, `help`, `applies` (`next_run` or
+  `restart`), `value`, `default`, `overridden`, who changed it, when and
+  why, `problem` when a stored value no longer validates, and `choices`.
+  The form groups items by `group`. It reads how to edit each from its
+  value and default: a switch, a number (empty when the help says Empty),
+  a list, pairs written like the default, or text. `choices` show as a
+  select, `production.universe` too, with the current value kept when it
+  is a ticker list.
+- Save asks for the fresh second factor (`StepUpService.ensure()`), then
+  sends one `PUT /api/settings/system/{key}` per changed key with
+  `{ value, reason }`. A 422 says `<key>: <message>`, shown under that
+  field. "Use the default" posts `.../{key}/reset` with the same reason.
+- The reason (5 characters or more) goes to the audit log. Secrets never
   show.
 
 ## Trader screens added in 18.2

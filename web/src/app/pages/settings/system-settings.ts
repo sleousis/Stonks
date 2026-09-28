@@ -7,51 +7,92 @@ import {
   signal,
 } from '@angular/core';
 
-import {
-  type AdminSettingsView,
-  AdminSettingsService,
-  type SettingField,
-  settingErrors,
-} from '../../api/admin-settings.service';
-import { formatAgo, formatDateTime, formatNumber, formatPercent } from '../../core/format/format';
+import type { SystemSettingView } from '../../api/generated/types.gen';
+import { SystemService } from '../../api/system.service';
+import { StepUpService } from '../../core/auth/step-up.service';
+import { ApiError } from '../../core/http/api-error';
+import { formatAgo, formatDateTime } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { ErrorState, LoadingState } from '../../shared/ui/states';
 
 /** A field's value as the input holds it: text for numbers and lists, a flag for switches. */
 type Raw = string | boolean;
 
+/** How a setting is edited, read from its value, default and choices. */
+export type SettingKind = 'bool' | 'number' | 'choice' | 'list' | 'json' | 'text';
+
 /** The shortest reason the audit log accepts. */
 export const MIN_REASON = 5;
 
-/** What the input shows for a stored value. Percent fields are fractions on the wire. */
-export function toRaw(field: SettingField, value: unknown): Raw {
-  if (field.type === 'bool') return value === true;
-  if (value == null) return '';
-  if (field.type === 'percent' && typeof value === 'number') {
-    return String(Number((value * 100).toPrecision(12)));
+/** The groups in the order the form shows them, with their headings. */
+export const GROUPS: readonly { id: SystemSettingView['group']; label: string; help: string }[] = [
+  { id: 'risk', label: 'Risk limits', help: 'The system policy every portfolio starts from.' },
+  { id: 'trading', label: 'Trading run', help: 'What the daily trading run trades and with what.' },
+  { id: 'notifications', label: 'System alerts', help: 'Where operator alerts go.' },
+  { id: 'schedule', label: 'Schedule', help: 'Which jobs run and when.' },
+];
+
+/** The option a choice setting shows when its value is not one of the choices. */
+export const KEEP_CURRENT = '__current__';
+
+const isNum = (v: unknown) => typeof v === 'number';
+const isStrList = (v: unknown) => Array.isArray(v) && v.every((x) => typeof x === 'string');
+
+/** How to edit a setting. The API sends plain values, so the kind is read from them. */
+export function kindOf(item: SystemSettingView): SettingKind {
+  if (item.choices?.length) return 'choice';
+  const { value, default: base } = item;
+  if (typeof value === 'boolean' || typeof base === 'boolean') return 'bool';
+  if ((isNum(value) || value === null) && (isNum(base) || base === null)) {
+    // Both empty: an optional limit ("Empty means no limit") is still a number.
+    if (isNum(value) || isNum(base) || /\bEmpty\b/.test(item.help)) return 'number';
   }
-  if (field.type === 'list' && Array.isArray(value)) return value.join(', ');
+  if (isStrList(value) || isStrList(base)) {
+    const nested = [value, base].some((v) => Array.isArray(v) && v.some(Array.isArray));
+    return nested ? 'json' : 'list';
+  }
+  if ((value !== null && typeof value === 'object') || (base !== null && typeof base === 'object'))
+    return 'json';
+  return 'text';
+}
+
+/** A number setting that may be empty (no limit). */
+export function optional(item: SystemSettingView): boolean {
+  return item.value === null || item.default === null || /\bEmpty\b/.test(item.help);
+}
+
+/** What the input shows for a stored value. */
+export function toRaw(item: SystemSettingView, value: unknown): Raw {
+  const kind = kindOf(item);
+  if (kind === 'bool') return value === true;
+  if (value == null) return '';
+  if (kind === 'choice') {
+    return typeof value === 'string' && (item.choices ?? []).includes(value)
+      ? value
+      : KEEP_CURRENT;
+  }
+  if (kind === 'list' && Array.isArray(value)) return value.join(', ');
+  if (kind === 'json') return JSON.stringify(value);
   return String(value);
 }
 
 /** The value to send for what the input holds, or an error in words. */
-export function parseRaw(field: SettingField, raw: Raw): { value?: unknown; error?: string } {
-  switch (field.type) {
+export function parseRaw(item: SystemSettingView, raw: Raw): { value?: unknown; error?: string } {
+  switch (kindOf(item)) {
     case 'bool':
       return { value: raw === true };
-    case 'int':
-    case 'float':
-    case 'percent': {
+    case 'number': {
       const text = String(raw).trim();
-      if (text === '') return { error: 'Enter a number.' };
+      if (text === '') return optional(item) ? { value: null } : { error: 'Enter a number.' };
       const n = Number(text);
       if (!Number.isFinite(n)) return { error: 'Enter a number.' };
-      if (field.type === 'int' && !Number.isInteger(n)) return { error: 'Enter a whole number.' };
-      const unit = field.type === 'percent' ? '%' : field.unit ? ` ${field.unit}` : '';
-      if (field.min != null && n < field.min) return { error: `At least ${field.min}${unit}.` };
-      if (field.max != null && n > field.max) return { error: `At most ${field.max}${unit}.` };
-      return { value: field.type === 'percent' ? n / 100 : n };
+      return { value: n };
     }
+    case 'choice':
+      if (raw === KEEP_CURRENT) return { value: item.value };
+      return (item.choices ?? []).includes(String(raw))
+        ? { value: String(raw) }
+        : { error: 'Pick one of the options.' };
     case 'list':
       return {
         value: String(raw)
@@ -59,96 +100,90 @@ export function parseRaw(field: SettingField, raw: Raw): { value?: unknown; erro
           .map((s) => s.trim())
           .filter(Boolean),
       };
-    case 'choice': {
-      const ok = (field.choices ?? []).some((c) => c.value === raw);
-      return ok ? { value: raw } : { error: 'Pick one of the options.' };
+    case 'json': {
+      const text = String(raw).trim();
+      if (text === '') return { value: null };
+      try {
+        return { value: JSON.parse(text) };
+      } catch {
+        return { error: 'Write it like the default, for example [[0.1, 0.5]].' };
+      }
     }
     default:
       return { value: String(raw) };
   }
 }
 
-/** A value in words for the "Default" hint. */
-export function valueText(field: SettingField, value: unknown): string {
+/** A value in words, for the default and the current value of a choice. */
+export function valueText(value: unknown): string {
   if (value == null || value === '') return 'None';
-  switch (field.type) {
-    case 'bool':
-      return value ? 'On' : 'Off';
-    case 'percent':
-      return typeof value === 'number' ? formatPercent(value, { digits: 1 }) : String(value);
-    case 'int':
-    case 'float':
-      return typeof value === 'number'
-        ? `${formatNumber(value)}${field.unit ? ` ${field.unit}` : ''}`
-        : String(value);
-    case 'choice':
-      return field.choices?.find((c) => c.value === value)?.label ?? String(value);
-    case 'list':
-      return Array.isArray(value) ? value.join(', ') || 'None' : String(value);
-    default:
-      return String(value);
-  }
+  if (value === true) return 'On';
+  if (value === false) return 'Off';
+  if (Array.isArray(value))
+    return value.length ? value.map((v) => (Array.isArray(v) ? `[${v}]` : v)).join(', ') : 'None';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+/** The message a 422 gives for one key: the server writes "<key>: <message>". */
+export function keyError(err: unknown, key: string): string | null {
+  if (!(err instanceof ApiError) || err.status !== 422) return null;
+  const detail = String(err.problem['detail'] ?? err.message);
+  const prefix = `${key}: `;
+  return detail.startsWith(prefix) ? detail.slice(prefix.length) : detail;
 }
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * Admin System settings: the safe, non-secret switches the server lets an
- * admin change here, grouped, with validation, a reason for the audit log,
- * and each setting's default. Secrets (keys, tokens, passwords) never show.
- *
- * Feature check: the form renders only when `GET /api/admin/settings`
- * answers. A server without the route (404) shows nothing, so the read-only
- * System panels stay as they were.
+ * Admin System settings (`/api/settings/system`): the safe, non-secret
+ * settings an admin may change here, grouped as the server groups them,
+ * stored as overrides on the TOML config with an audit row. Each changed
+ * setting is one PUT with the shared reason, after a fresh second factor.
+ * Keys, tokens and passwords never show.
  */
 @Component({
   selector: 'app-system-settings',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ErrorState, LoadingState],
   template: `
-    @if (state.error(); as err) {
-      <section class="panel" aria-labelledby="ops-settings-title">
-        <div class="panel-head"><h3 id="ops-settings-title">Operational settings</h3></div>
+    <section class="panel" aria-labelledby="ops-settings-title">
+      <div class="panel-head">
+        <h3 id="ops-settings-title">System settings</h3>
+        @if (lastSaved(); as s) {
+          <span class="muted saved">
+            Saved {{ ago(s.updated_at!) }}{{ s.updated_by ? ' by ' + s.updated_by : '' }}
+          </span>
+        }
+      </div>
+      @if (state.error(); as err) {
         <app-error-state
-          title="Could not load the operational settings"
+          title="Could not load the system settings"
           [error]="err"
           (retry)="state.reload()"
         />
-      </section>
-    } @else if (state.isLoading() && !state.hasValue()) {
-      <section class="panel" aria-labelledby="ops-settings-title">
-        <div class="panel-head"><h3 id="ops-settings-title">Operational settings</h3></div>
-        <app-loading-state label="Loading operational settings" [rows]="4" />
-      </section>
-    } @else if (view(); as v) {
-      <section class="panel" aria-labelledby="ops-settings-title">
-        <div class="panel-head">
-          <h3 id="ops-settings-title">Operational settings</h3>
-          @if (v.updated_at) {
-            <span class="muted saved">
-              Saved {{ ago(v.updated_at) }}{{ v.updated_by ? ' by ' + v.updated_by : '' }}
-            </span>
-          }
-        </div>
+      } @else if (state.isLoading() && !state.hasValue()) {
+        <app-loading-state label="Loading system settings" [rows]="4" />
+      } @else {
         <form class="panel-body" novalidate (submit)="$event.preventDefault(); save()">
           <p class="intro">
-            Change these here. Each save is checked by the server and kept in the audit log with
-            your reason. Keys, tokens and passwords stay on the server and never show here.
+            Change these here. The server checks each value and keeps it in the audit log with your
+            reason. Your authenticator code is asked for before a save. Keys, tokens and passwords
+            stay on the server and never show here.
           </p>
-          @if (v.groups.length === 0) {
-            <p class="muted">The server offers no settings to change here yet.</p>
+          @if (items().length === 0) {
+            <p class="muted">The server offers no settings to change here.</p>
           }
-          @for (g of v.groups; track g.id) {
+          @for (g of groups(); track g.id) {
             <fieldset class="group">
               <legend>{{ g.label }}</legend>
-              @if (g.description) {
-                <p class="group-help">{{ g.description }}</p>
-              }
-              @for (f of g.fields; track f.key) {
+              <p class="group-help">{{ g.help }}</p>
+              @for (f of g.items; track f.key) {
                 @let id = 'set-' + f.key;
                 @let err = shownError(f.key);
-                @if (f.type === 'bool') {
-                  <div class="field">
+                @let kind = kindOf(f);
+                <div class="field">
+                  @if (kind === 'bool') {
                     <label class="check">
                       <input
                         type="checkbox"
@@ -159,13 +194,10 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
                       />
                       {{ f.label }}
                     </label>
-                    <span class="hint" [id]="id + '-hint'">{{ hint(f) }}</span>
-                  </div>
-                } @else {
-                  <div class="field">
+                  } @else {
                     <label [for]="id">{{ f.label }}</label>
                     <div class="control">
-                      @if (f.type === 'choice') {
+                      @if (kind === 'choice') {
                         <select
                           class="input"
                           [id]="id"
@@ -174,13 +206,16 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
                           [attr.aria-describedby]="id + '-hint' + (err ? ' ' + id + '-error' : '')"
                           (change)="edit(f, $any($event.target).value)"
                         >
-                          @for (c of f.choices ?? []; track c.value) {
-                            <option [value]="c.value" [selected]="c.value === raw(f)">
-                              {{ c.label }}
+                          @if (toRaw(f, f.value) === keep) {
+                            <option [value]="keep" [selected]="raw(f) === keep">
+                              {{ valueText(f.value) }}
                             </option>
                           }
+                          @for (c of f.choices ?? []; track c) {
+                            <option [value]="c" [selected]="c === raw(f)">{{ c }}</option>
+                          }
                         </select>
-                      } @else if (f.type === 'list') {
+                      } @else if (kind === 'list' || kind === 'json') {
                         <textarea
                           class="input"
                           rows="2"
@@ -196,29 +231,41 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
                           class="input"
                           [id]="id"
                           type="text"
-                          [attr.inputmode]="f.type === 'string' ? null : 'decimal'"
+                          [attr.inputmode]="kind === 'number' ? 'decimal' : null"
                           [value]="raw(f)"
                           [attr.aria-invalid]="err ? 'true' : null"
                           [attr.aria-describedby]="id + '-hint' + (err ? ' ' + id + '-error' : '')"
                           (input)="edit(f, $any($event.target).value)"
                         />
                       }
-                      @if (f.type === 'percent') {
-                        <span class="unit" aria-hidden="true">%</span>
-                      } @else if (f.unit && f.type !== 'string') {
-                        <span class="unit" aria-hidden="true">{{ f.unit }}</span>
-                      }
                     </div>
-                    <span class="hint" [id]="id + '-hint'">{{ hint(f) }}</span>
-                    @if (err) {
-                      <span class="error" [id]="id + '-error'">{{ err }}</span>
-                    }
-                  </div>
-                }
+                  }
+                  <span class="hint" [id]="id + '-hint'">{{ hint(f) }}</span>
+                  @if (f.overridden && f.updated_at) {
+                    <span class="changed">
+                      Changed {{ ago(f.updated_at) }}{{ f.updated_by ? ' by ' + f.updated_by : ''
+                      }}{{ f.reason ? ': ' + f.reason : '' }}.
+                      <button
+                        type="button"
+                        class="btn btn-ghost"
+                        [disabled]="saving()"
+                        (click)="reset(f)"
+                      >
+                        Use the default
+                      </button>
+                    </span>
+                  }
+                  @if (f.problem) {
+                    <span class="error">The saved value is not used: {{ f.problem }}</span>
+                  }
+                  @if (err) {
+                    <span class="error" [id]="id + '-error'">{{ err }}</span>
+                  }
+                </div>
               }
             </fieldset>
           }
-          @if (v.groups.length) {
+          @if (items().length) {
             <div class="field reason">
               <label for="ops-settings-reason">Reason for the change</label>
               <input
@@ -237,11 +284,8 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
                 <span class="error">{{ r }}</span>
               }
             </div>
-            @if (serverError(); as s) {
+            @if (formError(); as s) {
               <p class="form-error" role="alert">{{ s }}</p>
-            }
-            @if (restartNeeded()) {
-              <p class="muted">Some of these changes take effect after the server restarts.</p>
             }
             <div class="actions">
               <button
@@ -263,8 +307,8 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
             </div>
           }
         </form>
-      </section>
-    }
+      }
+    </section>
   `,
   styles: `
     @use 'breakpoints' as bp;
@@ -279,8 +323,16 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
       color: var(--color-ink-2);
       max-width: 65ch;
     }
-    .saved {
+    .saved,
+    .changed {
       font-size: var(--text-sm);
+      color: var(--color-ink-2);
+    }
+    .changed {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
     }
     .group {
       display: grid;
@@ -307,10 +359,6 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
         padding-block: var(--space-2);
       }
     }
-    .unit {
-      font-size: var(--text-sm);
-      color: var(--color-ink-2);
-    }
     .reason .input {
       max-width: 36rem;
     }
@@ -334,47 +382,54 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
   `,
 })
 export class SystemSettings {
-  private readonly api = inject(AdminSettingsService);
+  private readonly api = inject(SystemService);
+  private readonly stepUp = inject(StepUpService);
   private readonly toasts = inject(ToastService);
 
-  /** Idle (nothing asked) until the route is in the API contract. */
-  protected readonly state = resource({
-    params: () => (this.api.inContract() ? {} : undefined),
-    loader: () => this.api.load(),
-  });
-  /** Set after a save, so the form shows what the server kept. */
-  private readonly saved = signal<AdminSettingsView | null>(null);
-  protected readonly view = computed<AdminSettingsView | null>(() => {
-    const saved = this.saved();
-    if (saved) return saved;
-    const s = this.state.hasValue() ? this.state.value() : null;
-    return s?.available ? s.view : null;
-  });
-  /** False only once the server said it has no editable settings. */
-  readonly available = computed(() => {
-    if (!this.api.inContract()) return false;
-    return this.state.hasValue() ? this.state.value().available : true;
-  });
+  protected readonly keep = KEEP_CURRENT;
+  protected readonly toRaw = toRaw;
+  protected readonly valueText = valueText;
+  protected readonly kindOf = kindOf;
 
-  private readonly fields = computed(() => this.view()?.groups.flatMap((g) => g.fields) ?? []);
+  protected readonly state = resource({ loader: () => this.api.settings() });
+  /** Items the server sent back after a save, by key: newer than the list. */
+  private readonly saved = signal<Record<string, SystemSettingView>>({});
+  protected readonly items = computed<SystemSettingView[]>(() => {
+    const list = this.state.hasValue() ? this.state.value().items : [];
+    const saved = this.saved();
+    return list.map((i) => saved[i.key] ?? i);
+  });
+  protected readonly groups = computed(() =>
+    GROUPS.map((g) => ({ ...g, items: this.items().filter((i) => i.group === g.id) })).filter(
+      (g) => g.items.length,
+    ),
+  );
+  /** The most recent change of any setting. */
+  protected readonly lastSaved = computed(() =>
+    this.items()
+      .filter((i) => i.overridden && i.updated_at)
+      .sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? ''))
+      .at(0),
+  );
+
   private readonly edits = signal<Record<string, Raw>>({});
   protected readonly reason = signal('');
   protected readonly saving = signal(false);
   protected readonly submitted = signal(false);
   private readonly serverErrors = signal<Record<string, string>>({});
-  protected readonly serverError = signal<string | null>(null);
+  protected readonly formError = signal<string | null>(null);
 
-  protected raw(f: SettingField): Raw {
+  protected raw(f: SystemSettingView): Raw {
     const edits = this.edits();
     return f.key in edits ? edits[f.key] : toRaw(f, f.value);
   }
 
-  /** The changed settings with their parsed values, and client-side errors. */
+  /** The changed settings with their parsed values, and errors found here. */
   private readonly changes = computed(() => {
     const values: Record<string, unknown> = {};
     const errors: Record<string, string> = {};
     const edits = this.edits();
-    for (const f of this.fields()) {
+    for (const f of this.items()) {
       if (!(f.key in edits)) continue;
       const parsed = parseRaw(f, edits[f.key]);
       if (parsed.error) errors[f.key] = parsed.error;
@@ -389,9 +444,6 @@ export class SystemSettings {
     const n = this.changedCount();
     return n === 0 ? 'Save changes' : n === 1 ? 'Save 1 change' : `Save ${n} changes`;
   });
-  protected readonly restartNeeded = computed(() =>
-    this.fields().some((f) => f.restart && f.key in this.changes().values),
-  );
   protected readonly reasonError = computed(() => {
     if (!this.submitted()) return null;
     return this.reason().trim().length < MIN_REASON
@@ -403,17 +455,20 @@ export class SystemSettings {
     return this.changes().errors[key] ?? this.serverErrors()[key] ?? null;
   }
 
-  protected hint(f: SettingField): string {
-    const parts: string[] = [];
-    if (f.help) parts.push(f.help);
-    if (f.default !== undefined) parts.push(`Default: ${valueText(f, f.default)}.`);
-    if (f.restart) parts.push('Takes effect after a restart.');
+  protected hint(f: SystemSettingView): string {
+    const parts = [f.help];
+    parts.push(`Default: ${valueText(f.default)}.`);
+    parts.push(
+      f.applies === 'restart'
+        ? 'Takes effect when the scheduler restarts.'
+        : 'Used from the next trading run.',
+    );
     return parts.join(' ');
   }
 
   protected readonly ago = (iso: string) => `${formatAgo(iso)} (${formatDateTime(iso)})`;
 
-  protected edit(f: SettingField, raw: Raw): void {
+  protected edit(f: SystemSettingView, raw: Raw): void {
     this.edits.update((e) => ({ ...e, [f.key]: raw }));
     if (this.serverErrors()[f.key]) {
       this.serverErrors.update((errors) => {
@@ -427,38 +482,77 @@ export class SystemSettings {
   protected undo(): void {
     this.edits.set({});
     this.serverErrors.set({});
-    this.serverError.set(null);
+    this.formError.set(null);
     this.submitted.set(false);
   }
 
+  private keepSaved(view: SystemSettingView): void {
+    this.saved.update((s) => ({ ...s, [view.key]: view }));
+    this.edits.update((e) => {
+      const rest = { ...e };
+      delete rest[view.key];
+      return rest;
+    });
+  }
+
+  /** One PUT per changed setting, with the shared reason, after the second factor. */
   async save(): Promise<void> {
     this.submitted.set(true);
     const { values, errors } = this.changes();
     if (Object.keys(errors).length || this.reasonError()) {
-      this.serverError.set('Fix the marked fields, then save again.');
+      this.formError.set('Fix the marked fields, then save again.');
       return;
     }
-    if (!Object.keys(values).length) return;
+    const keys = Object.keys(values);
+    if (!keys.length) return;
+    if (!(await this.stepUp.ensure('Change system settings'))) return;
     this.saving.set(true);
-    this.serverError.set(null);
+    this.formError.set(null);
+    const reason = this.reason().trim();
+    const failed: Record<string, string> = {};
+    let done = 0;
     try {
-      const view = await this.api.save({ values, reason: this.reason().trim() });
-      this.saved.set(view);
-      const n = Object.keys(values).length;
-      this.edits.set({});
-      this.serverErrors.set({});
+      for (const key of keys) {
+        try {
+          this.keepSaved(await this.api.changeSetting(key, { value: values[key], reason }));
+          done += 1;
+        } catch (err) {
+          const message = keyError(err, key);
+          if (message === null) throw err;
+          failed[key] = message;
+        }
+      }
+    } catch (err) {
+      this.formError.set(err instanceof Error ? err.message : String(err));
+    } finally {
+      this.saving.set(false);
+    }
+    this.serverErrors.set(failed);
+    if (Object.keys(failed).length) {
+      this.formError.set('The server did not accept some values. Fix the marked fields.');
+    } else if (!this.formError()) {
       this.reason.set('');
       this.submitted.set(false);
-      this.toasts.success(n === 1 ? 'Saved 1 setting.' : `Saved ${n} settings.`);
+    }
+    if (done) this.toasts.success(done === 1 ? 'Saved 1 setting.' : `Saved ${done} settings.`);
+  }
+
+  /** Drop the override, so the TOML value applies again. Needs the reason too. */
+  async reset(f: SystemSettingView): Promise<void> {
+    this.submitted.set(true);
+    if (this.reasonError()) {
+      this.formError.set('Say why in the reason field, then try again.');
+      return;
+    }
+    if (!(await this.stepUp.ensure('Change system settings'))) return;
+    this.saving.set(true);
+    this.formError.set(null);
+    try {
+      this.keepSaved(await this.api.resetSetting(f.key, { reason: this.reason().trim() }));
+      this.submitted.set(false);
+      this.toasts.success(`${f.label} uses the default again.`);
     } catch (err) {
-      const { byKey, other } = settingErrors(
-        err,
-        this.fields().map((f) => f.key),
-      );
-      this.serverErrors.set(byKey);
-      this.serverError.set(
-        other ?? 'The server did not accept some values. Fix the marked fields and save again.',
-      );
+      this.formError.set(err instanceof Error ? err.message : String(err));
     } finally {
       this.saving.set(false);
     }

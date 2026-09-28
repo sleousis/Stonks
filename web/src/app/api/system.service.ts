@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 
+import { SILENT_HEADERS } from '../core/http/interceptors';
 import { unwrap } from './api-call';
 import {
   changeSystemSetting,
@@ -57,14 +58,17 @@ export class SystemService {
     return unwrap(getSystemSetting({ path: { key } }));
   }
 
-  /** Change one setting; needs a fresh second factor. 422 on a bad value. */
+  /**
+   * Change one setting; needs a fresh second factor. 422 on a bad value.
+   * Silent: the settings form shows each failure beside its field.
+   */
   changeSetting(key: string, body: SystemSettingChange) {
-    return unwrap(changeSystemSetting({ path: { key }, body }));
+    return unwrap(changeSystemSetting({ path: { key }, body, headers: SILENT_HEADERS }));
   }
 
   /** Drop the override, so the TOML value applies again. */
   resetSetting(key: string, body: SystemSettingReset) {
-    return unwrap(resetSystemSetting({ path: { key }, body }));
+    return unwrap(resetSystemSetting({ path: { key }, body, headers: SILENT_HEADERS }));
   }
 
   /** The starter strategies and whether each is registered. */
