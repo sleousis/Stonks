@@ -192,3 +192,124 @@ def universe(
         if refresh:
             done = call(lambda: universes.refresh(universe_id))
             Console().print(f"{done.members} members, {done.current_members} today")
+
+
+# ---- screen alerts (roadmap 23.17) ------------------------------------------------------
+
+_WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+
+
+def _alerts() -> tuple[Any, Any]:
+    from stonks.app.context import AppContext
+    from stonks.app.screen_alerts import ScreenAlertService
+    from stonks.cli import _settings
+
+    context = AppContext(_settings())
+    with context.state() as state:
+        state.migrate()
+    return context, ScreenAlertService(context)
+
+
+def _weekday(value: str | None) -> int | None:
+    if value is None:
+        return None
+    day = value.strip().lower()[:3]
+    if day not in _WEEKDAYS:
+        raise typer.BadParameter("a day like mon, tue ... sun", param_hint="--weekly")
+    return _WEEKDAYS.index(day)
+
+
+@app.command("alert")
+def alert(
+    screen_id: str = typer.Argument(..., help="one of your saved screens"),
+    weekly: str | None = typer.Option(None, "--weekly", help="run weekly on this day (mon..sun)"),
+    off: bool = typer.Option(False, "--off", help="keep the alert but switch it off"),
+    user: str | None = _USER,
+) -> None:
+    """Alert on a saved screen: daily (default) or weekly, notify only."""
+    from stonks.app.screen_alerts import ScreenAlertSet
+
+    day = _weekday(weekly)
+    body = call(
+        lambda: ScreenAlertSet(
+            enabled=not off, cadence="weekly" if day is not None else "daily", weekday=day
+        )
+    )
+    context, service = _alerts()
+    view = call(lambda: service.set(cli_principal(context, user), screen_id, body))
+    when = f"weekly on {_WEEKDAYS[view.weekday]}" if view.weekday is not None else "daily"
+    state = "on" if view.enabled else "off"
+    Console().print(f"alert on {view.screen_name} ({view.screen_id}): {when}, {state}")
+
+
+@app.command("alert-delete")
+def alert_delete(screen_id: str = typer.Argument(...), user: str | None = _USER) -> None:
+    """Remove the alert from a saved screen (the screen stays)."""
+    context, service = _alerts()
+    call(lambda: service.delete(cli_principal(context, user), screen_id))
+    Console().print(f"removed the alert on {screen_id}")
+
+
+@app.command("alerts")
+def alerts(user: str | None = _USER) -> None:
+    """Your screen alerts."""
+    context, service = _alerts()
+    rows = call(lambda: service.list(cli_principal(context, user)))
+    if not rows:
+        Console().print("no screen alerts")
+        return
+    table = Table(title="screen alerts")
+    for col in ("screen", "name", "when", "on", "last run", "matched", "error"):
+        table.add_column(col)
+    for a in rows:
+        when = f"weekly {_WEEKDAYS[a.weekday]}" if a.weekday is not None else "daily"
+        table.add_row(
+            a.screen_id,
+            a.screen_name,
+            when,
+            "yes" if a.enabled else "no",
+            str(a.last_as_of or "-"),
+            str(a.matched),
+            a.last_error or "",
+        )
+    Console().print(table)
+
+
+@app.command("alert-events")
+def alert_events(
+    screen: str | None = _SCREEN,
+    limit: int = typer.Option(20, "--limit", min=1, max=500),
+    user: str | None = _USER,
+) -> None:
+    """When your screens found new names, newest first."""
+    context, service = _alerts()
+    page = call(
+        lambda: service.events(
+            cli_principal(context, user), screen_id=screen, limit=limit, offset=0
+        )
+    )
+    if not page.items:
+        Console().print("no screen alert events")
+        return
+    table = Table(title=f"screen alert events ({page.total})")
+    for col in ("day", "screen", "new names", "matched"):
+        table.add_column(col)
+    for e in page.items:
+        table.add_row(
+            str(e.as_of), e.screen_name or e.screen_id, ", ".join(e.tickers), str(e.matched)
+        )
+    Console().print(table)
+
+
+@app.command("alerts-run")
+def alerts_run(
+    as_of: str | None = typer.Option(None, "--as-of", help="run on this day (default today)"),
+) -> None:
+    """Run every due screen alert of every person now (the scheduler's
+    screen_alerts job). Opens the lake."""
+    _, service = _alerts()
+    out = service.evaluate(as_of=_day(as_of, "--as-of"))
+    Console().print(
+        f"{out.ran} of {out.alerts} alerts ran: {out.baselines} baselines, {out.fired} found"
+        f" new names, {out.published} sent, {out.failed} failed"
+    )

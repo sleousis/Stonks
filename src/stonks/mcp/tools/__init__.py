@@ -21,6 +21,7 @@ from stonks.mcp.tools import (
     reads,
     research,
     risk,
+    screen_alerts,
     screener,
     studio,
     subscriptions,
@@ -54,6 +55,7 @@ MODULES = (
     research,
     calendars,
     screener,
+    screen_alerts,
     live,
     options,
 )

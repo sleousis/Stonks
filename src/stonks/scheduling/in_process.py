@@ -298,6 +298,16 @@ def in_process_price_alerts(ctx: RunContext) -> JobOutcome:
     return JobOutcome("succeeded", out.as_dict())
 
 
+@IN_PROCESS_ACTIONS.register("screen_alerts")
+def in_process_screen_alerts(ctx: RunContext) -> JobOutcome:
+    """Every due screen alert of every person on the day's data."""
+    from stonks.app.screen_alerts import ScreenAlertService
+
+    service = ScreenAlertService(_executor(ctx).services.context)
+    out = service.evaluate(as_of=ctx.fire.as_of)
+    return JobOutcome("succeeded", out.as_dict())
+
+
 @IN_PROCESS_ACTIONS.register("model_retrain")
 def in_process_model_retrain(ctx: RunContext) -> JobOutcome:
     """Refit on the server's JobRunner; each fit becomes a candidate version."""
