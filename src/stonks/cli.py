@@ -2290,6 +2290,12 @@ from stonks.cli_tca import app as tca_app  # noqa: E402
 
 app.add_typer(tca_app, name="tca")
 
+# ---- the round-trip journal (roadmap 23.3) --------------------------------------
+
+from stonks.cli_journal import app as journal_app  # noqa: E402
+
+app.add_typer(journal_app, name="journal")
+
 # ---- options research (Phase 17) -----------------------------------------------
 
 from stonks.cli_options import app as options_app  # noqa: E402

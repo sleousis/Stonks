@@ -102,6 +102,10 @@ class RoundTrip:
     dividends: float = 0.0
     #: ``long`` (bought then sold) or ``short`` (sold then bought back).
     side: TradeSide = "long"
+    #: The opening fill's reference (``ref_of``, default its client id).
+    entry_ref: str = ""
+    #: The closing fill's reference; ``""`` for an open lot.
+    exit_ref: str = ""
 
 
 @dataclass(frozen=True)
@@ -147,6 +151,7 @@ class _Lot:
     dividends: float = 0.0
     #: ``1`` for a long lot, ``-1`` for a short one.
     direction: int = 1
+    ref: str = ""
 
     def take(self, qty: float) -> tuple[float, float, float]:
         """Remove ``qty`` shares; return their share of the entry fee,
@@ -168,15 +173,22 @@ def build_round_trips(
     bars: pd.DataFrame | None = None,
     marks: Mapping[str, float] | None = None,
     reference_price: ReferencePrice | None = None,
+    key_of: Callable[[Fill], str] | None = None,
+    ref_of: Callable[[Fill], str] | None = None,
 ) -> list[RoundTrip]:
     """Round trips from ``fills`` (see the module docstring for the rules).
 
     ``timeline`` is the backtest's bar timestamps (``equity_dates``);
     ``bars`` has columns ``ticker, timestamp, high, low, close`` and feeds
-    MAE/MFE and the open-lot mark. Trades come out closed ones first, by
-    exit, then open lots by entry."""
+    MAE/MFE and the open-lot mark. ``key_of`` labels a fill's lots (default
+    the engine's client id prefix), and ``ref_of`` names a fill in
+    ``entry_ref`` and ``exit_ref`` (default its client id), for ledgers
+    outside a backtest such as the round-trip journal (roadmap 23.3).
+    Trades come out closed ones first, by exit, then open lots by entry."""
+    key_fn = key_of or (lambda f: _strategy_key(f.order_client_id))
+    ref_fn = ref_of or (lambda f: f.order_client_id)
     clock = [_utc(t) for t in timeline]
-    excursions = _Excursions(bars)
+    excursions = Excursions(bars)
     splits: dict[str, list[tuple[datetime, float]]] = {}
     events: list[tuple[datetime, int, Fill | CorporateActionRecord]] = []
     for record in corporate_actions:
@@ -211,7 +223,8 @@ def build_round_trips(
             continue
         fill = event
         last_price[fill.ticker] = fill.price
-        key = _strategy_key(fill.order_client_id)
+        key = key_fn(fill)
+        ref = ref_fn(fill)
         slip = _slippage(fill, reference_price)
         queue = lots.setdefault(fill.ticker, [])
         direction = 1 if fill.side == "buy" else -1
@@ -232,6 +245,7 @@ def build_round_trips(
                     bars_held=bars_between(lot.entry_ts, ts),
                     excursion=excursion,
                     is_open=False,
+                    exit_ref=ref,
                 )
             )
             to_close -= qty
@@ -249,6 +263,7 @@ def build_round_trips(
                     fill.fee * share,
                     slip * share,
                     direction=direction,
+                    ref=ref,
                 )
             )
 
@@ -286,6 +301,7 @@ def _trip(
     bars_held: int,
     excursion: Callable[[_Lot, datetime], tuple[float | None, float | None]],
     is_open: bool,
+    exit_ref: str = "",
 ) -> RoundTrip:
     entry_px = lot.entry_px
     mae, mfe = excursion(lot, exit_ts)
@@ -311,6 +327,8 @@ def _trip(
         is_open=is_open,
         dividends=dividends,
         side="long" if lot.direction > 0 else "short",
+        entry_ref=lot.ref,
+        exit_ref=exit_ref,
     )
 
 
@@ -349,7 +367,7 @@ def _slippage(fill: Fill, reference_price: ReferencePrice | None) -> float:
 def _mark(
     ticker: str,
     marks: Mapping[str, float] | None,
-    excursions: _Excursions,
+    excursions: Excursions,
     last_price: Mapping[str, float],
 ) -> float:
     if marks and ticker in marks:
@@ -367,7 +385,7 @@ def _utc(value: date) -> datetime:
     return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
 
 
-class _Excursions:
+class Excursions:
     """Per-ticker bar arrays for MAE/MFE and the last close."""
 
     def __init__(self, bars: pd.DataFrame | None) -> None:

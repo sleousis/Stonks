@@ -9,6 +9,7 @@ export const ORDERS_TABS = [
   { path: '/orders/fills', label: 'Fills', exact: false },
   { path: '/orders/ticks', label: 'Trading runs', exact: false },
   { path: '/trades', label: 'Trade costs', exact: true },
+  { path: '/journal', label: 'Journal', exact: false },
 ] as const;
 
 /**

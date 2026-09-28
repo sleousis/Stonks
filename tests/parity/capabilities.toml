@@ -775,6 +775,53 @@ console = { limited = "operator tool, a proposal a person reviews" }
 cli = "stonks tca calibrate"
 mcp = { limited = "operator tool, a proposal a person reviews" }
 
+# ---- round-trip journal (roadmap 23.3) ------------------------------------------------
+
+[[capability]]
+id = "journal.trades"
+domain = "journal"
+title = "Round trips built from fills"
+routes = ["GET /api/journal/trades", "GET /api/journal/trades/{trade_id}"]
+console = ["listJournalTrades", "getJournalTrade"]
+cli = ["stonks journal trades", "stonks journal show"]
+mcp = ["list_round_trips", "get_round_trip"]
+
+[[capability]]
+id = "journal.review"
+domain = "journal"
+title = "Tags, mistakes, playbook and plan on a trade"
+routes = ["PUT /api/journal/trades/{trade_id}/review", "GET /api/journal/labels"]
+console = ["reviewJournalTrade", "listJournalLabels"]
+cli = ["stonks journal review", "stonks journal labels"]
+mcp = { limited = "reviewing a trade is a person's own judgement, done in the console" }
+
+[[capability]]
+id = "journal.calendar"
+domain = "journal"
+title = "P&L calendar by day, week and month"
+routes = ["GET /api/journal/calendar"]
+console = "getPnlCalendar"
+cli = "stonks journal calendar"
+mcp = "get_pnl_calendar"
+
+[[capability]]
+id = "journal.breakdown"
+domain = "journal"
+title = "Results by sleeve, tag, mistake, playbook or plan"
+routes = ["GET /api/journal/breakdown"]
+console = "getJournalBreakdown"
+cli = "stonks journal breakdown"
+mcp = "get_journal_breakdown"
+
+[[capability]]
+id = "journal.playbooks"
+domain = "journal"
+title = "Playbooks"
+routes = ["GET /api/journal/playbooks", "POST /api/journal/playbooks", "PATCH /api/journal/playbooks/{playbook_id}"]
+console = ["listPlaybooks", "createPlaybook", "updatePlaybook"]
+cli = ["stonks journal playbooks", "stonks journal playbook-add", "stonks journal playbook-edit"]
+mcp = "list_playbooks"
+
 # ---- risk and halts ------------------------------------------------------------------
 
 [[capability]]

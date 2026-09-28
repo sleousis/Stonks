@@ -369,6 +369,17 @@ CASES: dict[str, Case] = {
     "get_tca_summary": _c("GET", "/api/tca/summary", lambda i: {"portfolio_id": i["portfolio"]}),
     "list_trade_journal": _c("GET", "/api/tca/journal", lambda i: {"portfolio_id": i["portfolio"]}),
     "get_order_tca": _c("GET", "/api/tca/orders/{client_id}", lambda i: {"client_id": "nope"}),
+    "list_round_trips": _c(
+        "GET", "/api/journal/trades", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
+    "get_round_trip": _c("GET", "/api/journal/trades/{trade_id}", lambda i: {"trade_id": 999999}),
+    "get_pnl_calendar": _c(
+        "GET", "/api/journal/calendar", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
+    "get_journal_breakdown": _c(
+        "GET", "/api/journal/breakdown", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
+    "list_playbooks": _c("GET", "/api/journal/playbooks", lambda i: {}),
     "add_journal_note": _c(
         "POST",
         "/api/tca/orders/{client_id}/notes",

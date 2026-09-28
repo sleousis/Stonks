@@ -2051,6 +2051,108 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Win rate, P&L, profit factor, average R and exit efficiency per\ngroup: by sleeve, tag, mistake, playbook, or followed versus broke\nplan.",
+      "input_schema": {
+        "properties": {
+          "by": {
+            "default": "all",
+            "description": "how to group the trades",
+            "enum": [
+              "all",
+              "sleeve",
+              "origin",
+              "ticker",
+              "side",
+              "exit_trigger",
+              "tag",
+              "mistake",
+              "playbook",
+              "plan"
+            ],
+            "title": "By",
+            "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "enum": [
+                  "strategy",
+                  "manual"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "strategy or manual orders",
+            "title": "Origin"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "sleeve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sleeve"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Until"
+          }
+        },
+        "title": "get_journal_breakdownArguments",
+        "type": "object"
+      },
+      "name": "get_journal_breakdown",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Every strategy ranked by its risk-adjusted paper result (the\nmodel book the tick keeps for it): total return, CAGR, Sharpe,\nSortino, worst drawdown, trades in the model book and in real books,\nsurvival tests passed and the go-live verdict.",
       "input_schema": {
         "properties": {
@@ -2667,6 +2769,90 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Realised P&L of closed trades by exit day, with weekly and\nmonthly totals, in the portfolio's base currency.",
+      "input_schema": {
+        "properties": {
+          "origin": {
+            "anyOf": [
+              {
+                "enum": [
+                  "strategy",
+                  "manual"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "strategy or manual orders",
+            "title": "Origin"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "sleeve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sleeve"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Until"
+          }
+        },
+        "title": "get_pnl_calendarArguments",
+        "type": "object"
+      },
+      "name": "get_pnl_calendar",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Current portfolio: cash, positions valued at the latest stored closes,\nweights and total value, from the latest snapshot.",
       "input_schema": {
         "properties": {
@@ -2772,6 +2958,44 @@
         "type": "object"
       },
       "name": "get_risk_policy",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "One trade with every leg (each partial exit) and its review.",
+      "input_schema": {
+        "properties": {
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "trade_id": {
+            "description": "the id of the opening fill",
+            "minimum": 1,
+            "title": "Trade Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "trade_id"
+        ],
+        "title": "get_round_tripArguments",
+        "type": "object"
+      },
+      "name": "get_round_trip",
       "needs_confirm": false
     },
     {
@@ -4517,6 +4741,28 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "Your playbooks: the setups you trade, with their rules.",
+      "input_schema": {
+        "properties": {
+          "include_archived": {
+            "default": false,
+            "title": "Include Archived",
+            "type": "boolean"
+          }
+        },
+        "title": "list_playbooksArguments",
+        "type": "object"
+      },
+      "name": "list_playbooks",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "Portfolio history: one snapshot per production tick, newest first.",
       "input_schema": {
         "properties": {
@@ -4782,6 +5028,169 @@
         "type": "object"
       },
       "name": "list_risk_snapshots",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
+      "description": "Your round trips built from fills, open first then newest exit\nfirst: entry and exit, holding days, P&L, adverse and favourable\nexcursion, R multiple (when a stop is known), exit efficiency, and\nyour tags, mistakes and playbook.",
+      "input_schema": {
+        "properties": {
+          "limit": {
+            "default": 50,
+            "maximum": 200,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "mistake": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Mistake"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "enum": [
+                  "strategy",
+                  "manual"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "strategy or manual orders",
+            "title": "Origin"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "enum": [
+                  "followed",
+                  "broke",
+                  "not_said"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "whether the plan was followed",
+            "title": "Plan"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Portfolio Id"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Since"
+          },
+          "sleeve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "one strategy id, or manual",
+            "title": "Sleeve"
+          },
+          "status": {
+            "default": "all",
+            "description": "all, open or closed",
+            "enum": [
+              "all",
+              "open",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tag"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ticker"
+          },
+          "until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "YYYY-MM-DD",
+            "title": "Until"
+          }
+        },
+        "title": "list_round_tripsArguments",
+        "type": "object"
+      },
+      "name": "list_round_trips",
       "needs_confirm": false
     },
     {

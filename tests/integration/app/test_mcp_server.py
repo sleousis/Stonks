@@ -144,6 +144,11 @@ READ_TOOLS = {
     "get_tca_summary",
     "list_trade_journal",
     "get_order_tca",
+    "list_round_trips",
+    "get_round_trip",
+    "get_pnl_calendar",
+    "get_journal_breakdown",
+    "list_playbooks",
     "get_golive_report",
     "list_ledger_runs",
     "get_ledger_run",
@@ -397,7 +402,7 @@ async def test_risk_policy_broker_sources_cost_models(mcp, settings):
     sources = (await call(mcp, "list_sources"))["items"]
     assert any(s["default"] for s in sources)
     presets = (await call(mcp, "list_cost_models"))["items"]
-    assert {p["name"] for p in presets} == {"zero", "realistic"}
+    assert {p["name"] for p in presets} == {"zero", "realistic", "ibkr_fixed", "ibkr_tiered"}
 
 
 @pytest.mark.anyio

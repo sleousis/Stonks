@@ -90,6 +90,19 @@ class IbkrTieredFees(BaseModel):
     #: Clearing fee per share (NSCC and DTC, USD 0.00020 on IBKR's page).
     clearing_per_share: float = Field(default=0.0002, ge=0.0)
 
+    @field_validator("tiers", mode="before")
+    @classmethod
+    def _open_top(cls, tiers: object) -> object:
+        """JSON writes the open top tier's ``inf`` bound as null. Read it back."""
+        if isinstance(tiers, (list, tuple)):
+            return tuple(
+                (float("inf"), row[1])
+                if isinstance(row, (list, tuple)) and len(row) == 2 and row[0] is None
+                else row
+                for row in tiers
+            )
+        return tiers
+
     @field_validator("tiers")
     @classmethod
     def _ascending(cls, tiers: tuple[tuple[float, float], ...]) -> tuple[tuple[float, float], ...]:
