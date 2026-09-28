@@ -221,7 +221,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     term: 'Real money',
     short:
       'Orders go to your broker and fill for real. Only a portfolio at a real-money stage trades real money. Also called live.',
-    aliases: ['Live', 'Go live', 'Live trading'],
+    aliases: ['Live', 'Live trading'],
   },
   signals_only: {
     term: 'Alerts only',
@@ -325,7 +325,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   on_trial: {
     term: 'On trial',
     short:
-      'A strategy status: the system trades it on its own test book every run, with no real orders. Nobody can follow it for trades yet. Also called shadow.',
+      'A strategy status: the system trades it on its own test book every run. Nobody can follow it for trades yet. Also called shadow.',
     aliases: ['Shadow', 'Trial', 'Put on trial', 'Back on trial'],
   },
   approved: {
@@ -343,7 +343,7 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   test_book: {
     term: 'Test book',
     short:
-      "A strategy's own practice portfolio, run by the system while it is on trial, so its record never depends on anyone following it. Also called a model book or shadow book.",
+      "A strategy's own practice portfolio, run by the system while it is on trial. Also called a model book or shadow book.",
     aliases: ['Model book', 'Shadow book', 'Paper book', 'Test books'],
   },
   go_live_check: {
@@ -376,7 +376,8 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
   },
   simulated: {
     term: 'Simulated',
-    short: 'A portfolio stage: Stonks fills orders itself. Nothing reaches a broker. No real money.',
+    short:
+      'A portfolio stage: Stonks fills orders itself. Nothing reaches a broker. No real money.',
     aliases: ['Simulated paper'],
   },
   broker_paper: {
@@ -398,13 +399,20 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     term: "The strategy's part of your portfolio",
     short:
       'The part of your portfolio one followed strategy trades. Each part gets its own value and risk readings. Also called a sleeve.',
-    aliases: ["Strategy's part", 'Strategy parts', 'Sleeve', 'Sleeves', 'Strategy sleeve', 'Strategy sleeves'],
+    aliases: [
+      "Strategy's part",
+      'Strategy parts',
+      'Sleeve',
+      'Sleeves',
+      'Strategy sleeve',
+      'Strategy sleeves',
+    ],
   },
   signal: {
     term: 'Signal',
     short:
       'What a strategy wants after a close: buy, sell or hold a ticker, with how strongly it thinks so.',
-    aliases: ['Signals', 'Signal score'],
+    aliases: ['Signals'],
   },
   watchlist: {
     term: 'Watchlist',

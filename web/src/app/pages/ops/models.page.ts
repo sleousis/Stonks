@@ -11,7 +11,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 
 /**
  * Model versions across strategies (roadmap 22.6): every candidate that
- * runs as a model book and waits for a swap or a rejection, and a retrain
+ * runs as a test book and waits for a swap or a rejection, and a retrain
  * of every strategy that learns from data. Swaps happen on each strategy's
  * Model versions tab, next to its swap check.
  */

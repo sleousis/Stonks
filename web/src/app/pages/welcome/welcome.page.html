@@ -211,8 +211,8 @@
                 @case ('follow') {
                   @if (strategies.hasValue() && strategies.value().length === 0) {
                     <p class="muted">
-                      No strategy is ready to follow yet. Strategies show here once they start paper
-                      trading.
+                      No strategy is ready to follow yet. Strategies show here once they are put on
+                      trial.
                     </p>
                   } @else if (session.can('portfolio.trade')) {
                     <form class="form-grid inline-form" (submit)="follow($event)">

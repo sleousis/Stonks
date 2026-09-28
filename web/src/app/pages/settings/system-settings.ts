@@ -67,9 +67,7 @@ export function toRaw(item: SystemSettingView, value: unknown): Raw {
   if (kind === 'bool') return value === true;
   if (value == null) return '';
   if (kind === 'choice') {
-    return typeof value === 'string' && (item.choices ?? []).includes(value)
-      ? value
-      : KEEP_CURRENT;
+    return typeof value === 'string' && (item.choices ?? []).includes(value) ? value : KEEP_CURRENT;
   }
   if (kind === 'list' && Array.isArray(value)) return value.join(', ');
   if (kind === 'json') return JSON.stringify(value);

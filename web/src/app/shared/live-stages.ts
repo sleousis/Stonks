@@ -77,7 +77,7 @@ export function checkLabel(name: string): string {
 
 export type CheckState = 'pass' | 'fail' | 'none';
 
-/** Pass, fail, or no data yet (not blocking). */
+/** Passed, failed, or not enough data yet (not blocking): the vocabulary's check words. */
 export function checkState(check: Pick<GateCheckView, 'passed'>): CheckState {
   if (check.passed === true) return 'pass';
   if (check.passed === false) return 'fail';
@@ -85,9 +85,9 @@ export function checkState(check: Pick<GateCheckView, 'passed'>): CheckState {
 }
 
 export const CHECK_STATE_WORDS: Record<CheckState, string> = {
-  pass: 'Met',
-  fail: 'Not met',
-  none: 'No data yet',
+  pass: 'Passed',
+  fail: 'Failed',
+  none: 'Not enough data yet',
 };
 
 /** Why a session was not clean, in plain words (empty: clean). */

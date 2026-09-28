@@ -141,7 +141,7 @@ describe('LiveStageCard', () => {
     expect(el.querySelectorAll('.step.done').length).toBe(1);
     expect(el.textContent).toContain('To move up to Real money, small');
     const checks = [...el.querySelectorAll('.checks li')].map((li) => li.textContent ?? '');
-    expect(checks.find((t) => t.includes('Stop trading tested'))).toContain('No data yet');
+    expect(checks.find((t) => t.includes('Stop trading tested'))).toContain('Not enough data yet');
     expect(el.querySelector('.stage-note')?.textContent).toContain('never moves the stage');
     const days = [...el.querySelectorAll('.days li')].map((li) => li.textContent ?? '');
     expect(days[0]).toContain('Not clean');

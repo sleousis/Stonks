@@ -6,13 +6,7 @@ import type { PositionView, TickRun } from '../../api/models';
 import { PortfolioService } from '../../api/portfolio.service';
 import { StrategiesService } from '../../api/strategies.service';
 import { TicksService } from '../../api/ticks.service';
-import {
-  formatDate,
-  formatDateTime,
-  formatMoney,
-  formatPercent,
-  toneClass,
-} from '../../core/format/format';
+import { formatDateTime, formatMoney, formatPercent, toneClass } from '../../core/format/format';
 import { dayChangeFrom, dayChangeLine } from '../../core/format/day-change';
 import type { ChartSeries } from '../../shared/chart/chart-engine';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';

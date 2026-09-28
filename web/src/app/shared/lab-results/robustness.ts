@@ -17,9 +17,14 @@ export const ROBUSTNESS_WORDS: Readonly<Record<Robustness, { status: string; lab
 };
 
 /** The words for a run's robustness, with a plain fallback for an unknown value. */
-export function robustnessWords(value: string | null | undefined): { status: string; label: string } {
+export function robustnessWords(value: string | null | undefined): {
+  status: string;
+  label: string;
+} {
   const known = (ROBUSTNESS_WORDS as Readonly<Record<string, { status: string; label: string }>>)[
     value ?? ''
   ];
-  return known ?? { status: value ?? 'unknown', label: value ? value.replace(/_/g, ' ') : 'Unknown' };
+  return (
+    known ?? { status: value ?? 'unknown', label: value ? value.replace(/_/g, ' ') : 'Unknown' }
+  );
 }

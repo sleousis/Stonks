@@ -66,7 +66,13 @@ export const RESEARCH_GLOSSARY = {
     term: 'Robustness tests',
     short:
       'Checks after a backtest, each asking whether the result could be luck or fitted to the past. Also called survival tests.',
-    aliases: ['Robustness', 'Robustness test', 'Survival tests', 'Survival test', 'Full robustness tests'],
+    aliases: [
+      'Robustness',
+      'Robustness test',
+      'Survival tests',
+      'Survival test',
+      'Full robustness tests',
+    ],
   },
   lab_verdict: {
     term: 'Lab verdict',

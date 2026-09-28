@@ -45,8 +45,8 @@ describe('StrategiesCard', () => {
   /** The first row's checked follow mode (M8: the shared follow control). */
   function modeValue(el: HTMLElement): string | null {
     return (
-      el.querySelector<HTMLInputElement>('app-follow-control input[type="radio"]:checked')
-        ?.value ?? null
+      el.querySelector<HTMLInputElement>('app-follow-control input[type="radio"]:checked')?.value ??
+      null
     );
   }
 

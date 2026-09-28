@@ -173,7 +173,7 @@ export class WelcomePage {
     const portfolio = this.followPortfolio() || this.portfolios.current()?.id || '';
     if (!strategy) return this.formError.set('Pick a strategy to follow.');
     if (mode === 'paper' && !portfolio) {
-      return this.formError.set('Paper trading needs a portfolio. Open one in step 2 first.');
+      return this.formError.set('Following on Paper needs a portfolio. Open one in step 2 first.');
     }
     await this.run('follow', async () => {
       await this.subscriptionsApi.subscribe({
