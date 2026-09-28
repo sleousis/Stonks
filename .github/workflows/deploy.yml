@@ -89,10 +89,14 @@ jobs:
             ServerAliveInterval 30
           EOF
 
-      - name: Copy deploy files (keeps the server's .env and snapshots)
+      - name: Copy deploy files (keeps the server's .env, snapshots and IBKR secret files)
         run: |
+          # The IBKR secret files exist only on the server (git ignores them).
+          # Protect them from --delete, or every deploy would wipe them and
+          # the gateway profiles could no longer start.
           rsync -az --delete \
             --exclude .env --exclude .deployed-tag --exclude .previous-tag --exclude snapshots/ \
+            --filter 'protect /ibkr/secrets/*' \
             deploy/ "stonks:${DEPLOY_DIR}/"
 
       - name: Log the server in to GHCR with this job's token
