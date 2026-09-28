@@ -161,6 +161,17 @@
   margin: 0 0 var(--space-4);
   font-size: var(--text-sm);
 
+  summary::before {
+    content: '▸';
+    margin-right: var(--space-2);
+    color: var(--color-ink-3);
+    transition: transform 0.15s ease;
+  }
+
+  &[open] summary::before {
+    transform: rotate(90deg);
+  }
+
   summary {
     display: inline-flex;
     align-items: center;

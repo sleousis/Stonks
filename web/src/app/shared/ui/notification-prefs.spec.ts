@@ -125,6 +125,12 @@ describe('NotificationPrefs', () => {
     await tick();
   });
 
+  it("never offers the server's own log as a channel (M6)", async () => {
+    const el = await render({ ...VIEW, channels: ['inapp', 'log', 'webpush'] });
+    const heads = [...el.querySelectorAll('thead th')].map((th) => th.textContent?.trim());
+    expect(heads).toEqual(['Alert', 'Push']);
+  });
+
   it('says in the Price alerts row that they check daily closes', async () => {
     const el = await render();
     const row = [...el.querySelectorAll('tbody th')].find((th) =>

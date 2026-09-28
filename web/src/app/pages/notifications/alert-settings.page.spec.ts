@@ -70,17 +70,17 @@ describe('AlertSettingsPage', () => {
   it('puts every alert setting on one page, in two plain groups (F39)', async () => {
     const el = await render();
     const groups = [...el.querySelectorAll('h2')].map((h) => h.textContent?.trim());
-    expect(groups).toEqual(['What reaches you, and when', 'Where alerts reach you']);
+    expect(groups).toEqual(['Where alerts reach you', 'What reaches you, and when']);
     const panels = [...el.querySelectorAll('h3')].map((h) => h.textContent?.trim());
     expect(panels).toEqual([
-      'Which alerts go where',
-      'Upcoming events',
-      'Quiet hours',
-      'Price alerts',
       'Push on this device',
       'Your devices',
       'Telegram',
       'Your webhook',
+      'Which alerts go where',
+      'Upcoming events',
+      'Quiet hours',
+      'Price alerts',
     ]);
   });
 

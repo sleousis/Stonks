@@ -39,6 +39,8 @@ const CHANNEL_LABELS: Record<string, string> = {
 
 /** The in-app feed always gets everything; it is not a switch. */
 const ALWAYS_ON = 'inapp';
+/** The server's own log: an operator channel, never a choice for people (M6). */
+const HIDDEN = new Set([ALWAYS_ON, 'log']);
 
 /** The panels this component can show, each its own titled section. */
 export type PrefsPart = 'channels' | 'events' | 'quiet' | 'webhook';
@@ -362,11 +364,26 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
       gap: var(--space-4);
       min-width: 0;
     }
+    /* Narrow screens keep the grid short: the Price alerts panel says the same. */
+    @media (max-width: 40rem) {
+      .row-hint {
+        display: none;
+      }
+    }
     .row-hint {
       display: block;
       color: var(--color-ink-3);
       font-size: var(--text-xs);
       font-weight: var(--weight-regular);
+    }
+    .countries-fold summary::before {
+      content: '▸';
+      margin-right: var(--space-2);
+      color: var(--color-ink-3);
+      transition: transform 0.15s ease;
+    }
+    .countries-fold[open] summary::before {
+      transform: rotate(90deg);
     }
     .countries-fold summary {
       display: inline-flex;
@@ -520,7 +537,7 @@ export class NotificationPrefs {
     this.prefs.hasValue() ? this.prefs.value() : null,
   );
   protected readonly channels = computed(
-    () => this.view()?.channels.filter((c) => c !== ALWAYS_ON) ?? [],
+    () => this.view()?.channels.filter((c) => !HIDDEN.has(c)) ?? [],
   );
   /** One switch per kind of upcoming-event alert (earnings, dividends, economic). */
   protected readonly eventAlerts = computed(() => this.view()?.event_alerts ?? []);
@@ -680,7 +697,7 @@ export class NotificationPrefs {
     try {
       const sent = await this.api.sendTest();
       const names = sent.channels
-        .filter((c) => c !== ALWAYS_ON)
+        .filter((c) => !HIDDEN.has(c))
         .map((c) => this.channelLabel(c).toLowerCase());
       if (sent.deliveries > 0) {
         const where = names.length ? ` by ${names.join(', ')}` : '';

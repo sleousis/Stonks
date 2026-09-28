@@ -9,10 +9,11 @@ import { PushDevices } from './push-devices';
 import { TelegramLink } from './telegram-link';
 
 /**
- * Every alert setting in one place (F39): what reaches you and when (the
+ * Every alert setting in one place (F39): where alerts reach you first
+ * (push on this device, your devices, Telegram, your webhook: turning push
+ * on is the first thing on a phone), then what reaches you and when (the
  * alert and channel grid, upcoming events, quiet hours, a pointer to price
- * alerts), and where it reaches you (push on this device, your devices,
- * Telegram, your webhook). Settings links here.
+ * alerts). Settings links here.
  */
 @Component({
   selector: 'app-alert-settings-page',
@@ -34,6 +35,14 @@ import { TelegramLink } from './telegram-link';
     <app-notifications-tabs />
 
     <div class="layout">
+      <section class="group" aria-labelledby="where-group">
+        <h2 id="where-group" class="group-title">Where alerts reach you</h2>
+        <app-notification-settings title="Push on this device" />
+        <app-push-devices />
+        <app-telegram-link />
+        <app-notification-prefs [only]="['webhook']" />
+      </section>
+
       <section class="group" aria-labelledby="what-group">
         <h2 id="what-group" class="group-title">What reaches you, and when</h2>
         <app-notification-prefs [only]="['channels', 'events', 'quiet']" />
@@ -45,19 +54,11 @@ import { TelegramLink } from './telegram-link';
             <p class="lead">
               Your own rules on a ticker's price. They check each day's closing price after the
               evening data update, not live prices. Where they reach you follows the Price alerts
-              row above.
+              row in Which alerts go where.
             </p>
             <a class="btn" routerLink="/notifications/price-alerts">Open price alerts</a>
           </div>
         </section>
-      </section>
-
-      <section class="group" aria-labelledby="where-group">
-        <h2 id="where-group" class="group-title">Where alerts reach you</h2>
-        <app-notification-settings title="Push on this device" />
-        <app-push-devices />
-        <app-telegram-link />
-        <app-notification-prefs [only]="['webhook']" />
       </section>
     </div>
   `,
@@ -73,7 +74,7 @@ import { TelegramLink } from './telegram-link';
       gap: var(--space-5);
       min-width: 0;
       @include bp.from-desktop {
-        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
         align-items: start;
       }
     }

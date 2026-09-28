@@ -176,17 +176,19 @@ const CURRENCY = /^[A-Z]{3}$/;
                   }
                 </p>
                 @if (where() === 'us') {
-                  <label class="check">
-                    <input
-                      type="checkbox"
-                      [disabled]="!canManage()"
-                      [checked]="washSales()"
-                      (change)="washSales.set($any($event.target).checked)"
-                      aria-describedby="tax-wash-hint"
-                    />
-                    Wash sale adjustment
-                  </label>
-                  <app-help-tip term="wash_sale" />
+                  <span class="label-row">
+                    <label class="check">
+                      <input
+                        type="checkbox"
+                        [disabled]="!canManage()"
+                        [checked]="washSales()"
+                        (change)="washSales.set($any($event.target).checked)"
+                        aria-describedby="tax-wash-hint"
+                      />
+                      Wash sale adjustment
+                    </label>
+                    <app-help-tip term="wash_sale" />
+                  </span>
                   <p id="tax-wash-hint" class="hint">
                     A loss is put off when you buy the same ticker within 30 days before or after
                     the sale.

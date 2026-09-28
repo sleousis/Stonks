@@ -39,7 +39,9 @@
               </span>
               <span class="limit-figures num">
                 <span class="visually-hidden">Now </span>{{ r.now }}
-                <span class="muted"> of {{ r.limit }}</span>
+                @if (r.status !== 'none') {
+                  <span class="muted"> of {{ r.limit }}</span>
+                }
               </span>
               <span class="meter" aria-hidden="true">
                 <span [style.width]="meterWidth(r)"></span>
