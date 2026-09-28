@@ -40,6 +40,7 @@ from stonks.production.feature_drift_settings import FeatureDriftSettings
 from stonks.production.intraday_pnl_settings import IntradayPnlSettings
 from stonks.production.live.settings import LiveSettings
 from stonks.production.monitor_settings import RiskMonitorSettings
+from stonks.production.price_check_settings import PriceCheckSettings
 from stonks.production.quit_rule import QuitRuleSettings
 from stonks.production.rules.settings import RuleSettings
 from stonks.scheduling.config import SchedulerConfig
@@ -325,6 +326,9 @@ class ProductionConfig(BaseModel):
     feature_drift: FeatureDriftSettings = FeatureDriftSettings()
     # ``[production.live]``: live trading at a real broker (roadmap 19).
     live: LiveSettings = LiveSettings()
+    # ``[production.price_check]``: the second-source price check before
+    # the tick (roadmap 23.6). Off by default.
+    price_check: PriceCheckSettings = PriceCheckSettings()
     # ``[production.options]``: live options at a real broker (roadmap
     # 17.8). Off by default.
     options: OptionsLiveSettings = OptionsLiveSettings()

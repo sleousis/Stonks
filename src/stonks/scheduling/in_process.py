@@ -308,6 +308,17 @@ def in_process_screen_alerts(ctx: RunContext) -> JobOutcome:
     return JobOutcome("succeeded", out.as_dict())
 
 
+@IN_PROCESS_ACTIONS.register("price_check")
+def in_process_price_check(ctx: RunContext) -> JobOutcome:
+    """The second-source price check through the server's own stores."""
+    from stonks.scheduling.local import price_check_outcome
+
+    if not ctx.settings.production.price_check.enabled:
+        return JobOutcome("skipped", {"reason": "disabled"})
+    view = _executor(ctx).services.price_checks.run(ctx.fire.as_of)
+    return price_check_outcome(ctx, view.model_dump(mode="json"))
+
+
 @IN_PROCESS_ACTIONS.register("model_retrain")
 def in_process_model_retrain(ctx: RunContext) -> JobOutcome:
     """Refit on the server's JobRunner; each fit becomes a candidate version."""

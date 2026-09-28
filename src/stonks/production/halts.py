@@ -82,7 +82,7 @@ HALT_KINDS: tuple[str, ...] = get_args(HaltKind)
 
 TABLE = "risk_halts"
 #: Health checks whose failure opens the operational halt (by name prefix).
-OPERATIONAL_CHECKS = ("freshness", "stuck_ticks", "stuck_ingest_runs")
+OPERATIONAL_CHECKS = ("freshness", "stuck_ticks", "stuck_ingest_runs", "price_check")
 HEALTH_ACTOR = "service:health"
 
 

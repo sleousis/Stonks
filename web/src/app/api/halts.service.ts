@@ -6,6 +6,7 @@ import {
   clearHalt,
   engageKillSwitch,
   getHalt,
+  getResumeChecks,
   listHalts,
   resumeKillSwitch,
 } from './generated/sdk.gen';
@@ -35,6 +36,11 @@ export class HaltsService {
 
   kill(body: KillSwitchRequest) {
     return unwrap(engageKillSwitch({ body }));
+  }
+
+  /** What a resume checks first (gateway, last reconcile, account, equity cover). Read only. */
+  resumeChecks(id: number) {
+    return unwrap(getResumeChecks({ path: { halt_id: id }, headers: SILENT_HEADERS }));
   }
 
   /** Needs a fresh second factor (step-up); `confirmation` must be `RESUME TRADING`. */

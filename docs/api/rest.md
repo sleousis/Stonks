@@ -169,6 +169,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | GET | `/api/halts/{halt_id}` | Get Halt | sign-in |  | [HaltView](#haltview) |
 | POST | `/api/halts/{halt_id}/clear` | Clear Halt | `risk.reset` | [ClearHaltRequest](#clearhaltrequest) | [HaltView](#haltview) |
 | POST | `/api/halts/{halt_id}/resume` | Resume Kill Switch | `killswitch.resume` | [ResumeRequest](#resumerequest) | [HaltView](#haltview) |
+| GET | `/api/halts/{halt_id}/resume-checks` | Get Resume Checks | `killswitch.user` |  | [ResumeChecksView](#resumechecksview) |
 
 ## health endpoints
 
@@ -176,6 +177,8 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/health` | Liveness probe | none |  | [Health](#health) |
 | GET | `/api/health/live` | Liveness probe (process and hosted scheduler) | none |  | [ProbeView](#probeview) |
+| GET | `/api/health/price-check` | Latest Price Check | sign-in |  | [PriceCheckView](#pricecheckview) \| null |
+| POST | `/api/health/price-check/run` | Run Price Check | `operations.run` | [PriceCheckRunBody](#pricecheckrunbody) | [PriceCheckRunView](#pricecheckrunview) |
 | GET | `/api/health/ready` | Readiness probe (state migrated, lake present) | none |  | [ProbeView](#probeview) |
 | GET | `/api/health/report` | Health Report | sign-in |  | [HealthReportView](#healthreportview) |
 | POST | `/api/health/run` | Run Health Checks | `operations.run` | [HealthRunRequest](#healthrunrequest) | [HealthReportView](#healthreportview) |
@@ -2950,7 +2953,9 @@ A portfolio's exposure with each held fund split into what it holds (roadmap 23.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `lock_days` | integer | no |  |
+| `loss_window_days` | integer | no |  |
 | `max_consecutive_losses` | integer \| null | no |  |
+| `max_loss_pct` | number \| null | no |  |
 
 ### LotPick
 
@@ -4639,6 +4644,50 @@ Change the name, the thresholds or switch the rule on or off. The target and the
 | `max_gap_pct` | number \| null | no |  |
 | `nbbo_band_pct` | number | no |  |
 
+### PriceCheckItemView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `adjustment_gap` | number \| null | no |  |
+| `close_gap` | number \| null | no |  |
+| `detail` | string | yes |  |
+| `second_close` | number \| null | no |  |
+| `source` | string | no |  |
+| `status` | string | yes |  |
+| `ticker` | string | yes |  |
+| `vendor_close` | number \| null | no |  |
+| `vendor_date` | date \| null | no |  |
+
+### PriceCheckRunBody
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
+
+### PriceCheckRunView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `check` | [PriceCheckView](#pricecheckview) \| null | no |  |
+| `ran` | boolean | yes |  |
+| `reason` | string \| null | no |  |
+
+### PriceCheckView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `as_of` | date | yes |  |
+| `checked_at` | date-time | yes |  |
+| `detail` | string \| null | no |  |
+| `halt_id` | integer \| null | no |  |
+| `held` | list[string] | yes |  |
+| `id` | integer | yes |  |
+| `items` | list[[PriceCheckItemView](#pricecheckitemview)] | yes |  |
+| `source` | string | yes |  |
+| `status` | string | yes |  |
+| `tickers_checked` | integer | yes |  |
+| `tickers_compared` | integer | yes |  |
+
 ### ProbeView
 
 | Field | Type | Required | Description |
@@ -4901,11 +4950,31 @@ A research session: what to look for, on which universe, and budgets that may on
 | `next_steps` | list[string] | yes |  |
 | `state_migrations_applied` | list[integer] | yes |  |
 
+### ResumeCheckView
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `detail` | string | yes |  |
+| `name` | string | yes |  |
+| `passed` | boolean \| null | yes |  |
+| `portfolio_id` | string \| null | no |  |
+
+### ResumeChecksView
+
+What is checked before a kill switch resume (roadmap 23.15): per portfolio at a real broker, the gateway, the last reconcile, the account and the equity cover of the largest position.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `checks` | list[[ResumeCheckView](#resumecheckview)] | yes |  |
+| `halt_id` | integer | yes |  |
+| `passed` | boolean | yes |  |
+
 ### ResumeRequest
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `confirmation` | string | yes |  |
+| `override_checks` | boolean | no |  |
 | `reason` | string | yes |  |
 
 ### RetrainOutcomeView

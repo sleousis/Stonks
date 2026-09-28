@@ -29,6 +29,9 @@ class ClosedTrade:
     exit_day: date
     pnl: float
     stop: bool = False
+    #: The entry cost of the quantity this exit closed (the per-ticker loss
+    #: breaker's denominator, roadmap 23.15).
+    notional: float = 0.0
 
     @property
     def loss(self) -> bool:
@@ -69,6 +72,7 @@ def closed_from_fills(fills: Iterable[FillRow]) -> list[ClosedTrade]:
                 exit_day=f.day,
                 pnl=direction * closed * (f.price - avg),
                 stop=f.stop,
+                notional=closed * abs(avg),
             )
         )
         rest = q + direction * -closed

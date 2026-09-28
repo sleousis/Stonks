@@ -135,13 +135,15 @@ def measure(path: Path, *, repeat: int = 3, as_of: date = AS_OF) -> dict[str, An
     from stonks.screener import ScreenSpec, metric_ids, run_screen
     from stonks.screener.data import ScreenData
     from stonks.screener.engine import candidates
+    from stonks.screener.spec import MAX_FILTERS
     from stonks.store.lake import DuckDBLake
 
     spec = ScreenSpec(
         min_price=1.0,
         filters=[{"metric": "return_12m", "min": -0.9}, {"metric": "pe_ratio", "max": 500}],
         sort_by="market_cap",
-        columns=metric_ids(),
+        # a screen names at most MAX_FILTERS columns; every_metric reads all
+        columns=metric_ids()[:MAX_FILTERS],
     )
     lake = DuckDBLake(path, read_only=True)
     try:

@@ -353,6 +353,20 @@ def api_screen_alerts(ctx: RunContext) -> JobOutcome:
     return JobOutcome("succeeded", {k: view.get(k) for k in keys})
 
 
+@API_ACTIONS.register("price_check")
+def api_price_check(ctx: RunContext) -> JobOutcome:
+    """The server holds the lake, so it compares
+    (``POST /api/health/price-check/run``)."""
+    from stonks.scheduling.local import price_check_outcome
+
+    if not ctx.settings.production.price_check.enabled:
+        return JobOutcome("skipped", {"reason": "disabled"})
+    view = _executor(ctx).client.post(
+        "/api/health/price-check/run", {"as_of": ctx.fire.as_of.isoformat()}
+    )
+    return price_check_outcome(ctx, view)
+
+
 @API_ACTIONS.register("model_retrain")
 def api_model_retrain(ctx: RunContext) -> JobOutcome:
     """The server holds the lake, so it refits (``POST /api/model-versions/retrain``)."""

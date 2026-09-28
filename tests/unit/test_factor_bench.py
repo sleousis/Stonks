@@ -86,16 +86,16 @@ def test_bench_needs_a_universe(lake):
 
 
 def test_every_benched_factor_is_a_trial(lake, tmp_path):
-    state = SqliteState(tmp_path / "state.sqlite")
-    state.migrate()
-    ledger = TrialLedger(state, tmp_path / "artifacts")
-    result = factor_bench([Oracle(5), _noise()], lake, _request(), horizon=5)
-    first = record_bench(ledger, result)
-    assert first.run_id is not None
-    assert first.n_trials_family == 2
-    second = record_bench(ledger, result)
-    assert second.n_trials_family == 4
-    assert ledger.n_trials_family(BENCH_FAMILY) == 4
-    trials = ledger.trials(first.run_id)
-    assert [t.params["factor"] for t in trials] == ["oracle5", "noise"]
-    assert ledger.run(first.run_id)["verdict"] == "pass"
+    with SqliteState(tmp_path / "state.sqlite") as state:
+        state.migrate()
+        ledger = TrialLedger(state, tmp_path / "artifacts")
+        result = factor_bench([Oracle(5), _noise()], lake, _request(), horizon=5)
+        first = record_bench(ledger, result)
+        assert first.run_id is not None
+        assert first.n_trials_family == 2
+        second = record_bench(ledger, result)
+        assert second.n_trials_family == 4
+        assert ledger.n_trials_family(BENCH_FAMILY) == 4
+        trials = ledger.trials(first.run_id)
+        assert [t.params["factor"] for t in trials] == ["oracle5", "noise"]
+        assert ledger.run(first.run_id)["verdict"] == "pass"

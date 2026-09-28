@@ -112,6 +112,7 @@ READ_TOOLS = {
     "list_shadow_pnl",
     "get_shadow_pnl",
     "get_health_report",
+    "get_price_check",
     "get_stream_status",
     "get_broker",
     "list_sources",

@@ -344,6 +344,7 @@ CASES: dict[str, Case] = {
         "GET", "/api/shadow/strategies/{strategy_id}/pnl", lambda i: {"strategy_id": "bah_shadow"}
     ),
     "get_health_report": _c("GET", "/api/health/report"),
+    "get_price_check": _c("GET", "/api/health/price-check"),
     "get_stream_status": _c("GET", "/api/stream/status"),
     "get_broker": _c("GET", "/api/brokers"),
     "list_sources": _c("GET", "/api/sources"),
@@ -413,6 +414,9 @@ CASES: dict[str, Case] = {
     "get_insights_totals": _c("GET", "/api/insights/totals"),
     "get_look_through": _c(
         "GET", "/api/insights/look-through", lambda i: {"portfolio_id": i["portfolio"]}
+    ),
+    "get_behaviour_report": _c(
+        "GET", "/api/insights/behaviour", lambda i: {"portfolio_id": i["portfolio"]}
     ),
     "get_chart": _c(
         "GET",
@@ -709,6 +713,18 @@ CASES: dict[str, Case] = {
     "list_tax_lot_picks": _c(
         "GET", "/api/tax/lots/picks", lambda i: {"portfolio_id": i["portfolio"]}
     ),
+    "preview_trade_tax": _c(
+        "GET",
+        "/api/tax/preview",
+        lambda i: {
+            "portfolio_id": i["portfolio"],
+            "ticker": "UP.US",
+            "side": "sell",
+            "quantity": 1,
+            "price": 100.0,
+        },
+    ),
+    "get_tax_year": _c("GET", "/api/tax/year", lambda i: {"portfolio_id": i["portfolio"]}),
     "get_fx_rate": _c("GET", "/api/fx/rate", lambda i: {"base": "EUR", "quote": "USD"}),
     "list_cash_flows": _c(
         "GET",

@@ -12467,6 +12467,12 @@
             "title": "Lock Days",
             "type": "integer"
           },
+          "loss_window_days": {
+            "default": 90,
+            "minimum": 1.0,
+            "title": "Loss Window Days",
+            "type": "integer"
+          },
           "max_consecutive_losses": {
             "anyOf": [
               {
@@ -12478,6 +12484,19 @@
               }
             ],
             "title": "Max Consecutive Losses"
+          },
+          "max_loss_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Loss Pct"
           }
         },
         "title": "LosingLockSettings",
@@ -20242,6 +20261,225 @@
         "title": "PriceBandSettings",
         "type": "object"
       },
+      "PriceCheckItemView": {
+        "properties": {
+          "adjustment_gap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustment Gap"
+          },
+          "close_gap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Gap"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "second_close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Second Close"
+          },
+          "source": {
+            "default": "",
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "ticker": {
+            "title": "Ticker",
+            "type": "string"
+          },
+          "vendor_close": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Close"
+          },
+          "vendor_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Date"
+          }
+        },
+        "required": [
+          "ticker",
+          "status",
+          "detail"
+        ],
+        "title": "PriceCheckItemView",
+        "type": "object"
+      },
+      "PriceCheckRunBody": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          }
+        },
+        "title": "PriceCheckRunBody",
+        "type": "object"
+      },
+      "PriceCheckRunView": {
+        "properties": {
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PriceCheckView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ran": {
+            "title": "Ran",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "ran"
+        ],
+        "title": "PriceCheckRunView",
+        "type": "object"
+      },
+      "PriceCheckView": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "halt_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Halt Id"
+          },
+          "held": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Held",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PriceCheckItemView"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tickers_checked": {
+            "title": "Tickers Checked",
+            "type": "integer"
+          },
+          "tickers_compared": {
+            "title": "Tickers Compared",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "as_of",
+          "checked_at",
+          "source",
+          "status",
+          "tickers_checked",
+          "tickers_compared",
+          "held",
+          "items"
+        ],
+        "title": "PriceCheckView",
+        "type": "object"
+      },
       "ProbeView": {
         "properties": {
           "checks": {
@@ -21647,6 +21885,74 @@
         "title": "RestoreResultView",
         "type": "object"
       },
+      "ResumeCheckView": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "passed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Passed"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          }
+        },
+        "required": [
+          "name",
+          "passed",
+          "detail"
+        ],
+        "title": "ResumeCheckView",
+        "type": "object"
+      },
+      "ResumeChecksView": {
+        "description": "What is checked before a kill switch resume (roadmap 23.15): per\nportfolio at a real broker, the gateway, the last reconcile, the\naccount and the equity cover of the largest position.",
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/ResumeCheckView"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "halt_id": {
+            "title": "Halt Id",
+            "type": "integer"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "halt_id",
+          "passed",
+          "checks"
+        ],
+        "title": "ResumeChecksView",
+        "type": "object"
+      },
       "ResumeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -21654,6 +21960,11 @@
             "maxLength": 64,
             "title": "Confirmation",
             "type": "string"
+          },
+          "override_checks": {
+            "default": false,
+            "title": "Override Checks",
+            "type": "boolean"
           },
           "reason": {
             "maxLength": 500,
@@ -22059,7 +22370,8 @@
               "liquidity": {},
               "live_notional_caps": {},
               "losing_lock": {
-                "lock_days": 30
+                "lock_days": 30,
+                "loss_window_days": 90
               },
               "manual_discipline": {
                 "enabled": false,
@@ -22684,7 +22996,8 @@
           "losing_lock": {
             "$ref": "#/components/schemas/LosingLockSettings",
             "default": {
-              "lock_days": 30
+              "lock_days": 30,
+              "loss_window_days": 90
             }
           },
           "manual_discipline": {
@@ -39030,7 +39343,7 @@
     },
     "/api/halts/{halt_id}/resume": {
       "post": {
-        "description": "Turn a kill switch off. ``confirmation`` must be exactly\n``RESUME TRADING``; the reason is audited. Needs a second factor from\nthe last few minutes (step-up), so API tokens get 403.",
+        "description": "Turn a kill switch off. ``confirmation`` must be exactly\n``RESUME TRADING``; the reason is audited. Needs a second factor from\nthe last few minutes (step-up), so API tokens get 403. A failed resume\ncheck is a 409 unless ``override_checks`` is set (audited).",
         "operationId": "resumeKillSwitch",
         "parameters": [
           {
@@ -39127,6 +39440,95 @@
         "x-permission": "killswitch.resume"
       }
     },
+    "/api/halts/{halt_id}/resume-checks": {
+      "get": {
+        "description": "What a resume of this kill switch checks, read now: per covered\nportfolio at a real broker, the gateway is up, the last reconcile was\nclean, the account reads and its equity covers a multiple of the\nlargest position. Read only.",
+        "operationId": "getResumeChecks",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "halt_id",
+            "required": true,
+            "schema": {
+              "title": "Halt Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResumeChecksView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Resume Checks",
+        "tags": [
+          "halts"
+        ],
+        "x-permission": "killswitch.user"
+      }
+    },
     "/api/health": {
       "get": {
         "operationId": "getHealth",
@@ -39177,6 +39579,179 @@
         "tags": [
           "health"
         ]
+      }
+    },
+    "/api/health/price-check": {
+      "get": {
+        "description": "The newest second-source price check (roadmap 23.6): each held and\nsignalled ticker's vendor close and adjusted return against a second\nsource, and the tickers whose opening orders the tick holds. Null\nbefore the first check.",
+        "operationId": "getPriceCheck",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/PriceCheckView"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Getpricecheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Latest Price Check",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/health/price-check/run": {
+      "post": {
+        "description": "The scheduled price check job: compare now and store the result. A\nsystematic gap opens the global operational halt. Skips while\n``[production.price_check] enabled = false``.",
+        "operationId": "runPriceCheck",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PriceCheckRunBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceCheckRunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Price Check",
+        "tags": [
+          "health"
+        ],
+        "x-permission": "operations.run"
       }
     },
     "/api/health/ready": {

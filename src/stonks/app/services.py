@@ -38,6 +38,7 @@ from stonks.app.ownership import check_owner, owner_filter, owner_of
 from stonks.app.pagination import Page
 from stonks.app.portfolio import PortfolioService
 from stonks.app.price_alerts import PriceAlertService
+from stonks.app.price_checks import PriceCheckService
 from stonks.app.schedule import ScheduleService
 from stonks.app.screener import ScreenerService
 from stonks.app.signals import SignalService
@@ -199,6 +200,7 @@ class Services:
     lab: LabService
     lab_workers: LabWorkerService
     operations: OperationsService
+    price_checks: PriceCheckService
     brokers: BrokerService
     studio: StudioService
     alerts: AlertService
@@ -277,6 +279,7 @@ class Services:
             # Roadmap 14.9: the lab queue over the API for remote workers.
             lab_workers=LabWorkerService(context, runner),
             operations=OperationsService(context),
+            price_checks=PriceCheckService(context),
             brokers=BrokerService(
                 context, connector=broker_connector, secrets=lambda: _configured_secrets(context)
             ),

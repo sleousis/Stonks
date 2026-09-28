@@ -158,6 +158,14 @@ def default_jobs() -> list[JobConfig]:
             action="screen_alerts",
             trigger=SessionTriggerConfig(offset_minutes=42),
         ),
+        # The second-source price check on the closes the ingest stored,
+        # before the tick reads its holds (roadmap 23.6). Skips while
+        # [production.price_check] enabled = false.
+        JobConfig(
+            name="price_check",
+            action="price_check",
+            trigger=SessionTriggerConfig(offset_minutes=42),
+        ),
         JobConfig(
             name="tick",
             action="tick",

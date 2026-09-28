@@ -95,6 +95,7 @@ def live_cases(draw):
                 exit_day=ctx.as_of or NOW.date(),
                 pnl=pick(-5.0, 5.0),
                 stop=pick(False, True),
+                notional=pick(0.0, 50.0),
             )
             for _ in range(draw(st.integers(min_value=0, max_value=4)))
         ),
@@ -110,7 +111,10 @@ def live_cases(draw):
         account_rules={"enabled": True},
         stop_cooldown={"cooldown_days": pick(None, 5)},
         stop_guard={"max_stops": pick(None, 1, 3)},
-        losing_lock={"max_consecutive_losses": pick(None, 1, 2)},
+        losing_lock={
+            "max_consecutive_losses": pick(None, 1, 2),
+            "max_loss_pct": pick(None, 0.05),
+        },
         max_orders_per_run={
             "max_opening_orders": pick(None, 0, 2),
             "max_closing_orders": pick(None, 0, 1),

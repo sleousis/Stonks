@@ -25,6 +25,7 @@ the optional Flex token comes from ``STONKS_IBKR_FLEX_TOKEN``.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -174,6 +175,19 @@ class IbkrFlexSettings(BaseModel):
         return _refuse_secrets(data, "brokers.ibkr.flex")
 
 
+class IbkrJournalSettings(BaseModel):
+    """The broker event journal (roadmap 23.15): every gateway call the
+    broker makes, with its raw answer or error, as JSON lines on disk for
+    incident replay. Account ids are redacted. Off by default."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    #: One folder per gateway and process role under this one, one file per
+    #: UTC day.
+    dir: Path = Path("data/broker_journal")
+
+
 class IbkrBrokerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", hide_input_in_errors=True)
 
@@ -198,6 +212,7 @@ class IbkrBrokerConfig(BaseModel):
     gateways: dict[str, IbkrGatewayConfig] = Field(default_factory=dict[str, IbkrGatewayConfig])
     health: IbkrHealthSettings = Field(default_factory=IbkrHealthSettings)
     flex: IbkrFlexSettings = Field(default_factory=IbkrFlexSettings)
+    journal: IbkrJournalSettings = Field(default_factory=IbkrJournalSettings)
 
     @model_validator(mode="before")
     @classmethod

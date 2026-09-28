@@ -384,6 +384,9 @@ class GateFacts:
     broker_linked: bool = False
     allocation_set: bool = False
     profile_set: bool = False
+    #: Checks the service layer ran itself and every promotion needs, such
+    #: as the replay of recent sessions (roadmap 23.15).
+    extra_checks: tuple[GateCheck, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -503,6 +506,7 @@ def gate_report(
         checks = _GATES[target](
             GateInput(state, portfolio_id, metrics, facts, settings, clock.now().date())
         )
+        checks += list(facts.extra_checks)
     return GateReport(
         portfolio_id=portfolio_id,
         from_stage=current,

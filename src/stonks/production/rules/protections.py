@@ -9,6 +9,11 @@ Three registered rules that read the book's recent closed trades
   strategy opens nothing until the count falls under the limit;
 - ``losing_lock``: a ticker whose last ``max_consecutive_losses`` trades
   for the strategy all lost is locked for ``lock_days`` after the last one.
+  With ``max_loss_pct`` it is also a per-ticker loss breaker (roadmap
+  23.15): when the strategy's realised P&L on a ticker over the last
+  ``loss_window_days``, as a share of the entry notional those exits
+  closed, is a loss of ``max_loss_pct`` or more, the ticker is locked for
+  ``lock_days`` after its last exit.
 
 A stop-out is an exit by a stop order (``decision_context.trigger ==
 "stop"``, the protective stops of 19.10). ``count_losses`` decides whether
@@ -26,7 +31,7 @@ They act only on live books. Every one is off by default.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -69,10 +74,15 @@ class LosingLockSettings(BaseModel):
 
     max_consecutive_losses: int | None = Field(default=None, ge=1)
     lock_days: int = Field(default=30, ge=1)
+    #: The loss breaker: realised loss over entry notional (0.05 is 5%)
+    #: that locks the ticker. ``None`` is off.
+    max_loss_pct: float | None = Field(default=None, gt=0, le=1)
+    #: How far back the loss breaker adds up closed trades.
+    loss_window_days: int = Field(default=90, ge=1)
 
     @property
     def active(self) -> bool:
-        return self.max_consecutive_losses is not None
+        return self.max_consecutive_losses is not None or self.max_loss_pct is not None
 
 
 def _trades_for(order: Order, ctx: RiskContext) -> list[ClosedTrade]:
@@ -186,13 +196,43 @@ class LosingLock(_Protection):
         settings: LosingLockSettings,
         ctx: RiskContext,
     ) -> str | None:
-        n = settings.max_consecutive_losses
-        assert n is not None
         mine = sorted((t for t in trades if t.ticker == order.ticker), key=lambda t: t.exit_day)
-        recent = mine[-n:]
-        if len(recent) < n or not all(t.loss for t in recent):
-            return None
-        last = recent[-1].exit_day
-        if decision_day(ctx) - last > timedelta(days=settings.lock_days):
-            return None
-        return f"{order.ticker} locked: its last {n} trades lost (until {settings.lock_days} days after {last.isoformat()})"
+        today = decision_day(ctx)
+        n = settings.max_consecutive_losses
+        if n is not None:
+            recent = mine[-n:]
+            if len(recent) == n and all(t.loss for t in recent):
+                last = recent[-1].exit_day
+                if today - last <= timedelta(days=settings.lock_days):
+                    return (
+                        f"{order.ticker} locked: its last {n} trades lost"
+                        f" (until {settings.lock_days} days after {last.isoformat()})"
+                    )
+        if settings.max_loss_pct is not None:
+            return _loss_breaker(order, mine, settings, today)
+        return None
+
+
+def _loss_breaker(
+    order: Order, trades: list[ClosedTrade], settings: LosingLockSettings, today: date
+) -> str | None:
+    """The per-ticker loss breaker: realised P&L over the entry notional of
+    the trades closed in the window (``trades`` oldest first)."""
+    limit = settings.max_loss_pct
+    assert limit is not None
+    since = today - timedelta(days=settings.loss_window_days)
+    window = [t for t in trades if t.exit_day > since]
+    notional = sum(t.notional for t in window)
+    if not window or notional <= 0:
+        return None
+    lost = -sum(t.pnl for t in window) / notional
+    if lost < limit:
+        return None
+    last = window[-1].exit_day
+    if today - last > timedelta(days=settings.lock_days):
+        return None
+    return (
+        f"{order.ticker} locked: realised loss {lost:.1%} of notional in"
+        f" {settings.loss_window_days} days (limit {limit:.1%}, until"
+        f" {settings.lock_days} days after {last.isoformat()})"
+    )

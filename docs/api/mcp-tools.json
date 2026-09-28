@@ -3044,6 +3044,22 @@
         "open_world": false,
         "read_only": true
       },
+      "description": "The newest second-source price check: each held and signalled\nticker's vendor close and adjusted return against a second source,\nand the tickers whose opening orders the tick holds (`held`). Null\nbefore the first check.",
+      "input_schema": {
+        "properties": {},
+        "title": "get_price_checkArguments",
+        "type": "object"
+      },
+      "name": "get_price_check",
+      "needs_confirm": false
+    },
+    {
+      "annotations": {
+        "destructive": false,
+        "idempotent": true,
+        "open_world": false,
+        "read_only": true
+      },
       "description": "One reconcile report: every unexplained drift item, what the check\nexplained itself, and the owner's own positions and orders it kept\napart (never drift).",
       "input_schema": {
         "properties": {
