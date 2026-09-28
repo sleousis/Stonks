@@ -28,6 +28,8 @@ Version 1 is the fit the strategy was registered with. It is recorded the first 
 
 The params never change in a retrain. A new param set is a new lab run and a new strategy id.
 
+Each version keeps its own feature profile, and a model whose feature names or order differ from the code refuses to load. The `feature_drift` tick hook warns when live features drift from the live version's profile. See [ML toolkit](ml-toolkit.md).
+
 ## Which strategies retrain
 
 A strategy retrains when its `retrainable` flag is true. By default that means the class has its own `fit`. A wrapper retrains when its inner strategy does, or when it fits a model of its own (`LatentRegimeFilter`). Today: `trendline_meta_label`, `rsi_pca`, `pip_miner`, and wrappers around them.

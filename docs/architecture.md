@@ -263,6 +263,6 @@ Switch: set `[lake.bars] backend = "parquet"`, stop `stonks serve`, run `uv run 
 ## More
 
 - [Operations](operations.md), [deploy](deploy.md), [capacity](capacity.md), [runbooks](runbooks/)
-- [Principles](principles.md), [strategies](strategies/README.md), [web console](ui.md), [universes and on-demand data](universes.md), [calendars and news](calendars.md), [factors](factors.md), [model lifecycle](model-lifecycle.md), [tax](tax.md), [security](security.md)
+- [Principles](principles.md), [strategies](strategies/README.md), [web console](ui.md), [universes and on-demand data](universes.md), [calendars and news](calendars.md), [factors](factors.md), [model lifecycle](model-lifecycle.md), [ML toolkit](ml-toolkit.md), [tax](tax.md), [security](security.md)
 - Designs: [accounts and modes](design/accounts-and-modes.md), [live trading](design/live-trading.md), [intraday](design/intraday.md), [short selling](design/shorting.md), [options](design/options.md)
 - Block notes (history and details): [ingestion](blocks/01_ingestion.md), [storage](blocks/02_storage.md), [lab](blocks/03_strategy_lab.md), [registry](blocks/04_strategy_store.md), [tick](blocks/05_production_tick.md)
