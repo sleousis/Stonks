@@ -5,7 +5,8 @@ It speaks only to an :class:`~stonks.execution.brokers.ibkr.client.IbClient`
 only our types. Capabilities: ``Broker``, ``OrderStateSource``,
 ``OrderCanceller``, ``GlobalCanceller``, ``AccountReader``,
 ``MarginPreviewer``, ``ExecutionSource``, ``QuoteSource``,
-``OpenOrderSource`` and, for options (roadmap 17.8, off by default),
+``OpenOrderSource``, ``NativeAlgoBroker`` (Adaptive, VWAP and TWAP run
+by IBKR, roadmap 23.16) and, for options (roadmap 17.8, off by default),
 ``OptionBroker`` (``option_broker.py``: option and combo orders behind the
 portfolio's options gate, never market orders).
 
@@ -134,6 +135,10 @@ class LoginCheck:
 
 
 class IbkrBroker:
+    #: The execution algos IBKR runs itself (roadmap 23.16,
+    #: ``NativeAlgoBroker``): the order goes out with ``algoStrategy``.
+    native_algos: frozenset[str] = frozenset({"adaptive", "twap", "vwap"})
+
     def __init__(
         self,
         client: IbClient,

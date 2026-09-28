@@ -535,6 +535,13 @@ def order_live_values(order: Order, columns: frozenset[str]) -> dict[str, Any]:
         values["oca_group"] = order.oca_group
     if is_protective_stop(order) and "protective" in columns:
         values["protective"] = 1
+    if order.algo and "exec_algo" in columns:  # migration 059
+        name = order.algo.get("name")
+        if name:
+            values["exec_algo"] = str(name)
+        parent = order.algo.get("parent")
+        if parent and "parent_client_id" in columns:
+            values["parent_client_id"] = str(parent)
     return values
 
 

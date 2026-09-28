@@ -439,6 +439,14 @@ def test_to_order_carries_the_oca_group():
     assert plain.ocaGroup == ""
 
 
+def test_to_order_carries_the_algo():
+    """Roadmap 23.16: IBKR's algoStrategy and algoParams as TagValues."""
+    o = to_order(_req(algo_strategy="Vwap", algo_params=(("maxPctVol", "0.1"),)))
+    assert o.algoStrategy == "Vwap"
+    assert [(t.tag, t.value) for t in o.algoParams] == [("maxPctVol", "0.1")]
+    assert to_order(_req()).algoStrategy == ""
+
+
 def test_all_open_trades_reads_every_clients_orders(pair):
     """Roadmap 19.17: ``reqAllOpenOrders`` with the placing client id."""
     c, ib = pair
