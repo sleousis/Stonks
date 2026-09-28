@@ -55,6 +55,12 @@ class PeriodPnl(BaseModel):
     )
 
 
+class MonthlyReturn(BaseModel):
+    month: str = Field(description="YYYY-MM")
+    #: The month's return; null when it cannot be measured.
+    value: float | None
+
+
 class RiskStats(BaseModel):
     observations: int = Field(description="Daily returns the numbers use.")
     volatility: float | None = Field(description="Annualized (252 days) standard deviation.")
