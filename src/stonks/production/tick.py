@@ -859,11 +859,14 @@ def _run_tick_body(
     )
 
 
-def _record_decisions(run: _TickRun, portfolio_id: str, decisions: list[TickerDecision]) -> None:
+def _record_decisions(
+    run: _TickRun, portfolio_id: str, decisions: list[TickerDecision] | None
+) -> None:
     """Store why each ticker did or did not trade (roadmap 23.7). A real
-    tick only, and a failure here never fails the tick."""
+    tick only, and a failure here never fails the tick. ``None``: the
+    explanation failed, so there is nothing to store."""
     cfg = run.settings.decisions
-    if run.dry_run or not cfg.enabled:
+    if run.dry_run or not cfg.enabled or decisions is None:
         return
     try:
         _store_decisions(
@@ -1424,15 +1427,20 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         if exits:
             log.info("tick.retired_exits", tickers=sorted(retired_owned))
     raw_signals = {sid: book_scores[sid] for sid in book_scores if sid in strategy_ids}
-    decisions = explain_decisions(
-        raw_signals,
-        signals,
-        pipeline,
-        portfolio,
-        prices,
-        universe=book.spec.universe,
-        constructor=construction.method,
-    )
+    decisions: list[TickerDecision] | None
+    try:
+        decisions = explain_decisions(
+            raw_signals,
+            signals,
+            pipeline,
+            portfolio,
+            prices,
+            universe=book.spec.universe,
+            constructor=construction.method,
+        )
+    except Exception as exc:  # the explanation is a nicety, the trade is not
+        log.warning("tick.explain_failed", error=repr(exc))
+        decisions = None
     if pipeline.reason is not None and not exits:
         _record_decisions(run, portfolio_id, decisions)
         return noop(pipeline.reason)
@@ -1471,14 +1479,16 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         # A halt keeps only position-reducing orders (sells of longs, covers).
         before_halt = {o.ticker for o in proposed}
         proposed = [] if halt.halt == "all" else [o for o in proposed if _reduces(o)]
-        decisions = mark_decisions(
-            decisions,
-            before_halt - {o.ticker for o in proposed},
-            "halt",
-            {"halt": halt.halt, "gate": halt.gate},
-        )
-    decisions = mark_decisions(decisions, outside, "scope")
-    decisions = mark_decisions(decisions, external_skipped, "external")
+        if decisions is not None:
+            decisions = mark_decisions(
+                decisions,
+                before_halt - {o.ticker for o in proposed},
+                "halt",
+                {"halt": halt.halt, "gate": halt.gate},
+            )
+    if decisions is not None:
+        decisions = mark_decisions(decisions, outside, "scope")
+        decisions = mark_decisions(decisions, external_skipped, "external")
     _record_decisions(run, portfolio_id, decisions)
 
     if broker is None:

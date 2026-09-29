@@ -44,3 +44,22 @@ def test_dry_run_and_disabled_record_nothing(tick_env):
     off = TickSettings(universe=["UP.US"], decisions=DecisionSettings(enabled=False))
     run_tick(state, lake, registry, off, as_of=AS_OF)
     assert state.count_rows("trade_decisions") == 0
+
+
+def test_a_failing_explanation_loses_only_the_decision_rows(tick_env, monkeypatch):
+    """The explanation is a nicety: when it breaks, the book still trades
+    and only the ``trade_decisions`` rows are missing."""
+    import stonks.production.tick as tick_module
+
+    def broken(*_a, **_k):
+        raise RuntimeError("explain broke")
+
+    monkeypatch.setattr(tick_module, "explain_decisions", broken)
+    lake, state, registry = tick_env
+    result = run_tick(
+        state, lake, registry, TickSettings(universe=["UP.US"], initial_cash=10_000.0),
+        as_of=AS_OF,
+    )  # fmt: skip
+    assert result.status == "ok"
+    assert state.count_rows("orders") >= 1
+    assert state.count_rows("trade_decisions") == 0
