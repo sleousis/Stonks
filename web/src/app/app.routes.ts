@@ -44,6 +44,16 @@ export const routes: Routes = [
     loadChildren: () => import('./pages/dashboard/dashboard.routes'),
   },
   { path: 'strategies', loadChildren: () => import('./pages/strategies/strategies.routes') },
+  // Signal notifications written before 2026-09-29 link to /signals, which
+  // never had a page: open the strategy they name.
+  {
+    path: 'signals',
+    pathMatch: 'full',
+    redirectTo: ({ queryParams }) => {
+      const id = queryParams['strategy'];
+      return typeof id === 'string' && id ? `/strategies/${encodeURIComponent(id)}` : '/';
+    },
+  },
   { path: 'studio', loadChildren: () => import('./pages/studio/studio.routes') },
   { path: 'lab', loadChildren: () => import('./pages/lab/lab.routes') },
   { path: 'data', loadChildren: () => import('./pages/data/data.routes') },
