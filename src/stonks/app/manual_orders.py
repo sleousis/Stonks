@@ -233,7 +233,7 @@ class ManualOrdersService:
             account = self._portfolio(state, who, body.portfolio_id)
             book = self._book(state, account)
             tick = build_tick_settings(self._ctx.settings, [])
-            with self._ctx.lake() as lake, _closing(book.broker):
+            with self._ctx.lake() as lake, closing_broker(book.broker):
                 try:
                     plan = plan_manual_order(
                         state,
@@ -287,7 +287,7 @@ class ManualOrdersService:
             self._authorize(who, live, confirm_live)
             book = self._book(state, account)
             tick = build_tick_settings(self._ctx.settings, [])
-            with self._ctx.lake() as lake, _closing(book.broker):
+            with self._ctx.lake() as lake, closing_broker(book.broker):
                 try:
                     result = change_manual_order(
                         state,
@@ -365,7 +365,7 @@ class ManualOrdersService:
                 stop_price=body.stop_price,
                 target_price=body.target_price,
             )
-            with self._ctx.lake() as lake, _closing(book.broker):
+            with self._ctx.lake() as lake, closing_broker(book.broker):
                 try:
                     result = place_manual_order(
                         state, lake, order, book, tick, preview=preview, now=self._clock()
@@ -422,6 +422,12 @@ class ManualOrdersService:
         if account.id == DEFAULT_PORTFOLIO_ID:
             return broker_mode(self._ctx.settings) == "live"
         return False
+
+    def book(self, state: SqliteState, account: AccountPortfolio) -> ManualBook:
+        """The book a person's orders trade in, as the tick sees it: the
+        tick's risk policy and broker (the planner uses it too). The caller
+        closes ``book.broker`` when done (:func:`closing_broker`)."""
+        return self._book(state, account)
 
     def _book(self, state: SqliteState, account: AccountPortfolio) -> ManualBook:
         row = state.sql(
@@ -504,7 +510,7 @@ class ManualOrdersService:
 
 
 @contextmanager
-def _closing(broker: object | None) -> Iterator[None]:
+def closing_broker(broker: object | None) -> Iterator[None]:
     """Close a broker built for this request when it is done, so the next
     request can open the API's client id again (roadmap 19.17)."""
     try:

@@ -53,7 +53,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from typing import Any, Literal
@@ -74,7 +74,12 @@ from stonks.production.live.context import LiveContext
 from stonks.production.manual_history import manual_context
 from stonks.production.manual_stops import sync_manual_stops, working_manual_stop
 from stonks.production.prices import load_prices
-from stonks.production.risk import apply_risk, build_risk_context, needs_risk_context
+from stonks.production.risk import (
+    RiskResult,
+    apply_risk,
+    build_risk_context,
+    needs_risk_context,
+)
 from stonks.production.rules import RiskContext
 from stonks.production.tca import expected_cost_bps
 from stonks.production.tick import (
@@ -304,20 +309,18 @@ def place_manual_order(
 
     asset_classes = _asset_classes(lake, [order.ticker, *held])
     prices = dict(priced.prices)
-    context = None
-    if needs_risk_context(book.risk):
-        context = build_risk_context(
-            lake,
-            state,
-            portfolio,
-            prices,
-            as_of,
-            policy=book.risk,
-            universe=[order.ticker],
-            cost_model=tick.costs,
-            volumes=priced.volumes,
-            portfolio_id=book.portfolio_id,
-        )
+    context = book_risk_context(
+        state,
+        lake,
+        book,
+        tick,
+        portfolio,
+        prices,
+        asset_classes,
+        as_of,
+        universe=[order.ticker],
+        volumes=priced.volumes,
+    )
     if _discipline_on(book.risk):
         context = replace(
             context
@@ -338,38 +341,8 @@ def place_manual_order(
                 has_stop=order.stop_price is not None,
             ),
         )
-    if external:
-        # 19.8: a book at a real broker gives the live safeguards and the
-        # account rules their live context, as the tick does. They do
-        # nothing without it.
-        context = replace(
-            context
-            or RiskContext(
-                portfolio=portfolio,
-                prices=prices,
-                asset_classes=asset_classes,
-                policy=book.risk,
-                portfolio_id=book.portfolio_id,
-                as_of=as_of,
-                allow_short=book.allow_short,
-            ),
-            live=_live_context(state, lake, book, as_of, sorted({order.ticker, *held})),
-        )
-    costs: dict[str, Any] = (
-        {"cost_model": tick.costs}
-        if tick.costs is not None
-        else {"slippage_bps": tick.slippage_bps, "fee_per_trade": tick.fee_per_trade}
-    )
-    risk = apply_risk(
-        [proposed],
-        portfolio,
-        prices,
-        asset_classes,
-        book.risk,
-        volumes=priced.volumes,
-        context=context,
-        allow_short=book.allow_short,
-        **costs,
+    risk = apply_book_risk(
+        [proposed], book, tick, portfolio, prices, asset_classes, priced.volumes, context
     )
     adjustments = tuple(a.as_dict() for a in risk.adjustments)
     if not risk.orders:
@@ -421,6 +394,85 @@ def place_manual_order(
         return replace(placed, protective_stop=mine)
     return _fill_simulated(
         state, book, order, decided, result, portfolio, priced, asset_classes, tick, now, marker
+    )
+
+
+def book_risk_context(
+    state: SqliteState,
+    lake: DuckDBLake,
+    book: ManualBook,
+    tick: TickSettings,
+    portfolio: Portfolio,
+    prices: Mapping[str, float],
+    asset_classes: Mapping[str, str],
+    as_of: date,
+    *,
+    universe: Sequence[str],
+    volumes: Mapping[str, float] | None,
+) -> RiskContext | None:
+    """The risk context for orders a person places in ``book`` (a manual
+    order or a confirmed rebalance plan): the policy's context when a rule
+    needs one, and at a real broker the live context the live safeguards
+    and the account rules read, as the tick builds them (19.8)."""
+    context = None
+    if needs_risk_context(book.risk):
+        context = build_risk_context(
+            lake,
+            state,
+            portfolio,
+            dict(prices),
+            as_of,
+            policy=book.risk,
+            universe=list(universe),
+            cost_model=tick.costs,
+            volumes=dict(volumes) if volumes is not None else None,
+            portfolio_id=book.portfolio_id,
+        )
+    if book.broker is not None:
+        held = [t for t, q in portfolio.positions.items() if abs(q) > _QTY_EPS]
+        context = replace(
+            context
+            or RiskContext(
+                portfolio=portfolio,
+                prices=dict(prices),
+                asset_classes=dict(asset_classes),
+                policy=book.risk,
+                portfolio_id=book.portfolio_id,
+                as_of=as_of,
+                allow_short=book.allow_short,
+            ),
+            live=_live_context(state, lake, book, as_of, sorted({*universe, *held})),
+        )
+    return context
+
+
+def apply_book_risk(
+    orders: Sequence[Order],
+    book: ManualBook,
+    tick: TickSettings,
+    portfolio: Portfolio,
+    prices: Mapping[str, float],
+    asset_classes: Mapping[str, str],
+    volumes: Mapping[str, float] | None,
+    context: RiskContext | None,
+) -> RiskResult:
+    """Every risk rule of ``book``'s policy over ``orders``, with the tick's
+    cost model (``apply_risk``)."""
+    costs: dict[str, Any] = (
+        {"cost_model": tick.costs}
+        if tick.costs is not None
+        else {"slippage_bps": tick.slippage_bps, "fee_per_trade": tick.fee_per_trade}
+    )
+    return apply_risk(
+        list(orders),
+        portfolio,
+        dict(prices),
+        dict(asset_classes),
+        book.risk,
+        volumes=dict(volumes) if volumes is not None else None,
+        context=context,
+        allow_short=book.allow_short,
+        **costs,
     )
 
 
