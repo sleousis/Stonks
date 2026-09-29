@@ -94,6 +94,7 @@ class EtoroConnection(BrokerConnection):
         self._catalog = catalog_for(self._config.base_url, self._config.instrument_overrides)
         self._id: str | None = None
         self._scopes: tuple[str, ...] = ()
+        self._handed_out = False
 
     @classmethod
     def capabilities_for(cls, config: ConnectionsConfig) -> frozenset[Capability]:
@@ -243,10 +244,14 @@ class EtoroConnection(BrokerConnection):
             broker.refuse_opens(
                 "real-money opens at eToro need [connections.etoro] allow_real_money = true"
             )
+        self._handed_out = True
         return broker
 
     def close(self) -> None:
-        """The trader may outlive the connection object: the client stays open."""
+        """Release the HTTP client, unless a trader still uses it (the
+        trader closes it through ``close_broker``)."""
+        if not self._handed_out:
+            self._account.client.close()
 
     # ---- plumbing --------------------------------------------------------------------
 

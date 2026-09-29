@@ -180,3 +180,18 @@ def test_errors_never_carry_the_keys():
     assert "api_key" not in repr(Credentials({"api_key": API_KEY})) or API_KEY not in repr(
         Credentials({"api_key": API_KEY})
     )
+
+
+def test_close_releases_the_client_unless_a_trader_holds_it():
+    fake = FakeEtoro()
+    conn = connect(fake)
+    (acc,) = conn.accounts()
+    conn.close()
+    with pytest.raises(RuntimeError):
+        conn.balances(acc.id)  # the HTTP client is closed
+
+    trading = connect(fake, trading=True)
+    trader = trading.trader(acc.id)
+    trading.close()
+    assert trader.fetch_portfolio().cash == pytest.approx(10_000.0)
+    trader.close()
