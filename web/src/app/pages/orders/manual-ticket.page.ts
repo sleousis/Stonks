@@ -779,6 +779,13 @@ export class ManualTicketPage implements OnInit {
       const result = await this.api.place(body);
       this.placed.set(result);
       this.preview.set(null);
+      if (result.status === 'rejected') {
+        // Nothing traded: keep what was typed so the trader can fix and retry.
+        this.toasts.error(this.placedText(result), 'Order rejected');
+        this.key = newKey();
+        this.list()?.reload();
+        return;
+      }
       this.toasts.success(this.placedText(result));
       this.quantity.set('');
       this.reason.set('');

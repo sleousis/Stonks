@@ -321,6 +321,27 @@ describe('ManualTicketPage', () => {
     await settle();
   });
 
+  it('keeps the form and warns when the order comes back rejected', async () => {
+    setup();
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    const error = vi.spyOn(TestBed.inject(ToastService), 'error');
+    const el = await render();
+    fill(el);
+    button(el, 'Place order').click();
+    (await nextRequest(http, '/api/orders/manual/preview', 'POST')).flush(result());
+    (await nextRequest(http, '/api/orders/manual', 'POST')).flush(
+      result({ status: 'rejected', reason: 'not enough cash' }),
+    );
+    (await nextRequest(http, '/api/orders')).flush(EMPTY_PAGE);
+    await settle();
+    expect(success).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('not enough cash'),
+      expect.anything(),
+    );
+    expect(el.querySelector<HTMLInputElement>('#mo-qty')!.value).toBe('10');
+  });
+
   it('does not place when the ticket is cancelled', async () => {
     setup();
     const el = await render();
