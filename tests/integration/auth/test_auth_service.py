@@ -569,3 +569,30 @@ def test_bootstrap_and_reset_normalise_email(svc, db):
     user = svc.bootstrap_admin("Owner@Example.com", PASSWORD)
     assert user.email == "owner@example.com"
     assert svc.set_password_by_email("OWNER@example.com", PASSWORD + "!").id == user.id
+
+
+def test_demoting_to_viewer_pauses_their_trading_follows(svc, db):
+    """A viewer may not trade, so their approve and auto follows pause, as
+    when they are disabled, with an audit row. Paper and alerts stay."""
+    from stonks.accounts import PortfolioRepository, Scope
+
+    uid = add_user(db, "trader@example.com")
+    with SqliteState(db) as state:
+        pf = PortfolioRepository(state).create(Scope(user_id=uid, role=Role.TRADER), name="P").id
+        state.execute("PRAGMA foreign_keys = OFF")
+        for sid, mode in [("s_auto", "auto"), ("s_approve", "approve"), ("s_paper", "paper")]:
+            state.execute(
+                "INSERT INTO subscriptions (id, user_id, strategy_id, portfolio_id, mode,"
+                " created_at, updated_at) VALUES (?, ?, ?, ?, ?, '2026-01-01', '2026-01-01')",
+                [sid, uid, sid, pf, mode],
+            )
+    admin = session_principal(DEFAULT_OWNER_ID, Role.ADMIN)
+    svc.update_user(admin, uid, role=Role.VIEWER)
+    with SqliteState(db) as state:
+        paused = {
+            r["id"]: r["paused_reason"]
+            for r in state.sql("SELECT id, paused_reason FROM subscriptions")
+        }
+    assert paused == {"s_auto": "user_viewer", "s_approve": "user_viewer", "s_paper": None}
+    [row] = _audit(db, "subscriptions.paused")
+    assert json.loads(row["details_json"])["count"] == 2
