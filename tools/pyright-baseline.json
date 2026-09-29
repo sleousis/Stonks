@@ -118,7 +118,7 @@
   "src/stonks/reporting/tearsheet.py::reportAttributeAccessIssue": 1,
   "src/stonks/scheduling/calendar.py::reportArgumentType": 2,
   "src/stonks/scheduling/calendar.py::reportAttributeAccessIssue": 1,
-  "src/stonks/scheduling/in_process.py::reportArgumentType": 3,
+  "src/stonks/scheduling/in_process.py::reportArgumentType": 2,
   "src/stonks/scheduling/metrics.py::reportAssignmentType": 1,
   "src/stonks/stats/sharpe.py::reportReturnType": 1,
   "src/stonks/store/audit.py::reportArgumentType": 1,
