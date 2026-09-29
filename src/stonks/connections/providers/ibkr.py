@@ -178,6 +178,7 @@ class IbkrConnection(BrokerConnection):
     #: The name of a ``[brokers.ibkr.gateways]`` entry. Not a secret.
     credential_fields = ("gateway",)
     has_paper: ClassVar[bool] = True
+    needs_gateway: ClassVar[bool] = True
     capabilities: ClassVar[frozenset[Capability]] = frozenset(
         {
             Capability.READ_BALANCES,

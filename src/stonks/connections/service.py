@@ -50,6 +50,7 @@ from stonks.connections.base import (
     Activity,
     BrokerConnection,
     Capability,
+    CapabilityMissing,
     ConnectionsError,
     Credentials,
     ExternalAccount,
@@ -191,16 +192,18 @@ class ConnectionService:
                 enabled = False
             else:
                 enabled = True
+            offered = cls.capabilities_for(self.config)
             out.append(
                 ProviderInfo(
                     name=name,
                     display_name=cls.display_name,
                     auth_flow=cls.auth_flow,
-                    capabilities=tuple(sorted(c.value for c in cls.capabilities)),
+                    capabilities=tuple(sorted(c.value for c in offered)),
                     credential_fields=tuple(cls.credential_fields),
-                    can_trade=cls.supports(Capability.TRADE),
+                    can_trade=Capability.TRADE in offered,
                     enabled=enabled,
                     has_paper=cls.has_paper,
+                    needs_gateway=cls.needs_gateway,
                 )
             )
         return out
@@ -846,7 +849,8 @@ class ConnectionService:
             raise ConnectionsError(f"portfolio {portfolio_id!r} is not linked to a broker account")
         record = owned_connection(self._state, scope, portfolio.broker_connection_id)
         cls = enabled_provider(self.config, record.provider)
-        cls.require(Capability.TRADE)
+        if Capability.TRADE not in cls.capabilities_for(self.config):
+            raise CapabilityMissing(f"{record.provider} does not place orders here")
         credentials = self._open_credentials(self._secret_box(), record.id)
         try:
             # the trader runs in the caller's thread, so it may use the state

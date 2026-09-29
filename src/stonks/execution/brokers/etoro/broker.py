@@ -148,6 +148,7 @@ class EtoroBroker:
         self._sent: dict[str, _Sent] = {}
         self._eligibility: dict[int, _Eligibility] = {}
         self._lock = threading.Lock()
+        self._opens_refused: str | None = None
 
     @property
     def env(self) -> Env:
@@ -160,6 +161,11 @@ class EtoroBroker:
 
     def __repr__(self) -> str:
         return f"EtoroBroker(env={self.env!r})"
+
+    def refuse_opens(self, reason: str) -> None:
+        """Refuse every opening order with ``reason``. Closes still go out,
+        so a book can always wind down (P28)."""
+        self._opens_refused = reason
 
     # ---- Broker protocol -----------------------------------------------------------------
 
@@ -297,6 +303,8 @@ class EtoroBroker:
     # ---- opens ---------------------------------------------------------------------------
 
     def _open(self, order: Order, inst: EtoroInstrument) -> None:
+        if self._opens_refused is not None and order.position_effect != "close":
+            raise OrderRejectedError(self._opens_refused)
         if order.position_effect == "close":
             raise OrderRejectedError(
                 "eToro shorts are CFDs, which Stonks does not open: there is no short to cover"
