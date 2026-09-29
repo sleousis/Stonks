@@ -86,6 +86,28 @@ def test_cancel_request_flags_only_a_running_worker_job(path, queue):
     assert queue.cancel_requested(job.id) is True
 
 
+def test_worker_progress_never_overwrites_a_cancel_request(path, queue):
+    # A heartbeat that read "no cancel" just before the cancel landed must
+    # not replace the "cancellation requested" message with its own.
+    store = JobStore(path)
+    job = store.create("lab_run", {}, executor="worker")
+    queue.claim_next("w1", ["lab_run"])
+    assert queue.worker_progress(job.id, "w1", 0.2, "tuning") is True
+    assert store.get(job.id).message == "tuning"
+    queue.request_cancel(job.id)
+    store.set_progress(job.id, 0.2, "cancellation requested")
+    assert queue.worker_progress(job.id, "w1", 0.3, "tuning") is False
+    assert store.get(job.id).message == "cancellation requested"
+
+
+def test_worker_progress_of_another_worker_is_ignored(path, queue):
+    store = JobStore(path)
+    job = store.create("lab_run", {}, executor="worker")
+    queue.claim_next("w1", ["lab_run"])
+    assert queue.worker_progress(job.id, "w2", 0.5, "not mine") is False
+    assert store.get(job.id).message is None
+
+
 def test_is_pending_is_true_for_non_terminal_worker_jobs_only(path, queue):
     store = JobStore(path)
     local = store.create("lab_run", {})
