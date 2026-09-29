@@ -310,7 +310,7 @@ class SubscriptionRepository:
         if status != "active":
             reasons.append(f"the broker connection is {status}")
         cls = provider_classes().get(provider)
-        if cls is None or Capability.TRADE not in cls.capabilities:
+        if cls is None or Capability.TRADE not in _offered(cls):
             reasons.append(f"the {provider} connection cannot place orders")
         return reasons
 
@@ -326,3 +326,15 @@ class SubscriptionRepository:
             self._state, today, portfolio_id=portfolio.id, user_id=portfolio.owner_id
         )
         return [f"trading is halted: {h.kind} ({h.target})" for h in halts]
+
+
+def _offered(cls: Any) -> frozenset[Any]:
+    """The provider's capabilities under the server's connections settings
+    (eToro trades only with ``[connections.etoro] trading`` on). Settings
+    that cannot be read leave the provider's own list."""
+    from stonks.connections.settings import ConnectionsConfig
+
+    try:
+        return cls.capabilities_for(ConnectionsConfig.load())
+    except Exception:
+        return cls.capabilities

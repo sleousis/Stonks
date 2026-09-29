@@ -269,3 +269,20 @@ def test_a_real_account_below_live_small_only_closes(
     [order] = [o for o in w.orders() if o["side"] == "buy"]
     assert order["status"] == "rejected" and "live_small" in (order["status_reason"] or "")
     assert not fake.orders
+
+
+def test_automatic_is_blocked_while_eToro_trading_is_off(world, monkeypatch):
+    from stonks.connections import settings as connection_settings
+
+    subs = SubscriptionRepository(world.state)
+    (sub,) = subs.list_for_user(world.scope)
+    off = connection_settings.ConnectionsConfig(enabled_providers=("etoro",))
+    monkeypatch.setattr(connection_settings.ConnectionsConfig, "load", classmethod(
+        lambda cls, *a, **k: off))  # fmt: skip
+    assert "the etoro connection cannot place orders" in subs.auto_blockers(world.scope, sub.id)
+    on = connection_settings.ConnectionsConfig(
+        enabled_providers=("etoro",), etoro={"trading": True}
+    )
+    monkeypatch.setattr(connection_settings.ConnectionsConfig, "load", classmethod(
+        lambda cls, *a, **k: on))  # fmt: skip
+    assert "the etoro connection cannot place orders" not in subs.auto_blockers(world.scope, sub.id)
