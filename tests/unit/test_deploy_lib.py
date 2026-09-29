@@ -177,3 +177,16 @@ def test_redeploying_the_same_tag_keeps_the_rollback_target(tmp_path):
     assert out.returncode == 0, out.stderr
     assert (deploy_dir / ".deployed-tag").read_text(encoding="utf-8").strip() == "v1.1.0"
     assert (deploy_dir / ".previous-tag").read_text(encoding="utf-8").strip() == "v1.0.0"
+
+
+def test_the_example_env_lists_the_telegram_and_assistant_secrets_empty():
+    """Both are env-only secrets the app reads (review wave 2): the deploy
+    template names them, empty, so an operator finds where they go."""
+    example = (LIB.parents[1] / ".env.example").read_text(encoding="utf-8")
+    values = dict(
+        line.split("=", 1)
+        for line in example.splitlines()
+        if "=" in line and not line.lstrip().startswith("#")
+    )
+    for key in ("STONKS_TELEGRAM_BOT_TOKEN", "STONKS_ASSISTANT_API_KEY"):
+        assert values.get(key) == "", f"{key} must be listed empty in deploy/.env.example"
