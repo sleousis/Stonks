@@ -34,6 +34,7 @@ from stonks.accounts import (
     MAX_WEIGHT,
     MIN_PAPER_DAYS_FOR_AUTO,
     AccountsError,
+    AlreadyFollowing,
     AutoGateRefused,
     Mode,
     NotFound,
@@ -112,6 +113,8 @@ def _errors() -> Iterator[None]:
         raise NotFoundError(str(exc)) from None
     except AutoGateRefused as exc:
         raise AutoBlocked(exc.reasons) from None
+    except AlreadyFollowing as exc:
+        raise ConflictError(str(exc)) from None
     except AccountsError as exc:
         raise ValidationError(str(exc)) from None
 
