@@ -79,6 +79,9 @@ describe('HoldButton', () => {
     button.click(); // detail 0: no pointer, no key
     fixture.detectChanges();
     expect(button.textContent).toContain('Press again to confirm');
+    // Announced: a screen reader does not read a label change on the focused button.
+    const live = (fixture.nativeElement as HTMLElement).querySelector('[aria-live="polite"]');
+    expect(live?.textContent).toContain('Press again to confirm');
     expect(confirmed).not.toHaveBeenCalled();
     button.click();
     expect(confirmed).toHaveBeenCalledTimes(1);
