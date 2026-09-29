@@ -1,6 +1,11 @@
 import { signal } from '@angular/core';
 
-import type { ConnectedAccountView, ConnectionView, ProviderView } from '../../api/models';
+import type {
+  ConnectedAccountView,
+  ConnectionView,
+  ProviderView,
+  StatementPresetView,
+} from '../../api/models';
 import type { Permission } from '../../core/auth/permissions';
 
 export const ALPACA: ProviderView = {
@@ -12,6 +17,7 @@ export const ALPACA: ProviderView = {
   can_trade: true,
   enabled: true,
   has_paper: true,
+  needs_gateway: false,
 };
 
 export const SNAPTRADE: ProviderView = {
@@ -23,6 +29,19 @@ export const SNAPTRADE: ProviderView = {
   can_trade: false,
   enabled: true,
   has_paper: false,
+  needs_gateway: false,
+};
+
+export const ETORO: ProviderView = {
+  name: 'etoro',
+  display_name: 'eToro',
+  auth_flow: 'api_key',
+  capabilities: ['read_activity', 'read_balances', 'read_positions', 'trade'],
+  credential_fields: ['api_key', 'user_key'],
+  can_trade: true,
+  enabled: true,
+  has_paper: true,
+  needs_gateway: false,
 };
 
 export function connection(over: Partial<ConnectionView> = {}): ConnectionView {
@@ -67,3 +86,28 @@ export function sessionStub(allowed: boolean) {
     status: signal('signed-in'),
   };
 }
+
+/** The DEGIRO export presets, as GET /api/statement-imports/presets lists them. */
+export const DEGIRO_PRESETS: StatementPresetView[] = [
+  {
+    id: 'degiro_transactions',
+    broker: 'DEGIRO',
+    label: 'Transactions',
+    kind: 'activities',
+    how_to_export: 'In the DEGIRO web trader open Inbox, then Transactions.',
+  },
+  {
+    id: 'degiro_account',
+    broker: 'DEGIRO',
+    label: 'Account statement',
+    kind: 'activities',
+    how_to_export: 'In the DEGIRO web trader open Inbox, then Account statement.',
+  },
+  {
+    id: 'degiro_portfolio',
+    broker: 'DEGIRO',
+    label: 'Portfolio',
+    kind: 'holdings',
+    how_to_export: 'In the DEGIRO web trader open Portfolio and choose Export.',
+  },
+];

@@ -1210,6 +1210,15 @@ cli = ["python -m stonks.connections connect", "python -m stonks.connections cal
 mcp = { limited = "step-up and secrets: a token cannot pass a second factor" }
 
 [[capability]]
+id = "connections.etoro"
+domain = "connections"
+title = "Connect an eToro demo or real account with its own key pair, sync it, and trade it when an admin turns trading on"
+routes = []
+console = ["listProviders", "connectWithKeys", "syncConnection"]
+cli = ["python -m stonks.connections connect", "python -m stonks.connections sync"]
+mcp = { limited = "keys and step-up: a token cannot pass a second factor" }
+
+[[capability]]
 id = "connections.link"
 domain = "connections"
 title = "Link an account to a portfolio"
@@ -2151,18 +2160,20 @@ mcp = { limited = "made-up figures would only mislead an assistant or a script" 
 [[capability]]
 id = "statements.import"
 domain = "portfolio"
-title = "CSV statement imports: preview, import, list and undo, for brokers without an API"
+title = "CSV statement imports: preview, import, list and undo, for brokers without an API, with ready broker presets (DEGIRO)"
 routes = [
   "GET /api/statement-imports",
+  "GET /api/statement-imports/presets",
   "POST /api/statement-imports/preview",
   "POST /api/statement-imports",
   "POST /api/statement-imports/{import_id}/undo",
 ]
 console = [
   "listStatementImports",
+  "listStatementPresets",
   "previewStatementImport",
   "commitStatementImport",
   "undoStatementImport",
 ]
-cli = ["stonks imports preview", "stonks imports commit", "stonks imports list", "stonks imports undo"]
+cli = ["stonks imports preview", "stonks imports commit", "stonks imports list", "stonks imports undo", "stonks imports presets"]
 mcp = { limited = "a person maps and checks the columns of their own file in the console or CLI" }

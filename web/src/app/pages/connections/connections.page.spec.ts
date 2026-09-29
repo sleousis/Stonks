@@ -10,7 +10,14 @@ import { ToastService } from '../../core/notify/toast.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { BROWSER_REDIRECT } from './browser-redirect';
 import { ConnectionsPage } from './connections.page';
-import { ALPACA, SNAPTRADE, connection, sessionStub } from './connections.fixtures';
+import {
+  ALPACA,
+  DEGIRO_PRESETS,
+  ETORO,
+  SNAPTRADE,
+  connection,
+  sessionStub,
+} from './connections.fixtures';
 
 describe('ConnectionsPage', () => {
   let fixture: ComponentFixture<ConnectionsPage>;
@@ -68,6 +75,7 @@ describe('ConnectionsPage', () => {
       limit: 500,
       offset: 0,
     });
+    (await nextRequest(http, '/api/statement-imports/presets')).flush(DEGIRO_PRESETS);
     await settle();
   }
 
@@ -187,6 +195,33 @@ describe('ConnectionsPage', () => {
     expect(el.querySelector('form.keys')).toBeNull();
   });
 
+  it('connects eToro with its API key and user key, as a real account when unticked', async () => {
+    await setUp({ providers: [ETORO] });
+    const card = el.querySelector('.provider')!;
+    expect(card.textContent).toContain('Reads, and places orders when you allow it.');
+    expect(card.textContent).toContain('You paste API keys from your eToro account.');
+    button('Connect with keys')!.click();
+    fixture.detectChanges();
+    expect(el.querySelector('label[for="key-etoro-api_key"]')?.textContent).toContain('API key');
+    expect(el.querySelector('label[for="key-etoro-user_key"]')?.textContent).toContain('User key');
+    expect(el.textContent).toContain('paper or demo account keys');
+    type('#key-etoro-api_key', 'PUB1');
+    type('#key-etoro-user_key', 'USR1');
+    const demo = el.querySelector<HTMLInputElement>('form.keys input[type="checkbox"]')!;
+    demo.click();
+    fixture.detectChanges();
+    button('Connect')!.click();
+    await settle();
+    const req = await nextRequest(http, '/api/connections/keys', 'POST');
+    expect(req.request.body).toEqual({
+      provider: 'etoro',
+      fields: { api_key: 'PUB1', user_key: 'USR1', paper: 'false' },
+      label: null,
+    });
+    req.flush(connection({ id: 'con_e', provider: 'etoro' }));
+    await settle();
+  });
+
   it('starts the hosted sign-in and sends the browser to its URL', async () => {
     await setUp();
     button('Sign in at SnapTrade')!.click();
@@ -221,5 +256,24 @@ describe('ConnectionsPage', () => {
     expect(button('Sign in at SnapTrade')).toBeUndefined();
     expect(button('Connect a broker')).toBeUndefined();
     expect(el.textContent).toContain('Traders only.');
+  });
+
+  it('shows DEGIRO as a broker read from its exports, never a connection', async () => {
+    await setUp();
+    const panel = el.querySelector('app-broker-exports-panel') as HTMLElement;
+    expect(panel.textContent).toContain('Brokers without a connection');
+    expect(panel.textContent).toContain('DEGIRO');
+    expect(panel.textContent).toContain('Reads only');
+    const links = [...panel.querySelectorAll<HTMLAnchorElement>('a.export-link')];
+    expect(links.map((a) => a.textContent?.trim())).toEqual([
+      'Transactions',
+      'Account statement',
+      'Portfolio',
+    ]);
+    expect(links[0].getAttribute('href')).toBe('/connections/import?preset=degiro_transactions');
+    // DEGIRO is not offered as a provider to sign in to
+    expect([...el.querySelectorAll('.provider h3')].map((h) => h.textContent)).not.toContain(
+      'DEGIRO',
+    );
   });
 });

@@ -22,6 +22,7 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatusPill } from '../../shared/ui/status-pill';
+import { BrokerExportsPanel } from './broker-exports-panel';
 import { BROWSER_REDIRECT } from './browser-redirect';
 import {
   CONNECTION_STATUS_LABEL,
@@ -63,6 +64,7 @@ export const CALLBACK_PATH = '/connections/callback';
     RouterLink,
     AgoPipe,
     HelpTip,
+    BrokerExportsPanel,
   ],
   templateUrl: './connections.page.html',
   styleUrl: './connections.page.scss',

@@ -422,7 +422,30 @@ For a broker with no connection, bring its history in from the CSV file it expor
 uv run stonks imports preview FILE --new "Old broker" [--mapping JSON] [--currency EUR]
 uv run stonks imports commit FILE --portfolio PF_ID [--mapping JSON]
 uv run stonks imports list | undo IMPORT_ID
+uv run stonks imports presets        # broker exports read without a mapping
 ```
+
+### DEGIRO
+
+DEGIRO has no API and its terms forbid automated tools and sharing your login, so Stonks reads the CSV files you export and never trades there. Presets read them without a mapping, in English, Dutch, German, French, Spanish, Italian and Portuguese. Design and sources: [DEGIRO](design/degiro.md).
+
+1. **Export Transactions.** In the DEGIRO web trader open Inbox, then Transactions. Set the dates from your first trade to today, choose Export, then CSV.
+2. **Export the Account statement.** Inbox, then Account statement. Same dates, Export, then CSV. It brings dividends, dividend tax, deposits, withdrawals, interest and fees.
+3. **Export the Portfolio, if you like.** Portfolio, then Export, then CSV. It sets the holdings and cash on the day you export it. Note that day.
+4. **Import Transactions first,** into a new portfolio in your account currency:
+
+   ```bash
+   uv run stonks imports preview Transactions.csv --new "DEGIRO" --currency EUR
+   uv run stonks imports commit Transactions.csv --new "DEGIRO" --currency EUR
+   ```
+
+   The preview says `read as DEGIRO Transactions (nl)`, or your language. In the console, open Broker connections and pick Transactions under Brokers without a connection.
+5. **Import the Account statement** into that portfolio: `uv run stonks imports commit Account.csv --portfolio PF_ID`. Lines that belong to trades are left out, so nothing counts twice.
+6. **Import the Portfolio** with its day: `uv run stonks imports commit Portfolio.csv --portfolio PF_ID --as-of 2025-06-10`.
+7. **Check what is not covered.** The preview lists the ISINs no ticker maps to, with the product name. They stay in the portfolio by ISIN. To map them, ingest their metadata so the lake knows the ISIN (`uv run stonks ingest metadata --tickers ASML.AS`), then undo the import and import it again.
+8. **Stay up to date.** Export again later and import the same way. Lines already imported are skipped.
+
+A DEGIRO account that a SnapTrade connection shows is never synced: SnapTrade reaches DEGIRO with your login over an unofficial route.
 
 ## Telegram
 
@@ -547,7 +570,7 @@ Before switching models, run the eval set: `uv run stonks assistant eval` checks
 
 ## Broker connections
 
-Connections sync a user's broker accounts: positions, cash and activities, into a linked `broker` portfolio. A provider that can trade (`ibkr`) also places the orders of that portfolio's auto and approve books, the manual orders placed there and the suggested orders its owner approves, at the portfolio's stage. Alerts only and Paper follows never place an order at a broker, and a provider that only reads (`snaptrade`, `alpaca` here) never places one. The console's Broker connections page says this on every provider card and under "When Stonks trades". Providers are `alpaca`, `snaptrade`, `ibkr` (an IB Gateway named in `[brokers.ibkr.gateways]`, see [Live trading](#live-trading)) and the fakes for tests. No provider works until an admin enables it.
+Connections sync a user's broker accounts: positions, cash and activities, into a linked `broker` portfolio. A provider that can trade (`ibkr`, and `etoro` once an admin turns its trading on) also places the orders of that portfolio's auto and approve books, the manual orders placed there and the suggested orders its owner approves, at the portfolio's stage. Alerts only and Paper follows never place an order at a broker, and a provider that only reads (`snaptrade`, `alpaca` here) never places one. The console's Broker connections page says this on every provider card and under "When Stonks trades". Providers are `alpaca`, `snaptrade`, `ibkr` (an IB Gateway named in `[brokers.ibkr.gateways]`, see [Live trading](#live-trading)), `etoro` (see [eToro](#etoro)) and the fakes for tests. No provider works until an admin enables it.
 
 ```bash
 export STONKS_SECRET_KEYS="$(uv run python -m stonks.security keygen 2>/dev/null)"   # once; keep it secret
@@ -563,6 +586,34 @@ uv run python -m stonks.connections rotate-keys       # after adding a new maste
 - SnapTrade needs `STONKS_SNAPTRADE_CLIENT_ID` and `STONKS_SNAPTRADE_CONSUMER_KEY` and connects through its portal (`connect snaptrade --redirect URL`, then `callback`).
 - A sync writes one `portfolio_snapshots` row per portfolio and day (`source` other than `tick`), and is safe to repeat.
 - The scheduler's `connections_sync` job runs `sync --due` every hour. Without the scheduler, run it from cron or a timer.
+
+### eToro
+
+Stonks talks to eToro only through eToro's official public API. What it allows, what Stonks builds on it and the gaps are in `docs/design/etoro.md`.
+
+1. The admin adds `etoro` to `[connections].enabled_providers` (or `STONKS_CONNECTIONS_ENABLED_PROVIDERS`). It then reads only.
+2. Each person makes their own key in the eToro app: **Settings > Trading > API Key Management > Create New Key**. The eToro account must be verified first.
+   - **Environment**: Demo for the demo (virtual money) account, Real for the real one. One key per environment. Connect each as its own connection.
+   - **Permissions**: Read to sync only. Write too if Stonks may place orders.
+   - Set an expiry date, and an IP allow list with the server's address if it has a fixed one.
+   - Copy the public API key and the user key. eToro shows the user key once.
+3. They connect on Broker connections: **eToro > Connect with keys**, paste the API key and the user key, and leave "paper or demo account keys" ticked for a demo key (untick it for a real key). From the shell: `STONKS_CONNECT_API_KEY=... STONKS_CONNECT_USER_KEY=... uv run python -m stonks.connections connect etoro [--real]`. A key for the other environment is refused and never stored.
+4. Trading stays off until the admin sets `[connections.etoro] trading = true`. The demo account then trades as **Broker paper**. A real account also needs `allow_real_money = true`, and opens positions only at the Real money stages. Closes always go out.
+
+```toml
+[connections.etoro]
+trading = false            # place orders through eToro connections
+allow_real_money = false   # a Real key may open positions (at the Real money stages)
+reads_per_minute = 50      # our budget per connection, eToro allows 60
+orders_per_minute = 10     # opens, closes and cancels, eToro allows 20
+# instrument_overrides = { "AAPL.US" = 1001 }   # pin a ticker to an eToro instrument id
+```
+
+- Keys are never in TOML: `[connections.etoro]` refuses any key field. They are sealed per connection like every broker credential.
+- The trader sends market orders only, opens long positions at leverage 1 in the real asset, and turns a sell into closes of the oldest positions. CFD-only instruments, shorts and leverage are refused. Copied (mirror) positions are synced but never traded.
+- A `429` from eToro backs off and retries. After that the sync moves to later, or the order counts as a broker outage.
+- Keys go stale after their expiry date. The sync then fails as an auth error, the connection shows Needs attention, and auto books on it pause. Make a new key and connect again.
+- If a key leaks, delete it in eToro at once, tell eToro within 24 hours as its terms ask, and disconnect the connection in Stonks.
 
 ## Manual orders
 
@@ -713,7 +764,7 @@ In the console: Real-money settings of the portfolio, the Stage card and Order p
 
 The Going live page (`/going-live`, linked from Real-money settings and Broker connections) walks one portfolio through every step to real money, in order, and says for each whether it is done and who acts:
 
-1. **Server gateway set up** (admin): an IB Gateway under `[brokers.ibkr.gateways]` lists the portfolio and is connected.
+1. **Server gateway set up** (admin): an IB Gateway under `[brokers.ibkr.gateways]` lists the portfolio and is connected. A broker reached over its own web API, such as eToro, needs no gateway, and the step reads Done.
 2. **Broker connected**: the portfolio is linked to a connection that can trade.
 3. **Portfolio stage**: done at Real money, small or full. Otherwise it lists the checks the next stage still needs.
 4. **Allocation**: set on Real-money settings with a fresh code.

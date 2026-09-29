@@ -265,6 +265,8 @@ class BrokerConnection(ABC):
     credential_fields: ClassVar[tuple[str, ...]] = ()
     #: The provider offers paper (simulated money) accounts.
     has_paper: ClassVar[bool] = False
+    #: Trading needs a gateway on the server (IBKR's IB Gateway).
+    needs_gateway: ClassVar[bool] = False
 
     @classmethod
     @abstractmethod
@@ -275,6 +277,13 @@ class BrokerConnection(ABC):
     def check_configured(cls, config: ConnectionsConfig) -> None:
         """Raise :class:`ProviderNotConfigured` when app-level settings are
         missing. API-key providers need none."""
+
+    @classmethod
+    def capabilities_for(cls, config: ConnectionsConfig) -> frozenset[Capability]:
+        """What the provider offers under ``config``: its
+        :attr:`capabilities`, less any an app setting turns off (eToro's
+        trading is off until ``[connections.etoro] trading`` is on)."""
+        return cls.capabilities
 
     @classmethod
     def supports(cls, capability: Capability) -> bool:

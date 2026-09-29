@@ -702,12 +702,15 @@ top of Settings, System. It reads `GET /api/settings/system` through
 - **Connections.** Each provider card says what Stonks may do there:
   "Reads only. It never places an order there." or "Reads, and places
   orders when you allow it." (`providerReach()`, from the provider's
-  `can_trade`). "When Stonks trades" spells it out: a broker that can trade
-  (Interactive Brokers) gets orders only in the portfolio linked to it, and
+  `can_trade`, which for eToro is true only when an admin turned its trading
+  on). "When Stonks trades" spells it out: a broker that can trade
+  (Interactive Brokers, eToro) gets orders only in the portfolio linked to it, and
   only for follows set to Approve each trade (after each ticket) or
   Automatic, for orders placed by hand there and for suggested orders you
   approve, at the portfolio's stage. Alerts only and Paper follows never
-  place an order at the broker. Key fields are password inputs, cleared when the form
+  place an order at the broker. A provider with paper accounts (Alpaca,
+  eToro) adds the tick box "These are paper or demo account keys (no real
+  money)", sent as `paper`. eToro asks for its API key and user key. Key fields are password inputs, cleared when the form
   closes and never shown again. Portal providers leave through the
   `BROWSER_REDIRECT` seam and come back to `/connections/callback`, which
   calls the callback route once. Link sends a new broker portfolio by
@@ -935,7 +938,8 @@ flowchart LR
 - **Going live checklist** (`pages/going-live/`). One page walks the whole
   path for the portfolio on screen, or `?portfolio=`, with a picker when
   there are several: (1) the server's IB Gateway lists and connects this
-  portfolio (`GET /api/brokers/gateways`), (2) the portfolio is linked to a
+  portfolio (`GET /api/brokers/gateways`), done at once for a broker whose
+  provider has `needs_gateway` false (eToro), (2) the portfolio is linked to a
   broker connection that can trade, (3) its stage (done at a Real money
   stage; otherwise the checks still missing for the next stage), (4) the
   allocation, (5) the account profile, (6) every safeguard on, (7) a dry-run
@@ -1273,12 +1277,13 @@ flowchart LR
 | Page | Route | What it does |
 |---|---|---|
 | Demo portfolio | `/demo` | Open, look around in and remove a sample book of made-up holdings and prices |
-| Import a CSV statement | `/connections/import` | Map a broker's CSV onto trades, dividends and cash flows, preview, import and undo |
+| Import a CSV statement | `/connections/import` | Map a broker's CSV onto trades, dividends and cash flows, or read a DEGIRO export with its preset, preview, import and undo |
 
 - **Privacy mode.** `PrivacyService` (`core/privacy/`) holds one switch per device (localStorage). While on, `formatMoney` returns a mask, so the money pipe, tables, tiles and chart axes hide amounts. Percentages, counts and dates stay. `html[data-privacy="on"]` is there for a figure a page formats itself. The eye button in the top bar and the sidebar, the palette, `h` and Alt+Shift+H (always on) toggle it, and Settings has a check box.
 - **Demo portfolio.** `pages/demo/demo.page.ts`. Every view says Sample data in a note above the tiles. The instruments end in `.DEMO`. The welcome page and the setup card link to it.
 - **Screen alerts.** `<app-screen-alerts>` (`pages/screener/screen-alerts.ts`) sits under Your screens. A When select per screen turns an alert on (Daily, or Weekly on a weekday), Remove asks first, and the newest finds list below. The Screen alerts row in the notification settings decides where alerts reach you.
 - **CSV import.** `pages/connections/statement-import.page.ts`, linked from Broker connections. The first Preview sends no mapping and fills the column selects from the server's guess. Preview and import are silent calls, and a refusal shows under the buttons. Pure helpers live in `statement-mapping.ts`.
+- **Broker exports (DEGIRO).** What file is it? on the import page picks a broker export (`GET /api/statement-imports/presets`), Find out from the headers (the default), or Another broker: I map the columns (`preset: none`). A preset reads the columns itself, so the mapping panel stays hidden, and the preview says Read as DEGIRO Transactions, Dutch, with notes on what it left out. A holdings export (DEGIRO Portfolio) asks the day of the export. `?preset=degiro_transactions` opens the page with that export chosen (router input binding). Broker connections shows `<app-broker-exports-panel>` (`broker-exports-panel.ts`): each broker read from its exports, marked Reads only, with a link per export and where to find it. DEGIRO is never offered as a connection. See [DEGIRO](design/degiro.md).
 
 ## Options research (17.6)
 

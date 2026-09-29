@@ -10,6 +10,9 @@ read from the same TOML file's ``[connections]`` table plus the environment:
   SnapTrade partner credentials. The consumer key is env-only (refused in
   TOML) and kept as a ``SecretStr``.
 
+``[connections.etoro]`` holds the eToro provider's settings (trading is off
+by default). Its keys are per connection and sealed, never in TOML.
+
 The ``ibkr`` provider reads the same ``[brokers.ibkr]`` table as the IBKR
 broker (one source of truth for the gateways), copied into ``ibkr`` here.
 """
@@ -24,6 +27,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
+from stonks.execution.brokers.etoro.settings import EtoroConfig
 from stonks.execution.brokers.ibkr.settings import IbkrBrokerConfig
 
 ENABLED_ENV = "STONKS_CONNECTIONS_ENABLED_PROVIDERS"
@@ -58,6 +62,7 @@ class ConnectionsConfig(BaseModel):
     #: First sync pulls this much activity history; later syncs overlap a week.
     activity_lookback_days: int = Field(default=90, ge=1)
     snaptrade: SnapTradeConfig = Field(default_factory=SnapTradeConfig)
+    etoro: EtoroConfig = Field(default_factory=EtoroConfig)
     #: The IB Gateways of ``[brokers.ibkr]`` (roadmap 19.3), for the
     #: ``ibkr`` provider. Loaded from that table, never ``[connections]``.
     ibkr: IbkrBrokerConfig = Field(default_factory=IbkrBrokerConfig)

@@ -16,6 +16,7 @@ from stonks.app.statement_imports import (
     StatementImportRequest,
     StatementImportService,
     StatementImportView,
+    StatementPresetView,
     StatementPreview,
 )
 from stonks.auth import Permission
@@ -44,6 +45,17 @@ def list_statement_imports(
     return page_of(_service(services).list(principal), page)
 
 
+@router.get(
+    "/presets", response_model=list[StatementPresetView], operation_id="listStatementPresets"
+)
+def list_statement_presets(
+    services: ServicesDep, principal: PrincipalDep
+) -> list[StatementPresetView]:
+    """The broker exports Stonks reads without a column mapping (DEGIRO
+    Transactions, Account statement and Portfolio), with where to find each."""
+    return _service(services).presets(principal)
+
+
 @router.post(
     "/preview",
     response_model=StatementPreview,
@@ -53,8 +65,9 @@ def list_statement_imports(
 def preview_statement_import(
     body: StatementImportRequest, services: ServicesDep, principal: PrincipalDep
 ) -> StatementPreview:
-    """Each row as new, duplicate or skipped, and the column mapping used
-    (guessed from the headers when you give none). Writes nothing."""
+    """Each row as new, duplicate or skipped, and the column mapping or the
+    broker preset used (a known broker export is found from its headers,
+    else the mapping is guessed from them). Writes nothing."""
     return _service(services).preview(principal, body)
 
 

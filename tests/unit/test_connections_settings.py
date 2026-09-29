@@ -65,3 +65,47 @@ def test_ibkr_gateways_come_from_brokers_ibkr(tmp_path):
     path.write_text("[connections.ibkr]\nallow_live = true\n")
     with pytest.raises(ValueError, match=r"\[brokers.ibkr\]"):
         ConnectionsConfig.load(path, environ={})
+
+
+def test_etoro_is_off_and_trades_nothing_by_default(tmp_path):
+    cfg = ConnectionsConfig.load(tmp_path / "missing.toml", environ={})
+    assert not cfg.is_enabled("etoro")
+    assert cfg.etoro.trading is False
+    assert cfg.etoro.allow_real_money is False
+    assert cfg.etoro.base_url == "https://public-api.etoro.com"
+    # our own budgets stay under eToro's (60 reads, 20 orders a minute)
+    assert cfg.etoro.reads_per_minute <= 60
+    assert cfg.etoro.orders_per_minute <= 20
+
+
+def test_etoro_settings_come_from_toml(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text(
+        '[connections]\nenabled_providers = ["etoro"]\n'
+        "[connections.etoro]\ntrading = true\norders_per_minute = 5\n"
+        '[connections.etoro.instrument_overrides]\n"AAPL.US" = 1001\n'
+    )
+    cfg = ConnectionsConfig.load(path, environ={})
+    assert cfg.is_enabled("etoro")
+    assert cfg.etoro.trading is True
+    assert cfg.etoro.orders_per_minute == 5
+    assert cfg.etoro.instrument_overrides == {"AAPL.US": 1001}
+
+
+@pytest.mark.parametrize("field", ["api_key", "user_key", "x_api_key"])
+def test_etoro_keys_in_toml_are_refused_without_echo(tmp_path, field):
+    path = tmp_path / "c.toml"
+    path.write_text(f'[connections.etoro]\n{field} = "leaky-value"\n')
+    with pytest.raises(ValueError) as info:
+        ConnectionsConfig.load(path, environ={})
+    assert "leaky-value" not in str(info.value)
+
+
+def test_etoro_budgets_cannot_exceed_etoros_limits(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text("[connections.etoro]\norders_per_minute = 21\n")
+    with pytest.raises(ValueError):
+        ConnectionsConfig.load(path, environ={})
+    path.write_text("[connections.etoro]\nreads_per_minute = 61\n")
+    with pytest.raises(ValueError):
+        ConnectionsConfig.load(path, environ={})
