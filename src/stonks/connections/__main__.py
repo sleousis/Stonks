@@ -9,8 +9,10 @@ Commands::
     providers                      enabled providers
     list                           the user's connections
     accounts CONNECTION            accounts on a connection (and linked portfolio)
-    connect PROVIDER [--label L]   API-key providers: fields from STONKS_CONNECT_<FIELD>
-                                   (e.g. STONKS_CONNECT_API_KEY) or a hidden prompt
+    connect PROVIDER [--label L] [--real]   API-key providers: fields from
+                                   STONKS_CONNECT_<FIELD> (e.g. STONKS_CONNECT_API_KEY) or a
+                                   hidden prompt. --real: the keys are for a real-money
+                                   account (default: paper or demo)
     connect PROVIDER --redirect URL   hosted-portal providers: prints the portal link
     callback CONNECTION --state S [--outcome O]   finish a portal connection
     link CONNECTION ACCOUNT [--portfolio ID] [--name N]
@@ -69,6 +71,8 @@ def _parser() -> argparse.ArgumentParser:
     c.add_argument("--label")
     c.add_argument("--redirect", help="callback URL for hosted-portal providers")
     c.add_argument("--no-link", action="store_true", help="don't create broker portfolios")
+    c.add_argument("--real", action="store_true",
+                   help="the keys are for a real-money account (default: paper or demo)")
     cb = sub.add_parser("callback")
     cb.add_argument("connection")
     cb.add_argument("--state", required=True)
@@ -204,7 +208,11 @@ def _connect(
         _say(f"connection {link.connection_id} pending")
         _say(f"open this link to connect (expires {link.expires_at}):\n{link.url}")
         return 0
+    if args.real and not cls.has_paper:
+        raise _UsageError(f"{args.provider} has no paper account, so --real does not apply")
     fields = {name: _field(name) for name in cls.credential_fields}
+    if cls.has_paper:
+        fields["paper"] = "false" if args.real else "true"
     rec = service.connect_with_keys(
         scope, args.provider, fields, label=args.label, link_accounts=not args.no_link
     )

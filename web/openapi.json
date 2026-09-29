@@ -22199,6 +22199,10 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "needs_gateway": {
+            "title": "Needs Gateway",
+            "type": "boolean"
           }
         },
         "required": [
@@ -22209,7 +22213,8 @@
           "credential_fields",
           "can_trade",
           "enabled",
-          "has_paper"
+          "has_paper",
+          "needs_gateway"
         ],
         "title": "ProviderView",
         "type": "object"

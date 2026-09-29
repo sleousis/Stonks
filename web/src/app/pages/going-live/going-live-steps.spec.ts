@@ -18,6 +18,7 @@ const IBKR: ProviderView = {
   can_trade: true,
   enabled: true,
   has_paper: true,
+  needs_gateway: true,
 };
 
 const SNAP: ProviderView = {
@@ -25,6 +26,15 @@ const SNAP: ProviderView = {
   name: 'snaptrade',
   display_name: 'SnapTrade',
   can_trade: false,
+  needs_gateway: false,
+};
+
+const ETORO: ProviderView = {
+  ...IBKR,
+  name: 'etoro',
+  display_name: 'eToro',
+  credential_fields: ['api_key', 'user_key'],
+  needs_gateway: false,
 };
 
 function conn(over: Partial<ConnectionView> = {}): ConnectionView {
@@ -217,6 +227,25 @@ describe('goingLiveSteps', () => {
       facts({ gateways: { configured: true, gateways: [gateway({ your_portfolios: [] })] } }),
     );
     expect(other['gateway'].detail).toContain('not for this portfolio');
+  });
+
+  it('needs no server gateway for eToro, which trades over its own API', () => {
+    const s = byKey(
+      facts({
+        gateways: { configured: false, gateways: [] },
+        connections: [conn({ provider: 'etoro' })],
+        providers: [IBKR, SNAP, ETORO],
+      }),
+    );
+    expect(s['gateway']).toMatchObject({ state: 'done', link: null });
+    expect(s['gateway'].detail).toBe('eToro needs no gateway on the server.');
+    expect(s['broker'].state).toBe('done');
+    expect(s['broker'].detail).toContain('Linked to eToro');
+  });
+
+  it('names eToro among the brokers that can trade', () => {
+    const s = byKey(facts({ portfolio: book({ id: 'pf_p', name: 'Paper' }) }));
+    expect(s['broker'].detail).toContain('Interactive Brokers or eToro');
   });
 
   it('refuses a read-only broker as the link to real money', () => {

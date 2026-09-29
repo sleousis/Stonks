@@ -12226,6 +12226,10 @@ export type ProviderView = {
      * Name
      */
     name: string;
+    /**
+     * Needs Gateway
+     */
+    needs_gateway: boolean;
 };
 
 /**

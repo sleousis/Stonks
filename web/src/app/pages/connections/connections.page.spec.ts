@@ -10,7 +10,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { BROWSER_REDIRECT } from './browser-redirect';
 import { ConnectionsPage } from './connections.page';
-import { ALPACA, SNAPTRADE, connection, sessionStub } from './connections.fixtures';
+import { ALPACA, ETORO, SNAPTRADE, connection, sessionStub } from './connections.fixtures';
 
 describe('ConnectionsPage', () => {
   let fixture: ComponentFixture<ConnectionsPage>;
@@ -185,6 +185,33 @@ describe('ConnectionsPage', () => {
     expect(navigate).toHaveBeenCalledWith(['/connections', 'con_9']);
     // The form closed and the keys are gone from the page.
     expect(el.querySelector('form.keys')).toBeNull();
+  });
+
+  it('connects eToro with its API key and user key, as a real account when unticked', async () => {
+    await setUp({ providers: [ETORO] });
+    const card = el.querySelector('.provider')!;
+    expect(card.textContent).toContain('Reads, and places orders when you allow it.');
+    expect(card.textContent).toContain('You paste API keys from your eToro account.');
+    button('Connect with keys')!.click();
+    fixture.detectChanges();
+    expect(el.querySelector('label[for="key-etoro-api_key"]')?.textContent).toContain('API key');
+    expect(el.querySelector('label[for="key-etoro-user_key"]')?.textContent).toContain('User key');
+    expect(el.textContent).toContain('paper or demo account keys');
+    type('#key-etoro-api_key', 'PUB1');
+    type('#key-etoro-user_key', 'USR1');
+    const demo = el.querySelector<HTMLInputElement>('form.keys input[type="checkbox"]')!;
+    demo.click();
+    fixture.detectChanges();
+    button('Connect')!.click();
+    await settle();
+    const req = await nextRequest(http, '/api/connections/keys', 'POST');
+    expect(req.request.body).toEqual({
+      provider: 'etoro',
+      fields: { api_key: 'PUB1', user_key: 'USR1', paper: 'false' },
+      label: null,
+    });
+    req.flush(connection({ id: 'con_e', provider: 'etoro' }));
+    await settle();
   });
 
   it('starts the hosted sign-in and sends the browser to its URL', async () => {

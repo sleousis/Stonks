@@ -101,6 +101,9 @@ class ProviderView(BaseModel):
     enabled: bool
     #: The provider offers paper (simulated money) accounts.
     has_paper: bool
+    #: Trading needs a gateway an admin runs on the server (IBKR). eToro
+    #: and the other API providers need none.
+    needs_gateway: bool
 
 
 class ConnectionView(BaseModel):
@@ -275,6 +278,7 @@ class ConnectionsAppService:
                     can_trade=p.can_trade,
                     enabled=p.enabled,
                     has_paper=p.has_paper,
+                    needs_gateway=p.needs_gateway,
                 )
                 for p in svc.providers(scope)
             ]
