@@ -114,13 +114,41 @@ def merge_construction(
     base: Mapping[str, Any], *overrides: Mapping[str, Any] | None
 ) -> dict[str, Any]:
     """Global construction settings merged with portfolio overrides. The W2.1
-    pipeline validates the result against its constructor's ``Settings``."""
+    pipeline validates the result against its constructor's ``Settings``.
+
+    The shared risk knobs (:data:`CONSTRUCTION_TIGHTEN`) only tighten, also
+    when the global settings leave one unset: then the constructor's default
+    is the bound (``max_gross`` 1.0, ``long_only``), so a portfolio can never
+    loosen what nobody configured (P26, P28). A knob nested in an
+    override's ``params`` is held to the same rule."""
     out = dict(base)
+    defaults = _construction_defaults()
     for override in overrides:
-        for key, value in (override or {}).items():
+        flat = dict(override or {})
+        nested = flat.pop("params", None)
+        if isinstance(nested, Mapping):
+            params = dict(nested)
+            for key in CONSTRUCTION_TIGHTEN:
+                if key in params:
+                    flat.setdefault(key, params.pop(key))
+            flat["params"] = params
+        elif nested is not None:
+            flat["params"] = nested
+        for key, value in flat.items():
             rule = CONSTRUCTION_TIGHTEN.get(key)
-            out[key] = rule(out[key], value) if rule is not None and key in out else value
+            if rule is None:
+                out[key] = value
+            else:
+                out[key] = rule(out[key] if key in out else defaults[key], value)
     return out
+
+
+def _construction_defaults() -> dict[str, Any]:
+    """The constructors' own defaults for the shared risk knobs."""
+    from stonks.portfolio.base import ConstructorSettings
+
+    fields = ConstructorSettings.model_fields
+    return {key: fields[key].default for key in CONSTRUCTION_TIGHTEN}
 
 
 def _frozen(mapping: Mapping[str, Any]) -> Mapping[str, Any]:

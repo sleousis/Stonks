@@ -52,3 +52,18 @@ def test_merge_construction_only_tightens_shared_knobs():
     # Non-risk knobs (which constructor, its parameters) are the portfolio's choice.
     assert merged["constructor"] == "equal"
     assert merge_construction(base, {"max_gross": 1.0})["max_gross"] == 0.8
+
+
+def test_merge_construction_tightens_against_the_default_when_global_is_silent():
+    """A short book's portfolio cannot pick max_gross above the effective
+    default (1.0) just because the global settings leave it unset (P26,
+    P28). Nested constructor params are held to the same rule."""
+    assert merge_construction({}, {"max_gross": 4.0})["max_gross"] == 1.0
+    assert (
+        merge_construction({"method": "equal_weight_top_n"}, {"max_gross": 0.6})["max_gross"] == 0.6
+    )
+    nested = merge_construction({}, {"params": {"max_gross": 3.0, "top_n": 5}})
+    assert nested.get("max_gross", 1.0) <= 1.0
+    assert nested.get("params", {}).get("max_gross", 1.0) <= 1.0
+    # the global setting still widens the room when an operator sets it
+    assert merge_construction({"max_gross": 2.0}, {"max_gross": 1.5})["max_gross"] == 1.5
