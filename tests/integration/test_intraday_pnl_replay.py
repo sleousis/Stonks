@@ -246,3 +246,30 @@ def test_a_runner_subscriber_mark_book_sees_ticks_between_bars(seeded, tmp_path)
     marks(TradeTick("A.US", OPEN + 32 * ONE, 151.0, 1))
     [book, *_] = tracker.books(OPEN + 33 * ONE)
     assert book.pnl == pytest.approx(10.0)
+
+
+def test_a_broker_book_counts_only_its_own_shares(seeded):
+    """At a real broker the account also holds the owner's own shares. The
+    book's intraday P&L uses the managed view the daily tick and the engine
+    use: the start positions its fills explain, and none of the owner's
+    manual fills."""
+    yesterday = datetime(2026, 9, 25, 15, 0, tzinfo=UTC)
+    _fill(seeded, "o1", "A.US", "buy", 4, 90.0, yesterday, "mom")
+    _fill(seeded, "m1", "B.US", "buy", 2, 50.0, OPEN + ONE, None)
+    seeded.execute("UPDATE orders SET origin = 'manual' WHERE client_id = 'm1'")
+    at = OPEN + 5 * ONE
+    marks = MarkBook()
+    marks.update("A.US", 110.0, at, "trade")
+    marks.update("B.US", 60.0, at, "trade")
+    tracker = IntradayPnlTracker(
+        seeded,
+        [PF],
+        marks=marks,
+        reference_prices=lambda tickers, day: {"A.US": 100.0, "B.US": 50.0},
+        managed=[PF],
+    )
+    from stonks.production.intraday_pnl import PORTFOLIO_BOOK
+
+    [whole] = [b for b in tracker.books(at) if b.strategy_id == PORTFOLIO_BOOK]
+    assert whole.unrealised == pytest.approx(4 * 10.0)
+    assert whole.fills == 0
