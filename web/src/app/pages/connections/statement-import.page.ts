@@ -3,6 +3,8 @@ import {
   Component,
   computed,
   inject,
+  input,
+  linkedSignal,
   resource,
   signal,
 } from '@angular/core';
@@ -12,6 +14,7 @@ import type {
   ColumnMapping,
   StatementImportRequest,
   StatementImportView,
+  StatementPresetView,
   StatementPreview,
   StatementRowView,
 } from '../../api/models';
@@ -58,6 +61,22 @@ const ROW_COLUMNS: TableColumn<StatementRowView>[] = [
   { key: 'reason', label: 'Why skipped', mobile: 'hide' },
 ];
 
+/** The file's language, as the preview names it. */
+const LOCALE_NAMES: Record<string, string> = {
+  en: 'English',
+  nl: 'Dutch',
+  de: 'German',
+  fr: 'French',
+  es: 'Spanish',
+  it: 'Italian',
+  pt: 'Portuguese',
+};
+
+/** Find the broker export from the headers (else guess a column mapping). */
+const AUTO = 'auto';
+/** Skip the broker exports: map the columns by hand. */
+const NO_PRESET = 'none';
+
 /** Rough bytes cap for a file read in the browser (the API allows 5 MB of text). */
 const MAX_FILE_BYTES = 5_000_000;
 
@@ -84,7 +103,7 @@ const MAX_FILE_BYTES = 5_000_000;
   template: `
     <app-page-header
       title="Import a CSV statement"
-      description="For brokers without a connection: bring trades, dividends and cash flows in from the CSV file your broker exports."
+      description="For brokers without a connection: bring trades, dividends and cash flows in from the CSV file your broker exports. DEGIRO files need no mapping."
     >
       <a actions class="btn btn-ghost" routerLink="/connections">Broker connections</a>
     </app-page-header>
@@ -110,6 +129,42 @@ const MAX_FILE_BYTES = 5_000_000;
             }
           </span>
         </div>
+        <div class="field">
+          <label for="imp-preset">What file is it?</label>
+          <select
+            id="imp-preset"
+            class="input"
+            aria-describedby="imp-preset-hint"
+            (change)="choosePreset($any($event.target).value)"
+          >
+            <option [value]="auto" [selected]="choice() === auto">Find out from the headers</option>
+            @for (p of presetList(); track p.id) {
+              <option [value]="p.id" [selected]="choice() === p.id">
+                {{ p.broker }} {{ p.label }}
+              </option>
+            }
+            <option [value]="none" [selected]="choice() === none">
+              Another broker: I map the columns
+            </option>
+          </select>
+          <span id="imp-preset-hint" class="hint">{{ presetHint() }}</span>
+        </div>
+        @if (holdings()) {
+          <div class="field">
+            <label for="imp-asof">Day of the export</label>
+            <input
+              id="imp-asof"
+              class="input"
+              type="date"
+              aria-describedby="imp-asof-hint"
+              [value]="asOf()"
+              (input)="asOf.set($any($event.target).value)"
+            />
+            <span id="imp-asof-hint" class="hint"
+              >The holdings and cash are as of this day. Empty means today.</span
+            >
+          </div>
+        }
         <app-segmented
           label="Import into"
           [options]="targets"
@@ -275,6 +330,9 @@ const MAX_FILE_BYTES = 5_000_000;
         <div class="panel-head">
           <h2 id="preview-title">3. Preview</h2>
           <span class="hint" role="status">
+            @if (r.preset_label) {
+              Read as {{ r.preset_label }}{{ r.locale ? ', ' + localeName(r.locale) : '' }}.
+            }
             {{ r.new }} new, {{ r.duplicate }} already imported, {{ r.skipped }} skipped
             @if (r.first_date) {
               , {{ day(r.first_date) }} to {{ day(r.last_date) }}
@@ -283,6 +341,13 @@ const MAX_FILE_BYTES = 5_000_000;
         </div>
         @if (r.unmapped.length) {
           <p class="panel-body note">Not covered, kept by symbol: {{ r.unmapped.join(', ') }}</p>
+        }
+        @if (r.notes?.length) {
+          <ul class="panel-body notes">
+            @for (n of r.notes; track n) {
+              <li class="note">{{ n }}</li>
+            }
+          </ul>
         }
         <app-data-table
           caption="Rows of the statement"
@@ -374,6 +439,12 @@ const MAX_FILE_BYTES = 5_000_000;
     .import .btn {
       min-height: 44px;
     }
+    .notes {
+      display: grid;
+      gap: var(--space-1);
+      margin: 0;
+      padding-left: var(--space-5);
+    }
     .imports {
       display: grid;
       gap: var(--space-2);
@@ -410,6 +481,8 @@ export class StatementImportPage {
   private readonly toasts = inject(ToastService);
 
   protected readonly targets = TARGETS;
+  protected readonly auto = AUTO;
+  protected readonly none = NO_PRESET;
   protected readonly fields = MAPPED_FIELDS;
   protected readonly rowColumns = ROW_COLUMNS;
   protected readonly rowKey = (r: StatementRowView) => String(r.line);
@@ -434,6 +507,28 @@ export class StatementImportPage {
   protected readonly busy = signal<'preview' | 'commit' | 'undo' | null>(null);
 
   protected readonly imports = resource({ loader: () => this.api.list() });
+  protected readonly presets = resource({ loader: () => this.api.presets() });
+  protected readonly presetList = computed<StatementPresetView[]>(() =>
+    this.presets.hasValue() ? this.presets.value() : [],
+  );
+  /** `?preset=` from the Broker connections page (router input binding). */
+  readonly preset = input<string>();
+  /** `auto`, `none`, or a preset id. */
+  protected readonly choice = linkedSignal(() => this.preset() || AUTO);
+  protected readonly asOf = signal('');
+  protected readonly chosenPreset = computed(() =>
+    this.presetList().find((p) => p.id === this.choice()),
+  );
+  /** A holdings export (DEGIRO Portfolio) describes one day. */
+  protected readonly holdings = computed(
+    () => this.chosenPreset()?.kind === 'holdings' || this.result()?.kind === 'holdings',
+  );
+  protected readonly presetHint = computed(() => {
+    const p = this.chosenPreset();
+    if (p) return p.how_to_export;
+    if (this.choice() === NO_PRESET) return 'You say which column is which after the preview.';
+    return 'A known broker export (DEGIRO) is found from its headers. Any other file gets a first guess at its columns.';
+  });
 
   protected readonly lineCount = computed(
     () => this.content().split(/\r?\n/).filter(Boolean).length,
@@ -451,6 +546,18 @@ export class StatementImportPage {
     if (!this.content() || !this.canImport()) return false;
     return this.target() === 'new' ? !!this.newName().trim() : !!this.portfolioId();
   });
+
+  protected localeName(code: string): string {
+    return LOCALE_NAMES[code] ?? code;
+  }
+
+  protected choosePreset(value: string): void {
+    this.choice.set(value || AUTO);
+    this.mapping.set(null);
+    this.headers.set([]);
+    this.result.set(null);
+    this.error.set(null);
+  }
 
   protected column(field: MappedField): string {
     return (this.mapping()?.[field] as string | null | undefined) ?? '';
@@ -490,6 +597,10 @@ export class StatementImportPage {
       portfolio_id: this.target() === 'existing' ? this.portfolioId() : null,
       new_portfolio: this.target() === 'new' ? this.newName().trim() : null,
     };
+    const preset = this.choice();
+    if (preset !== AUTO) body.preset = preset;
+    if (this.holdings() && this.asOf()) body.as_of = this.asOf();
+    // Only a preview without a preset fills the mapping (choosePreset clears it).
     if (mapping) {
       body.mapping = cleanMapping({
         ...mapping,
@@ -507,14 +618,15 @@ export class StatementImportPage {
     this.error.set(null);
     try {
       const out = await this.api.preview(this.body());
-      if (!this.mapping()) {
+      if (!this.mapping() && out.mapping) {
         this.mapping.set(out.mapping);
         this.typesText.set(typesToText(out.mapping.types));
         this.sellsText.set((out.mapping.sell_values ?? []).join(', '));
         this.dateFormat.set(out.mapping.date_format ?? '');
         this.exchange.set(out.mapping.exchange ?? '');
       }
-      this.headers.set(out.headers);
+      // A broker preset reads the columns itself: nothing to map.
+      this.headers.set(out.mapping ? out.headers : []);
       this.guessed.set(out.guessed);
       this.result.set(out);
       this.previewed = JSON.stringify(this.body());

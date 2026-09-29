@@ -192,3 +192,15 @@ def test_presets_are_named_or_refused(client, people):
         headers=alice,
     )  # fmt: skip
     assert both.status_code == 422
+
+
+def test_none_maps_the_columns_of_a_degiro_file(client, people):
+    alice = people["alice"]["headers"]
+    got = client.post(
+        "/api/statement-imports/preview",
+        json={"content": _file("account_en.csv"), "new_portfolio": "x", "preset": "none"},
+        headers=alice,
+    )
+    assert got.status_code == 200, got.text
+    body = got.json()
+    assert body["preset"] is None and body["guessed"] is True and body["mapping"]["date"] == "Date"

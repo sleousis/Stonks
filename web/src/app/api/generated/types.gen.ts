@@ -14840,7 +14840,7 @@ export type StatementImportRequest = {
     /**
      * Preset
      *
-     * A broker export preset id (GET /api/statement-imports/presets), or 'auto'. Blank with no mapping also detects a preset from the headers first.
+     * A broker export preset id (GET /api/statement-imports/presets), 'auto' to find one from the headers, or 'none' to map the columns. Blank with no mapping also finds a preset first.
      */
     preset?: string | null;
 };

@@ -5,6 +5,7 @@ import { allItems, unwrap } from './api-call';
 import {
   commitStatementImport,
   listStatementImports,
+  listStatementPresets,
   previewStatementImport,
   undoStatementImport,
 } from './generated/sdk.gen';
@@ -15,6 +16,11 @@ import type { StatementImportRequest } from './models';
 export class StatementImportsService {
   list() {
     return allItems((query) => unwrap(listStatementImports({ query })));
+  }
+
+  /** The broker exports read without a column mapping (DEGIRO first). */
+  presets() {
+    return unwrap(listStatementPresets());
   }
 
   /** What an import would do. Silent: the page shows a bad file or mapping inline. */

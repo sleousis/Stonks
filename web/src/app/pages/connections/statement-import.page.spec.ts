@@ -9,6 +9,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { TRADER, problem } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
+import { DEGIRO_PRESETS } from './connections.fixtures';
 import { StatementImportPage } from './statement-import.page';
 
 const CSV = 'Date,Action,Symbol,Quantity,Amount\n2026-01-05,BUY,AAPL,10,-1900\n';
@@ -70,25 +71,31 @@ describe('StatementImportPage', () => {
 
   afterEach(() => http.verify());
 
-  async function render(imports: unknown[] = []) {
+  async function render(imports: unknown[] = [], preset?: string) {
     const fixture = TestBed.createComponent(StatementImportPage);
+    if (preset) fixture.componentRef.setInput('preset', preset);
     fixture.detectChanges();
     (await nextRequest(http, '/api/statement-imports')).flush(page(imports));
+    (await nextRequest(http, '/api/statement-imports/presets')).flush(DEGIRO_PRESETS);
     await tick();
     fixture.detectChanges();
     return fixture;
   }
 
-  async function pick(fixture: ComponentFixture<StatementImportPage>) {
+  async function pick(
+    fixture: ComponentFixture<StatementImportPage>,
+    text = CSV,
+    name = 'jan.csv',
+  ) {
     const root = fixture.nativeElement as HTMLElement;
     const input = root.querySelector('#imp-file') as HTMLInputElement;
-    const file = new File([CSV], 'jan.csv', { type: 'text/csv' });
+    const file = new File([text], name, { type: 'text/csv' });
     Object.defineProperty(input, 'files', { value: [file] });
     input.dispatchEvent(new Event('change'));
     await tick(5);
-    const name = root.querySelector('#imp-name') as HTMLInputElement;
-    name.value = 'Old broker';
-    name.dispatchEvent(new Event('input'));
+    const field = root.querySelector('#imp-name') as HTMLInputElement;
+    field.value = 'Old broker';
+    field.dispatchEvent(new Event('input'));
     fixture.detectChanges();
   }
 
@@ -218,4 +225,108 @@ describe('StatementImportPage', () => {
     expect(confirm).toHaveBeenCalledOnce();
     expect(root.textContent).toContain('No imports yet');
   });
+
+  it('reads a DEGIRO export without a mapping and shows what it left out', async () => {
+    const fixture = await render();
+    const root = fixture.nativeElement as HTMLElement;
+    await pick(fixture, DEGIRO_CSV, 'Transactions.csv');
+    button(root, 'Preview').click();
+    const pre = await nextRequest(http, '/api/statement-imports/preview', 'POST');
+    // "Find out from the headers": no preset and no mapping sent
+    expect(pre.request.body.preset).toBeUndefined();
+    expect(pre.request.body.mapping).toBeUndefined();
+    pre.flush(DEGIRO_PREVIEW);
+    await tick();
+    fixture.detectChanges();
+    expect(root.textContent).toContain('Read as DEGIRO Transactions, Dutch.');
+    expect(root.textContent).toContain('Trades are in the account currency');
+    expect(root.textContent).toContain('BE0974293251 (ANHEUSER-BUSCH INBEV)');
+    // nothing to map
+    expect(root.querySelector('#imp-col-date')).toBeNull();
+    button(root, 'Import 1 new rows').click();
+    const commit = await nextRequest(http, '/api/statement-imports', 'POST');
+    expect(commit.request.body.mapping).toBeUndefined();
+    commit.flush({ ...IMPORTED, preset: 'degiro_transactions' });
+    (await nextRequest(http, '/api/statement-imports')).flush(page([]));
+    await tick();
+  });
+
+  it('opens with a preset from the link and asks the day of a Portfolio export', async () => {
+    const fixture = await render([], 'degiro_portfolio');
+    const root = fixture.nativeElement as HTMLElement;
+    const select = root.querySelector('#imp-preset') as HTMLSelectElement;
+    expect(select.value).toBe('degiro_portfolio');
+    expect(root.textContent).toContain('open Portfolio and choose Export');
+    await pick(fixture, DEGIRO_CSV, 'Portfolio.csv');
+    const day = root.querySelector('#imp-asof') as HTMLInputElement;
+    day.value = '2025-06-10';
+    day.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    button(root, 'Preview').click();
+    const pre = await nextRequest(http, '/api/statement-imports/preview', 'POST');
+    expect(pre.request.body).toMatchObject({ preset: 'degiro_portfolio', as_of: '2025-06-10' });
+    pre.flush({ ...DEGIRO_PREVIEW, preset: 'degiro_portfolio', kind: 'holdings' });
+    await tick();
+    fixture.detectChanges();
+    // another broker: back to mapping the columns
+    select.value = 'none';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(root.querySelector('#imp-asof')).toBeNull();
+    button(root, 'Preview').click();
+    const again = await nextRequest(http, '/api/statement-imports/preview', 'POST');
+    expect(again.request.body.preset).toBe('none');
+    again.flush(PREVIEW);
+    await tick();
+  });
 });
+
+const DEGIRO_CSV =
+  'Datum,Tijd,Product,ISIN,Beurs,Uitvoeringsplaats,Aantal,Koers,,Lokale waarde,,Waarde EUR,' +
+  'Wisselkoers,AutoFX Kosten,Transactiekosten en/of kosten van derden EUR,Totaal EUR,Order ID,\n';
+
+const DEGIRO_PREVIEW: StatementPreview = {
+  headers: ['Datum', 'Tijd', 'Product', 'ISIN'],
+  mapping: null,
+  guessed: false,
+  preset: 'degiro_transactions',
+  preset_label: 'DEGIRO Transactions',
+  locale: 'nl',
+  kind: 'activities',
+  notes: ['Trades are in the account currency: the price is the value per share.'],
+  rows: [
+    {
+      line: 2,
+      status: 'new',
+      kind: 'trade',
+      day: '2025-03-17',
+      symbol: 'BE0974293251',
+      ticker: null,
+      quantity: 2,
+      amount: -114.7,
+      currency: 'EUR',
+    },
+  ],
+  total: 1,
+  new: 1,
+  duplicate: 0,
+  skipped: 0,
+  first_date: '2025-03-17',
+  last_date: '2025-03-17',
+  unmapped: ['BE0974293251 (ANHEUSER-BUSCH INBEV)'],
+};
+
+const IMPORTED = {
+  id: 'imp_2',
+  portfolio_id: 'pf_2',
+  portfolio_name: 'Old broker',
+  filename: 'Transactions.csv',
+  rows_total: 1,
+  rows_added: 1,
+  rows_duplicate: 0,
+  rows_skipped: 0,
+  first_date: '2025-03-17',
+  last_date: '2025-03-17',
+  created_at: '2026-09-29T10:00:00Z',
+  undone_at: null,
+};

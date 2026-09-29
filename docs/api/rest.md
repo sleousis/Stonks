@@ -6058,7 +6058,7 @@ A CSV to preview or import, into ``portfolio_id`` (a broker portfolio of yours) 
 | `mapping` | [ColumnMapping](#columnmapping) \| null | no | Column mapping; blank guesses it from the headers. |
 | `new_portfolio` | string \| null | no |  |
 | `portfolio_id` | string \| null | no |  |
-| `preset` | string \| null | no | A broker export preset id (GET /api/statement-imports/presets), or 'auto'. Blank with no mapping also detects a preset from the headers first. |
+| `preset` | string \| null | no | A broker export preset id (GET /api/statement-imports/presets), 'auto' to find one from the headers, or 'none' to map the columns. Blank with no mapping also finds a preset first. |
 
 ### StatementImportView
 

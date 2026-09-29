@@ -82,6 +82,8 @@ _NEVER = "9999-12-31T00:00:00+00:00"
 RowStatus = Literal["new", "duplicate", "skipped"]
 #: ``preset`` value that asks for detection from the headers.
 AUTO = "auto"
+#: ``preset`` value that skips the presets: map the columns (or guess them).
+NO_PRESET = "none"
 
 
 class StatementImportRequest(BaseModel):
@@ -98,8 +100,9 @@ class StatementImportRequest(BaseModel):
     preset: str | None = Field(
         default=None,
         max_length=64,
-        description="A broker export preset id (GET /api/statement-imports/presets), or"
-        " 'auto'. Blank with no mapping also detects a preset from the headers first.",
+        description="A broker export preset id (GET /api/statement-imports/presets), 'auto'"
+        " to find one from the headers, or 'none' to map the columns. Blank with no mapping"
+        " also finds a preset first.",
     )
     as_of: date | None = Field(
         default=None, description="The day a holdings export describes; blank is today."
@@ -113,7 +116,7 @@ class StatementImportRequest(BaseModel):
     def _target(self) -> Self:
         if (self.portfolio_id is None) == (self.new_portfolio is None):
             raise ValueError("give a portfolio_id or a new_portfolio name, not both")
-        if self.mapping is not None and self.preset not in (None, AUTO):
+        if self.mapping is not None and self.preset not in (None, AUTO, NO_PRESET):
             raise ValueError("give a column mapping or a preset, not both")
         return self
 
@@ -435,7 +438,9 @@ class StatementImportService:
             if body.mapping is not None:
                 return _Reading(body.mapping, False, parse_statement(body.content, body.mapping))
             chosen: StatementPreset | None = None
-            if body.preset not in (None, AUTO):
+            if body.preset == NO_PRESET:
+                chosen = None
+            elif body.preset not in (None, AUTO):
                 chosen = preset_registry.preset(body.preset or "")
             else:
                 found = preset_registry.detect(read_headers(body.content, sniff=True))
