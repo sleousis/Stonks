@@ -88,6 +88,85 @@ def test_average_cost_follows_a_split_the_book_went_through(client, settings, se
     assert pos["cost_basis"] == pytest.approx(avg * held)
 
 
+_OPTION = "UP.US:2026-06-19:C:10"
+
+
+def _hold_an_option(settings, *, contracts: float = 2.0, premium: float = 1.5) -> None:
+    """A filled buy of ``contracts`` calls at ``premium`` per share, and a
+    snapshot that holds them beside the seeded stock."""
+    with SqliteState(settings.state.path) as state:
+        [snap] = state.sql(
+            "SELECT cash, positions_json FROM portfolio_snapshots ORDER BY id DESC LIMIT 1"
+        )
+        state.execute(
+            "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status,"
+            " created_at, updated_at, portfolio_id, origin) VALUES ('opt-1', ?, 'buy', ?,"
+            " 'market', 'filled', '2026-03-21', '2026-03-21', 'pf_default', 'manual')",
+            [_OPTION, contracts],
+        )
+        state.execute(
+            "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at,"
+            " portfolio_id) VALUES ('opt-1', ?, ?, ?, 0, '2026-03-21T15:00:00+00:00',"
+            " 'pf_default')",
+            [_OPTION, contracts, premium],
+        )
+        held = {**json.loads(snap["positions_json"]), _OPTION: contracts}
+        state.execute(
+            "INSERT INTO portfolio_snapshots (taken_at, as_of, cash, positions_json, total_value,"
+            " portfolio_id, source) VALUES ('2026-03-23T21:00:00+00:00', '2026-03-23', ?, ?,"
+            " 0, 'pf_default', 'tick')",
+            [float(snap["cash"]) - contracts * premium * 100, json.dumps(held)],
+        )
+
+
+def test_an_option_position_is_priced_from_its_quotes_with_the_multiplier(client, settings, seeded):
+    from datetime import date
+
+    from stonks.ingest.option_schemas import OptionQuoteRow
+    from stonks.options.store import OptionStore
+    from stonks.store.lake import DuckDBLake
+
+    _hold_an_option(settings)
+    with DuckDBLake(settings.lake.path) as lake:
+        OptionStore(lake).upsert_quotes(
+            [
+                OptionQuoteRow(
+                    underlying="UP.US",
+                    expiry=date(2026, 6, 19),
+                    strike=10.0,
+                    right="call",
+                    as_of=date(2026, 3, 23),
+                    bid=1.9,
+                    ask=2.1,
+                )
+            ],
+            source="test",
+        )
+    body = client.get("/api/portfolio", headers=AUTH).json()
+    opt = next(p for p in body["positions"] if p["ticker"] == _OPTION)
+    stock = next(p for p in body["positions"] if p["ticker"] == "UP.US")
+    assert opt["multiplier"] == 100
+    assert opt["price"] == pytest.approx(2.0)  # the mid, per share
+    assert opt["price_date"] == "2026-03-23"
+    assert opt["market_value"] == pytest.approx(2 * 2.0 * 100)
+    assert opt["avg_cost"] == pytest.approx(1.5)
+    assert opt["cost_basis"] == pytest.approx(2 * 1.5 * 100)
+    assert opt["unrealized_pnl"] == pytest.approx(2 * 0.5 * 100)
+    assert body["positions_value"] == pytest.approx(stock["market_value"] + 400.0)
+    assert body["total_value"] == pytest.approx(body["cash"] + body["positions_value"])
+    assert stock["multiplier"] == 1
+
+
+def test_an_unquoted_option_is_unpriced_with_its_cost_at_the_multiplier(client, settings, seeded):
+    _hold_an_option(settings)
+    body = client.get("/api/portfolio", headers=AUTH).json()
+    opt = next(p for p in body["positions"] if p["ticker"] == _OPTION)
+    assert opt["price"] is None and opt["market_value"] is None
+    assert opt["multiplier"] == 100
+    assert opt["cost_basis"] == pytest.approx(2 * 1.5 * 100)
+    assert opt["unrealized_pnl"] is None
+
+
 def test_portfolio_currency_follows_the_instruments(client, settings):
     from stonks.store.lake import DuckDBLake
 

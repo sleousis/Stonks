@@ -11345,7 +11345,7 @@ export type PositionView = {
     /**
      * Cost Basis
      *
-     * avg_cost * quantity.
+     * avg_cost * quantity * multiplier.
      */
     cost_basis?: number | null;
     /**
@@ -11365,6 +11365,12 @@ export type PositionView = {
      */
     market_value_base?: number | null;
     /**
+     * Multiplier
+     *
+     * Units per contract: 1 for a stock, 100 for a standard option. price and avg_cost are per unit; market_value, cost_basis and unrealized_pnl count it.
+     */
+    multiplier?: number;
+    /**
      * Price
      */
     price: number | null;
@@ -11383,7 +11389,7 @@ export type PositionView = {
     /**
      * Unrealized Pnl
      *
-     * (price - avg_cost) * quantity at the latest stored close.
+     * (price - avg_cost) * quantity * multiplier at the latest stored close (an option's latest quote mark).
      */
     unrealized_pnl?: number | null;
     /**

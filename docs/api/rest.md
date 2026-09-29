@@ -4771,15 +4771,16 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers and n
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `avg_cost` | number \| null | no | Average cost per share from the fill history (weighted average, fees included); null when the ledger has no fills for the position. |
-| `cost_basis` | number \| null | no | avg_cost * quantity. |
+| `cost_basis` | number \| null | no | avg_cost * quantity * multiplier. |
 | `currency` | string \| null | no | The instrument's trading currency; null when unknown. |
 | `market_value` | number \| null | yes |  |
 | `market_value_base` | number \| null | no | market_value in the portfolio's base currency, at the FX rate of the price date; null when unpriced or no FX rate is stored. |
+| `multiplier` | number | no | Units per contract: 1 for a stock, 100 for a standard option. price and avg_cost are per unit; market_value, cost_basis and unrealized_pnl count it. |
 | `price` | number \| null | yes |  |
 | `price_date` | date \| null | yes |  |
 | `quantity` | number | yes |  |
 | `ticker` | string | yes |  |
-| `unrealized_pnl` | number \| null | no | (price - avg_cost) * quantity at the latest stored close. |
+| `unrealized_pnl` | number \| null | no | (price - avg_cost) * quantity * multiplier at the latest stored close (an option's latest quote mark). |
 | `unrealized_pnl_pct` | number \| null | no | unrealized_pnl / \|cost_basis\| (0.05 = +5%). |
 | `weight` | number \| null | yes |  |
 
