@@ -592,7 +592,11 @@ export class NotificationPrefs {
     const found = this.view()?.preferences.find(
       (p) => p.category === category && p.channel === channel && !p.strategy_id,
     );
-    return found ? found.enabled : true;
+    if (found) return found.enabled;
+    // Unset: the channel's own default, as the server delivers it (email
+    // and webhooks are off until turned on).
+    const fallback = this.view()?.channel_defaults?.find((d) => d.channel === channel);
+    return fallback ? fallback.default_enabled : true;
   }
 
   protected async setPref(category: Category, channel: string, event: Event): Promise<void> {
