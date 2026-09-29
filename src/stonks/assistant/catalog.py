@@ -185,7 +185,9 @@ NEVER: frozenset[str] = frozenset(
 #: without asking (still counted by the rate limit). ``draft_order`` places
 #: nothing: the person approves it in the web app. Left out on purpose:
 #: ``update_draft`` and ``cancel_job`` (an admin reaches other people's
-#: drafts and jobs) and ``update_price_alert`` (it can switch alerts off).
+#: drafts and jobs), ``update_price_alert`` (it can switch alerts off) and
+#: ``mark_notifications_read`` (an instruction hidden in tool data could mark
+#: every alert read, halt and risk alerts included).
 RESEARCH_WRITES: frozenset[str] = frozenset(
     {
         "create_draft",
@@ -198,7 +200,6 @@ RESEARCH_WRITES: frozenset[str] = frozenset(
         "run_signal_ic",
         "start_research",
         "create_price_alert",
-        "mark_notifications_read",
         "draft_order",
     }
 )
