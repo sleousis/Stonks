@@ -3,8 +3,10 @@
 
 ``preview`` shows each row as new, duplicate or skipped and writes
 nothing. ``commit`` imports the new rows, ``list`` shows your imports and
-``undo`` removes exactly the rows one import added. Commands act as the
-owner unless ``--user`` names someone."""
+``undo`` removes exactly the rows one import added, and ``presets`` lists
+the broker exports read without a mapping (``--preset degiro_transactions``,
+or found from the headers). Commands act as the owner unless ``--user``
+names someone."""
 
 from __future__ import annotations
 
@@ -27,6 +29,15 @@ _MAPPING = typer.Option(
     help='column mapping as JSON, e.g. {"date": "Date", "type": "Action", ...};'
     " blank guesses it from the headers",
 )
+_PRESET = typer.Option(
+    None,
+    "--preset",
+    help="a broker export preset (see `stonks imports presets`), or auto;"
+    " blank finds one from the headers, else guesses a mapping",
+)
+_AS_OF = typer.Option(
+    None, "--as-of", help="the day a holdings export (DEGIRO Portfolio) describes; default today"
+)
 _PORTFOLIO = typer.Option(None, "--portfolio", help="a portfolio made by an earlier import")
 _NEW = typer.Option(None, "--new", help="import into a new portfolio with this name")
 _CURRENCY = typer.Option("USD", "--currency", help="currency of a new portfolio")
@@ -45,7 +56,13 @@ def _service() -> tuple[Any, Any]:
 
 
 def _request(
-    file: Path, mapping: str | None, portfolio: str | None, new: str | None, currency: str
+    file: Path,
+    mapping: str | None,
+    portfolio: str | None,
+    new: str | None,
+    currency: str,
+    preset: str | None = None,
+    as_of: str | None = None,
 ) -> Any:
     from stonks.app.statement_imports import StatementImportRequest
 
@@ -59,6 +76,8 @@ def _request(
         "portfolio_id": portfolio,
         "new_portfolio": new,
         "currency": currency,
+        "preset": preset,
+        "as_of": as_of,
     }
     if mapping is not None:
         try:
@@ -75,13 +94,17 @@ def preview(
     portfolio: str | None = _PORTFOLIO,
     new: str | None = _NEW,
     currency: str = _CURRENCY,
+    preset: str | None = _PRESET,
+    as_of: str | None = _AS_OF,
     user: str | None = _USER,
 ) -> None:
     """Show what an import would do. Writes nothing."""
-    request = _request(file, mapping, portfolio, new, currency)
+    request = _request(file, mapping, portfolio, new, currency, preset, as_of)
     context, service = _service()
     out = call(lambda: service.preview(cli_principal(context, user), request))
-    if out.guessed:
+    if out.preset_label:
+        Console().print(f"read as {out.preset_label} ({out.locale})")
+    elif out.guessed and out.mapping is not None:
         Console().print(f"guessed mapping: {out.mapping.model_dump_json(exclude_defaults=True)}")
     table = Table(title=f"{out.new} new, {out.duplicate} duplicate, {out.skipped} skipped")
     for col in ("line", "status", "kind", "day", "symbol", "quantity", "amount", "reason"):
@@ -100,6 +123,8 @@ def preview(
     Console().print(table)
     if out.unmapped:
         Console().print(f"not covered (kept by symbol): {', '.join(out.unmapped)}")
+    for note in out.notes:
+        Console().print(note)
 
 
 @app.command("commit")
@@ -109,16 +134,31 @@ def commit(
     portfolio: str | None = _PORTFOLIO,
     new: str | None = _NEW,
     currency: str = _CURRENCY,
+    preset: str | None = _PRESET,
+    as_of: str | None = _AS_OF,
     user: str | None = _USER,
 ) -> None:
     """Import the new rows of a CSV statement."""
-    request = _request(file, mapping, portfolio, new, currency)
+    request = _request(file, mapping, portfolio, new, currency, preset, as_of)
     context, service = _service()
     out = call(lambda: service.commit(cli_principal(context, user), request))
     Console().print(
         f"imported {out.id} into {out.portfolio_name or out.portfolio_id}: {out.rows_added} added,"
         f" {out.rows_duplicate} duplicate, {out.rows_skipped} skipped"
     )
+
+
+@app.command("presets")
+def list_presets(user: str | None = _USER) -> None:
+    """The broker exports read without a column mapping, and where to find them."""
+    context, service = _service()
+    rows = call(lambda: service.presets(cli_principal(context, user)))
+    table = Table(title="broker export presets")
+    for col in ("preset", "broker", "export", "kind", "how to export"):
+        table.add_column(col, overflow="fold")
+    for p in rows:
+        table.add_row(p.id, p.broker, p.label, p.kind, p.how_to_export)
+    Console().print(table)
 
 
 @app.command("list")
