@@ -27,6 +27,7 @@ import { StatusPill } from '../../shared/ui/status-pill';
 import {
   brokerLabel,
   isLiveBroker,
+  realMoneyBooksLine,
   tickConfirmOptions,
   tickRequest,
   tickTicket,
@@ -83,6 +84,7 @@ import { latestRealRunDay } from './tick-mode';
             } @else if (broker.hasValue()) {
               @if (live()) {
                 Real-money run on the <strong>{{ brokerText() }}</strong> broker.
+                {{ booksLine() }}
               } @else {
                 Paper run on the <strong>{{ brokerText() }}</strong> broker. No real money moves.
               }
@@ -306,6 +308,9 @@ export class TickRunner {
   protected readonly allowed = computed(() => this.session.can('operations.run'));
 
   protected readonly broker = resource({ loader: () => this.system.broker() });
+  protected readonly booksLine = computed(() =>
+    this.broker.hasValue() ? realMoneyBooksLine(this.broker.value()) : '',
+  );
   protected readonly brokerText = computed(() =>
     this.broker.hasValue() ? brokerLabel(this.broker.value()) : '',
   );

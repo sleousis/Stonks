@@ -51,6 +51,10 @@ class BrokerInfo(BaseModel):
     allow_live: bool
     #: Whether both Alpaca keys are set; the keys themselves are never exposed.
     credentials_configured: bool
+    #: Portfolios at a real-money stage (live_small, live_scale) with an
+    #: approve or automatic follow: a trading run sends them real orders
+    #: through their own broker even when this one is paper.
+    real_money_books: int = 0
 
 
 class BrokerAccountView(BaseModel):
@@ -110,7 +114,18 @@ class BrokerService:
             paper=b.alpaca.paper,
             allow_live=b.alpaca.allow_live,
             credentials_configured=bool(b.alpaca.api_key and b.alpaca.secret_key),
+            real_money_books=self._real_money_books(),
         )
+
+    def _real_money_books(self) -> int:
+        from stonks.production.live.stages import real_money_books
+
+        try:
+            with self._ctx.state() as state:
+                return real_money_books(state)
+        except Exception as exc:  # the info page must load; the count is a guard
+            _log.warning("brokers.real_money_books_failed", error=str(exc))
+            return 0
 
     def alpaca_status(self, principal: Principal) -> AlpacaStatus:
         """Connect and read the account and market clock (read-only calls).

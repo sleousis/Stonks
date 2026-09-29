@@ -1136,6 +1136,7 @@ A backtest against its benchmark (``backtest.benchmark.BenchmarkStats``). Ratios
 | `credentials_configured` | boolean | yes |  |
 | `kind` | "simulated" \| "alpaca" \| "ibkr" | yes |  |
 | `paper` | boolean | yes |  |
+| `real_money_books` | integer | no |  |
 
 ### CalendarBucketView
 
@@ -2247,6 +2248,7 @@ Limits a paper-trading period must meet before ``stonks golive check`` passes (`
 | `costs` | [CostComparisonView](#costcomparisonview) \| null | no |  |
 | `passed` | boolean | yes |  |
 | `policy` | [GoLivePolicy](#golivepolicy) | yes |  |
+| `real_money_books` | integer | no |  |
 | `source` | "shadow" \| "portfolio" \| "none" | yes |  |
 | `status` | string | yes |  |
 | `strategy_id` | string | yes |  |

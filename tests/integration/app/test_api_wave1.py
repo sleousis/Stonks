@@ -322,6 +322,7 @@ def test_broker_info_defaults_to_simulated_without_keys(client):
         "paper": True,
         "allow_live": False,
         "credentials_configured": False,
+        "real_money_books": 0,
     }
     # the alpaca status route only applies when alpaca is the configured broker
     assert client.get("/api/brokers/alpaca/status", headers=AUTH).status_code == 409

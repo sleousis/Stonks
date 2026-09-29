@@ -1423,6 +1423,10 @@ export type BrokerInfo = {
      * Paper
      */
     paper: boolean;
+    /**
+     * Real Money Books
+     */
+    real_money_books?: number;
 };
 
 /**
@@ -4433,6 +4437,10 @@ export type GoLiveReport = {
      */
     passed: boolean;
     policy: GoLivePolicy;
+    /**
+     * Real Money Books
+     */
+    real_money_books?: number;
     /**
      * Source
      */

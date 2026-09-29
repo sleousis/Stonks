@@ -78,6 +78,25 @@ def trades_real_money(stage: LiveStage) -> bool:
     return stage in REAL_MONEY
 
 
+def real_money_books(state: SqliteState, strategy_id: str | None = None) -> int:
+    """How many active portfolios at ``live_small`` or ``live_scale`` have
+    an enabled approve or automatic follow (of ``strategy_id`` when given):
+    the books whose orders are real money, whatever the system broker is.
+    A paused follow counts too, so a ticket never understates real money."""
+    if not stages_enabled(state):
+        return 0
+    marks = ", ".join("?" * len(REAL_MONEY))
+    where = "" if strategy_id is None else " AND s.strategy_id = ?"
+    rows = state.sql(
+        "SELECT COUNT(DISTINCT p.id) AS n FROM portfolios p"
+        " JOIN subscriptions s ON s.portfolio_id = p.id"
+        f" WHERE p.status = 'active' AND p.live_stage IN ({marks})"
+        f" AND s.enabled = 1 AND s.mode IN ('approve', 'auto'){where}",
+        [*sorted(REAL_MONEY), *([] if strategy_id is None else [strategy_id])],
+    )
+    return int(rows[0]["n"]) if rows else 0
+
+
 def get_stage(state: SqliteState, portfolio_id: str) -> LiveStage:
     """The portfolio's stage (``sim_paper`` for an unknown portfolio or a
     state DB before migration 037)."""
