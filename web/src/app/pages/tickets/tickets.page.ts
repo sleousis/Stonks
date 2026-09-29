@@ -181,17 +181,17 @@ interface Group {
                               <dt>Price</dt>
                               <dd>
                                 {{
-                                  t.limit_price ? 'Limit ' + money(t.limit_price) : 'At the open'
+                                  t.limit_price ? 'Limit ' + money(t.limit_price, t) : 'At the open'
                                 }}
                               </dd>
                             </div>
                             <div>
                               <dt>Decided at</dt>
-                              <dd>{{ money(t.reference_price) }}</dd>
+                              <dd>{{ money(t.reference_price, t) }}</dd>
                             </div>
                             <div>
                               <dt>About</dt>
-                              <dd>{{ money(t.notional) }}</dd>
+                              <dd>{{ money(t.notional, t) }}</dd>
                             </div>
                             @if (t.strategy_id) {
                               <div>
@@ -208,7 +208,7 @@ interface Group {
                             @if (commission(t); as fee) {
                               <div>
                                 <dt>Commission</dt>
-                                <dd>{{ money(fee) }}</dd>
+                                <dd>{{ money(fee, t) }}</dd>
                               </div>
                             }
                           </dl>
@@ -529,7 +529,12 @@ export class TicketsPage {
     { key: 'ticker', label: 'Order', mobile: 'title', sortable: false },
     { key: 'portfolio_name', label: 'Portfolio' },
     { key: 'quantity', label: 'Quantity', format: 'number' },
-    { key: 'notional', label: 'About', format: 'money' },
+    {
+      key: 'notional',
+      label: 'About',
+      format: 'money',
+      currency: (t) => this.currencyOf(t.portfolio_id),
+    },
     { key: 'status', label: 'Status', value: (t) => ticketStatusLook(t.status).label },
     { key: 'decided_by', label: 'Decided by', value: (t) => deciderWords(t.decided_by) },
     { key: 'as_of', label: 'Decided', format: 'date' },
@@ -539,7 +544,13 @@ export class TicketsPage {
   protected readonly hold = (t: TicketView) => holdWords(t.hold);
   protected readonly rules = ruleLines;
   protected readonly strategyName = (id: string) => strategyDisplayName(id);
-  protected readonly money = (v: number | null | undefined) => formatMoney(v);
+  /** Money in the ticket's portfolio currency (USD while the list is unknown). */
+  protected readonly money = (v: number | null | undefined, t?: { portfolio_id: string }) =>
+    formatMoney(v, { currency: t ? this.currencyOf(t.portfolio_id) : undefined });
+
+  private currencyOf(portfolioId: string): string | undefined {
+    return this.portfolios.options().find((p) => p.id === portfolioId)?.base_currency;
+  }
   protected readonly qty = (v: number) => formatNumber(v);
   protected readonly date = formatDate;
   protected readonly dateTime = formatDateTime;
@@ -601,7 +612,10 @@ export class TicketsPage {
         lines: [
           { label: 'Portfolio', value: group.portfolioName },
           { label: 'Orders', value: String(group.tickets.length) },
-          { label: 'About', value: formatMoney(group.notional) },
+          {
+            label: 'About',
+            value: this.money(group.notional, { portfolio_id: group.portfolioId }),
+          },
           { label: 'Send by', value: formatDateTime(group.expiresAt) },
         ],
       },

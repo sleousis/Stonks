@@ -5,6 +5,7 @@ import { provideRouter } from '@angular/router';
 import type { OrderDraftView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import type { TicketView } from '../../api/tickets.service';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
@@ -12,6 +13,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { TicketCountService } from '../../core/tickets/ticket-count.service';
 import { TRADER } from '../../../testing/auth-fixtures';
 import { provideFakeTax } from '../../../testing/fake-tax';
+import { book } from '../../../testing/portfolio-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { TicketsPage } from './tickets.page';
 
@@ -142,6 +144,19 @@ describe('TicketsPage', () => {
     await tick();
     fixture.detectChanges();
     expect(count.waiting()).toBe(1);
+  });
+
+  it("shows a ticket's money in its portfolio's currency", async () => {
+    const ctx = TestBed.inject(PortfolioContextService);
+    const loading = ctx.load();
+    (await nextRequest(controller, '/api/portfolios')).flush(
+      page([book({ id: 'pf_live', name: 'Growth', trading: 'live', base_currency: 'EUR' })]),
+    );
+    await loading;
+    const el = await render([ticket()]);
+    const card = el.querySelector('article.ticket')!;
+    expect(card.textContent).toContain('€');
+    expect(card.textContent).not.toContain('$');
   });
 
   it('says so when nothing waits', async () => {
