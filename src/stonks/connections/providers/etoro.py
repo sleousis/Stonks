@@ -49,9 +49,9 @@ from stonks.connections.registry import register_provider
 from stonks.connections.settings import ConnectionsConfig
 from stonks.execution.brokers.etoro.account import (
     SETTLEMENT_REAL,
+    Env,
     EtoroAccount,
     EtoroPosition,
-    Env,
     parse_time,
 )
 from stonks.execution.brokers.etoro.broker import EtoroBroker
@@ -211,7 +211,9 @@ class EtoroConnection(BrokerConnection):
             )
             if act is not None:
                 out.setdefault(act.provider_activity_id, act)
-        return sorted(out.values(), key=lambda a: (a.trade_date or date.min, a.provider_activity_id))
+        return sorted(
+            out.values(), key=lambda a: (a.trade_date or date.min, a.provider_activity_id)
+        )
 
     # ---- trading ---------------------------------------------------------------------
 
@@ -376,4 +378,3 @@ def _int(value: Any, *, default: int = -1) -> int:
 
 
 __all__ = ["EtoroConnection", "env_of"]
-

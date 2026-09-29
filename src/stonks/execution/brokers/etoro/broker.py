@@ -34,7 +34,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from stonks.connections.base import (
     ProviderAuthError,
@@ -54,7 +54,8 @@ from stonks.execution.brokers.base import (
     OrderState,
     UnsupportedTickerError,
 )
-from stonks.execution.brokers.etoro.account import EtoroAccount, EtoroPosition, Env
+from stonks.execution.brokers.etoro._json import integer, num, obj, rows
+from stonks.execution.brokers.etoro.account import Env, EtoroAccount, EtoroPosition
 from stonks.execution.brokers.etoro.client import OutcomeUnknown
 from stonks.execution.brokers.etoro.instruments import EtoroInstrument, InstrumentCatalog
 from stonks.logging import get_logger
@@ -227,7 +228,7 @@ class EtoroBroker:
             info = self._lookup({"referenceId": request_id(client_id)})
             if info is None:
                 return False
-            sent = _Sent("open", "", "buy", 0.0, [int(info.get("orderId") or 0)])
+            sent = _Sent("open", "", "buy", 0.0, [integer(info.get("orderId"), default=0)])
         requested = False
         for order_id in sent.order_ids:
             path = (
@@ -341,7 +342,7 @@ class EtoroBroker:
         # a repeat after a lost answer: eToro may have it already
         known = self._lookup({"referenceId": rid})
         if known is not None:
-            self._remember(order, "open", [int(known.get("orderId") or 0)])
+            self._remember(order, "open", [integer(known.get("orderId"), default=0)])
             return
         try:
             answer = self._client.post("open order", self._paths.open, body, request_id=rid)
@@ -349,7 +350,7 @@ class EtoroBroker:
             raise OrderOutcomeUnknownError(order.client_id, str(exc)) from None
         except ProviderError as exc:
             raise _order_error("open order", exc) from None
-        order_id = int(answer.get("orderId") or 0) if isinstance(answer, dict) else 0
+        order_id = integer(obj(answer).get("orderId"), default=0)
         self._remember(order, "open", [order_id] if order_id else [])
         _log.info("etoro.order.open", client_id=order.client_id, env=self.env,
                   instrument_id=inst.id, order_id=order_id)  # fmt: skip
@@ -375,10 +376,10 @@ class EtoroBroker:
             "rates", lambda: self._client.get("rates", self._paths.rates,
                                               {"instrumentIds": str(instrument_id)})
         )  # fmt: skip
-        for row in data.get("results") or [] if isinstance(data, dict) else []:
-            if int(row.get("instrumentId") or -1) == instrument_id:
-                ask = float(row.get("ask") or 0.0)
-                if ask > 0 and math.isfinite(ask):
+        for row in rows(obj(data).get("results")):
+            if integer(row.get("instrumentId")) == instrument_id:
+                ask = num(row.get("ask"))
+                if ask is not None and ask > 0:
                     return ask
         raise OrderRejectedError("eToro sent no price to size the order by amount")
 
@@ -401,8 +402,13 @@ class EtoroBroker:
                 " in plain positions, and Stonks never sells short at eToro"
             )
         plan = _close_plan(held, order.quantity)
-        if any(units is not None for _, units in plan) and not self._rules(inst).allow_partial_close:
-            raise OrderRejectedError(f"eToro does not allow closing part of a {order.ticker} position")
+        if (
+            any(units is not None for _, units in plan)
+            and not self._rules(inst).allow_partial_close
+        ):
+            raise OrderRejectedError(
+                f"eToro does not allow closing part of a {order.ticker} position"
+            )
         sent = self._remember(order, "close", [])
         for i, (position, units) in enumerate(plan):
             body = {"InstrumentId": inst.id, "UnitsToDeduct": units}
@@ -424,8 +430,8 @@ class EtoroBroker:
                              error=str(exc))  # fmt: skip
                 sent.refused_units += units if units is not None else position.units
                 continue
-            close = answer.get("orderForClose") if isinstance(answer, dict) else None
-            order_id = int(close.get("orderID") or 0) if isinstance(close, dict) else 0
+            close = obj(obj(answer).get("orderForClose"))
+            order_id = integer(close.get("orderID"), default=0)
             if order_id:
                 sent.order_ids.append(order_id)
         _log.info("etoro.order.close", client_id=order.client_id, env=self.env,
@@ -436,27 +442,26 @@ class EtoroBroker:
     def _open_state(
         self, client_id: str, info: dict[str, Any], sent: _Sent | None
     ) -> BrokerOrderState:
-        status = info.get("status") if isinstance(info.get("status"), dict) else {}
-        state = STATUS_STATES.get(int(status.get("id") or 0), "submitted")
+        status = obj(info.get("status"))
+        status_id = integer(status.get("id"), default=0)
+        state = STATUS_STATES.get(status_id, "submitted")
         units = 0.0
         notional = 0.0
-        for execution in info.get("positionExecutions") or []:
-            opening = execution.get("openingData") if isinstance(execution, dict) else None
-            if not isinstance(opening, dict):
-                continue
-            u = float(opening.get("units") or 0.0)
+        for execution in rows(info.get("positionExecutions")):
+            opening = obj(execution.get("openingData"))
+            u = num(opening.get("units")) or 0.0
             units += u
-            notional += u * float(opening.get("avgPrice") or 0.0)
-        asset = info.get("asset") if isinstance(info.get("asset"), dict) else {}
+            notional += u * (num(opening.get("avgPrice")) or 0.0)
+        asset = obj(info.get("asset"))
         ticker = sent.ticker if sent else self._ticker_of(asset.get("instrumentId"))
-        requested = sent.quantity if sent else float(info.get("requestedUnits") or units)
-        if state == "cancelled" and units <= QTY_EPSILON and int(status.get("id") or 0) == 10:
+        requested = sent.quantity if sent else (num(info.get("requestedUnits")) or units)
+        if state == "cancelled" and units <= QTY_EPSILON and status_id == 10:
             state = "rejected"
         if state == "filled" and units < requested - QTY_EPSILON and units > QTY_EPSILON:
             requested = units  # an amount order: the units are what the amount bought
         return BrokerOrderState(
             client_id=client_id,
-            broker_order_id=str(info.get("orderId") or ""),
+            broker_order_id=str(integer(info.get("orderId"), default=0) or ""),
             ticker=ticker,
             side="buy",
             status=_COARSE[state],  # type: ignore[arg-type]
@@ -474,20 +479,21 @@ class EtoroBroker:
         rejected = 0
         for order_id in sent.order_ids:
             try:
-                info = self._client.get("close order", f"{self._paths.close_info}/{order_id}")
+                info = obj(self._client.get("close order", f"{self._paths.close_info}/{order_id}"))
             except ProviderError as exc:
                 if exc.status == 404:
                     working = True  # not listed yet
                     continue
                 raise _broker_error("close order", exc) from None
-            done = [p for p in info.get("positions") or [] if isinstance(p, dict)]
-            filled = sum(float(p.get("units") or 0.0) for p in done)
+            done = rows(info.get("positions"))
+            filled = sum(num(p.get("units")) or 0.0 for p in done)
             units += filled
-            notional += sum(float(p.get("units") or 0.0) * float(p.get("rate") or 0.0)
-                            for p in done)  # fmt: skip
-            if int(info.get("errorCode") or 0) != 0:
+            notional += sum(
+                (num(p.get("units")) or 0.0) * (num(p.get("rate")) or 0.0) for p in done
+            )
+            if integer(info.get("errorCode"), default=0) != 0:
                 rejected += 1
-            elif filled <= QTY_EPSILON and int(info.get("statusID") or 0) not in (7, 8):
+            elif filled <= QTY_EPSILON and integer(info.get("statusID"), default=0) not in (7, 8):
                 working = True
         state: OrderState
         if working:
@@ -520,7 +526,8 @@ class EtoroBroker:
             if exc.status == 404:
                 return None
             raise _broker_error("order lookup", exc) from None
-        return info if isinstance(info, dict) else None
+        found = obj(info)
+        return found or None
 
     # ---- plumbing ------------------------------------------------------------------------
 
@@ -547,10 +554,9 @@ class EtoroBroker:
             return {}
         return self._read("instruments", lambda: self._catalog.by_ids(self._client, ids))
 
-    def _ticker_of(self, instrument_id: Any) -> str:
-        try:
-            iid = int(instrument_id)
-        except (TypeError, ValueError):
+    def _ticker_of(self, instrument_id: object) -> str:
+        iid = integer(instrument_id)
+        if iid < 0:
             return "etoro:unknown"
         inst = self._instruments([iid]).get(iid)
         return (inst.ticker if inst else None) or f"etoro:{iid}"
@@ -567,14 +573,11 @@ class EtoroBroker:
                 {"instrumentIds": [inst.id], "currency": "USD"},
             ),
         )  # fmt: skip
-        rows = data.get("eligibilities") if isinstance(data, dict) else None
-        row = next(
-            (r for r in rows or [] if isinstance(r, dict) and int(r.get("instrumentId") or -1) == inst.id),
-            None,
-        )  # fmt: skip
+        found = rows(obj(data).get("eligibilities"))
+        row = next((r for r in found if integer(r.get("instrumentId")) == inst.id), None)
         if row is None:
             raise OrderRejectedError(f"eToro sent no trading rules for {inst.symbol}")
-        configs = [c for c in row.get("leverageConfigs") or [] if isinstance(c, dict)]
+        configs = rows(row.get("leverageConfigs"))
         rules = _Eligibility(
             instrument_id=inst.id,
             allow_open=bool(row.get("allowOpenPosition", False)),
@@ -582,13 +585,13 @@ class EtoroBroker:
             real_long=any(
                 c.get("settlementType") == "real"
                 and c.get("direction") == "long"
-                and 1 in (c.get("leverageValues") or [])
+                and 1 in _leverages(c.get("leverageValues"))
                 for c in configs
             ),
             whole_units=row.get("unitsQuantityType") == "whole",
             amount_only=row.get("allowedOrderQuantityType") == "amountOnly",
-            min_exposure=_float(row.get("minPositionExposure")),
-            max_units=_float(row.get("maxUnitsPerOrder")),
+            min_exposure=num(row.get("minPositionExposure")),
+            max_units=num(row.get("maxUnitsPerOrder")),
         )
         with self._lock:
             self._eligibility[inst.id] = rules
@@ -658,7 +661,9 @@ class EtoroBroker:
             raise _broker_error(op, exc) from None
 
 
-def _close_plan(held: list[EtoroPosition], quantity: float) -> list[tuple[EtoroPosition, float | None]]:
+def _close_plan(
+    held: list[EtoroPosition], quantity: float
+) -> list[tuple[EtoroPosition, float | None]]:
     """The positions a sell closes, oldest first: ``None`` units close a
     position in full."""
     plan: list[tuple[EtoroPosition, float | None]] = []
@@ -696,12 +701,10 @@ def _whole(units: float) -> bool:
     return abs(units - round(units)) <= QTY_EPSILON
 
 
-def _float(value: Any) -> float | None:
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return None
-    return out if math.isfinite(out) else None
+def _leverages(value: object) -> list[int]:
+    if not isinstance(value, list):
+        return []
+    return [integer(v) for v in cast(list[object], value)]
 
 
 def _time(value: Any) -> datetime | None:

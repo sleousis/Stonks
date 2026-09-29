@@ -123,7 +123,11 @@ def test_activities_are_opens_and_closes_for_tax_lots():
     buy = acts[f"open:{still_open}"]
     assert (buy.ticker, buy.quantity, buy.price, buy.amount) == ("AAPL.US", 3.0, 150.0, -450.0)
     opened = acts["open:555"]
-    assert (opened.ticker, opened.quantity, opened.trade_date) == ("MSFT.US", 2.0, date(2026, 1, 10))
+    assert (opened.ticker, opened.quantity, opened.trade_date) == (
+        "MSFT.US",
+        2.0,
+        date(2026, 1, 10),
+    )
     (close_id,) = [k for k in acts if k.startswith("close:555:")]
     close = acts[close_id]
     assert (close.quantity, close.price, close.amount, close.fee) == (-2.0, 330.0, 660.0, 1.5)

@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Literal
 
+from stonks.execution.brokers.etoro._json import integer, num, obj, rows, strings
 from stonks.execution.brokers.etoro.client import EtoroClient
 
 Env = Literal["demo", "real"]
@@ -28,7 +29,7 @@ class EtoroPaths:
     """The endpoint paths of one environment."""
 
     def __init__(self, env: Env) -> None:
-        self.env = env
+        self.env: Env = env
         demo = env == "demo"
         self.pnl = f"/api/v1/trading/info/{env}/pnl"
         self.history = "/api/v1/trading/info/trade/" + ("demo/history" if demo else "history")
@@ -127,18 +128,16 @@ class EtoroAccount:
         if env not in ENVS:
             raise ValueError(f"unknown eToro environment {env!r}")
         self.client = client
-        self.env = env
+        self.env: Env = env
         self.paths = EtoroPaths(env)
 
     def account_id(self) -> tuple[str, tuple[str, ...]]:
         """The account's id (``demo-<cid>`` or ``real-<cid>``) and the key's
         scopes when eToro lists them. Nothing else of the profile is kept:
         it holds personal data Stonks does not need."""
-        me = self.client.get("identity", self.paths.me)
-        if not isinstance(me, dict):
-            me = {}
-        cid = me.get("demoCid" if self.env == "demo" else "realCid")
-        scopes = tuple(str(s) for s in me.get("scopes") or () if isinstance(s, str))
+        me = obj(self.client.get("identity", self.paths.me))
+        cid: object = me.get("demoCid" if self.env == "demo" else "realCid")
+        scopes = tuple(strings(me.get("scopes")))
         if cid in (None, "", 0):
             cid = me.get("gcid") or "account"
         return f"{self.env}-{cid}", scopes
@@ -151,31 +150,33 @@ class EtoroAccount:
         """Closed trades since ``since``, oldest page first."""
         out: list[dict[str, Any]] = []
         for page in range(1, _MAX_HISTORY_PAGES + 1):
-            rows = self.client.get(
+            answer: object = self.client.get(
                 "trade history",
                 self.paths.history,
                 {"minDate": since.isoformat(), "page": page, "pageSize": _HISTORY_PAGE},
             )
-            if isinstance(rows, dict):  # some answers wrap the list
-                rows = rows.get("items") or rows.get("results") or []
-            batch = [r for r in rows or [] if isinstance(r, dict)]
+            wrapped = obj(answer)
+            if wrapped:  # some answers wrap the list
+                answer = wrapped.get("items") or wrapped.get("results") or []
+            batch = rows(answer)
             out.extend(batch)
             if len(batch) < _HISTORY_PAGE:
                 break
         return out
 
 
-def parse_portfolio(data: Any) -> EtoroSnapshot:
-    root = data.get("clientPortfolio", data) if isinstance(data, dict) else {}
-    if not isinstance(root, dict):
-        root = {}
+def parse_portfolio(data: object) -> EtoroSnapshot:
+    top = obj(data)
+    root = obj(top.get("clientPortfolio", top))
     positions = tuple(p for p in (_position(r) for r in _rows(root, "positions")) if p)
     mirrors = _rows(root, "mirrors")
     mirror_positions = tuple(
         p for m in mirrors for p in (_position(r) for r in _rows(m, "positions")) if p
     )
     open_own = [
-        r for r in _rows(root, "ordersForOpen") if _int(r.get("mirrorId", r.get("mirrorID")), default=0) == 0
+        r
+        for r in _rows(root, "ordersForOpen")
+        if _int(r.get("mirrorId", r.get("mirrorID")), default=0) == 0
     ]
     queued = _rows(root, "orders")
     credit = _num(root.get("credit", root.get("credits"))) or 0.0
@@ -187,7 +188,8 @@ def parse_portfolio(data: Any) -> EtoroSnapshot:
         sum(p.amount for p in positions)
         + sum(p.amount for p in mirror_positions)
         + sum(
-            (_num(m.get("availableAmount")) or 0.0) - (_num(m.get("closedPositionsNetProfit")) or 0.0)
+            (_num(m.get("availableAmount")) or 0.0)
+            - (_num(m.get("closedPositionsNetProfit")) or 0.0)
             for m in mirrors
         )
         + reserved
@@ -234,7 +236,7 @@ def _position(row: dict[str, Any]) -> EtoroPosition | None:
     units = _num(row.get("units"))
     if pid < 0 or iid < 0 or units is None:
         return None
-    pnl = row.get("unrealizedPnL") if isinstance(row.get("unrealizedPnL"), dict) else {}
+    pnl = obj(row.get("unrealizedPnL"))
     return EtoroPosition(
         position_id=pid,
         instrument_id=iid,
@@ -255,9 +257,8 @@ def _position(row: dict[str, Any]) -> EtoroPosition | None:
     )
 
 
-def _rows(parent: Any, key: str) -> list[dict[str, Any]]:
-    value = parent.get(key) if isinstance(parent, dict) else None
-    return [r for r in value or [] if isinstance(r, dict)]
+def _rows(parent: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    return rows(parent.get(key))
 
 
 def parse_time(value: Any) -> datetime | None:
@@ -269,29 +270,17 @@ def parse_time(value: Any) -> datetime | None:
         return None
 
 
-def _num(value: Any) -> float | None:
-    if value in (None, ""):
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _int(value: Any, *, default: int = -1) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
+_num = num
+_int = integer
 
 
 __all__ = [
     "ENVS",
+    "Env",
     "EtoroAccount",
     "EtoroPaths",
     "EtoroPosition",
     "EtoroSnapshot",
-    "Env",
     "PendingClose",
     "PendingOpen",
     "parse_portfolio",

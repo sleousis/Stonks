@@ -158,17 +158,20 @@ class FakeEtoro:
         if queued:
             status, headers, body = queued.popleft()
             return httpx2.Response(status, headers=headers, json=body or {"errorCode": status})
-        if request.headers.get("x-api-key") != self.api_key or request.headers.get(
-            "x-user-key"
-        ) != self.user_key:
+        if (
+            request.headers.get("x-api-key") != self.api_key
+            or request.headers.get("x-user-key") != self.user_key
+        ):
             return _error(401, "Unauthorized", "invalid credentials")
         try:
             uuid.UUID(request.headers.get("x-request-id", ""))
         except ValueError:
             return _error(422, "RequestIdRequired", "x-request-id must be a UUID")
         other = "real" if self.env == "demo" else "demo"
-        if f"/{other}/" in path or path.endswith(f"/{other}") or (
-            self.env == "demo" and _real_only(path)
+        if (
+            f"/{other}/" in path
+            or path.endswith(f"/{other}")
+            or (self.env == "demo" and _real_only(path))
         ):
             return _error(403, "Forbidden", "this key is for another environment")
         query = {k: v[-1] for k, v in parse_qs(request.url.query.decode()).items()}
@@ -204,7 +207,10 @@ class FakeEtoro:
                 {"instrumentId": i, "bid": self.instruments[i].bid, "ask": self.instruments[i].ask,
                  "date": NOW, "quoteType": "realtime"} for i in ids if i in self.instruments
             ]})  # fmt: skip
-        if method == "POST" and path == f"/api/v2/trading/info/{'demo/' if env == 'demo' else ''}eligibility":
+        if (
+            method == "POST"
+            and path == f"/api/v2/trading/info/{'demo/' if env == 'demo' else ''}eligibility"
+        ):
             return self._eligibility(body)
         hist = "/api/v1/trading/info/trade/" + ("demo/history" if env == "demo" else "history")
         if method == "GET" and path == hist:

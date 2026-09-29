@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from stonks.execution.brokers.base import UnsupportedTickerError
+from stonks.execution.brokers.etoro._json import integer, obj, rows
 from stonks.execution.brokers.etoro.client import EtoroClient
 from stonks.execution.brokers.symbols import to_canonical_ticker
 
@@ -156,22 +157,20 @@ class InstrumentCatalog:
             if exc.status == 404:  # no instrument matched
                 return []
             raise
-        rows = data.get("results") if isinstance(data, dict) else None
-        return [r for r in rows or [] if isinstance(r, dict)]
+        return rows(obj(data).get("results"))
 
     def _to_instruments(
-        self, client: EtoroClient, rows: list[dict[str, Any]]
+        self, client: EtoroClient, found: list[dict[str, Any]]
     ) -> list[EtoroInstrument]:
-        exchanges = self._exchange_names(client) if rows else {}
+        exchanges = self._exchange_names(client) if found else {}
         out: list[EtoroInstrument] = []
-        for row in rows:
-            try:
-                iid = int(row["instrumentId"])
-            except (KeyError, TypeError, ValueError):
+        for row in found:
+            iid = integer(row.get("instrumentId"))
+            if iid < 0:
                 continue
             symbol = str(row.get("symbol") or iid)
             kind = row.get("type")
-            exchange = exchanges.get(_int(row.get("exchangeId")))
+            exchange = exchanges.get(integer(row.get("exchangeId")))
             out.append(
                 EtoroInstrument(
                     id=iid,
@@ -189,11 +188,9 @@ class InstrumentCatalog:
             if self._exchanges is not None:
                 return self._exchanges
         data = client.get("exchanges", "/api/v1/market-data/exchanges")
-        rows = data.get("exchangeInfo") if isinstance(data, dict) else None
         names = {
-            _int(r.get("exchangeID")): str(r.get("exchangeDescription") or "")
-            for r in rows or []
-            if isinstance(r, dict)
+            integer(r.get("exchangeID")): str(r.get("exchangeDescription") or "")
+            for r in rows(obj(data).get("exchangeInfo"))
         }
         with self._lock:
             self._exchanges = names
@@ -214,13 +211,6 @@ def _symbol_candidates(ticker: str) -> list[str]:
     variants = [base, base.replace("-", "."), base.replace("-", "")]
     out = [f"{v}{end}" for end in endings for v in variants]
     return list(dict.fromkeys(out))
-
-
-def _int(value: Any) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return -1
 
 
 _CATALOGS: dict[tuple[str, tuple[tuple[str, int], ...]], InstrumentCatalog] = {}

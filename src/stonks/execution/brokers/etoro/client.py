@@ -38,6 +38,7 @@ from stonks.connections.base import (
     RateLimited,
 )
 from stonks.connections.ratelimit import RateLimiter
+from stonks.execution.brokers.etoro._json import obj
 from stonks.execution.brokers.etoro.settings import EtoroConfig
 from stonks.ingest.redact import redact_secrets
 from stonks.logging import get_logger
@@ -214,10 +215,8 @@ def _retry_after(response: httpx2.Response) -> float | None:
 def _detail(response: httpx2.Response) -> str:
     """eToro's short error text, when the body carries one."""
     try:
-        data = response.json()
+        data = obj(response.json())
     except ValueError:
-        return ""
-    if not isinstance(data, dict):
         return ""
     for key in ("errorMessage", "message", "error", "title"):
         value = data.get(key)

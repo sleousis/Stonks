@@ -71,8 +71,11 @@ def _parser() -> argparse.ArgumentParser:
     c.add_argument("--label")
     c.add_argument("--redirect", help="callback URL for hosted-portal providers")
     c.add_argument("--no-link", action="store_true", help="don't create broker portfolios")
-    c.add_argument("--real", action="store_true",
-                   help="the keys are for a real-money account (default: paper or demo)")
+    c.add_argument(
+        "--real",
+        action="store_true",
+        help="the keys are for a real-money account (default: paper or demo)",
+    )
     cb = sub.add_parser("callback")
     cb.add_argument("connection")
     cb.add_argument("--state", required=True)
