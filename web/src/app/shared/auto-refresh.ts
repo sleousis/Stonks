@@ -19,6 +19,8 @@ export interface Reloadable {
   reload(): unknown;
   isLoading(): boolean;
   hasValue(): boolean;
+  /** The last load's error; `resource()` refs have it. */
+  error?(): unknown;
 }
 
 export interface AutoRefreshOptions {
@@ -110,12 +112,22 @@ export function autoRefresh(
     });
   }
 
-  const updatedAt = linkedSignal<{ busy: boolean; loaded: boolean }, number | null>({
+  // A failed read keeps the last time: "Updated just now" over an error
+  // would make a failure look like a fresh read.
+  const updatedAt = linkedSignal<
+    { busy: boolean; loaded: boolean; failed: boolean },
+    number | null
+  >({
     source: () => {
       const list = resources();
-      return { busy: list.some((r) => r.isLoading()), loaded: list.some((r) => r.hasValue()) };
+      return {
+        busy: list.some((r) => r.isLoading()),
+        loaded: list.some((r) => r.hasValue()),
+        failed: list.some((r) => r.error?.() != null),
+      };
     },
-    computation: ({ busy, loaded }, prev) => (!busy && loaded ? Date.now() : (prev?.value ?? null)),
+    computation: ({ busy, loaded, failed }, prev) =>
+      !busy && loaded && !failed ? Date.now() : (prev?.value ?? null),
   });
 
   inject(RefreshStatus, { optional: true })?.attach(updatedAt, destroyRef);
