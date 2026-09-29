@@ -55,11 +55,14 @@ from stonks.connections.base import (
     mask_number,
 )
 from stonks.connections.registry import register_provider
+from stonks.connections.route_policy import refused_route
 from stonks.connections.settings import SNAPTRADE_CONSUMER_KEY_ENV, SnapTradeConfig
 from stonks.execution.brokers.symbols import to_canonical_ticker
 from stonks.ingest.redact import redact_secrets
+from stonks.logging import get_logger
 
 _MAX_DETAIL = 160
+_log = get_logger("stonks.connections.snaptrade")
 
 #: SnapTrade security type codes -> our normalized asset types.
 _TYPE_CODES: dict[str, str] = {
@@ -351,6 +354,11 @@ class SnapTradeConnection(BrokerConnection, PortalFlow):
         out: list[ExternalAccount] = []
         for raw in data:
             if not isinstance(raw, dict) or not raw.get("id"):
+                continue
+            refused = refused_route(self.provider, raw.get("institution_name"))
+            if refused is not None:
+                # never stored, linked or synced: see stonks.connections.route_policy
+                _log.warning("snaptrade.account_refused", broker=refused.broker)
                 continue
             self._accounts[str(raw["id"])] = raw
             total = (raw.get("balance") or {}).get("total") or {}
