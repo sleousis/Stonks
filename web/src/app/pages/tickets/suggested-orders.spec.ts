@@ -191,6 +191,33 @@ describe('SuggestedOrders', () => {
     await settle();
   });
 
+  it('says not placed when the approved order comes back rejected', async () => {
+    setup();
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    const el = await render([draft()]);
+    button(el, 'Approve').click();
+    (await nextRequest(http, '/api/orders/drafts/od_1/approve', 'POST')).flush({
+      draft: draft({ status: 'placed' }),
+      order: {
+        client_id: 'manual:pf_1:x',
+        portfolio_id: 'pf_1',
+        ticker: 'AAA.US',
+        side: 'buy',
+        quantity: 5,
+        requested_quantity: 5,
+        order_type: 'market',
+        limit_price: null,
+        reference_price: 25,
+        status: 'rejected',
+        reason: 'not enough cash',
+        live: false,
+      },
+    });
+    await settle();
+    expect(success).not.toHaveBeenCalled();
+    expect(el.querySelector('.failure')?.textContent).toContain('not enough cash');
+  });
+
   it('does nothing without the code', async () => {
     setup();
     const el = await render([draft()]);

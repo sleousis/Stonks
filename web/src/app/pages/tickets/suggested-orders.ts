@@ -314,6 +314,11 @@ export class SuggestedOrders {
     this.setProblem(d.id, null);
     try {
       const { order } = await this.api.approve(d.id);
+      if (order.status === 'rejected') {
+        // Approved, but the order did not trade (cash, a broker rejection).
+        this.setProblem(d.id, `Not placed: ${order.reason ?? 'the order was rejected'}.`);
+        return;
+      }
       this.toasts.success(
         order.status === 'filled'
           ? `Placed and filled: ${order.side} ${formatNumber(order.quantity)} ${order.ticker}.`
