@@ -467,6 +467,7 @@ class TaxService:
                 " WHERE portfolio_id = ? AND kind = 'split' ORDER BY ex_date, ticker",
                 [portfolio_id],
             )
+            imported = _imported(state, portfolio_id, "trade")
         splits = [
             TaxSplit(
                 ticker=r["ticker"],
@@ -513,6 +514,7 @@ class TaxService:
             )
             for r in raw
         ]
+        fills.extend(_imported_fills(imported))
         picks: dict[int, list[tuple[int, float]]] = {}
         for r in pick_rows:
             picks.setdefault(int(r["sell_fill_id"]), []).append(
@@ -543,6 +545,7 @@ class TaxService:
                 " AND ex_date >= ? AND ex_date <= ? ORDER BY ex_date, ticker",
                 [portfolio_id, f"{year}-01-01", f"{year}-12-31"],
             )
+            imported = _imported_dividends(state, portfolio_id)
         currencies = self._currencies(sorted({r["ticker"] for r in rows}))
         events = [
             DividendEvent(
@@ -556,6 +559,7 @@ class TaxService:
             for r in rows
             if abs(float(r["quantity_before"])) > _EPS
         ]
+        events.extend(imported)
         fx = self._fx({e.currency for e in events if e.currency}, view.base_currency)
         return to_csv(DIVIDEND_COLUMNS, dividend_rows(events, year, view.base_currency, fx))
 
@@ -597,6 +601,89 @@ class _LotInputs:
     fills: list[TaxFill]
     picks: dict[int, list[tuple[int, float]]]
     splits: list[TaxSplit]
+
+
+#: Imported trades count as fills with ids above any ledger fill id, in
+#: import order, so they never meet a real fill's id or its lot picks.
+_IMPORTED_ID_BASE = 1_000_000_000_000
+
+
+def _imported(state: SqliteState, portfolio_id: str, kind: str) -> list[Any]:
+    """Activities a CSV statement import added to this portfolio. Only
+    imports: a broker sync's trades may also be Stonks' own fills."""
+    return state.sql(
+        "SELECT a.id, a.ticker, a.raw_symbol, a.quantity, a.price, a.amount, a.fee,"
+        " a.currency, a.trade_date, a.description FROM broker_activities a"
+        " JOIN broker_connections c ON c.id = a.connection_id"
+        " WHERE a.portfolio_id = ? AND c.provider = 'csv' AND a.kind = ?"
+        " AND a.trade_date IS NOT NULL ORDER BY a.trade_date, a.id",
+        [portfolio_id, kind],
+    )
+
+
+def _imported_fills(rows: list[Any]) -> list[TaxFill]:
+    """Imported trades as lot fills. Price and fee are in the activity's
+    currency (a DEGIRO trade's account currency), the instrument is its
+    ticker, or its ISIN when no ticker maps."""
+    out: list[TaxFill] = []
+    for r in rows:
+        qty = float(r["quantity"] or 0.0)
+        symbol = r["ticker"] or r["raw_symbol"]
+        if abs(qty) <= _EPS or r["price"] is None or not symbol:
+            continue
+        day = date.fromisoformat(str(r["trade_date"])[:10])
+        out.append(
+            TaxFill(
+                id=_IMPORTED_ID_BASE + int(r["id"]),
+                ticker=str(symbol),
+                side="buy" if qty > 0 else "sell",
+                quantity=abs(qty),
+                price=float(r["price"]),
+                fee=abs(float(r["fee"] or 0.0)),
+                filled_at=datetime(day.year, day.month, day.day, tzinfo=UTC),
+                currency=r["currency"],
+            )
+        )
+    return out
+
+
+def _imported_dividends(state: SqliteState, portfolio_id: str) -> list[DividendEvent]:
+    """Imported dividends per instrument, day and currency: the gross is
+    what was paid, the withholding the dividend tax lines (negative
+    amounts) of the same day. The shares held come from the imported
+    trades; unknown, the event counts one unit at the whole gross."""
+    held: dict[str, list[tuple[date, float]]] = {}
+    for t in _imported(state, portfolio_id, "trade"):
+        symbol = t["ticker"] or t["raw_symbol"]
+        if symbol:
+            held.setdefault(str(symbol), []).append(
+                (date.fromisoformat(str(t["trade_date"])[:10]), float(t["quantity"] or 0.0))
+            )
+    grouped: dict[tuple[str, date, str | None], list[float]] = {}
+    for r in _imported(state, portfolio_id, "dividend"):
+        symbol = r["ticker"] or r["raw_symbol"]
+        if not symbol or r["amount"] is None:
+            continue
+        key = (str(symbol), date.fromisoformat(str(r["trade_date"])[:10]), r["currency"])
+        grouped.setdefault(key, []).append(float(r["amount"]))
+    events: list[DividendEvent] = []
+    for (symbol, day, currency), amounts in sorted(grouped.items(), key=lambda kv: kv[0][:2]):
+        gross = sum(a for a in amounts if a > 0)
+        if gross <= _EPS:
+            continue
+        shares = sum(q for d, q in held.get(symbol, []) if d <= day)
+        quantity = shares if shares > _EPS else 1.0
+        events.append(
+            DividendEvent(
+                ticker=symbol,
+                ex_date=day,
+                per_share=gross / quantity,
+                quantity=quantity,
+                net=sum(amounts),
+                currency=currency,
+            )
+        )
+    return events
 
 
 def _check_year(year: int) -> None:
