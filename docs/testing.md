@@ -85,6 +85,7 @@ Every journey runs twice, on a desktop (1280 by 800) and on a phone (375 by 812)
 | Kill switch | Engaging it turns the strip red and the next tick places no orders. Resume needs RESUME TRADING and a fresh code |
 | Backup | Back up now finishes and shows in the backup list |
 | Tenant isolation | The trader gets 404 for the admin's book and sees only their own value and orders |
+| No broker | On its own stack with no broker, no connection and a Telegram bot whose sends land in a file: a Studio draft is tested, put on trial, approved with the override and followed in Alerts only, Telegram is linked and kept for signals only, and after a trading run the signal is in the feed and in Telegram while no order or fill exists ([without-a-broker.md](without-a-broker.md)) |
 
 Each journey also checks:
 

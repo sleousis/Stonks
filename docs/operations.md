@@ -2,6 +2,8 @@
 
 How to run Stonks every day and know when something breaks. Server setup, updates, off-server backups and host monitoring are in [deploy.md](deploy.md). Incident steps are in the [runbooks](#runbooks).
 
+Stonks needs no broker. To get a strategy's signals on Telegram with no broker at all, follow [without-a-broker.md](without-a-broker.md).
+
 ## The daily loop
 
 ```mermaid
@@ -357,7 +359,7 @@ Orders the risk rules clip or drop are not alerts; they are listed under `risk_a
 
 ## Push and per-user notifications
 
-Per-user notifications go through an outbox: the router writes one in-app `alerts` row and one delivery per channel (Web Push, the user's webhook, email), with dedupe, preferences and quiet hours in the user's time zone. The delivery worker sends them with retries and dead letters. The tick's `notification_enqueue` hook queues each notify subscription's signals of the day (entries, exits, increases and decreases). `notify test` sends a test notification to one user.
+Per-user notifications go through an outbox: the router writes one in-app `alerts` row and one delivery per channel (Web Push, the user's webhook, email), with dedupe, preferences and quiet hours in the user's time zone. The delivery worker sends them with retries and dead letters. The tick's `notification_enqueue` hook queues each notify subscription's signals of the day (entries, exits, increases and decreases). A signal links to its strategy's page. `notify test` sends a test notification to one user.
 
 ```bash
 uv run python -m stonks.notify vapid-keygen             # prints STONKS_VAPID_PUBLIC_KEY / _PRIVATE_KEY
@@ -442,6 +444,8 @@ uv run stonks telegram poll [--once]    # run the bot in the foreground instead 
 Commands in a linked private chat: `/status` (halts, last tick, portfolio value), `/today` (orders, fills and P&L change today), `/positions [portfolio_id]`, `/signals` (latest signals of the strategies you follow), `/kill` (stops new orders on all your portfolios after you type `KILL ALL`), `/unlink` and `/help`. Resuming after the kill switch is only possible in the web app. Group chats are refused.
 
 Run only one poller per bot token. Do not run `stonks telegram poll` while `stonks serve` has the bot enabled.
+
+Telegram needs no broker. [without-a-broker.md](without-a-broker.md) walks through linking it and keeping signal alerts on Telegram only. Without the token Alert settings does not offer Telegram, and a linked chat counts as alerts on in the Welcome guide.
 
 ## AI assistant
 
@@ -941,7 +945,7 @@ Each tick scores every active strategy once for everyone, and shadow strategies 
 - `signals`: one row per strategy and ticker, with the score, its rank and its weight in the model book.
 - `signal_events`: what changed (`entry`, `exit`, `increase`, `decrease`) with a plain reason. A strategy can give its own reason through an `explain(ticker, as_of, lake)` method.
 
-A strategy with a model book signals what its book did. One without signals new and dropped tickers. With `[production] model_books = "all"` every active strategy gets a model book. A same-day rerun writes nothing twice.
+A strategy with a model book signals what its book did. A book that fills at the next open counts the orders it placed that day, so a signal goes out the evening the strategy decides, not a run later when the order fills. One without a model book signals new and dropped tickers. With `[production] model_books = "all"` every active strategy gets a model book. A same-day rerun writes nothing twice.
 
 Strategies that set `parallel_scoring = True` are scored in worker processes over a read-only copy of the lake. `[production] scoring_workers` sets the processes (0 means every core) and `parallel_min_estimates` (default 2000) is the smallest job worth a pool. Other strategies are scored in the tick's own process.
 

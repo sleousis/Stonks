@@ -31,6 +31,7 @@ Tests: `uv run pytest -n auto` (no network needed).
 - [Wiki](https://github.com/sleousis/Stonks/wiki): guides for traders and operators, and the glossary.
 - [API docs](https://sleousis.github.io/Stonks/): REST and MCP reference, generated from the code.
 - [Architecture](docs/architecture.md) and [operations](docs/operations.md).
+- [Without a broker](docs/without-a-broker.md): build and test a strategy, turn it on and get its signals on Telegram, with no broker at all.
 - [Deploy guide](docs/deploy.md): one server with Docker Compose.
 - [Capacity and cost](docs/capacity.md): measured sizes, VM sizes and limits.
 - [Strategies](docs/strategies/README.md) and [principles](docs/principles.md).
