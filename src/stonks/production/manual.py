@@ -772,7 +772,8 @@ def change_manual_order(
     now: datetime | None = None,
 ) -> ManualResult:
     """Cancel the working manual order ``client_id`` and place its
-    replacement with the new quantity or limit (every check again)."""
+    replacement with the new quantity or limit (every check again). The
+    replacement is checked first, so a refusal keeps the original."""
     row = _order_row(state, book.portfolio_id, client_id)
     if row["origin"] != MANUAL_ORIGIN:
         raise ManualOrderRefused("only a manual order can change; cancel a strategy's order")
@@ -786,6 +787,24 @@ def change_manual_order(
     new_qty = float(quantity if quantity is not None else row["quantity"]) - filled
     if new_qty <= _QTY_EPS:
         raise ManualOrderRefused(f"{filled:g} already filled; the new quantity must be larger")
+
+    def replacement(qty: float) -> ManualOrder:
+        return ManualOrder(
+            portfolio_id=book.portfolio_id,
+            ticker=row["ticker"],
+            side=row["side"],
+            quantity=qty,
+            reason=reason,
+            actor=actor,
+            order_type=row["order_type"],
+            limit_price=limit_price if limit_price is not None else row["limit_price"],
+            allow_reduce=allow_reduce,
+            replaces=client_id,
+        )
+
+    # Every check runs on the replacement before anything is cancelled: a
+    # refused replacement leaves the original working (raises here).
+    place_manual_order(state, lake, replacement(new_qty), book, tick, preview=True, now=now)
     cancelled = cancel_order(
         state, book.portfolio_id, client_id, broker=book.broker, actor=actor, reason=reason
     )
@@ -804,25 +823,7 @@ def change_manual_order(
     new_qty = float(quantity if quantity is not None else row["quantity"]) - filled
     if new_qty <= _QTY_EPS:
         raise ManualOrderRefused(f"{filled:g} filled before the cancel; nothing replaced it")
-    return place_manual_order(
-        state,
-        lake,
-        ManualOrder(
-            portfolio_id=book.portfolio_id,
-            ticker=row["ticker"],
-            side=row["side"],
-            quantity=new_qty,
-            reason=reason,
-            actor=actor,
-            order_type=row["order_type"],
-            limit_price=limit_price if limit_price is not None else row["limit_price"],
-            allow_reduce=allow_reduce,
-            replaces=client_id,
-        ),
-        book,
-        tick,
-        now=now,
-    )
+    return place_manual_order(state, lake, replacement(new_qty), book, tick, now=now)
 
 
 # ---- helpers -----------------------------------------------------------------------
