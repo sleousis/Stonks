@@ -1,6 +1,8 @@
 """``stonks serve`` for the e2e stack, with every data source swapped for the
 canned one (:mod:`tests.e2e.fake_market`), so no request can reach a vendor,
-and the assistant's model swapped for :mod:`tests.e2e.fake_assistant`.
+the assistant's model swapped for :mod:`tests.e2e.fake_assistant`, and,
+when ``STONKS_E2E_TELEGRAM_LOG`` is set, Telegram swapped for a file
+(:mod:`tests.e2e.fake_telegram`).
 
 Started by :func:`tests.e2e.stack.start_server` with the stack root as the
 working directory (``config/default.toml`` is read from there) and
@@ -40,9 +42,28 @@ def _install_fake_assistant() -> None:
     assistant.default_model = lambda _config: KeywordChatModel()
 
 
+def _install_fake_telegram() -> None:
+    """With ``STONKS_E2E_TELEGRAM_LOG`` set, every Telegram send lands in
+    that file (:mod:`tests.e2e.fake_telegram`), never at Telegram."""
+    from tests.e2e.fake_telegram import LOG_ENV, FileTelegramApi
+
+    path = os.environ.get(LOG_ENV)
+    if not path:
+        return
+    import stonks.telegram.bot as bot
+    import stonks.telegram.channel as channel
+
+    def fake(*_args: object, **_kwargs: object) -> FileTelegramApi:
+        return FileTelegramApi(path)
+
+    channel.HttpTelegramApi = fake  # type: ignore[assignment,misc]
+    bot.HttpTelegramApi = fake  # type: ignore[assignment,misc]
+
+
 def main(argv: list[str] | None = None) -> None:
     _install_canned_source()
     _install_fake_assistant()
+    _install_fake_telegram()
     from stonks.cli import app
 
     app(["serve", *(argv if argv is not None else sys.argv[1:])])
