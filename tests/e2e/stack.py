@@ -162,7 +162,7 @@ def free_port() -> int:
         return int(s.getsockname()[1])
 
 
-def _config_text(data_dir: Path, dist: Path) -> str:
+def _config_text(data_dir: Path, dist: Path, scheduler: str = "") -> str:
     def p(path: Path) -> str:
         return path.as_posix()
 
@@ -205,7 +205,7 @@ max_concurrent_jobs = 2
 
 [scheduler]
 catch_up = "none"
-
+{scheduler}
 # On, but served by tests.e2e.fake_assistant: nothing listens at this address.
 [assistant]
 base_url = "http://assistant.invalid/v1"
@@ -307,16 +307,30 @@ def _seed_strategies(state: SqliteState, artifacts: Path) -> None:
         registry.register(BuyAndHold({"ticker": "CCC.US", "allocation": 0.5}), [report], sid)
 
 
-def build_stack(root: Path, *, dist: Path = DEFAULT_DIST, market_end: date | None = None) -> Stack:
+def build_stack(
+    root: Path,
+    *,
+    dist: Path = DEFAULT_DIST,
+    market_end: date | None = None,
+    seed_strategies: bool = True,
+    env: dict[str, str | None] | None = None,
+    scheduler: str = "",
+) -> Stack:
+    """The seeded install. ``seed_strategies=False`` leaves the catalog
+    empty (no approved strategy, so the default book follows nothing);
+    ``env`` adds to the server's environment or, with ``None``, drops a
+    name; ``scheduler`` is extra ``[scheduler]`` lines."""
     root = Path(root).resolve()
     data_dir = root / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
     (root / "config").mkdir(exist_ok=True)
     config_path = root / "config" / "default.toml"
-    config_path.write_text(_config_text(data_dir, Path(dist).resolve()), encoding="utf-8")
+    config_path.write_text(
+        _config_text(data_dir, Path(dist).resolve(), scheduler), encoding="utf-8"
+    )
 
     market_end = market_end or last_business_day(datetime.now(UTC).date())
-    env = {
+    server_env: dict[str, str] = {
         "STONKS_SECRET_KEYS": f"e2e:{generate_key()}",
         "STONKS_AUTH_COOKIE_SECURE": "false",
         "STONKS_CONNECTIONS_ENABLED_PROVIDERS": "fake",
@@ -326,7 +340,12 @@ def build_stack(root: Path, *, dist: Path = DEFAULT_DIST, market_end: date | Non
         # journey sees the step-up prompt without waiting ten minutes.
         "STONKS_AUTH_STEP_UP_MINUTES": "0.25",
     }
-    box = SecretBox.from_env(env)
+    for name, value in (env or {}).items():
+        if value is None:
+            server_env.pop(name, None)
+        else:
+            server_env[name] = value
+    box = SecretBox.from_env(server_env)
 
     _seed_market(data_dir, market_end)
     with SqliteState(data_dir / "state.sqlite") as state:
@@ -334,7 +353,8 @@ def build_stack(root: Path, *, dist: Path = DEFAULT_DIST, market_end: date | Non
         admin, trader, trader_pf = _seed_people(state, box)
         _seed_snapshot(state, trader_pf, market_end - timedelta(days=25), TRADER_CASH)
         _seed_snapshot(state, DEFAULT_PORTFOLIO_ID, market_end - timedelta(days=25), ADMIN_CASH)
-        _seed_strategies(state, data_dir / "artifacts")
+        if seed_strategies:
+            _seed_strategies(state, data_dir / "artifacts")
 
     days = [market_end - timedelta(days=i) for i in range(20)]
     tick_days = sorted(d for d in days if d.weekday() < 5)[-8:]
@@ -342,7 +362,7 @@ def build_stack(root: Path, *, dist: Path = DEFAULT_DIST, market_end: date | Non
         root=root,
         data_dir=data_dir,
         config_path=config_path,
-        env=env,
+        env=server_env,
         admin=admin,
         trader=trader,
         market_end=market_end,

@@ -46,6 +46,7 @@ from stonks.scheduling.jobs import (
     job_is_scoped,
     job_universe,
     no_gateways,
+    price_source,
     retrain_body,
     universes_outcome,
 )
@@ -118,7 +119,7 @@ def in_process_ingest_prices(ctx: RunContext) -> JobOutcome:
     job = ex.services.ingest.submit(
         IngestRequest(
             kind="prices",
-            source=str(ctx.params.get("source", "eodhd")),
+            source=price_source(ctx),  # type: ignore[arg-type]
             tickers=universe,
             since=since,
             until=until,

@@ -48,6 +48,10 @@ class TelegramChannel(Channel):
         return "TelegramChannel()"
 
     @classmethod
+    def offered(cls) -> bool:
+        return bot_token() is not None
+
+    @classmethod
     def from_settings(cls, settings: NotifySettings) -> TelegramChannel | None:
         token = bot_token()
         if token is None:

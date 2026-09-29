@@ -10,7 +10,10 @@ said today, once for everyone:
 
 A strategy with a model book (``shadow_portfolio_snapshots`` for today)
 signals what its book did: bought (entry), sold out (exit), added
-(increase) or trimmed (decrease). A strategy without one signals changes in
+(increase) or trimmed (decrease). A book that fills at the next open
+(``paper_fills = "next_open"``, P21) counts the orders it placed that day
+as done, so its followers hear about a decision on the day it is made, and
+not a trading run later when the order fills. A strategy without one signals changes in
 its scored set against its last recorded day: a new ticker is an entry, a
 dropped one an exit.
 
@@ -144,13 +147,16 @@ def strategies_with_signals(state: SqliteState, as_of: date) -> set[str]:
 # ---- internals --------------------------------------------------------------------
 
 
-#: ``(positions today, positions before, total value today)`` of a model book.
-_Book = tuple[dict[str, float], dict[str, float], float]
+#: ``(positions today, positions before, total value today, tickers the book
+#: ordered today for the next open)`` of a model book. Positions include the
+#: orders placed for the next open on that day.
+_Book = tuple[dict[str, float], dict[str, float], float, frozenset[str]]
 
 
 def _model_book(state: SqliteState, strategy_id: str, day: str) -> _Book | None:
-    """The model book's positions today and on its previous day, or None
-    when it has no snapshot for today (no model book, or it failed)."""
+    """The model book's positions today and on its previous day, each with
+    the orders it placed that day for the next open, or None when it has
+    no snapshot for today (no model book, or it failed)."""
     rows = state.sql(
         "SELECT positions_json, total_value FROM shadow_portfolio_snapshots"
         " WHERE strategy_id = ? AND as_of = ? ORDER BY id DESC LIMIT 1",
@@ -159,12 +165,47 @@ def _model_book(state: SqliteState, strategy_id: str, day: str) -> _Book | None:
     if not rows:
         return None
     prev = state.sql(
-        "SELECT positions_json FROM shadow_portfolio_snapshots"
+        "SELECT as_of, positions_json FROM shadow_portfolio_snapshots"
         " WHERE strategy_id = ? AND as_of < ? ORDER BY as_of DESC, id DESC LIMIT 1",
         [strategy_id, day],
     )
-    before = json.loads(prev[0]["positions_json"]) if prev else {}
-    return json.loads(rows[0]["positions_json"]), before, float(rows[0]["total_value"])
+    before: dict[str, float] = {}
+    if prev:
+        before = _with_orders(
+            json.loads(prev[0]["positions_json"]),
+            _next_open_orders(state, strategy_id, prev[0]["as_of"]),
+        )
+    ordered = _next_open_orders(state, strategy_id, day)
+    today = _with_orders(json.loads(rows[0]["positions_json"]), ordered)
+    return today, before, float(rows[0]["total_value"]), frozenset(ordered)
+
+
+def _next_open_orders(state: SqliteState, strategy_id: str, day: str) -> dict[str, float]:
+    """Net signed quantity per ticker the book ordered on ``day`` for a
+    later open: still working, filled at a later open, or expired unfilled.
+    A book that fills at the close has none (its fills are in the day's
+    snapshot already)."""
+    columns = state.sql("SELECT name FROM pragma_table_info('shadow_decisions')")
+    if not any(c["name"] == "filled_on" for c in columns):
+        return {}  # before migration 047: every book filled at the close
+    rows = state.sql(
+        "SELECT ticker, side, quantity FROM shadow_decisions"
+        " WHERE strategy_id = ? AND as_of = ? AND (status IN ('working', 'expired')"
+        " OR (status = 'filled' AND filled_on > as_of))",
+        [strategy_id, day],
+    )
+    out: dict[str, float] = {}
+    for r in rows:
+        sign = 1.0 if r["side"] == "buy" else -1.0
+        out[r["ticker"]] = out.get(r["ticker"], 0.0) + sign * float(r["quantity"])
+    return out
+
+
+def _with_orders(positions: Mapping[str, float], orders: Mapping[str, float]) -> dict[str, float]:
+    out = {t: float(q) for t, q in positions.items()}
+    for ticker, qty in orders.items():
+        out[ticker] = out.get(ticker, 0.0) + qty
+    return out
 
 
 def _weight(qty: float, price: float | None, total: float) -> float | None:
@@ -192,8 +233,9 @@ def _record_one(
     after_w: dict[str, float | None] = {}
     before_w: dict[str, float | None] = {}
     changes: list[tuple[str, EventKind]] = []
+    ordered: frozenset[str] = frozenset()
     if book is not None:
-        today, before, total = book
+        today, before, total, ordered = book
         for t in sorted({*today, *before}):
             q1, q0 = float(today.get(t, 0.0)), float(before.get(t, 0.0))
             after_w[t] = _weight(q1, prices.get(t), total)
@@ -257,6 +299,7 @@ def _record_one(
             before=before_w.get(ticker),
             after=after_w.get(ticker),
             model_book=book is not None,
+            next_open=ticker in ordered,
         )
         if book is not None:
             strength = (after_w.get(ticker) or 0.0) - (before_w.get(ticker) or 0.0)
@@ -288,6 +331,15 @@ _VERBS: dict[str, tuple[str, str]] = {
     "risk": ("flagged", "flags"),
 }
 
+#: What a test book does at the next open, for an order still to fill.
+_NEXT_OPEN_VERBS: dict[str, str] = {
+    "entry": "buys",
+    "exit": "sells out of",
+    "increase": "adds to",
+    "decrease": "trims",
+    "risk": "flags",
+}
+
 
 def _reason(
     strategy: Any,
@@ -303,14 +355,20 @@ def _reason(
     before: float | None,
     after: float | None,
     model_book: bool,
+    next_open: bool = False,
 ) -> dict[str, Any]:
     book_verb, score_verb = _VERBS[kind]
     if model_book:
         # A test book's score is the strategy's own scale, not a return:
         # the text gives its weight and rank only.
-        text = f"The test book {book_verb} {ticker}"
-        if after is not None and kind != "exit":
-            text += f" (now {after:.1%} of the book)"
+        if next_open:
+            text = f"The test book {_NEXT_OPEN_VERBS[kind]} {ticker} at the next open"
+            if after is not None and kind != "exit":
+                text += f" ({after:.1%} of the book after it)"
+        else:
+            text = f"The test book {book_verb} {ticker}"
+            if after is not None and kind != "exit":
+                text += f" (now {after:.1%} of the book)"
         if rank is not None:
             text += f", rank {rank} of {of}"
     else:

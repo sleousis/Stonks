@@ -29,7 +29,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal, get_args
-from urllib.parse import urlencode
+from urllib.parse import quote
 
 from stonks.logging import get_logger
 from stonks.notify.channels import Channel
@@ -263,9 +263,6 @@ def _signal_event(router: NotificationRouter, notice: SignalNotice) -> Event:
         body += " (on trial)"
     if notice.reason:
         body += f". {notice.reason}"
-    query = urlencode(
-        {"strategy": notice.strategy_id, "ticker": notice.ticker, "as_of": notice.as_of}
-    )
     return Event(
         category="signal",
         title=f"{notice.ticker}: {notice.kind} signal",
@@ -273,7 +270,9 @@ def _signal_event(router: NotificationRouter, notice: SignalNotice) -> Event:
         audience=Audience.subscribers(notice.strategy_id),
         urgency=notice.urgency,
         dedupe_key=(f"signal:{notice.strategy_id}:{notice.ticker}:{notice.kind}:{notice.as_of}"),
-        deep_link=f"/signals?{query}",
+        # The strategy's page: its signals and test book (the console has
+        # no page of its own for one signal).
+        deep_link=f"/strategies/{quote(notice.strategy_id, safe='')}",
         strategy_id=notice.strategy_id,
     )
 

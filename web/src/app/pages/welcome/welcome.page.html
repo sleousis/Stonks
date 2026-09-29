@@ -288,6 +288,10 @@
                 }
                 @case ('alerts') {
                   <app-notification-settings />
+                  <p class="muted">
+                    Rather use Telegram? Link your chat in
+                    <a routerLink="/notifications/settings">Alert settings</a>.
+                  </p>
                   <button type="button" class="btn btn-ghost" (click)="guide.reload()">
                     I turned them on
                   </button>

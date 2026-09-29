@@ -75,3 +75,19 @@ def build_source(source_id: str, cfg: SourcesConfig) -> DataSource:
     if factory is None:
         raise SourceConfigError(f"unknown source {source_id!r}; choose one of {list(SOURCE_IDS)}")
     return factory(cfg)
+
+
+#: Needs no key: what a scheduled price update reads while the default has none.
+KEYLESS_SOURCE_ID = "yahoo"
+
+
+def scheduled_source_id(cfg: SourcesConfig) -> str:
+    """The source a scheduled price update reads when its job names none:
+    the default once it is set up (EODHD with its key), else Yahoo. So an
+    install with no key keeps its daily bars fresh instead of failing every
+    day. Building a source makes no network call."""
+    try:
+        build_source(DEFAULT_SOURCE_ID, cfg)
+    except SourceConfigError:
+        return KEYLESS_SOURCE_ID
+    return DEFAULT_SOURCE_ID

@@ -42,7 +42,7 @@ import { lastPreview } from './preview-memory';
   template: `
     <app-page-header
       title="Going live"
-      description="Every step from paper to real money for one portfolio, in order. Each says whether it is done and where to do it. Nothing changes here."
+      description="Every step from paper to real money for one portfolio, in order. Each says whether it is done and where to do it. Nothing changes here. Alerts only and Paper need none of these steps and no broker."
     >
       @if (stageLoaded()) {
         <app-mode-stamp [live]="realMoney()" />

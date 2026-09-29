@@ -41,6 +41,7 @@ from stonks.accounts.models import (
     MAX_WEIGHT,
     MIN_PAPER_DAYS_FOR_AUTO,
     AccountsError,
+    AlreadyFollowing,
     AutoGateRefused,
     Mode,
     NotFound,
@@ -123,6 +124,7 @@ class SubscriptionRepository:
             raise AccountsError(f"{mode.value} mode needs a portfolio")
         if not (math.isfinite(weight) and 0 <= weight <= MAX_WEIGHT):
             raise AccountsError(f"weight must be finite and in [0, {MAX_WEIGHT:g}], got {weight}")
+        self._refuse_second_follow(scope, strategy_id, portfolio_id)
         if weight == 0 and mode.needs_portfolio and portfolio_id is not None:
             others = self._state.sql(
                 "SELECT 1 FROM subscriptions WHERE portfolio_id = ? AND enabled = 1"
@@ -159,6 +161,34 @@ class SubscriptionRepository:
                 details={"strategy_id": strategy_id, "mode": mode.value},
             )
         return self.get(scope, sub_id)
+
+    def _refuse_second_follow(
+        self, scope: Scope, strategy_id: str, portfolio_id: str | None
+    ) -> None:
+        """One follow per portfolio and strategy, and one without a
+        portfolio per person and strategy (the table's unique indexes). A
+        promotion makes the default portfolio follow on its own, so a second
+        follow there names the one to change instead of failing."""
+        if portfolio_id is not None:
+            rows = self._state.sql(
+                "SELECT id, mode FROM subscriptions WHERE portfolio_id = ? AND strategy_id = ?",
+                [portfolio_id, strategy_id],
+            )
+            where = "this portfolio"
+        else:
+            rows = self._state.sql(
+                "SELECT id, mode FROM subscriptions WHERE user_id = ? AND strategy_id = ?"
+                " AND portfolio_id IS NULL",
+                [scope.user_id, strategy_id],
+            )
+            where = "you"
+        if rows:
+            sub_id, mode = rows[0]["id"], rows[0]["mode"]
+            raise AlreadyFollowing(
+                f"{where} already follows {strategy_id} ({mode}, {sub_id}):"
+                " change that follow's mode instead",
+                sub_id,
+            )
 
     def auto_blockers(self, scope: Scope, subscription_id: str) -> list[str]:
         """Every data-model check of the auto checklist that fails (empty =

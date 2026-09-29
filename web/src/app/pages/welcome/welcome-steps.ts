@@ -25,8 +25,8 @@ export const STEP_COPY: Record<OnboardingStepId, { title: string; lead: string; 
   },
   alerts: {
     title: 'Turn on alerts',
-    lead: 'Signals and fills reach this device, even when the console is closed.',
-    done: 'This account gets alerts on a device.',
+    lead: 'Signals and fills reach this device or your Telegram chat, even when the console is closed.',
+    done: 'This account gets alerts on a device or in Telegram.',
   },
 };
 

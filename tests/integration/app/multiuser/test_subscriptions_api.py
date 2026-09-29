@@ -220,6 +220,24 @@ def test_subscribe_refusals(client, settings, people):
     assert auto.json()["blockers"]
 
 
+def test_a_second_follow_on_the_same_portfolio_is_a_conflict_not_a_crash(client, settings):
+    """Approving a strategy makes the default portfolio follow it in Paper.
+    Following it again there (in Alerts only, say) names the follow to
+    change instead of failing with a server error."""
+    body = {"strategy_id": "bah_active", "portfolio_id": DEFAULT_PORTFOLIO_ID, "mode": "notify"}
+    again = client.post("/api/subscriptions", json=body, headers=AUTH)
+    assert again.status_code == 409, again.text
+    assert "already follows" in again.json()["detail"]
+    alerts = client.post(
+        "/api/subscriptions", json={"strategy_id": "bah_active", "mode": "notify"}, headers=AUTH
+    )
+    assert alerts.status_code == 201, alerts.text
+    twice = client.post(
+        "/api/subscriptions", json={"strategy_id": "bah_active", "mode": "notify"}, headers=AUTH
+    )
+    assert twice.status_code == 409, twice.text
+
+
 def test_disable_enable_and_notify(client, settings, people):
     alice = people["alice"]
     pf = _portfolio(settings, alice, "Book")

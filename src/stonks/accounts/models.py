@@ -79,6 +79,15 @@ class NotFound(LookupError):
     same, so ids never leak (HTTP 404, never 403)."""
 
 
+class AlreadyFollowing(AccountsError):
+    """The portfolio (or, for a follow with no portfolio, the person)
+    already follows the strategy; ``subscription_id`` is that follow."""
+
+    def __init__(self, message: str, subscription_id: str) -> None:
+        super().__init__(message)
+        self.subscription_id = subscription_id
+
+
 class AutoGateRefused(AccountsError):
     """A switch to auto failed the checklist; ``reasons`` lists each failure."""
 

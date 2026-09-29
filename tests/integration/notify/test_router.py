@@ -306,7 +306,9 @@ def test_notify_signal_is_minimal_and_idempotent_per_as_of(state, users, router)
     assert row["category"] == "signal" and row["strategy_id"] == "mom"
     assert row["dedupe_key"] == "signal:mom:AAPL.US:entry:2026-01-05"
     assert row["title"] == "AAPL.US: entry signal"
-    assert row["deep_link"].startswith("/signals?")
+    # The console has a page for it (there is no /signals page): the
+    # strategy, whose page shows its signals and test book.
+    assert row["deep_link"] == "/strategies/mom"
     next_day = notify_signal(router, **{**kw, "as_of": "2026-01-06"})
     assert len(next_day.notification_ids) == 1
 

@@ -84,6 +84,22 @@ describe('NotificationPrefs', () => {
     expect(el.textContent).toContain('Europe/London');
   });
 
+  it('shows a channel the server keeps off by default as off until it is turned on', async () => {
+    const el = await render({
+      ...VIEW,
+      channels: ['telegram', 'webhook', 'webpush'],
+      preferences: [],
+      channel_defaults: [
+        { channel: 'telegram', default_enabled: true, fallback: true },
+        { channel: 'webhook', default_enabled: false, fallback: true },
+        { channel: 'webpush', default_enabled: true, fallback: false },
+      ],
+    });
+    expect(box(el, 'Signals by Telegram').checked).toBe(true);
+    expect(box(el, 'Signals by Push').checked).toBe(true);
+    expect(box(el, 'Signals by Webhook').checked).toBe(false);
+  });
+
   it('saves one switch at a time', async () => {
     const el = await render();
     box(el, 'Signals by Push').click();

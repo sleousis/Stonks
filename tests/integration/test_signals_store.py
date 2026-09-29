@@ -207,3 +207,38 @@ def test_be16_notify_subscribers_get_the_exit_notice(env):
         )
     ]
     assert titles == ["UP.US: entry signal", "UP.US: exit signal"]
+
+
+# ---- next-open fills: a signal is sent on the day the book decides -----------------
+
+
+NEXT_OPEN = replace(SETTINGS, paper_fills="next_open")
+
+
+def test_a_next_open_book_signals_on_the_day_it_decides(env):
+    """With ``paper_fills = "next_open"`` (the shipped default) the test
+    book's order waits for the next open. Its follower must hear about it
+    on the day it decides, not a trading run later, and only once."""
+    lake, state, registry = env
+    carol = Scope.for_user(
+        UserRepository(state).create(display_name="C", role=Role.TRADER, actor="t")
+    )
+    SubscriptionRepository(state).subscribe(carol, strategy_id="bh_flat", mode=Mode.NOTIFY)
+    run_tick(state, lake, registry, NEXT_OPEN, as_of=DAY1, plan=load_tick_plan(state, NEXT_OPEN))
+
+    flat = _events(state, DAY1)[("bh_flat", "FLAT.US", "entry")]
+    assert flat.strength == pytest.approx(0.5, abs=0.02)
+    down = _events(state, DAY1)[("bh_down", "DOWN.US", "entry")]
+    assert down.text.startswith("The test book buys DOWN.US at the next open")
+    [row] = state.sql("SELECT title FROM notification_outbox WHERE category = 'signal'")
+    assert row["title"] == "FLAT.US: entry signal"
+
+    # The next run fills the order at the open: nothing new to say.
+    run_tick(state, lake, registry, NEXT_OPEN, as_of=DAY2, plan=load_tick_plan(state, NEXT_OPEN))
+    assert [k for (sid, _, k) in _events(state, DAY2) if sid == "bh_flat"] == []
+    assert state.count_rows("notification_outbox") == 1
+    [weight] = state.sql(
+        "SELECT model_weight FROM signals WHERE strategy_id = 'bh_flat' AND as_of = ?",
+        [DAY2.isoformat()],
+    )
+    assert weight["model_weight"] == pytest.approx(0.5, abs=0.02)
