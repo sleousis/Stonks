@@ -154,3 +154,19 @@ def test_the_assistant_drafts_only_inside_its_envelope(app, people, settings):
     # the assistant can never approve
     with pytest.raises(PermissionDenied):
         services.order_drafts.approve(principal, made.id)
+
+
+def test_a_rejected_order_leaves_the_draft_rejected_not_placed(app, client, people, settings):
+    """A draft whose order the broker (here the simulated book) rejects is
+    recorded as rejected, with the order's id and the reason."""
+    alice = people["alice"]
+    pid = _book(settings, alice["id"])
+    body = _body(pid, order_type="limit", limit_price=198.5, retry_key="low")
+    draft = client.post("/api/orders/drafts", json=body, headers=alice["headers"]).json()
+    allow_step_up(app)
+    ok = client.post(f"/api/orders/drafts/{draft['id']}/approve", headers=alice["headers"])
+    assert ok.status_code == 200, ok.text
+    out = ok.json()
+    assert out["order"]["status"] == "rejected"
+    assert out["draft"]["status"] == "rejected"
+    assert out["draft"]["client_id"] == out["order"]["client_id"]
