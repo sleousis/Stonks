@@ -743,13 +743,20 @@ export class ManualTicketPage implements OnInit {
   /** Check, confirm on the ticket (a fresh code first for real money), then place. */
   async place(): Promise<void> {
     if (!this.request()) return;
-    const live = this.live();
+    let live = this.live();
     if (live) {
       const ok = await this.stepUp.ensure(`Place a real-money order for ${this.tickerField()}.`);
       if (!ok) return;
     }
     const checked = await this.check();
     if (!checked) return;
+    // The server's check says whether the book trades real money; the picker
+    // may not know (its list failed, or no default is picked).
+    if (checked.live && !live) {
+      const fresh = await this.stepUp.ensure(`Place a real-money order for ${checked.ticker}.`);
+      if (!fresh) return;
+      live = true;
+    }
     const ok = await this.confirm.confirm({
       title: `${checked.side === 'buy' ? 'Buy' : 'Sell'} ${formatNumber(checked.quantity)} ${checked.ticker}?`,
       message: live

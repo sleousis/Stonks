@@ -300,6 +300,27 @@ describe('ManualTicketPage', () => {
     expect(el.querySelector<HTMLInputElement>('#mo-qty')!.value).toBe('');
   });
 
+  it('confirms as real money when the check says the book trades real money', async () => {
+    // The picker thinks paper (the list failed, say); the server knows better.
+    setup();
+    const el = await render();
+    fill(el);
+    button(el, 'Place order').click();
+    (await nextRequest(http, '/api/orders/manual/preview', 'POST')).flush(result({ live: true }));
+    const placed = await nextRequest(http, '/api/orders/manual', 'POST');
+    expect(ensure).toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tone: 'danger',
+        typedConfirmation: 'AAA.US',
+        ticket: expect.objectContaining({ live: true }),
+      }),
+    );
+    placed.flush(result({ status: 'pending', live: true }));
+    (await nextRequest(http, '/api/orders')).flush(EMPTY_PAGE);
+    await settle();
+  });
+
   it('does not place when the ticket is cancelled', async () => {
     setup();
     const el = await render();
