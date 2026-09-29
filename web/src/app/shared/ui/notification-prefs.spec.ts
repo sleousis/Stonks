@@ -84,7 +84,7 @@ describe('NotificationPrefs', () => {
     expect(el.textContent).toContain('Europe/London');
   });
 
-  it("shows a channel the server keeps off by default as off until it is turned on", async () => {
+  it('shows a channel the server keeps off by default as off until it is turned on', async () => {
     const el = await render({
       ...VIEW,
       channels: ['telegram', 'webhook', 'webpush'],
