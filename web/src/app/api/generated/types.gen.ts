@@ -14806,6 +14806,12 @@ export type StatementFlagView = {
  */
 export type StatementImportRequest = {
     /**
+     * As Of
+     *
+     * The day a holdings export describes; blank is today.
+     */
+    as_of?: string | null;
+    /**
      * Content
      *
      * The CSV text.
@@ -14831,12 +14837,22 @@ export type StatementImportRequest = {
      * Portfolio Id
      */
     portfolio_id?: string | null;
+    /**
+     * Preset
+     *
+     * A broker export preset id (GET /api/statement-imports/presets), or 'auto'. Blank with no mapping also detects a preset from the headers first.
+     */
+    preset?: string | null;
 };
 
 /**
  * StatementImportView
  */
 export type StatementImportView = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
     /**
      * Created At
      */
@@ -14854,6 +14870,10 @@ export type StatementImportView = {
      */
     id: string;
     /**
+     * Kind
+     */
+    kind?: 'activities' | 'holdings';
+    /**
      * Last Date
      */
     last_date: string | null;
@@ -14865,6 +14885,10 @@ export type StatementImportView = {
      * Portfolio Name
      */
     portfolio_name: string | null;
+    /**
+     * Preset
+     */
+    preset?: string | null;
     /**
      * Rows Added
      */
@@ -14888,9 +14912,41 @@ export type StatementImportView = {
 };
 
 /**
+ * StatementPresetView
+ *
+ * A broker export Stonks reads without a mapping.
+ */
+export type StatementPresetView = {
+    /**
+     * Broker
+     */
+    broker: string;
+    /**
+     * How To Export
+     */
+    how_to_export: string;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Kind
+     */
+    kind: 'activities' | 'holdings';
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
  * StatementPreview
  */
 export type StatementPreview = {
+    /**
+     * As Of
+     */
+    as_of?: string | null;
     /**
      * Duplicate
      */
@@ -14908,14 +14964,34 @@ export type StatementPreview = {
      */
     headers: Array<string>;
     /**
+     * Kind
+     */
+    kind?: 'activities' | 'holdings';
+    /**
      * Last Date
      */
     last_date: string | null;
-    mapping: ColumnMapping;
+    /**
+     * Locale
+     */
+    locale?: string | null;
+    mapping: ColumnMapping | null;
     /**
      * New
      */
     new: number;
+    /**
+     * Notes
+     */
+    notes?: Array<string>;
+    /**
+     * Preset
+     */
+    preset?: string | null;
+    /**
+     * Preset Label
+     */
+    preset_label?: string | null;
     /**
      * Rows
      */
@@ -30677,6 +30753,49 @@ export type CommitStatementImportResponses = {
 };
 
 export type CommitStatementImportResponse = CommitStatementImportResponses[keyof CommitStatementImportResponses];
+
+export type ListStatementPresetsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/statement-imports/presets';
+};
+
+export type ListStatementPresetsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetails;
+    /**
+     * Not Found
+     */
+    404: ProblemDetails;
+    /**
+     * Conflict
+     */
+    409: ProblemDetails;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetails;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetails;
+};
+
+export type ListStatementPresetsError = ListStatementPresetsErrors[keyof ListStatementPresetsErrors];
+
+export type ListStatementPresetsResponses = {
+    /**
+     * Response Liststatementpresets
+     *
+     * Successful Response
+     */
+    200: Array<StatementPresetView>;
+};
+
+export type ListStatementPresetsResponse = ListStatementPresetsResponses[keyof ListStatementPresetsResponses];
 
 export type PreviewStatementImportData = {
     body: StatementImportRequest;
