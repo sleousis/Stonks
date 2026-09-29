@@ -162,6 +162,18 @@ def _subscribe_no_auth(client):
 # ---- preferences, quiet hours, webhook -------------------------------------------------
 
 
+def test_telegram_is_offered_only_with_a_bot_token(client, monkeypatch):
+    """Without STONKS_TELEGRAM_BOT_TOKEN nothing can reach Telegram, so the
+    alert settings do not offer it (docs/without-a-broker.md)."""
+    monkeypatch.delenv("STONKS_TELEGRAM_BOT_TOKEN", raising=False)
+    body = client.get("/api/notifications/preferences", headers=AUTH).json()
+    assert "telegram" not in body["channels"]
+    assert "telegram" not in {d["channel"] for d in body["channel_defaults"]}
+    monkeypatch.setenv("STONKS_TELEGRAM_BOT_TOKEN", "1:test")
+    body = client.get("/api/notifications/preferences", headers=AUTH).json()
+    assert "telegram" in body["channels"]
+
+
 def test_preferences_round_trip(client):
     got = client.get("/api/notifications/preferences", headers=AUTH)
     assert got.status_code == 200

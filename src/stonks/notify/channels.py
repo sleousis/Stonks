@@ -74,6 +74,13 @@ class Channel(ABC):
         """The configured channel, or None when it can't run (no keys...)."""
         return cls()
 
+    @classmethod
+    def offered(cls) -> bool:
+        """Whether people are offered this channel in their alert settings.
+        A channel that needs a server-wide secret nobody set (the Telegram
+        bot token) says no, so no one picks a channel that cannot send."""
+        return True
+
     def targets(self, state: SqliteState, user_id: str) -> list[str]:
         """Target ids for one user; one delivery row is written per target.
         Single-target channels return ``[""]`` when the user can be reached."""
@@ -130,6 +137,12 @@ def _load_builtins() -> None:
 def channel_names() -> list[str]:
     _load_builtins()
     return sorted(_REGISTRY)
+
+
+def offered_channel_names() -> list[str]:
+    """The channels people may choose in their alert settings."""
+    _load_builtins()
+    return sorted(name for name, cls in _REGISTRY.items() if cls.offered())
 
 
 def channel_defaults() -> dict[str, tuple[bool, bool]]:

@@ -28,7 +28,7 @@ from stonks.accounts import AccountsError, AuditLog, NotFound, Scope
 from stonks.calendars.countries import COUNTRY_LABELS
 from stonks.calendars.importance import IMPORTANCE_LABELS, IMPORTANCE_LEVELS
 from stonks.notify.base import redact_url
-from stonks.notify.channels import channel_defaults, channel_names
+from stonks.notify.channels import channel_defaults, channel_names, offered_channel_names
 from stonks.notify.prefs import (
     EVENT_ALERT_TOPICS,
     EconomicAlertPrefs,
@@ -358,15 +358,18 @@ def get_preferences(state: SqliteState, scope: Scope) -> NotificationPreferences
     user_id = _person(state, scope)
     store = PreferenceStore(state)
     s = store.settings(user_id)
+    offered = offered_channel_names()
     return NotificationPreferences(
         preferences=tuple(store.list(user_id)),
         quiet_start=s.quiet_start,
         quiet_end=s.quiet_end,
         timezone=s.timezone,
         webhook=redact_url(s.webhook_url) if s.webhook_url else None,
-        channels=tuple(channel_names()),
+        channels=tuple(offered),
         channel_defaults=tuple(
-            (name, enabled, fallback) for name, (enabled, fallback) in channel_defaults().items()
+            (name, enabled, fallback)
+            for name, (enabled, fallback) in channel_defaults().items()
+            if name in offered
         ),
         event_alerts=tuple(
             EventAlertSwitch(topic, EVENT_ALERT_TOPICS[topic], enabled)
