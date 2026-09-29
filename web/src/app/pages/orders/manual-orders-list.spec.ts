@@ -121,6 +121,24 @@ describe('ManualOrdersList', () => {
     expect(toast).toHaveBeenCalledWith('Cancelled the order for AAA.US.');
   });
 
+  it('says a cancel is only requested while the broker still works the order', async () => {
+    const info = vi.spyOn(TestBed.inject(ToastService), 'info');
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    const el = await render([order()]);
+    byText(el, 'Cancel')!.click();
+    await settle();
+    answerDialog(fixture, { reason: 'changed my mind' });
+    (await nextRequest(http, '/api/orders/mk1/cancel', 'POST')).flush({
+      client_id: 'mk1',
+      cancelled: true,
+      status: 'pending',
+    });
+    (await nextRequest(http, '/api/orders')).flush(pageOf([order()]));
+    await settle();
+    expect(success).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('can still fill'));
+  });
+
   it('asks to cancel a paper order without a red button, and a real-money one with it', async () => {
     const el = await render([order()]);
     byText(el, 'Cancel')!.click();

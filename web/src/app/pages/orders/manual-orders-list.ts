@@ -194,11 +194,19 @@ export class ManualOrdersList {
     this.busy.set(order.client_id);
     try {
       const result = await this.manual.cancel(order.client_id, { reason: body.reason ?? '' });
-      this.toasts.success(
-        result.cancelled
-          ? `Cancelled the order for ${order.ticker}.`
-          : `The order for ${order.ticker} had already ended.`,
-      );
+      // `cancelled` says the broker took the request; the status says what
+      // the order is now. Only a cancelled status means it cannot fill.
+      if (result.status === 'cancelled') {
+        this.toasts.success(`Cancelled the order for ${order.ticker}.`);
+      } else if (isWorking({ status: result.status as OrderView['status'] })) {
+        this.toasts.info(
+          result.cancelled
+            ? `Asked your broker to cancel the order for ${order.ticker}. It can still fill until the broker confirms.`
+            : `Your broker did not take the cancel. The order for ${order.ticker} is still working.`,
+        );
+      } else {
+        this.toasts.info(`The order for ${order.ticker} had already ended.`);
+      }
       this.orders.reload();
     } catch {
       // The error interceptor already showed the API's message.
