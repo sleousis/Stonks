@@ -112,12 +112,12 @@ describe('LiveStageCard', () => {
 
   afterEach(() => http.verify());
 
-  async function render(passed = true): Promise<HTMLElement> {
+  async function render(passed = true, stage: LiveStageView = STAGE): Promise<HTMLElement> {
     fixture = TestBed.createComponent(LiveStageCard);
     fixture.componentRef.setInput('portfolioId', 'pf_live');
     fixture.componentRef.setInput('portfolioName', 'Main live');
     fixture.detectChanges();
-    (await nextRequest(http, '/api/portfolios/pf_live/live/stage')).flush(STAGE);
+    (await nextRequest(http, '/api/portfolios/pf_live/live/stage')).flush(stage);
     (await nextRequest(http, '/api/portfolios/pf_live/live/gate-report')).flush(report(passed));
     await tick();
     fixture.detectChanges();
@@ -210,6 +210,24 @@ describe('LiveStageCard', () => {
     post.flush({ ...STAGE, stage: 'sim_paper', next_stage: 'broker_paper' });
     (await nextRequest(http, '/api/portfolios/pf_live/live/gate-report')).flush(report(false));
     await tick();
+  });
+
+  it('stamps a move down to a lower real-money stage as real money', async () => {
+    confirm.mockResolvedValue(false);
+    const el = await render(true, {
+      ...STAGE,
+      stage: 'live_scale',
+      next_stage: null,
+      real_money: true,
+    });
+    el.querySelector<HTMLDetailsElement>('.move-down')!.open = true;
+    type(el, '#stage-down-reason', 'smaller for now');
+    fixture.detectChanges();
+    button(el, 'Move down').click();
+    await tick();
+    const options = confirm.mock.calls[0][0] as { ticket: { live: boolean }; message: string };
+    expect(options.message).toContain('keeps trading real money');
+    expect(options.ticket.live).toBe(true);
   });
 
   it('turns the controls off for someone who may not change the stage', async () => {
