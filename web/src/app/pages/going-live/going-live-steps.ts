@@ -164,6 +164,23 @@ export function goingLiveSteps(f: GoingLiveFacts): GoingLiveStep[] {
 
 function gatewayStep(f: GoingLiveFacts): GoingLiveStep {
   const title = 'Server gateway set up';
+  if (f.portfolio.broker_connection_id) {
+    // A broker reached over its own web API (eToro, say) needs no gateway.
+    if (f.connections === undefined || f.providers === undefined) {
+      return checking('gateway', title);
+    }
+    const conn = f.connections.find((c) => c.id === f.portfolio.broker_connection_id);
+    const provider = conn ? f.providers.find((x) => x.name === conn.provider) : undefined;
+    if (provider && !provider.needs_gateway) {
+      return {
+        key: 'gateway',
+        title,
+        state: 'done',
+        detail: `${provider.display_name} needs no gateway on the server.`,
+        link: null,
+      };
+    }
+  }
   if (f.gateways === undefined) return checking('gateway', title);
   const health = f.isAdmin ? { label: 'Open Health', path: '/health' } : null;
   if (!f.gateways.configured || f.gateways.gateways.length === 0) {
@@ -216,7 +233,7 @@ function brokerStep(f: GoingLiveFacts): GoingLiveStep {
       title,
       state: 'todo',
       detail:
-        'Connect a broker that can trade, such as Interactive Brokers, and link its account to a portfolio.',
+        'Connect a broker that can trade, such as Interactive Brokers or eToro, and link its account to a portfolio.',
       link: connect,
     };
   }

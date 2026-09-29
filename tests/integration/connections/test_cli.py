@@ -114,3 +114,45 @@ def test_default_principal_is_the_owner(env, capsys, monkeypatch):
     _run(capsys, *env, "connect", "fake")
     code, out, _ = _run(capsys, *env, "--json", "list")
     assert json.loads(out)[0]["user_id"] == DEFAULT_OWNER_ID
+
+
+def test_connect_etoro_demo_and_real_keys(env, capsys, monkeypatch):
+    from stonks.connections import __main__ as cli
+    from stonks.connections.service import ConnectionService
+    from stonks.execution.brokers.etoro.instruments import reset_catalogs
+    from tests.fakes.etoro_server import API_KEY, USER_KEY, FakeEtoro
+
+    reset_catalogs()
+    demo, real = FakeEtoro(env="demo"), FakeEtoro(env="real", cid=777)
+    fakes = {"demo": demo, "real": real}
+    monkeypatch.setenv("STONKS_CONNECTIONS_ENABLED_PROVIDERS", "etoro")
+    monkeypatch.setenv("STONKS_CONNECT_API_KEY", API_KEY)
+    monkeypatch.setenv("STONKS_CONNECT_USER_KEY", USER_KEY)
+    target = ["demo"]
+    monkeypatch.setattr(
+        cli, "ConnectionService",
+        lambda state, config: ConnectionService(
+            state, config, transports={"etoro": fakes[target[0]].transport()}
+        ),
+    )  # fmt: skip
+
+    code, out, err = _run(capsys, *env, "providers")
+    assert code == 0 and out.startswith("etoro\tapi_key")
+    code, out, err = _run(capsys, *env, "connect", "etoro")
+    assert code == 0, err
+    assert API_KEY not in out + err and USER_KEY not in out + err
+    code, out, _ = _run(capsys, *env, "accounts", out.split()[1])
+    assert "demo-4242" in out
+
+    target[0] = "real"
+    code, out, err = _run(capsys, *env, "connect", "etoro", "--real")
+    assert code == 0, err
+    code, out, _ = _run(capsys, *env, "accounts", out.split()[1])
+    assert "real-777" in out
+    reset_catalogs()
+
+
+def test_real_needs_a_provider_with_paper_accounts(env, capsys, monkeypatch):
+    monkeypatch.setenv("STONKS_CONNECT_TOKEN", "cli-token-123456")
+    code, _, err = _run(capsys, *env, "connect", "fake", "--real")
+    assert code == 2 and "--real" in err

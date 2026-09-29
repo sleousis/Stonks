@@ -70,6 +70,8 @@ class ProviderInfo:
     can_trade: bool
     enabled: bool = True
     has_paper: bool = False
+    #: Trading needs a gateway on the server (IBKR), set up by an admin.
+    needs_gateway: bool = False
 
 
 @dataclass(frozen=True)

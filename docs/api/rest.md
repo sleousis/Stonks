@@ -5082,6 +5082,7 @@ The paper a published factor comes from (roadmap 23.13).
 | `enabled` | boolean | yes |  |
 | `has_paper` | boolean | yes |  |
 | `name` | string | yes |  |
+| `needs_gateway` | boolean | yes |  |
 
 ### PushDeviceView
 

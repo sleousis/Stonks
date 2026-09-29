@@ -17,6 +17,7 @@ export const ALPACA: ProviderView = {
   can_trade: true,
   enabled: true,
   has_paper: true,
+  needs_gateway: false,
 };
 
 export const SNAPTRADE: ProviderView = {
@@ -28,6 +29,19 @@ export const SNAPTRADE: ProviderView = {
   can_trade: false,
   enabled: true,
   has_paper: false,
+  needs_gateway: false,
+};
+
+export const ETORO: ProviderView = {
+  name: 'etoro',
+  display_name: 'eToro',
+  auth_flow: 'api_key',
+  capabilities: ['read_activity', 'read_balances', 'read_positions', 'trade'],
+  credential_fields: ['api_key', 'user_key'],
+  can_trade: true,
+  enabled: true,
+  has_paper: true,
+  needs_gateway: false,
 };
 
 export function connection(over: Partial<ConnectionView> = {}): ConnectionView {
