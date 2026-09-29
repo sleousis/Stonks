@@ -773,3 +773,51 @@ def test_the_cli_walks_the_same_path(cli_home, spy, telegram):
     assert spy.calls == []
     sent = _sent(telegram)
     assert sent and {s for _, s in sent} == {sid}
+
+
+# ---- a keyless install keeps its prices fresh ---------------------------------------
+
+
+@pytest.mark.parametrize("backend", ["local", "in_process", "api"])
+def test_a_keyless_install_keeps_its_prices_fresh_on_every_backend(
+    backend, settings, auth, owner, monkeypatch
+):
+    """With no EODHD key the scheduled price update reads Yahoo, which needs
+    none, instead of failing every day and leaving the signals stale."""
+    import stonks.ingest.sources.registry as registry
+    from stonks.scheduling.api_backend import ApiExecutor
+    from stonks.scheduling.api_client import SchedulerApiClient
+    from stonks.scheduling.in_process import InProcessExecutor
+    from stonks.scheduling.local import LocalExecutor
+    from stonks.store.lake import DuckDBLake
+
+    monkeypatch.delenv("EODHD_API_KEY", raising=False)
+    monkeypatch.setitem(registry._FACTORIES, "yahoo", lambda _cfg: YahooLikeSource())
+    assert settings.sources.eodhd.api_key is None
+    app = create_app(settings, services=Services.create(AppContext(settings)))
+    app.state.auth = auth
+    params = {"lookback_days": 30}
+    if backend == "local":
+        with DuckDBLake(settings.lake.path) as lake:
+            lake.migrate()
+        executor: Any = LocalExecutor()
+        outcome = executor.execute(_run_context(settings, executor, "ingest_prices", **params)[0])
+    elif backend == "in_process":
+        with TestClient(app, client=REMOTE, base_url=BASE):
+            executor = InProcessExecutor(app.state.services)
+            ctx = _run_context(settings, executor, "ingest_prices", **params)[0]
+            outcome = executor.execute(ctx)
+    else:
+        with TestClient(app, client=("127.0.0.1", 50000)) as local:
+            token = owner["Authorization"].removeprefix("Bearer ")
+            api = SchedulerApiClient("http://127.0.0.1:8000", token=token, transport=_bridge(local))
+            executor = ApiExecutor(api, poll_seconds=0.02)
+            try:
+                ctx = _run_context(settings, executor, "ingest_prices", **params)[0]
+                outcome = executor.execute(ctx)
+            finally:
+                executor.close()
+    assert outcome.status == "succeeded", outcome.detail
+    with DuckDBLake(settings.lake.path) as lake:
+        latest = lake.sql("SELECT MAX(date) FROM prices WHERE ticker = 'RISE.US'")
+    assert str(latest.iloc[0, 0])[:10] == AS_OF.isoformat()

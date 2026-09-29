@@ -110,7 +110,7 @@ Run exactly one, as a long-lived process (systemd unit, Windows service, or the 
 | `engine_start`: start the intraday engine process (see [intraday](design/intraday.md)) | open - 15 min | none |
 | `engine_stop`: ask the intraday engine to stop, and wait for it | close + 10 min | none |
 
-Session jobs run on NYSE trading days. `price_check` skips while `[production.price_check] enabled = false`. The two engine jobs skip while `[engine] enabled = false`. The two options jobs skip while `[production.options] live = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio, and `live_margin` while no portfolio has a margin profile). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`.
+Session jobs run on NYSE trading days. `price_check` skips while `[production.price_check] enabled = false`. The two engine jobs skip while `[engine] enabled = false`. The two options jobs skip while `[production.options] live = false`. The IB Gateway jobs skip while `[brokers.ibkr.gateways]` is empty (the two reconcile checks also while no gateway lists a portfolio, and `live_margin` while no portfolio has a margin profile). `ingest_metadata` reads Yahoo because the free EODHD plan has no metadata. On a paid plan set `params = { source = "eodhd" }`. `ingest_prices` reads EODHD once `EODHD_API_KEY` is set, and Yahoo while it is not, so an install with no key still gets its daily bars. A `source` param picks one for good.
 
 The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 

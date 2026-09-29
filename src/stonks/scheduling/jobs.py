@@ -413,6 +413,15 @@ def _validate_calendar(trigger: Trigger) -> None:
         get_calendar(name)
 
 
+def price_source(ctx: RunContext) -> str:
+    """The data source of a scheduled price update: the job's ``source``
+    param, else the configured default, or Yahoo while the default has no
+    key (:func:`stonks.ingest.sources.registry.scheduled_source_id`)."""
+    from stonks.ingest.sources.registry import scheduled_source_id
+
+    return str(ctx.params.get("source") or scheduled_source_id(ctx.settings.sources))
+
+
 def briefing_outcome(view: dict[str, Any]) -> JobOutcome:
     """A briefings run as a job outcome: skipped while briefings are off."""
     keys = ("kind", "as_of", "skipped", "people", "sent", "failed")

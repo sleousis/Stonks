@@ -59,6 +59,7 @@ from stonks.scheduling.jobs import (
     job_is_scoped,
     job_universe,
     no_gateways,
+    price_source,
     retrain_body,
     retrain_outcome,
     universes_outcome,
@@ -114,7 +115,6 @@ def build_source(source_id: str, sources: Any) -> Any:
 
 @register_action("ingest_prices")
 def ingest_prices_action(ctx: RunContext) -> JobOutcome:
-    from stonks.ingest.sources.registry import DEFAULT_SOURCE_ID
     from stonks.ingest.wiring import build_ingest_pipeline
     from stonks.store.lake import DuckDBLake
 
@@ -122,7 +122,7 @@ def ingest_prices_action(ctx: RunContext) -> JobOutcome:
     if not universe:
         return JobOutcome("skipped", {"reason": "empty_universe"})
     lookback = int(ctx.params.get("lookback_days", 7))
-    source = build_source(str(ctx.params.get("source", DEFAULT_SOURCE_ID)), ctx.settings.sources)
+    source = build_source(price_source(ctx), ctx.settings.sources)
     with DuckDBLake(ctx.settings.lake.path) as lake:
         lake.migrate()
         closed = closed_day_outcome(ctx, universe, lake.get_asset_classes(universe))

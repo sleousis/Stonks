@@ -45,6 +45,7 @@ from stonks.scheduling.jobs import (
     job_is_scoped,
     job_universe,
     no_gateways,
+    price_source,
     retrain_body,
     retrain_outcome,
     universes_outcome,
@@ -243,7 +244,7 @@ def api_ingest_prices(ctx: RunContext) -> JobOutcome:
     since, until = ingest_window(ctx)
     body = {
         "kind": "prices",
-        "source": str(ctx.params.get("source", "eodhd")),
+        "source": price_source(ctx),
         "tickers": universe,
         "since": since,
         "until": until,
