@@ -3,6 +3,7 @@ import {
   Component,
   computed,
   inject,
+  linkedSignal,
   resource,
   signal,
 } from '@angular/core';
@@ -260,7 +261,7 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
               <option value="vwap">VWAP</option>
             </select>
           </div>
-          @if (algo === 'adaptive') {
+          @if (algo() === 'adaptive') {
             <div class="field">
               <label for="rb-priority">Priority</label>
               <select id="rb-priority" class="input" name="priority" [(ngModel)]="priority">
@@ -269,7 +270,7 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
                 <option value="urgent">Urgent</option>
               </select>
             </div>
-          } @else if (algo !== 'plain') {
+          } @else if (algo() !== 'plain') {
             <div class="field">
               <label for="rb-end">Minutes after the open to finish</label>
               <input
@@ -381,9 +382,6 @@ export class RebalancePage {
   protected shortRate: number | null = null;
   protected longRate: number | null = null;
   protected reason = '';
-  protected algo: AlgoChoice = 'plain';
-  protected priority = 'normal';
-  protected endMinutes: number | null = null;
 
   protected readonly busy = signal(false);
   protected readonly problem = signal<string | null>(null);
@@ -406,6 +404,17 @@ export class RebalancePage {
   protected readonly ownSetting = computed(
     () => this.settings.value()?.items.find((s) => !s.strategy_id) ?? null,
   );
+  /** The form starts from the stored setting, so Save on an untouched form keeps it. */
+  protected readonly algo = linkedSignal<AlgoChoice>(
+    () => (this.ownSetting()?.algo as AlgoChoice | undefined) ?? 'plain',
+  );
+  protected readonly priority = linkedSignal(() =>
+    String(this.ownSetting()?.params?.['priority'] ?? 'normal'),
+  );
+  protected readonly endMinutes = linkedSignal<number | null>(() => {
+    const end = this.ownSetting()?.params?.['end_minutes'];
+    return typeof end === 'number' ? end : null;
+  });
 
   private readonly currency = computed(() => this.ctx.current()?.base_currency ?? 'USD');
   protected readonly money = (v: number | null | undefined) =>
@@ -524,16 +533,18 @@ export class RebalancePage {
     if (!portfolio) return;
     this.busy.set(true);
     try {
-      if (this.algo === 'plain') {
+      const algo = this.algo();
+      const end = this.endMinutes();
+      if (algo === 'plain') {
         await this.api.clearAlgo(portfolio);
       } else {
         const params: Record<string, unknown> =
-          this.algo === 'adaptive'
-            ? { priority: this.priority }
-            : this.endMinutes
-              ? { end_minutes: Number(this.endMinutes) }
+          algo === 'adaptive'
+            ? { priority: this.priority() }
+            : end
+              ? { end_minutes: Number(end) }
               : {};
-        await this.api.setAlgo(portfolio, { algo: this.algo, params });
+        await this.api.setAlgo(portfolio, { algo, params });
       }
       this.toasts.success('Saved how orders are worked.');
       this.settings.reload();

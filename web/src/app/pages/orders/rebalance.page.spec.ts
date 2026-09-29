@@ -38,10 +38,12 @@ describe('rebalance helpers', () => {
 });
 
 describe('RebalancePage', () => {
-  function setup() {
+  function setup(items: unknown[] = []) {
     const current = signal(book({ id: 'pf_1', name: 'Main' }));
     const api = {
-      settings: vi.fn(async () => ({ items: [] })),
+      settings: vi.fn(async () => ({ items })),
+      setAlgo: vi.fn(async () => ({})),
+      clearAlgo: vi.fn(async () => undefined),
       parents: vi.fn(async () => ({ items: [] })),
       plan: vi.fn(async () => ({
         portfolio_id: 'pf_1',
@@ -62,13 +64,15 @@ describe('RebalancePage', () => {
       ],
     });
     vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(true);
-    const page = TestBed.createComponent(RebalancePage).componentInstance as unknown as {
+    const fixture = TestBed.createComponent(RebalancePage);
+    const page = fixture.componentInstance as unknown as {
       targetsText: string;
       preview(): Promise<void>;
       write(): Promise<void>;
       plan: () => unknown;
+      saveAlgo(): Promise<void>;
     };
-    return { page, api, current };
+    return { page, api, current, fixture };
   }
 
   it('never writes tickets for targets other than the previewed plan', async () => {
@@ -89,6 +93,27 @@ describe('RebalancePage', () => {
     current.set(book({ id: 'pf_2', name: 'Other', trading: 'live' }));
     await page.write();
     expect(api.confirm).not.toHaveBeenCalled();
+  });
+
+  it('starts the algo form from the stored setting, so Save keeps it', async () => {
+    const { page, api, fixture } = setup([
+      {
+        portfolio_id: 'pf_1',
+        strategy_id: null,
+        algo: 'twap',
+        params: { end_minutes: 90 },
+        updated_at: '2026-09-28T10:00:00Z',
+        updated_by: null,
+      },
+    ]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await page.saveAlgo();
+    expect(api.clearAlgo).not.toHaveBeenCalled();
+    expect(api.setAlgo).toHaveBeenCalledWith('pf_1', {
+      algo: 'twap',
+      params: { end_minutes: 90 },
+    });
   });
 
   it('writes the previewed plan', async () => {
