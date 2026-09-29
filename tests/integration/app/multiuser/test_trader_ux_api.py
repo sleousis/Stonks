@@ -105,6 +105,21 @@ def test_onboarding_steps_are_stored_per_person(client, people):
     assert unknown.status_code == 422
 
 
+def test_onboarding_counts_a_linked_telegram_chat_as_alerts_on(client, people, settings):
+    """Alerts can reach you on Telegram alone, with no push device
+    (docs/without-a-broker.md)."""
+    alice = people["alice"]
+    with SqliteState(settings.state.path) as state:
+        state.execute(
+            "INSERT INTO telegram_links (chat_id, user_id, username, linked_at)"
+            " VALUES ('4242', ?, 'alice_tg', ?)",
+            [alice["id"], datetime.now(UTC).isoformat()],
+        )
+    view = client.get("/api/onboarding", headers=alice["headers"]).json()
+    alerts = next(s for s in view["steps"] if s["id"] == "alerts")
+    assert alerts == {"id": "alerts", "state": "done", "derived": True}
+
+
 def test_onboarding_completes_when_every_step_is_done_or_skipped(client, people):
     vic = people["vic"]["headers"]  # viewers can use the guide too
     for step in ("account", "portfolio", "data", "follow"):

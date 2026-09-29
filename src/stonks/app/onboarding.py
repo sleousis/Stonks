@@ -6,10 +6,10 @@ A new install or a new trader is walked through a few plain steps:
 2. ``portfolio``: pick or open a portfolio,
 3. ``data``: choose the data to watch (a watchlist, or a universe),
 4. ``follow``: follow a strategy for signals or paper trading,
-5. ``alerts``: turn on push alerts on a device.
+5. ``alerts``: turn on push alerts on a device, or link Telegram.
 
 Each step is **done** when the data already shows it (a second factor, a
-portfolio, a watchlist, a subscription, a push device) or when the person
+portfolio, a watchlist, a subscription, a push device or a Telegram chat) or when the person
 marked it done, **skipped** when they skipped it, else **todo**. Progress is
 stored per user (``onboarding_steps``, migration 026), so it follows the
 person across devices. Closing the guide stores ``dismissed_at``.
@@ -273,7 +273,9 @@ def _derived(state: SqliteState, user_id: str) -> dict[StepId, bool]:
         ),
         "data": has("SELECT 1 FROM watchlists WHERE owner_id = ? LIMIT 1"),
         "follow": has("SELECT 1 FROM subscriptions WHERE user_id = ? AND enabled = 1 LIMIT 1"),
+        # A push device or a linked Telegram chat: either reaches you.
         "alerts": has(
             "SELECT 1 FROM push_subscriptions WHERE user_id = ? AND revoked_at IS NULL LIMIT 1"
-        ),
+        )
+        or has("SELECT 1 FROM telegram_links WHERE user_id = ? LIMIT 1"),
     }
