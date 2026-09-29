@@ -144,6 +144,16 @@ def test_the_system_checklist_is_for_admins(client, people):
     assert got.json()["complete"] is False
 
 
+def test_the_data_source_check_passes_on_yahoo_with_no_key(client, people, monkeypatch):
+    """No EODHD key: the daily price update reads Yahoo, which needs none,
+    so the install has a working data source (docs/without-a-broker.md)."""
+    monkeypatch.delenv("EODHD_API_KEY", raising=False)
+    got = client.get("/api/onboarding/system", headers=people["ada"]["headers"]).json()
+    check = next(c for c in got["checks"] if c["id"] == "data_source")
+    assert check["done"] is True, check
+    assert "yahoo" in check["detail"]
+
+
 # ---- charts (13.5) ---------------------------------------------------------------
 
 

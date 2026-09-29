@@ -190,6 +190,16 @@ class OnboardingService:
             return SystemCheckView(
                 id="data_source", done=True, detail=f"{default.id} is set up and is the default"
             )
+        from stonks.ingest.sources.registry import KEYLESS_SOURCE_ID
+
+        if KEYLESS_SOURCE_ID in ready:
+            # The scheduled price update reads it while the default has no key.
+            return SystemCheckView(
+                id="data_source",
+                done=True,
+                detail=f"{KEYLESS_SOURCE_ID} is set up and needs no key; the daily price update"
+                " reads it until an EODHD key is set",
+            )
         detail = default.detail if default is not None and default.detail else "no source is set up"
         if ready:
             detail += f". Ready: {', '.join(ready)}"
