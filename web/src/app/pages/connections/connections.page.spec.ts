@@ -10,7 +10,14 @@ import { ToastService } from '../../core/notify/toast.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { BROWSER_REDIRECT } from './browser-redirect';
 import { ConnectionsPage } from './connections.page';
-import { ALPACA, DEGIRO_PRESETS, ETORO, SNAPTRADE, connection, sessionStub } from './connections.fixtures';
+import {
+  ALPACA,
+  DEGIRO_PRESETS,
+  ETORO,
+  SNAPTRADE,
+  connection,
+  sessionStub,
+} from './connections.fixtures';
 
 describe('ConnectionsPage', () => {
   let fixture: ComponentFixture<ConnectionsPage>;
