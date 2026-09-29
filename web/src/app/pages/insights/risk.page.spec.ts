@@ -25,12 +25,14 @@ describe('RiskPage', () => {
   let chart: FakeChartEngine;
   let el: HTMLElement;
   let live: typeof LIVE;
+  let insights: typeof INSIGHTS;
   let mine: Record<string, number>;
   const selected = signal<string | null>('pf_2');
   const seen: string[] = [];
 
   beforeEach(() => {
     live = LIVE;
+    insights = INSIGHTS;
     mine = {};
     seen.length = 0;
     chart = new FakeChartEngine();
@@ -72,7 +74,7 @@ describe('RiskPage', () => {
       case '/api/risk/live':
         return req.flush(live);
       case '/api/insights':
-        return req.flush(INSIGHTS);
+        return req.flush(insights);
       case '/api/risk/policy':
         return req.flush(POLICY);
       case '/api/risk/limits':
@@ -116,6 +118,14 @@ describe('RiskPage', () => {
     expect(text).toContain('3.30%');
     expect(text).toContain('3 misses, 1.2 times the expected rate');
     expect(text).not.toContain('Treat these numbers with care');
+  });
+
+  it("shows money in the book's currency", async () => {
+    insights = { ...INSIGHTS, currency: 'EUR' };
+    await flushAll();
+    const text = el.textContent ?? '';
+    expect(text).toContain('€');
+    expect(text).not.toContain('$');
   });
 
   it('warns when the model is out of band, and shows a fading sleeve', async () => {

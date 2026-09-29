@@ -188,8 +188,14 @@ export class RuleBuilder {
     this.update((d) => ({ ...d, risk: { ...d.risk, [key]: on ? fallback : null } }));
   }
 
-  protected setRisk(key: 'stop_loss_pct' | 'take_profit_pct', raw: string): void {
-    const value = raw.trim() === '' ? null : round(Number(raw) / 100);
+  protected setRisk(key: 'stop_loss_pct' | 'take_profit_pct', input: HTMLInputElement): void {
+    const raw = input.value;
+    if (raw.trim() === '') {
+      // A cleared (or half-typed) box keeps the exit: the checkbox turns it off.
+      input.value = this.pct(this.spec().risk[key]);
+      return;
+    }
+    const value = round(Number(raw) / 100);
     this.update((d) => ({ ...d, risk: { ...d.risk, [key]: value } }));
   }
 

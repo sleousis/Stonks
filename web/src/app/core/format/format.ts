@@ -87,7 +87,14 @@ function dateFormat(locale: string, options: Intl.DateTimeFormatOptions): Intl.D
   return fmt;
 }
 
-function signedText(text: string, value: number, signed: boolean | undefined): string {
+/**
+ * Format `value`, with a "+" on positive values when `signed`. A value that
+ * rounds to zero reads as a plain zero: never "-0.00%" or "+$0.00".
+ */
+function signedText(fmt: Intl.NumberFormat, value: number, signed: boolean | undefined): string {
+  const zero = fmt.format(0);
+  if (fmt.format(Math.abs(value)) === zero) return zero;
+  const text = fmt.format(value);
   return signed && value > 0 ? `+${text}` : text;
 }
 
@@ -108,28 +115,28 @@ export function formatMoney(value: Num, opts: NumberOptions = {}): string {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       };
-  return signedText(numberFormat(locale, options).format(value), value, opts.signed);
+  return signedText(numberFormat(locale, options), value, opts.signed);
 }
 
 /** `value` is a fraction: 0.0123 → "1.23%". */
 export function formatPercent(value: Num, opts: NumberOptions = {}): string {
   if (!isNum(value)) return MISSING;
   const digits = opts.digits ?? 2;
-  const text = numberFormat(activeFormat().locale, {
+  const fmt = numberFormat(activeFormat().locale, {
     style: 'percent',
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  }).format(value);
-  return signedText(text, value, opts.signed);
+  });
+  return signedText(fmt, value, opts.signed);
 }
 
 export function formatNumber(value: Num, opts: NumberOptions = {}): string {
   if (!isNum(value)) return MISSING;
-  const text = numberFormat(activeFormat().locale, {
+  const fmt = numberFormat(activeFormat().locale, {
     notation: opts.compact ? 'compact' : 'standard',
     maximumFractionDigits: opts.digits ?? 4,
-  }).format(value);
-  return signedText(text, value, opts.signed);
+  });
+  return signedText(fmt, value, opts.signed);
 }
 
 /**

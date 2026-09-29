@@ -19,6 +19,7 @@ import {
 class FakeResource implements Reloadable {
   readonly loading = signal(false);
   readonly loaded = signal(true);
+  readonly failed = signal<unknown>(undefined);
   reloads = 0;
   reload() {
     this.reloads++;
@@ -29,6 +30,9 @@ class FakeResource implements Reloadable {
   }
   hasValue() {
     return this.loaded();
+  }
+  error() {
+    return this.failed();
   }
 }
 
@@ -114,6 +118,20 @@ describe('autoRefresh', () => {
     expect(auto.updatedAt()).toBe(Date.parse('2026-09-26T10:00:00Z'));
     res.loading.set(false);
     expect(auto.updatedAt()).toBe(Date.parse('2026-09-26T10:01:00Z'));
+  });
+
+  it('never says updated when one of the reads failed', () => {
+    const other = new FakeResource();
+    vi.setSystemTime(new Date('2026-09-26T10:00:00Z'));
+    auto = runInInjectionContext(injector, () => autoRefresh(() => [res, other]));
+    expect(auto.updatedAt()).toBe(Date.parse('2026-09-26T10:00:00Z'));
+    res.loading.set(true);
+    vi.setSystemTime(new Date('2026-09-26T10:01:00Z'));
+    // The reload fails: no value, not loading. The other read is fine.
+    res.loaded.set(false);
+    res.failed.set(new Error('boom'));
+    res.loading.set(false);
+    expect(auto.updatedAt()).toBe(Date.parse('2026-09-26T10:00:00Z'));
   });
 
   it('reports to a RefreshStatus provided above it', () => {

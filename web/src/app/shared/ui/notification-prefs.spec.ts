@@ -305,6 +305,23 @@ describe('NotificationPrefs', () => {
     await tick();
   });
 
+  it('keeps quiet hours typed but not saved when another switch is saved', async () => {
+    const el = await render();
+    const set = (id: string, v: string) => {
+      const input = el.querySelector<HTMLInputElement>(id)!;
+      input.value = v;
+      input.dispatchEvent(new Event('input'));
+    };
+    set('#quiet-start', '22:00');
+    set('#quiet-end', '07:00');
+    box(el, 'Signals by Push').click();
+    (await nextRequest(controller, '/api/notifications/preferences', 'PUT')).flush({ ...VIEW });
+    await tick();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#quiet-start')!.value).toBe('22:00');
+    expect(el.querySelector<HTMLInputElement>('#quiet-end')!.value).toBe('07:00');
+  });
+
   it('asks for both times', async () => {
     const el = await render();
     const start = el.querySelector<HTMLInputElement>('#quiet-start')!;

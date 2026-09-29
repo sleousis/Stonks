@@ -20,7 +20,8 @@ import { CONNECTION_STATUS_LABEL, providerName } from './connection-labels';
 
 interface Finished {
   connection: ConnectionView;
-  accounts: ConnectedAccountView[];
+  /** Null when the accounts read failed: the connection itself is made. */
+  accounts: ConnectedAccountView[] | null;
   provider: string;
 }
 
@@ -84,7 +85,11 @@ class IncompleteReturn extends Error {
               Start connecting again from the connections page.
             </p>
           }
-          @if (r.accounts.length === 0) {
+          @if (r.accounts === null) {
+            <p class="muted" role="status">
+              Could not read the accounts just now. Open this connection to see them.
+            </p>
+          } @else if (r.accounts.length === 0) {
             <app-empty-state
               title="No accounts found yet"
               message="Accounts appear after the broker confirms the connection."
@@ -161,8 +166,10 @@ export class ConnectionCallbackPage implements OnInit {
         state,
         ...(status ? { status } : {}),
       });
+      // The connection is made at this point: a failed accounts read must
+      // not read as a failed connection (the state cannot be used again).
       const [accounts, providers] = await Promise.all([
-        this.api.accounts(connection.id),
+        this.api.accounts(connection.id).catch(() => null),
         this.api.providers().catch(() => undefined),
       ]);
       return { connection, accounts, provider: providerName(providers, connection.provider) };

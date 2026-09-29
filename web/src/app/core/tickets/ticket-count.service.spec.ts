@@ -122,4 +122,15 @@ describe('TicketCountService', () => {
     count.set(-1);
     expect(count.waiting()).toBe(0);
   });
+  it('never lets a read that started before the page set the count bring the old one back', async () => {
+    setup(0);
+    void count.refresh();
+    const summary = await nextRequest(http, SUMMARY);
+    const pending = await nextRequest(http, DRAFTS);
+    count.set(0, 0);
+    summary.flush({ awaiting_approval: 3, by_portfolio: {} });
+    pending.flush(drafts(2));
+    await tick();
+    expect(count.waiting()).toBe(0);
+  });
 });

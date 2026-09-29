@@ -151,7 +151,12 @@ export class RiskPage {
 
   protected readonly pct = (value: number | null | undefined) =>
     formatPercent(value, { digits: 2 });
-  protected readonly money = (value: number | null | undefined) => formatMoney(value);
+  /** The book's own currency, the one its value and cash are kept in. */
+  private readonly currency = computed(() =>
+    this.insights.hasValue() ? this.insights.value().currency : null,
+  );
+  protected readonly money = (value: number | null | undefined) =>
+    formatMoney(value, { currency: this.currency() });
   protected readonly violationText = violationText;
 
   protected readonly chartSeries = computed<ChartSeries[]>(() => {
@@ -212,7 +217,7 @@ export class RiskPage {
       mobile: 'title',
       value: (r) => (r.strategy_id ? strategyDisplayName(r.strategy_id) : 'Whole portfolio'),
     },
-    { key: 'value', label: 'Value', format: 'money' },
+    { key: 'value', label: 'Value', format: 'money', currency: () => this.currency() },
     { key: 'var_95', label: 'VaR 95%', format: 'percent', help: 'var' },
     {
       key: 'es_95',
@@ -233,7 +238,7 @@ export class RiskPage {
 
   protected readonly historyColumns: TableColumn<RiskSnapshotView>[] = [
     { key: 'as_of', label: 'Day', format: 'date', mobile: 'title' },
-    { key: 'value', label: 'Value', format: 'money' },
+    { key: 'value', label: 'Value', format: 'money', currency: () => this.currency() },
     { key: 'realized_return', label: 'Return', format: 'signedPercent', tone: true },
     { key: 'var_95', label: 'VaR 95%', format: 'percent', help: 'var' },
     {

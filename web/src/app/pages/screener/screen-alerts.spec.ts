@@ -114,6 +114,22 @@ describe('ScreenAlerts', () => {
     expect(root.textContent).toContain('Not run yet.');
   });
 
+  it('puts the select back to the stored schedule when a save fails', async () => {
+    const fixture = await render();
+    const root = fixture.nativeElement as HTMLElement;
+    const select = root.querySelector('select') as HTMLSelectElement;
+    const before = select.value;
+    select.value = 'daily';
+    select.dispatchEvent(new Event('change'));
+    (await nextRequest(http, `/api/screener/screens/${SAVED.id}/alert`, 'PUT')).flush(
+      { title: 'Server error', status: 500, detail: 'busy' },
+      { status: 500, statusText: 'Server Error' },
+    );
+    await tick();
+    fixture.detectChanges();
+    expect(select.value).toBe(before);
+  });
+
   it('removes an alert after asking', async () => {
     confirm.mockResolvedValue(true);
     const fixture = await render();

@@ -13,7 +13,7 @@ import { StopTradingService } from '../../core/halts/stop-trading.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
-import { answerDialog } from '../../../testing/status-dialog';
+import { answerDialog, confirmButton, dialogForm } from '../../../testing/status-dialog';
 import { HaltsPage } from './halts.page';
 import { book } from '../../../testing/portfolio-fixtures';
 
@@ -232,6 +232,31 @@ describe('HaltsPage', () => {
       await flushAll([BREAKER]);
     });
 
+    it('never shows the checks of an earlier opening of the sheet', async () => {
+      button('Resume trading')!.click();
+      await settle();
+      const cancel = [...el.querySelectorAll<HTMLButtonElement>('app-resume-sheet button')].find(
+        (b) => b.textContent?.trim() === 'Cancel',
+      )!;
+      cancel.click();
+      await settle();
+      button('Resume trading')!.click();
+      await settle();
+      const [first, second] = http.match('/api/halts/1/resume-checks');
+      second.flush({
+        halt_id: 1,
+        passed: false,
+        checks: [{ name: 'gateway_up', passed: false, detail: 'down', portfolio_id: null }],
+      });
+      await settle();
+      // The slow answer from the first opening lands last: it must not win.
+      first.flush({ halt_id: 1, passed: true, checks: [] });
+      await settle();
+      const form = el.querySelector<HTMLFormElement>('app-resume-sheet form')!;
+      expect(form.textContent).toContain('down');
+      expect(form.querySelector('#resume-override')).not.toBeNull();
+    });
+
     it('resumes only with the typed words and after a step-up', async () => {
       button('Resume trading')!.click();
       await settle();
@@ -276,6 +301,9 @@ describe('HaltsPage', () => {
     it('clears a breaker halt with a reason', async () => {
       button('Clear')!.click();
       await settle();
+      // No real-money portfolio under this halt: no red button.
+      const form = dialogForm(fixture.nativeElement as HTMLElement)!;
+      expect(confirmButton(form).classList).not.toContain('btn-danger');
       answerDialog(fixture, { reason: 'Reviewed the drawdown' });
       const post = await nextRequest(http, '/api/halts/2/clear', 'POST');
       expect(post.request.body).toEqual({ reason: 'Reviewed the drawdown' });

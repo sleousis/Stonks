@@ -12,7 +12,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
-import { answerDialog } from '../../../testing/status-dialog';
+import { answerDialog, confirmButton, dialogForm } from '../../../testing/status-dialog';
 import { ManualOrdersList, isWorking } from './manual-orders-list';
 
 function order(over: Partial<OrderView> = {}): OrderView {
@@ -122,6 +122,38 @@ describe('ManualOrdersList', () => {
     expect(toast).toHaveBeenCalledWith('Cancelled the order for AAA.US.');
   });
 
+  it('says a cancel is only requested while the broker still works the order', async () => {
+    const info = vi.spyOn(TestBed.inject(ToastService), 'info');
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    const el = await render([order()]);
+    byText(el, 'Cancel')!.click();
+    await settle();
+    answerDialog(fixture, { reason: 'changed my mind' });
+    (await nextRequest(http, '/api/orders/mk1/cancel', 'POST')).flush({
+      client_id: 'mk1',
+      cancelled: true,
+      status: 'pending',
+    });
+    (await nextRequest(http, '/api/orders')).flush(pageOf([order()]));
+    await settle();
+    expect(success).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('can still fill'));
+  });
+
+  it('asks to cancel a paper order without a red button, and a real-money one with it', async () => {
+    const el = await render([order()]);
+    byText(el, 'Cancel')!.click();
+    await settle();
+    const form = () => dialogForm(fixture.nativeElement as HTMLElement)!;
+    expect(confirmButton(form()).classList).not.toContain('btn-danger');
+    [...form().querySelectorAll('button')].find((b) => b.type === 'button')!.click();
+    await settle();
+    live.set(true);
+    byText(el, 'Cancel')!.click();
+    await settle();
+    expect(confirmButton(form()).classList).toContain('btn-danger');
+  });
+
   it('changes a working order and shows a refusal inside the sheet', async () => {
     live.set(true);
     const el = await render([order()]);
@@ -188,5 +220,26 @@ describe('ManualOrdersList', () => {
     (await nextRequest(http, '/api/orders')).flush(pageOf([order({ quantity: 20 })]));
     await settle();
     expect(el.querySelector('app-order-change-sheet form')).toBeNull();
+  });
+  it('reads the list again when the sheet closes after a refused change', async () => {
+    // The server cancels the working order before it checks the new one.
+    const el = await render([order()]);
+    byText(el, 'Change')!.click();
+    await settle();
+    const form = el.querySelector<HTMLFormElement>('app-order-change-sheet form')!;
+    const reason = form.querySelector<HTMLTextAreaElement>('#co-reason')!;
+    reason.value = 'bigger';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    form.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    (await nextRequest(http, '/api/orders/mk1/change', 'POST')).flush(
+      { title: 'Conflict', status: 409, code: 'order_refused', detail: 'halted' },
+      { status: 409, statusText: 'Conflict' },
+    );
+    await settle();
+    [...form.querySelectorAll('button')].find((b) => b.textContent?.includes('Keep'))!.click();
+    await settle();
+    (await nextRequest(http, '/api/orders')).flush(pageOf([order({ status: 'cancelled' })]));
+    await settle();
   });
 });

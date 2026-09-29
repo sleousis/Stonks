@@ -221,7 +221,8 @@ export class LiveStageCard {
       confirmLabel: `Move down to ${to.label}`,
       ticket: {
         kind: 'Stage change',
-        live: false,
+        // Real money when the lower stage still trades it (Real money, small).
+        live: to.live,
         lines: [
           { label: 'Portfolio', value: this.portfolioName() },
           { label: 'Now', value: stageWords(this.current() ?? '').label },

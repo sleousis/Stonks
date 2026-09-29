@@ -165,6 +165,9 @@ export class HaltsPage {
     this.stopTrading.open.set(true);
   }
 
+  /** Numbers each opening of the resume sheet. */
+  private resumeOpening = 0;
+
   async resume(h: HaltView): Promise<void> {
     const sheet = this.resumeSheet();
     const opened = sheet.open({
@@ -176,10 +179,13 @@ export class HaltsPage {
         { label: 'Why it stopped', value: h.reason || 'None given' },
       ],
     });
-    // Roadmap 23.15: the resume checks show above the typed words.
+    // Roadmap 23.15: the resume checks show above the typed words. Only the
+    // latest opening's answer may land: a slow one from an earlier opening
+    // would show another check result under this ticket.
+    const opening = ++this.resumeOpening;
     this.api.resumeChecks(h.id).then(
-      (checks) => sheet.setChecks(checks),
-      () => sheet.setChecks('error'),
+      (checks) => opening === this.resumeOpening && sheet.setChecks(checks),
+      () => opening === this.resumeOpening && sheet.setChecks('error'),
     );
     const answer = await opened;
     if (answer === null) return;
@@ -208,7 +214,8 @@ export class HaltsPage {
       message:
         'New orders go out again from the next trading run, unless another halt still applies.',
       confirmLabel: 'Clear halt',
-      tone: 'danger',
+      // Red only when real money trades again under this halt.
+      tone: this.liveFor(h.scope, h.portfolio_id) ? 'danger' : 'default',
       minReason: 1,
       reasonHint: 'Kept in the audit log and the status history.',
     });

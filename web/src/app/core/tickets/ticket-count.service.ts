@@ -27,6 +27,8 @@ export class TicketCountService {
   private readonly tickets = signal(0);
   private readonly suggested = signal(0);
   private watchers = 0;
+  /** Numbers each read; counts set after a read started win over it. */
+  private sequence = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly onVisibility = () => this.sync(true);
 
@@ -50,10 +52,13 @@ export class TicketCountService {
 
   /** Re-read both counts. A failed read keeps that part's last known count. */
   async refresh(): Promise<void> {
+    const mine = ++this.sequence;
     const [tickets, suggested] = await Promise.allSettled([
       this.api.summary(true),
       this.drafts.pendingCount(),
     ]);
+    // A newer read, or counts the approvals page set since, know better.
+    if (mine !== this.sequence) return;
     // Offline or signed out: keep what we had, say nothing.
     if (tickets.status === 'fulfilled') this.tickets.set(tickets.value.awaiting_approval);
     if (suggested.status === 'fulfilled') this.suggested.set(suggested.value);
@@ -64,6 +69,7 @@ export class TicketCountService {
    * argument is the whole count (older callers); two split it.
    */
   set(tickets: number, suggested = 0): void {
+    this.sequence++;
     this.tickets.set(Math.max(0, tickets));
     this.suggested.set(Math.max(0, suggested));
   }

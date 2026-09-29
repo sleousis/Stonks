@@ -7,7 +7,7 @@ import {
   signal,
 } from '@angular/core';
 
-import type { TcaGroupView } from '../../api/models';
+import type { TcaGroupView, TcaSummaryView } from '../../api/models';
 import { strategyDisplayName } from '../../shared/strategy-names';
 import { TcaService } from '../../api/tca.service';
 import { formatMoney, formatNumber, formatPercent } from '../../core/format/format';
@@ -65,7 +65,7 @@ const KEY_LABELS: Record<Grouping, string> = {
         <div class="tiles" aria-label="Trade cost totals">
           <app-stat-tile
             label="Total cost"
-            [value]="money(g.is_cost + g.opportunity_cost)"
+            [value]="totalCost(g)"
             detail="Shortfall plus missed fills"
             [help]="false"
             featured
@@ -73,7 +73,7 @@ const KEY_LABELS: Record<Grouping, string> = {
           <app-stat-tile
             label="Shortfall"
             [value]="bps(g.is_bps)"
-            [detail]="money(g.is_cost)"
+            [detail]="money(headlineMoney(g).is_cost, totalsCurrency())"
             [help]="false"
           />
           <app-stat-tile
@@ -179,6 +179,9 @@ export class TcaSummary {
   protected readonly columns = computed<TableColumn<TcaGroupView>[]>(() => {
     const by = this.grouping();
     const options = this.ctx.options();
+    const view = this.breakdown.hasValue() ? this.breakdown.value() : null;
+    const currency = currencyOf(view);
+    const inBase = (g: TcaGroupView) => moneyIn(view, g);
     return [
       {
         key: 'key',
@@ -197,7 +200,13 @@ export class TcaSummary {
         format: 'number',
         value: (g) => bps1(g.is_bps),
       },
-      { key: 'is_cost', label: 'Shortfall', format: 'money' },
+      {
+        key: 'is_cost',
+        label: 'Shortfall',
+        format: 'money',
+        value: (g) => inBase(g).is_cost,
+        currency: () => currency,
+      },
       {
         key: 'fee_bps',
         label: 'Fees (bps)',
@@ -210,6 +219,8 @@ export class TcaSummary {
         label: 'Missed fills',
         format: 'money',
         mobile: 'hide',
+        value: (g) => inBase(g).opportunity_cost,
+        currency: () => currency,
       },
       {
         key: 'model_gap_bps',
@@ -227,8 +238,24 @@ export class TcaSummary {
     return formatBps(value);
   }
 
-  protected money(value: number | null | undefined): string {
-    return formatMoney(value);
+  /** The totals' currency: the portfolio's base currency when the server converted. */
+  protected readonly totalsCurrency = computed(() =>
+    currencyOf(this.totals.hasValue() ? this.totals.value() : null),
+  );
+
+  protected headlineMoney(g: TcaGroupView): GroupMoney {
+    return moneyIn(this.totals.hasValue() ? this.totals.value() : null, g);
+  }
+
+  protected totalCost(g: TcaGroupView): string {
+    const m = this.headlineMoney(g);
+    const total =
+      m.is_cost == null || m.opportunity_cost == null ? null : m.is_cost + m.opportunity_cost;
+    return this.money(total, this.totalsCurrency());
+  }
+
+  protected money(value: number | null | undefined, currency?: string | null): string {
+    return formatMoney(value, { currency });
   }
 
   protected count(value: number): string {
@@ -238,4 +265,25 @@ export class TcaSummary {
   protected fillRate(g: TcaGroupView): string {
     return g.orders > 0 ? `${formatPercent(g.filled_orders / g.orders, { digits: 0 })} filled` : '';
   }
+}
+
+interface GroupMoney {
+  is_cost: number | null;
+  opportunity_cost: number | null;
+}
+
+/** The currency of a summary's money: its base currency once the server converts. */
+function currencyOf(view: TcaSummaryView | null): string | null {
+  return view?.base_currency ?? null;
+}
+
+/**
+ * A group's money in the base currency (each order converted at its day's
+ * rate, null when a rate is missing). An older server without the base
+ * figures keeps the raw sums.
+ */
+function moneyIn(view: TcaSummaryView | null, g: TcaGroupView): GroupMoney {
+  if (!view?.base_currency) return { is_cost: g.is_cost, opportunity_cost: g.opportunity_cost };
+  const base = (view.groups_base ?? []).find((m) => m.key === g.key);
+  return { is_cost: base?.is_cost ?? null, opportunity_cost: base?.opportunity_cost ?? null };
 }

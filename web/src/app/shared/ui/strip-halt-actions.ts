@@ -170,7 +170,7 @@ export class StripHaltActions {
       message:
         'New orders go out again from the next trading run, unless another halt still applies.',
       confirmLabel: halts.length === 1 ? 'Clear halt' : 'Clear halts',
-      tone: 'danger',
+      tone: halts.some((h) => this.isLive(h)) ? 'danger' : 'default',
       minReason: 1,
       reasonHint: 'Kept in the audit log and the status history.',
     });

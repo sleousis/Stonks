@@ -10,7 +10,7 @@ import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angula
 import { RouterLink } from '@angular/router';
 
 import { AuthService } from '../../api/auth.service';
-import type { ApiScope, TokenView, ToolsetView } from '../../api/models';
+import type { ApiScope, Role, TokenView, ToolsetView } from '../../api/models';
 import { PASSWORD_MAX, PASSWORD_MIN, sameAs } from '../../core/auth/passwords';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
@@ -26,19 +26,33 @@ interface ScopeOption {
   value: ApiScope;
   label: string;
   help: string;
-  adminOnly?: boolean;
+  /** The roles that may hold it (the server's `ROLE_SCOPES`). */
+  roles: readonly Role[];
 }
 
+const TRADERS: readonly Role[] = ['trader', 'admin'];
+const ADMINS: readonly Role[] = ['admin'];
+
 const SCOPES: readonly ScopeOption[] = [
-  { value: 'read', label: 'Read', help: 'See your portfolio, strategies and data.' },
-  { value: 'trade', label: 'Trade', help: 'Change modes and place orders. Asks for a code.' },
-  { value: 'lab', label: 'Lab', help: 'Run backtests and lab jobs.' },
-  { value: 'admin', label: 'Admin', help: 'Admin actions. Asks for a code.', adminOnly: true },
+  {
+    value: 'read',
+    label: 'Read',
+    help: 'See your portfolio, strategies and data.',
+    roles: ['viewer', 'trader', 'admin'],
+  },
+  {
+    value: 'trade',
+    label: 'Trade',
+    help: 'Change modes and place orders. Asks for a code.',
+    roles: TRADERS,
+  },
+  { value: 'lab', label: 'Lab', help: 'Run backtests and lab jobs.', roles: TRADERS },
+  { value: 'admin', label: 'Admin', help: 'Admin actions. Asks for a code.', roles: ADMINS },
   {
     value: 'lab_worker',
     label: 'Lab worker',
     help: 'For a lab worker on another machine, alone. Asks for a code.',
-    adminOnly: true,
+    roles: ADMINS,
   },
 ];
 
@@ -89,9 +103,11 @@ export class ProfilePage {
   protected readonly me = this.session.me;
   protected readonly viaSession = this.session.viaSession;
   protected readonly roleLabel = computed(() => ROLE_LABELS[this.me()?.role ?? ''] ?? 'Unknown');
-  protected readonly scopes = computed(() =>
-    SCOPES.filter((s) => !s.adminOnly || this.session.isAdmin()),
-  );
+  /** Only the scopes the server lets this role put on a token. */
+  protected readonly scopes = computed(() => {
+    const role = this.session.role();
+    return SCOPES.filter((s) => role !== null && s.roles.includes(role));
+  });
 
   // Password ------------------------------------------------------------------
   protected readonly passwordForm = this.fb.group(

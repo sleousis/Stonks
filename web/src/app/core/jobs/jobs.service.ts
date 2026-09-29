@@ -112,8 +112,14 @@ export class JobsService {
         resolveFinished(event());
       },
       complete: () => {
+        // Only an `untracked` end completes before a terminal status: no
+        // worker will finish this job, so say so rather than "Running…".
+        const last = event();
+        if (last && !isTerminal(last.status)) {
+          failure.set('The server lost track of this job. Run it again.');
+        }
         ended.set(true);
-        resolveFinished(event());
+        resolveFinished(last);
       },
     });
     // Stopping settles `finished` with the last event, so nobody waits forever.

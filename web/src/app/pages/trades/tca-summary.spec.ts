@@ -75,6 +75,32 @@ describe('TcaSummary', () => {
     expect(el.querySelector('table')?.textContent).toContain('momentum-v3');
   });
 
+  it('shows money in the portfolio base currency, converted by the server', async () => {
+    const base = {
+      base_currency: 'EUR',
+      groups_base: [{ key: 'all', filled_notional: 9000, is_cost: 10, opportunity_cost: 2 }],
+    };
+    const eur = { key: 'momentum-v3', filled_notional: 9000, is_cost: 10, opportunity_cost: 2 };
+    for (const r of await both()) {
+      const by = byOf(r);
+      if (by === 'all') r.flush(summary(base));
+      else
+        r.flush(
+          summary({
+            by: 'strategy',
+            groups: [group({ key: 'momentum-v3' })],
+            base_currency: 'EUR',
+            groups_base: [eur],
+          }),
+        );
+    }
+    await settle();
+    const text = el.textContent ?? '';
+    expect(text).toContain('€12.00');
+    expect(text).not.toContain('$');
+    expect(el.querySelector('table')?.textContent).toContain('€10.00');
+  });
+
   it('asks for another grouping when the switch changes', async () => {
     await flushSummaries('strategy');
     const byTicker = Array.from(el.querySelectorAll<HTMLButtonElement>('[role=radio]')).find(

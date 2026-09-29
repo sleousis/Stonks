@@ -75,6 +75,14 @@ describe('compareToReal', () => {
     expect(c.maxDrawdown).toBe(-0.02);
   });
 
+  it('leaves the real side empty when your portfolio started after the strategy', () => {
+    // The strategy ran from Sep 2; your portfolio only from Sep 3: not the same days.
+    const c = compareToReal('value-v1', SHADOW, [row('2026-09-03', 100), row('2026-09-04', 110)]);
+    expect(c.realReturn).toBeNull();
+    expect(c.excess).toBeNull();
+    expect(c.shadowReturn).toBeCloseTo(0.05);
+  });
+
   it('leaves the real side empty without overlapping history', () => {
     const c = compareToReal('value-v1', SHADOW, []);
     expect(c.realReturn).toBeNull();

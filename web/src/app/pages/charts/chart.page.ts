@@ -216,11 +216,14 @@ export class ChartPage {
   protected readonly signalColumns: TableColumn<ChartSignalView>[] = [
     { key: 'as_of', label: 'Date', format: 'date', mobile: 'title' },
     { key: 'kind', label: 'Signal', value: (s) => SIGNAL_WORDS[s.kind] ?? s.kind },
-    { key: 'strategy_id', label: 'Strategy' },
+    { key: 'strategy_id', label: 'Strategy', value: (s) => strategyDisplayName(s.strategy_id) },
     { key: 'reason', label: 'Why', value: (s) => s.reason ?? '', sortable: false },
   ];
   protected readonly fillKey = (f: ChartFillView) => `${f.order_client_id}-${f.filled_at}`;
   protected readonly signalKey = (s: ChartSignalView) => `${s.as_of}-${s.strategy_id}-${s.kind}`;
+
+  /** Numbers each query; only the latest one's answer may show. */
+  private searchSeq = 0;
 
   constructor() {
     void this.portfolioCtx.load();
@@ -230,6 +233,8 @@ export class ChartPage {
   protected onQuery(text: string): void {
     this.query.set(text);
     clearTimeout(this.timer);
+    // Each keystroke outdates any search still on its way.
+    const mine = ++this.searchSeq;
     const q = text.trim();
     if (q.length < 2) {
       this.suggestions.set([]);
@@ -238,9 +243,9 @@ export class ChartPage {
     this.timer = setTimeout(async () => {
       try {
         const page = await this.search.instruments(q, 8);
-        this.suggestions.set(page.items.map((i) => i.id));
+        if (mine === this.searchSeq) this.suggestions.set(page.items.map((i) => i.id));
       } catch {
-        this.suggestions.set([]);
+        if (mine === this.searchSeq) this.suggestions.set([]);
       }
     }, SEARCH_DEBOUNCE_MS);
   }

@@ -139,7 +139,9 @@ interface Open {
             <p class="failure" role="alert">{{ f }}</p>
           }
           <div class="sheet-actions">
-            <button type="button" class="btn" (click)="close(null)">Cancel</button>
+            <button type="button" class="btn" [disabled]="busy()" (click)="close(null)">
+              Cancel
+            </button>
             <button type="submit" class="btn btn-primary" [disabled]="busy()">Save universe</button>
           </div>
         </form>
@@ -247,7 +249,9 @@ export class SaveUniverseSheet {
         ...(c.screenId ? { screen_id: c.screenId } : { spec: c.spec }),
         ...(rule ? { start: this.start() || null, rebalance: this.rebalance() } : {}),
       });
-      this.close(saved);
+      // Report the universe to the caller that asked, even if the sheet moved on.
+      if (this.current() === c) this.current.set(null);
+      c.resolve(saved);
     } catch (err) {
       this.failure.set(errorMessage(err));
     } finally {
@@ -255,7 +259,9 @@ export class SaveUniverseSheet {
     }
   }
 
+  /** Cancel. Ignored while the save is on its way: the server may already have made it. */
   protected close(result: ScreenUniverseView | null): void {
+    if (this.busy()) return;
     const c = this.current();
     this.current.set(null);
     c?.resolve(result);

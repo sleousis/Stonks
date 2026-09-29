@@ -17,8 +17,9 @@ const STANCE_LABELS: Record<string, string> = {
 };
 
 /** Plain findings from a behaviour report, most telling first. */
-export function findings(r: BehaviourView): string[] {
+export function findings(r: BehaviourView, currency = 'USD'): string[] {
   const out: string[] = [];
+  const money = (v: number | null | undefined) => formatMoney(v, { currency });
   const d = r.disposition;
   if (d.present && d.ratio) {
     out.push(`You hold losers ${formatNumber(d.ratio, { digits: 1 })} times longer than winners.`);
@@ -26,13 +27,13 @@ export function findings(r: BehaviourView): string[] {
   if (r.revenge.trades > 0) {
     out.push(
       `${formatNumber(r.revenge.trades)} trades came within a day of a losing exit and made ` +
-        `${formatMoney(r.revenge.pnl)} together.`,
+        `${money(r.revenge.pnl)} together.`,
     );
   }
   if (r.overtrading.busy_days > 0) {
     out.push(
       `${formatNumber(r.overtrading.busy_days)} busy days (5 or more entries) made ` +
-        `${formatMoney(r.overtrading.busy_day_pnl)}.`,
+        `${money(r.overtrading.busy_day_pnl)}.`,
     );
   }
   const cost = r.against_strategies_cost;
@@ -40,7 +41,7 @@ export function findings(r: BehaviourView): string[] {
   if (cost !== null && cost !== undefined && against && against.trades > 0) {
     out.push(
       `${formatNumber(against.trades)} trades went against the active strategies and made ` +
-        `${formatMoney(cost)}.`,
+        `${money(cost)}.`,
     );
   }
   return out;
@@ -300,7 +301,7 @@ export class BehaviourPage {
   });
 
   protected readonly notes = computed(() =>
-    this.report.hasValue() ? findings(this.report.value()) : [],
+    this.report.hasValue() ? findings(this.report.value(), this.currency()) : [],
   );
   /** Weekdays with trades (weekends only when you traded then). */
   protected readonly weekdays = computed<BehaviourBucketView[]>(() =>
@@ -323,8 +324,9 @@ export class BehaviourPage {
   protected pct(v: number | null | undefined): string {
     return formatPercent(v ?? null, { digits: 0 });
   }
+  private readonly currency = computed(() => this.ctx.current()?.base_currency ?? 'USD');
   protected money(v: number | null | undefined): string {
-    return formatMoney(v ?? null, { currency: this.ctx.current()?.base_currency ?? 'USD' });
+    return formatMoney(v ?? null, { currency: this.currency() });
   }
   protected days(v: number | null | undefined): string {
     return formatNumber(v ?? null, { digits: 1 });

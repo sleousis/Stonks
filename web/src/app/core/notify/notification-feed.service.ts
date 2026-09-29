@@ -28,6 +28,8 @@ export class NotificationFeedService {
 
   private readonly count = signal(0);
   private watchers = 0;
+  /** Numbers each read; a count set after a read started wins over it. */
+  private sequence = 0;
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly onVisibility = () => this.sync(true);
 
@@ -54,8 +56,11 @@ export class NotificationFeedService {
 
   /** Re-read the unread count. A failed read keeps the last known count. */
   async refresh(): Promise<void> {
+    const mine = ++this.sequence;
     try {
-      this.count.set((await this.api.feed({ limit: 1 }, true)).unread_count);
+      const unread = (await this.api.feed({ limit: 1 }, true)).unread_count;
+      // A newer read or a mark-read since this one started knows better.
+      if (mine === this.sequence) this.count.set(unread);
     } catch {
       // Offline or signed out: keep what we had, say nothing.
     }
@@ -63,6 +68,7 @@ export class NotificationFeedService {
 
   /** The page read the feed or marked items read: take the server's count. */
   set(unread: number): void {
+    this.sequence++;
     this.count.set(Math.max(0, unread));
   }
 

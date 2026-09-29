@@ -76,6 +76,19 @@ describe('ProfilePage', () => {
     expect(el.textContent).not.toContain('MCP');
   });
 
+  it('offers only the token scopes your role may hold', async () => {
+    const scopes = (el: HTMLElement) =>
+      [...el.querySelectorAll('.scopes strong')].map((i) => i.textContent?.trim());
+    const viewer = await render({ ...TRADER, role: 'viewer', scopes: ['read'] });
+    expect(scopes(viewer)).toEqual(['Read']);
+  });
+
+  it('offers a trader read, trade and lab scopes', async () => {
+    const el = await render();
+    const values = [...el.querySelectorAll('.scopes strong')].map((i) => i.textContent?.trim());
+    expect(values).toEqual(['Read', 'Trade', 'Lab']);
+  });
+
   it('checks the new password before sending', async () => {
     const el = await render();
     type(el, '#pw-current', 'old-password');

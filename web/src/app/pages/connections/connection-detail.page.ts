@@ -162,7 +162,19 @@ export class ConnectionDetailPage implements OnInit {
    * trades real money, and the provider's name typed to confirm.
    */
   private disconnectTicket(name: string): ConfirmOptions {
-    const accounts = this.accounts.hasValue() ? this.accounts.value() : [];
+    if (!this.accounts.hasValue()) {
+      // The accounts did not load: the links are not known, so never say
+      // none is archived, and ask as for real money.
+      return {
+        title: `Disconnect ${name}?`,
+        message: `Stonks stops reading from ${name}. The linked accounts could not be read, and every portfolio linked to ${name} is archived. Your account at ${name} is not touched. You may be asked for a fresh code.`,
+        confirmLabel: `Disconnect ${name}`,
+        tone: 'danger',
+        typedConfirmation: name,
+        ticket: { live: true, lines: [{ label: 'Linked portfolios', value: 'Not known' }] },
+      };
+    }
+    const accounts = this.accounts.value();
     const linked = accounts.filter((a) => !!a.portfolio_id);
     const books = linked.map((a) => ({
       account: a.name,

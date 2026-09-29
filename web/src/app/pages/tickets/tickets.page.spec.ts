@@ -5,6 +5,7 @@ import { provideRouter } from '@angular/router';
 import type { OrderDraftView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import type { TicketView } from '../../api/tickets.service';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
@@ -12,6 +13,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { TicketCountService } from '../../core/tickets/ticket-count.service';
 import { TRADER } from '../../../testing/auth-fixtures';
 import { provideFakeTax } from '../../../testing/fake-tax';
+import { book } from '../../../testing/portfolio-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { TicketsPage } from './tickets.page';
 
@@ -145,6 +147,19 @@ describe('TicketsPage', () => {
     expect(count.waiting()).toBe(1);
   });
 
+  it("shows a ticket's money in its portfolio's currency", async () => {
+    const ctx = TestBed.inject(PortfolioContextService);
+    const loading = ctx.load();
+    (await nextRequest(controller, '/api/portfolios')).flush(
+      page([book({ id: 'pf_live', name: 'Growth', trading: 'live', base_currency: 'EUR' })]),
+    );
+    await loading;
+    const el = await render([ticket()]);
+    const card = el.querySelector('article.ticket')!;
+    expect(card.textContent).toContain('€');
+    expect(card.textContent).not.toContain('$');
+  });
+
   it('says so when nothing waits', async () => {
     const el = await render([ticket({ status: 'filled', hold: null })]);
     expect(el.textContent).toContain('Nothing waits for you');
@@ -163,6 +178,22 @@ describe('TicketsPage', () => {
     fixture.detectChanges();
     expect(el.querySelectorAll('article.ticket').length).toBe(1);
     expect(success).toHaveBeenCalledWith(expect.stringContaining('before the open'));
+  });
+
+  it('sends one approval for a double click while the code check runs', async () => {
+    let pass!: (ok: boolean) => void;
+    vi.spyOn(TestBed.inject(StepUpService), 'ensure').mockReturnValue(
+      new Promise<boolean>((resolve) => (pass = resolve)),
+    );
+    const el = await render([ticket(), MSFT]);
+    button(el, 'Approve', 1).click();
+    button(el, 'Approve', 1).click();
+    pass(true);
+    await tick();
+    const reqs = controller.match('/api/tickets/approve');
+    expect(reqs.length).toBe(1);
+    reqs[0].flush({ items: [ticket({ status: 'approved' })] });
+    await tick();
   });
 
   it('sends nothing when the code is cancelled', async () => {

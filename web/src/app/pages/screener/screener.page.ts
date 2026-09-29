@@ -29,6 +29,7 @@ import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { formatDate, formatNumber } from '../../core/format/format';
+import { errorMessage } from '../../core/http/api-error';
 import { ToastService } from '../../core/notify/toast.service';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { JobProgress, JobResult } from '../../shared/ui/job-progress';
@@ -281,14 +282,17 @@ export class ScreenerPage {
   // ---- saved screens ------------------------------------------------------------------
 
   async openScreen(s: SavedScreenView): Promise<void> {
+    // The form reads percent bounds through the metric units: wait for them.
+    if (!this.metrics.hasValue()) return;
     try {
       const fresh = await this.api.get(s.id);
       this.load(fresh);
       this.result.set(null);
       this.savedUniverse.set(null);
       this.toasts.info(`Opened ${fresh.name}. Run it to see today's matches.`);
-    } catch {
-      // The error interceptor already showed the API's message.
+    } catch (err) {
+      // A read: the error interceptor does not toast it, so say so here.
+      this.toasts.error(errorMessage(err), `Could not open ${s.name}`);
     }
   }
 

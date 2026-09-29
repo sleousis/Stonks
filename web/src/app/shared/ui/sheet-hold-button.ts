@@ -55,6 +55,9 @@ let nextId = 0;
     <span class="visually-hidden" [id]="hintId">
       Press and hold for one second, or hold Enter or Space. With a screen reader, press twice.
     </span>
+    <span class="visually-hidden" aria-live="polite">{{
+      armed() ? 'Press again to confirm' : ''
+    }}</span>
   `,
   styles: `
     :host {

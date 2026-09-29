@@ -386,7 +386,7 @@
             data-path="risk.stop_loss_pct"
             [attr.aria-invalid]="invalid('risk.stop_loss_pct')"
             [value]="pct(s.risk.stop_loss_pct)"
-            (change)="setRisk('stop_loss_pct', $any($event.target).value)"
+            (change)="setRisk('stop_loss_pct', $any($event.target))"
           />
           <span aria-hidden="true">% below entry</span>
         </div>
@@ -418,7 +418,7 @@
             data-path="risk.take_profit_pct"
             [attr.aria-invalid]="invalid('risk.take_profit_pct')"
             [value]="pct(s.risk.take_profit_pct)"
-            (change)="setRisk('take_profit_pct', $any($event.target).value)"
+            (change)="setRisk('take_profit_pct', $any($event.target))"
           />
           <span aria-hidden="true">% above entry</span>
         </div>

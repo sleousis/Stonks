@@ -238,6 +238,7 @@ describe('LoginPage', () => {
   it('shows a wait, not the password form, on a reload mid sign-in (UX-70)', async () => {
     const el = render({ step: 'code' });
     expect(heading(el)).toBe('Signing in');
+    expect(el.querySelector('[role="status"]')?.textContent?.trim()).toBe('One moment…');
     expect(el.querySelector('#login-password')).toBeNull();
     (await nextRequest(controller, '/api/auth/mfa/enrol', 'POST')).flush(problem(409, 'x'), {
       status: 409,

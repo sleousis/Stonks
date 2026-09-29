@@ -289,7 +289,10 @@ export class SuggestedOrders {
   }
 
   protected async approve(d: OrderDraftView): Promise<void> {
-    const live = this.isLive(d);
+    // A portfolio missing from the list (not loaded, failed) may trade real
+    // money: ask as for real money rather than confirm it as paper.
+    const known = this.ctx.options().some((p) => p.id === d.portfolio_id);
+    const live = known ? this.isLive(d) : true;
     const ok = await this.stepUp.ensure(`Approve the order for ${d.ticker}.`);
     if (!ok) return;
     const confirmed = await this.confirm.confirm({
@@ -311,6 +314,11 @@ export class SuggestedOrders {
     this.setProblem(d.id, null);
     try {
       const { order } = await this.api.approve(d.id);
+      if (order.status === 'rejected') {
+        // Approved, but the order did not trade (cash, a broker rejection).
+        this.setProblem(d.id, `Not placed: ${order.reason ?? 'the order was rejected'}.`);
+        return;
+      }
       this.toasts.success(
         order.status === 'filled'
           ? `Placed and filled: ${order.side} ${formatNumber(order.quantity)} ${order.ticker}.`
@@ -334,7 +342,7 @@ export class SuggestedOrders {
       title: `Reject the suggested order for ${d.ticker}?`,
       message: 'Nothing is placed. The assistant sees that you said no.',
       confirmLabel: 'Reject',
-      tone: 'danger',
+      tone: this.isLive(d) ? 'danger' : 'default',
       minReason: 0,
       reasonHint: 'Optional. Kept with the suggested order.',
     });

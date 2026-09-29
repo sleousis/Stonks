@@ -1,7 +1,10 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
+  Injector,
   type OnInit,
+  afterNextRender,
   computed,
   inject,
   input,
@@ -559,6 +562,8 @@ export function orderLines(
 })
 export class ManualTicketPage implements OnInit {
   private readonly api = inject(ManualOrdersService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   private readonly ctx = inject(PortfolioContextService);
   private readonly session = inject(SessionService);
   private readonly stepUp = inject(StepUpService);
@@ -668,20 +673,14 @@ export class ManualTicketPage implements OnInit {
       return;
     }
     if (errs.stop || errs.risk) return;
-    const value = Number(this.risk());
-    const limit = this.orderType() === 'limit' ? Number(this.limit()) : NaN;
+    const body = this.sizingBody();
     this.busy.set(true);
     this.failure.set(null);
     try {
-      const result = await this.api.plan({
-        ticker,
-        side: this.sideField(),
-        stop_price: Number(this.stop()),
-        target_price: optionalPrice(this.target()),
-        entry_price: limit > 0 ? limit : null,
-        risk_percent: this.riskMode() === 'percent' ? value : null,
-        risk_amount: this.riskMode() === 'amount' ? value : null,
-      });
+      const result = await this.api.plan(body);
+      // The ticket changed while the size was on its way: this size is for
+      // other inputs, so it must not fill the quantity.
+      if (JSON.stringify(this.sizingBody()) !== JSON.stringify(body)) return;
       this.triedPlan.set(false);
       if (result.quantity > 0) this.edit(this.quantity, String(result.quantity));
       this.plan.set(result);
@@ -692,6 +691,21 @@ export class ManualTicketPage implements OnInit {
       this.busy.set(false);
     }
   }
+  /** The sizing request for the fields as they stand now. */
+  private sizingBody() {
+    const value = Number(this.risk());
+    const limit = this.orderType() === 'limit' ? Number(this.limit()) : NaN;
+    return {
+      ticker: this.tickerField().trim().toUpperCase(),
+      side: this.sideField(),
+      stop_price: Number(this.stop()),
+      target_price: optionalPrice(this.target()),
+      entry_price: limit > 0 ? limit : null,
+      risk_percent: this.riskMode() === 'percent' ? value : null,
+      risk_amount: this.riskMode() === 'amount' ? value : null,
+    };
+  }
+
   protected money(v: number): string {
     return formatMoney(v, { currency: this.currency() });
   }
@@ -734,13 +748,20 @@ export class ManualTicketPage implements OnInit {
   /** Check, confirm on the ticket (a fresh code first for real money), then place. */
   async place(): Promise<void> {
     if (!this.request()) return;
-    const live = this.live();
+    let live = this.live();
     if (live) {
       const ok = await this.stepUp.ensure(`Place a real-money order for ${this.tickerField()}.`);
       if (!ok) return;
     }
     const checked = await this.check();
     if (!checked) return;
+    // The server's check says whether the book trades real money; the picker
+    // may not know (its list failed, or no default is picked).
+    if (checked.live && !live) {
+      const fresh = await this.stepUp.ensure(`Place a real-money order for ${checked.ticker}.`);
+      if (!fresh) return;
+      live = true;
+    }
     const ok = await this.confirm.confirm({
       title: `${checked.side === 'buy' ? 'Buy' : 'Sell'} ${formatNumber(checked.quantity)} ${checked.ticker}?`,
       message: live
@@ -763,6 +784,13 @@ export class ManualTicketPage implements OnInit {
       const result = await this.api.place(body);
       this.placed.set(result);
       this.preview.set(null);
+      if (result.status === 'rejected') {
+        // Nothing traded: keep what was typed so the trader can fix and retry.
+        this.toasts.error(this.placedText(result), 'Order rejected');
+        this.key = newKey();
+        this.list()?.reload();
+        return;
+      }
       this.toasts.success(this.placedText(result));
       this.quantity.set('');
       this.reason.set('');
@@ -808,7 +836,14 @@ export class ManualTicketPage implements OnInit {
 
   private request(): ManualOrderRequest | null {
     this.tried.set(true);
-    if (Object.keys(this.errors()).length) return null;
+    if (Object.keys(this.errors()).length) {
+      // The errors may sit far above the button on a phone: go to the first.
+      afterNextRender(
+        () => this.host.nativeElement.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
+        { injector: this.injector },
+      );
+      return null;
+    }
     const limit = this.orderType() === 'limit' ? Number(this.limit()) : null;
     return {
       ticker: this.tickerField().trim().toUpperCase(),

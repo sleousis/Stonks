@@ -65,6 +65,23 @@ describe('ConnectionCallbackPage', () => {
     expect(open?.getAttribute('href')).toBe('/connections/con_2');
   });
 
+  it('still says connected when only the accounts read fails', async () => {
+    setUp({ connection_id: 'con_2', state: 'st_1' });
+    (await nextRequest(http, '/api/connections/callback')).flush(
+      connection({ id: 'con_2', provider: 'snaptrade' }),
+    );
+    await tick();
+    (await nextRequest(http, '/api/connections/con_2/accounts')).flush(
+      { title: 'Server error', status: 500, detail: 'busy' },
+      { status: 500, statusText: 'Server Error' },
+    );
+    (await nextRequest(http, '/api/connections/providers')).flush([SNAPTRADE]);
+    await settle();
+    expect(el.textContent).toContain('SnapTrade is connected.');
+    expect(el.textContent).not.toContain('Could not finish connecting');
+    expect(el.textContent).toContain('Could not read the accounts');
+  });
+
   it('says the provider did not finish when the connection stays pending', async () => {
     setUp({ connection_id: 'con_2', state: 'st_1', status: 'ABANDONED' });
     (await nextRequest(http, '/api/connections/callback')).flush(

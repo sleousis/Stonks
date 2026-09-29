@@ -48,4 +48,11 @@ describe('SseParser', () => {
     const out = new SseParser().push('event: status\ndata: 1\n\nevent: done\ndata: 2\n\n');
     expect(out.map((m) => m.event)).toEqual(['status', 'done']);
   });
+  it('keeps a CRLF split by an empty chunk as one line end', () => {
+    // A decoder that holds half a multi-byte character hands back "".
+    const p = new SseParser();
+    expect(p.push('data: a\r')).toEqual([]);
+    expect(p.push('')).toEqual([]);
+    expect(p.push('\ndata: b\r\n\r\n')).toEqual([{ event: 'message', data: 'a\nb' }]);
+  });
 });

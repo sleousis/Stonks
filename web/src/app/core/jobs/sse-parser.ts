@@ -21,6 +21,9 @@ export class SseParser {
 
   push(chunk: string): SseMessage[] {
     const out: SseMessage[] = [];
+    // Nothing new (a decoder holding half a character returns ""): keep a
+    // pending `\r`, so the `\n` of its `\r\n` in the next chunk is not a blank line.
+    if (chunk === '') return out;
     let text = chunk;
     // A `\r\n` split across chunks: the `\n` belongs to the line already ended.
     if (this.pendingCR && text.startsWith('\n')) text = text.slice(1);

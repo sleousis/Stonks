@@ -428,6 +428,8 @@ export class StatementImportPage {
   protected readonly dateFormat = signal('');
   protected readonly exchange = signal('');
   protected readonly result = signal<StatementPreview | null>(null);
+  /** The request the shown preview was made from; Import sends only this. */
+  private previewed: string | null = null;
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal<'preview' | 'commit' | 'undo' | null>(null);
 
@@ -515,6 +517,7 @@ export class StatementImportPage {
       this.headers.set(out.headers);
       this.guessed.set(out.guessed);
       this.result.set(out);
+      this.previewed = JSON.stringify(this.body());
     } catch (e) {
       this.error.set(e instanceof Error ? e.message : 'Could not read the statement.');
     } finally {
@@ -523,10 +526,18 @@ export class StatementImportPage {
   }
 
   protected async commit(): Promise<void> {
+    const body = this.body();
+    // A field changed since the preview: its rows and counts no longer say
+    // what would be imported, or into which portfolio.
+    if (JSON.stringify(body) !== this.previewed) {
+      this.result.set(null);
+      this.error.set('The settings changed since the preview. Preview again.');
+      return;
+    }
     this.busy.set('commit');
     this.error.set(null);
     try {
-      const done = await this.api.commit(this.body());
+      const done = await this.api.commit(body);
       this.toasts.success(
         `${done.rows_added} rows imported into ${done.portfolio_name ?? done.portfolio_id}.`,
         'Statement imported',

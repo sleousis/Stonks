@@ -5,6 +5,8 @@ import { Sheet } from '../../shared/ui/sheet';
 interface Open {
   /** "Buy 5 AAPL.US", shown in the title. */
   what: string;
+  /** The ticket's portfolio trades real money: only then a red button. */
+  live: boolean;
   resolve: (reason: string | null) => void;
 }
 
@@ -53,7 +55,14 @@ export const MIN_REASON = 3;
           </div>
           <div class="sheet-actions">
             <button type="button" class="btn" (click)="answer(false)">Keep it</button>
-            <button type="submit" class="btn btn-danger">Reject</button>
+            <button
+              type="submit"
+              class="btn"
+              [class.btn-danger]="req.live"
+              [class.btn-primary]="!req.live"
+            >
+              Reject
+            </button>
           </div>
         </form>
       }
@@ -72,9 +81,9 @@ export class RejectSheet {
   protected readonly reason = linkedSignal({ source: this.current, computation: () => '' });
   protected readonly tried = linkedSignal({ source: this.current, computation: () => false });
 
-  open(what: string): Promise<string | null> {
+  open(what: string, live = true): Promise<string | null> {
     this.current()?.resolve(null);
-    return new Promise((resolve) => this.current.set({ what, resolve }));
+    return new Promise((resolve) => this.current.set({ what, live, resolve }));
   }
 
   protected short(): boolean {

@@ -282,7 +282,10 @@ export class PortfolioCard {
       .map((p) => ({
         ticker: p.ticker,
         quantity: `${formatNumber(p.quantity)} shares`,
-        value: p.market_value == null ? 'n/a' : formatMoney(p.market_value),
+        value:
+          p.market_value == null
+            ? 'n/a'
+            : formatMoney(p.market_value, { currency: p.currency ?? this.currency() }),
         pnl:
           p.unrealized_pnl_pct == null ? '' : formatPercent(p.unrealized_pnl_pct, { signed: true }),
         tone: toneClass(p.unrealized_pnl_pct),

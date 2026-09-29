@@ -304,6 +304,7 @@
                 type="button"
                 class="btn"
                 [attr.aria-label]="'Open ' + s.name"
+                [disabled]="!metrics.hasValue()"
                 (click)="openScreen(s)"
               >
                 Open

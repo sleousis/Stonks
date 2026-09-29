@@ -270,7 +270,7 @@
                             (change)="followPortfolio.set($any($event.target).value)"
                           >
                             @for (p of portfolios.options(); track p.id) {
-                              <option [value]="p.id" [selected]="portfolios.current()?.id === p.id">
+                              <option [value]="p.id" [selected]="followBook() === p.id">
                                 {{ p.name }}
                               </option>
                             }

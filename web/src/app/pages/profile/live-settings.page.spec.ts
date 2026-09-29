@@ -1,12 +1,15 @@
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { type WritableSignal, signal } from '@angular/core';
 import { type ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
+import { LiveService } from '../../api/live.service';
 import type { GateReportView, LiveRulesView, LiveStageView, MarginView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { StepUpService } from '../../core/auth/step-up.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
+import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
 import { OPTIONS_OFF } from '../../../testing/fake-options-live';
@@ -427,5 +430,41 @@ describe('LiveSettingsPage', () => {
   it('explains a paper portfolio has no live settings', async () => {
     const el = await render('pf_paper');
     expect(el.textContent).toContain('This portfolio trades on paper');
+  });
+});
+
+describe('LiveSettingsPage stage per portfolio', () => {
+  it('forgets the last portfolio stage when the page moves to another one', async () => {
+    const never = () => new Promise<never>(() => undefined);
+    TestBed.overrideComponent(LiveSettingsPage, { set: { template: '', imports: [] } });
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        {
+          provide: LiveService,
+          useValue: { allocation: never, profile: never, rules: never },
+        },
+        {
+          provide: PortfolioContextService,
+          useValue: {
+            options: signal([LIVE, { ...LIVE, id: 'pf_other', name: 'Other' }]),
+            load: () => Promise.resolve(),
+          },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(LiveSettingsPage);
+    const page = fixture.componentInstance as unknown as {
+      stage: WritableSignal<string | null>;
+      realMoney: () => boolean;
+    };
+    fixture.componentRef.setInput('id', 'pf_live');
+    fixture.detectChanges();
+    page.stage.set('live_small');
+    expect(page.realMoney()).toBe(true);
+    // The router reuses the page for /profile/live/pf_other: no brass before its stage loads.
+    fixture.componentRef.setInput('id', 'pf_other');
+    fixture.detectChanges();
+    expect(page.realMoney()).toBe(false);
   });
 });

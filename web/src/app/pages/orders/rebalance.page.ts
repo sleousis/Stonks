@@ -3,6 +3,7 @@ import {
   Component,
   computed,
   inject,
+  linkedSignal,
   resource,
   signal,
 } from '@angular/core';
@@ -260,7 +261,7 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
               <option value="vwap">VWAP</option>
             </select>
           </div>
-          @if (algo === 'adaptive') {
+          @if (algo() === 'adaptive') {
             <div class="field">
               <label for="rb-priority">Priority</label>
               <select id="rb-priority" class="input" name="priority" [(ngModel)]="priority">
@@ -269,7 +270,7 @@ export function algoText(s: Pick<AlgoSettingView, 'algo' | 'params'> | null | un
                 <option value="urgent">Urgent</option>
               </select>
             </div>
-          } @else if (algo !== 'plain') {
+          } @else if (algo() !== 'plain') {
             <div class="field">
               <label for="rb-end">Minutes after the open to finish</label>
               <input
@@ -381,13 +382,12 @@ export class RebalancePage {
   protected shortRate: number | null = null;
   protected longRate: number | null = null;
   protected reason = '';
-  protected algo: AlgoChoice = 'plain';
-  protected priority = 'normal';
-  protected endMinutes: number | null = null;
 
   protected readonly busy = signal(false);
   protected readonly problem = signal<string | null>(null);
   protected readonly plan = signal<RebalancePlanView | null>(null);
+  /** The request the shown plan was made from; Write tickets sends only this. */
+  private planned: PlanRequest | null = null;
   protected readonly portfolioId = computed(() => this.ctx.current()?.id ?? null);
   protected readonly canTrade = computed(() => this.session.can('portfolio.trade'));
   protected readonly canManage = computed(() => this.session.can('portfolio.manage'));
@@ -404,6 +404,17 @@ export class RebalancePage {
   protected readonly ownSetting = computed(
     () => this.settings.value()?.items.find((s) => !s.strategy_id) ?? null,
   );
+  /** The form starts from the stored setting, so Save on an untouched form keeps it. */
+  protected readonly algo = linkedSignal<AlgoChoice>(
+    () => (this.ownSetting()?.algo as AlgoChoice | undefined) ?? 'plain',
+  );
+  protected readonly priority = linkedSignal(() =>
+    String(this.ownSetting()?.params?.['priority'] ?? 'normal'),
+  );
+  protected readonly endMinutes = linkedSignal<number | null>(() => {
+    const end = this.ownSetting()?.params?.['end_minutes'];
+    return typeof end === 'number' ? end : null;
+  });
 
   private readonly currency = computed(() => this.ctx.current()?.base_currency ?? 'USD');
   protected readonly money = (v: number | null | undefined) =>
@@ -467,8 +478,10 @@ export class RebalancePage {
     this.problem.set(null);
     try {
       this.plan.set(await this.api.plan(body));
+      this.planned = body;
     } catch (err) {
       this.plan.set(null);
+      this.planned = null;
       this.problem.set(errorMessage(err));
     } finally {
       this.busy.set(false);
@@ -479,6 +492,14 @@ export class RebalancePage {
     const body = this.request();
     const pl = this.plan();
     if (typeof body === 'string' || !pl) return;
+    // The form or the portfolio changed since the preview: the plan on screen
+    // no longer says what would be written.
+    if (JSON.stringify(body) !== JSON.stringify(this.planned)) {
+      this.plan.set(null);
+      this.planned = null;
+      this.problem.set('The form changed since the preview. Preview the plan again.');
+      return;
+    }
     const ok = await this.confirmer.confirm({
       title: `Write ${this.trades().length} order ticket(s)?`,
       message: 'Each ticket waits on Approvals for your code. Nothing is sent before that.',
@@ -512,16 +533,18 @@ export class RebalancePage {
     if (!portfolio) return;
     this.busy.set(true);
     try {
-      if (this.algo === 'plain') {
+      const algo = this.algo();
+      const end = this.endMinutes();
+      if (algo === 'plain') {
         await this.api.clearAlgo(portfolio);
       } else {
         const params: Record<string, unknown> =
-          this.algo === 'adaptive'
-            ? { priority: this.priority }
-            : this.endMinutes
-              ? { end_minutes: Number(this.endMinutes) }
+          algo === 'adaptive'
+            ? { priority: this.priority() }
+            : end
+              ? { end_minutes: Number(end) }
               : {};
-        await this.api.setAlgo(portfolio, { algo: this.algo, params });
+        await this.api.setAlgo(portfolio, { algo, params });
       }
       this.toasts.success('Saved how orders are worked.');
       this.settings.reload();

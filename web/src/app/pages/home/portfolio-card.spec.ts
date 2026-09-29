@@ -92,6 +92,27 @@ describe('PortfolioCard', () => {
     );
   });
 
+  it('shows each holding in its own currency', async () => {
+    const el = await render([book({ id: 'pf_1', name: 'Main', is_default: true })], undefined, {
+      portfolio: {
+        currency: 'EUR',
+        positions: [
+          {
+            ticker: 'SAP.XETRA',
+            quantity: 2,
+            price: 150,
+            price_date: '2026-09-25',
+            market_value: 300,
+            weight: 1,
+            currency: 'EUR',
+          },
+        ],
+      },
+    });
+    expect(el.textContent).toContain('€300.00');
+    expect(el.textContent).not.toContain('$300.00');
+  });
+
   it('shows no base line when the base currency is the one shown', async () => {
     const el = await render([book({ id: 'pf_1', name: 'Main', is_default: true })]);
     expect(el.textContent).not.toContain('Value in');

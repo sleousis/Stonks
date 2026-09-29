@@ -1,4 +1,5 @@
 import type { ChartView } from '../../api/models';
+import { newCandleWindow } from '../../shared/chart/chart-engine';
 import { chartData, chartSummary, dayOf, sma, toCandles, toMarkers } from './chart-data';
 
 function bar(day: string, close: number, open = close) {
@@ -111,6 +112,19 @@ describe('chart data', () => {
     expect(withMa.overlays[0].id).toBe('ma20');
     expect(withMa.overlays[0].points).toEqual([]); // fewer than 20 bars
     expect(withMa.markers.map((m) => m.kind)).toEqual(['buy', 'sell', 'entry', 'change']);
+  });
+
+  it('keeps the zoom when a toggle rebuilds the same bars, and fits new ones', () => {
+    const opts = { bars: 3, averages: [], fills: true, signals: true, volume: true };
+    const before = chartData(VIEW, opts).candles;
+    expect(newCandleWindow(before, chartData(VIEW, { ...opts, volume: false }).candles)).toBe(
+      false,
+    );
+    expect(newCandleWindow(before, chartData(VIEW, { ...opts, averages: [20] }).candles)).toBe(
+      false,
+    );
+    expect(newCandleWindow(before, chartData(VIEW, { ...opts, bars: 2 }).candles)).toBe(true);
+    expect(newCandleWindow([], before)).toBe(true);
   });
 
   it('sums the chart up in a sentence', () => {

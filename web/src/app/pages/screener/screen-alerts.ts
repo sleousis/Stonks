@@ -28,6 +28,12 @@ export function cadenceLabel(alert: Pick<ScreenAlertView, 'cadence' | 'weekday'>
   return 'Daily';
 }
 
+/** The "When" select's value for a stored alert ("" when there is none). */
+export function whenValue(alert: ScreenAlertView | null | undefined): string {
+  if (!alert) return '';
+  return alert.cadence === 'weekly' && alert.weekday != null ? String(alert.weekday) : 'daily';
+}
+
 /** What the value of the "When" select means as an alert body. */
 export function alertBody(when: string): ScreenAlertSet {
   if (when === 'daily') return { enabled: true, cadence: 'daily', weekday: null };
@@ -99,7 +105,7 @@ export function alertBody(when: string): ScreenAlertSet {
                     class="input"
                     [id]="'alert-when-' + s.id"
                     [disabled]="!canEdit() || busy() === s.id"
-                    (change)="setWhen(s, $any($event.target).value)"
+                    (change)="setWhen(s, $any($event.target))"
                   >
                     @if (!a) {
                       <option value="" selected>Choose when</option>
@@ -231,7 +237,8 @@ export class ScreenAlerts {
     return formatDate(value);
   }
 
-  protected async setWhen(screen: SavedScreenView, when: string): Promise<void> {
+  protected async setWhen(screen: SavedScreenView, select: HTMLSelectElement): Promise<void> {
+    const when = select.value;
     if (!when) return;
     this.busy.set(screen.id);
     try {
@@ -239,7 +246,9 @@ export class ScreenAlerts {
       this.toasts.success(`${screen.name} alerts you ${cadenceLabel(saved).toLowerCase()}.`);
       this.alerts.reload();
     } catch {
-      // The error interceptor already showed the API's message.
+      // The error interceptor already showed the API's message. Put the
+      // select back: its option bindings did not change, so nothing else will.
+      select.value = whenValue(this.byScreen().get(screen.id));
     } finally {
       this.busy.set(null);
     }
