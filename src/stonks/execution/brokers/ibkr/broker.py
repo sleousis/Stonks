@@ -106,7 +106,7 @@ from stonks.logging import get_logger
 from stonks.options.chain import OptionQuote
 from stonks.options.live.events import OptionEvent
 from stonks.options.live.gate import OptionsGate
-from stonks.production.live.stages import REAL_MONEY
+from stonks.production.live.stage_guard import ensure_stage_allows
 
 _log = get_logger("stonks.execution.brokers.ibkr")
 
@@ -290,26 +290,19 @@ class IbkrBroker:
             )
         return account
 
+    @property
+    def real_money(self) -> bool:
+        """A live gateway trades real money (the stage guard reads it)."""
+        return self.mode == "live"
+
     def _ensure_stage_allows(self, order: Order) -> None:
         """At a live gateway an order that may open needs the portfolio at
         ``live_small`` or higher. A close (a sell that does not open a
-        short, or a buy marked as covering one) goes out at any stage."""
-        closes = order.position_effect == "close" or (
-            order.side == "sell" and order.position_effect != "open"
-        )
-        if self.mode != "live" or closes:
+        short, or a buy marked as covering one) goes out at any stage. The
+        one rule for every real-money broker (``production.live.stage_guard``)."""
+        if self.mode != "live":
             return
-        try:
-            stage = self._stage_lookup() if self._stage_lookup is not None else None
-        except Exception as exc:
-            raise LiveTradingRefusedError(
-                f"the portfolio's live stage could not be read ({exc}): refusing to open"
-            ) from exc
-        if stage not in REAL_MONEY:
-            raise LiveTradingRefusedError(
-                f"real-money orders that open need the portfolio at stage live_small or higher"
-                f" (it is {stage or 'unknown'})"
-            )
+        ensure_stage_allows(order, self._stage_lookup)
 
     def login_check(self) -> LoginCheck:
         """Connect, check the account and read the server time. The health

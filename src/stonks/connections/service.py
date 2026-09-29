@@ -855,9 +855,15 @@ class ConnectionService:
                 cls, record.id, extra={"state": self._state, "session": session}
             )
             conn = cls.open(credentials, context)
-            return conn.trader(portfolio.external_account_id)
+            trader = conn.trader(portfolio.external_account_id)
         except ProviderError as exc:
             raise _redacted(exc, credentials) from None
+        # Roadmap 19.9: a real-money account opens positions only at
+        # live_small or higher; closes always go out (P28). One guard for
+        # every provider's trader and every order path.
+        from stonks.production.live.stage_guard import guard_live_stage, portfolio_stage_lookup
+
+        return guard_live_stage(trader, portfolio_stage_lookup(self._state, portfolio_id))
 
     # ---- key rotation ---------------------------------------------------------------------
 

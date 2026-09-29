@@ -76,6 +76,8 @@ class FakeBook:
     orders: dict[str, BrokerOrderState] = field(default_factory=dict)
     #: ``fake_trading``: stop orders waiting at the broker, by client id.
     resting: dict[str, tuple[str, Order]] = field(default_factory=dict)
+    #: ``fake_trading``: the account trades real money (the stage guard applies).
+    real_money: bool = False
 
     def trigger_stop(self, client_id: str, price: float) -> None:
         """The market reached a resting stop: it fills in full at ``price``."""
@@ -240,6 +242,10 @@ class FakeTrader:
         self._conn = connection
         self._book = connection.book
         self._account_id = account_id
+
+    @property
+    def real_money(self) -> bool:
+        return self._book.real_money
 
     def fetch_portfolio(self) -> Portfolio:
         self._conn.call("fetch_portfolio")

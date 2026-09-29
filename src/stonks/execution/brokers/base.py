@@ -69,6 +69,12 @@ class OrderRejectedError(BrokerError):
     account, untradable asset, quantity below the broker minimum, ...)."""
 
 
+class StageRefusedError(OrderRejectedError, LiveTradingRefusedError):
+    """The portfolio's live stage refuses an opening real-money order
+    (roadmap 19.9). Raised before anything is sent, so every order path
+    records it as rejected, never as an unknown outcome."""
+
+
 class BrokerUnavailableError(BrokerError):
     """The broker could not be reached (gateway down, link to the broker
     lost, competing session). A short outage: the book skips and alerts,

@@ -490,3 +490,20 @@ def test_disabling_a_user_pauses_their_approve_subscriptions(world):
         "SELECT paused_reason FROM subscriptions WHERE id = ?", [world.bob_auto]
     )
     assert row["paused_reason"] == "user_disabled"
+
+
+def test_a_real_money_connection_below_live_small_opens_nothing(world):
+    """Roadmap 19.9 outside IBKR: a linked account that trades real money
+    sends no opening order while its portfolio stands below live_small.
+    The guard sits on the trader the connection opens, so the tick, manual
+    orders and tickets all meet it."""
+    from stonks.production.live.stages import change_stage
+
+    world.book.real_money = True
+    world.tick(DAY1)
+    assert world.book.orders == {}, "no opening order reached the real-money account"
+    for stage in ("broker_paper", "live_small"):
+        change_stage(world.state, world.live, stage, actor="t", reason="gates passed",
+                     gate_report={"target": stage, "passed": True})  # fmt: skip
+    world.tick(DAY2)
+    assert world.book.orders, "at live_small the book opens"
