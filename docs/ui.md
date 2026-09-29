@@ -29,7 +29,8 @@ STONKS_API_TOKEN=... uv run stonks serve     # 127.0.0.1:8000
 `npm run build` writes the production bundle to `web/dist/`; `stonks serve` then
 serves it at `/` with single-page fallback (`[api].ui_dist`), so one process
 serves both. The dev server origin (`http://localhost:4200`) is the API's
-`[api].ui_origin` for CORS, although the proxy makes CORS unnecessary in dev.
+`[api].ui_origin` for CORS in the dev profile only (`STONKS_PROFILE=dev`),
+although the proxy makes CORS unnecessary in dev.
 
 Every call needs a credential. Sign in, or paste an API token (in the
 closed "For scripts" section of the sign-in page, open only in dev, or of

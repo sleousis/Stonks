@@ -133,7 +133,7 @@ The API answers only requests whose `Host` is a loopback name, `[api].host` (whe
 
 ## CORS
 
-Only `[api].ui_origin`, the Angular dev server (`http://localhost:4200`), may call the API from another origin. It may send the cookie and `X-CSRF-Token`. The built console is served from the same origin and needs no CORS.
+Only `[api].ui_origin`, the Angular dev server (`http://localhost:4200`), may call the API from another origin, and only in the dev profile (`STONKS_PROFILE=dev` sets `[api].cors_ui_origin`). It may send the cookie and `X-CSRF-Token`. On a server CORS is off. The built console is served from the same origin and needs no CORS.
 
 ## What is stored
 

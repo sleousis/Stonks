@@ -455,6 +455,10 @@ class ApiConfig(BaseModel):
     port: int = 8000
     # The only browser origin CORS lets through (the Angular dev server).
     ui_origin: str = "http://localhost:4200"
+    # CORS for ``ui_origin``, with credentials. Off by default, so a server
+    # never lets another origin send the session cookie; the dev profile
+    # (STONKS_PROFILE=dev) turns it on.
+    cors_ui_origin: bool = False
     # GET routes skip the credential when the peer is a loopback address.
     # Off by default; the dev profile (STONKS_PROFILE=dev) turns it on.
     open_reads_on_loopback: bool = False
@@ -797,6 +801,7 @@ def _overlay_env(data: dict) -> None:
     # Angular dev server proxies from 127.0.0.1). Never set it on a server.
     if os.environ.get("STONKS_PROFILE", "").strip().lower() == "dev":
         data.setdefault("api", {})["open_reads_on_loopback"] = True
+        data["api"]["cors_ui_origin"] = True
 
     for name in AuthConfig.model_fields:
         value = os.environ.get(f"STONKS_AUTH_{name.upper()}")

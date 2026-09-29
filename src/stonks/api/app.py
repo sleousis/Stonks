@@ -116,15 +116,17 @@ def create_app(
     # guard for the open-on-loopback reads), then CORS, then logging.
     app.add_middleware(_RequestLogMiddleware)
     # Only the Angular dev server's origin ([api].ui_origin) may call the
-    # API cross-origin, with the session cookie and its CSRF header. The
-    # built console is same-origin and needs no CORS at all.
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[cfg.ui_origin],
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "Last-Event-ID", CSRF_HEADER],
-    )
+    # API cross-origin, with the session cookie and its CSRF header, and only
+    # in the dev profile ([api].cors_ui_origin). The built console is
+    # same-origin and needs no CORS at all.
+    if cfg.cors_ui_origin:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[cfg.ui_origin],
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "Last-Event-ID", CSRF_HEADER],
+        )
     allowed = [*_LOOPBACK_HOSTS, *cfg.allowed_hosts]
     if cfg.host not in _WILDCARD_BINDS:  # "0.0.0.0" binds every address, names none
         allowed.append(cfg.host)
