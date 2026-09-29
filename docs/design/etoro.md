@@ -81,7 +81,7 @@ SnapTrade lists eToro for the US and Europe, read only, through eToro's own sign
 | eToro | Stonks |
 |---|---|
 | The demo account | A broker portfolio at the **Broker paper** stage. Its trader says it trades no real money. |
-| The real account | A broker portfolio. Opening orders need **Real money, small** or higher. Closing orders go out at any stage. |
+| The real account | A broker portfolio. Opening orders need **Real money, small** or higher. Closing orders go out at any stage. A demo key and a real key are two connections with two portfolios, so moving from demo to real money means connecting the real key and taking its portfolio up the stages. |
 | A position (one line per purchase) | Positions of the same instrument are added up into one holding. The trader closes the oldest positions first. |
 | Units | Quantity. Stonks sends orders in units, so no conversion is needed. |
 | Amount | Used only when an instrument accepts amounts and not units. Stonks converts its quantity with eToro's ask price for that instrument, for USD instruments only, and refuses the order otherwise. |
