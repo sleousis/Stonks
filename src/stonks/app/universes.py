@@ -20,6 +20,7 @@ from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.ingest import SourceId
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.pagination import Page
+from stonks.core.clock import SYSTEM_CLOCK, today
 from stonks.core.interval import Interval
 from stonks.ingest.ensure import DataEnsurer, EnsureReport, EnsureSettings
 from stonks.ingest.wiring import build_ingest_pipeline
@@ -280,7 +281,7 @@ class UniverseService:
         return _view(definition)
 
     def members(self, universe_id: str, as_of: date | None = None) -> UniverseMembers:
-        day = as_of or date.today()
+        day = as_of or today(SYSTEM_CLOCK)  # the UTC date, like every stored timestamp
         with self._ctx.lake() as lake:
             self._definition(UniverseStore(lake), universe_id)
             tickers = lake.members_as_of(universe_id, day)
