@@ -839,6 +839,8 @@ The shipped `config/default.toml` turns on three protections for a new install. 
 | `[production.risk.rules.circuit_breaker]` | `max_month_loss = 0.06`, `max_week_loss = 0.04`, `max_drawdown_halt = 0.20` | Halts new buys after a 6% month loss, a 4% loss over five runs, or a 20% drop from the peak (held until cleared). Sells always pass. |
 | `[production.risk.rules.drawdown_scaling]` | `schedule = [[0.10, 0.5], [0.20, 0.0]]` | Half-size new buys from 10% down, none from 20% down. |
 
+Stonks finds `config/default.toml` under the working folder first, then in the project that holds the code, so running from another folder keeps these limits. Without any config file, `stonks serve`, `stonks tick` and the scheduler refuse to start, and other commands log a warning, because the code defaults drop every limit above.
+
 There is no one-day loss limit: the shortest breaker is the week loss over `week_sessions` runs (set it to 1 for a day). An existing install that keeps its own config file keeps its own values. To loosen a protection, change it in the file or in the console (below); a portfolio or follow can only tighten it.
 
 ### System settings in the console
