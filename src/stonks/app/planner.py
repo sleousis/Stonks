@@ -26,12 +26,13 @@ from stonks.accounts import NotFound, Scope, owned_portfolio
 from stonks.accounts import Portfolio as AccountPortfolio
 from stonks.accounts.audit import AuditLog
 from stonks.app.context import AppContext
-from stonks.app.errors import NotFoundError, ValidationError
+from stonks.app.errors import ConflictError, NotFoundError, ValidationError
+from stonks.app.manual_orders import BrokerOpener, closing_broker
 from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import POLICY, Permission, require
 from stonks.auth.principal import Principal
 from stonks.backtest.costs import ExecAlgoAssumption
-from stonks.core.types import Order
+from stonks.core.types import Order, Portfolio
 from stonks.execution.algos import AlgoParamsError, algo_names, get_algo
 from stonks.execution.algos.settings import (
     AlgoSetting,
@@ -42,6 +43,8 @@ from stonks.execution.algos.settings import (
 )
 from stonks.portfolio.planner import PlanError, RebalancePlan, plan_rebalance
 from stonks.production.algo_slices import ParentView, list_parents
+from stonks.production.manual import ManualBook
+from stonks.production.risk import RiskResult
 from stonks.store.state import SqliteState
 
 Who = Principal | Scope
@@ -227,9 +230,17 @@ class PlanConfirmResult(BaseModel):
 
 
 class ExecutionService:
-    def __init__(self, context: AppContext, *, clock: Callable[[], datetime] | None = None) -> None:
+    def __init__(
+        self,
+        context: AppContext,
+        *,
+        clock: Callable[[], datetime] | None = None,
+        brokers: BrokerOpener | None = None,
+    ) -> None:
         self._ctx = context
         self._clock = clock or (lambda: datetime.now(UTC))
+        #: Opens a real-broker portfolio's broker (tests pass a fake).
+        self._brokers = brokers
 
     # ---- algos ----------------------------------------------------------------------
 
@@ -306,53 +317,79 @@ class ExecutionService:
     def plan(self, who: Who, body: PlanRequest) -> RebalancePlanView:
         """The trades that reach the targets. Nothing is written or sent."""
         _allow(who, Permission.READ)
-        return self._plan(who, body)[0]
+        account, book = self._book(who, body.portfolio_id)
+        with closing_broker(book.broker):
+            return self._plan(body, account, book)[0]
 
     def confirm(self, who: Who, body: PlanConfirm) -> PlanConfirmResult:
-        """One order ticket per trade of the plan, each waiting for approval."""
+        """One order ticket per trade of the plan, each waiting for approval.
+        The trades go through every risk rule of the book first, as a
+        tick's and a manual order's do: a rule may shrink or drop a trade,
+        and what it did is on the ticket and in the plan's notes."""
         _allow(who, Permission.PORTFOLIO_TRADE)
         from stonks.production.tickets import list_tickets, submit_window, write_tickets
 
-        view, plan, account = self._plan(who, body)
-        trades = plan.trades
-        if not trades:
-            raise ValidationError("the plan has no trades to confirm")
-        key = body.key or _plan_key(account.id, plan)
-        now = self._clock()
-        orders = [
-            Order(
-                client_id=f"plan:{account.id}:{key}:{line.ticker}:{line.side}",
-                ticker=line.ticker,
-                side=line.side,  # type: ignore[arg-type]
-                quantity=line.quantity,
-                order_type="market",
-                portfolio_id=account.id,
-                decision_price=line.price,
-                decided_at=now,
-                decision_context={
-                    "trigger": PLANNER_TRIGGER,
-                    "source": "planner",
-                    "plan_key": key,
-                    "planned_from": body.strategy_id if body.source == "strategy" else "targets",
-                    "target_weight": line.target_weight,
-                    "note": body.reason,
-                },
-                expected_cost_bps=line.cost_bps,
-                position_effect="close" if line.side == "sell" else "open",
-            )
-            for line in trades
+        account, book = self._book(who, body.portfolio_id)
+        with closing_broker(book.broker):
+            view, plan, holdings = self._plan(body, account, book)
+            trades = plan.trades
+            if not trades:
+                raise ValidationError("the plan has no trades to confirm")
+            key = body.key or _plan_key(account.id, plan)
+            now = self._clock()
+            orders = [
+                Order(
+                    client_id=f"plan:{account.id}:{key}:{line.ticker}:{line.side}",
+                    ticker=line.ticker,
+                    side=line.side,  # type: ignore[arg-type]
+                    quantity=line.quantity,
+                    order_type="market",
+                    portfolio_id=account.id,
+                    decision_price=line.price,
+                    decided_at=now,
+                    decision_context={
+                        "trigger": PLANNER_TRIGGER,
+                        "source": "planner",
+                        "plan_key": key,
+                        "planned_from": (
+                            body.strategy_id if body.source == "strategy" else "targets"
+                        ),
+                        "target_weight": line.target_weight,
+                        "note": body.reason,
+                    },
+                    expected_cost_bps=line.cost_bps,
+                    position_effect="close" if line.side == "sell" else "open",
+                )
+                for line in trades
+            ]
+            with self._ctx.state() as state, self._ctx.lake() as lake:
+                marks = {ln.ticker: ln.price for ln in plan.lines if ln.price is not None}
+                risk = self._risk(state, lake, orders, book, holdings, marks, plan.as_of)
+        allowed = list(risk.orders)
+        adjustments = [a.as_dict() for a in risk.adjustments]
+        notes = [
+            f"risk: {a['rule']} {a['ticker']} {a['original_quantity']:g} -> "
+            f"{a['adjusted_quantity']:g} ({a['reason']})"
+            for a in adjustments
         ]
+        view = view.model_copy(update={"notes": [*view.notes, *notes]})
+        if not allowed:
+            raise ConflictError(
+                "the risk rules refuse every trade of this plan: " + "; ".join(notes)
+            )
+        rules = {o.client_id: [a for a in adjustments if a["ticker"] == o.ticker] for o in allowed}
         with self._ctx.state() as state:
             window = submit_window(plan.as_of, self._ctx.settings.production.live.submit)
             written = write_tickets(
                 state,
-                orders,
+                allowed,
                 portfolio_id=account.id,
                 tick_id=None,
                 as_of=plan.as_of,
                 window=window,
                 hold=lambda _o: "approve_mode",
                 now=now,
+                rules=rules,
             )
             AuditLog(state).record(
                 _scope(who).actor,
@@ -361,9 +398,9 @@ class ExecutionService:
                 account.id,
                 portfolio_id=account.id,
                 details={"key": key, "trades": len(orders), "written": len(written),
-                         "reason": body.reason},
+                         "risk_adjustments": len(adjustments), "reason": body.reason},
             )  # fmt: skip
-            ids = {o.client_id for o in orders}
+            ids = {o.client_id for o in allowed}
             tickets = [
                 t for t in list_tickets(state, portfolio_ids=[account.id]) if t.client_id in ids
             ]
@@ -371,26 +408,97 @@ class ExecutionService:
             plan=view, key=key, ticket_ids=sorted(t.id for t in tickets), written=len(written)
         )
 
-    def _plan(
-        self, who: Who, body: PlanRequest
-    ) -> tuple[RebalancePlanView, RebalancePlan, AccountPortfolio]:
+    def _book(self, who: Who, portfolio_id: str) -> tuple[AccountPortfolio, ManualBook]:
+        """The portfolio and the book its orders trade in: the tick's risk
+        policy and broker (the same book manual orders use)."""
+        from stonks.app.manual_orders import ManualOrdersService
+
+        with self._ctx.state() as state:
+            account = self._portfolio(state, who, portfolio_id)
+            book = ManualOrdersService(self._ctx, brokers=self._brokers).book(state, account)
+        return account, book
+
+    def _holdings(
+        self, state: SqliteState, account: AccountPortfolio, book: ManualBook
+    ) -> Portfolio:
+        """What the plan sizes from, as the tick sees the book: the Stonks
+        ledger for a simulated book. At a real broker it is the broker's
+        account, narrowed to the positions the book owns (a linked
+        connection) or without the owner's manual holdings (the default
+        portfolio at an external broker)."""
+        from stonks.production.corporate_actions import load_corporate_actions
+        from stonks.production.ownership import (
+            managed_view,
+            manual_positions,
+            owned_positions,
+            strip_holdings,
+        )
+        from stonks.production.prices import held_tickers
         from stonks.production.tick import _load_or_seed_portfolio
 
+        if book.broker is None:
+            return _load_or_seed_portfolio(state, book.initial_cash, account.id)
+        whole = book.broker.fetch_portfolio()
+        with self._ctx.lake() as lake:
+            actions = load_corporate_actions(lake, held_tickers(dict(whole.positions)))
+        if account.kind == "broker":
+            view, _ = managed_view(whole, owned_positions(state, account.id, actions))
+        else:
+            view, _ = strip_holdings(whole, manual_positions(state, account.id, actions))
+        return view
+
+    def _risk(
+        self,
+        state: SqliteState,
+        lake: Any,
+        orders: list[Order],
+        book: ManualBook,
+        holdings: Portfolio,
+        prices: dict[str, float],
+        as_of: date,
+    ) -> RiskResult:
+        """Every risk rule of the book over the planned orders (the account
+        rules and the live safeguards too, at a real broker)."""
+        from stonks.production.manual import apply_book_risk, book_risk_context
+        from stonks.production.prices import held_tickers, load_prices
+        from stonks.production.settings_builder import build_tick_settings
+        from stonks.production.tick import _asset_classes
+
+        tick = build_tick_settings(self._ctx.settings, [])
+        tickers = sorted({o.ticker for o in orders})
+        every = sorted({*tickers, *held_tickers(dict(holdings.positions))})
+        # the rules see the book at the closes the plan was sized at, and
+        # the volume of each close's bar (the liquidity and impact inputs)
+        volumes = load_prices(
+            lake, [], every, as_of, max_staleness_days=tick.max_price_staleness_days
+        ).volumes
+        classes = _asset_classes(lake, every)
+        context = book_risk_context(
+            state,
+            lake,
+            book,
+            tick,
+            holdings,
+            prices,
+            classes,
+            as_of,
+            universe=tickers,
+            volumes=volumes,
+        )
+        return apply_book_risk(orders, book, tick, holdings, prices, classes, volumes, context)
+
+    def _plan(
+        self, body: PlanRequest, account: AccountPortfolio, book: ManualBook
+    ) -> tuple[RebalancePlanView, RebalancePlan, Portfolio]:
         today = self._clock().astimezone(UTC).date()
         with self._ctx.state() as state:
-            account = self._portfolio(state, who, body.portfolio_id)
             targets = self._targets(state, body)
-            initial = (
-                float(account.initial_cash)
-                if account.initial_cash is not None
-                else float(self._ctx.settings.production.initial_cash)
-            )
-            book = _load_or_seed_portfolio(state, initial, account.id)
+            holdings = self._holdings(state, account, book)
             algo = resolve_algo(state, account.id, body.strategy_id)
-        tickers = sorted(set(targets) | set(book.positions))
+        tickers = sorted(set(targets) | set(holdings.positions))
         prices, classes = self._market(tickers, today)
         lots = None
-        if any(q > 0 for q in book.positions.values()):
+        if any(q > 0 for q in holdings.positions.values()):
             from stonks.app.tax import TaxService
 
             try:
@@ -410,8 +518,8 @@ class ExecutionService:
         try:
             plan = plan_rebalance(
                 as_of=today,
-                cash=book.cash,
-                positions=book.positions,
+                cash=holdings.cash,
+                positions=dict(holdings.positions),
                 prices=prices,
                 targets=targets,
                 cost_model=costs.build(),
@@ -422,7 +530,7 @@ class ExecutionService:
             )
         except PlanError as exc:
             raise ValidationError(str(exc)) from None
-        return _plan_view(plan, body, algo), plan, account
+        return _plan_view(plan, body, algo), plan, holdings
 
     def _targets(self, state: SqliteState, body: PlanRequest) -> dict[str, float]:
         if body.source == "targets":

@@ -79,11 +79,7 @@ class UserRepository:
         with self._state.transaction():
             self._state.execute("UPDATE users SET status = ? WHERE id = ?", [status, user_id])
             if status == "disabled":
-                self._state.execute(
-                    "UPDATE subscriptions SET paused_reason = 'user_disabled', updated_at = ?"
-                    " WHERE user_id = ? AND mode IN ('approve', 'auto') AND paused_reason IS NULL",
-                    [iso_now(), user_id],
-                )
+                self.pause_trading_follows(user_id, "user_disabled", actor=actor)
             self._audit.record(
                 actor,
                 "user.status",
@@ -92,6 +88,27 @@ class UserRepository:
                 details={"from": before.status, "to": status},
             )
         return self.get(user_id)
+
+    def pause_trading_follows(self, user_id: str, reason: str, *, actor: str) -> int:
+        """Pause every ``approve`` and ``auto`` follow of the user that is
+        not paused yet (``paused_reason = reason``), with an audit row when
+        any paused. Paper and alerts-only follows go on. Returns how many
+        paused. Call it inside the caller's transaction."""
+        cur = self._state.execute(
+            "UPDATE subscriptions SET paused_reason = ?, updated_at = ?"
+            " WHERE user_id = ? AND mode IN ('approve', 'auto') AND paused_reason IS NULL",
+            [reason, iso_now(), user_id],
+        )
+        count = int(cur.rowcount or 0)
+        if count:
+            self._audit.record(
+                actor,
+                "subscriptions.paused",
+                "user",
+                user_id,
+                details={"reason": reason, "count": count},
+            )
+        return count
 
     def risk_policy(self, user_id: str) -> dict[str, Any]:
         """The user's own risk limits: a partial ``RiskPolicy`` that

@@ -567,7 +567,11 @@ Tickers open `/data?instrument=<id>`.
   again, never a silent "Finished".
 - Run now on the trading run is the same order ticket as the runner
   (`tickTicket()`): broker, PAPER or LIVE stamp, and the broker label
-  typed. Other jobs ask plainly, named by `jobLabel()`
+  typed. The stamp is LIVE when the system broker is live or when
+  `GET /api/brokers` counts `real_money_books` (portfolios at a real-money
+  stage with an approve or automatic follow). The approval ticket does the
+  same with the go-live report's `real_money_books` for that strategy.
+  Other jobs ask plainly, named by `jobLabel()`
   (`core/schedule/job-labels.ts`: Trading run, Price update, Broker sync,
   Health check, Broker check before the open, ...). Every default job has
   a name there, never its id. A real run cannot be dated before the last

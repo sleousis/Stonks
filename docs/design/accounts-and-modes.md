@@ -41,7 +41,7 @@ erDiagram
 **`users`** `(id, kind, email, display_name, role, status, password_hash, totp_secret_enc, timezone, created_at, last_login_at)`
 - `kind ∈ {human, service}`. Service accounts have no password and no session; they act in-process.
 - `role ∈ {viewer, trader, admin}`, a `StrEnum` with predicates (`role.can_trade`, `role.is_admin`), because the set carries behaviour.
-- `status ∈ {active, disabled}`. Disabling a user revokes sessions and tokens and pauses their auto subscriptions.
+- `status ∈ {active, disabled}`. Disabling a user revokes sessions and tokens and pauses their approve and auto follows (`user_disabled`). Changing a user's role to viewer pauses them too (`user_viewer`), since a viewer may not trade. Each pause writes a `subscriptions.paused` audit row. Paper and alerts-only follows go on.
 - Passwords: argon2id (`argon2-cffi`, wrapped in `auth/passwords.py`).
 
 **Roles**

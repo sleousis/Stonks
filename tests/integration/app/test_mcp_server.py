@@ -417,7 +417,9 @@ async def test_risk_policy_broker_sources_cost_models(mcp, settings):
     assert policy["enabled"] is True
     broker = await call(mcp, "get_broker")
     assert broker["kind"] == "simulated"
-    assert set(broker) == {"kind", "paper", "allow_live", "credentials_configured"}
+    assert set(broker) == {
+        "kind", "paper", "allow_live", "credentials_configured", "real_money_books"
+    }  # fmt: skip
     sources = (await call(mcp, "list_sources"))["items"]
     assert any(s["default"] for s in sources)
     presets = (await call(mcp, "list_cost_models"))["items"]

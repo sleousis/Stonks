@@ -234,6 +234,12 @@ class OrderDraftService:
             raise ConflictError(f"the draft was not placed: {exc}") from None
         with self._ctx.state() as state:
             mark_placed(state, draft.id, order.client_id)
+            if order.status == "rejected":
+                # the order exists but never traded: the draft says so
+                state.execute(
+                    "UPDATE order_drafts SET status = 'rejected', decision_note = ? WHERE id = ?",
+                    [f"order rejected: {order.reason or 'no reason given'}"[:500], draft.id],
+                )
             placed = get_draft(state, principal.user_id, draft.id)
         return OrderDraftApproval(draft=draft_view(placed), order=order)
 

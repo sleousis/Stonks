@@ -167,6 +167,6 @@ A constructor turns the strategies' signals into target weights (`portfolio/`). 
 
 `hrp`, `erc` and `mean_variance_costs` read a covariance estimator, including the `pca` and `style` factor risk models.
 
-Every constructor takes `long_only`, `max_gross`, `min_net`, `max_net` and `neutral` (`none`, `dollar` or `beta`). A book that may short runs its constructor with `long_only = false`. Gross may then go above 1.0 (up to 4.0), net stays inside `[min_net, max_net]`, and `dollar` or `beta` shrinks the bigger leg until the legs match. `beta` works on `equal_weight_top_n` and `vol_target`. A book that cannot short always runs long-only at no more than 1.0 gross.
+Every constructor takes `long_only`, `max_gross`, `min_net`, `max_net` and `neutral` (`none`, `dollar` or `beta`). A book that may short runs its constructor with `long_only = false`. Gross may then go above 1.0 (up to 4.0, and never above the global `max_gross`, which defaults to 1.0), net stays inside `[min_net, max_net]`, and `dollar` or `beta` shrinks the bigger leg until the legs match. `beta` works on `equal_weight_top_n` and `vol_target`. A book that cannot short always runs long-only at no more than 1.0 gross.
 
 `[production.construction]` sets the constructor for every book. A portfolio's `portfolios.construction_json` is merged on top, and a backtest picks one in `BacktestConfig.construction`.

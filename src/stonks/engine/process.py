@@ -858,6 +858,9 @@ def build_engine(
             reference_prices=lake_reference_prices(lake),
             settings=settings.production.intraday_pnl,
             clock=clock,
+            # a real broker's account may hold the owner's own shares: the
+            # P&L sees the book's managed view, as book_portfolio does
+            managed=[b.portfolio_id for b in books if not b.simulated],
         )
     return EngineProcess(
         strategies={n: pool[n] for n in names},

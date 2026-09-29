@@ -67,6 +67,8 @@ Changing the setting needs `portfolio.manage` and is audited.
 
 The planner shows the trades that move a portfolio to target weights. The targets are either a strategy's latest model book weights or your own list. Nothing is written or sent.
 
+A simulated portfolio is sized from the Stonks ledger. A portfolio at a real broker is sized from the broker's account, as the trading run sees it: a linked account counts only the positions its fills explain, and the default portfolio leaves out what you bought by hand.
+
 For each ticker it shows:
 
 - the weight now, the target and the weight after.
@@ -80,7 +82,9 @@ The tax figure is a preview. The broker's lots and the tax report decide.
 
 ### Confirming
 
-Confirming writes one order ticket per trade. Every ticket waits for approval (`hold = approve_mode`), which needs a fresh second factor in the web app or the typed phrase in the CLI. Approved tickets go out in the next submit window, worked with the portfolio's algo. Confirming the same plan twice writes its tickets once.
+Confirming first runs the trades through every risk rule of the portfolio, the same rules a trading run and a manual order meet: the caps, your limits, and at a real broker the live safeguards and account rules. A rule may shrink or drop a trade. What it did is in the plan's notes and on the ticket. When the rules drop every trade, nothing is written.
+
+Confirming then writes one order ticket per trade. Every ticket waits for approval (`hold = approve_mode`), which needs a fresh second factor in the web app or the typed phrase in the CLI. Approved tickets go out in the next submit window, worked with the portfolio's algo. Confirming the same plan twice writes its tickets once.
 
 Planned tickets carry no strategy: the trades are the portfolio's own, with the plan's key and your reason in the ticket.
 

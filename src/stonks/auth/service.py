@@ -910,7 +910,8 @@ class AuthService:
         ip: str | None = None,
     ) -> UserAuthInfo:
         """Change role or status. Disabling revokes every session and token
-        (the repository also pauses auto subscriptions). The last active
+        (the repository also pauses approve and auto follows), and a demotion
+        to viewer pauses them too. The last active
         admin can't be demoted or disabled."""
         require(principal, Permission.USERS_MANAGE)
         return self._update_user(principal.actor, user_id, role=role, status=status, ip=ip)
@@ -947,6 +948,9 @@ class AuthService:
                     details={"from": user.role.value, "to": Role(role).value},
                     ip=ip,
                 )
+                if not Role(role).can_trade:
+                    # a viewer may not trade: their books stop sending orders
+                    repo.pause_trading_follows(user_id, "user_viewer", actor=actor)
             if status is not None and status != user.status:
                 repo.set_status(user_id, status, actor=actor)
                 if status == "disabled":

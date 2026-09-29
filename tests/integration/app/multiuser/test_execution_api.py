@@ -96,3 +96,55 @@ def test_plan_requests_are_checked(client, settings, people):
     assert client.post("/api/planner/plan", json=unknown, headers=alice).status_code == 404
     empty = {"portfolio_id": pf, "source": "targets", "reason": "nothing", "targets": []}
     assert client.post("/api/planner/confirm", json=empty, headers=alice).status_code == 422
+
+
+def _services_with_brokers(client, brokers: dict) -> None:
+    from stonks.app.planner import ExecutionService
+
+    services = client.app.state.services
+    services.execution = ExecutionService(services.context, brokers=lambda p: brokers[p.id])
+
+
+def test_confirm_runs_the_books_risk_rules(client, settings, people):
+    """Planned trades take the same risk road as the tick's and manual
+    orders: a 10% cap per ticker shrinks a 50% target (P28)."""
+    with SqliteState(settings.state.path) as state:
+        scope = Scope(user_id=people["alice"]["id"], role=people["alice"]["role"])
+        pf = (
+            PortfolioRepository(state)
+            .create(scope, name="Capped", initial_cash=10_000.0,
+                    risk_policy={"max_weight_per_ticker": 0.1})
+            .id
+        )  # fmt: skip
+    alice = people["alice"]["headers"]
+    body = {"portfolio_id": pf, "source": "targets", "reason": "rebalance",
+            "targets": [{"ticker": "UP.US", "weight": 0.5}]}  # fmt: skip
+    r = client.post("/api/planner/confirm", json=body, headers=alice)
+    assert r.status_code == 200, r.text
+    [ticket] = client.get(f"/api/tickets?portfolio_id={pf}", headers=alice).json()["items"]
+    assert ticket["notional"] <= 0.1 * 10_000.0 + 1e-6
+    assert ticket["rules"], "the rule that cut the order is on the ticket"
+    assert any("risk" in n for n in r.json()["plan"]["notes"])
+
+
+def test_a_broker_portfolio_is_sized_from_the_broker_account(client, settings, people):
+    """A real-broker portfolio plans from the broker's account (as the tick
+    sees it), never from the ledger's seeded cash."""
+    from tests.unit.test_manual_orders import WorkingBroker
+
+    with SqliteState(settings.state.path) as state:
+        scope = Scope(user_id=people["alice"]["id"], role=people["alice"]["role"])
+        pf = (
+            PortfolioRepository(state)
+            .create(scope, name="At broker", kind="broker", initial_cash=10_000.0)
+            .id
+        )
+    _services_with_brokers(client, {pf: WorkingBroker(cash=50_000.0)})
+    body = {"portfolio_id": pf, "source": "targets",
+            "targets": [{"ticker": "UP.US", "weight": 0.5}]}  # fmt: skip
+    r = client.post("/api/planner/plan", json=body, headers=people["alice"]["headers"])
+    assert r.status_code == 200, r.text
+    plan = r.json()
+    assert plan["equity"] == 50_000.0
+    [line] = [x for x in plan["lines"] if x["side"]]
+    assert line["value"] > 20_000.0

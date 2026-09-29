@@ -231,6 +231,18 @@ describe('promoteThroughGate ticket (UX-03)', () => {
     await expect(live.result).resolves.toBeNull();
   });
 
+  it('stamps LIVE when a follower is at a real-money stage behind a paper broker', async () => {
+    const report = { ...goLiveReport('momentum_3fa9c21b', true), real_money_books: 1 };
+    const live = await open(alpaca(true), { golive: () => Promise.resolve(report) });
+    const ticket = live.form.querySelector('.ticket')!;
+    expect(ticket.classList).toContain('live');
+    expect(ticket.querySelector('app-mode-stamp')!.textContent).toContain('LIVE');
+    expect(ticket.textContent).toContain('Real-money portfolios');
+    expect(live.form.textContent).toContain('Real money');
+    expect(live.form.textContent).not.toContain('No real money moves');
+    expect(isHoldDialog(el)).toBe(false);
+  });
+
   it('asks for the override straight away for an admin override', async () => {
     const promote = vi.fn().mockResolvedValue('forced');
     const { result, form } = await open(alpaca(true), { overrideFirst: true, promote });

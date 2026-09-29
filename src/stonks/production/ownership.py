@@ -29,12 +29,18 @@ _EPS = 1e-9
 
 
 def owned_positions(
-    state: SqliteState, portfolio_id: str, actions: CorporateActions | None = None
+    state: SqliteState,
+    portfolio_id: str,
+    actions: CorporateActions | None = None,
+    *,
+    before: date | None = None,
 ) -> dict[str, float]:
     """Net filled quantity per ticker of ``portfolio_id`` (signed: shorts
     are negative), each fill carried through the splits after its date.
-    Manual orders (roadmap 20.1) are the person's own, never the book's."""
-    return _net_fills(state, portfolio_id, actions, manual=False)
+    Manual orders (roadmap 20.1) are the person's own, never the book's.
+    ``before``: only fills dated before that day (what the book owned when
+    the day began)."""
+    return _net_fills(state, portfolio_id, actions, manual=False, before=before)
 
 
 def manual_positions(
@@ -49,7 +55,12 @@ def manual_positions(
 
 
 def _net_fills(
-    state: SqliteState, portfolio_id: str, actions: CorporateActions | None, *, manual: bool
+    state: SqliteState,
+    portfolio_id: str,
+    actions: CorporateActions | None,
+    *,
+    manual: bool,
+    before: date | None = None,
 ) -> dict[str, float]:
     origin = ""
     if "origin" in ledger_columns(state, "orders"):
@@ -64,6 +75,8 @@ def _net_fills(
     for r in rows:
         ticker = r["ticker"]
         filled = date.fromisoformat(str(r["filled_at"])[:10])
+        if before is not None and filled >= before:
+            continue
         qty = float(r["quantity"]) * _split_factor(actions, ticker, filled)
         out[ticker] = out.get(ticker, 0.0) + (qty if r["side"] == "buy" else -qty)
     return {t: q for t, q in out.items() if abs(q) > _EPS}

@@ -98,6 +98,9 @@ class GoLiveReport(BaseModel):
     #: Live costs against the model; null without a real paper period.
     costs: CostComparisonView | None = None
     policy: GoLivePolicy
+    #: Portfolios at a real-money stage that follow the strategy in approve
+    #: or automatic mode: approving it sends them real orders.
+    real_money_books: int = 0
 
 
 #: Checks whose value is read from the paper P&L.
@@ -115,7 +118,10 @@ class GoLiveService:
         """Evaluate the strategy's paper period against ``[golive]``.
         ``NotFoundError`` for an unknown id. With a ``principal`` that is
         neither an admin nor the default book's owner, the default book's
-        figures are hidden (BE-46)."""
+        figures are hidden (BE-46). ``real_money_books`` counts the followers
+        that trade real money once it is approved."""
+        from stonks.production.live.stages import real_money_books
+
         policy = self._ctx.settings.golive
         with self._ctx.state() as state:
             registry = self._ctx.registry_on(state)
@@ -124,7 +130,8 @@ class GoLiveService:
             except KeyError:
                 raise NotFoundError(f"no strategy with id {strategy_id!r}") from None
             hide = report.source == "portfolio" and not _sees_default_book(state, principal)
-        view = self._view(report, policy)
+            real = real_money_books(state, strategy_id)
+        view = self._view(report, policy).model_copy(update={"real_money_books": real})
         if not hide:
             return view
         return view.model_copy(

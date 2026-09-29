@@ -2484,6 +2484,11 @@
           "paper": {
             "title": "Paper",
             "type": "boolean"
+          },
+          "real_money_books": {
+            "default": 0,
+            "title": "Real Money Books",
+            "type": "integer"
           }
         },
         "required": [
@@ -8143,6 +8148,11 @@
           },
           "policy": {
             "$ref": "#/components/schemas/GoLivePolicy"
+          },
+          "real_money_books": {
+            "default": 0,
+            "title": "Real Money Books",
+            "type": "integer"
           },
           "source": {
             "enum": [
