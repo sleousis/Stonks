@@ -37,6 +37,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import os
 import platform
 import re
 import shutil
@@ -213,10 +214,13 @@ def create_backup(
     stores are skipped and recorded as ``null`` in the manifest."""
     now = (now or datetime.now(UTC)).astimezone(UTC)
     dest_root = Path(dest_root)
-    dest_root.mkdir(parents=True, exist_ok=True)
+    if not dest_root.exists():
+        dest_root.mkdir(parents=True)
+        _owner_only(dest_root, 0o700)
     backup_id = _new_id(dest_root, now)
     staging = dest_root / f"{backup_id}{PARTIAL_SUFFIX}"
-    staging.mkdir()
+    staging.mkdir(mode=0o700)
+    _owner_only(staging, 0o700)
     log = _log.bind(backup_id=backup_id)
     try:
         state = None
@@ -254,6 +258,7 @@ def create_backup(
             "files": _file_entries(staging),
         }
         (staging / MANIFEST).write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        _restrict_tree(staging)
         final = dest_root / backup_id
         staging.rename(final)
     except BaseException:
@@ -638,6 +643,23 @@ def run_configured_backup(
 
 
 # ---- helpers ----------------------------------------------------------------------------
+
+
+def _owner_only(path: Path, mode: int) -> None:
+    """``chmod`` where the OS has POSIX modes. On Windows it only sets or
+    clears read-only, and 0600 and 0700 both keep the owner's write bit."""
+    try:
+        os.chmod(path, mode)
+    except OSError as exc:  # a filesystem without modes (some mounts)
+        _log.warning("backup.chmod_failed", path=str(path), error=str(exc))
+
+
+def _restrict_tree(root: Path) -> None:
+    """Owner-only modes on a backup: folders 0700, files 0600. It holds the
+    state DB (users, sealed broker credentials) and the whole lake."""
+    _owner_only(root, 0o700)
+    for path in root.rglob("*"):
+        _owner_only(path, 0o700 if path.is_dir() else 0o600)
 
 
 def _new_id(root: Path, now: datetime) -> str:
