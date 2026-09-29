@@ -80,10 +80,10 @@ class ConnectionsConfig(BaseModel):
         config_path: Path | None = None,
         environ: Mapping[str, str] | None = None,
     ) -> ConnectionsConfig:
-        from stonks.config import DEFAULT_CONFIG_PATH
+        from stonks.config import resolve_default_config_path
 
         env = os.environ if environ is None else environ
-        path = Path(config_path) if config_path is not None else DEFAULT_CONFIG_PATH
+        path = Path(config_path) if config_path is not None else resolve_default_config_path()
         data: dict[str, Any] = {}
         ibkr: dict[str, Any] = {}
         if path.exists():

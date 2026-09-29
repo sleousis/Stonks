@@ -385,15 +385,18 @@ def _check_transition(
 ) -> tuple[str, bool | None]:
     """Apply the promotion rules; returns the reason to log and whether the
     go-live report passed (``None`` without one). A report only counts when
-    it was evaluated for this strategy in its current status."""
-    golive_passed = None if golive_report is None else bool(golive_report.passed)
+    it was evaluated for this strategy (it must name it) in its current
+    status. A mapping report is read by its keys."""
+    golive_passed = None if golive_report is None else bool(_report_field(golive_report, "passed"))
     if status != "active":
         return _require_reason(reason, what=f"moving a strategy to {status!r}"), golive_passed
     if golive_report is not None:
-        report_sid = getattr(golive_report, "strategy_id", strategy_id)
-        report_status = getattr(golive_report, "status", current)
+        report_sid = _report_field(golive_report, "strategy_id")
+        report_status = _report_field(golive_report, "status", current)
         problem = None
-        if report_sid != strategy_id:
+        if report_sid is None:
+            problem = f"go-live report names no strategy, so it cannot count for {strategy_id!r}"
+        elif report_sid != strategy_id:
             problem = (
                 f"go-live report is for another strategy ({report_sid!r}), not {strategy_id!r}"
             )
@@ -421,15 +424,22 @@ def _check_transition(
         )
     if not golive_passed:
         failed = [
-            f"{getattr(c, 'name', '?')}: {getattr(c, 'detail', '')}".rstrip(": ")
-            for c in getattr(golive_report, "checks", [])
-            if not getattr(c, "passed", False)
+            f"{_report_field(c, 'name', '?')}: {_report_field(c, 'detail', '')}".rstrip(": ")
+            for c in _report_field(golive_report, "checks", None) or []
+            if not _report_field(c, "passed", False)
         ]
         raise PromotionRefused(
             f"go-live check failed for {strategy_id!r}: " + ("; ".join(failed) or "no checks")
         )
     text = (reason or "").strip()
     return text or "go-live check passed", golive_passed
+
+
+def _report_field(report: Any, name: str, default: Any = None) -> Any:
+    """A go-live report's field: a mapping's key, else an attribute."""
+    if isinstance(report, Mapping):
+        return report.get(name, default)
+    return getattr(report, name, default)
 
 
 def _report_json(report: Any) -> str | None:

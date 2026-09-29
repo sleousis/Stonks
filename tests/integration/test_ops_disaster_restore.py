@@ -114,6 +114,21 @@ def test_find_snapshot_picks_the_newest_app_backup(tmp_path):
     assert snap.path == newest
 
 
+def test_find_snapshot_orders_same_second_backups_by_counter(tmp_path):
+    """Backups made in one second get ``-1`` .. ``-10``: by name ``-10``
+    sorts before ``-9``, so the counter is compared as a number."""
+    backups = tmp_path / "restore" / "data" / "backups"
+    for suffix in ("", "-1", "-9", "-10"):
+        folder = backups / f"stonks-20260102T000000Z{suffix}"
+        folder.mkdir(parents=True)
+        (folder / "manifest.json").write_text("{}", encoding="utf-8")
+    older = backups / "stonks-20260101T235959Z-99"
+    older.mkdir()
+    (older / "manifest.json").write_text("{}", encoding="utf-8")
+    snap = find_snapshot(tmp_path / "restore")
+    assert snap.path.name == "stonks-20260102T000000Z-10"
+
+
 def test_find_snapshot_falls_back_to_a_stopped_volume_copy(tmp_path):
     root = _restic_tree_with_volume_copy(tmp_path)
     snap = find_snapshot(root)

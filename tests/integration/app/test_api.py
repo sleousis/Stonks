@@ -470,3 +470,22 @@ def test_unhandled_error_log_scrubs_configured_secrets(settings, seeded, capsys)
     out = capsys.readouterr().out
     assert "api.unhandled_error" in out
     assert "vendor-key-xyz" not in out
+
+
+def test_cors_is_off_outside_the_dev_profile(settings, seeded, fake_source):
+    """The Angular dev server's origin may call the API with credentials only
+    in the dev profile, never on a production server (review wave 2)."""
+    settings.api.allowed_hosts = ["testserver"]
+    settings.api.cors_ui_origin = False
+    prod = create_app(settings, source_factory=lambda: fake_source)
+    with TestClient(prod, client=LOOPBACK) as c:
+        resp = c.options(
+            "/api/halts/kill",
+            headers={
+                "Origin": "http://localhost:4200",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "x-csrf-token",
+            },
+        )
+    assert "access-control-allow-origin" not in resp.headers
+    assert "access-control-allow-credentials" not in resp.headers

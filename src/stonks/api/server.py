@@ -19,7 +19,8 @@ def app_factory() -> FastAPI:
     from dotenv import load_dotenv
 
     load_dotenv(override=False)
-    settings = load_settings()
+    # the API never serves on the looser code defaults (no shipped risk limits)
+    settings = load_settings(required=True)
     configure_logging(level=settings.logging.level)
     # uvicorn's access log prints full URLs, query strings included, which
     # can carry a job stream token; the app logs every request itself

@@ -266,3 +266,20 @@ def test_exchanges_come_from_the_instruments_we_hold(client, listing_source):
         {"exchange": "NASDAQ", "instruments": 1, "listed": 0},
         {"exchange": "NYSE", "instruments": 2, "listed": 2},
     ]
+
+
+def test_members_default_to_the_utc_date(client, monkeypatch):
+    """Without ``as_of`` the members are read for today's UTC date, the
+    calendar every stored timestamp uses, not the host's local date."""
+    from datetime import UTC, datetime
+
+    from stonks.app import universes as universes_mod
+    from stonks.core.clock import FixedClock
+
+    body = {"id": "utc", "kind": "list", "name": "Utc", "spec": {"tickers": ["UP.US"]}}
+    assert client.post("/api/universes", json=body, headers=AUTH).status_code == 201
+    monkeypatch.setattr(
+        universes_mod, "SYSTEM_CLOCK", FixedClock(datetime(2031, 5, 6, 0, 30, tzinfo=UTC))
+    )
+    members = client.get("/api/universes/utc/members").json()
+    assert members["as_of"] == "2031-05-06"

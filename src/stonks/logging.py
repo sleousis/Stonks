@@ -9,11 +9,18 @@ import structlog
 
 _CONFIGURED = False
 
+#: HTTP client libraries log each request's full URL at INFO (and headers at
+#: DEBUG). A URL can carry a vendor key in its query string, so these log at
+#: WARNING and above whatever the app's level.
+_QUIET_HTTP_LOGGERS = ("httpx", "httpx2", "httpcore", "urllib3")
+
 
 def configure_logging(level: str = "INFO") -> None:
     global _CONFIGURED
     numeric = getattr(logging, level.upper(), logging.INFO)
     logging.basicConfig(level=numeric, stream=sys.stderr, format="%(message)s")
+    for name in _QUIET_HTTP_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
 
     structlog.configure(
         processors=[

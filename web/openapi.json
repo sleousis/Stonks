@@ -20582,7 +20582,7 @@
                 "type": "null"
               }
             ],
-            "description": "avg_cost * quantity.",
+            "description": "avg_cost * quantity * multiplier.",
             "title": "Cost Basis"
           },
           "currency": {
@@ -20619,6 +20619,12 @@
             ],
             "description": "market_value in the portfolio's base currency, at the FX rate of the price date; null when unpriced or no FX rate is stored.",
             "title": "Market Value Base"
+          },
+          "multiplier": {
+            "default": 1.0,
+            "description": "Units per contract: 1 for a stock, 100 for a standard option. price and avg_cost are per unit; market_value, cost_basis and unrealized_pnl count it.",
+            "title": "Multiplier",
+            "type": "number"
           },
           "price": {
             "anyOf": [
@@ -20660,7 +20666,7 @@
                 "type": "null"
               }
             ],
-            "description": "(price - avg_cost) * quantity at the latest stored close.",
+            "description": "(price - avg_cost) * quantity * multiplier at the latest stored close (an option's latest quote mark).",
             "title": "Unrealized Pnl"
           },
           "unrealized_pnl_pct": {

@@ -332,3 +332,35 @@ def test_stale_report_for_another_status_does_not_count(env):
     with pytest.raises(PromotionRefused, match="stale"):
         reg.set_status(sid, "active", actor="t", golive_report=report)
     assert _status(reg, sid) == "shadow"
+
+
+# ---- review wave 2: the report must name this strategy ---------------------------
+
+
+def test_a_report_without_a_strategy_id_does_not_count(env):
+    @dataclass(frozen=True)
+    class _Anonymous:
+        checks: list = field(default_factory=list)
+
+        @property
+        def passed(self) -> bool:
+            return True
+
+    reg, _, sid = env
+    with pytest.raises(PromotionRefused, match="names no strategy"):
+        reg.set_status(sid, "active", actor="t", golive_report=_Anonymous())
+    assert _status(reg, sid) == "shadow"
+
+
+def test_a_mapping_report_is_read_by_its_keys(env):
+    reg, _, sid = env
+    other = {"strategy_id": "someone_else", "status": "shadow", "passed": True, "checks": []}
+    with pytest.raises(PromotionRefused, match="another strategy"):
+        reg.set_status(sid, "active", actor="t", golive_report=other)
+    nameless = {"passed": True, "checks": []}
+    with pytest.raises(PromotionRefused, match="names no strategy"):
+        reg.set_status(sid, "active", actor="t", golive_report=nameless)
+    assert _status(reg, sid) == "shadow"
+    mine = {"strategy_id": sid, "status": "shadow", "passed": True, "checks": []}
+    reg.set_status(sid, "active", actor="t", golive_report=mine)
+    assert _status(reg, sid) == "active"

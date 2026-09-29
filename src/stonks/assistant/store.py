@@ -35,6 +35,10 @@ class ActionNotFound(LookupError):
     """No such pending action in this conversation."""
 
 
+#: The ``audit_log`` action of each write the assistant ran or proposed.
+WRITE_AUDIT_ACTION = "assistant.write"
+
+
 def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
@@ -355,6 +359,20 @@ class ConversationStore:
                     json.dumps(arguments),
                     "pending",
                     now,
+                ],
+            )
+            # The write rate limit counts these audit rows, which outlive the
+            # conversation (deleting it must not reset the limit).
+            state.execute(
+                "INSERT INTO audit_log (actor, action, target_kind, target_id, details_json,"
+                " created_at) SELECT 'user:' || owner_id, ?, 'assistant_action', ?, ?, ?"
+                " FROM assistant_conversations WHERE id = ?",
+                [
+                    WRITE_AUDIT_ACTION,
+                    aid,
+                    json.dumps({"tool": tool_name, "conversation_id": conversation_id}),
+                    now,
+                    conversation_id,
                 ],
             )
         action = PendingAction(

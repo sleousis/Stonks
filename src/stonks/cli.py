@@ -116,6 +116,17 @@ console = Console()
 # ---- helpers ----------------------------------------------------------------
 
 
+def _require_config() -> None:
+    """serve and tick refuse to run on the looser code defaults: without a
+    config file every shipped risk limit is gone."""
+    from stonks.config import ConfigFileMissing, resolve_default_config_path
+
+    path = resolve_default_config_path()
+    if not path.is_file():
+        console.print(f"[red]{ConfigFileMissing.__name__}: config file not found: {path}[/red]")
+        raise typer.Exit(code=2)
+
+
 def _settings() -> Settings:
     # CLI is the right place to materialize .env into the process env;
     # load_settings itself stays pure so tests can monkeypatch freely.
@@ -1115,6 +1126,7 @@ def tick(
     from stonks.app.errors import ConflictError, ValidationError
     from stonks.app.ticks import TickRequest, execute_tick
 
+    _require_config()
     settings = _settings()
     configured = settings.production.universe
     if not _parse_tickers(tickers) and not configured:
@@ -1292,6 +1304,7 @@ def serve(
     """
     import uvicorn
 
+    _require_config()
     settings = _settings()
     bind_host = host or settings.api.host
     bind_port = port or settings.api.port

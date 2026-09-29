@@ -25,6 +25,7 @@ from stonks.app.pagination import Page
 from stonks.app.serialize import finite
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
+from stonks.core.options import is_option_id
 from stonks.production.ledger import ledger_filter
 from stonks.production.live.stages import (
     DEFAULT_STAGE,
@@ -47,6 +48,11 @@ class PositionView(BaseModel):
     price_date: date | None
     market_value: float | None
     weight: float | None
+    multiplier: float = Field(
+        default=1.0,
+        description="Units per contract: 1 for a stock, 100 for a standard option. price and "
+        "avg_cost are per unit; market_value, cost_basis and unrealized_pnl count it.",
+    )
     currency: str | None = Field(
         default=None, description="The instrument's trading currency; null when unknown."
     )
@@ -55,9 +61,11 @@ class PositionView(BaseModel):
         description="Average cost per share from the fill history (weighted average, fees "
         "included); null when the ledger has no fills for the position.",
     )
-    cost_basis: float | None = Field(default=None, description="avg_cost * quantity.")
+    cost_basis: float | None = Field(default=None, description="avg_cost * quantity * multiplier.")
     unrealized_pnl: float | None = Field(
-        default=None, description="(price - avg_cost) * quantity at the latest stored close."
+        default=None,
+        description="(price - avg_cost) * quantity * multiplier at the latest stored close "
+        "(an option's latest quote mark).",
     )
     unrealized_pnl_pct: float | None = Field(
         default=None, description="unrealized_pnl / |cost_basis| (0.05 = +5%)."
@@ -476,8 +484,15 @@ class PortfolioService:
             return self._with_base(empty, portfolio_id)
         row = rows[0]
         holdings: dict[str, float] = json.loads(row["positions_json"])
-        latest = self._latest_closes(list(holdings))
-        currencies = self._currencies(list(holdings))
+        options = [t for t in holdings if is_option_id(t)]
+        stocks = [t for t in holdings if t not in set(options)]
+        latest = self._latest_closes(stocks)
+        currencies = self._currencies(stocks)
+        multipliers: dict[str, float] = {}
+        if options:
+            marks, multipliers, option_ccy = self._option_marks(options)
+            latest.update(marks)
+            currencies.update(option_ccy)
         costs = self._average_costs(portfolio_id)
         cash = float(row["cash"])
 
@@ -486,7 +501,15 @@ class PortfolioService:
             qty = float(holdings[ticker])
             price, price_date = latest.get(ticker, (None, None))
             positions.append(
-                _position(ticker, qty, price, price_date, costs.get(ticker), currencies.get(ticker))
+                _position(
+                    ticker,
+                    qty,
+                    price,
+                    price_date,
+                    costs.get(ticker),
+                    currencies.get(ticker),
+                    multipliers.get(ticker, 1.0),
+                )
             )
         positions_value = sum(p.market_value or 0.0 for p in positions)
         total = cash + positions_value
@@ -634,6 +657,49 @@ class PortfolioService:
             if r["currency"]
         }
 
+    def _option_marks(
+        self, contract_ids: list[str]
+    ) -> tuple[dict[str, tuple[float, date]], dict[str, float], dict[str, str]]:
+        """Each held option's latest quote mark (the mid, else the last trade)
+        per share with its day, its multiplier and its currency. The
+        multiplier comes from ``option_contracts`` when the lake knows the
+        contract, else from the id; an unquoted contract stays unpriced."""
+        from stonks.core.instruments import InstrumentBook
+
+        multipliers = {cid: InstrumentBook().multiplier(cid) for cid in contract_ids}
+        marks: dict[str, tuple[float, date]] = {}
+        currencies: dict[str, str] = {}
+        with self._ctx.lake() as lake:
+            contracts = lake.sql(
+                "SELECT contract_id, multiplier, currency FROM option_contracts"
+                " WHERE contract_id = ANY(?)",
+                [contract_ids],
+            )
+            quotes = lake.sql(
+                """
+                SELECT contract_id, as_of, bid, ask, "last"
+                  FROM option_quotes
+                 WHERE contract_id = ANY(?)
+                   AND (("last" IS NOT NULL) OR (bid IS NOT NULL AND ask IS NOT NULL))
+                QUALIFY ROW_NUMBER() OVER (
+                    PARTITION BY contract_id ORDER BY as_of DESC, source) = 1
+                """,
+                [contract_ids],
+            )
+        for r in contracts.to_dict("records"):
+            multipliers[str(r["contract_id"])] = float(r["multiplier"])
+            if r["currency"]:
+                currencies[str(r["contract_id"])] = str(r["currency"]).upper()
+        for r in quotes.to_dict("records"):
+            bid, ask, last = (finite(r[k]) for k in ("bid", "ask", "last"))
+            mark = (bid + ask) / 2.0 if bid is not None and ask is not None else last
+            if mark is None:
+                continue
+            day = r["as_of"]
+            day = day.date() if isinstance(day, datetime) else day
+            marks[str(r["contract_id"])] = (mark, day)
+        return marks, multipliers, currencies
+
     def _latest_closes(self, tickers: list[str]) -> dict[str, tuple[float, date]]:
         """The latest close per ticker in the major currency unit: the
         ledger's average cost is in pounds, so a pence close would be 100
@@ -668,19 +734,22 @@ def _position(
     price_date: date | None,
     avg_cost: float | None,
     currency: str | None,
+    multiplier: float = 1.0,
 ) -> PositionView:
-    cost_basis = None if avg_cost is None else avg_cost * qty
+    units = qty * multiplier
+    cost_basis = None if avg_cost is None else avg_cost * units
     pnl = pnl_pct = None
     if avg_cost is not None and price is not None:
-        pnl = (price - avg_cost) * qty
+        pnl = (price - avg_cost) * units
         pnl_pct = pnl / abs(cost_basis) if cost_basis else None
     return PositionView(
         ticker=ticker,
         quantity=qty,
         price=price,
         price_date=price_date,
-        market_value=None if price is None else qty * price,
+        market_value=None if price is None else units * price,
         weight=None,
+        multiplier=multiplier,
         currency=currency,
         avg_cost=avg_cost,
         cost_basis=cost_basis,

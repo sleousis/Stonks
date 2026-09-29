@@ -144,6 +144,38 @@ def test_a_tick_that_fails_before_it_starts_is_not_taken_as_alerted(settings, mo
     assert _tick_rows(settings) == []
 
 
+def test_a_tick_whose_row_insert_fails_is_not_taken_as_alerted(settings, monkeypatch):
+    """``database is locked`` before the tick row exists: ``run_tick`` never
+    reached its error handler, so it did not alert (review wave 2)."""
+    import sqlite3
+
+    from stonks.production import tick as tick_mod
+
+    def locked(**_kw):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(tick_mod, "run_tick", locked)
+    ctx, _ = _ctx(settings, "tick", date(2026, 9, 25))
+    out = get_action("tick")(ctx)
+    assert out.status == "failed" and not out.alerted
+    assert "database is locked" in out.detail["error"]
+
+
+def test_a_tick_that_fails_after_its_row_was_alerted(settings, monkeypatch):
+    from stonks.production import tick as tick_mod
+
+    def fails_inside(**kw):
+        kw["state"].execute(
+            "INSERT INTO tick_runs (id, started_at, status) VALUES ('t1', 'x', 'error')"
+        )
+        raise RuntimeError("broker down")
+
+    monkeypatch.setattr(tick_mod, "run_tick", fails_inside)
+    ctx, _ = _ctx(settings, "tick", date(2026, 9, 25))
+    out = get_action("tick")(ctx)
+    assert out.status == "failed" and out.alerted
+
+
 def test_tick_skip_can_be_disabled(settings):
     # Thanksgiving 2025: a closed day in the past (a future tick is refused)
     ctx, _ = _ctx(settings, "tick", date(2025, 11, 27), skip_closed_days=False)

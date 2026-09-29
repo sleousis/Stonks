@@ -201,6 +201,7 @@ def ingest_borrow_action(ctx: RunContext) -> JobOutcome:
 def tick_action(ctx: RunContext) -> JobOutcome:
     from stonks.production.settings_builder import build_tick_runtime
     from stonks.production.tick import BackdatedTickError, run_tick
+    from stonks.production.tick_failures import tick_row_added, tick_row_count
     from stonks.registry.store import StrategyRegistry
     from stonks.scheduling.calendar import bars_due
     from stonks.store.lake import DuckDBLake
@@ -229,6 +230,7 @@ def tick_action(ctx: RunContext) -> JobOutcome:
             # built before the tick starts: its failure was not alerted yet,
             # so it propagates and the scheduler alerts
             plan = runtime.plan_for(state, dry_run=dry_run)
+            rows_before = tick_row_count(state)
             try:
                 result = run_tick(
                     state=state,
@@ -244,8 +246,13 @@ def tick_action(ctx: RunContext) -> JobOutcome:
             except BackdatedTickError as exc:
                 return JobOutcome("skipped", {"reason": "backdated", "error": str(exc)})
             except Exception as exc:
-                # run_tick recorded the error row and alerted already.
-                return JobOutcome("failed", {"error": f"{type(exc).__name__}: {exc}"}, alerted=True)
+                # Past its row insert, run_tick closed the row as error and
+                # alerted. Before it (a locked database) nobody did.
+                return JobOutcome(
+                    "failed",
+                    {"error": f"{type(exc).__name__}: {exc}"},
+                    alerted=tick_row_added(state, rows_before),
+                )
     finally:
         state.close()
     detail = {
