@@ -179,6 +179,13 @@ A trader's own webhook URL points at a host they chose. So it must be `https`, i
 - On a book that trades real money the service also asks for `orders.live`, so it needs a fresh second factor. API tokens, MCP, the assistant and the Telegram bot can never place one. The CLI on the server asks for the typed phrase `PLACE LIVE ORDER`.
 - Each order records who placed it and why, and writes an `audit_log` row. The same client id never places twice.
 
+## Broker keys
+
+- Broker credentials (Alpaca and eToro keys, the SnapTrade user secret) are sealed per connection with `STONKS_SECRET_KEYS` (AES-GCM, the connection id as associated data) in `broker_credentials`. They are read from the console form, `STONKS_CONNECT_<FIELD>` or a hidden prompt, never from TOML or command arguments.
+- Keys a provider refuses at connect are never stored. Errors are scrubbed of every credential value before they are logged, stored or shown.
+- eToro: the public API key and the user key travel only in the `x-api-key` and `x-user-key` headers, never in a URL, and request headers are never logged. Stonks keeps only the account id from eToro's profile answer, never the name or birth date it also returns.
+- eToro's terms say keys may not be shared. Each person connects their own keys, for their own account only. Give a key Read permission unless the account should trade, and an expiry date. If a key leaks, delete it in eToro, tell eToro within 24 hours and disconnect it in Stonks.
+
 ## Telegram bot
 
 - The bot token is read from `STONKS_TELEGRAM_BOT_TOKEN` only. It is never in TOML, never logged, and scrubbed from errors.

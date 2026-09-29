@@ -702,12 +702,15 @@ top of Settings, System. It reads `GET /api/settings/system` through
 - **Connections.** Each provider card says what Stonks may do there:
   "Reads only. It never places an order there." or "Reads, and places
   orders when you allow it." (`providerReach()`, from the provider's
-  `can_trade`). "When Stonks trades" spells it out: a broker that can trade
-  (Interactive Brokers) gets orders only in the portfolio linked to it, and
+  `can_trade`, which for eToro is true only when an admin turned its trading
+  on). "When Stonks trades" spells it out: a broker that can trade
+  (Interactive Brokers, eToro) gets orders only in the portfolio linked to it, and
   only for follows set to Approve each trade (after each ticket) or
   Automatic, for orders placed by hand there and for suggested orders you
   approve, at the portfolio's stage. Alerts only and Paper follows never
-  place an order at the broker. Key fields are password inputs, cleared when the form
+  place an order at the broker. A provider with paper accounts (Alpaca,
+  eToro) adds the tick box "These are paper or demo account keys (no real
+  money)", sent as `paper`. eToro asks for its API key and user key. Key fields are password inputs, cleared when the form
   closes and never shown again. Portal providers leave through the
   `BROWSER_REDIRECT` seam and come back to `/connections/callback`, which
   calls the callback route once. Link sends a new broker portfolio by
@@ -935,7 +938,8 @@ flowchart LR
 - **Going live checklist** (`pages/going-live/`). One page walks the whole
   path for the portfolio on screen, or `?portfolio=`, with a picker when
   there are several: (1) the server's IB Gateway lists and connects this
-  portfolio (`GET /api/brokers/gateways`), (2) the portfolio is linked to a
+  portfolio (`GET /api/brokers/gateways`), done at once for a broker whose
+  provider has `needs_gateway` false (eToro), (2) the portfolio is linked to a
   broker connection that can trade, (3) its stage (done at a Real money
   stage; otherwise the checks still missing for the next stage), (4) the
   allocation, (5) the account profile, (6) every safeguard on, (7) a dry-run

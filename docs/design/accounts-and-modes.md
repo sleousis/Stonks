@@ -275,7 +275,7 @@ class BrokerConnection(ABC):
 
 - Types are ours (`ExternalPosition`, `Activity` with a normalised `kind ∈ {trade, dividend, interest, fee, deposit, withdrawal, split, other}`); vendor JSON never crosses the seam.
 - `@register_provider("alpaca")` in `connections/providers/<name>.py`; discovery like the risk-rule registry.
-- `[connections] enabled_providers = []`: **no provider is enabled by default**. The admin enables `snaptrade`, `alpaca` or both. Disabled providers are hidden in the UI and refused by the API.
+- `[connections] enabled_providers = []`: **no provider is enabled by default**. The admin enables `snaptrade`, `alpaca`, `ibkr` or `etoro` (see `docs/design/etoro.md`). Disabled providers are hidden in the UI and refused by the API.
 - The Alpaca adapter reuses `execution/brokers/alpaca.py` for reads and returns the existing `AlpacaBroker` from `trader()`. The aggregator adapter is read-only first; its trading endpoints come later behind the same `trader()` call.
 - Symbols map to our tickers through an extended `execution/brokers/symbols.py`. An unmapped holding is kept with its raw symbol and `ticker = NULL`, shown as "not covered".
 
