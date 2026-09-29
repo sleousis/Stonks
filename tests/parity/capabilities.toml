@@ -2151,18 +2151,20 @@ mcp = { limited = "made-up figures would only mislead an assistant or a script" 
 [[capability]]
 id = "statements.import"
 domain = "portfolio"
-title = "CSV statement imports: preview, import, list and undo, for brokers without an API"
+title = "CSV statement imports: preview, import, list and undo, for brokers without an API, with ready broker presets (DEGIRO)"
 routes = [
   "GET /api/statement-imports",
+  "GET /api/statement-imports/presets",
   "POST /api/statement-imports/preview",
   "POST /api/statement-imports",
   "POST /api/statement-imports/{import_id}/undo",
 ]
 console = [
   "listStatementImports",
+  "listStatementPresets",
   "previewStatementImport",
   "commitStatementImport",
   "undoStatementImport",
 ]
-cli = ["stonks imports preview", "stonks imports commit", "stonks imports list", "stonks imports undo"]
+cli = ["stonks imports preview", "stonks imports commit", "stonks imports list", "stonks imports undo", "stonks imports presets"]
 mcp = { limited = "a person maps and checks the columns of their own file in the console or CLI" }

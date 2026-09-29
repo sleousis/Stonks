@@ -27242,6 +27242,19 @@
         "additionalProperties": false,
         "description": "A CSV to preview or import, into ``portfolio_id`` (a broker portfolio\nof yours) or into a new portfolio named ``new_portfolio``.",
         "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The day a holdings export describes; blank is today.",
+            "title": "As Of"
+          },
           "content": {
             "description": "The CSV text.",
             "maxLength": 5000000,
@@ -27303,6 +27316,19 @@
               }
             ],
             "title": "Portfolio Id"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A broker export preset id (GET /api/statement-imports/presets), 'auto' to find one from the headers, or 'none' to map the columns. Blank with no mapping also finds a preset first.",
+            "title": "Preset"
           }
         },
         "required": [
@@ -27313,6 +27339,18 @@
       },
       "StatementImportView": {
         "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -27345,6 +27383,15 @@
             "title": "Id",
             "type": "string"
           },
+          "kind": {
+            "default": "activities",
+            "enum": [
+              "activities",
+              "holdings"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "last_date": {
             "anyOf": [
               {
@@ -27371,6 +27418,17 @@
               }
             ],
             "title": "Portfolio Name"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
           "rows_added": {
             "title": "Rows Added",
@@ -27418,8 +27476,58 @@
         "title": "StatementImportView",
         "type": "object"
       },
+      "StatementPresetView": {
+        "description": "A broker export Stonks reads without a mapping.",
+        "properties": {
+          "broker": {
+            "title": "Broker",
+            "type": "string"
+          },
+          "how_to_export": {
+            "title": "How To Export",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "activities",
+              "holdings"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "broker",
+          "label",
+          "kind",
+          "how_to_export"
+        ],
+        "title": "StatementPresetView",
+        "type": "object"
+      },
       "StatementPreview": {
         "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
           "duplicate": {
             "title": "Duplicate",
             "type": "integer"
@@ -27447,6 +27555,15 @@
             "title": "Headers",
             "type": "array"
           },
+          "kind": {
+            "default": "activities",
+            "enum": [
+              "activities",
+              "holdings"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "last_date": {
             "anyOf": [
               {
@@ -27459,12 +27576,59 @@
             ],
             "title": "Last Date"
           },
+          "locale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locale"
+          },
           "mapping": {
-            "$ref": "#/components/schemas/ColumnMapping"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ColumnMapping"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "new": {
             "title": "New",
             "type": "integer"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
+          },
+          "preset_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset Label"
           },
           "rows": {
             "items": {
@@ -59500,9 +59664,90 @@
         "x-permission": "portfolio.manage"
       }
     },
+    "/api/statement-imports/presets": {
+      "get": {
+        "description": "The broker exports Stonks reads without a column mapping (DEGIRO\nTransactions, Account statement and Portfolio), with where to find each.",
+        "operationId": "listStatementPresets",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StatementPresetView"
+                  },
+                  "title": "Response Liststatementpresets",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Statement Presets",
+        "tags": [
+          "statement-imports"
+        ]
+      }
+    },
     "/api/statement-imports/preview": {
       "post": {
-        "description": "Each row as new, duplicate or skipped, and the column mapping used\n(guessed from the headers when you give none). Writes nothing.",
+        "description": "Each row as new, duplicate or skipped, and the column mapping or the\nbroker preset used (a known broker export is found from its headers,\nelse the mapping is guessed from them). Writes nothing.",
         "operationId": "previewStatementImport",
         "requestBody": {
           "content": {

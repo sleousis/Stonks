@@ -26,6 +26,7 @@ CATALOGS = {
     "/api/screener/metrics",
     "/api/options/strategies",
     "/api/options/structures",
+    "/api/statement-imports/presets",
 }
 
 #: Record lists that were plain lists before AS-17 (a route with no id in

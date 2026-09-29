@@ -352,3 +352,17 @@ def test_the_http_request_log_never_carries_the_user_secret(context, caplog):
     for secret in (USER_SECRET, CONSUMER_KEY):
         assert all(secret not in line for line in lines)
     assert all("userSecret" not in line for line in lines)
+
+
+def test_a_degiro_account_is_never_synced(context, server):
+    """SnapTrade reaches DEGIRO over an unofficial route that DEGIRO's
+    terms forbid: the account is left out, the others come through."""
+    from stonks.connections.route_policy import refused_route
+
+    degiro = {**ACCOUNTS[0], "id": "acc-9", "institution_name": "DEGIRO", "name": "Degiro"}
+    server.override["GET /accounts"] = httpx2.Response(200, json=[degiro, ACCOUNTS[0]])
+    conn = SnapTradeConnection.open(_creds(), context)
+    assert [a.id for a in conn.accounts()] == ["acc-1"]
+    assert refused_route("snaptrade", "flatexDEGIRO Bank") is not None
+    assert refused_route("snaptrade", "Interactive Brokers") is None
+    assert refused_route("alpaca", "DEGIRO") is None

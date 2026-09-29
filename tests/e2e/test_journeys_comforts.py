@@ -110,3 +110,33 @@ def test_screen_alerts_and_a_csv_import(browse, stack, viewport):
     listed = v.api("GET", "/api/statement-imports").json()["items"]
     assert listed[0]["undone_at"]
     v.guard.assert_clean()
+
+
+def test_a_degiro_export_needs_no_mapping(browse, stack, viewport):
+    """DEGIRO is never a connection: the trader follows its export link
+    from Broker connections and imports the file without mapping columns."""
+    from pathlib import Path
+
+    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "degiro" / "transactions_nl.csv"
+    v = _trader(browse, stack, "degiro", viewport)
+    page = v.page
+    v.go("/connections")
+    panel = page.locator("app-broker-exports-panel")
+    expect(panel.get_by_role("heading", name="Brokers without a connection")).to_be_visible()
+    expect(panel).to_contain_text("Reads only")
+    panel.get_by_role("link", name="Transactions").click()
+    expect(page.get_by_role("heading", level=1)).to_have_text("Import a CSV statement")
+    expect(page.get_by_label("What file is it?")).to_have_value("degiro_transactions")
+    page.get_by_label("CSV file").set_input_files(
+        {"name": "Transactions.csv", "mimeType": "text/csv", "buffer": fixture.read_bytes()}
+    )
+    page.get_by_label("Portfolio name").fill(f"DEGIRO {viewport}")
+    page.get_by_label("Currency").fill("EUR")
+    page.get_by_role("button", name="Preview").click()
+    status = page.get_by_role("status").filter(has_text="Read as DEGIRO Transactions, Dutch.")
+    expect(status).to_contain_text("2 new")
+    expect(page.locator("#imp-col-date")).to_have_count(0)
+    v.check_page("statement-import-degiro")
+    page.get_by_role("button", name="Import 2 new rows").click()
+    expect(page.locator("ul.imports")).to_contain_text(re.compile(r"DEGIRO .*: 2 added"))
+    v.guard.assert_clean()

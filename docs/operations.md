@@ -422,7 +422,30 @@ For a broker with no connection, bring its history in from the CSV file it expor
 uv run stonks imports preview FILE --new "Old broker" [--mapping JSON] [--currency EUR]
 uv run stonks imports commit FILE --portfolio PF_ID [--mapping JSON]
 uv run stonks imports list | undo IMPORT_ID
+uv run stonks imports presets        # broker exports read without a mapping
 ```
+
+### DEGIRO
+
+DEGIRO has no API and its terms forbid automated tools and sharing your login, so Stonks reads the CSV files you export and never trades there. Presets read them without a mapping, in English, Dutch, German, French, Spanish, Italian and Portuguese. Design and sources: [DEGIRO](design/degiro.md).
+
+1. **Export Transactions.** In the DEGIRO web trader open Inbox, then Transactions. Set the dates from your first trade to today, choose Export, then CSV.
+2. **Export the Account statement.** Inbox, then Account statement. Same dates, Export, then CSV. It brings dividends, dividend tax, deposits, withdrawals, interest and fees.
+3. **Export the Portfolio, if you like.** Portfolio, then Export, then CSV. It sets the holdings and cash on the day you export it. Note that day.
+4. **Import Transactions first,** into a new portfolio in your account currency:
+
+   ```bash
+   uv run stonks imports preview Transactions.csv --new "DEGIRO" --currency EUR
+   uv run stonks imports commit Transactions.csv --new "DEGIRO" --currency EUR
+   ```
+
+   The preview says `read as DEGIRO Transactions (nl)`, or your language. In the console, open Broker connections and pick Transactions under Brokers without a connection.
+5. **Import the Account statement** into that portfolio: `uv run stonks imports commit Account.csv --portfolio PF_ID`. Lines that belong to trades are left out, so nothing counts twice.
+6. **Import the Portfolio** with its day: `uv run stonks imports commit Portfolio.csv --portfolio PF_ID --as-of 2025-06-10`.
+7. **Check what is not covered.** The preview lists the ISINs no ticker maps to, with the product name. They stay in the portfolio by ISIN. To map them, ingest their metadata so the lake knows the ISIN (`uv run stonks ingest metadata --tickers ASML.AS`), then undo the import and import it again.
+8. **Stay up to date.** Export again later and import the same way. Lines already imported are skipped.
+
+A DEGIRO account that a SnapTrade connection shows is never synced: SnapTrade reaches DEGIRO with your login over an unofficial route.
 
 ## Telegram
 

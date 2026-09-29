@@ -1,6 +1,11 @@
 import { signal } from '@angular/core';
 
-import type { ConnectedAccountView, ConnectionView, ProviderView } from '../../api/models';
+import type {
+  ConnectedAccountView,
+  ConnectionView,
+  ProviderView,
+  StatementPresetView,
+} from '../../api/models';
 import type { Permission } from '../../core/auth/permissions';
 
 export const ALPACA: ProviderView = {
@@ -67,3 +72,28 @@ export function sessionStub(allowed: boolean) {
     status: signal('signed-in'),
   };
 }
+
+/** The DEGIRO export presets, as GET /api/statement-imports/presets lists them. */
+export const DEGIRO_PRESETS: StatementPresetView[] = [
+  {
+    id: 'degiro_transactions',
+    broker: 'DEGIRO',
+    label: 'Transactions',
+    kind: 'activities',
+    how_to_export: 'In the DEGIRO web trader open Inbox, then Transactions.',
+  },
+  {
+    id: 'degiro_account',
+    broker: 'DEGIRO',
+    label: 'Account statement',
+    kind: 'activities',
+    how_to_export: 'In the DEGIRO web trader open Inbox, then Account statement.',
+  },
+  {
+    id: 'degiro_portfolio',
+    broker: 'DEGIRO',
+    label: 'Portfolio',
+    kind: 'holdings',
+    how_to_export: 'In the DEGIRO web trader open Portfolio and choose Export.',
+  },
+];

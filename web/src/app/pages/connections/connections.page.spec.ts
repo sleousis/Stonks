@@ -10,7 +10,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { BROWSER_REDIRECT } from './browser-redirect';
 import { ConnectionsPage } from './connections.page';
-import { ALPACA, SNAPTRADE, connection, sessionStub } from './connections.fixtures';
+import { ALPACA, DEGIRO_PRESETS, SNAPTRADE, connection, sessionStub } from './connections.fixtures';
 
 describe('ConnectionsPage', () => {
   let fixture: ComponentFixture<ConnectionsPage>;
@@ -68,6 +68,7 @@ describe('ConnectionsPage', () => {
       limit: 500,
       offset: 0,
     });
+    (await nextRequest(http, '/api/statement-imports/presets')).flush(DEGIRO_PRESETS);
     await settle();
   }
 
@@ -221,5 +222,24 @@ describe('ConnectionsPage', () => {
     expect(button('Sign in at SnapTrade')).toBeUndefined();
     expect(button('Connect a broker')).toBeUndefined();
     expect(el.textContent).toContain('Traders only.');
+  });
+
+  it('shows DEGIRO as a broker read from its exports, never a connection', async () => {
+    await setUp();
+    const panel = el.querySelector('app-broker-exports-panel') as HTMLElement;
+    expect(panel.textContent).toContain('Brokers without a connection');
+    expect(panel.textContent).toContain('DEGIRO');
+    expect(panel.textContent).toContain('Reads only');
+    const links = [...panel.querySelectorAll<HTMLAnchorElement>('a.export-link')];
+    expect(links.map((a) => a.textContent?.trim())).toEqual([
+      'Transactions',
+      'Account statement',
+      'Portfolio',
+    ]);
+    expect(links[0].getAttribute('href')).toBe('/connections/import?preset=degiro_transactions');
+    // DEGIRO is not offered as a provider to sign in to
+    expect([...el.querySelectorAll('.provider h3')].map((h) => h.textContent)).not.toContain(
+      'DEGIRO',
+    );
   });
 });

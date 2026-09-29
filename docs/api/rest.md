@@ -488,6 +488,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 |--------|------|---------|------|---------|----------|
 | GET | `/api/statement-imports` | List Statement Imports | sign-in |  | [Page_StatementImportView_](#page_statementimportview_) |
 | POST | `/api/statement-imports` | Commit Statement Import | `portfolio.manage` | [StatementImportRequest](#statementimportrequest) | [StatementImportView](#statementimportview) |
+| GET | `/api/statement-imports/presets` | List Statement Presets | sign-in |  | list[[StatementPresetView](#statementpresetview)] |
 | POST | `/api/statement-imports/preview` | Preview Statement Import | `portfolio.manage` | [StatementImportRequest](#statementimportrequest) | [StatementPreview](#statementpreview) |
 | POST | `/api/statement-imports/{import_id}/undo` | Undo Statement Import | `portfolio.manage` |  | [StatementImportView](#statementimportview) |
 
@@ -6050,41 +6051,64 @@ A CSV to preview or import, into ``portfolio_id`` (a broker portfolio of yours) 
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `as_of` | date \| null | no | The day a holdings export describes; blank is today. |
 | `content` | string | yes | The CSV text. |
 | `currency` | string | no |  |
 | `filename` | string \| null | no |  |
 | `mapping` | [ColumnMapping](#columnmapping) \| null | no | Column mapping; blank guesses it from the headers. |
 | `new_portfolio` | string \| null | no |  |
 | `portfolio_id` | string \| null | no |  |
+| `preset` | string \| null | no | A broker export preset id (GET /api/statement-imports/presets), 'auto' to find one from the headers, or 'none' to map the columns. Blank with no mapping also finds a preset first. |
 
 ### StatementImportView
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
 | `created_at` | date-time | yes |  |
 | `filename` | string \| null | yes |  |
 | `first_date` | date \| null | yes |  |
 | `id` | string | yes |  |
+| `kind` | "activities" \| "holdings" | no |  |
 | `last_date` | date \| null | yes |  |
 | `portfolio_id` | string | yes |  |
 | `portfolio_name` | string \| null | yes |  |
+| `preset` | string \| null | no |  |
 | `rows_added` | integer | yes |  |
 | `rows_duplicate` | integer | yes |  |
 | `rows_skipped` | integer | yes |  |
 | `rows_total` | integer | yes |  |
 | `undone_at` | date-time \| null | yes |  |
 
+### StatementPresetView
+
+A broker export Stonks reads without a mapping.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `broker` | string | yes |  |
+| `how_to_export` | string | yes |  |
+| `id` | string | yes |  |
+| `kind` | "activities" \| "holdings" | yes |  |
+| `label` | string | yes |  |
+
 ### StatementPreview
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `as_of` | date \| null | no |  |
 | `duplicate` | integer | yes |  |
 | `first_date` | date \| null | yes |  |
 | `guessed` | boolean | yes |  |
 | `headers` | list[string] | yes |  |
+| `kind` | "activities" \| "holdings" | no |  |
 | `last_date` | date \| null | yes |  |
-| `mapping` | [ColumnMapping](#columnmapping) | yes |  |
+| `locale` | string \| null | no |  |
+| `mapping` | [ColumnMapping](#columnmapping) \| null | yes |  |
 | `new` | integer | yes |  |
+| `notes` | list[string] | no |  |
+| `preset` | string \| null | no |  |
+| `preset_label` | string \| null | no |  |
 | `rows` | list[[StatementRowView](#statementrowview)] | yes |  |
 | `skipped` | integer | yes |  |
 | `total` | integer | yes |  |
