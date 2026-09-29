@@ -13,7 +13,7 @@ import { StopTradingService } from '../../core/halts/stop-trading.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
-import { answerDialog } from '../../../testing/status-dialog';
+import { answerDialog, confirmButton, dialogForm } from '../../../testing/status-dialog';
 import { HaltsPage } from './halts.page';
 import { book } from '../../../testing/portfolio-fixtures';
 
@@ -301,6 +301,9 @@ describe('HaltsPage', () => {
     it('clears a breaker halt with a reason', async () => {
       button('Clear')!.click();
       await settle();
+      // No real-money portfolio under this halt: no red button.
+      const form = dialogForm(fixture.nativeElement as HTMLElement)!;
+      expect(confirmButton(form).classList).not.toContain('btn-danger');
       answerDialog(fixture, { reason: 'Reviewed the drawdown' });
       const post = await nextRequest(http, '/api/halts/2/clear', 'POST');
       expect(post.request.body).toEqual({ reason: 'Reviewed the drawdown' });

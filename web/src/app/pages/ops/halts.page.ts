@@ -214,7 +214,8 @@ export class HaltsPage {
       message:
         'New orders go out again from the next trading run, unless another halt still applies.',
       confirmLabel: 'Clear halt',
-      tone: 'danger',
+      // Red only when real money trades again under this halt.
+      tone: this.liveFor(h.scope, h.portfolio_id) ? 'danger' : 'default',
       minReason: 1,
       reasonHint: 'Kept in the audit log and the status history.',
     });
