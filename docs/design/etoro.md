@@ -117,4 +117,9 @@ SnapTrade lists eToro for the US and Europe, read only, through eToro's own sign
 - **No what-if preview in Stonks.** eToro has a cost preview (`/api/v2/trading/info/costs`), but it is not wired into the live preview yet.
 - **Prices are USD only for amount orders.** Amount sizing works for USD instruments only.
 - **One user's keys, one person.** The terms allow use for your own account only. Each person connects their own eToro keys. Stonks never uses one person's eToro keys for another.
+- **Daily books, not scalping.** The terms forbid scalping and latency games. Stonks keeps to one order budget of 10 a minute per connection and never opens opposing positions, but it does not stop an intraday book from using an eToro portfolio. Use eToro for daily books.
 - **eToro data stays out of the lake.** Prices and candles from eToro are Licensed Content. Stonks reads a price only to size an order and never stores eToro market data or uses it for research.
+
+## How to connect
+
+See [Operations: eToro](../operations.md#etoro) for the key settings, the console and CLI steps, and what to do when a key expires or leaks.
