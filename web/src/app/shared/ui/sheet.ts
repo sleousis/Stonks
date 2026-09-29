@@ -7,6 +7,7 @@ import {
   input,
   model,
   output,
+  signal,
   viewChild,
 } from '@angular/core';
 
@@ -38,6 +39,7 @@ import {
       [attr.aria-labelledby]="labelledBy()"
       [attr.aria-describedby]="describedBy()"
       (cancel)="$event.preventDefault(); dismiss.emit()"
+      (close)="onNativeClose()"
     >
       <ng-content />
     </dialog>
@@ -119,16 +121,33 @@ export class Sheet {
   readonly dismiss = output<void>();
 
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
+  /** Bumped when the browser closes the dialog on its own. */
+  private readonly nativeCloses = signal(0);
 
   constructor() {
     effect(() => {
       const el = this.dialog().nativeElement;
+      this.nativeCloses();
       if (this.open()) {
         if (!el.open) el.showModal?.();
       } else if (el.open) {
         el.close();
       }
     });
+  }
+
+  /**
+   * The browser closed the dialog itself: a second Escape or back gesture
+   * cannot be cancelled. Report it, and open again if the host still wants
+   * the sheet (a request under way), so its state and the screen agree and
+   * the next open is not a no-op.
+   */
+  protected onNativeClose(): void {
+    if (!this.open()) return;
+    if (!this.dialog().nativeElement.open) {
+      this.dismiss.emit();
+      this.nativeCloses.update((n) => n + 1);
+    }
   }
 }
 
