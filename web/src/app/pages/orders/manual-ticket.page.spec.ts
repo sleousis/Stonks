@@ -147,6 +147,16 @@ describe('ManualTicketPage', () => {
     expect(http.match(() => true)).toHaveLength(0);
   });
 
+  it('puts the cursor on the first field to fix when Place order is pressed too soon', async () => {
+    setup();
+    const el = await render();
+    button(el, 'Place order').click();
+    await settle();
+    expect(document.activeElement?.id).toBe('mo-ticker');
+    await tick(5);
+    expect(http.match(() => true)).toHaveLength(0);
+  });
+
   it('works out a whole-share size from the risk and the stop', async () => {
     setup();
     const el = await render();

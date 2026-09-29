@@ -1,7 +1,10 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  ElementRef,
+  Injector,
   type OnInit,
+  afterNextRender,
   computed,
   inject,
   input,
@@ -559,6 +562,8 @@ export function orderLines(
 })
 export class ManualTicketPage implements OnInit {
   private readonly api = inject(ManualOrdersService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
   private readonly ctx = inject(PortfolioContextService);
   private readonly session = inject(SessionService);
   private readonly stepUp = inject(StepUpService);
@@ -831,7 +836,14 @@ export class ManualTicketPage implements OnInit {
 
   private request(): ManualOrderRequest | null {
     this.tried.set(true);
-    if (Object.keys(this.errors()).length) return null;
+    if (Object.keys(this.errors()).length) {
+      // The errors may sit far above the button on a phone: go to the first.
+      afterNextRender(
+        () => this.host.nativeElement.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(),
+        { injector: this.injector },
+      );
+      return null;
+    }
     const limit = this.orderType() === 'limit' ? Number(this.limit()) : null;
     return {
       ticker: this.tickerField().trim().toUpperCase(),
