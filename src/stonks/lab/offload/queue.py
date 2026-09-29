@@ -128,6 +128,22 @@ class LabQueue:
                 [self._now(), job_id, worker_id],
             )
 
+    def worker_progress(
+        self, job_id: str, worker_id: str, progress: float, message: str | None
+    ) -> bool:
+        """Store a remote worker's progress unless a cancel was asked. The
+        check and the write are one statement, so a heartbeat that read "no
+        cancel" just before the cancel landed never replaces the
+        "cancellation requested" message. False when nothing was written."""
+        clamped = min(1.0, max(0.0, float(progress)))
+        with self._state() as s:
+            cur = s.execute(
+                "UPDATE jobs SET progress=?, progress_message=? "
+                "WHERE id=? AND worker_id=? AND status='running' AND cancel_requested_at IS NULL",
+                [clamped, message, job_id, worker_id],
+            )
+            return cur.rowcount == 1
+
     def request_cancel(self, job_id: str) -> bool:
         """Flag a running worker job for cancellation; False when it is not
         one (queued jobs are cancelled directly through the job store)."""
