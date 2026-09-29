@@ -104,8 +104,13 @@ class ParsedRow:
     skipped: str | None = None
 
 
-def read_headers(text: str) -> list[str]:
-    reader = csv.reader(io.StringIO(_strip_bom(text)))
+def read_headers(text: str, *, sniff: bool = False) -> list[str]:
+    """The first line's cells. ``sniff`` also takes a semicolon as the
+    delimiter when the first line has more semicolons than commas."""
+    body = _strip_bom(text)
+    first = body.split("\n", 1)[0]
+    delimiter = ";" if sniff and first.count(";") > first.count(",") else ","
+    reader = csv.reader(io.StringIO(body), delimiter=delimiter)
     return [h.strip() for h in next(reader, [])]
 
 
@@ -252,7 +257,7 @@ def _date(value: str, fmt: str | None) -> date:
 def _number(row: dict[str, str], column: str | None) -> float | None:
     if not column:
         return None
-    text = _decimal_point(_NUMBER_JUNK.sub("", row.get(column, "")))
+    text = decimal_point(_NUMBER_JUNK.sub("", row.get(column, "")))
     if not text:
         return None
     negative = text.startswith("(") and text.endswith(")")
@@ -263,7 +268,7 @@ def _number(row: dict[str, str], column: str | None) -> float | None:
     return -value if negative else value
 
 
-def _decimal_point(text: str) -> str:
+def decimal_point(text: str) -> str:
     """``text`` with a point as its only decimal mark and no thousands
     marks. With both marks the last one is the decimal mark (``1.234,56``,
     ``1,234.56``). A lone comma followed by other than three digits is a
