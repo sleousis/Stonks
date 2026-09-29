@@ -567,8 +567,11 @@ export class NotificationPrefs {
     () => this.countryChoices().filter((c) => c.chosen).length,
   );
   protected readonly countryError = signal<string | null>(null);
-  protected readonly quietStart = linkedSignal(() => this.view()?.quiet_start ?? '');
-  protected readonly quietEnd = linkedSignal(() => this.view()?.quiet_end ?? '');
+  /** The stored quiet hours: the fields reset only when these change, not on every save. */
+  private readonly storedStart = computed(() => this.view()?.quiet_start ?? '');
+  private readonly storedEnd = computed(() => this.view()?.quiet_end ?? '');
+  protected readonly quietStart = linkedSignal(() => this.storedStart());
+  protected readonly quietEnd = linkedSignal(() => this.storedEnd());
   protected readonly quietError = signal<string | null>(null);
   protected readonly saving = signal(false);
   protected readonly canManage = computed(() => this.session.can('notifications.manage'));
