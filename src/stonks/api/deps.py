@@ -164,8 +164,11 @@ def require_token(
     creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
 ) -> None:
     """Always demands a principal, whatever the method or peer: for routes
-    about the caller (``/api/auth/*``)."""
-    _resolve(request, creds)
+    about the caller (``/api/auth/*``). A machine credential (a lab worker
+    token) reaches only the routes its scope grants, as in :func:`authorize`."""
+    principal = _resolve(request, creds)
+    if principal.confined and not _route_grants(request, principal):
+        raise PermissionDenied("this credential only reaches its own routes")
 
 
 def authorize_stream(

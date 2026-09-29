@@ -352,3 +352,14 @@ def test_forecasts_and_resolves_its_open_trades(lake):
 
 def test_unfitted_strategy_forecasts_nothing(lake):
     assert _strategy().forecast_probability("X.US", DATES[600].to_pydatetime(), lake) is None
+
+
+@pytest.mark.parametrize("params", [{}, {"lookback": 100, "atr_lookback": 60}])
+def test_required_history_covers_the_feature_tail(params):
+    """open_trade needs feature_tail + 1 bars (3 x the longer look-back): a
+    shorter declared history leaves the preflight and the warm-up fetch
+    too short, and the strategy silently never acts early in a window."""
+    s = TrendlineMetaLabelStrategy(params)
+    assert s.required_history_bars >= s.feature_tail + 1
+    cls = TrendlineMetaLabelStrategy
+    assert cls.required_history_bars >= cls({}).feature_tail + 1

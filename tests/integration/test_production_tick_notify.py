@@ -57,7 +57,9 @@ def test_rejected_orders_notify_warning(tick_env, monkeypatch):
     [n] = rec.sent
     assert n.level == "warning"
     assert n.fields["tick_id"] == result.tick_id
-    assert n.fields["rejected"] == ["UP.US"]
+    # admins see a count, never the tickers (the owner's alert names them)
+    assert n.fields["rejected"] == 1
+    assert "UP.US" not in n.message
 
 
 def test_partial_tick_notifies_warning(tick_env, monkeypatch):

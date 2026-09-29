@@ -115,3 +115,27 @@ def test_year_tax_carries_a_net_loss_to_the_other_term():
     ]
     y = year_tax(fills, TaxSettings(wash_sales=False), RATES, year=2026, as_of=date(2026, 12, 31))
     assert y.estimated_tax == pytest.approx(200 * 0.15)
+
+
+def test_year_tax_in_base_matches_the_gains_export():
+    """The yearly figure in the base currency is the gains file's
+    ``gain_base`` summed: the cost at the purchase day's rate, the
+    proceeds at the sale day's rate, so an FX gain counts."""
+    from stonks.fx import FxRates
+    from stonks.tax import gains_rows, realized_disposals
+
+    fx = FxRates([("EUR", "USD", date(2026, 1, 1), 1.10), ("EUR", "USD", date(2026, 3, 1), 1.20)])
+    fills = [
+        TaxFill(1, "SAP.XETRA", "buy", 10, 100.0, 0.0, datetime(2026, 1, 5, 15, tzinfo=UTC), "EUR"),
+        TaxFill(
+            2, "SAP.XETRA", "sell", 10, 100.0, 0.0, datetime(2026, 3, 5, 15, tzinfo=UTC), "EUR"
+        ),
+    ]
+
+    def to_base(amount, currency, day):
+        return fx.convert(amount, currency or "USD", "USD", day)
+
+    y = year_tax(fills, TaxSettings(), RATES, year=2026, to_base=to_base)
+    rows = gains_rows(realized_disposals(fills, TaxSettings()), 2026, "USD", fx)
+    assert y.short_term_gain == pytest.approx(sum(float(r["gain_base"]) for r in rows))
+    assert y.short_term_gain == pytest.approx(1000 * 1.20 - 1000 * 1.10)

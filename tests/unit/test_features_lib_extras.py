@@ -203,3 +203,11 @@ def test_runs_test_degenerate_all_same_is_nan():
     # Can't test independence with a constant sequence; returns NaN.
     z = runs_test_z_score(np.array([1, 1, 1, 1, 1]))
     assert math.isnan(z)
+
+
+def test_runs_z_ignores_flat_moves():
+    """A zero (a flat bar) is neither a rise nor a fall: counting it as a
+    run of its own inflated the z-score of any series with flat bars
+    (10 runs and z 6.5 here, against 5 runs and z 1.2 without them)."""
+    s = np.array([1, 0, 1, -1, 1, 0, -1, 1, 0, 1], dtype=float)
+    assert math.isclose(runs_test_z_score(s), runs_test_z_score(s[s != 0]))

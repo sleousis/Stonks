@@ -168,7 +168,7 @@ A tick killed mid-run (container stop, out of memory, reboot) leaves its `tick_r
 
 ### Dead-man checks
 
-- **Deadlines.** A watchdog checks every `watchdog_seconds` that each job with `deadline_minutes` succeeded (or was skipped) in time. A miss sends one error alert, recorded in `scheduler_deadline_alerts` so restarts don't repeat it.
+- **Deadlines.** A watchdog checks every `watchdog_seconds` that each job with `deadline_minutes` succeeded (or was skipped) in time. A miss sends one error alert, recorded in `scheduler_deadline_alerts` so restarts don't repeat it. A job that has never run (just added or switched on) is only watched from the scheduler's start.
 - **Pings.** With `ping_url_env`, a job POSTs `<url>/start`, then `<url>` or `<url>/fail`. The external monitor alerts when pings stop, which also covers a dead scheduler or server. Logs show only `scheme://host/***`.
 - **Engine dead-man.** The same watchdog checks each live intraday engine. When no bar close was dispatched for `[streaming.monitor] deadman_minutes` (5) while the engine's market is open, it sends one error alert per silent stretch. Silence counts from the last bar close, the engine's start or today's open, whichever is latest. A stopped engine or a closed market never alerts. The alert is recorded in `scheduler_deadline_alerts` as job `engine:<id>`, so restarts don't repeat it. `python -m stonks.scheduling check` runs it once too.
 
@@ -278,7 +278,7 @@ uv run stonks backup prune
 
 `python -m stonks.ops <command>` is the same tool without the rest of the CLI. It also has `restore-snapshot` and `check-restore`, which the off-server restore scripts use.
 
-A backup is one folder `stonks-<UTC time>Z` with the state DB, the lake, Parquet bars (hard-linked), artifacts and a `manifest.json` of hashes and row counts. It goes to `[backup].dir`, or `backups/` next to the lake. Pruning keeps the newest backup of each of the last 7 days, 4 weeks and 12 months.
+A backup is one folder `stonks-<UTC time>Z` with the state DB, the lake, Parquet bars (hard-linked), artifacts and a `manifest.json` of hashes and row counts. It goes to `[backup].dir`, or `backups/` next to the lake. Pruning keeps the newest backup of each of the last 7 days, 4 weeks and 12 months. A backup that finds no state DB or no lake (wrong data paths) fails, and nothing is pruned.
 
 The lake must not be held by another writer: stop `stonks serve` or back up from the server's own copy. `[backup]` in the config sets the folder and the retention. Off-server encrypted copies (restic) are covered in [deploy.md](deploy.md#6-backups). Full steps: [runbooks/restore.md](runbooks/restore.md).
 
@@ -340,7 +340,9 @@ min_level = "warning"                    # info | warning | error
 - `store`: every alert, any level, in the `alerts` table, read by `GET /api/alerts`. Credentials are scrubbed first.
 - `webhook`: POSTs `{level, title, message, fields, text}` to `STONKS_NOTIFY_WEBHOOK_URL` (keep it in `.env`; Slack and Mattermost show `text`).
 
-A notifier never raises. What alerts:
+A notifier never raises. Admins never see holdings, so an operator alert about one book carries counts only (orders rejected, corporate actions deferred, orders not reconciled). The portfolio's owner gets the detailed alert with the tickers, and the structured log keeps them for the operator.
+
+What alerts:
 
 | Source | Level | When |
 |--------|-------|------|
@@ -838,6 +840,8 @@ The shipped `config/default.toml` turns on three protections for a new install. 
 | `[production.risk] max_weight_per_ticker` | `0.25` | One ticker holds at most 25% of a portfolio. A single-winner strategy leaves the rest in cash. |
 | `[production.risk.rules.circuit_breaker]` | `max_month_loss = 0.06`, `max_week_loss = 0.04`, `max_drawdown_halt = 0.20` | Halts new buys after a 6% month loss, a 4% loss over five runs, or a 20% drop from the peak (held until cleared). Sells always pass. |
 | `[production.risk.rules.drawdown_scaling]` | `schedule = [[0.10, 0.5], [0.20, 0.0]]` | Half-size new buys from 10% down, none from 20% down. |
+
+Stonks finds `config/default.toml` under the working folder first, then in the project that holds the code, so running from another folder keeps these limits. Without any config file, `stonks serve`, `stonks tick` and the scheduler refuse to start, and other commands log a warning, because the code defaults drop every limit above.
 
 There is no one-day loss limit: the shortest breaker is the week loss over `week_sessions` runs (set it to 1 for a day). An existing install that keeps its own config file keeps its own values. To loosen a protection, change it in the file or in the console (below); a portfolio or follow can only tighten it.
 

@@ -200,7 +200,8 @@ def test_the_lab_worker_scope_is_admin_only_and_confined():
     assert not allowed(_principal(Role.ADMIN, {ApiScope.LAB}, via="token"), Permission.LAB_WORKER)
     mixed = _principal(Role.ADMIN, {ApiScope.LAB_WORKER, ApiScope.READ}, via="token")
     assert not mixed.confined
-    assert not _principal(Role.ADMIN, set(), via="token").confined
+    # a token the role clamped to nothing reaches nothing, not even reads
+    assert _principal(Role.ADMIN, set(), via="token").confined
 
 
 def test_every_permission_has_a_rule():

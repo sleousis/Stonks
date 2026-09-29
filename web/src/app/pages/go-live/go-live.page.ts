@@ -13,7 +13,7 @@ import type { LeaderboardRow } from '../../api/models';
 import { StrategiesService } from '../../api/strategies.service';
 import { SystemService } from '../../api/system.service';
 import { brokerName, isRealMoneyBroker } from '../../shared/governance';
-import { strategyDisplayName, strategyKindName } from '../../shared/strategy-names';
+import { rowStrategyName, strategyKindName } from '../../shared/strategy-names';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PageHeader } from '../../shared/ui/page-header';
@@ -125,7 +125,7 @@ export class GoLivePage {
   ];
   protected readonly rowKey = (r: LeaderboardRow) => r.strategy_id;
 
-  protected readonly name = strategyDisplayName;
+  protected readonly name = (r: LeaderboardRow) => rowStrategyName(r) ?? r.strategy_id;
   protected readonly kind = strategyKindName;
   protected readonly verdict = rowVerdict;
   protected readonly realMoney = isRealMoneyBroker;

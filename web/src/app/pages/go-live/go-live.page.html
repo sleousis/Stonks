@@ -38,7 +38,7 @@
       >
         <ng-template appCell="strategy_id" [appCellOf]="rows()" let-r>
           <a class="name" [routerLink]="['/strategies', r.strategy_id]">
-            <span class="id">{{ name(r.strategy_id) }}</span>
+            <span class="id">{{ name(r) }}</span>
             <span class="cls muted">{{ kind(r.class_path) }}</span>
           </a>
         </ng-template>
@@ -54,7 +54,7 @@
             [class.btn-primary]="r.status === 'shadow' && r.golive_passed"
             [routerLink]="['/strategies', r.strategy_id]"
             [queryParams]="{ tab: 'review' }"
-            [attr.aria-label]="'Review ' + name(r.strategy_id)"
+            [attr.aria-label]="'Review ' + name(r)"
             >Review <span aria-hidden="true">→</span></a
           >
         </ng-template>

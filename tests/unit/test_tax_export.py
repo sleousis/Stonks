@@ -72,3 +72,14 @@ def test_dividends_with_withholding():
     assert (row["gross"], row["withholding"], row["net"]) == ("20.00", "5.00", "15.00")
     assert float(row["net_base"]) == pytest.approx(15 * 1.20)
     assert text.splitlines()[0] == ",".join(DIVIDEND_COLUMNS)
+
+
+def test_a_short_converts_its_proceeds_at_the_short_sale_day():
+    # A short sold on 2024-02-01 (EURUSD 1.10) and covered on 2024-07-01
+    # (1.20): the proceeds came in at the sale, the cost was paid at the
+    # cover, like docs/tax.md says and like the open lot row shows it.
+    short = disposal(kind="short", proceeds=1500.0, cost_basis=1000.0)
+    (row,) = gains_rows([short], 2024, "USD", FX)
+    assert float(row["proceeds_base"]) == pytest.approx(1500 * 1.10)
+    assert float(row["cost_basis_base"]) == pytest.approx(1000 * 1.20)
+    assert float(row["gain_base"]) == pytest.approx(1500 * 1.10 - 1000 * 1.20)

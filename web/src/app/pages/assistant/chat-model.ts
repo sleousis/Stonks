@@ -205,6 +205,13 @@ export function decideItem(
   });
 }
 
+/** Every confirm step still waiting, marked rejected: a new message moved on from them. */
+export function rejectPending(items: readonly ChatItem[]): ChatItem[] {
+  return items.map((i) =>
+    i.type === 'confirm' && i.state === 'pending' ? { ...i, state: 'rejected' } : i,
+  );
+}
+
 /** The action still waiting for your answer, if any. */
 export function pendingConfirm(items: readonly ChatItem[]): ConfirmItem | null {
   for (let i = items.length - 1; i >= 0; i--) {

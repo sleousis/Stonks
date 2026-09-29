@@ -133,3 +133,12 @@ def test_allowed_hosts_refuse_catch_alls_and_urls(bad):
 def test_allowed_hosts_accept_names_and_subdomain_wildcards():
     cfg = ApiConfig(allowed_hosts=["stonks.example.com", "*.ts.net", "api", "10.1.2.3"])
     assert cfg.allowed_hosts == ["stonks.example.com", "*.ts.net", "api", "10.1.2.3"]
+
+
+def test_cors_for_the_dev_origin_is_on_only_in_the_dev_profile(tmp_path, monkeypatch):
+    missing = tmp_path / "none.toml"
+    monkeypatch.delenv("STONKS_PROFILE", raising=False)
+    assert load_settings(config_path=missing).api.cors_ui_origin is False
+    assert load_settings(config_path=Path("config/default.toml")).api.cors_ui_origin is False
+    monkeypatch.setenv("STONKS_PROFILE", "dev")
+    assert load_settings(config_path=missing).api.cors_ui_origin is True

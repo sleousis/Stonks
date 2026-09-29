@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, input, output, signal } from '@angu
 
 import type { ConnectedAccountView } from '../../api/models';
 import type { PortfolioRef } from '../../api/portfolios.service';
+import { portfolioModeNote } from '../../shared/live-stages';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 
 /** Link this account to that portfolio (null: a new portfolio for it). */
@@ -33,8 +34,8 @@ export interface LinkChoice {
           <div class="linked">
             @if (a.portfolio_id) {
               <span>Feeds {{ portfolioName(a.portfolio_id) }}</span>
-              @if (portfolio(a.portfolio_id)?.trading; as mode) {
-                <app-mode-stamp [live]="mode === 'live'" />
+              @if (portfolio(a.portfolio_id); as p) {
+                <app-mode-stamp [live]="p.trading === 'live'" [stage]="p.live_stage" />
               }
             } @else {
               <span class="muted">Not linked to a portfolio</span>
@@ -54,7 +55,7 @@ export interface LinkChoice {
                 <option value="" [selected]="!chosen(a)">A new portfolio for this account</option>
                 @for (p of portfolios(); track p.id) {
                   <option [value]="p.id" [selected]="chosen(a) === p.id">
-                    {{ p.name }}{{ p.trading === 'live' ? ' (live)' : '' }}
+                    {{ p.name }}{{ note(p) }}
                   </option>
                 }
               </select>
@@ -134,6 +135,7 @@ export class AccountList {
   readonly canLink = input(true);
   readonly busyId = input<string | null>(null);
   readonly link = output<LinkChoice>();
+  protected readonly note = portfolioModeNote;
 
   /** The portfolio picked per account; unset means the listed one it feeds now, else a new one. */
   private readonly picks = signal<Record<string, string | null>>({});

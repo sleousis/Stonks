@@ -12,7 +12,7 @@ import type { GetLeaderboardData, LeaderboardRow, StrategyStatus } from '../../a
 import { StrategiesService } from '../../api/strategies.service';
 import { formatDate } from '../../core/format/format';
 import { STATUS_WORDS } from '../../shared/governance-labels';
-import { strategyDisplayName, strategyKindName } from '../../shared/strategy-names';
+import { rowStrategyName, strategyKindName } from '../../shared/strategy-names';
 import { type Verdict, strategyVerdict } from '../../shared/strategy-verdict';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
@@ -138,7 +138,7 @@ export function rowVerdict(r: LeaderboardRow): Verdict {
           <ng-template appCell="strategy_id" [appCellOf]="board.value().rows" let-r>
             <a [routerLink]="['/strategies', r.strategy_id]" class="name">
               <span class="num rank">{{ r.rank }}</span>
-              <span class="id">{{ name(r.strategy_id) }}</span>
+              <span class="id">{{ name(r) }}</span>
               <span class="cls muted">{{ kind(r.class_path) }}</span>
             </a>
           </ng-template>
@@ -272,7 +272,7 @@ export class LeaderboardPage {
     },
   ];
   protected readonly rowKey = (r: LeaderboardRow) => r.strategy_id;
-  protected readonly name = strategyDisplayName;
+  protected readonly name = (r: LeaderboardRow) => rowStrategyName(r) ?? r.strategy_id;
   protected readonly kind = strategyKindName;
 
   protected verdict(r: LeaderboardRow): Verdict {

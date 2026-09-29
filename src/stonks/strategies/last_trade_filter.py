@@ -56,6 +56,8 @@ class LastTradeFilter(InnerStrategyWrapper):
         "after a loser keeps the better trades. Adds no alpha of its own."
     )
     id_suffix = "last_trade"
+    #: The replayed trade log is long-only (see the module doc).
+    long_only = True
 
     @classmethod
     def parameter_spec(cls):

@@ -126,6 +126,11 @@ class AlpacaBroker:
         self._assets: dict[str, dict[str, Any]] = {}
         self._account_ok = False
 
+    @property
+    def real_money(self) -> bool:
+        """The live endpoint trades real money (the stage guard reads it)."""
+        return not self.paper
+
     @classmethod
     def connect(
         cls,

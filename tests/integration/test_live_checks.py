@@ -139,7 +139,7 @@ def test_drift_opens_the_halt_pauses_auto_and_alerts(state, sent):
     assert report.id in halt.reason
     assert report.paused == ("sub_1",)
     assert paused_reason(state).startswith("broker_drift: ") and report.id in paused_reason(state)
-    assert [e.title for e in sent] == ["Trading halted: broker drift"]
+    assert [e.title for e in sent] == ["Trading stopped: broker drift"]
 
     # a second check finds the same halt open and pauses nothing new
     again = check(state, broker, "eod", sent=sent)
@@ -252,6 +252,18 @@ def test_a_wrong_account_is_a_fault_that_pauses_at_once(state, sent):
     assert not active_halts(state, MON.date(), portfolio_id=PF)
 
 
+def test_a_fault_pauses_approve_subscriptions_too(state, sent):
+    """Approve mode trades at the broker too (roadmap 19.8): a fault pauses
+    it with auto, as the tick and the broker health job do."""
+    auto_subscription(state)
+    state.execute("UPDATE subscriptions SET mode = 'approve' WHERE id = 'sub_1'")
+    broker = ib_broker(state, FakeIbGateway(["U7654321"]))  # a live account on paper
+    result = check(state, broker, sent=sent)
+    assert result.status == "fault"
+    assert result.report.paused == ("sub_1",)
+    assert paused_reason(state).startswith("broker_error: ")
+
+
 # ---- start and end of day --------------------------------------------------------------------
 
 
@@ -360,3 +372,50 @@ def test_reports_list_newest_first(state):
     assert [r.id for r in list_reports(state, portfolio_ids=[PF])] == [second.id, first.id]
     assert list_reports(state, portfolio_ids=["pf_other"]) == []
     assert list_reports(state, portfolio_ids=[]) == []
+
+
+# ---- a gateway shared by two portfolios ---------------------------------------------------
+
+
+def _other_portfolio_holds(state, ticker: str, qty: float, pid: str = "pf_b") -> str:
+    """A second portfolio on the same account, whose ledger owns ``qty``."""
+    state.execute(
+        "INSERT INTO portfolios (id, owner_id, name, kind, created_at)"
+        " SELECT ?, owner_id, 'B', 'broker', 'x' FROM portfolios WHERE id = ?",
+        [pid, PF],
+    )
+    state.execute(
+        "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status, state,"
+        " created_at, updated_at, portfolio_id) VALUES ('b-1', ?, 'buy', ?, 'market',"
+        " 'filled', 'filled', 'x', 'x', ?)",
+        [ticker, qty, pid],
+    )
+    state.execute(
+        "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at,"
+        " portfolio_id) VALUES ('b-1', ?, ?, 400.0, 0.0, ?, ?)",
+        [ticker, qty, MON.isoformat(), pid],
+    )
+    return pid
+
+
+def test_a_shared_gateway_checks_only_this_portfolios_positions(state, sent):
+    """With manual trades off, what another portfolio on the same account
+    owns is not this portfolio's drift. The submit gate (no account list)
+    reads the portfolios from the gateway's broker."""
+    gw = FakeIbGateway()
+    broker = ib_broker(state, gw)
+    bought(state, gw, broker)
+    other = _other_portfolio_holds(state, "MSFT.US", 5)
+    gw.set_position(AAPL, 10)
+    gw.set_position(MSFT, 5)
+    strict = LiveSettings(allow_manual_trades=False)
+
+    result = check(state, broker, sent=sent, settings=strict, account_portfolios=(PF, other))
+    assert result.status == "clean", result.report.items
+    broker.portfolios = (PF, other)
+    gate = submit_gate(state, broker, PF, settings=strict, clock=FakeClock(MON))
+    assert gate.may_submit, gate.report.items
+    # the owner's own shares on top still count as drift with manual trades off
+    gw.set_position(MSFT, 7)
+    again = check(state, broker, sent=sent, settings=strict, account_portfolios=(PF, other))
+    assert again.status == "drift"

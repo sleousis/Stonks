@@ -39,15 +39,16 @@ from __future__ import annotations
 import json
 import math
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, Literal
 
 from stonks.core.clock import SYSTEM_CLOCK, Clock
 from stonks.core.stream import QuoteTick, StreamBar, StreamEvent, TradeTick
+from stonks.core.types import Portfolio
 from stonks.logging import get_logger
 from stonks.production.intraday_pnl_settings import IntradayPnlSettings
-from stonks.production.ledger import ledger_filter
+from stonks.production.ledger import ledger_columns, ledger_filter
 from stonks.store.state import SqliteState
 
 if TYPE_CHECKING:
@@ -319,6 +320,17 @@ def load_day_start(state: SqliteState, portfolio_id: str, day: date) -> DayStart
     )
 
 
+def _managed_start(state: SqliteState, start: DayStart) -> DayStart:
+    """``start`` narrowed to what the book owned when the day began (its
+    fills before the day, capped by the account): the managed view of
+    ``production.ownership``. The cash stays the account's, as in the tick."""
+    from stonks.production.ownership import managed_view, owned_positions
+
+    owned = owned_positions(state, start.portfolio_id, before=start.day)
+    view, _ = managed_view(Portfolio(cash=start.cash, positions=start.positions), owned)
+    return replace(start, positions=dict(view.positions))
+
+
 def _has_table(state: SqliteState, name: str) -> bool:
     rows = state.sql("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", [name])
     return bool(rows)
@@ -351,10 +363,15 @@ def _day_bounds(day: date) -> tuple[datetime, datetime]:
     return start, start + timedelta(days=1)
 
 
-def _new_fills(state: SqliteState, portfolio_id: str, day: date, after_id: int) -> list[DayFill]:
-    """Fills of ``portfolio_id`` on ``day`` (UTC) with an id above ``after_id``."""
+def _new_fills(
+    state: SqliteState, portfolio_id: str, day: date, after_id: int, *, manual: bool = True
+) -> list[DayFill]:
+    """Fills of ``portfolio_id`` on ``day`` (UTC) with an id above
+    ``after_id``. ``manual=False`` leaves the owner's manual orders out."""
     where, params = ledger_filter(state, "fills", portfolio_id, alias="f")
     lo, hi = _day_bounds(day)
+    if not manual and "origin" in ledger_columns(state, "orders"):
+        where += " AND o.origin <> 'manual'"
     rows = state.sql(
         "SELECT f.id, f.ticker, f.quantity, f.price, f.fee, f.filled_at, o.side, o.strategy_id"
         " FROM fills f JOIN orders o ON o.client_id = f.order_client_id"
@@ -643,10 +660,16 @@ class IntradayPnlTracker:
         reference_prices: ReferencePrices | None = None,
         settings: IntradayPnlSettings | None = None,
         clock: Clock = SYSTEM_CLOCK,
+        managed: Iterable[str] = (),
     ) -> None:
         cfg = settings or IntradayPnlSettings()
         self.state = state
         self.portfolio_ids = list(dict.fromkeys(portfolio_ids))
+        #: Portfolios at a real broker, whose account may also hold the
+        #: owner's own shares: their whole-portfolio book is the managed
+        #: view the daily tick and the engine use (the start positions the
+        #: book's fills explain, never the owner's manual fills).
+        self.managed = frozenset(managed)
         self.marks = marks if marks is not None else MarkBook()
         self.reference_prices = reference_prices
         self.snapshot_every = timedelta(minutes=cfg.snapshot_minutes)
@@ -706,6 +729,8 @@ class IntradayPnlTracker:
         self._portfolios = {}
         for pid in self.portfolio_ids:
             start = load_day_start(self.state, pid, day)
+            if pid in self.managed:
+                start = _managed_start(self.state, start)
             tickers = set(start.positions) | {t for s in start.sleeves.values() for t in s}
             ref = dict(self.reference_prices(sorted(tickers), day)) if self.reference_prices else {}
             books = {PORTFOLIO_BOOK: _Book(PORTFOLIO_BOOK, PositionLedger(start.positions, ref))}
@@ -729,7 +754,13 @@ class IntradayPnlTracker:
         return {r["strategy_id"]: max(float(r["hw"] or 0.0), 0.0) for r in rows}
 
     def _pull_fills(self, portfolio_id: str, pf: _Portfolio, at: datetime) -> None:
-        fresh = _new_fills(self.state, portfolio_id, pf.start.day, pf.cursor)
+        fresh = _new_fills(
+            self.state,
+            portfolio_id,
+            pf.start.day,
+            pf.cursor,
+            manual=portfolio_id not in self.managed,
+        )
         if fresh:
             pf.cursor = max(f.fill_id for f in fresh)
             pf.waiting.extend(fresh)

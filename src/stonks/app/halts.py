@@ -273,7 +273,7 @@ class HaltService:
                 user_id = scope.user_id
             else:
                 if not request.portfolio_id:
-                    raise ValidationError("a portfolio kill switch needs portfolio_id")
+                    raise ValidationError("Stop trading for one portfolio needs portfolio_id")
                 portfolio_id = self._owned(state, scope, request.portfolio_id)
             mode = "buys" if request.buys_only else "all"
             with state.transaction():
@@ -407,7 +407,7 @@ class HaltService:
         with self._state() as state:
             halt = self._load(state, scope, halt_id)
             if halt.kind == "kill":
-                raise ValidationError("the kill switch is turned off with resume")
+                raise ValidationError("Stop trading is lifted with resume")
             return self._clear(state, who, halt, request.reason, "risk_halt.clear", ip)
 
     # ---- helpers -----------------------------------------------------------------------
@@ -553,7 +553,7 @@ def _cancel_drafts(state: SqliteState, halt: Halt) -> None:
     assistant's proposals, roadmap 20.4). Never raises."""
     from stonks.production.order_drafts import cancel_drafts
 
-    reason = f"cancelled by the kill switch (halt {halt.id})"
+    reason = f"cancelled by Stop trading (halt {halt.id})"
     try:
         if halt.scope == "global":
             cancel_drafts(state, reason=reason, everyone=True)

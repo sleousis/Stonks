@@ -1,14 +1,15 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
 
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
+import { portfolioModeNote } from '../live-stages';
 import { ModeStamp } from './mode-stamp';
 
 /**
  * Which portfolio the money pages show. Sits in the session strip; renders
  * only when the user has more than one portfolio (and the server lists
  * them). One option per portfolio (UX-69): with no pick yet, the default
- * portfolio shows as chosen. A live portfolio carries a brass LIVE stamp, a
- * paper one a grey PAPER stamp.
+ * portfolio shows as chosen. A portfolio at a Real money stage carries a
+ * brass LIVE stamp, a paper one a grey PAPER (or BROKER PAPER) stamp.
  */
 @Component({
   selector: 'app-portfolio-picker',
@@ -28,12 +29,12 @@ import { ModeStamp } from './mode-stamp';
           }
           @for (p of ctx.options(); track p.id) {
             <option [value]="p.id" [selected]="p.id === ctx.current()?.id">
-              {{ p.name }}{{ p.trading === 'live' ? ' (live)' : '' }}
+              {{ p.name }}{{ note(p) }}
             </option>
           }
         </select>
-        @if (ctx.current()?.trading; as mode) {
-          <app-mode-stamp [live]="mode === 'live'" />
+        @if (ctx.current(); as p) {
+          <app-mode-stamp [live]="p.trading === 'live'" [stage]="p.live_stage" />
         }
       </span>
     }
@@ -70,6 +71,7 @@ import { ModeStamp } from './mode-stamp';
 })
 export class PortfolioPicker implements OnInit {
   protected readonly ctx = inject(PortfolioContextService);
+  protected readonly note = portfolioModeNote;
 
   ngOnInit(): void {
     void this.ctx.load();

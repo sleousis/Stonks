@@ -70,6 +70,22 @@ describe('PortfolioPicker', () => {
     expect(el.querySelector('app-mode-stamp')?.textContent).toContain('LIVE');
   });
 
+  it('reads a broker portfolio at Broker paper as paper, never LIVE or brass', async () => {
+    const { fixture, el } = await render([
+      book({ id: 'pf_1', name: 'Main', is_default: true }),
+      book({ id: 'pf_2', name: 'IBKR paper', kind: 'broker', live_stage: 'broker_paper' }),
+    ]);
+    expect(options(el)[1]).toEqual({ text: 'IBKR paper (broker paper)', selected: false });
+    const select = el.querySelector('select')!;
+    select.value = 'pf_2';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    const stamp = el.querySelector('app-mode-stamp .stamp')!;
+    expect(stamp.textContent).toContain('BROKER PAPER');
+    expect(stamp.textContent).not.toContain('LIVE');
+    expect(stamp.getAttribute('data-mode')).toBe('paper');
+  });
+
   it('asks for a pick when no portfolio is the default', async () => {
     const { el } = await render([book({ id: 'pf_1', name: 'A' }), book({ id: 'pf_2', name: 'B' })]);
     expect(options(el)[0]).toEqual({ text: 'Pick a portfolio', selected: true });

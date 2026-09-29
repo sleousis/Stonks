@@ -442,3 +442,56 @@ def _refresh_manifest(backup: Path) -> None:
     manifest["files"] = _file_entries(backup)
     manifest["lake"] = _lake_facts(backup / "lake" / "lake.duckdb")
     manifest_path.write_text(json.dumps(manifest))
+
+
+def test_run_backup_refuses_a_backup_without_the_stores_and_keeps_the_old_ones(tmp_path):
+    """A scheduled backup pointed at the wrong folder (no state DB, no lake)
+    must not count as a backup: stored, it would push the good ones out of
+    the retention buckets day after day until none is left."""
+    src = _seed(tmp_path / "data")
+    target = LocalFilesystemTarget(tmp_path / "backups")
+    retention = BackupRetention(daily=1, weekly=0, monthly=0)
+    start = datetime(2026, 9, 1, 3, tzinfo=UTC)
+    good = run_backup(src, target, retention, now=start).ref
+    wrong = _fresh(tmp_path / "empty")
+    with pytest.raises(BackupError, match="state DB"):
+        run_backup(wrong, target, retention, now=start + timedelta(days=1))
+    assert [r.id for r in target.list()] == [good.id]
+    assert [p.name for p in (tmp_path / "backups").iterdir()] == [good.id]
+
+
+def test_backup_folders_and_files_are_owner_only(tmp_path, monkeypatch):
+    """A backup holds every secret the state DB seals and every user row:
+    folders 0700 and files 0600 where the OS has POSIX modes (review wave 2).
+    On Windows ``os.chmod`` only toggles read-only, so the calls are checked."""
+    import os
+    import stat
+
+    from stonks.ops import backup as backup_mod
+
+    calls: dict[Path, int] = {}
+    real_chmod = os.chmod
+
+    def spy(path, mode, *args, **kwargs):
+        calls[Path(path)] = mode
+        return real_chmod(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(backup_mod.os, "chmod", spy)
+    src = _seed(tmp_path / "data")
+    root = tmp_path / "backups"
+    backup = create_backup(src, root)
+
+    files = [p for p in backup.rglob("*") if p.is_file()]
+    folders = [backup, *(p for p in backup.rglob("*") if p.is_dir())]
+    assert files and len(folders) > 1
+    staged = {p.name for p in calls}
+    for f in files:
+        assert f.name in staged
+    assert calls[root] == 0o700
+    assert all(mode in (0o600, 0o700) for mode in calls.values())
+    if os.name == "posix":
+        assert stat.S_IMODE(root.stat().st_mode) == 0o700
+        for d in folders:
+            assert stat.S_IMODE(d.stat().st_mode) == 0o700, d
+        for f in files:
+            assert stat.S_IMODE(f.stat().st_mode) == 0o600, f

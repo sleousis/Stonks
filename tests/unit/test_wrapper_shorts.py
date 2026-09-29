@@ -60,3 +60,19 @@ def test_be14_exit_all_covers_shorts_too(cls, monkeypatch):
     _risk_off(monkeypatch, wrapper, [])
     out = {(o.ticker, o.side, o.quantity) for o in wrapper.decide([], book, {}, AS_OF)}
     assert out == {("S.US", "buy", 10.0), ("L.US", "sell", 5.0)}
+
+
+@pytest.mark.parametrize(
+    "path", ["trailing_stop:TrailingStopWrapper", "last_trade_filter:LastTradeFilter"]
+)
+def test_long_only_wrappers_never_short(path):
+    """The trailing stop and the last trade filter replay a long trade log
+    (a high-water mark less k ATRs, long winners and losers). Adopting a
+    short inner's ``supports_short`` would stop a winning short on a fall
+    and judge short entries on long outcomes, so they stay long-only."""
+    import importlib
+
+    module, name = path.split(":")
+    cls = getattr(importlib.import_module(f"stonks.strategies.{module}"), name)
+    assert _wrap(cls).inner.supports_short is True
+    assert _wrap(cls).supports_short is False

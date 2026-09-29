@@ -581,8 +581,10 @@ retry_backoff_seconds = 1.0
 # Bind address. Env: STONKS_API_HOST (Compose sets 0.0.0.0).
 host = "127.0.0.1"
 port = 8000
-# The Angular dev server. The only origin CORS lets send cookies.
+# The Angular dev server. The only origin CORS lets send cookies, and only
+# with cors_ui_origin on. Off. STONKS_PROFILE=dev turns it on.
 ui_origin = "http://localhost:4200"
+cors_ui_origin = false
 # Reads from 127.0.0.1 without a credential. Off. STONKS_PROFILE=dev turns
 # it on for local UI work.
 open_reads_on_loopback = false

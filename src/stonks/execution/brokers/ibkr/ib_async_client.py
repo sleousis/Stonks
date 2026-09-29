@@ -55,6 +55,7 @@ from stonks.execution.brokers.ibkr.client import (
     IbSnapshot,
     IbTrade,
     IbWhatIf,
+    merge_corrections,
 )
 from stonks.execution.brokers.ibkr.errors import classify, is_info
 from stonks.execution.brokers.ibkr.session import LoopThread, TokenBucket, retry_until
@@ -245,8 +246,9 @@ class IbAsyncClient:
 
     def executions(self) -> Sequence[IbExecution]:
         self._run(self.ib.reqExecutionsAsync)
-        # the cached fills carry the commission reports that came later
-        return [from_fill(f) for f in self._call(self.ib.fills, paced=False)]
+        # the cached fills carry the commission reports that came later; a
+        # correction replaces the execution it corrects
+        return merge_corrections([from_fill(f) for f in self._call(self.ib.fills, paced=False)])
 
     def positions(self, account: str) -> Sequence[IbPosition]:
         return [from_position(p) for p in self._call(lambda: self.ib.positions(account))]

@@ -134,4 +134,13 @@ describe('NotificationFeedService', () => {
     expect(appLink('https://x.example')).toBeNull();
     expect(appLink(null)).toBeNull();
   });
+  it('never lets a read that started before a mark-read bring the old count back', async () => {
+    setup(0);
+    void feed.refresh();
+    const stale = await nextRequest(http, FEED);
+    feed.set(0);
+    stale.flush({ items: [], unread_count: 5 });
+    await tick();
+    expect(feed.unread()).toBe(0);
+  });
 });

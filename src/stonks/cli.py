@@ -116,6 +116,17 @@ console = Console()
 # ---- helpers ----------------------------------------------------------------
 
 
+def _require_config() -> None:
+    """serve and tick refuse to run on the looser code defaults: without a
+    config file every shipped risk limit is gone."""
+    from stonks.config import ConfigFileMissing, resolve_default_config_path
+
+    path = resolve_default_config_path()
+    if not path.is_file():
+        console.print(f"[red]{ConfigFileMissing.__name__}: config file not found: {path}[/red]")
+        raise typer.Exit(code=2)
+
+
 def _settings() -> Settings:
     # CLI is the right place to materialize .env into the process env;
     # load_settings itself stays pure so tests can monkeypatch freely.
@@ -1115,6 +1126,7 @@ def tick(
     from stonks.app.errors import ConflictError, ValidationError
     from stonks.app.ticks import TickRequest, execute_tick
 
+    _require_config()
     settings = _settings()
     configured = settings.production.universe
     if not _parse_tickers(tickers) and not configured:
@@ -1292,6 +1304,7 @@ def serve(
     """
     import uvicorn
 
+    _require_config()
     settings = _settings()
     bind_host = host or settings.api.host
     bind_port = port or settings.api.port
@@ -1382,12 +1395,13 @@ def users_bootstrap(
 def users_reset_password(
     email: str = typer.Option(..., "--email", help="the person's sign-in email"),
 ) -> None:
-    """Set a new password for a person and sign them out everywhere."""
+    """Set a new password for a person, sign them out everywhere and revoke
+    their API tokens."""
     from stonks.auth.prompt import read_new_password
 
     svc = _auth_service(_settings())
     user = _users_call(lambda: svc.set_password_by_email(email, read_new_password()))
-    console.print(f"password reset for {user.id}; their sessions were signed out")
+    console.print(f"password reset for {user.id}; sessions signed out, API tokens revoked")
 
 
 _ROLES = ("viewer", "trader", "admin")
@@ -2205,7 +2219,7 @@ def lab_sweep(
 
 # ---- risk halts and the kill switch ------------------------------------------
 
-halts_app = typer.Typer(help="Kill switch and risk halts", no_args_is_help=True)
+halts_app = typer.Typer(help="Stop trading and risk halts", no_args_is_help=True)
 app.add_typer(halts_app, name="halts")
 
 _HALT_USER = typer.Option(
@@ -2335,12 +2349,12 @@ def halts_kill(
             ),
         )
     )
-    console.print(f"[red]kill switch on[/red]: halt #{view.id} ({view.scope}, {view.halt})")
+    console.print(f"[red]trading stopped[/red]: halt #{view.id} ({view.scope}, {view.halt})")
 
 
 @halts_app.command("resume")
 def halts_resume(
-    halt_id: int = typer.Argument(..., help="the kill switch's halt id"),
+    halt_id: int = typer.Argument(..., help="the Stop trading halt id"),
     reason: str = typer.Option(..., "--reason", help="why trading may resume (audited)"),
     user: str | None = _HALT_USER,
     override_checks: bool = typer.Option(

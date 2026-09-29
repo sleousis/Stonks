@@ -39,3 +39,14 @@ def test_caddy_passes_the_real_host_and_the_api_allows_only_the_domain():
     assert compose["services"]["caddy"]["environment"]["STONKS_DOMAIN"] == (
         "${STONKS_DOMAIN:-localhost}"
     )
+
+
+def test_caddy_access_log_redacts_the_job_stream_token():
+    """A browser EventSource carries the short-lived job stream token in
+    ``?token=``; the JSON access log records the URI with it replaced."""
+    caddyfile = (COMPOSE.parent / "Caddyfile").read_text(encoding="utf-8")
+    log_block = caddyfile[caddyfile.index("\tlog {") :]
+    assert "format filter" in log_block
+    assert "wrap json" in log_block
+    assert "request>uri query" in log_block
+    assert "replace token REDACTED" in log_block

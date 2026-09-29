@@ -58,6 +58,7 @@ const SHEET: TearSheetView = {
       id: 1,
       tick_id: 't1',
       strategy_id: 'mom_v2',
+      strategy_name: null,
       as_of: '2026-09-25',
       ticker: 'UP.US',
       side: 'buy',

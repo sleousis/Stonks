@@ -9,6 +9,7 @@ import {
   TableCell,
   type TableColumn,
 } from '../../shared/ui/data-table/data-table';
+import { rowStrategyName } from '../../shared/strategy-names';
 import { SideTag } from '../../shared/ui/side-tag';
 import { OrderStatus, orderReason, stopWords } from './order-status';
 
@@ -98,7 +99,7 @@ export class OrdersTable {
     { key: 'quantity', label: 'Qty', format: 'number' },
     { key: 'limit_price', label: 'Price', mobile: 'hide' },
     { key: 'status', label: 'Status' },
-    { key: 'strategy_id', label: 'Strategy' },
+    { key: 'strategy_id', label: 'Strategy', value: (o) => rowStrategyName(o) },
     { key: 'tick_id', label: 'Run', sortable: false, mobile: 'hide' },
     // Phones keep the time an order was placed (UX-57); Price goes instead.
     { key: 'created_at', label: 'Created', format: 'datetime' },

@@ -12,6 +12,7 @@ function row(id: string, extra: Partial<LeaderboardRow> = {}): LeaderboardRow {
   return {
     rank: 1,
     strategy_id: id,
+    strategy_name: null,
     class_path: 'stonks.strategies.examples.buy_and_hold:BuyAndHold',
     status: 'shadow',
     paper: paper(),

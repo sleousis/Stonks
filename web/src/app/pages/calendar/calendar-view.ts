@@ -169,3 +169,10 @@ export function summarizeSentiment(days: readonly SentimentDay[]): SentimentSumm
 export function safeUrl(url: string | null | undefined): string | null {
   return url && /^https?:\/\//i.test(url) ? url : null;
 }
+
+/** What a filing announces: each item's name, or "Item 5.02" when no name is known. */
+export function filingItemsLabel(f: { items?: string[]; item_names?: string[] }): string {
+  const items = f.items ?? [];
+  const names = f.item_names ?? [];
+  return items.map((code, i) => names[i]?.trim() || `Item ${code}`).join(', ');
+}

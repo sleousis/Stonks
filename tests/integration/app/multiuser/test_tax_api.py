@@ -364,3 +364,57 @@ def test_trade_preview_and_year_estimate(client, people, book):
             "/api/tax/year", params={"portfolio_id": pid}, headers=people[who]["headers"]
         )
         assert r.status_code == 404
+
+
+def test_option_gains_count_the_contract_multiplier(client, people, settings):
+    """An option fill's price is per share of the deliverable; one contract
+    moves the multiplier (100) times it. A contract bought at 2.00 and sold
+    at 3.00 gains 100, not 1."""
+    alice = people["alice"]
+    contract = "UP.US:2025-06-20:C:100"
+    with SqliteState(settings.state.path) as state:
+        pid = (
+            PortfolioRepository(state)
+            .create(Scope(user_id=alice["id"], role=Role.TRADER), name="OptionBook")
+            .id
+        )
+        for cid, side, price, fee, at in (
+            ("oo1", "buy", 2.0, 0.65, "2025-03-03T15:00:00+00:00"),
+            ("oo2", "sell", 3.0, 0.65, "2025-04-01T15:00:00+00:00"),
+        ):
+            state.execute(
+                "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status,"
+                " created_at, updated_at, portfolio_id) VALUES (?, ?, ?, 1, 'limit',"
+                " 'filled', ?, ?, ?)",
+                [cid, contract, side, at, at, pid],
+            )
+            state.execute(
+                "INSERT INTO fills (order_client_id, ticker, quantity, price, fee, filled_at,"
+                " portfolio_id) VALUES (?, ?, 1, ?, ?, ?, ?)",
+                [cid, contract, price, fee, at, pid],
+            )
+    resp = client.get(
+        "/api/tax/exports/gains",
+        params={"portfolio_id": pid, "year": 2025},
+        headers=alice["headers"],
+    )
+    assert resp.status_code == 200, resp.text
+    (row,) = _rows(resp.text)
+    assert (row["proceeds"], row["cost_basis"], row["gain"]) == ("299.35", "200.65", "98.70")
+
+
+def test_acting_as_a_viewer_from_the_shell_cannot_write_either(client, people, book):
+    """``stonks tax settings --user`` acts as that person with a bare Scope:
+    a viewer is refused like the API refuses them (403 above)."""
+    from stonks.app.tax import LotPicksUpdate, TaxService, TaxSettingsUpdate
+    from stonks.auth.errors import PermissionDenied
+
+    service = TaxService(client.app.state.services.context)
+    viewer = Scope(user_id=people["vic"]["id"], role=Role.VIEWER)
+    with pytest.raises(PermissionDenied):
+        service.update_settings(viewer, book["pid"], TaxSettingsUpdate(jurisdiction="eu"))
+    with pytest.raises(PermissionDenied):
+        service.set_picks(
+            viewer, book["pid"], LotPicksUpdate(sell_fill_id=book["fills"]["o3"], picks=[])
+        )
+    assert service.settings(book["pid"]).jurisdiction == "us"

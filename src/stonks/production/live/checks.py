@@ -49,6 +49,7 @@ from stonks.core.protocols import Broker
 from stonks.execution.brokers.base import (
     AccountReader,
     BrokerError,
+    BrokerOpenOrder,
     LiveTradingRefusedError,
     OpenOrderSource,
     OrderCanceller,
@@ -239,7 +240,7 @@ def run_check(
     detail: str | None = None
     account = _Account(
         account_id=account_id,
-        portfolios=tuple(account_portfolios or (portfolio_id,)),
+        portfolios=tuple(account_portfolios or _served(broker) or (portfolio_id,)),
         statements=statements,
         settlement=settlement or AccountRulesSettings(),
     )
@@ -353,13 +354,14 @@ def _inspect(
     if kind == "sod" and settings.cancel_stale_orders:
         explained = _cancel_stale(state, broker, portfolio_id, day, clock)
     allow_manual = settings.allow_manual_trades
-    items, external = _diff(state, broker, portfolio_id, allow_manual, actions)
+    siblings = [p for p in account.portfolios if p != portfolio_id]
+    items, external = _diff(state, broker, portfolio_id, allow_manual, actions, siblings)
     if any(i.material for i in items):
         # a fill or a state change may have landed between the reads:
         # reconcile once more and look again before calling it drift
         again = reconcile_orders(broker, state, now=clock.now(), portfolio_id=portfolio_id)
         summary["recheck"] = _summary_dict(again)
-        items, external = _diff(state, broker, portfolio_id, allow_manual, actions)
+        items, external = _diff(state, broker, portfolio_id, allow_manual, actions, siblings)
     items += _reconcile_findings(state, start.summary)
     if kind == "eod":
         items += eod_items(
@@ -705,13 +707,18 @@ def _diff(
     portfolio_id: str,
     allow_manual: bool,
     actions: CorporateActions | None,
+    siblings: Sequence[str] = (),
 ) -> tuple[list[DriftItem], dict[str, Any]]:
-    held = broker.fetch_portfolio().positions
+    """Diff ``portfolio_id`` against the broker. ``siblings``: the other
+    portfolios on the same account (a shared gateway). What their ledgers
+    hold and their working orders are theirs, never this portfolio's drift
+    or external holdings."""
+    held = _without_siblings(state, broker.fetch_portfolio().positions, siblings, actions)
     owned = owned_positions(state, portfolio_id, actions)
     items, external_positions = position_drift(owned, held, allow_manual=allow_manual)
     external: dict[str, Any] = {"positions": external_positions, "orders": []}
     if isinstance(broker, OpenOrderSource):
-        working = list(broker.open_orders())
+        working = _drop_sibling_orders(state, list(broker.open_orders()), siblings)
         ids = [o.client_id for o in working if o.client_id is not None]
         ledger = _ledger_orders(state, portfolio_id, ids)
         order_items, external_orders = order_drift(ledger, working, allow_manual=allow_manual)
@@ -731,6 +738,57 @@ def _diff(
         order_items, _ = order_drift(ledger, [], allow_manual=True)
         order_items = [i for i in order_items if i.kind == "unresolved_order"]
     return items + order_items, external
+
+
+def _served(broker: Broker) -> tuple[str, ...]:
+    """The portfolios the broker's account serves, when it says (an IBKR
+    gateway listed in ``[brokers.ibkr.gateways]``)."""
+    served = getattr(broker, "portfolios", ())
+    if isinstance(served, (tuple, list)) and all(isinstance(p, str) for p in served):
+        return tuple(served)
+    return ()
+
+
+def _without_siblings(
+    state: SqliteState,
+    held: Mapping[str, float],
+    siblings: Sequence[str],
+    actions: CorporateActions | None,
+) -> dict[str, float]:
+    """The account's positions less what the other portfolios on it hold by
+    their ledgers (their own and their manual fills)."""
+    from stonks.production.ownership import manual_positions
+
+    out = {t: float(q) for t, q in held.items()}
+    for pid in siblings:
+        for part in (owned_positions(state, pid, actions), manual_positions(state, pid, actions)):
+            for ticker, qty in part.items():
+                rest = out.get(ticker, 0.0) - qty
+                if abs(rest) > 1e-9:
+                    out[ticker] = rest
+                else:
+                    out.pop(ticker, None)
+    return out
+
+
+def _drop_sibling_orders(
+    state: SqliteState, working: list[BrokerOpenOrder], siblings: Sequence[str]
+) -> list[BrokerOpenOrder]:
+    """The broker's working orders less those another portfolio on the
+    account placed (its ledger has their client ids)."""
+    ids = [o.client_id for o in working if o.client_id is not None]
+    if not siblings or not ids:
+        return working
+    marks = ", ".join("?" * len(siblings))
+    theirs = {
+        r["client_id"]
+        for r in state.sql(
+            f"SELECT client_id FROM orders WHERE portfolio_id IN ({marks})"
+            f" AND client_id IN ({', '.join('?' * len(ids))})",
+            [*siblings, *ids],
+        )
+    }
+    return [o for o in working if o.client_id is None or o.client_id not in theirs]
 
 
 def _reconcile_findings(state: SqliteState, summary: ReconcileSummary) -> list[DriftItem]:

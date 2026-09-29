@@ -75,7 +75,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"bootstrap admin {user.id} can now sign in as {user.email}")
         else:
             user = svc.set_password_by_email(args.email, _password())
-            print(f"password reset for {user.id}; their sessions were signed out")
+            print(f"password reset for {user.id}; sessions signed out, API tokens revoked")
     except AppError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

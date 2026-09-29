@@ -431,6 +431,15 @@ def read_health(
 Publish = Callable[[Any], Any]
 
 
+def halt_title(kind: str) -> str:
+    """The notification title of a halt in trader words (docs/design/
+    vocabulary.md): "Trading stopped", with why for anything but the kill
+    switch ("Trading stopped: broker drift")."""
+    if kind == "kill":
+        return "Trading stopped"
+    return f"Trading stopped: {kind.replace('_', ' ')}"
+
+
 def notify_trip(state: SqliteState, halt: Halt, publish: Publish | None = None) -> None:
     """Send the ``risk`` notification (high urgency) for a trip: to the
     portfolio's owner, the user, or the admins for a global halt. A failed
@@ -447,7 +456,7 @@ def notify_trip(state: SqliteState, halt: Halt, publish: Publish | None = None) 
     event = Event(
         category="risk",
         level="error",
-        title=f"Trading halted: {halt.kind.replace('_', ' ')}",
+        title=halt_title(halt.kind),
         body=f"{'New orders' if halt.halt == 'all' else 'New buys'} are blocked for "
         f"{halt.target}: {halt.reason}",
         audience=audience,

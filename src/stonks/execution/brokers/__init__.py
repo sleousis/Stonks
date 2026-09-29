@@ -115,14 +115,22 @@ def make_broker(
         broker.on_close(state.close)
         return broker
     if kind == "alpaca":
+        from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
+        from stonks.production.live.stage_guard import guard_live_stage, state_stage_lookup
+
         cfg = settings.brokers.alpaca
-        return AlpacaBroker.connect(
-            cfg.api_key.get_secret_value() if cfg.api_key else None,
-            cfg.secret_key.get_secret_value() if cfg.secret_key else None,
-            paper=cfg.paper,
-            allow_live=cfg.allow_live,
-            allow_short=cfg.allow_short,
-            max_retries=cfg.max_retries,
-            retry_backoff_seconds=cfg.retry_backoff_seconds,
+        # Roadmap 19.9: the live endpoint opens positions only while the
+        # default portfolio stands at live_small or higher (closes always).
+        return guard_live_stage(
+            AlpacaBroker.connect(
+                cfg.api_key.get_secret_value() if cfg.api_key else None,
+                cfg.secret_key.get_secret_value() if cfg.secret_key else None,
+                paper=cfg.paper,
+                allow_live=cfg.allow_live,
+                allow_short=cfg.allow_short,
+                max_retries=cfg.max_retries,
+                retry_backoff_seconds=cfg.retry_backoff_seconds,
+            ),
+            state_stage_lookup(settings.state.path, DEFAULT_PORTFOLIO_ID),
         )
     raise ValueError(f"unknown broker kind {kind!r}")

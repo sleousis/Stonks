@@ -129,7 +129,7 @@ def test_lab_registration_preview_shows_request_and_lands_in_shadow():
     preview = lab_registration_preview({"budget": 2, "register_strategy": True})
     assert preview["preview"] is True and preview["applied"] is False
     assert preview["request"] == {"budget": 2, "register_strategy": True}
-    assert any("shadow" in w for w in preview["warnings"])
+    assert any("on trial" in w and "shadow" not in w for w in preview["warnings"])
     assert "confirm=true" in preview["next_step"]
 
 

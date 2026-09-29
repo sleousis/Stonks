@@ -69,6 +69,7 @@ export function entry(overrides: Partial<JournalEntryView> = {}): JournalEntryVi
     status: 'filled',
     status_reason: null,
     strategy_id: 'momentum-v3',
+    strategy_name: null,
     ticker: 'AAPL.US',
     trigger: 'signal',
     ...overrides,

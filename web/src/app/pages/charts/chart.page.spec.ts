@@ -4,6 +4,7 @@ import { provideRouter } from '@angular/router';
 
 import type { ChartView, CompareView } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
+import { SearchService } from '../../api/search.service';
 import { SessionService } from '../../core/auth/session.service';
 import { TRADER } from '../../../testing/auth-fixtures';
 import { FakeChartEngine, provideFakeChart } from '../../../testing/fake-chart';
@@ -39,11 +40,17 @@ function view(days: number): ChartView {
         quantity: 10,
         price: 120,
         order_client_id: 'o1',
-        strategy_id: 'mom',
+        strategy_id: 'momentum_3fa9c21b',
       },
     ],
     signals: [
-      { as_of: last, strategy_id: 'mom', kind: 'entry', strength: 0.5, reason: 'trend is up' },
+      {
+        as_of: last,
+        strategy_id: 'momentum_3fa9c21b',
+        kind: 'entry',
+        strength: 0.5,
+        reason: 'trend is up',
+      },
     ],
   };
 }
@@ -143,6 +150,9 @@ describe('ChartPage', () => {
     const el: HTMLElement = fixture.nativeElement;
     expect(el.querySelector('h1')?.textContent).toContain('UP.US');
     expect(el.textContent).toContain('trend is up');
+    // Strategies by name, never by raw id (UX-27).
+    expect(el.textContent).toContain('Momentum 3fa9');
+    expect(el.textContent).not.toContain('momentum_3fa9c21b');
     expect(el.querySelector('app-side-tag')).not.toBeNull();
 
     // Toggles redraw without a new request.
@@ -236,6 +246,30 @@ describe('ChartPage', () => {
     expect(param(longer.request.urlWithParams, 'window')).toBe('126');
     longer.flush(comparison(['UP.US', 'SPY.US'], 40, 126));
     await tick(5);
+  });
+
+  it('never shows suggestions for a query no longer in the box', async () => {
+    const answers: ((v: unknown) => void)[] = [];
+    vi.spyOn(TestBed.inject(SearchService), 'instruments').mockImplementation(
+      () => new Promise((resolve) => answers.push(resolve)) as never,
+    );
+    const fixture = await render();
+    const page = fixture.componentInstance as unknown as {
+      onQuery(t: string): void;
+      suggestions: () => string[];
+    };
+    page.onQuery('AAP');
+    await tick(300);
+    page.onQuery('AAPL');
+    await tick(300);
+    // The newer answer lands first, the older one last: the newer must stay.
+    answers[1]({ items: [{ id: 'AAPL.US' }], total: 1, limit: 8, offset: 0 });
+    await tick();
+    answers[0]({ items: [{ id: 'AAP.US' }], total: 1, limit: 8, offset: 0 });
+    await tick();
+    expect(page.suggestions()).toEqual(['AAPL.US']);
+    page.onQuery('A');
+    expect(page.suggestions()).toEqual([]);
   });
 
   it('asks for a ticker when none is open', async () => {

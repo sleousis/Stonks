@@ -118,6 +118,10 @@ export class WelcomePage {
   protected readonly followStrategy = signal('');
   protected readonly followMode = signal<'notify' | 'paper'>('notify');
   protected readonly followPortfolio = signal('');
+  /** The portfolio a Paper follow goes to: the one picked here, else the current one. */
+  protected readonly followBook = computed(
+    () => this.followPortfolio() || this.portfolios.current()?.id || '',
+  );
   protected readonly formError = signal<string | null>(null);
 
   constructor() {
@@ -170,7 +174,7 @@ export class WelcomePage {
     event.preventDefault();
     const strategy = this.followStrategy();
     const mode = this.followMode();
-    const portfolio = this.followPortfolio() || this.portfolios.current()?.id || '';
+    const portfolio = this.followBook();
     if (!strategy) return this.formError.set('Pick a strategy to follow.');
     if (mode === 'paper' && !portfolio) {
       return this.formError.set('Following on Paper needs a portfolio. Open one in step 2 first.');
@@ -182,7 +186,9 @@ export class WelcomePage {
         portfolio_id: mode === 'paper' ? portfolio : null,
       });
       this.toasts.success(
-        mode === 'paper' ? `Paper trading ${strategy}.` : `Following ${strategy} for signals.`,
+        mode === 'paper'
+          ? `Paper trading ${this.displayName(strategy)}.`
+          : `Following ${this.displayName(strategy)} for signals.`,
       );
       this.guide.reload();
     });

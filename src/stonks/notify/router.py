@@ -257,10 +257,10 @@ class SignalNotice:
 
 def _signal_event(router: NotificationRouter, notice: SignalNotice) -> Event:
     rows = router.state.sql("SELECT status FROM strategies WHERE id = ?", [notice.strategy_id])
-    incubating = bool(rows) and rows[0]["status"] == "shadow"
+    on_trial = bool(rows) and rows[0]["status"] == "shadow"
     body = f"{notice.strategy_id} on {notice.as_of}"
-    if incubating:
-        body += " (incubating strategy)"
+    if on_trial:
+        body += " (on trial)"
     if notice.reason:
         body += f". {notice.reason}"
     query = urlencode(

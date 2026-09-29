@@ -290,3 +290,21 @@ def test_trader_without_a_configured_account_checks_the_one_it_was_given(state):
 
     with pytest.raises(LiveTradingRefusedError):
         bad.fetch_portfolio()
+
+
+def test_a_flex_correction_is_the_same_activity_as_the_session_execution(gw):
+    """The session reports an execution under its first id (corrections
+    merged). The statement may name its correction: one trade, one activity."""
+    gw._executions.append(
+        IbExecution(
+            exec_id="0000e0d5.6576f7c6.01.01", order_ref="", perm_id=1, contract=BRKB.contract,
+            side="SLD", shares=3, price=450.0, time=T0, account=ACCOUNT,
+        )
+    )  # fmt: skip
+    corrected = FLEX.replace('ibExecID="0001f4e8.2"', 'ibExecID="0000e0d5.6576f7c6.01.02"')
+    answers = iter([SEND, corrected])
+    flex = FlexClient("tok-123456789", IbkrFlexSettings(query_id="1"),
+                      transport=lambda url, params: next(answers), sleep=lambda s: None)  # fmt: skip
+    conn = opened(gw, flex=flex)
+    trades = [a for a in conn.activities(ACCOUNT, date(2026, 9, 1)) if a.kind == "trade"]
+    assert [a.provider_activity_id for a in trades] == ["exec:0000e0d5.6576f7c6.01.01"]

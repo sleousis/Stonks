@@ -45,7 +45,7 @@ async def test_register_if_passes_is_guarded(mcp):
     args = {"class_path": MOMENTUM, **WINDOW, "budget": 1, "register_if_passes": True}
     preview = await call(mcp, "run_lab", args)
     assert preview["preview"] is True
-    assert any("only if every survival test passes" in w for w in preview["warnings"])
+    assert any("only if every robustness test passes" in w for w in preview["warnings"])
     assert (await call(mcp, "list_jobs"))["total"] == 0
 
 

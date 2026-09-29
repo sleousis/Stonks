@@ -400,12 +400,14 @@ def runs_test_z_score(signs: np.ndarray) -> float:
     consistent with independence; large positive Z ⇒ too many runs
     (over-alternating); large negative Z ⇒ too few runs (clustering).
 
-    Returns ``NaN`` when the sequence is degenerate (all-positive or
-    all-negative).
+    Zeros and NaNs are dropped first. Returns ``NaN`` when the sequence
+    is degenerate (all-positive or all-negative).
     """
     signs = np.asarray(signs)
     if len(signs) < 2:
         raise ValueError("runs_test requires at least 2 elements")
+    # a zero (a flat move) or NaN is neither sign: it is no run of its own
+    signs = signs[(signs > 0) | (signs < 0)]
     n_pos = int(np.sum(signs > 0))
     n_neg = int(np.sum(signs < 0))
     n = n_pos + n_neg

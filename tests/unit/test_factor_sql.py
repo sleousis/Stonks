@@ -354,3 +354,26 @@ def test_panel_request_validates():
 def test_empty_input_gives_an_empty_panel():
     out = evaluate(parse("$close"), prepare_bars(RAW.iloc[0:0]), ["A"])
     assert out.empty and list(out.columns) == ["A"]
+
+
+def test_a_correlation_with_a_constant_series_is_empty_not_nan():
+    """DuckDB's CORR is NaN when one side is constant. The module rule is
+    that a non-finite value is empty, inside the expression too: a NaN
+    must not rank first in CSRank or pass a comparison."""
+    raw = _bars(
+        {"A": [1, 2, 3, 4, 5, 6], "B": [6, 5, 4, 3, 2, 1], "C": [1, 3, 2, 4, 3, 5]},
+        {"C": [100.0, 110.0, 105.0, 120.0, 90.0, 130.0], "D": [100.0] * 6},
+    )
+    raw = pd.concat([raw, _bars({"D": [1, 2, 4, 3, 5, 4]}, {"D": [100.0] * 6})])
+    corr = "Corr($close, $volume, 3)"
+    assert _col(_panel(f"CSRank({corr})", raw), "D") == [N] * 6
+    assert _col(_panel(f"{corr} > 0.99", raw), "D") == [N] * 6
+    assert _col(_panel(corr, raw), "D") == [N] * 6
+
+
+def test_the_r_squared_of_a_flat_window_is_empty():
+    """A flat close has no trend to explain: REGR_R2 says 1.0, the best
+    score a trend-quality factor can give, but the value is undefined."""
+    raw = _bars({"A": [1, 2, 3, 4, 5, 6], "F": [5, 5, 5, 5, 5, 5]})
+    assert _col(_panel("Rsquare($close, 3)", raw), "F") == [N] * 6
+    assert _col(_panel("CSRank(Rsquare($close, 3))", raw), "F") == [N] * 6

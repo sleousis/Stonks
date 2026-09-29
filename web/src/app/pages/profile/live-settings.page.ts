@@ -30,7 +30,7 @@ import {
   profileNotes,
   safeguardWords,
 } from '../../shared/live-rules';
-import { type LiveStage, stageWords } from '../../shared/live-stages';
+import { type LiveStage, atBroker, stageWords } from '../../shared/live-stages';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
@@ -154,9 +154,20 @@ export class LiveSettingsPage {
   protected readonly portfolio = computed(
     () => this.ctx.options().find((p) => p.id === this.id()) ?? null,
   );
-  protected readonly isLive = computed(() => this.portfolio()?.trading === 'live');
-  /** The portfolio's stage, from the stage card once it has loaded. */
-  protected readonly stage = signal<LiveStage | null>(null);
+  /** Linked to a real broker, at any stage (paper at Broker paper). */
+  protected readonly isLive = computed(() => {
+    const p = this.portfolio();
+    return p ? atBroker(p) : false;
+  });
+  /**
+   * The portfolio's stage, from the stage card once it has loaded. Starts
+   * empty for each portfolio: the router reuses this page when `:id`
+   * changes, and the last portfolio's real-money stage must not carry over.
+   */
+  protected readonly stage = linkedSignal<string, LiveStage | null>({
+    source: this.id,
+    computation: () => null,
+  });
   /** Real money moves at this stage: only then brass, the LIVE stamp and red buttons. */
   protected readonly realMoney = computed(() => {
     const s = this.stage();

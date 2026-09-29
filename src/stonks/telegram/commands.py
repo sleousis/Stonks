@@ -24,6 +24,7 @@ from stonks.app.context import AppContext
 from stonks.app.errors import AppError
 from stonks.app.halts import HaltService, KillSwitchRequest
 from stonks.app.portfolio import PortfolioService
+from stonks.app.strategy_names import strategy_title
 from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import Permission, allowed
 from stonks.auth.principal import ROLE_SCOPES, Principal
@@ -43,13 +44,13 @@ MAX_ROWS = 15
 
 HELP_LINKED = (
     "Stonks commands:\n"
-    "/status - halts, last tick and your portfolio value\n"
+    "/status - halts, last trading run and your portfolio value\n"
     "/today - today's orders, fills and P&L change\n"
     "/positions [portfolio_id] - your holdings\n"
     "/signals - latest signals of your strategies\n"
     "/kill - stop new orders on all your portfolios (asks you to type KILL ALL)\n"
     "/unlink - unlink this chat\n"
-    "Resuming after the kill switch needs the web app and a fresh second factor."
+    "Resuming after Stop trading needs the web app and a fresh second factor."
 )
 HELP_UNLINKED = (
     "This chat is not linked to Stonks yet. Make a link code in the web app "
@@ -247,12 +248,13 @@ class CommandHandler:
             return "No signals yet for the strategies you follow."
         lines = ["Latest signals:"]
         for r in rows:
-            lines.append(f"- {r['as_of']} {r['ticker']}: {r['kind']} ({r['strategy_id']})")
+            name = strategy_title(r["strategy_id"]) or r["strategy_id"]
+            lines.append(f"- {r['as_of']} {r['ticker']}: {r['kind']} ({name})")
         return "\n".join(lines)
 
     def _kill(self, principal: Principal, chat: str, arg: str) -> str:
         if not allowed(principal, Permission.KILLSWITCH_USER):
-            return "Your role cannot use the kill switch."
+            return "Your role cannot use Stop trading."
         minutes = self._config.kill_confirm_minutes
         self._pending_kill[chat] = self._clock() + timedelta(minutes=minutes)
         return (
@@ -262,21 +264,21 @@ class CommandHandler:
 
     def _confirm_kill(self, state: SqliteState, user_id: str, text: str, expires: datetime) -> str:
         if self._clock() > expires:
-            return "The kill switch request expired. Send /kill again."
+            return "The Stop trading request expired. Send /kill again."
         if text != KILL_PHRASE:
-            return "Kill switch cancelled."
+            return "Stop trading cancelled."
         principal = principal_for(state, user_id)
         if principal is None:
             return "Your Stonks account is not active."
         try:
             view = self._halts.engage_kill(
                 principal,
-                KillSwitchRequest(scope="user", reason="kill switch from Telegram"),
+                KillSwitchRequest(scope="user", reason="Stop trading from Telegram"),
             )
         except PermissionDenied:
-            return "Your role cannot use the kill switch."
+            return "Your role cannot use Stop trading."
         _log.warning("telegram.kill_switch", user_id=user_id, halt_id=view.id)
         return (
-            f"Kill switch on (halt #{view.id}). No new orders on your portfolios. "
+            f"Trading stopped (halt #{view.id}). No new orders on your portfolios. "
             "Resume in the web app with a fresh second factor."
         )

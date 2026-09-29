@@ -41,6 +41,11 @@ export const WORD_RULES = [
   { id: 'promote', re: /\bpromot(e|es|ed|ing|ion)\b/i, say: 'Approve' },
   { id: 'register', re: /\bregist(er|ers|ered|ering|ration)\b/i, say: 'Put on trial' },
   { id: 'code', re: /\bclass_path\b|\bpython -m\b/i, say: 'a plain name' },
+  { id: 'model-book', re: /\bmodel books?\b/i, say: 'Test book' },
+  { id: 'kill-switch', re: /\bkill switch(es)?\b/i, say: 'Stop trading' },
+  { id: 'incubating', re: /\bincubat(e|es|ed|ing|ion)\b/i, say: 'On trial' },
+  { id: 'go-live', re: /\bgo live\b/i, say: 'Approve, or Going live for a portfolio' },
+  { id: 'paper-trading', re: /\bpaper trading strateg/i, say: 'strategies on trial' },
 ];
 
 /**
@@ -49,7 +54,19 @@ export const WORD_RULES = [
  */
 export const ALLOW = {
   // The glossary explains the system's names on purpose ("also called ...").
-  'src/app/core/help/glossary.ts': ['tick', 'shadow', 'promote', 'retire', 'ingest', 'register'],
+  'src/app/core/help/glossary.ts': [
+    'tick',
+    'shadow',
+    'promote',
+    'retire',
+    'ingest',
+    'register',
+    'model-book',
+    'kill-switch',
+  ],
+  // Search keywords: people may still type the old name to find the page.
+  'src/app/shell/nav-items.ts': ['kill-switch'],
+  'src/app/shell/shell-commands.ts': ['kill-switch'],
 };
 
 function walk(dir, out = []) {

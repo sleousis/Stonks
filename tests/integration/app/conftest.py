@@ -94,8 +94,11 @@ def settings(tmp_path, monkeypatch) -> Settings:
         lake=LakeConfig(path=tmp_path / "lake.duckdb"),
         state=StateConfig(path=tmp_path / "state.sqlite"),
         registry=RegistryConfig(artifacts_dir=tmp_path / "artifacts"),
-        # Like the dev profile: loopback reads need no credential.
-        api=ApiConfig(ui_dist=tmp_path / "no-dist", open_reads_on_loopback=True),
+        # Like the dev profile: loopback reads need no credential, and the
+        # Angular dev server's origin passes CORS.
+        api=ApiConfig(
+            ui_dist=tmp_path / "no-dist", open_reads_on_loopback=True, cors_ui_origin=True
+        ),
     )
 
 

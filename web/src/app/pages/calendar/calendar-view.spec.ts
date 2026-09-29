@@ -1,4 +1,5 @@
 import {
+  filingItemsLabel,
   addDays,
   comparisonLabel,
   importanceLabel,
@@ -101,5 +102,18 @@ describe('calendar view helpers', () => {
     expect(safeUrl('https://example.com/a')).toBe('https://example.com/a');
     expect(safeUrl('javascript:alert(1)')).toBeNull();
     expect(safeUrl(null)).toBeNull();
+  });
+});
+
+describe('filingItemsLabel', () => {
+  it('names each item, or its code when no name is known', () => {
+    expect(
+      filingItemsLabel({
+        items: ['2.02', '9.01'],
+        item_names: ['Results of operations', 'Exhibits'],
+      }),
+    ).toBe('Results of operations, Exhibits');
+    expect(filingItemsLabel({ items: ['5.02'], item_names: [] })).toBe('Item 5.02');
+    expect(filingItemsLabel({ items: [], item_names: [] })).toBe('');
   });
 });

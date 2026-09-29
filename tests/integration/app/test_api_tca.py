@@ -158,3 +158,17 @@ def test_a_viewer_cannot_write_notes(app, people):
     with TestClient(app, client=REMOTE, base_url=BASE) as c:
         resp = c.post("/api/tca/orders/a1/notes", json={"note": "x"}, headers=people["vera"])
     assert resp.status_code in (401, 403)
+
+
+def test_the_shell_acting_as_a_viewer_cannot_write_notes(app, people, settings):
+    """``stonks tca note --user`` acts with a bare Scope: an owner who is a
+    viewer now is refused like the API refuses a viewer."""
+    from stonks.app.tca import NoteRequest, TcaService
+    from stonks.auth.errors import PermissionDenied
+
+    with SqliteState(settings.state.path) as state:
+        owner = state.sql("SELECT owner_id FROM portfolios WHERE id = ?", [people["pf_a"]])
+    viewer = Scope(user_id=owner[0]["owner_id"], role=Role.VIEWER)
+    service = TcaService(app.state.services.context)
+    with pytest.raises(PermissionDenied):
+        service.add_note(viewer, "a1", NoteRequest(note="x"))

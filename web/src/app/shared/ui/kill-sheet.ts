@@ -212,8 +212,20 @@ export class KillSheet {
   protected readonly picked = this.portfolios.current;
 
   /** Starts on the picked portfolio each time the sheet opens. */
+  /**
+   * What resets the scope: opening the sheet, or another portfolio picked.
+   * A string, so a re-read of the same portfolio (a new object) never
+   * throws away the trader's choice.
+   */
+  private readonly scopeKey = computed(
+    () => ({
+      open: this.open(),
+      id: this.picked()?.id ?? null,
+    }),
+    { equal: (a, b) => a.open === b.open && a.id === b.id },
+  );
   protected readonly scope = linkedSignal<{ open: boolean; id: string | null }, KillScope>({
-    source: () => ({ open: this.open(), id: this.picked()?.id ?? null }),
+    source: this.scopeKey,
     computation: ({ id }) => (id ? 'portfolio' : 'user'),
   });
   protected readonly buysOnly = linkedSignal({ source: this.open, computation: () => false });

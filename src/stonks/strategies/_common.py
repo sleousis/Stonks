@@ -371,15 +371,26 @@ class LakeBarCaches:
     def __init__(self) -> None:
         self._caches: weakref.WeakKeyDictionary[Any, BarCache] = weakref.WeakKeyDictionary()
         self._views: weakref.WeakKeyDictionary[Any, BarCache] = weakref.WeakKeyDictionary()
+        self._sessions: weakref.WeakKeyDictionary[Any, BarCache] = weakref.WeakKeyDictionary()
 
     def for_lake(self, lake: Any) -> BarCache:
         if isinstance(lake, PointInTimeLake):
-            # One cache per underlying lake (read once per run), clamped to
-            # each view; the clamped cache is kept per view, so memos keyed
-            # by the cache object hold within one decision.
+            # One cache per session (read once per run), clamped to each
+            # view; the clamped cache is kept per view, so memos keyed by the
+            # cache object hold within one decision. Keyed by the session,
+            # not the raw lake: a new session (the live engine opens one per
+            # bar close) must see the bars written since.
             view = self._views.get(lake)
             if view is None:
-                view = self.for_lake(lake.pit_session.lake).clamped(lake)
+                session = lake.pit_session
+                base = self._sessions.get(session)
+                if base is None:
+                    try:
+                        base = BarCache(session.lake, weak=True)
+                    except TypeError:  # a lake that can't be weakly referenced
+                        base = BarCache(session.lake)
+                    self._sessions[session] = base
+                view = base.clamped(lake)
                 self._views[lake] = view
             return view
         try:

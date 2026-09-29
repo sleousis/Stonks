@@ -277,7 +277,7 @@ def _findings(report: SoakReport) -> list[str]:
     vs = report.vs_model
     if vs is not None and (vs.broker_only or vs.model_only or vs.quantity_gap > 1e-9):
         out.append(
-            f"fills differ from the model book: {vs.model_only} missing, "
+            f"fills differ from the test book: {vs.model_only} missing, "
             f"{vs.broker_only} extra, quantity gap {vs.quantity_gap:g}"
         )
     if report.outages > report.reconnects:

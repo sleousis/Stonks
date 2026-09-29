@@ -36,7 +36,7 @@ MAX_ROWS = 20_000
 DATE_FORMATS = ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%d.%m.%Y", "%Y%m%d")
 
 _CANONICAL = re.compile(r"^[A-Z0-9][A-Z0-9-]*\.[A-Z]{2,5}$")
-_NUMBER_JUNK = re.compile(r"[\s,$€£]")
+_NUMBER_JUNK = re.compile(r"[\s$€£]")
 
 
 class StatementError(ValueError):
@@ -252,7 +252,7 @@ def _date(value: str, fmt: str | None) -> date:
 def _number(row: dict[str, str], column: str | None) -> float | None:
     if not column:
         return None
-    text = _NUMBER_JUNK.sub("", row.get(column, ""))
+    text = _decimal_point(_NUMBER_JUNK.sub("", row.get(column, "")))
     if not text:
         return None
     negative = text.startswith("(") and text.endswith(")")
@@ -261,6 +261,24 @@ def _number(row: dict[str, str], column: str | None) -> float | None:
     except ValueError:
         raise _Skip(f"{column} {row.get(column)!r} is not a number") from None
     return -value if negative else value
+
+
+def _decimal_point(text: str) -> str:
+    """``text`` with a point as its only decimal mark and no thousands
+    marks. With both marks the last one is the decimal mark (``1.234,56``,
+    ``1,234.56``). A lone comma followed by other than three digits is a
+    decimal comma (``12,5``). Anything else keeps commas as thousands."""
+    if "," not in text:
+        return text
+    if "." in text:
+        if text.rfind(",") > text.rfind("."):
+            return text.replace(".", "").replace(",", ".")
+        return text.replace(",", "")
+    head, _, tail = text.rpartition(",")
+    digits = tail.rstrip(")")
+    if text.count(",") == 1 and digits.isdigit() and len(digits) != 3:
+        return f"{head}.{tail}"
+    return text.replace(",", "")
 
 
 def _strip_bom(text: str) -> str:

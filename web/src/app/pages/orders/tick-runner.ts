@@ -27,6 +27,7 @@ import { StatusPill } from '../../shared/ui/status-pill';
 import {
   brokerLabel,
   isLiveBroker,
+  realMoneyBooksLine,
   tickConfirmOptions,
   tickRequest,
   tickTicket,
@@ -83,6 +84,7 @@ import { latestRealRunDay } from './tick-mode';
             } @else if (broker.hasValue()) {
               @if (live()) {
                 Real-money run on the <strong>{{ brokerText() }}</strong> broker.
+                {{ booksLine() }}
               } @else {
                 Paper run on the <strong>{{ brokerText() }}</strong> broker. No real money moves.
               }
@@ -174,7 +176,13 @@ import { latestRealRunDay } from './tick-mode';
             </div>
             <div class="wide">
               <dt>Top strategy</dt>
-              <dd>{{ r.winner_strategy_id ? strategyName(r.winner_strategy_id) : 'None' }}</dd>
+              <dd>
+                {{
+                  r.winner_strategy_id
+                    ? strategyName(r.winner_strategy_id, r.winner_strategy_name)
+                    : 'None'
+                }}
+              </dd>
             </div>
           </dl>
           <a class="btn" [routerLink]="['/orders/ticks', r.tick_id]">Open this run</a>
@@ -300,6 +308,9 @@ export class TickRunner {
   protected readonly allowed = computed(() => this.session.can('operations.run'));
 
   protected readonly broker = resource({ loader: () => this.system.broker() });
+  protected readonly booksLine = computed(() =>
+    this.broker.hasValue() ? realMoneyBooksLine(this.broker.value()) : '',
+  );
   protected readonly brokerText = computed(() =>
     this.broker.hasValue() ? brokerLabel(this.broker.value()) : '',
   );
@@ -310,7 +321,8 @@ export class TickRunner {
     if (this.dryRun()) return 'Start dry run';
     return this.live() ? 'Start trading run' : 'Start paper run';
   });
-  protected readonly strategyName = (id: string) => strategyDisplayName(id);
+  protected readonly strategyName = (id: string, name?: string | null) =>
+    strategyDisplayName(id, { name });
   /** Recent runs, to know the last real run's date (admins only start runs). */
   private readonly recent = resource({
     params: () => (this.allowed() ? { limit: 20 } : undefined),

@@ -304,16 +304,21 @@ class PointInTimeLake:
         day after it (BE-22). Each period reads the version known then."""
         if self._versioned():
             full = self._versions(table, ticker, 90, False)
-            filed = _on_or_before(
-                pd.Series(full["filing_date"]), self._filed_by - timedelta(days=1)
-            )
+            filed = self._filed(full)
             picked = known_versions(full, self._reach, filed).drop(columns=["available_date"])
             picked = picked.sort_values(
                 ["period_end", "frequency"], ascending=[False, True], kind="stable"
             )
             return picked.reset_index(drop=True)
         full = self._cached((table, ticker), lambda: getattr(self._lake, f"get_{table}")(ticker))
-        return _rows(full, _on_or_before(full["filing_date"], self._filed_by - timedelta(days=1)))
+        return _rows(full, self._filed(full))
+
+    def _filed(self, frame: pd.DataFrame) -> pd.Series:
+        """Rows filed before the decision day whose period has ended by it:
+        a filing date before the period end is bad data, so the row waits
+        for the period end, as ``available_date`` does."""
+        filed = _on_or_before(pd.Series(frame["filing_date"]), self._filed_by - timedelta(days=1))
+        return filed & _on_or_before(pd.Series(frame["period_end"]), self._filed_by)
 
     def _read_get_income_statement(self, ticker: str) -> pd.DataFrame:
         return self._statement("income_statement", ticker)

@@ -13,6 +13,7 @@ import { OrdersService } from '../../api/orders.service';
 import { TicksService } from '../../api/ticks.service';
 import { formatDateTime, formatDuration, formatPercent } from '../../core/format/format';
 import { liveAdjustmentLabel } from '../../shared/live-rules';
+import { rowStrategyName } from '../../shared/strategy-names';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { StatTile } from '../../shared/ui/stat-tile';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -82,7 +83,7 @@ export const TICK_FILLS_LIMIT = 200;
         <app-stat-tile label="Fills" [value]="count(s?.fills)" />
         <app-stat-tile
           [label]="outcome().kind === 'exit' ? 'Exit strategy' : 'Winner'"
-          [value]="outcome().strategyId ?? outcome().text"
+          [value]="outcome().strategyName ?? outcome().text"
           [detail]="outcomeDetail()"
           featured
         />
@@ -111,7 +112,9 @@ export const TICK_FILLS_LIMIT = 200;
               <dt>{{ outcome().kind === 'exit' ? 'Exited positions of' : 'Winning strategy' }}</dt>
               <dd>
                 @if (outcome().strategyId; as id) {
-                  <a class="cell-link" routerLink="/strategies/{{ id }}">{{ id }}</a>
+                  <a class="cell-link" routerLink="/strategies/{{ id }}">{{
+                    outcome().strategyName
+                  }}</a>
                 } @else {
                   {{ outcome().text }}
                 }
@@ -214,22 +217,22 @@ export const TICK_FILLS_LIMIT = 200;
 
         <section class="panel span-6" aria-labelledby="shadow-title">
           <div class="panel-head">
-            <h2 id="shadow-title">Paper trading</h2>
+            <h2 id="shadow-title">Strategies on trial</h2>
             <a class="cell-link" routerLink="/shadow">Open paper trading</a>
           </div>
           @if (s?.shadow_error) {
             <p class="alert-line" role="alert">
-              Paper trading could not be checked: {{ s?.shadow_error }}
+              Strategies on trial could not be checked: {{ s?.shadow_error }}
             </p>
           }
           @if (shadows().length === 0) {
             <app-empty-state
-              title="No paper trading strategies checked"
-              message="Paper trading strategies are checked after real trading runs, not dry runs."
+              title="No strategies on trial checked"
+              message="Strategies on trial are checked after real trading runs, not dry runs."
             />
           } @else {
             <app-data-table
-              caption="How each paper trading strategy did"
+              caption="How each strategy on trial did"
               [rows]="shadows()"
               [columns]="shadowColumns"
               [rowKey]="shadowKey"
@@ -312,7 +315,7 @@ export class TickDetailPage {
   });
   protected readonly shadowCount = computed(() => {
     const n = this.shadows().length;
-    return n ? `${n} paper trading strateg${n === 1 ? 'y' : 'ies'} checked` : null;
+    return n ? `${n} strateg${n === 1 ? 'y' : 'ies'} on trial checked` : null;
   });
 
   protected readonly dateTime = formatDateTime;
@@ -337,7 +340,7 @@ export class TickDetailPage {
   protected readonly fillKey = (f: FillView) => String(f.id);
 
   protected readonly shadowColumns: TableColumn<ShadowOutcomeView>[] = [
-    { key: 'strategy_id', label: 'Strategy', mobile: 'title' },
+    { key: 'strategy_id', label: 'Strategy', mobile: 'title', value: (o) => rowStrategyName(o) },
     { key: 'status', label: 'Status' },
     { key: 'decisions', label: 'Decisions', format: 'number' },
     { key: 'fills', label: 'Fills', format: 'number' },

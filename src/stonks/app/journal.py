@@ -17,12 +17,14 @@ from datetime import UTC, date, datetime, time
 from typing import TYPE_CHECKING, Literal
 
 import pandas as pd
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from stonks.accounts import DEFAULT_OWNER_ID, Scope
+from stonks.accounts import DEFAULT_OWNER_ID, Role, Scope
 from stonks.app.context import AppContext
 from stonks.app.errors import NotFoundError, ValidationError
 from stonks.app.pagination import Page
+from stonks.app.strategy_names import strategy_title
+from stonks.auth.errors import PermissionDenied
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.journal.analytics import CalendarBucket, GroupStats, group_stats, pnl_calendar
@@ -65,6 +67,15 @@ BREAKDOWN_BYS: tuple[str, ...] = BreakdownBy.__args__  # type: ignore[attr-defin
 
 def _scope(who: Who) -> Scope:
     return who.scope if isinstance(who, Principal) else who
+
+
+def _check_write(who: Who) -> None:
+    """``portfolio.manage`` for a signed-in person; the shell acting as a
+    person (``--user``) gets that person's rights."""
+    if isinstance(who, Principal):
+        require(who, Permission.PORTFOLIO_MANAGE)
+    elif not (who.is_service or Role(who.role).can_trade):
+        raise PermissionDenied("writing the journal needs a role that can trade")
 
 
 def _owner(scope: Scope) -> str:
@@ -123,7 +134,21 @@ class PlaybookView(BaseModel):
         )
 
 
-class JournalTradeView(BaseModel):
+class _SleeveNamed(BaseModel):
+    """A view with a ``sleeve`` (a strategy id, ``manual`` or
+    ``unattributed``): adds ``sleeve_name``, the strategy's plain title."""
+
+    sleeve_name: str | None = Field(
+        default=None, description="The sleeve strategy's plain title (a starter's), or null."
+    )
+
+    @model_validator(mode="after")
+    def _derive_sleeve_name(self) -> _SleeveNamed:
+        self.sleeve_name = strategy_title(getattr(self, "sleeve", None))
+        return self
+
+
+class JournalTradeView(_SleeveNamed):
     """One leg of a trade. Money is in the instrument's currency, and
     ``pnl_base`` in the portfolio's base currency (null with no FX rate)."""
 
@@ -174,7 +199,7 @@ class JournalTradeView(BaseModel):
     review: str | None
 
 
-class JournalTradeDetailView(BaseModel):
+class JournalTradeDetailView(_SleeveNamed):
     """A whole trade: every leg and its review."""
 
     trade_id: int
@@ -470,8 +495,7 @@ class JournalService:
     ) -> AnnotationView:
         """Replace one trade's tags, mistakes, playbook, plan flag and review."""
         scope = _scope(who)
-        if isinstance(who, Principal):
-            require(who, Permission.PORTFOLIO_MANAGE)
+        _check_write(who)
         with self._context.state() as state:
             ledger = load_ledger(state, portfolio_id)
             entries = {t.trade_id for t in build_trades(ledger, bars=None, now=self._clock())}
@@ -509,8 +533,7 @@ class JournalService:
 
     def create_playbook(self, who: Who, request: PlaybookCreate) -> PlaybookView:
         scope = _scope(who)
-        if isinstance(who, Principal):
-            require(who, Permission.PORTFOLIO_MANAGE)
+        _check_write(who)
         with self._context.state() as state:
             try:
                 made = create_playbook(
@@ -522,8 +545,7 @@ class JournalService:
 
     def update_playbook(self, who: Who, playbook_id: str, request: PlaybookUpdate) -> PlaybookView:
         scope = _scope(who)
-        if isinstance(who, Principal):
-            require(who, Permission.PORTFOLIO_MANAGE)
+        _check_write(who)
         with self._context.state() as state:
             playbook = get_playbook(state, playbook_id)
             if playbook is None or playbook.owner_id != _owner(scope):

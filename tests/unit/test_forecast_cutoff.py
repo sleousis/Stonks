@@ -107,3 +107,22 @@ def test_the_runner_refuses_before_tuning_even_with_the_preflight_off(preflight)
     ds = _ds(date(2024, 1, 1), date(2025, 6, 30))
     with pytest.raises(PreflightError, match="forecast_cutoff"):
         runner.run(_ForecastBuyAndHold, ds)
+
+
+FORECAST_SIGNAL = "stonks.strategies.examples.forecast_signal:ForecastSignal"
+
+
+def test_a_wrapped_forecaster_still_meets_the_cutoff_rule():
+    """A wrapper (trailing stop, regime filters) runs its inner strategy's
+    model, so the cutoff rule must see that model through the wrapper."""
+    from stonks.strategies.trailing_stop import TrailingStopWrapper
+
+    params = {"inner_class_path": FORECAST_SIGNAL, "inner_params": {"model": "chronos_bolt"}}
+    assert strategy_forecast_models(TrailingStopWrapper, params) == ("chronos_bolt",)
+    ds = _ds(date(2024, 1, 1), date(2024, 12, 31))  # validation starts before the cutoff
+    issues = forecast_cutoff_issues(ds, TrailingStopWrapper, params)
+    assert [i.details["model"] for i in issues] == ["chronos_bolt"]
+    # a wrapper around a strategy with no forecaster uses none
+    plain = {"inner_class_path": "stonks.strategies.examples.momentum:Momentum"}
+    assert strategy_forecast_models(TrailingStopWrapper, plain) == ()
+    assert strategy_forecast_models(TrailingStopWrapper, {}) == ()

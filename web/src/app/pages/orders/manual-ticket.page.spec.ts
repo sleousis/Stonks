@@ -147,6 +147,16 @@ describe('ManualTicketPage', () => {
     expect(http.match(() => true)).toHaveLength(0);
   });
 
+  it('puts the cursor on the first field to fix when Place order is pressed too soon', async () => {
+    setup();
+    const el = await render();
+    button(el, 'Place order').click();
+    await settle();
+    expect(document.activeElement?.id).toBe('mo-ticker');
+    await tick(5);
+    expect(http.match(() => true)).toHaveLength(0);
+  });
+
   it('works out a whole-share size from the risk and the stop', async () => {
     setup();
     const el = await render();
@@ -194,6 +204,41 @@ describe('ManualTicketPage', () => {
     const ticket = el.querySelector('[aria-label="Checked order"]')!;
     expect(ticket.textContent).toContain('Stop');
     expect(ticket.textContent).toContain('3 to 1');
+  });
+
+  it('drops a size worked out for a stop that changed meanwhile', async () => {
+    setup();
+    const el = await render();
+    fill(el);
+    type(el, '#mo-stop', '24');
+    type(el, '#mo-risk', '1');
+    const qtyBefore = el.querySelector<HTMLInputElement>('#mo-qty')!.value;
+    button(el, 'Work out size').click();
+    const req = await nextRequest(http, '/api/orders/manual/plan', 'POST');
+    // The trader moves the stop while the size is on its way.
+    type(el, '#mo-stop', '20');
+    req.flush({
+      ticker: 'AAA.US',
+      side: 'buy',
+      entry_price: 25,
+      entry_is_close: true,
+      stop_price: 24,
+      target_price: null,
+      equity: 10_000,
+      cash: 10_000,
+      risk_budget: 100,
+      risk_per_share: 1,
+      quantity: 100,
+      risk_amount: 100,
+      notional: 2_500,
+      reward_risk: null,
+      capped_by: null,
+      note: null,
+    });
+    await settle();
+    expect(el.querySelector<HTMLInputElement>('#mo-qty')!.value).toBe(qtyBefore);
+    expect(el.querySelector('#mo-plan-result')?.textContent).not.toContain('to 1');
+    expect(el.querySelector('#mo-plan-result')?.textContent).toContain('whole shares');
   });
 
   it('asks for the stop and the risk before sizing', async () => {
@@ -263,6 +308,48 @@ describe('ManualTicketPage', () => {
     expect(toast).toHaveBeenCalledWith('Sold 10 AAA.US at $25.00.');
     expect(el.querySelector('.result')?.textContent).toContain('Filled at $25.00');
     expect(el.querySelector<HTMLInputElement>('#mo-qty')!.value).toBe('');
+  });
+
+  it('confirms as real money when the check says the book trades real money', async () => {
+    // The picker thinks paper (the list failed, say); the server knows better.
+    setup();
+    const el = await render();
+    fill(el);
+    button(el, 'Place order').click();
+    (await nextRequest(http, '/api/orders/manual/preview', 'POST')).flush(result({ live: true }));
+    const placed = await nextRequest(http, '/api/orders/manual', 'POST');
+    expect(ensure).toHaveBeenCalled();
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tone: 'danger',
+        typedConfirmation: 'AAA.US',
+        ticket: expect.objectContaining({ live: true }),
+      }),
+    );
+    placed.flush(result({ status: 'pending', live: true }));
+    (await nextRequest(http, '/api/orders')).flush(EMPTY_PAGE);
+    await settle();
+  });
+
+  it('keeps the form and warns when the order comes back rejected', async () => {
+    setup();
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    const error = vi.spyOn(TestBed.inject(ToastService), 'error');
+    const el = await render();
+    fill(el);
+    button(el, 'Place order').click();
+    (await nextRequest(http, '/api/orders/manual/preview', 'POST')).flush(result());
+    (await nextRequest(http, '/api/orders/manual', 'POST')).flush(
+      result({ status: 'rejected', reason: 'not enough cash' }),
+    );
+    (await nextRequest(http, '/api/orders')).flush(EMPTY_PAGE);
+    await settle();
+    expect(success).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('not enough cash'),
+      expect.anything(),
+    );
+    expect(el.querySelector<HTMLInputElement>('#mo-qty')!.value).toBe('10');
   });
 
   it('does not place when the ticket is cancelled', async () => {

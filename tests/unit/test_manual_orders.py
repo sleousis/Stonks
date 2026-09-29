@@ -637,3 +637,28 @@ def test_a_same_key_race_books_one_fill(monkeypatch, state, lake, tick, portfoli
     )
     assert out.duplicate
     assert len(state.sql("SELECT id FROM fills WHERE portfolio_id = ?", [portfolio_id])) == 1
+
+
+def test_a_refused_replacement_keeps_the_original_working(state, lake, tick, portfolio_id, owner):
+    """The replacement is checked before anything is cancelled: when the
+    risk rules refuse it, the original order still works at the broker, so
+    the person can retry with a smaller order."""
+    broker = WorkingBroker()
+    first = place_manual_order(
+        state,
+        lake,
+        _order(portfolio_id, owner, order_type="limit", limit_price=95.0, client_key="k"),
+        _book(portfolio_id, owner, broker=broker),
+        tick,
+        now=NOW,
+    )
+    strict = _book(portfolio_id, owner, broker=broker, risk=RiskPolicy(max_weight_per_ticker=0.05))
+    with pytest.raises(ManualOrderRefused, match="risk rules"):
+        change_manual_order(
+            state, lake, first.client_id, strict, tick, actor="user:x", reason="more",
+            quantity=400.0, now=NOW,
+        )  # fmt: skip
+    old = state.sql("SELECT status FROM orders WHERE client_id = ?", [first.client_id])[0]
+    assert old["status"] == "pending"
+    assert broker.orders[first.client_id].status == "pending"
+    assert not state.sql("SELECT 1 FROM orders WHERE client_id = ?", [f"{first.client_id}.r1"])

@@ -155,10 +155,19 @@ def _score(run: _Run, seed: int | None) -> tuple[float, float]:
             dataset = dataclasses.replace(run.context, lake=lake)
             strategy, tuned = tune_and_fit(run.strategy_cls, dataset, run.setup, run.fixed)
             report = run_backtest(strategy, dataset, run.val_window)
-            return float(tuned.best_score), float(getattr(report, run.oos_metric))
+            return _best_score(tuned), float(getattr(report, run.oos_metric))
     except Exception as exc:
         _log.warning("vs_random.run_failed", seed=seed, error=str(exc))
         return math.nan, math.nan
+
+
+def _best_score(tuned: Any) -> float:
+    """The tune's best score, NaN when it tried trials and none scored: the
+    tuners then report the defaults at 0.0, which is no score."""
+    history = list(getattr(tuned, "history", None) or [])
+    if history and not any(math.isfinite(float(score)) for _, score in history):
+        return math.nan
+    return float(tuned.best_score)
 
 
 class VsRandomOptions(BaseModel):

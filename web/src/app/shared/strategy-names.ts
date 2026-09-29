@@ -13,14 +13,16 @@ export interface DisplayNameHints {
   draftName?: string | null;
   /** A starter strategy's plain title and summary (`starter` on the API's views). */
   starter?: { title: string; summary?: string } | null;
+  /** The plain title the API sends as `strategy_name` next to a strategy id. */
+  name?: string | null;
 }
 
 /**
  * `stocks_on_the_move_3fa9c21b` -> `Stocks on the move 3fa9`. A starter's
- * title, then a draft name, wins when known. An id without the generated suffix is shown as it is.
+ * title (or the API's `strategy_name`), then a draft name, wins when known. An id without the generated suffix is shown as it is.
  */
 export function strategyDisplayName(id: string, hints: DisplayNameHints = {}): string {
-  const starter = hints.starter?.title.trim();
+  const starter = hints.starter?.title.trim() || hints.name?.trim();
   if (starter) return starter;
   const draft = hints.draftName?.trim();
   if (draft) return draft;
@@ -28,6 +30,14 @@ export function strategyDisplayName(id: string, hints: DisplayNameHints = {}): s
   if (!match) return id;
   const words = match[1].replace(/_+/g, ' ').trim();
   return `${words.charAt(0).toUpperCase()}${words.slice(1)} ${match[2].slice(0, 4)}`;
+}
+
+/** A row's strategy name from the API's `strategy_id` and `strategy_name`; null without a strategy. */
+export function rowStrategyName(row: {
+  strategy_id?: string | null;
+  strategy_name?: string | null;
+}): string | null {
+  return row.strategy_id ? strategyDisplayName(row.strategy_id, { name: row.strategy_name }) : null;
 }
 
 /** `stonks.strategies.momentum.MomentumStrategy` or `pkg.mod:Class` -> the class name. */

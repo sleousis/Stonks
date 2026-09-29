@@ -412,9 +412,9 @@ def scheduler_config_from(settings: object, config_path: Path | None = None) -> 
     existing = getattr(settings, "scheduler", None)
     if isinstance(existing, SchedulerConfig):
         return existing
-    from stonks.config import DEFAULT_CONFIG_PATH
+    from stonks.config import resolve_default_config_path
 
-    path = Path(config_path or DEFAULT_CONFIG_PATH)
+    path = Path(config_path or resolve_default_config_path())
     if not path.exists():
         return SchedulerConfig()
     with open(path, "rb") as f:

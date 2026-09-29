@@ -66,14 +66,14 @@ def lab_registration_preview(request: dict[str, Any]) -> dict[str, Any]:
     if request.get("register_if_passes"):
         flag = "register_if_passes"
         warning = (
-            "register_if_passes=true registers the tuned strategy in shadow (virtual "
-            "portfolio, never traded until promoted) only if every survival test passes"
+            "register_if_passes=true puts the tuned strategy on trial (a test book, "
+            "never traded until approved) only if every robustness test passes"
         )
     else:
         flag = "register_strategy"
         warning = (
-            "register_strategy=true registers the tuned strategy in shadow (virtual "
-            "portfolio, never traded until promoted), whatever the verdict"
+            "register_strategy=true puts the tuned strategy on trial (a test book, "
+            "never traded until approved), whatever the verdict"
         )
     return {
         "preview": True,
@@ -114,8 +114,7 @@ def draft_preview(
         if registered_as:
             warnings.append(f"draft is already registered as {registered_as}; applying fails")
         warnings.append(
-            "registering creates a strategy in shadow: evaluated on a virtual portfolio, "
-            "never traded until enabled"
+            "this puts a strategy on trial: it runs a test book, never traded until approved"
         )
     elif not registered_as:
         warnings.append("draft is not registered; register it first (applying fails)")

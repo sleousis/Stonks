@@ -16,7 +16,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 
 from stonks.core.options import format_number
-from stonks.execution.brokers.ibkr.client import IbContract, IbOptionEvent
+from stonks.execution.brokers.ibkr.client import IbContract, IbOptionEvent, execution_key
 from stonks.execution.brokers.ibkr.flex import (
     FlexCashTransaction,
     FlexClient,
@@ -56,7 +56,8 @@ def _execution(t: FlexTrade) -> StatementExecution | None:
         return None
     cash = t.proceeds if t.proceeds is not None else -t.quantity * t.price
     return StatementExecution(
-        exec_id=t.exec_id,
+        # a correction is named by the id of the execution it corrects
+        exec_id=execution_key(t.exec_id),
         quantity=t.quantity,
         symbol=t.symbol,
         order_ref=t.order_ref,

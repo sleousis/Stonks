@@ -29,7 +29,8 @@ STONKS_API_TOKEN=... uv run stonks serve     # 127.0.0.1:8000
 `npm run build` writes the production bundle to `web/dist/`; `stonks serve` then
 serves it at `/` with single-page fallback (`[api].ui_dist`), so one process
 serves both. The dev server origin (`http://localhost:4200`) is the API's
-`[api].ui_origin` for CORS, although the proxy makes CORS unnecessary in dev.
+`[api].ui_origin` for CORS in the dev profile only (`STONKS_PROFILE=dev`),
+although the proxy makes CORS unnecessary in dev.
 
 Every call needs a credential. Sign in, or paste an API token (in the
 closed "For scripts" section of the sign-in page, open only in dev, or of
@@ -552,6 +553,8 @@ Tickers open `/data?instrument=<id>`.
   [offset]="p.offset"`. The table is re-created after each load, and the
   offset keeps the pager on the right page.
 - Resume needs the typed words `RESUME TRADING` and a fresh second factor.
+  Its confirm button is red only when a covered portfolio trades real
+  money. On paper it is the primary button.
   The page calls `StepUpService.ensure()` (`core/auth/step-up.service.ts`)
   first, and again with `force` when the API answers 403
   `step_up_required`. The default service never prompts. The sign-in work
@@ -564,7 +567,11 @@ Tickers open `/data?instrument=<id>`.
   again, never a silent "Finished".
 - Run now on the trading run is the same order ticket as the runner
   (`tickTicket()`): broker, PAPER or LIVE stamp, and the broker label
-  typed. Other jobs ask plainly, named by `jobLabel()`
+  typed. The stamp is LIVE when the system broker is live or when
+  `GET /api/brokers` counts `real_money_books` (portfolios at a real-money
+  stage with an approve or automatic follow). The approval ticket does the
+  same with the go-live report's `real_money_books` for that strategy.
+  Other jobs ask plainly, named by `jobLabel()`
   (`core/schedule/job-labels.ts`: Trading run, Price update, Broker sync,
   Health check, Broker check before the open, ...). Every default job has
   a name there, never its id. A real run cannot be dated before the last
@@ -945,12 +952,19 @@ flowchart LR
   confirmation to move up is the next stage's name ("Broker paper"). Server
   sentences with stage ids go through `stageText()`.
 - **Getting there.** Profile lists "Real-money settings" next to each broker
-  portfolio. A paper portfolio has none, and the page says so and links the
-  checklist.
+  portfolio at any stage (`atBroker()` in `shared/live-stages.ts`). A paper
+  portfolio has none, and the page says so and links the checklist.
 - **Brass only for real money.** The page reads the stage from the stage
   card (`(stageChange)`). The header stamp, the brass allocation frame and
   red buttons show only at Real money, small or Real money, full. At
   Simulated or Broker paper the stamp is PAPER and the tickets are PAPER.
+- **Stage everywhere.** `GET /api/portfolios` and `.../trading-modes` send
+  `live_stage`, and a broker portfolio's `trading` is `live` only at
+  `live_small` or `live_scale`. So the portfolio picker, Profile, ticket
+  cards and linked accounts show brass and LIVE only for real money. Pass
+  the stage to the stamp (`<app-mode-stamp [live]="..." [stage]="p.live_stage">`)
+  and Broker paper reads BROKER PAPER in the paper style; the picker writes
+  "(broker paper)" after the name (`portfolioModeNote()`).
 - **Allocation.** The page's one brass figure at a Real money stage, in a
   `.live-frame` panel. Unset reads "Not set" and "Nothing opens". A note says there are no
   automatic steps: Stonks never raises or lowers the amount, and a bad week
@@ -1230,7 +1244,7 @@ flowchart LR
 
 | Page | Route | What it does |
 |---|---|---|
-| Calendar | `/calendar` | Earnings, ex-dividend dates, economic releases and news for your holdings, a watchlist, some tickers or everything |
+| Calendar | `/calendar` | Earnings, ex-dividend dates, economic releases, SEC filings and news for your holdings, a watchlist, some tickers or everything |
 | Screener | `/screener` | Filter instruments on price and fundamentals, keep screens, and save one as a universe for the lab |
 
 ```mermaid
@@ -1244,7 +1258,7 @@ flowchart LR
 ```
 
 - **Needs a data plan.** Calendars, news, fundamentals and option chains come with a paid data plan. `GET /api/market/data-coverage` says which kinds the lake holds at all, and `<app-data-plan-note kind="...">` (`shared/ui/data-plan-note.ts`) says plainly when one is missing, instead of an empty page that looks broken. Traders read who can fix it; admins read what to do and get a link (Data, or the schedule for the calendar update). It renders nothing while the data is stored or unknown. The Calendar, the News tab, the screener's filters, the factor library and Options research show it. `provideFakeDataCoverage()` (`src/testing/fake-data-coverage.ts`) keeps specs free of the call.
-- **Calendar.** `pages/calendar/calendar.page.ts`. "Whose events" picks the scope. Watchlists offers one list or all of them, and Tickers waits until you name some. From and To span at most 120 days, checked before any call. The tabs count each calendar. Countries shows on the Economic tab only. A cut read says so. `?ticker=&date=` opens one ticker from that day, which is where the event alerts link. `?country=&date=` opens the Economic tab for one country, where the economic release alerts link. The Economic tab shows each release's importance. Pure helpers live in `calendar-view.ts`.
+- **Calendar.** `pages/calendar/calendar.page.ts`. "Whose events" picks the scope. Watchlists offers one list or all of them, and Tickers waits until you name some. From and To span at most 120 days, checked before any call. The tabs count each calendar. Countries shows on the Economic tab only. A cut read says so. `?ticker=&date=` opens one ticker from that day, which is where the event alerts link. `?country=&date=` opens the Economic tab for one country, where the economic release alerts link. The Economic tab shows each release's importance. The Filings tab lists the SEC current reports (8-K) in `CalendarView.filings`: when filed, the ticker, the form, what it announces in words (`filingItemsLabel()`, "Item 5.02" when the name is unknown) and "Open on SEC" in a new tab, over http or https only. The link is 44px tall on phones. Filings are past events and follow named companies, so the empty state says to pick an earlier From date, or a narrower scope than Everything. Pure helpers live in `calendar-view.ts`.
 - **News.** `<app-news-panel>` (`pages/calendar/news-panel.ts`) takes the scope as `query`. Everything has no news, so the panel asks for a narrower scope and calls nothing. Each ticker gets a mood card (the 30-day score weighted by articles, in words, a shape and a signed number). Articles link out only over http or https, in a new tab.
 - **Ticket warning.** `<app-earnings-warning>` (`pages/orders/earnings-warning.ts`) sits under the ticker on the order ticket. For a full ticker it calls `GET /api/calendars/earnings-warnings` silently and shows one warning line when the report falls before the next open, with a link to the calendar. A failed check shows nothing and never blocks the ticket.
 - **Event alerts.** Alert settings has an Upcoming events row in the channel grid (where they reach you) and an Upcoming events panel with one switch per kind (earnings, dividends, economic releases) plus the economic release importance and countries. A kind switched off sends nothing, not even to the Feed.
@@ -1415,16 +1429,24 @@ No CLI commands, config keys, environment variables, raw ids or system
 words in trader copy. `npm run lint` runs `scripts/check-copy.mjs`, which
 fails on `stonks <command>`, `STONKS_*`, `[section]` config keys and
 "command line" anywhere, and on the system words tick, ingest, shadow,
-promote, register, retire, `class_path` and `python -m` in prose
+promote, register, `class_path`, `python -m`, model book, kill switch,
+incubating, go live and "paper trading strategies" in prose
 (template text, shown attributes, string literals with a space, and
 capitalised labels). Routes, API paths, snake ids, styles and bindings are
-skipped. The one allowlisted file is the glossary, which explains the
-system names on purpose. `node scripts/check-copy.mjs src/app/pages/lab`
+skipped. The glossary is allowlisted, since it explains the system names on
+purpose, and so are the nav and command search keywords, where people may
+still type "kill switch". `node scripts/check-copy.mjs src/app/pages/lab`
 checks one folder. The rule's own specs are `scripts/check-copy.test.mjs`.
 
 Names, not ids: `strategyDisplayName()` (`shared/strategy-names.ts`)
 turns `stocks_on_the_move_3fa9c21b` into "Stocks on the move 3fa9" (a
-draft's own name wins), with the id under "Technical details".
+starter's title, then a draft's own name, wins), with the id under
+"Technical details". Views that carry a strategy id also carry
+`strategy_name`, the starter's title (`winner_strategy_name` on a trading
+run, `sleeve_name` on a journal trade). Pages pass it as the `name` hint,
+or call `rowStrategyName(row)`, so orders, the journal, trading runs,
+tickets, the leaderboard and Trial results never show `starter_trend` or
+`bah_aaa` where a name belongs.
 `<app-status-pill>` writes strategy statuses as On trial, Approved and
 Retired and outcomes as Passed and Failed on its own. One `MODES` list
 (`shared/governance-labels.ts`) names Alerts only, Paper, Approve each trade and

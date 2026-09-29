@@ -2484,6 +2484,11 @@
           "paper": {
             "title": "Paper",
             "type": "boolean"
+          },
+          "real_money_books": {
+            "default": 0,
+            "title": "Real Money Books",
+            "type": "integer"
           }
         },
         "required": [
@@ -8144,6 +8149,11 @@
           "policy": {
             "$ref": "#/components/schemas/GoLivePolicy"
           },
+          "real_money_books": {
+            "default": 0,
+            "title": "Real Money Books",
+            "type": "integer"
+          },
           "source": {
             "enum": [
               "shadow",
@@ -10468,6 +10478,18 @@
             ],
             "title": "Strategy Id"
           },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
+          },
           "ticker": {
             "title": "Ticker",
             "type": "string"
@@ -10667,6 +10689,18 @@
           "sleeve": {
             "title": "Sleeve",
             "type": "string"
+          },
+          "sleeve_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The sleeve strategy's plain title (a starter's), or null.",
+            "title": "Sleeve Name"
           },
           "tags": {
             "items": {
@@ -10965,6 +10999,18 @@
           "sleeve": {
             "title": "Sleeve",
             "type": "string"
+          },
+          "sleeve_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The sleeve strategy's plain title (a starter's), or null.",
+            "title": "Sleeve Name"
           },
           "stop_price": {
             "anyOf": [
@@ -11765,6 +11811,18 @@
           "strategy_id": {
             "title": "Strategy Id",
             "type": "string"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           },
           "survival_passed": {
             "title": "Survival Passed",
@@ -16706,6 +16764,18 @@
             ],
             "title": "Strategy Id"
           },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
+          },
           "tick_id": {
             "anyOf": [
               {
@@ -19204,7 +19274,7 @@
             "title": "Short Term Rate"
           },
           "source": {
-            "description": "strategy: the strategy's latest model book weights; targets: your list.",
+            "description": "strategy: the weights of the strategy's test book; targets: your list.",
             "enum": [
               "strategy",
               "targets"
@@ -19429,7 +19499,7 @@
             "title": "Short Term Rate"
           },
           "source": {
-            "description": "strategy: the strategy's latest model book weights; targets: your list.",
+            "description": "strategy: the weights of the strategy's test book; targets: your list.",
             "enum": [
               "strategy",
               "targets"
@@ -20177,6 +20247,17 @@
             "title": "Kind",
             "type": "string"
           },
+          "live_stage": {
+            "default": "sim_paper",
+            "enum": [
+              "sim_paper",
+              "broker_paper",
+              "live_small",
+              "live_scale"
+            ],
+            "title": "Live Stage",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -20511,7 +20592,7 @@
                 "type": "null"
               }
             ],
-            "description": "avg_cost * quantity.",
+            "description": "avg_cost * quantity * multiplier.",
             "title": "Cost Basis"
           },
           "currency": {
@@ -20548,6 +20629,12 @@
             ],
             "description": "market_value in the portfolio's base currency, at the FX rate of the price date; null when unpriced or no FX rate is stored.",
             "title": "Market Value Base"
+          },
+          "multiplier": {
+            "default": 1.0,
+            "description": "Units per contract: 1 for a stock, 100 for a standard option. price and avg_cost are per unit; market_value, cost_basis and unrealized_pnl count it.",
+            "title": "Multiplier",
+            "type": "number"
           },
           "price": {
             "anyOf": [
@@ -20589,7 +20676,7 @@
                 "type": "null"
               }
             ],
-            "description": "(price - avg_cost) * quantity at the latest stored close.",
+            "description": "(price - avg_cost) * quantity * multiplier at the latest stored close (an option's latest quote mark).",
             "title": "Unrealized Pnl"
           },
           "unrealized_pnl_pct": {
@@ -25840,6 +25927,18 @@
             "title": "Strategy Id",
             "type": "string"
           },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
+          },
           "tick_id": {
             "title": "Tick Id",
             "type": "string"
@@ -25895,6 +25994,18 @@
           "strategy_id": {
             "title": "Strategy Id",
             "type": "string"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           },
           "total_value": {
             "anyOf": [
@@ -25981,6 +26092,18 @@
           "strategy_id": {
             "title": "Strategy Id",
             "type": "string"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           },
           "total_value": {
             "anyOf": [
@@ -30460,6 +30583,17 @@
               }
             ],
             "title": "Winner Strategy Id"
+          },
+          "winner_strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner Strategy Name"
           }
         },
         "required": [
@@ -30687,6 +30821,17 @@
             ],
             "title": "Exit Strategy Id"
           },
+          "exit_strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Strategy Name"
+          },
           "fills": {
             "anyOf": [
               {
@@ -30795,6 +30940,17 @@
               }
             ],
             "title": "Winner Strategy Id"
+          },
+          "winner_strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Winner Strategy Name"
           }
         },
         "title": "TickSummary",
@@ -31116,6 +31272,18 @@
               }
             ],
             "title": "Strategy Id"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           },
           "submit_after": {
             "format": "date-time",
@@ -31940,6 +32108,18 @@
           },
           "detail": {
             "title": "Detail",
+            "type": "string"
+          },
+          "live_stage": {
+            "default": "sim_paper",
+            "description": "Where the portfolio stands on the way to real money. A broker portfolio trades real money only at live_small or live_scale.",
+            "enum": [
+              "sim_paper",
+              "broker_paper",
+              "live_small",
+              "live_scale"
+            ],
+            "title": "Live Stage",
             "type": "string"
           },
           "name": {
@@ -66644,7 +66824,7 @@
     },
     "/api/universes/index-history": {
       "post": {
-        "description": "Import an index's constituents and changes (CSV or JSON) for\n``index`` universes to rebuild membership from.",
+        "description": "Import an index's constituents and changes (CSV or JSON) for\n``index`` universes to rebuild membership from. The index the trading\nuniverse follows needs ``strategy.promote``.",
         "operationId": "importIndexHistory",
         "requestBody": {
           "content": {
@@ -66992,7 +67172,7 @@
         ]
       },
       "put": {
-        "description": "Replace the definition. The members stay as they are until the next\nrefresh.",
+        "description": "Replace the definition. The members stay as they are until the next\nrefresh. The trading universe (``[production].universe``) needs\n``strategy.promote``.",
         "operationId": "updateUniverse",
         "parameters": [
           {

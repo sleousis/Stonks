@@ -13,7 +13,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { book } from '../../../testing/portfolio-fixtures';
-import { answerDialog } from '../../../testing/status-dialog';
+import { answerDialog, confirmButton, dialogForm } from '../../../testing/status-dialog';
 import { provideFakeTax } from '../../../testing/fake-tax';
 import { SuggestedOrders, draftSource, draftStatus } from './suggested-orders';
 
@@ -174,6 +174,50 @@ describe('SuggestedOrders', () => {
     expect(el.querySelector('.failure')?.textContent).toContain('Not placed');
   });
 
+  it('asks as for real money when the portfolio is not in the list', async () => {
+    // The list failed to load, or the draft's portfolio is missing from it:
+    // never confirm a possibly real-money order as paper.
+    setup();
+    const el = await render([draft({ portfolio_id: 'pf_unknown' })]);
+    button(el, 'Approve').click();
+    const req = await nextRequest(http, '/api/orders/drafts/od_1/approve', 'POST');
+    expect(confirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        typedConfirmation: 'AAA.US',
+        ticket: expect.objectContaining({ live: true }),
+      }),
+    );
+    req.flush({}, { status: 409, statusText: 'Conflict' });
+    await settle();
+  });
+
+  it('says not placed when the approved order comes back rejected', async () => {
+    setup();
+    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
+    const el = await render([draft()]);
+    button(el, 'Approve').click();
+    (await nextRequest(http, '/api/orders/drafts/od_1/approve', 'POST')).flush({
+      draft: draft({ status: 'placed' }),
+      order: {
+        client_id: 'manual:pf_1:x',
+        portfolio_id: 'pf_1',
+        ticker: 'AAA.US',
+        side: 'buy',
+        quantity: 5,
+        requested_quantity: 5,
+        order_type: 'market',
+        limit_price: null,
+        reference_price: 25,
+        status: 'rejected',
+        reason: 'not enough cash',
+        live: false,
+      },
+    });
+    await settle();
+    expect(success).not.toHaveBeenCalled();
+    expect(el.querySelector('.failure')?.textContent).toContain('not enough cash');
+  });
+
   it('does nothing without the code', async () => {
     setup();
     const el = await render([draft()]);
@@ -189,6 +233,9 @@ describe('SuggestedOrders', () => {
     const el = await render([draft()]);
     button(el, 'Reject').click();
     await settle();
+    // A paper order: no red button.
+    const form = dialogForm(fixture.nativeElement as HTMLElement)!;
+    expect(confirmButton(form).classList).not.toContain('btn-danger');
     answerDialog(fixture, { reason: 'not now' });
     const req = await nextRequest(http, '/api/orders/drafts/od_1/reject', 'POST');
     expect(req.request.body).toEqual({ note: 'not now' });

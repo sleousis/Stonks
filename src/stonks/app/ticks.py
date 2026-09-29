@@ -8,7 +8,7 @@ import re
 from datetime import UTC, date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from stonks.accounts import PortfolioRepository, Scope
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
@@ -17,12 +17,14 @@ from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.jobs import Job, JobContext, JobRunner
 from stonks.app.orders import OrdersService, OrderView
 from stonks.app.pagination import Page
+from stonks.app.strategy_names import strategy_title
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.core.types import AssetClass
 from stonks.execution.brokers.base import BrokerMode
 from stonks.production.settings_builder import build_tick_runtime
 from stonks.production.tick import BackdatedTickError, TickResult, run_tick
+from stonks.production.tick_failures import PreTickError, tick_row_added, tick_row_count
 from stonks.production.universe import EmptyUniverseError, production_tickers
 from stonks.scheduling.calendar import bars_due
 
@@ -94,6 +96,8 @@ class TickResultView(BaseModel):
     tick_id: str
     status: str
     winner_strategy_id: str | None
+    #: The winner's plain title (a starter's), or null; derived from the id.
+    winner_strategy_name: str | None = None
     orders_placed: int
     fills: int
     dry_run: bool
@@ -104,6 +108,11 @@ class TickResultView(BaseModel):
             " paper account, or a live (real money) account."
         ),
     )
+
+    @model_validator(mode="after")
+    def _derive_winner_name(self) -> TickResultView:
+        self.winner_strategy_name = strategy_title(self.winner_strategy_id)
+        return self
 
 
 class TickService:
@@ -223,7 +232,23 @@ def execute_tick(
     BE-66): the universe (with ``asset_class`` and the due bars), the
     runtime from settings, the per-portfolio plan, then :func:`run_tick`.
     ``ValidationError`` for an empty universe, ``ConflictError`` for a
-    refused date (backdated or in the future)."""
+    refused date (backdated or in the future). Any other failure before
+    :func:`run_tick` recorded its row is a :class:`PreTickError`: the tick
+    did not alert on it, so the scheduler does."""
+    rows_before = tick_row_count(state)
+    try:
+        return _execute_tick(settings, state, lake, registry, request)
+    except (ValidationError, ConflictError, NotFoundError):
+        raise
+    except Exception as exc:
+        if tick_row_added(state, rows_before):
+            raise  # run_tick closed its row as error and alerted
+        raise PreTickError.wrap(exc) from exc
+
+
+def _execute_tick(
+    settings: Any, state: Any, lake: Any, registry: Any, request: TickRequest
+) -> TickResult:
     universe = request_universe(settings, lake, request)
     if request.asset_class is not None:
         classes = lake.get_asset_classes(universe)

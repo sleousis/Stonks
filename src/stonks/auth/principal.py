@@ -118,5 +118,7 @@ class Principal:
 
     @property
     def confined(self) -> bool:
-        """True for a machine credential (only :data:`CONFINED_SCOPES`)."""
-        return bool(self.scopes) and self.scopes <= CONFINED_SCOPES
+        """True for a machine credential (only :data:`CONFINED_SCOPES`), and
+        for a token whose scopes the role clamped away entirely (a lab worker
+        token of a demoted admin): it reaches nothing, not even reads."""
+        return self.scopes <= CONFINED_SCOPES

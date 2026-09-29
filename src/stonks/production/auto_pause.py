@@ -126,11 +126,12 @@ def pause_auto(
 
 
 def auto_subscription_ids(state: SqliteState, portfolio_id: str) -> list[str]:
-    """The running auto subscriptions of ``portfolio_id``."""
+    """The running live subscriptions of ``portfolio_id``: auto and approve
+    (roadmap 19.8), which both trade at the broker."""
     if not state.sql("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'subscriptions'"):
         return []
     rows = state.sql(
-        "SELECT id FROM subscriptions WHERE portfolio_id = ? AND mode = 'auto'"
+        "SELECT id FROM subscriptions WHERE portfolio_id = ? AND mode IN ('approve', 'auto')"
         " AND paused_reason IS NULL ORDER BY id",
         [portfolio_id],
     )
@@ -140,7 +141,7 @@ def auto_subscription_ids(state: SqliteState, portfolio_id: str) -> list[str]:
 def pause_portfolio_auto(
     state: SqliteState, portfolio_id: str, reason: str, *, as_of: date
 ) -> list[str]:
-    """Pause every running auto subscription of ``portfolio_id``."""
+    """Pause every running auto and approve subscription of ``portfolio_id``."""
     ids = auto_subscription_ids(state, portfolio_id)
     return pause_auto(state, portfolio_id, ids, reason, tick_id=None, as_of=as_of)
 

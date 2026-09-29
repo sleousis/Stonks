@@ -101,3 +101,28 @@ def test_short_book_holds_a_dollar_neutral_pair(lake):
     assert short_value > 0 and long_value > 0
     # each leg is allocation / 2 = 0.5 of equity when it filled
     assert short_value == pytest.approx(long_value, rel=0.1)
+
+
+def test_a_missing_bar_in_one_leg_does_not_shift_the_other(tmp_path):
+    """The legs are paired by date: a bar missing from B (a holiday on its
+    exchange, a data gap) must not shift B's older closes against A's."""
+    full = _series()
+    s = PairsReversion({"pairs": "A.US:B.US", "short_mode": "short"})
+    whole = build_lake(tmp_path / "whole.duckdb", full)
+    try:
+        _, z_whole = s.pair_view("A.US", "B.US", LAST, whole)
+    finally:
+        whole.close()
+    gappy = build_lake(tmp_path / "gappy.duckdb", full)
+    try:
+        gap = DATES[N - 40].to_pydatetime()
+        gappy.con.execute("DELETE FROM bars WHERE ticker = 'B.US' AND timestamp = ?", [gap])
+        view = PairsReversion({"pairs": "A.US:B.US", "short_mode": "short"}).pair_view(
+            "A.US", "B.US", LAST, gappy
+        )
+    finally:
+        gappy.close()
+    assert view is not None
+    state, z = view
+    assert state == -1
+    assert z == pytest.approx(z_whole, rel=0.1)

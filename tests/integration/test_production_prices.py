@@ -112,3 +112,37 @@ def test_protective_stop_atr_comes_out_in_pounds(lake_trending):
     atr, closes = load_atr(lake_trending, ["VOD.LSE"], date(2026, 4, 1), 5)
     assert closes == {"VOD.LSE": 15.0}
     assert 0 < atr["VOD.LSE"] < 1.0  # (50.5 - 49.5) * 30 pence = 0.3 pounds
+
+
+def test_history_volume_follows_the_price_adjustment(tmp_path):
+    """Before a past 4:1 split the adjusted close is a quarter of the raw
+    one, so the volume must be in the same (post-split) shares: close x
+    volume is the dollar volume that really traded, on both sides of the
+    split. The liquidity rule reads it in the tick and the backtest."""
+    import pandas as pd
+
+    from stonks.production.prices import load_history
+    from stonks.store.lake import DuckDBLake
+
+    lake = DuckDBLake(tmp_path / "split.duckdb")
+    lake.migrate()
+    days = pd.bdate_range("2026-03-02", periods=20)
+    before = [d < days[10] for d in days]
+    lake.upsert_prices(
+        pd.DataFrame(
+            {
+                "ticker": "S.US",
+                "date": [d.date() for d in days],
+                "open": [400.0 if b else 100.0 for b in before],
+                "high": [400.0 if b else 100.0 for b in before],
+                "low": [400.0 if b else 100.0 for b in before],
+                "close": [400.0 if b else 100.0 for b in before],
+                "adj_close": 100.0,
+                "volume": [1_000.0 if b else 4_000.0 for b in before],
+            }
+        )
+    )
+    frame = load_history(lake, ["S.US"], days[-1].date(), bars=20)["S.US"]
+    lake.close()
+    dollar = frame["close"] * frame["volume"]
+    assert dollar.round(6).tolist() == [400_000.0] * 20

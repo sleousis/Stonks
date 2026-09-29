@@ -21,6 +21,7 @@ import { PriceChart } from '../../shared/chart/price-chart';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
+import { strategyDisplayName } from '../../shared/strategy-names';
 import { SideTag } from '../../shared/ui/side-tag';
 import { NoBook } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -205,16 +206,24 @@ export class ChartPage {
     { key: 'side', label: 'Side', sortable: false },
     { key: 'quantity', label: 'Qty', value: (f) => Math.abs(f.quantity), format: 'number' },
     { key: 'price', label: 'Price', format: 'money' },
-    { key: 'strategy_id', label: 'Strategy', value: (f) => f.strategy_id ?? '', mobile: 'hide' },
+    {
+      key: 'strategy_id',
+      label: 'Strategy',
+      value: (f) => (f.strategy_id ? strategyDisplayName(f.strategy_id) : ''),
+      mobile: 'hide',
+    },
   ];
   protected readonly signalColumns: TableColumn<ChartSignalView>[] = [
     { key: 'as_of', label: 'Date', format: 'date', mobile: 'title' },
     { key: 'kind', label: 'Signal', value: (s) => SIGNAL_WORDS[s.kind] ?? s.kind },
-    { key: 'strategy_id', label: 'Strategy' },
+    { key: 'strategy_id', label: 'Strategy', value: (s) => strategyDisplayName(s.strategy_id) },
     { key: 'reason', label: 'Why', value: (s) => s.reason ?? '', sortable: false },
   ];
   protected readonly fillKey = (f: ChartFillView) => `${f.order_client_id}-${f.filled_at}`;
   protected readonly signalKey = (s: ChartSignalView) => `${s.as_of}-${s.strategy_id}-${s.kind}`;
+
+  /** Numbers each query; only the latest one's answer may show. */
+  private searchSeq = 0;
 
   constructor() {
     void this.portfolioCtx.load();
@@ -224,6 +233,8 @@ export class ChartPage {
   protected onQuery(text: string): void {
     this.query.set(text);
     clearTimeout(this.timer);
+    // Each keystroke outdates any search still on its way.
+    const mine = ++this.searchSeq;
     const q = text.trim();
     if (q.length < 2) {
       this.suggestions.set([]);
@@ -232,9 +243,9 @@ export class ChartPage {
     this.timer = setTimeout(async () => {
       try {
         const page = await this.search.instruments(q, 8);
-        this.suggestions.set(page.items.map((i) => i.id));
+        if (mine === this.searchSeq) this.suggestions.set(page.items.map((i) => i.id));
       } catch {
-        this.suggestions.set([]);
+        if (mine === this.searchSeq) this.suggestions.set([]);
       }
     }, SEARCH_DEBOUNCE_MS);
   }

@@ -147,6 +147,17 @@ def test_live_stages_may_open(stage):
     assert gw.sent_count("t1-s1-AAPL.US-buy") == 1
 
 
+def test_a_demoted_live_book_may_still_cover_a_short():
+    """A cover is a close: a demoted book winds its shorts down too (P28)."""
+    gw = FakeIbGateway(["U7654321"])
+    broker, _ = make(gw, mode="live", allow_live=True, stage_lookup=lambda: "broker_paper")
+    broker.place_order(buy("t1-s1-AAPL.US-cover", position_effect="close"))
+    assert gw.sent_count("t1-s1-AAPL.US-cover") == 1
+    # a buy that may open still needs a live stage
+    with pytest.raises(LiveTradingRefusedError, match="live_small"):
+        broker.place_order(buy("t1-s1-MSFT.US-buy", ticker="MSFT.US"))
+
+
 def test_paper_gateways_ignore_the_stage():
     broker, gw = make(stage_lookup=lambda: "sim_paper")
     broker.place_order(buy())

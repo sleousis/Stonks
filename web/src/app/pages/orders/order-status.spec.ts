@@ -95,6 +95,7 @@ describe('orderStatusView', () => {
       side: 'buy',
       status: 'rejected',
       strategy_id: null,
+      strategy_name: null,
       tick_id: null,
       ticker: 'AAPL.US',
     };

@@ -99,10 +99,55 @@ describe('GoingLivePage', () => {
     await settle();
   }
 
+  it('says so when a step cannot be checked, and checks again on Try again', async () => {
+    const el = await render();
+    (await nextRequest(http, '/api/portfolios/pf_b/live/stage')).flush(
+      { title: 'Server error', status: 500, detail: 'state is busy' },
+      { status: 500, statusText: 'Server Error' },
+    );
+    (await nextRequest(http, '/api/portfolios/pf_b/live/gate-report')).flush({
+      portfolio_id: 'pf_b',
+      from_stage: 'broker_paper',
+      target: 'live_small',
+      passed: false,
+      checks: [],
+      metrics: {},
+      computed_at: '2026-09-27T20:00:00Z',
+    });
+    (await nextRequest(http, '/api/portfolios/pf_b/live/allocation')).flush({
+      portfolio_id: 'pf_b',
+      amount: 1000,
+      currency: 'USD',
+      reason: 'start',
+      updated_at: '2026-09-27T10:00:00Z',
+      updated_by: 'user:u',
+    });
+    (await nextRequest(http, '/api/portfolios/pf_b/live/account-profile')).flush(
+      { detail: 'none' },
+      { status: 404, statusText: 'Not Found' },
+    );
+    (await nextRequest(http, '/api/portfolios/pf_b/live/rules')).flush({
+      portfolio_id: 'pf_b',
+      safeguards: [],
+      account_rules_on: false,
+      profile_set: false,
+      account_rules: [],
+    });
+    await settle();
+    const alert = el.querySelector('app-error-state');
+    expect(alert?.textContent).toContain('state is busy');
+    const retry = [...alert!.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Try again'),
+    )!;
+    retry.click();
+    await nextRequest(http, '/api/portfolios/pf_b/live/stage');
+  });
+
   it('lists the eight steps in order with done or not and a link', async () => {
     rememberPreview('pf_b', '2026-09-27T10:00:00Z');
     const el = await render();
     await answerBroker();
+    expect(el.querySelector('app-error-state')).toBeNull();
     const steps = [...el.querySelectorAll('li.step')];
     expect(steps.map((s) => s.getAttribute('data-step'))).toEqual([
       'gateway',

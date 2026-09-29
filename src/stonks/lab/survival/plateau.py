@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Collection, Mapping
-from typing import Any
+from typing import Any, TypeGuard
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
@@ -185,10 +185,12 @@ class PlateauTest:
             log_prefix="plateau",
         )
         head, rest = results[0], results[1:]
-        if not head.ok or head.objective_score is None:
+        if not head.ok or not _finite(head.objective_score):
             notes.insert(0, f"tuned params failed to backtest: {head.error}")
             return SurvivalReport(self.id, False, metrics, "; ".join(notes))
-        scored = [r for r in rest if r.ok and r.objective_score is not None]
+        # a NaN score is a failed neighbour: in a median it would make every
+        # gate below compare False and pass
+        scored = [r for r in rest if r.ok and _finite(r.objective_score) and _finite(r.sharpe)]
         metrics["n_neighbours"] = float(len(scored))
         metrics["n_failed_neighbours"] = float(len(rest) - len(scored))
         best_train, best_oos = float(head.objective_score), float(head.sharpe)
@@ -256,6 +258,10 @@ class PlateauTest:
         if ratio is not None:
             out["robustness_ratio"] = ratio
         return out
+
+
+def _finite(value: float | None) -> TypeGuard[float]:
+    return value is not None and math.isfinite(value)
 
 
 def _train_ratio(best: float, median: float, maximize: bool) -> float | None:

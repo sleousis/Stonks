@@ -27,7 +27,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 from stonks.core.types import Order
 from stonks.production.rules import RiskAdjustment, RiskContext, RiskRule, register_rule
-from stonks.production.rules._common import book_value, scale_opens, settings_of
+from stonks.production.rules._common import account_value, scale_opens, settings_of
 
 Schedule = tuple[tuple[float, float], ...]
 
@@ -100,7 +100,7 @@ class DrawdownScaling(RiskRule):
         if settings is None or settings.schedule is None:
             return list(orders), []
         curve = [v for d, v in ctx.equity_curve if ctx.as_of is None or d <= ctx.as_of]
-        value = book_value(ctx)
+        value = account_value(ctx)  # the curve is the whole account's
         if value is None:  # a holding has no mark: no fake drawdown (BE-45)
             return list(orders), []
         curve.append(value)

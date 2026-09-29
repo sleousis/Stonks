@@ -169,6 +169,24 @@ describe('JobsService', () => {
     expect(handle.error()).toBeNull();
   });
 
+  it('says so when the server stops following a job that never finished', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: sseBody([
+        event('status', { progress: 0.2 }),
+        event('end', { progress: 0.2, reason: 'untracked' }),
+      ]),
+    });
+
+    const handle = jobs.track('j1');
+    await handle.finished;
+    await tick();
+
+    expect(handle.done()).toBe(true);
+    expect(handle.error()).toContain('lost track');
+  });
+
   it('reports an error after repeated poll failures', async () => {
     fetchMock.mockRejectedValue(new TypeError('network'));
     const handle = jobs.track('j1');

@@ -97,3 +97,16 @@ def test_sources_are_counted_and_empty_is_fine():
     assert r.sources == {"manual": 5, "broker": 1}
     empty = behaviour_report([])
     assert empty.trades == 0 and empty.win_rate is None
+
+
+def test_a_split_between_entry_and_exit_rescales_the_open_lot():
+    """10 shares bought at 100, a 2:1 split, 20 sold at 55: one winning
+    trip of 20 shares from 50, not half a trip and a phantom short."""
+    from datetime import date
+
+    from stonks.core.corporate_actions import Split
+
+    fills = [_f(1, "buy", 10, 100.0, T0), _f(2, "sell", 20, 55.0, T0 + timedelta(days=10))]
+    r = behaviour_report(fills, splits=[Split("UP.US", date(2026, 3, 5), 2.0)])
+    assert r.trades == 1 and r.open_positions == 0
+    assert r.total_pnl == pytest.approx(20 * (55.0 - 50.0))

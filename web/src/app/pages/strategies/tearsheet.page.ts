@@ -108,7 +108,11 @@ export class TearsheetPage {
     this.sheet.hasValue() ? curveSummary(this.sheet.value().curve) : null,
   );
   /** A name to read, not the registry id (UX-27). */
-  protected readonly displayName = computed(() => strategyDisplayName(this.id()));
+  protected readonly displayName = computed(() =>
+    strategyDisplayName(this.id(), {
+      starter: this.sheet.hasValue() ? this.sheet.value().strategy.starter : null,
+    }),
+  );
   protected readonly tests = computed(() =>
     this.sheet.hasValue()
       ? this.sheet.value().strategy.survival_reports.map((r) => ({

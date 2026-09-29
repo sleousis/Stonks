@@ -17,6 +17,7 @@ const ORDER: OrderView = {
   limit_price: null,
   broker_order_id: null,
   strategy_id: null,
+  strategy_name: null,
   tick_id: null,
   created_at: '2026-09-25T20:45:00Z',
   updated_at: '2026-09-25T20:45:00Z',
@@ -54,6 +55,27 @@ describe('OrderChangeSheet', () => {
     expect(http.match(() => true)).toHaveLength(0);
     [...form().querySelectorAll('button')].find((b) => b.textContent?.includes('Keep'))!.click();
     expect(await result).toBeNull();
+  });
+
+  it('cannot be closed while the change is on its way, and resolves with the new order', async () => {
+    const result = fixture.componentInstance.open(ORDER, false);
+    fixture.detectChanges();
+    const reason = form().querySelector<HTMLTextAreaElement>('#co-reason')!;
+    reason.value = 'smaller';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    form().querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    const req = await nextRequest(http, '/api/orders/mk1/change', 'POST');
+    fixture.detectChanges();
+    // Keep the order and Escape do nothing now: the server is already changing it.
+    const keep = [...form().querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Keep'),
+    )!;
+    expect(keep.disabled).toBe(true);
+    (fixture.componentInstance as unknown as { close(r: null): void }).close(null);
+    const placed = { order: { ...ORDER, client_id: 'mk2', quantity: 8 } };
+    req.flush(placed);
+    expect(await result).toEqual(placed);
   });
 
   it('shows a failure that is not a refusal', async () => {

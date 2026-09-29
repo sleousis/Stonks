@@ -36,6 +36,7 @@ import type {
   PriceMarker,
   PriceReadout,
 } from './chart-engine';
+import { newCandleWindow } from './chart-engine';
 
 const LOWER_PANE_STRETCH = 0.35;
 
@@ -312,7 +313,7 @@ class LightweightPriceChart implements PriceChartHandle {
   }
 
   setData(data: PriceChartData): void {
-    const firstLoad = this.data.candles.length === 0 || this.data.candles[0] !== data.candles[0];
+    const firstLoad = newCandleWindow(this.data.candles, data.candles);
     this.data = data;
     this.byTime = new Map(data.candles.map((c) => [c.time, c]));
     this.candles.setData(

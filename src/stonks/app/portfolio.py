@@ -19,13 +19,21 @@ from stonks.accounts import AccountsError, NotFound, PortfolioRepository, owned_
 from stonks.accounts import Portfolio as AccountPortfolio
 from stonks.accounts.models import DEFAULT_PORTFOLIO_ID
 from stonks.app.context import AppContext
-from stonks.app.cost_basis import FillLot, average_costs
+from stonks.app.cost_basis import FillLot, SplitEvent, average_costs
 from stonks.app.errors import NotFoundError, ValidationError
 from stonks.app.pagination import Page
 from stonks.app.serialize import finite
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
+from stonks.core.options import is_option_id
 from stonks.production.ledger import ledger_filter
+from stonks.production.live.stages import (
+    DEFAULT_STAGE,
+    STAGES,
+    LiveStage,
+    stages_enabled,
+    trades_real_money,
+)
 from stonks.production.pnl import day_change
 
 #: Reporting currency when the held instruments don't agree on one (or the
@@ -40,6 +48,11 @@ class PositionView(BaseModel):
     price_date: date | None
     market_value: float | None
     weight: float | None
+    multiplier: float = Field(
+        default=1.0,
+        description="Units per contract: 1 for a stock, 100 for a standard option. price and "
+        "avg_cost are per unit; market_value, cost_basis and unrealized_pnl count it.",
+    )
     currency: str | None = Field(
         default=None, description="The instrument's trading currency; null when unknown."
     )
@@ -48,9 +61,11 @@ class PositionView(BaseModel):
         description="Average cost per share from the fill history (weighted average, fees "
         "included); null when the ledger has no fills for the position.",
     )
-    cost_basis: float | None = Field(default=None, description="avg_cost * quantity.")
+    cost_basis: float | None = Field(default=None, description="avg_cost * quantity * multiplier.")
     unrealized_pnl: float | None = Field(
-        default=None, description="(price - avg_cost) * quantity at the latest stored close."
+        default=None,
+        description="(price - avg_cost) * quantity * multiplier at the latest stored close "
+        "(an option's latest quote mark).",
     )
     unrealized_pnl_pct: float | None = Field(
         default=None, description="unrealized_pnl / |cost_basis| (0.05 = +5%)."
@@ -250,6 +265,11 @@ class TradingModeView(BaseModel):
     trading: Trading = Field(
         description="paper: simulated fills or a paper broker account. live: real money."
     )
+    live_stage: LiveStage = Field(
+        default="sim_paper",
+        description="Where the portfolio stands on the way to real money. A broker portfolio "
+        "trades real money only at live_small or live_scale.",
+    )
     broker: BrokerKind = Field(
         description="simulated (the Stonks ledger), alpaca (the configured account, default "
         "portfolio only), ibkr (the IB Gateway that serves the default portfolio) or "
@@ -267,6 +287,9 @@ class PortfolioSummaryView(BaseModel):
     initial_cash: float | None
     broker_connection_id: str | None
     trading: Trading
+    #: Where the portfolio stands on the way to real money (``sim_paper``,
+    #: ``broker_paper``, ``live_small``, ``live_scale``).
+    live_stage: LiveStage = "sim_paper"
     created_at: datetime
     #: The portfolio reads use when no ``portfolio_id`` is sent.
     is_default: bool = False
@@ -306,7 +329,8 @@ class PortfolioService:
         require(principal, Permission.READ)
         with self._ctx.state() as state:
             books = PortfolioRepository(state).list(principal.scope)
-        modes = {m.portfolio_id: m for m in self._modes(books)}
+            stages = _stages(state, books)
+        modes = {m.portfolio_id: m for m in self._modes(books, stages)}
         open_books = sorted(
             (p for p in books if p.status != "archived"),
             key=lambda p: (p.id != DEFAULT_PORTFOLIO_ID, p.created_at, p.id),
@@ -322,6 +346,7 @@ class PortfolioService:
                 initial_cash=p.initial_cash,
                 broker_connection_id=p.broker_connection_id,
                 trading=modes[p.id].trading,
+                live_stage=modes[p.id].live_stage,
                 created_at=datetime.fromisoformat(p.created_at),
                 is_default=p.id == default_id,
             )
@@ -366,9 +391,12 @@ class PortfolioService:
         require(principal, Permission.READ)
         with self._ctx.state() as state:
             books = PortfolioRepository(state).list(principal.scope)
-        return self._modes(books)
+            stages = _stages(state, books)
+        return self._modes(books, stages)
 
-    def _modes(self, books: list[AccountPortfolio]) -> list[TradingModeView]:
+    def _modes(
+        self, books: list[AccountPortfolio], stages: dict[str, LiveStage]
+    ) -> list[TradingModeView]:
         from stonks.execution.brokers import broker_mode
 
         settings = self._ctx.settings
@@ -377,20 +405,28 @@ class PortfolioService:
         for p in books:
             trading: Trading
             broker: BrokerKind
+            stage = stages.get(p.id, DEFAULT_STAGE)
             if p.id == DEFAULT_PORTFOLIO_ID and brokers.kind in ("alpaca", "ibkr"):
                 # the one answer the order paths use (manual orders, step-up)
                 trading = "live" if broker_mode(settings) == "live" else "paper"
                 broker = brokers.kind
                 detail = _default_book_detail(settings, trading)
             elif p.kind == "broker":
-                trading, broker = "live", "connection"
-                detail = "mirrors a real broker account through its connection (read-only sync)"
+                # Real money follows the stage only (docs/design/vocabulary.md).
+                trading = "live" if trades_real_money(stage) else "paper"
+                broker = "connection"
+                detail = "mirrors a broker account through its connection (read-only sync)"
             else:
                 trading, broker = "paper", "simulated"
                 detail = "simulated fills on the Stonks ledger"
             out.append(
                 TradingModeView(
-                    portfolio_id=p.id, name=p.name, trading=trading, broker=broker, detail=detail
+                    portfolio_id=p.id,
+                    name=p.name,
+                    trading=trading,
+                    live_stage=stage,
+                    broker=broker,
+                    detail=detail,
                 )
             )
         return out
@@ -448,8 +484,15 @@ class PortfolioService:
             return self._with_base(empty, portfolio_id)
         row = rows[0]
         holdings: dict[str, float] = json.loads(row["positions_json"])
-        latest = self._latest_closes(list(holdings))
-        currencies = self._currencies(list(holdings))
+        options = [t for t in holdings if is_option_id(t)]
+        stocks = [t for t in holdings if t not in set(options)]
+        latest = self._latest_closes(stocks)
+        currencies = self._currencies(stocks)
+        multipliers: dict[str, float] = {}
+        if options:
+            marks, multipliers, option_ccy = self._option_marks(options)
+            latest.update(marks)
+            currencies.update(option_ccy)
         costs = self._average_costs(portfolio_id)
         cash = float(row["cash"])
 
@@ -458,7 +501,15 @@ class PortfolioService:
             qty = float(holdings[ticker])
             price, price_date = latest.get(ticker, (None, None))
             positions.append(
-                _position(ticker, qty, price, price_date, costs.get(ticker), currencies.get(ticker))
+                _position(
+                    ticker,
+                    qty,
+                    price,
+                    price_date,
+                    costs.get(ticker),
+                    currencies.get(ticker),
+                    multipliers.get(ticker, 1.0),
+                )
             )
         positions_value = sum(p.market_value or 0.0 for p in positions)
         total = cash + positions_value
@@ -556,21 +607,36 @@ class PortfolioService:
             where, params = ledger_filter(state, "fills", portfolio_id, alias="f")
             rows = state.sql(
                 f"""
-                SELECT f.ticker, f.quantity, f.price, f.fee, o.side
+                SELECT f.ticker, f.quantity, f.price, f.fee, f.filled_at, o.side
                   FROM fills f JOIN orders o ON o.client_id = f.order_client_id
                  WHERE {where}
                  ORDER BY f.filled_at, f.id
                 """,
                 params,
             )
-        return average_costs(
-            FillLot(
-                ticker=r["ticker"],
-                quantity=float(r["quantity"]) * (1 if r["side"] == "buy" else -1),
-                price=float(r["price"]),
-                fee=float(r["fee"] or 0.0),
+            # the splits the book went through, so the average follows the shares
+            split_rows = state.sql(
+                "SELECT ticker, ex_date, value FROM corporate_action_ledger"
+                " WHERE portfolio_id = ? AND kind = 'split' ORDER BY ex_date",
+                [portfolio_id],
             )
-            for r in rows
+        return average_costs(
+            (
+                FillLot(
+                    ticker=r["ticker"],
+                    quantity=float(r["quantity"]) * (1 if r["side"] == "buy" else -1),
+                    price=float(r["price"]),
+                    fee=float(r["fee"] or 0.0),
+                    day=datetime.fromisoformat(str(r["filled_at"])).date(),
+                )
+                for r in rows
+            ),
+            [
+                SplitEvent(
+                    r["ticker"], date.fromisoformat(str(r["ex_date"])[:10]), float(r["value"])
+                )
+                for r in split_rows
+            ],
         )
 
     def _currencies(self, tickers: list[str]) -> dict[str, str]:
@@ -590,6 +656,49 @@ class PortfolioService:
             for r in df.to_dict("records")
             if r["currency"]
         }
+
+    def _option_marks(
+        self, contract_ids: list[str]
+    ) -> tuple[dict[str, tuple[float, date]], dict[str, float], dict[str, str]]:
+        """Each held option's latest quote mark (the mid, else the last trade)
+        per share with its day, its multiplier and its currency. The
+        multiplier comes from ``option_contracts`` when the lake knows the
+        contract, else from the id; an unquoted contract stays unpriced."""
+        from stonks.core.instruments import InstrumentBook
+
+        multipliers = {cid: InstrumentBook().multiplier(cid) for cid in contract_ids}
+        marks: dict[str, tuple[float, date]] = {}
+        currencies: dict[str, str] = {}
+        with self._ctx.lake() as lake:
+            contracts = lake.sql(
+                "SELECT contract_id, multiplier, currency FROM option_contracts"
+                " WHERE contract_id = ANY(?)",
+                [contract_ids],
+            )
+            quotes = lake.sql(
+                """
+                SELECT contract_id, as_of, bid, ask, "last"
+                  FROM option_quotes
+                 WHERE contract_id = ANY(?)
+                   AND (("last" IS NOT NULL) OR (bid IS NOT NULL AND ask IS NOT NULL))
+                QUALIFY ROW_NUMBER() OVER (
+                    PARTITION BY contract_id ORDER BY as_of DESC, source) = 1
+                """,
+                [contract_ids],
+            )
+        for r in contracts.to_dict("records"):
+            multipliers[str(r["contract_id"])] = float(r["multiplier"])
+            if r["currency"]:
+                currencies[str(r["contract_id"])] = str(r["currency"]).upper()
+        for r in quotes.to_dict("records"):
+            bid, ask, last = (finite(r[k]) for k in ("bid", "ask", "last"))
+            mark = (bid + ask) / 2.0 if bid is not None and ask is not None else last
+            if mark is None:
+                continue
+            day = r["as_of"]
+            day = day.date() if isinstance(day, datetime) else day
+            marks[str(r["contract_id"])] = (mark, day)
+        return marks, multipliers, currencies
 
     def _latest_closes(self, tickers: list[str]) -> dict[str, tuple[float, date]]:
         """The latest close per ticker in the major currency unit: the
@@ -625,19 +734,22 @@ def _position(
     price_date: date | None,
     avg_cost: float | None,
     currency: str | None,
+    multiplier: float = 1.0,
 ) -> PositionView:
-    cost_basis = None if avg_cost is None else avg_cost * qty
+    units = qty * multiplier
+    cost_basis = None if avg_cost is None else avg_cost * units
     pnl = pnl_pct = None
     if avg_cost is not None and price is not None:
-        pnl = (price - avg_cost) * qty
+        pnl = (price - avg_cost) * units
         pnl_pct = pnl / abs(cost_basis) if cost_basis else None
     return PositionView(
         ticker=ticker,
         quantity=qty,
         price=price,
         price_date=price_date,
-        market_value=None if price is None else qty * price,
+        market_value=None if price is None else units * price,
         weight=None,
+        multiplier=multiplier,
         currency=currency,
         avg_cost=avg_cost,
         cost_basis=cost_basis,
@@ -672,3 +784,14 @@ def _snapshot_day(row: Any) -> date | None:
     if not raw:
         return None
     return date.fromisoformat(str(raw)[:10])
+
+
+def _stages(state: Any, books: Sequence[AccountPortfolio]) -> dict[str, LiveStage]:
+    """Each book's live stage (``sim_paper`` before migration 037)."""
+    if not books or not stages_enabled(state):
+        return {}
+    ids = [p.id for p in books]
+    rows = state.sql(
+        f"SELECT id, live_stage FROM portfolios WHERE id IN ({', '.join('?' * len(ids))})", ids
+    )
+    return {r["id"]: r["live_stage"] for r in rows if r["live_stage"] in STAGES}

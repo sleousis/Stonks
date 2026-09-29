@@ -1,9 +1,12 @@
+import { strategyDisplayName } from '../../shared/strategy-names';
 import { formatNumber, formatPercent } from '../../core/format/format';
 
 /** An R multiple ("+2.0R"), or "n/a" when no stop is known. */
 export function formatR(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return 'n/a';
-  return `${value > 0 ? '+' : ''}${value.toFixed(1)}R`;
+  // Round first, so a tiny loss reads 0.0R, never -0.0R.
+  const r = Math.round(value * 10) / 10 || 0;
+  return `${r > 0 ? '+' : ''}${r.toFixed(1)}R`;
 }
 
 /** An excursion or efficiency as a percent, or "n/a". */
@@ -38,11 +41,14 @@ export function exitLabel(trigger: string | null | undefined, open: boolean): st
   return EXITS[trigger] ?? trigger.replace(/_/g, ' ');
 }
 
-/** The sleeve's name: a strategy id, or "By hand" for manual trades. */
-export function sleeveLabel(sleeve: string): string {
+/**
+ * The sleeve's name: the strategy's display name (its title when the API
+ * sends one as `sleeve_name`), or "By hand" for manual trades.
+ */
+export function sleeveLabel(sleeve: string, name?: string | null): string {
   if (sleeve === 'manual') return 'By hand';
   if (sleeve === 'unattributed') return 'No strategy';
-  return sleeve;
+  return strategyDisplayName(sleeve, { name });
 }
 
 export function planLabel(followed: boolean | null | undefined): string {

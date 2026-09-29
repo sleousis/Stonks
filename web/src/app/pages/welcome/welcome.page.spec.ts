@@ -7,6 +7,8 @@ import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
+import { book } from '../../../testing/portfolio-fixtures';
+import { ToastService } from '../../core/notify/toast.service';
 import { WelcomePage } from './welcome.page';
 import { currentStep, parseTickerText, progressText } from './welcome-steps';
 
@@ -47,7 +49,13 @@ describe('WelcomePage', () => {
 
   afterEach(() => http.verify());
 
-  async function render(me = TRADER, view = guide({ account: 'done' }), step?: string) {
+  async function render(
+    me = TRADER,
+    view = guide({ account: 'done' }),
+    step?: string,
+    books: unknown[] = [],
+    strategyRows: unknown[] = [],
+  ) {
     const session = TestBed.inject(SessionService);
     const loading = session.load();
     (await nextRequest(http, '/api/auth/me')).flush(me);
@@ -55,7 +63,7 @@ describe('WelcomePage', () => {
     const fixture = TestBed.createComponent(WelcomePage);
     if (step) fixture.componentRef.setInput('step', step);
     fixture.detectChanges();
-    (await nextRequest(http, '/api/portfolios')).flush(page([]));
+    (await nextRequest(http, '/api/portfolios')).flush(page(books));
     (await nextRequest(http, '/api/onboarding')).flush(view);
     if (me.role === 'admin') {
       (await nextRequest(http, '/api/onboarding/system')).flush({
@@ -69,11 +77,13 @@ describe('WelcomePage', () => {
       });
     }
     const strategies = http.match((r) => r.url.split('?')[0] === '/api/strategies');
-    for (const r of strategies) r.flush(page([]));
+    const flushStrategies = (r: { request: { urlWithParams: string }; flush(b: unknown): void }) =>
+      r.flush(page(r.request.urlWithParams.includes('status=active') ? strategyRows : []));
+    for (const r of strategies) flushStrategies(r);
     if (!strategies.length) {
       await tick(5);
       for (const r of http.match((x) => x.url.split('?')[0] === '/api/strategies')) {
-        r.flush(page([]));
+        flushStrategies(r);
       }
     }
     await tick(5);
@@ -86,6 +96,43 @@ describe('WelcomePage', () => {
     if (!b) throw new Error(`no "${text}" button`);
     return b;
   }
+
+  it('follows on the portfolio the select shows, and names the strategy in words', async () => {
+    const books = [
+      book({ id: 'pf_a', name: 'Alpha', is_default: true }),
+      book({ id: 'pf_b', name: 'Beta' }),
+    ];
+    const row = { id: 'momentum_3fa9c21b', status: 'active', class_path: 'x:Momentum' };
+    const fixture = await render(TRADER, guide({ account: 'done' }), 'follow', books, [row]);
+    const el: HTMLElement = fixture.nativeElement;
+    const choose = (sel: string, value: string) => {
+      const s = el.querySelector<HTMLSelectElement>(sel)!;
+      s.value = value;
+      s.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+    };
+    const radio = (text: string) =>
+      [...el.querySelectorAll<HTMLLabelElement>('label.mode')]
+        .find((l) => l.textContent?.includes(text))!
+        .querySelector('input')!;
+    choose('#wf-strategy', 'momentum_3fa9c21b');
+    radio('Paper').click();
+    fixture.detectChanges();
+    choose('#wf-book', 'pf_b');
+    radio('Alerts only').click();
+    fixture.detectChanges();
+    radio('Paper').click();
+    fixture.detectChanges();
+    const shown = el.querySelector<HTMLSelectElement>('#wf-book')!.value;
+    const toast = vi.spyOn(TestBed.inject(ToastService), 'success');
+    el.querySelector<HTMLFormElement>('form.inline-form')!.dispatchEvent(new Event('submit'));
+    const req = await nextRequest(http, '/api/subscriptions', 'POST');
+    expect(req.request.body.portfolio_id).toBe(shown);
+    req.flush({});
+    await tick(5);
+    expect(toast.mock.calls[0]?.[0]).not.toContain('momentum_3fa9c21b');
+    for (const r of http.match((x) => x.url.split('?')[0] === '/api/onboarding')) r.flush(guide());
+  });
 
   it('lists the five steps and opens the first one still to do', async () => {
     const fixture = await render();

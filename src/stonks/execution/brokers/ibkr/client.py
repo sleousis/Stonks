@@ -17,8 +17,9 @@ text), :class:`IbConnectionError` (the socket is gone) or ``TimeoutError``
 
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Literal, Protocol, runtime_checkable
 
@@ -174,6 +175,47 @@ class IbExecution:
     account: str | None = None
     commission: float | None = None
     commission_currency: str | None = None
+
+
+#: An IBKR execution id: two hex groups, a two digit group and the
+#: correction number. A correction repeats the id with a higher last group.
+_EXEC_ID = re.compile(r"^([0-9A-Fa-f]{8}\.[0-9A-Fa-f]{8}\.[0-9A-Fa-f]{2}\.)(\d{2})$")
+
+
+def execution_key(exec_id: str) -> str:
+    """The id of the execution ``exec_id`` corrects, or ``exec_id`` itself:
+    an IBKR correction changes only the digits after the last period, so
+    every version of one execution maps to its first version's id."""
+    m = _EXEC_ID.match(exec_id)
+    return f"{m.group(1)}01" if m is not None else exec_id
+
+
+def _correction(exec_id: str) -> int:
+    m = _EXEC_ID.match(exec_id)
+    return int(m.group(2)) if m is not None else 0
+
+
+def merge_corrections(executions: Sequence[IbExecution]) -> list[IbExecution]:
+    """One execution per :func:`execution_key`, in first-seen order: the
+    latest correction's values under the first version's id, so a
+    correction replaces what it corrects instead of adding to it. A
+    commission not reported for the correction yet keeps the earlier one."""
+    merged: dict[str, IbExecution] = {}
+    version: dict[str, int] = {}
+    for e in executions:
+        key = execution_key(e.exec_id)
+        number = _correction(e.exec_id)
+        known = merged.get(key)
+        if known is not None and number < version[key]:
+            continue
+        latest = replace(e, exec_id=key)
+        if known is not None and latest.commission is None and known.commission is not None:
+            latest = replace(
+                latest, commission=known.commission, commission_currency=known.commission_currency
+            )
+        merged[key] = latest
+        version[key] = number
+    return list(merged.values())
 
 
 @dataclass(frozen=True)

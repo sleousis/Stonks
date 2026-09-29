@@ -559,6 +559,8 @@ class JobRunner:
             if deadline is None:
                 # Only an offloaded job can still finish: a worker runs it.
                 if not self._lab_executor.tracks(job_id):
+                    # The worker may have finished it since the last read.
+                    job = self._store.get(job_id)
                     break
                 time.sleep(0.05)
             elif time.monotonic() < deadline:

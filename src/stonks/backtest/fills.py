@@ -140,7 +140,8 @@ def lagged_market_stats(bars: pd.DataFrame, spec: MarketStatsSpec) -> pd.DataFra
 
     High / low / close are rescaled by ``adj_close / close`` and volume by
     its inverse, so a split inside the window doesn't read as volatility,
-    spread or a drop in volume (RS-20)."""
+    spread or a drop in volume (RS-20). ADV is then expressed in the fill
+    bar's raw shares, the units of the order it caps and prices."""
     out = pd.DataFrame(index=bars.index, columns=["adv", "sigma_daily", "half_spread_bps"])
     if bars.empty:
         return out.astype(float)
@@ -174,6 +175,10 @@ def lagged_market_stats(bars: pd.DataFrame, spec: MarketStatsSpec) -> pd.DataFra
     else:
         result["half_spread_bps"] = np.nan
     lagged = result.groupby(tickers, sort=False, group_keys=False).shift(1)
+    # ADV is in the shares of the last adjusted bar; express it in the fill
+    # bar's own shares, which the order quantity is in. Only the splits
+    # between the window and the fill bar remain, so no later split leaks in.
+    lagged["adv"] = lagged["adv"].astype(float) * factor
     return lagged.reindex(bars.index).astype(float)
 
 

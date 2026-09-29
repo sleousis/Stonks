@@ -1,18 +1,22 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+
+import { paperStampLabel } from '../live-stages';
 
 /**
  * A rubber-stamp mark for where money moves: a grey "PAPER" for simulated
- * money, a brass "LIVE" for real money. Brass means real money everywhere in
+ * money ("BROKER PAPER" with `stage` at Broker paper), a brass "LIVE" for
+ * real money. Brass means real money everywhere in
  * the console, so use this (not a pill) for broker, portfolio and order
  * ticket modes.
  *
  *   <app-mode-stamp [live]="!broker.paper" />
+ *   <app-mode-stamp [live]="p.trading === 'live'" [stage]="p.live_stage" />
  */
 @Component({
   selector: 'app-mode-stamp',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `<span class="stamp" [attr.data-mode]="live() ? 'live' : 'paper'"
-    >{{ live() ? 'LIVE' : 'PAPER'
+    >{{ live() ? 'LIVE' : paperLabel()
     }}<span class="visually-hidden">{{ live() ? ', real money' : ', simulated money' }}</span></span
   >`,
   styles: `
@@ -44,4 +48,7 @@ import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 })
 export class ModeStamp {
   readonly live = input.required<boolean>();
+  /** The portfolio's stage: Broker paper reads "BROKER PAPER" in the paper style. */
+  readonly stage = input<string | null | undefined>(null);
+  protected readonly paperLabel = computed(() => paperStampLabel(this.stage()));
 }

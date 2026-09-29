@@ -22,8 +22,8 @@ Safety, in the order every call meets it (:meth:`IbkrBroker.ensure_ready`):
 4. calls that change orders also need ``allow_live`` on a live gateway;
 5. an order that may open a position at a live gateway also needs the
    portfolio's live stage (``stage_lookup``) at ``live_small`` or higher
-   (roadmap 19.9). Closes and cancels still go out at a lower stage, so a
-   demoted book can wind down (P28).
+   (roadmap 19.9). Closes (covers of shorts too) and cancels still go out
+   at a lower stage, so a demoted book can wind down (P28).
 
 Idempotency: IBKR does not dedupe on ``orderRef``, so :meth:`place_order`
 first looks the client id up (open orders, completed orders, executions)
@@ -106,7 +106,7 @@ from stonks.logging import get_logger
 from stonks.options.chain import OptionQuote
 from stonks.options.live.events import OptionEvent
 from stonks.options.live.gate import OptionsGate
-from stonks.production.live.stages import REAL_MONEY
+from stonks.production.live.stage_guard import ensure_stage_allows
 
 _log = get_logger("stonks.execution.brokers.ibkr")
 
@@ -290,23 +290,19 @@ class IbkrBroker:
             )
         return account
 
+    @property
+    def real_money(self) -> bool:
+        """A live gateway trades real money (the stage guard reads it)."""
+        return self.mode == "live"
+
     def _ensure_stage_allows(self, order: Order) -> None:
         """At a live gateway an order that may open needs the portfolio at
         ``live_small`` or higher. A close (a sell that does not open a
-        short) goes out at any stage."""
-        if self.mode != "live" or (order.side == "sell" and order.position_effect != "open"):
+        short, or a buy marked as covering one) goes out at any stage. The
+        one rule for every real-money broker (``production.live.stage_guard``)."""
+        if self.mode != "live":
             return
-        try:
-            stage = self._stage_lookup() if self._stage_lookup is not None else None
-        except Exception as exc:
-            raise LiveTradingRefusedError(
-                f"the portfolio's live stage could not be read ({exc}): refusing to open"
-            ) from exc
-        if stage not in REAL_MONEY:
-            raise LiveTradingRefusedError(
-                f"real-money orders that open need the portfolio at stage live_small or higher"
-                f" (it is {stage or 'unknown'})"
-            )
+        ensure_stage_allows(order, self._stage_lookup)
 
     def login_check(self) -> LoginCheck:
         """Connect, check the account and read the server time. The health
@@ -476,7 +472,17 @@ class IbkrBroker:
     def cancel_order(self, client_id: str) -> bool:
         self._ensure_may_trade()
         ref = self.broker_ref(client_id)
-        trade = next((t for t in self._open_trades() if t.order_ref == ref), None)
+        open_trades = self._open_trades()
+        trade = next((t for t in open_trades if t.order_ref == ref), None)
+        if trade is None:
+            # a combo leg lives in its BAG order: cancelling it cancels the combo
+            bag = option_broker.bag_ref(self, client_id)
+            trade = next(
+                (t for t in open_trades if t.order_ref == bag and t.contract.sec_type == "BAG"),
+                None,
+            )
+            if trade is not None:
+                ref = trade.order_ref
         if trade is None:
             return False
         if ibkr_state(trade.status, filled=trade.filled) in TERMINAL:
@@ -562,6 +568,11 @@ class IbkrBroker:
                 continue
             state = self._state_of(t, t.filled)
             if state in TERMINAL:
+                continue
+            if t.order_ref and t.contract.sec_type == "BAG" and t.contract.combo_legs:
+                # the ledger holds a combo as its legs (roadmap 17.8)
+                combo_id = self._client_id_for(t.order_ref)
+                out.extend(option_broker.bag_open_orders(self, t, combo_id, state))
                 continue
             out.append(
                 BrokerOpenOrder(

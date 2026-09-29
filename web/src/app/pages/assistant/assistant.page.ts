@@ -28,6 +28,7 @@ import {
   decideItem,
   fromHistory,
   pendingConfirm,
+  rejectPending,
   userItem,
 } from './chat-model';
 import { ChatStep } from './chat-step';
@@ -194,7 +195,9 @@ export class AssistantPage {
         void this.router.navigate(['/assistant'], { queryParams: { c: id } });
       }
       this.draft.set('');
-      this.items.update((items) => [...items, userItem(text)]);
+      // A new message rejects the action still waiting for a yes (the server
+      // does the same), so its card must not stay clickable.
+      this.items.update((items) => [...rejectPending(items), userItem(text)]);
       await this.follow((signal) => this.api.send(id!, text, signal));
     } catch {
       // Creating failed: the error interceptor showed the API's message.

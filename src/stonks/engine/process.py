@@ -62,7 +62,7 @@ from stonks.core.clock import SYSTEM_CLOCK, Clock
 from stonks.core.interval import Interval
 from stonks.core.protocols import Broker, Strategy
 from stonks.core.stream import StreamEvent
-from stonks.core.types import Order
+from stonks.core.types import Order, Portfolio
 from stonks.engine.control import EngineControl
 from stonks.engine.driver import BarClose, EventDriver
 from stonks.engine.monitor import EngineMonitor
@@ -276,7 +276,7 @@ class EngineProcess:
             [b.spec for b in self.books],
             lake,
             universe=self.universe,
-            portfolio=lambda book_id: self._brokers[book_id].fetch_portfolio(),
+            portfolio=self.book_portfolio,
             interval=interval,
             threshold=threshold,
             halts=halts,
@@ -301,6 +301,21 @@ class EngineProcess:
 
     def router(self, book_id: str) -> IntradayRouter:
         return self._routers[book_id]
+
+    def book_portfolio(self, book_id: str) -> Portfolio:
+        """What ``book_id`` holds. A simulated broker holds the book alone.
+        A real broker account can hold the owner's own shares and other
+        books' too, so the book sees only what its own fills bought
+        (``production.ownership.managed_view``): it never decides on,
+        exits or flattens a holding that is not its own."""
+        account = self._brokers[book_id].fetch_portfolio()
+        book = next(b for b in self.books if b.id == book_id)
+        if book.simulated:
+            return account
+        from stonks.production.ownership import managed_view, owned_positions
+
+        managed, _ = managed_view(account, owned_positions(self.state, book.portfolio_id))
+        return managed
 
     def start(self) -> StartReport:
         """Recover, reconcile, then open the routers. Raises
@@ -346,7 +361,11 @@ class EngineProcess:
                 setter(self.step.asset_classes)
             self._brokers[book.id] = broker
             self._routers[book.id] = IntradayRouter(
-                broker, self.state, portfolio_id=book.portfolio_id, clock=self.clock
+                broker,
+                self.state,
+                portfolio_id=book.portfolio_id,
+                clock=self.clock,
+                hold_working=not book.simulated,
             )
             for fill in ledger_fills(self.state, book.portfolio_id):
                 self.step.record_fill(book.id, fill.ticker, fill.strategy_id)
@@ -522,7 +541,7 @@ class EngineProcess:
         stale = self._stream_stale()
         for book in self.books:
             try:
-                portfolio = self._brokers[book.id].fetch_portfolio()
+                portfolio = self.book_portfolio(book.id)
                 value = _marked_value(portfolio.cash, portfolio.positions, marks)
                 equity = [(t, v) for t, v in self._equity[book.id] if t.date() == at.date()]
                 sent = [t for t in self._sent[book.id] if t.date() == at.date()]
@@ -604,7 +623,7 @@ class EngineProcess:
                 self._verdicts[book.id] = verdict
         if verdict is None or verdict.mode is None or not decision.orders:
             return list(decision.orders)
-        positions = self._brokers[book.id].fetch_portfolio().positions
+        positions = self.book_portfolio(book.id).positions
         kept, blocked = gate_event_orders(decision.orders, verdict, positions)
         if blocked:
             self.stats.orders_halted += len(blocked)
@@ -630,7 +649,7 @@ class EngineProcess:
             if rules is None or not rules.flatten_at_close:
                 continue
             rulebook = SessionRulebook(rules, halts=self.halts)
-            positions = self._brokers[book.id].fetch_portfolio().positions
+            positions = self.book_portfolio(book.id).positions
             orders = flatten_orders(
                 positions,
                 lambda t, rb=rulebook: rb.state(at, t, asset_class=classes.get(t)),
@@ -839,6 +858,9 @@ def build_engine(
             reference_prices=lake_reference_prices(lake),
             settings=settings.production.intraday_pnl,
             clock=clock,
+            # a real broker's account may hold the owner's own shares: the
+            # P&L sees the book's managed view, as book_portfolio does
+            managed=[b.portfolio_id for b in books if not b.simulated],
         )
     return EngineProcess(
         strategies={n: pool[n] for n in names},

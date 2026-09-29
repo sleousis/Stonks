@@ -14,6 +14,7 @@ from stonks.api.deps import (
 )
 from stonks.api.errors import PROBLEM_RESPONSES
 from stonks.api.routers._jobs_common import JOB_CREATED, accepted
+from stonks.app.errors import NotFoundError
 from stonks.app.jobs import Job
 from stonks.app.pagination import Page, page_of
 from stonks.app.universes import (
@@ -30,7 +31,8 @@ from stonks.app.universes import (
     UniverseUpdate,
     UniverseView,
 )
-from stonks.auth import Permission
+from stonks.auth import Permission, require
+from stonks.auth.principal import Principal
 from stonks.ingest.ensure import EnsureReport
 
 router = APIRouter(prefix="/api/universes", tags=["universes"], responses=PROBLEM_RESPONSES)
@@ -39,6 +41,32 @@ router = APIRouter(prefix="/api/universes", tags=["universes"], responses=PROBLE
 _lab = [Depends(require_permission(Permission.LAB_RUN))]
 #: Deleting one can break the lab runs and ticks that name it: admins only.
 _admin = [Depends(require_permission(Permission.STRATEGY_PROMOTE))]
+
+
+def _trading_universe(services: ServicesDep) -> str | None:
+    """The stored universe the production tick trades, if it names one."""
+    universe = services.context.settings.production.universe
+    return universe if isinstance(universe, str) else None
+
+
+def guard_trading_universe(services: ServicesDep, principal: Principal, universe_id: str) -> None:
+    """The trading universe decides what every book buys. Changing it is an
+    admin setting, so changing its definition is admin work too."""
+    if universe_id == _trading_universe(services):
+        require(principal, Permission.STRATEGY_PROMOTE)
+
+
+def _guard_trading_index(services: ServicesDep, principal: Principal, index_id: str) -> None:
+    """An index universe follows the constituents imported for its index."""
+    trading = _trading_universe(services)
+    if trading is None:
+        return
+    try:
+        definition = services.universes.get(trading)
+    except NotFoundError:
+        return
+    if definition.kind == "index" and definition.spec.get("index_id") == index_id:
+        require(principal, Permission.STRATEGY_PROMOTE)
 
 
 @router.get("", response_model=Page[UniverseView], operation_id="listUniverses")
@@ -54,9 +82,12 @@ def list_universes(services: ServicesDep, page: PageDep) -> Page[UniverseView]:
     operation_id="createUniverse",
     dependencies=_lab,
 )
-def create_universe(body: UniverseCreate, services: ServicesDep) -> UniverseView:
+def create_universe(
+    body: UniverseCreate, services: ServicesDep, principal: PrincipalDep
+) -> UniverseView:
     """Store a universe definition (409 when the id exists). It has no
     members until its first refresh."""
+    guard_trading_universe(services, principal, body.id)
     return services.universes.create(body)
 
 
@@ -66,9 +97,13 @@ def create_universe(body: UniverseCreate, services: ServicesDep) -> UniverseView
     operation_id="importIndexHistory",
     dependencies=_lab,
 )
-def import_index_history(body: IndexHistoryImport, services: ServicesDep) -> IndexHistoryView:
+def import_index_history(
+    body: IndexHistoryImport, services: ServicesDep, principal: PrincipalDep
+) -> IndexHistoryView:
     """Import an index's constituents and changes (CSV or JSON) for
-    ``index`` universes to rebuild membership from."""
+    ``index`` universes to rebuild membership from. The index the trading
+    universe follows needs ``strategy.promote``."""
+    _guard_trading_index(services, principal, body.index_id)
     return services.universes.import_index_history(body)
 
 
@@ -112,9 +147,13 @@ def get_universe(universe_id: str, services: ServicesDep) -> UniverseView:
     operation_id="updateUniverse",
     dependencies=_lab,
 )
-def update_universe(universe_id: str, body: UniverseUpdate, services: ServicesDep) -> UniverseView:
+def update_universe(
+    universe_id: str, body: UniverseUpdate, services: ServicesDep, principal: PrincipalDep
+) -> UniverseView:
     """Replace the definition. The members stay as they are until the next
-    refresh."""
+    refresh. The trading universe (``[production].universe``) needs
+    ``strategy.promote``."""
+    guard_trading_universe(services, principal, universe_id)
     return services.universes.update(universe_id, body)
 
 

@@ -157,6 +157,25 @@ describe('StatementImportPage', () => {
     expect(root.textContent).toContain('Old broker: 1 added');
   });
 
+  it('never imports settings other than the previewed ones', async () => {
+    const fixture = await render();
+    const root = fixture.nativeElement as HTMLElement;
+    await pick(fixture);
+    button(root, 'Preview').click();
+    (await nextRequest(http, '/api/statement-imports/preview', 'POST')).flush(PREVIEW);
+    await tick();
+    fixture.detectChanges();
+    const name = root.querySelector('#imp-name') as HTMLInputElement;
+    name.value = 'Another broker';
+    name.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    button(root, 'Import 1 new rows').click();
+    await tick();
+    fixture.detectChanges();
+    http.expectNone({ method: 'POST', url: '/api/statement-imports' });
+    expect(root.textContent).toContain('Preview again');
+  });
+
   it('shows a refusal where the trader is looking', async () => {
     const fixture = await render();
     const root = fixture.nativeElement as HTMLElement;

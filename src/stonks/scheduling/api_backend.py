@@ -69,8 +69,9 @@ def tick_job_outcome(
     """Interpret a finished tick job (API or JobRunner).
 
     A failed tick raised inside ``run_tick``, which already alerted;
-    requests rejected before the tick started (backdated, bad universe)
-    did not."""
+    requests rejected before the tick started (backdated, bad universe) and
+    failures before the tick recorded its row (``PreTickError``: the plan,
+    a locked database) did not."""
     if job_status == "succeeded" and result is not None:
         detail = {
             "job_id": job_id,
@@ -83,7 +84,9 @@ def tick_job_outcome(
     error = job_error or f"tick job {job_status}"
     if _BACKDATED in error:
         return JobOutcome("skipped", {"reason": "backdated", "job_id": job_id, "error": error})
-    pre_tick = error.startswith(("ValidationError", "ConflictError", "NotFoundError"))
+    pre_tick = error.startswith(
+        ("ValidationError", "ConflictError", "NotFoundError", "PreTickError")
+    )
     return JobOutcome("failed", {"job_id": job_id, "error": error}, alerted=not pre_tick)
 
 

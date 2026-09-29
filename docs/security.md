@@ -99,9 +99,11 @@ Some actions need a second factor checked in the last 10 minutes: user admin, a 
 
 Create one in the browser with `POST /api/auth/tokens` (name, scopes, optional expiry in days). The token looks like `stk_<id>_<secret>` and is shown once. Only its SHA-256 is stored. List with `GET /api/auth/tokens`, revoke with `DELETE /api/auth/tokens/{id}`. Use it as `Authorization: Bearer stk_...`, for example in the MCP server's `STONKS_MCP_TOKEN`.
 
+A token's MCP tool groups (`toolsets`) are not a boundary. They only pick which tools `stonks mcp` offers, and the REST API does not check them. Scopes and the user's role are the boundary. See [docs/mcp.md](mcp.md).
+
 ## Job event streams
 
-A browser `EventSource` cannot send a header. So it asks `POST /api/jobs/{id}/stream-token` for a short token and puts it in the URL. The token opens that one job's stream for a few minutes. It names the user who asked for it and stops working if that user is disabled.
+A browser `EventSource` cannot send a header. So it asks `POST /api/jobs/{id}/stream-token` for a short token and puts it in the URL. The token opens that one job's stream for a few minutes. It names the user who asked for it and stops working if that user is disabled. The API logs the path only, and Caddy's access log replaces the `token` query value with `REDACTED`.
 
 ## The old shared token
 
@@ -133,7 +135,7 @@ The API answers only requests whose `Host` is a loopback name, `[api].host` (whe
 
 ## CORS
 
-Only `[api].ui_origin`, the Angular dev server (`http://localhost:4200`), may call the API from another origin. It may send the cookie and `X-CSRF-Token`. The built console is served from the same origin and needs no CORS.
+Only `[api].ui_origin`, the Angular dev server (`http://localhost:4200`), may call the API from another origin, and only in the dev profile (`STONKS_PROFILE=dev` sets `[api].cors_ui_origin`). It may send the cookie and `X-CSRF-Token`. On a server CORS is off. The built console is served from the same origin and needs no CORS.
 
 ## What is stored
 
@@ -158,6 +160,8 @@ uv run stonks users bootstrap --email you@example.com
 uv run stonks users reset-password --email you@example.com
 uv run stonks users list
 ```
+
+A shell reset, like an admin reset, signs the person out everywhere and revokes their API tokens.
 
 The password is prompted without echo, or read from `STONKS_AUTH_PASSWORD` in scripts. It is never a command option. The second factor is set up at the first sign-in. `python -m stonks.auth bootstrap-admin|reset-password` does the same.
 

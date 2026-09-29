@@ -95,7 +95,9 @@ interface Open {
             <p class="failure" role="alert">{{ f }}</p>
           }
           <div class="sheet-actions">
-            <button type="button" class="btn" (click)="close(null)">Keep the order</button>
+            <button type="button" class="btn" [disabled]="busy()" (click)="close(null)">
+              Keep the order
+            </button>
             <button
               type="submit"
               class="btn"
@@ -162,7 +164,9 @@ export class OrderChangeSheet {
     return new Promise((resolve) => this.current.set({ order, live, resolve }));
   }
 
+  /** Keep the order. Ignored while a change is on its way: the server may already have made it. */
   protected close(result: ManualOrderResult | null): void {
+    if (this.busy()) return;
     const c = this.current();
     this.current.set(null);
     c?.resolve(result);
@@ -182,7 +186,9 @@ export class OrderChangeSheet {
         reason: this.reason().trim(),
         allow_reduce: this.allowReduce(),
       });
-      this.close(result);
+      // Resolve the order this change was for, even if the sheet moved on.
+      if (this.current() === c) this.current.set(null);
+      c.resolve(result);
     } catch (err) {
       const refused = refusalOf(err);
       this.refusal.set(refused);

@@ -15,6 +15,9 @@ describe('journal format', () => {
     expect(formatR(2)).toBe('+2.0R');
     expect(formatR(-1)).toBe('-1.0R');
     expect(formatR(null)).toBe('n/a');
+    expect(formatR(-0.04)).toBe('0.0R');
+    expect(formatR(0.04)).toBe('0.0R');
+    expect(formatR(0.06)).toBe('+0.1R');
   });
 
   it('says holding time in plain words', () => {

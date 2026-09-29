@@ -171,6 +171,16 @@ def test_a_trip_notifies_the_portfolio_owner(state):
     assert "drawdown" in row["title"]
 
 
+def test_a_kill_switch_notification_says_trading_stopped(state):
+    """Vocabulary: "Stop trading", never "Trading halted: kill"."""
+    from stonks.production.halts import notify_trip
+
+    halt, _ = trip_halt(state, "kill", reason="k", actor="a", portfolio_id="pf_default", on=DAY)
+    notify_trip(state, halt)
+    [row] = state.sql("SELECT title FROM notification_outbox")
+    assert row["title"] == "Trading stopped"
+
+
 def test_a_failing_notification_never_raises(state):
     from stonks.production.halts import notify_trip
 

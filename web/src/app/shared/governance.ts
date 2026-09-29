@@ -19,6 +19,11 @@ export function isRealMoneyBroker(broker: BrokerInfo): boolean {
   return broker.kind !== 'simulated' && !broker.paper;
 }
 
+/** Followers at a real-money stage, from the go-live report (0 when unread). */
+function realBooks(report: GoLiveReport | null): number {
+  return report?.real_money_books ?? 0;
+}
+
 /** The broker as a trader reads it on a ticket. */
 export function brokerName(broker: BrokerInfo): string {
   if (broker.kind === 'simulated') return 'Simulated, paper money';
@@ -35,10 +40,13 @@ export function goLiveTicket(
   name: string,
   portfolios: readonly string[] | null,
   broker: BrokerInfo | null,
+  realMoneyBooks = 0,
 ): StatusChangeTicket {
   return {
     kind: 'Approval ticket',
-    live: broker ? isRealMoneyBroker(broker) : null,
+    // A follower at a real-money stage trades real money through its own
+    // broker, whatever the system broker is (the go-live report counts them).
+    live: realMoneyBooks > 0 ? true : broker ? isRealMoneyBroker(broker) : null,
     lines: [
       { label: 'Strategy', value: name },
       {
@@ -51,6 +59,9 @@ export function goLiveTicket(
               : 'The default portfolio',
       },
       { label: 'Broker', value: broker ? brokerName(broker) : 'Could not be read' },
+      ...(realMoneyBooks > 0
+        ? [{ label: 'Real-money portfolios', value: String(realMoneyBooks) }]
+        : []),
     ],
   };
 }
@@ -59,7 +70,14 @@ export function goLiveTicket(
  * One sentence on where the money is, built from the same broker as the
  * ticket's stamp (B2): PAPER never says real orders, LIVE always does.
  */
-export function moneyLine(broker: BrokerInfo | null): string {
+export function moneyLine(broker: BrokerInfo | null, realMoneyBooks = 0): string {
+  if (realMoneyBooks > 0) {
+    const who =
+      realMoneyBooks === 1
+        ? '1 portfolio that follows it is at a real-money stage'
+        : `${realMoneyBooks} portfolios that follow it are at a real-money stage`;
+    return `Real money: ${who} and sends real orders to its broker from the next trading run.`;
+  }
   if (!broker) return 'The broker could not be read. Check it on the Strategy review page first.';
   return isRealMoneyBroker(broker)
     ? 'Real money: portfolios that follow it send real orders to your broker from the next trading run.'
@@ -132,13 +150,14 @@ export async function promoteThroughGate<T>(steps: PromotionSteps<T>): Promise<T
     if (steps.broker) {
       broker = brokerRead.status === 'fulfilled' ? brokerRead.value : null;
       const followers = followersRead.status === 'fulfilled' ? followersRead.value : null;
-      ticket = goLiveTicket(name, steps.followers ? followers : [], broker);
+      ticket = goLiveTicket(name, steps.followers ? followers : [], broker, realBooks(report));
     }
   } finally {
     steps.busy?.(false);
   }
   const realMoney = ticket?.live === true;
-  const message = ticket ? `${steps.message} ${moneyLine(broker)}` : steps.message;
+  const money = moneyLine(broker, realBooks(report));
+  const message = ticket ? `${steps.message} ${money}` : steps.message;
 
   let refusal: string | null = null;
   if (!steps.overrideFirst) {
@@ -177,7 +196,7 @@ export async function promoteThroughGate<T>(steps: PromotionSteps<T>): Promise<T
     message:
       `${refusal ? `${refusal} ` : ''}Approving anyway lets people follow it without the ` +
       'evidence the check asks for. ' +
-      (ticket ? `${moneyLine(broker)} ` : '') +
+      (ticket ? `${money} ` : '') +
       'The override and your reason are recorded.',
     confirmLabel: 'Override and approve',
     // Red only when real money moves (B2): a paper override is a quiet choice.

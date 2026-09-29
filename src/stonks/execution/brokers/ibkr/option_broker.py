@@ -32,11 +32,13 @@ from stonks.core.combos import ComboOrder
 from stonks.core.options import STANDARD_MULTIPLIER, is_option_id, parse_contract_id
 from stonks.core.types import Order
 from stonks.execution.brokers.base import (
+    BrokerOpenOrder,
     BrokerOrderState,
     LiveTradingRefusedError,
     MarginPreview,
     OrderOutcomeUnknownError,
     OrderRejectedError,
+    OrderState,
     UnsupportedTickerError,
 )
 from stonks.execution.brokers.ibkr.client import (
@@ -206,6 +208,34 @@ def _bag_trade(broker: IbkrBroker, ref: str) -> IbTrade | None:
         return None
     broker.bag_legs[ref] = tuple(leg.con_id for leg in trade.contract.combo_legs)
     return trade
+
+
+def bag_ref(broker: IbkrBroker, client_id: str) -> str | None:
+    """The ``orderRef`` of the ``BAG`` order that holds combo leg
+    ``<combo>:<i>``, or ``None`` for anything that is not a leg id."""
+    m = _LEG_ID.match(client_id)
+    return broker.broker_ref(m.group("combo")) if m is not None else None
+
+
+def bag_open_orders(
+    broker: IbkrBroker, trade: IbTrade, combo_id: str, state: OrderState
+) -> list[BrokerOpenOrder]:
+    """A working ``BAG`` order as its legs, the way the ledger holds a
+    combo: ``<combo>:<i>`` per leg, each with its contract and quantity."""
+    out: list[BrokerOpenOrder] = []
+    for i, leg in enumerate(trade.contract.combo_legs):
+        out.append(
+            BrokerOpenOrder(
+                broker_order_id=str(trade.perm_id),
+                client_id=f"{combo_id}:{i}",
+                ticker=broker.resolver.ticker_for(leg.con_id) or str(leg.con_id),
+                side="buy" if leg.action == "BUY" else "sell",
+                quantity=trade.total_quantity * leg.ratio,
+                filled_quantity=trade.filled * leg.ratio,
+                state=state,
+            )
+        )
+    return out
 
 
 def leg_state(broker: IbkrBroker, client_id: str) -> BrokerOrderState | None:

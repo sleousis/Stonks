@@ -83,6 +83,24 @@ def test_an_offloaded_job_is_queued_for_the_worker_and_not_run_here(runner, exec
     assert runner.wait(light.id, timeout=10).result == "local"
 
 
+def test_wait_rereads_a_job_the_worker_finished_between_polls(runner, executor, path):
+    """The worker can finish the job after wait() read it as running but
+    before tracks() is asked: wait must return the finished row."""
+    runner.register("heavy", lambda p, c: None)
+    job = runner.submit("heavy", {})
+    assert executor.queue.claim_next("w1", ["heavy"]) == job.id
+    real_tracks = executor.tracks
+
+    def tracks_after_finish(job_id: str) -> bool:
+        JobStore(path).finish(job_id, "succeeded", result={"answer": 42})
+        return real_tracks(job_id)
+
+    executor.tracks = tracks_after_finish  # type: ignore[method-assign]
+    done = runner.wait(job.id)
+    assert done.status == "succeeded"
+    assert done.result == {"answer": 42}
+
+
 def test_wait_sees_the_worker_finish_the_job(runner, executor, path):
     runner.register("heavy", lambda p, c: None)
     job = runner.submit("heavy", {})

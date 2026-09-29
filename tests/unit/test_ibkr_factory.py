@@ -152,3 +152,26 @@ def test_connect_ibkr_reads_the_portfolio_stage(state):
     # a gateway picked by name that serves one portfolio reads that one
     named = connect_ibkr(config, gateway="live", state=state, client_factory=lambda e: fake)
     assert named._stage_lookup is not None and named._stage_lookup() == "live_small"
+
+
+def test_order_ref_lookup_maps_a_hashed_ref_back_through_the_ledger(state):
+    from stonks.execution.brokers.ibkr.orders import broker_ref
+
+    def add(client_id: str) -> None:
+        state.execute(
+            "INSERT INTO orders (client_id, ticker, side, quantity, order_type, status,"
+            " created_at, updated_at) VALUES (?, 'AAPL.US', 'buy', 1, 'market', 'pending',"
+            " 'x', 'x')",
+            [client_id],
+        )
+
+    stock = "2026-09-28:pf_default:a-long-registered-strategy-id:AAPL.US:buy"
+    combo = "cmb-" + "c" * 50
+    add(stock)
+    lookup = order_ref_lookup(state, 40)
+    assert lookup(broker_ref(stock, 40)) == stock
+    # a combo's BAG ref names the combo, whose legs are the ledger rows
+    add(f"{combo}:0")
+    add(f"{combo}:1")
+    assert lookup(broker_ref(combo, 40)) == combo
+    assert lookup("stk-unknownunknownunkn") is None

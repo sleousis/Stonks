@@ -194,6 +194,17 @@ def test_a_quote_after_the_fill_bar_opened_is_not_used():
     assert ex.price == pytest.approx(10.0)
 
 
+def test_a_later_quote_does_not_hide_the_one_before_the_open():
+    """Live, quotes keep arriving while the fill bar forms. The fill still
+    takes the half spread of the last quote before that bar opened."""
+    broker, _ = make()
+    broker.on_quote(QuoteTick("A.US", M0 + ONE - timedelta(seconds=1), bid=9.98, ask=10.02))
+    broker.on_quote(QuoteTick("A.US", M0 + ONE + timedelta(seconds=30), bid=9.9, ask=10.1))
+    broker.place_order(buy(decided_at=M0 + ONE))
+    (ex,) = broker.on_bar_close(close_of(sbar(1, open_=10.0)))
+    assert ex.price == pytest.approx(10.02)
+
+
 def test_buy_beyond_the_cash_fills_what_it_can_and_expires_the_rest():
     broker, _ = make(cash=505.0)
     broker.place_order(buy(qty=100.0, decided_at=M0 + ONE))

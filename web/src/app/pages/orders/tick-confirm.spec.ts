@@ -51,6 +51,19 @@ describe('tick confirmation', () => {
     expect(tickConfirmOptions(false, SIMULATED).message).toContain('No real money moves');
   });
 
+  it('calls a run real money when a portfolio at a real-money stage would act', () => {
+    const books: BrokerInfo = { ...SIMULATED, real_money_books: 2 };
+    expect(isLiveBroker(books)).toBe(true);
+    const opts = tickConfirmOptions(false, books);
+    expect(opts.tone).toBe('danger');
+    expect(opts.confirmLabel).toBe('Start trading run');
+    expect(opts.message).toContain('2 portfolios at a real-money stage');
+    expect(opts.message).not.toContain('No real money moves');
+    const ticket = tickTicket(books, { asOf: '', tickers: '' });
+    expect(ticket.ticket?.live).toBe(true);
+    expect(ticket.ticket?.lines.find((l) => l.label === 'Real-money portfolios')?.value).toBe('2');
+  });
+
   it('refuses a real run without broker information', () => {
     expect(() => tickConfirmOptions(false, null)).toThrow();
   });

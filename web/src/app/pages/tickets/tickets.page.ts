@@ -22,7 +22,7 @@ import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { TicketCountService } from '../../core/tickets/ticket-count.service';
 import { UpdatedAgo, autoRefresh } from '../../shared/auto-refresh';
-import { strategyDisplayName } from '../../shared/strategy-names';
+import { rowStrategyName } from '../../shared/strategy-names';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { ModeStamp } from '../../shared/ui/mode-stamp';
@@ -46,6 +46,8 @@ interface Group {
   asOf: string;
   expiresAt: string;
   live: boolean;
+  /** The portfolio's stage, for the stamp's words (BROKER PAPER). */
+  stage: string | null;
   tickets: TicketView[];
   notional: number;
 }
@@ -171,7 +173,7 @@ interface Group {
                               <span class="num">{{ qty(t.quantity) }}</span>
                               <strong class="num">{{ t.ticker }}</strong>
                             </span>
-                            <app-mode-stamp [live]="group.live" />
+                            <app-mode-stamp [live]="group.live" [stage]="group.stage" />
                           </p>
                           @if (hold(t); as why) {
                             <p class="hold" [class.alarm]="t.hold === 'runaway'">{{ why }}</p>
@@ -181,22 +183,22 @@ interface Group {
                               <dt>Price</dt>
                               <dd>
                                 {{
-                                  t.limit_price ? 'Limit ' + money(t.limit_price) : 'At the open'
+                                  t.limit_price ? 'Limit ' + money(t.limit_price, t) : 'At the open'
                                 }}
                               </dd>
                             </div>
                             <div>
                               <dt>Decided at</dt>
-                              <dd>{{ money(t.reference_price) }}</dd>
+                              <dd>{{ money(t.reference_price, t) }}</dd>
                             </div>
                             <div>
                               <dt>About</dt>
-                              <dd>{{ money(t.notional) }}</dd>
+                              <dd>{{ money(t.notional, t) }}</dd>
                             </div>
                             @if (t.strategy_id) {
                               <div>
                                 <dt>Strategy</dt>
-                                <dd>{{ strategyName(t.strategy_id) }}</dd>
+                                <dd>{{ strategyName(t) }}</dd>
                               </div>
                             }
                             @if (scoreText(t); as s) {
@@ -208,7 +210,7 @@ interface Group {
                             @if (commission(t); as fee) {
                               <div>
                                 <dt>Commission</dt>
-                                <dd>{{ money(fee) }}</dd>
+                                <dd>{{ money(fee, t) }}</dd>
                               </div>
                             }
                           </dl>
@@ -514,6 +516,7 @@ export class TicketsPage {
           asOf: t.as_of,
           expiresAt: t.expires_at,
           live: this.isLive(t.portfolio_id),
+          stage: this.stageOf(t.portfolio_id),
           tickets: [],
           notional: 0,
         };
@@ -529,7 +532,12 @@ export class TicketsPage {
     { key: 'ticker', label: 'Order', mobile: 'title', sortable: false },
     { key: 'portfolio_name', label: 'Portfolio' },
     { key: 'quantity', label: 'Quantity', format: 'number' },
-    { key: 'notional', label: 'About', format: 'money' },
+    {
+      key: 'notional',
+      label: 'About',
+      format: 'money',
+      currency: (t) => this.currencyOf(t.portfolio_id),
+    },
     { key: 'status', label: 'Status', value: (t) => ticketStatusLook(t.status).label },
     { key: 'decided_by', label: 'Decided by', value: (t) => deciderWords(t.decided_by) },
     { key: 'as_of', label: 'Decided', format: 'date' },
@@ -538,8 +546,14 @@ export class TicketsPage {
   protected readonly look = ticketStatusLook;
   protected readonly hold = (t: TicketView) => holdWords(t.hold);
   protected readonly rules = ruleLines;
-  protected readonly strategyName = (id: string) => strategyDisplayName(id);
-  protected readonly money = (v: number | null | undefined) => formatMoney(v);
+  protected readonly strategyName = (t: TicketView) => rowStrategyName(t);
+  /** Money in the ticket's portfolio currency (USD while the list is unknown). */
+  protected readonly money = (v: number | null | undefined, t?: { portfolio_id: string }) =>
+    formatMoney(v, { currency: t ? this.currencyOf(t.portfolio_id) : undefined });
+
+  private currencyOf(portfolioId: string): string | undefined {
+    return this.portfolios.options().find((p) => p.id === portfolioId)?.base_currency;
+  }
   protected readonly qty = (v: number) => formatNumber(v);
   protected readonly date = formatDate;
   protected readonly dateTime = formatDateTime;
@@ -568,9 +582,10 @@ export class TicketsPage {
       tickets.length === 1
         ? `${tickets[0].side === 'buy' ? 'Buy' : 'Sell'} ${tickets[0].ticker}`
         : `${tickets.length} orders in ${group.portfolioName}`;
-    if (!(await this.stepUp.ensure(`Approve ${what}.`))) return;
+    // Busy from the first click: a second one while the code check runs sends nothing.
     this.mark(ids, true);
     try {
+      if (!(await this.stepUp.ensure(`Approve ${what}.`))) return;
       const done = await this.api.approve(ids);
       this.replace(done.items);
       this.toasts.success(
@@ -600,7 +615,10 @@ export class TicketsPage {
         lines: [
           { label: 'Portfolio', value: group.portfolioName },
           { label: 'Orders', value: String(group.tickets.length) },
-          { label: 'About', value: formatMoney(group.notional) },
+          {
+            label: 'About',
+            value: this.money(group.notional, { portfolio_id: group.portfolioId }),
+          },
           { label: 'Send by', value: formatDateTime(group.expiresAt) },
         ],
       },
@@ -616,7 +634,7 @@ export class TicketsPage {
 
   protected async reject(ticket: TicketView): Promise<void> {
     const what = `${ticket.side === 'buy' ? 'Buy' : 'Sell'} ${ticket.ticker}`;
-    const reason = await this.rejectSheet().open(what);
+    const reason = await this.rejectSheet().open(what, this.isLive(ticket.portfolio_id));
     if (reason === null) return;
     this.mark([ticket.id], true);
     try {
@@ -628,6 +646,10 @@ export class TicketsPage {
     } finally {
       this.mark([ticket.id], false);
     }
+  }
+
+  private stageOf(portfolioId: string): string | null {
+    return this.portfolios.options().find((p) => p.id === portfolioId)?.live_stage ?? null;
   }
 
   private isLive(portfolioId: string): boolean {

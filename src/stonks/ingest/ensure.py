@@ -283,6 +283,13 @@ class DataEnsurer:
     ) -> _Plan:
         tickers = list(dict.fromkeys(tickers))
         plan = _Plan()
+        if not interval.is_intraday and interval != Interval.DAY_1:
+            # sources serve daily and native intraday bars; coarser ones are
+            # aggregated from them (``stonks ingest aggregate``)
+            plan.warnings.append(
+                f"{interval.code} bars are not fetched: ensure 1d bars and aggregate them"
+            )
+            return plan
         if interval.is_intraday and not self._limits.intraday:
             plan.warnings.append(
                 f"the {self._source.source_id} plan serves no intraday bars: nothing fetched"
@@ -631,19 +638,19 @@ class DataEnsurer:
     ) -> None:
         cutoff = self.today - timedelta(days=self._settings.settle_days)
         now = datetime.now(UTC).replace(tzinfo=None)
-        classes = self._lake.get_asset_classes(list(fetched)) if interval.is_intraday else {}
+        classes = self._lake.get_asset_classes(list(fetched))
         records = []
         for ticker, rows in fetched.items():
             days = [_row_day(r) for r in rows]
             for since, until in gaps.get(ticker, []):
                 end = until
-                if interval.is_intraday:
-                    # a session still open is asked for again (BE-23)
-                    still_open = open_sessions(
-                        self._sessions, ticker, since, until, self.now(), classes.get(ticker)
-                    )
-                    if still_open:
-                        until = end = min(end, still_open[0] - timedelta(days=1))
+                # a session still open is asked for again (BE-23), also
+                # when settle_days does not hold the day back
+                still_open = open_sessions(
+                    self._sessions, ticker, since, until, self.now(), classes.get(ticker)
+                )
+                if still_open:
+                    until = end = min(end, still_open[0] - timedelta(days=1))
                 if until > cutoff:
                     last = max((d for d in days if since <= d <= until), default=None)
                     end = max(cutoff, last) if last is not None else cutoff

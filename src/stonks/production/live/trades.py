@@ -50,24 +50,31 @@ class FillRow:
 
 
 def closed_from_fills(fills: Iterable[FillRow]) -> list[ClosedTrade]:
-    """Replay fills (oldest first) per strategy and ticker at average cost."""
+    """Replay fills (oldest first) per strategy and ticker at average cost.
+
+    A fill whose own strategy holds nothing on the ticker but that reduces
+    another strategy's position there (an exit a risk rule made with no
+    strategy, or one the book's constructor gave to another owner) closes
+    that position: the book sold what it held, and the trade belongs to
+    the strategy that held it."""
     held: dict[tuple[str | None, str], float] = {}
     cost: dict[tuple[str | None, str], float] = {}
     out: list[ClosedTrade] = []
-    for f in fills:
-        key = (f.strategy_id, f.ticker)
+
+    def book(key: tuple[str | None, str], f: FillRow, signed: float) -> float:
+        """Apply ``signed`` shares of ``f`` to ``key``; the shares left over
+        once its position is closed (0 when it all went in)."""
         q = held.get(key, 0.0)
-        signed = f.quantity if f.side == "buy" else -f.quantity
         if abs(q) <= _EPS or q * signed > 0:  # opens or grows
             cost[key] = cost.get(key, 0.0) + signed * f.price
             held[key] = q + signed
-            continue
+            return 0.0
         avg = cost.get(key, 0.0) / q
         closed = min(abs(signed), abs(q))
         direction = 1.0 if q > 0 else -1.0
         out.append(
             ClosedTrade(
-                strategy_id=f.strategy_id,
+                strategy_id=key[0],
                 ticker=f.ticker,
                 exit_day=f.day,
                 pnl=direction * closed * (f.price - avg),
@@ -79,10 +86,23 @@ def closed_from_fills(fills: Iterable[FillRow]) -> list[ClosedTrade]:
         held[key] = rest
         cost[key] = avg * rest
         left = abs(signed) - closed
-        if left > _EPS:  # crossed zero: the rest opens the other side
-            flip = left if signed > 0 else -left
-            held[key] = flip
-            cost[key] = flip * f.price
+        return left if signed > 0 else -left
+
+    for f in fills:
+        key = (f.strategy_id, f.ticker)
+        signed = f.quantity if f.side == "buy" else -f.quantity
+        if abs(held.get(key, 0.0)) <= _EPS:
+            for other, q in list(held.items()):
+                if abs(signed) <= _EPS:
+                    break
+                if other[1] == f.ticker and other != key and q * signed < -_EPS:
+                    signed = book(other, f, signed)
+        if abs(signed) <= _EPS:
+            continue
+        left = book(key, f, signed)
+        if abs(left) > _EPS:  # crossed zero: the rest opens the other side
+            held[key] = left
+            cost[key] = left * f.price
     return out
 
 
@@ -90,15 +110,18 @@ def closed_trades(
     state: SqliteState, portfolio_id: str, as_of: date, *, lookback_days: int = 120
 ) -> list[ClosedTrade]:
     """The book's trades closed in the ``lookback_days`` up to ``as_of``.
-    Fills before the window still set the average cost."""
+    Fills before the window still set the average cost. Manual orders are
+    left out: they are the person's (``manual_discipline`` reads them)."""
     from stonks.production.ledger import ledger_columns  # the accounts import cycle
 
     cols = ledger_columns(state, "orders")
     ctx_col = "o.decision_context_json" if "decision_context_json" in cols else "NULL"
+    # manual orders are the person's own, never the book's (BE-02)
+    manual = " AND o.origin <> 'manual'" if "origin" in cols else ""
     rows = state.sql(
         f"SELECT o.strategy_id, f.ticker, o.side, f.quantity, f.price, f.filled_at, {ctx_col}"
         " AS ctx FROM fills f JOIN orders o ON o.client_id = f.order_client_id"
-        " WHERE f.portfolio_id = ? AND substr(f.filled_at, 1, 10) <= ?"
+        f" WHERE f.portfolio_id = ? AND substr(f.filled_at, 1, 10) <= ?{manual}"
         " ORDER BY f.filled_at, f.id",
         [portfolio_id, as_of.isoformat()],
     )

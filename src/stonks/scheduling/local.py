@@ -42,6 +42,7 @@ universe trades on the fire's date (asset classes read from the lake).
 
 from __future__ import annotations
 
+import contextlib
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -200,6 +201,7 @@ def ingest_borrow_action(ctx: RunContext) -> JobOutcome:
 def tick_action(ctx: RunContext) -> JobOutcome:
     from stonks.production.settings_builder import build_tick_runtime
     from stonks.production.tick import BackdatedTickError, run_tick
+    from stonks.production.tick_failures import tick_row_added, tick_row_count
     from stonks.registry.store import StrategyRegistry
     from stonks.scheduling.calendar import bars_due
     from stonks.store.lake import DuckDBLake
@@ -224,6 +226,11 @@ def tick_action(ctx: RunContext) -> JobOutcome:
                     universe, lake.get_asset_classes(universe), ctx.fire.scheduled_for
                 ),
             )
+            dry_run = bool(ctx.params.get("dry_run", False))
+            # built before the tick starts: its failure was not alerted yet,
+            # so it propagates and the scheduler alerts
+            plan = runtime.plan_for(state, dry_run=dry_run)
+            rows_before = tick_row_count(state)
             try:
                 result = run_tick(
                     state=state,
@@ -231,16 +238,21 @@ def tick_action(ctx: RunContext) -> JobOutcome:
                     registry=registry,
                     settings=runtime.settings,
                     as_of=ctx.fire.as_of,
-                    dry_run=bool(ctx.params.get("dry_run", False)),
+                    dry_run=dry_run,
                     notifier=runtime.notifier,
                     broker_factory=runtime.broker_factory,
-                    plan=runtime.plan_for(state, dry_run=bool(ctx.params.get("dry_run", False))),
+                    plan=plan,
                 )
             except BackdatedTickError as exc:
                 return JobOutcome("skipped", {"reason": "backdated", "error": str(exc)})
             except Exception as exc:
-                # run_tick recorded the error row and alerted already.
-                return JobOutcome("failed", {"error": f"{type(exc).__name__}: {exc}"}, alerted=True)
+                # Past its row insert, run_tick closed the row as error and
+                # alerted. Before it (a locked database) nobody did.
+                return JobOutcome(
+                    "failed",
+                    {"error": f"{type(exc).__name__}: {exc}"},
+                    alerted=tick_row_added(state, rows_before),
+                )
     finally:
         state.close()
     detail = {
@@ -613,14 +625,11 @@ def live_stops_action(ctx: RunContext) -> JobOutcome:
         )[0]["n"]
         if not any(b.enabled for b in books) and not working:
             return JobOutcome("skipped", {"reason": "no_live_stops"})
-        lake = _read_only_lake(ctx.settings)
-        try:
+        with contextlib.ExitStack() as stack:
+            lake = _read_lake(ctx, stack)
             result = sync_live_books(
                 state, lake, books, submit_broker_opener(ctx.settings, state), as_of=ctx.fire.as_of
             )
-        finally:
-            if lake is not None:
-                lake.close()
     finally:
         state.close()
     errors = {pid: r["error"] for pid, r in result.items() if "error" in r}
@@ -628,12 +637,23 @@ def live_stops_action(ctx: RunContext) -> JobOutcome:
     return JobOutcome("failed" if errors else "succeeded", detail)
 
 
-def _read_only_lake(settings: Any) -> Any:
-    """The lake opened read only, or ``None`` when another process holds it."""
+def _open_lake_for_reading(ctx: RunContext) -> Any:
+    """A context manager over the lake: the server's own connection when
+    the executor runs inside ``stonks serve`` (a second, read-only open is
+    refused in the process that holds it), else a read-only open."""
+    server_lake = getattr(ctx.executor, "open_lake", None)
+    if server_lake is not None:
+        return server_lake()
     from stonks.store.lake import DuckDBLake
 
+    return DuckDBLake(ctx.settings.lake.path, read_only=True)
+
+
+def _read_lake(ctx: RunContext, stack: contextlib.ExitStack) -> Any:
+    """The lake for reading, kept open on ``stack``, or ``None`` when
+    another process holds it."""
     try:
-        return DuckDBLake(settings.lake.path, read_only=True)
+        return stack.enter_context(_open_lake_for_reading(ctx))
     except Exception:
         return None
 
@@ -725,7 +745,7 @@ def live_reconcile_action(ctx: RunContext) -> JobOutcome:
             kind,
             settings=ctx.settings.production.live,
             clock=FixedClock(ctx.now),
-            actions_for=_lake_actions(ctx.settings),
+            actions_for=_lake_actions(ctx),
             settlement=ctx.settings.production.risk.rules.account_rules,
         )
     finally:
@@ -737,19 +757,18 @@ def live_reconcile_action(ctx: RunContext) -> JobOutcome:
     return JobOutcome("failed" if bad else "succeeded", detail, alerted=bool(bad))
 
 
-def _lake_actions(settings: Any) -> Any:
+def _lake_actions(ctx: RunContext) -> Any:
     """Splits for the reconciliation checks, from the lake when it can be
-    read (the API may hold it). ``None`` otherwise: ownership then counts
-    raw fills."""
+    read (another process may hold it). ``None`` otherwise: ownership then
+    counts raw fills."""
 
     def actions_for(tickers: Any) -> Any:
         from stonks.production.corporate_actions import load_corporate_actions
-        from stonks.store.lake import DuckDBLake
 
         if not tickers:
             return None
         try:
-            with DuckDBLake(settings.lake.path, read_only=True) as lake:
+            with _open_lake_for_reading(ctx) as lake:
                 return load_corporate_actions(lake, tickers)
         except Exception as exc:
             from stonks.logging import get_logger

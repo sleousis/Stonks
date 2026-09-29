@@ -90,3 +90,25 @@ def test_too_many_rows_are_refused():
     text = "Date,Action\n" + "2026-01-01,BUY\n" * 10
     with pytest.raises(StatementError, match="at most 5"):
         parse_statement(text, ColumnMapping(date="Date", type="Action"), max_rows=5)
+
+
+def test_a_decimal_comma_is_read_as_a_decimal_point():
+    """European exports write 1.234,56 and 12,5. Stripping the comma as a
+    thousands separator read them as 1.23456 and 125."""
+    text = 'Datum;Symbol;Anzahl;Kurs;Betrag\n05.01.2026;VOD.LSE;3;"12,5";"-1.234,56"\n'.replace(
+        ";", ","
+    )
+    text = 'Datum,Symbol,Anzahl,Kurs,Betrag\n05.01.2026,VOD.LSE,3,"12,5","-1.234,56"\n'
+    mapping = ColumnMapping(
+        date="Datum", symbol="Symbol", quantity="Anzahl", price="Kurs", amount="Betrag",
+        kind="trade",
+    )  # fmt: skip
+    [row] = parse_statement(text, mapping)
+    assert row.activity is not None
+    assert row.activity.price == pytest.approx(12.5)
+    assert row.activity.amount == pytest.approx(-1234.56)
+    # a US thousands separator still reads as one
+    us = 'Date,Symbol,Quantity,Price,Amount\n2026-01-05,AAPL,1,"1,234.50","-1,234"\n'
+    [row] = parse_statement(us, ColumnMapping(date="Date", symbol="Symbol", quantity="Quantity",
+                                              price="Price", amount="Amount", kind="trade"))  # fmt: skip
+    assert row.activity.price == pytest.approx(1234.5) and row.activity.amount == -1234.0

@@ -10,9 +10,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from stonks.app.orders import OrderView
+from stonks.app.strategy_names import StrategyNamed, strategy_title
 from stonks.app.ticks import TickRunView
 from stonks.execution.brokers.base import BrokerMode
 
@@ -28,7 +29,7 @@ class RiskAdjustmentView(BaseModel):
     reason: str
 
 
-class ShadowOutcomeView(BaseModel):
+class ShadowOutcomeView(StrategyNamed):
     """How one shadow strategy was evaluated during the tick."""
 
     strategy_id: str
@@ -70,6 +71,17 @@ class TickSummary(BaseModel):
     dry_run: bool | None = None
     #: Whose money the default book traded (null for rows that predate it).
     broker_mode: BrokerMode | None = None
+
+    #: The winner's and the exit strategy's plain titles (a starter's), or
+    #: null: always derived from the ids, never read from the stored row.
+    winner_strategy_name: str | None = None
+    exit_strategy_name: str | None = None
+
+    @model_validator(mode="after")
+    def _strategy_names(self) -> TickSummary:
+        self.winner_strategy_name = strategy_title(self.winner_strategy_id)
+        self.exit_strategy_name = strategy_title(self.exit_strategy_id)
+        return self
 
 
 class TickRun(TickRunView):

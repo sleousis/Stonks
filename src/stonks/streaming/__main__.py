@@ -37,9 +37,12 @@ def _settings() -> Settings:
     from dotenv import load_dotenv
 
     from stonks.config import load_settings
+    from stonks.config_overrides import with_overrides
 
     load_dotenv(override=False)
-    return load_settings()
+    # the admin's console overrides (risk limits among them) on top of TOML,
+    # as the CLI and the scheduler apply them
+    return with_overrides(load_settings())
 
 
 def _tickers(raw: str | None, settings: Settings) -> list[str]:

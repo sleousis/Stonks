@@ -60,6 +60,26 @@ describe('BacktestResultView', () => {
     expect(drawdown.points[2].value).toBeCloseTo(-0.05);
   });
 
+  it('sums up a minute backtest with more points than a call can take', async () => {
+    TestBed.configureTestingModule({ providers: [provideFakeChart()] });
+    const fixture = TestBed.createComponent(BacktestResultView);
+    const equity = Array.from({ length: 200_000 }, (_, i) => ({
+      timestamp: new Date(Date.UTC(2025, 0, 2) + i * 60_000).toISOString().slice(0, 19),
+      value: 10_000 + (i % 100),
+    }));
+    fixture.componentRef.setInput('result', {
+      ...BACKTEST_RESULT,
+      interval: '1m',
+      equity,
+      drawdown: undefined,
+      benchmark_equity: null,
+    });
+    fixture.detectChanges();
+    await tick();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('Worst drawdown');
+  });
+
   it('shows trades when the result carries them', () => {
     TestBed.configureTestingModule({ providers: [provideFakeChart()] });
     const fixture = TestBed.createComponent(BacktestResultView);

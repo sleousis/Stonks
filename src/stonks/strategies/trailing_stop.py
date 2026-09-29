@@ -54,6 +54,8 @@ class TrailingStopWrapper(InnerStrategyWrapper):
         "best close."
     )
     id_suffix = "trailing_stop"
+    #: The replayed trade log is long-only (see the module doc).
+    long_only = True
     hypothesis = (
         "Cutting a position once it falls k ATRs below its best close since "
         "entry keeps the trend's gains and caps the loss when it breaks, at "

@@ -52,6 +52,11 @@ flowchart LR
   and registers only their tools, plus `whoami`. If it cannot ask, it keeps
   only `whoami`. The in-app assistant applies the same limit to a limited
   token.
+- Tool groups are a convenience, not a security boundary. They only decide
+  which tools the MCP server offers. The REST API does not check them, so
+  anyone holding the token can call every route its scopes allow, with or
+  without the MCP server. The token's scopes (and its user's role) are the
+  boundary: give a token only the scopes it needs.
 - Every tool does only what that user may do in the web app. A refused
   call says that the token's role or scopes do not allow it.
 - Portfolio tools take an optional `portfolio_id`. It must be one of your

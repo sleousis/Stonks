@@ -306,13 +306,17 @@ def _reason(
 ) -> dict[str, Any]:
     book_verb, score_verb = _VERBS[kind]
     if model_book:
-        text = f"The model book {book_verb} {ticker}"
+        # A test book's score is the strategy's own scale, not a return:
+        # the text gives its weight and rank only.
+        text = f"The test book {book_verb} {ticker}"
         if after is not None and kind != "exit":
             text += f" (now {after:.1%} of the book)"
+        if rank is not None:
+            text += f", rank {rank} of {of}"
     else:
         text = f"{sid} {score_verb} {ticker}"
-    if score is not None and rank is not None:
-        text += f": expected return {score:.2%}, rank {rank} of {of}"
+        if score is not None and rank is not None:
+            text += f": expected return {score:.2%}, rank {rank} of {of}"
     reason: dict[str, Any] = {
         "text": text + ".",
         "score": score,

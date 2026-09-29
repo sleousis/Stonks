@@ -47,6 +47,7 @@ Existing fields keep their meaning: they are not converted.
 - **Holding period**: long when held more than one year, else short.
 - **Short sales**: a sale beyond what you hold opens a short. A later buy covers it. The gain is realized at the cover and is always short term.
 - **Base amounts**: the cost at the purchase day's rate, the proceeds at the sale day's rate.
+- **Options**: a contract's price is per share, so its cost and proceeds count the multiplier (100 for a standard contract).
 
 ## Wash sales (US)
 

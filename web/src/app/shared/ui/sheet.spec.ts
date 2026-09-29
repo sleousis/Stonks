@@ -42,6 +42,40 @@ describe('Sheet', () => {
     expect(close).toHaveBeenCalledTimes(1);
   });
 
+  it('opens again when the browser closes it while the host keeps it open', async () => {
+    // A second Escape or back gesture closes a dialog even when cancel is prevented.
+    const fixture = TestBed.createComponent(Host);
+    await fixture.whenStable();
+    const dialog = (fixture.nativeElement as HTMLElement).querySelector('dialog')!;
+    const showModal = vi.fn(() => dialog.setAttribute('open', ''));
+    const close = vi.fn(() => dialog.removeAttribute('open'));
+    Object.assign(dialog, { showModal, close });
+    fixture.componentInstance.open.set(true);
+    await fixture.whenStable();
+    dialog.removeAttribute('open');
+    dialog.dispatchEvent(new Event('close'));
+    await fixture.whenStable();
+    expect(dialog.hasAttribute('open')).toBe(true);
+    expect(fixture.componentInstance.dismissed).toBe(1);
+  });
+
+  it('stays closed after a browser close the host agrees with', async () => {
+    const fixture = TestBed.createComponent(Host);
+    await fixture.whenStable();
+    const dialog = (fixture.nativeElement as HTMLElement).querySelector('dialog')!;
+    Object.assign(dialog, {
+      showModal: vi.fn(() => dialog.setAttribute('open', '')),
+      close: vi.fn(() => dialog.removeAttribute('open')),
+    });
+    fixture.componentInstance.open.set(true);
+    await fixture.whenStable();
+    dialog.removeAttribute('open');
+    fixture.componentInstance.open.set(false);
+    dialog.dispatchEvent(new Event('close'));
+    await fixture.whenStable();
+    expect(dialog.hasAttribute('open')).toBe(false);
+  });
+
   it('reports Escape as dismiss instead of closing on its own', async () => {
     const fixture = TestBed.createComponent(Host);
     await fixture.whenStable();

@@ -293,6 +293,32 @@ def test_executions_carry_late_commissions(pair):
     assert (e.commission, e.commission_currency) == (1.1, "USD")
 
 
+def test_an_execution_correction_replaces_the_execution_it_corrects(pair):
+    """IBKR sends a correction as another execution whose id differs only
+    after the last period. It must replace the original, never add to it."""
+    c, ib = pair
+    c.connect()
+    first = Execution(execId="0000e0d5.6576f7c6.01.01", time=NOW, acctNumber="DU1", side="BOT",
+                      shares=10, price=201.0, permId=77, orderRef="ref-1")  # fmt: skip
+    fixed = Execution(execId="0000e0d5.6576f7c6.01.02", time=NOW, acctNumber="DU1", side="BOT",
+                      shares=10, price=200.5, permId=77, orderRef="ref-1")  # fmt: skip
+    other = Execution(execId="0000e0d5.6576f7c7.01.01", time=NOW, acctNumber="DU1", side="BOT",
+                      shares=5, price=201.0, permId=77, orderRef="ref-1")  # fmt: skip
+    ib.fill_list = [
+        Fill(AAPL, first, CommissionReport(execId=first.execId, commission=1.0, currency="USD"),
+             NOW),
+        Fill(AAPL, other, CommissionReport(), NOW),
+        Fill(AAPL, fixed, CommissionReport(), NOW),
+    ]  # fmt: skip
+    got = c.executions()
+    assert [(e.exec_id, e.shares, e.price) for e in got] == [
+        ("0000e0d5.6576f7c6.01.01", 10, 200.5),
+        ("0000e0d5.6576f7c7.01.01", 5, 201.0),
+    ]
+    # the correction's commission report has not come yet: the known one stays
+    assert (got[0].commission, got[0].commission_currency) == (1.0, "USD")
+
+
 def _req(**kw) -> IbOrderRequest:
     base = {"action": "BUY", "total_quantity": 10.0, "order_type": "LMT", "tif": "OPG",
             "order_ref": "ref-1", "account": "DU1", "limit_price": 202.0}  # fmt: skip

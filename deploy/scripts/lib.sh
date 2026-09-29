@@ -35,18 +35,27 @@ snapshot_dir() { printf '%s/snapshots' "$(dirname "$(data_path)")"; }
 
 compose() { docker compose --project-directory "$DEPLOY_DIR" "$@"; }
 
-# Services that must be running: api, caddy, and scheduler when its profile is on.
+# Services that must be running: api, caddy, and scheduler and lab-worker
+# when their profiles are on.
 expected_services() {
+	local profiles
+	profiles=",$(env_get COMPOSE_PROFILES),"
 	printf 'api
 caddy
 '
-	case ",$(env_get COMPOSE_PROFILES)," in
+	case "$profiles" in
 	*,scheduler,*) printf 'scheduler
+' ;;
+	esac
+	case "$profiles" in
+	*,lab-worker,*) printf 'lab-worker
 ' ;;
 	esac
 }
 
-# Stop / start the two writers of /data (api, and scheduler when enabled).
+# Stop / start the writers of /data: api, and scheduler and lab-worker when
+# enabled (the lab worker writes job state to state.sqlite and snapshots to
+# /data/lab_tmp, so a snapshot or restore must not run under it).
 stop_writers() {
 	local svcs
 	mapfile -t svcs < <(expected_services | grep -v caddy)

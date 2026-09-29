@@ -73,6 +73,27 @@ def book_value(ctx: RiskContext) -> float | None:
     return None if prices is None else ctx.portfolio.total_value(prices)
 
 
+def account_value(ctx: RiskContext) -> float | None:
+    """The whole account's value: the book's (:func:`book_value`) plus the
+    positions it does not own (``ctx.outside_positions``), as the equity
+    curve records it. ``None`` when any of them has no mark."""
+    value = book_value(ctx)
+    if value is None:
+        return None
+    for ticker, qty in ctx.outside_positions.items():
+        if abs(qty) <= EPS:
+            continue
+        price = ctx.prices.get(ticker)
+        if price is None or not math.isfinite(price) or price <= 0:
+            frame = history(ctx, ticker)
+            price = float(frame["close"].iloc[-1]) if frame is not None else math.nan
+        if not (math.isfinite(price) and price > 0):
+            _log.warning("risk.unmarked_outside_holding", ticker=ticker)
+            return None
+        value += qty * price
+    return value
+
+
 def last_atr(ctx: RiskContext, ticker: str, bars: int = ATR_BARS) -> float | None:
     """Wilder ATR over ``bars`` at the last bar, or ``None`` without enough."""
     frame = history(ctx, ticker)

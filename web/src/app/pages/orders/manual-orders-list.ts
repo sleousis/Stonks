@@ -173,11 +173,20 @@ export class ManualOrdersList {
       return;
     }
     const result = await this.sheet().open(order, live);
+    // Read the list again either way: the server cancels the working order
+    // before it checks the new one, so a refused change may have ended it.
+    this.orders.reload();
     if (!result) return;
+    if (result.status === 'rejected') {
+      this.toasts.error(
+        `The new order for ${order.ticker} was rejected: ${result.reason ?? 'no reason given'}.`,
+        'Order rejected',
+      );
+      return;
+    }
     this.toasts.success(
       `Changed the order for ${order.ticker}: ${formatNumber(result.quantity)} now.`,
     );
-    this.orders.reload();
   }
 
   protected async cancel(order: OrderView): Promise<void> {
@@ -185,7 +194,8 @@ export class ManualOrdersList {
       title: `Cancel the order for ${formatNumber(order.quantity)} ${order.ticker}?`,
       message: 'What has filled stays filled. The rest of the order stops.',
       confirmLabel: 'Cancel order',
-      tone: 'danger',
+      // Red only for real money (the vocabulary's one rule).
+      tone: this.ctx.live() ? 'danger' : 'default',
       minReason: 1,
       reasonHint: 'Kept with the order.',
     });
@@ -193,11 +203,19 @@ export class ManualOrdersList {
     this.busy.set(order.client_id);
     try {
       const result = await this.manual.cancel(order.client_id, { reason: body.reason ?? '' });
-      this.toasts.success(
-        result.cancelled
-          ? `Cancelled the order for ${order.ticker}.`
-          : `The order for ${order.ticker} had already ended.`,
-      );
+      // `cancelled` says the broker took the request; the status says what
+      // the order is now. Only a cancelled status means it cannot fill.
+      if (result.status === 'cancelled') {
+        this.toasts.success(`Cancelled the order for ${order.ticker}.`);
+      } else if (isWorking({ status: result.status as OrderView['status'] })) {
+        this.toasts.info(
+          result.cancelled
+            ? `Asked your broker to cancel the order for ${order.ticker}. It can still fill until the broker confirms.`
+            : `Your broker did not take the cancel. The order for ${order.ticker} is still working.`,
+        );
+      } else {
+        this.toasts.info(`The order for ${order.ticker} had already ended.`);
+      }
       this.orders.reload();
     } catch {
       // The error interceptor already showed the API's message.
