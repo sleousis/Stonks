@@ -220,4 +220,25 @@ describe('ManualOrdersList', () => {
     await settle();
     expect(el.querySelector('app-order-change-sheet form')).toBeNull();
   });
+  it('reads the list again when the sheet closes after a refused change', async () => {
+    // The server cancels the working order before it checks the new one.
+    const el = await render([order()]);
+    byText(el, 'Change')!.click();
+    await settle();
+    const form = el.querySelector<HTMLFormElement>('app-order-change-sheet form')!;
+    const reason = form.querySelector<HTMLTextAreaElement>('#co-reason')!;
+    reason.value = 'bigger';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    form.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    (await nextRequest(http, '/api/orders/mk1/change', 'POST')).flush(
+      { title: 'Conflict', status: 409, code: 'order_refused', detail: 'halted' },
+      { status: 409, statusText: 'Conflict' },
+    );
+    await settle();
+    [...form.querySelectorAll('button')].find((b) => b.textContent?.includes('Keep'))!.click();
+    await settle();
+    (await nextRequest(http, '/api/orders')).flush(pageOf([order({ status: 'cancelled' })]));
+    await settle();
+  });
 });

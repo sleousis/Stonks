@@ -173,11 +173,20 @@ export class ManualOrdersList {
       return;
     }
     const result = await this.sheet().open(order, live);
+    // Read the list again either way: the server cancels the working order
+    // before it checks the new one, so a refused change may have ended it.
+    this.orders.reload();
     if (!result) return;
+    if (result.status === 'rejected') {
+      this.toasts.error(
+        `The new order for ${order.ticker} was rejected: ${result.reason ?? 'no reason given'}.`,
+        'Order rejected',
+      );
+      return;
+    }
     this.toasts.success(
       `Changed the order for ${order.ticker}: ${formatNumber(result.quantity)} now.`,
     );
-    this.orders.reload();
   }
 
   protected async cancel(order: OrderView): Promise<void> {
