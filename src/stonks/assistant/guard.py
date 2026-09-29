@@ -9,10 +9,12 @@ model says:
   may clear it in the web app (a fresh second factor).
 - **Kill switch.** While a kill switch covers the person (global or theirs),
   the assistant is research only too.
-- **Writes are counted** from ``assistant_pending_actions``: every write the
-  assistant ran or proposed is a row there. The check and the row are one
-  write transaction (:meth:`ConversationStore.reserve_action`), so two turns
-  at once cannot both pass the limit.
+- **Writes are counted** from ``audit_log``: every write the assistant ran
+  or proposed writes an ``assistant.write`` row there beside its
+  ``assistant_pending_actions`` row. The audit row outlives the
+  conversation, so deleting one does not reset the limit. The check and the
+  rows are one write transaction (:meth:`ConversationStore.reserve_action`),
+  so two turns at once cannot both pass the limit.
 
 Any error while checking counts as frozen: fail closed.
 """
@@ -24,6 +26,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from stonks.assistant.settings import AssistantEnvelope
+from stonks.assistant.store import WRITE_AUDIT_ACTION
 from stonks.logging import get_logger
 from stonks.production.halts import active_halts
 from stonks.store.state import SqliteState
@@ -76,10 +79,8 @@ def clear_freeze(state: SqliteState, user_id: str) -> bool:
 
 def writes_since(state: SqliteState, user_id: str, since: datetime) -> int:
     rows = state.sql(
-        "SELECT COUNT(*) AS n FROM assistant_pending_actions a"
-        " JOIN assistant_conversations c ON c.id = a.conversation_id"
-        " WHERE c.owner_id = ? AND a.created_at >= ?",
-        [user_id, _iso(since)],
+        "SELECT COUNT(*) AS n FROM audit_log WHERE actor = ? AND action = ? AND created_at >= ?",
+        [f"user:{user_id}", WRITE_AUDIT_ACTION, _iso(since)],
     )
     return int(rows[0]["n"])
 

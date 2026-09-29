@@ -245,10 +245,10 @@ def test_the_gate_freezes_on_a_burst_and_on_the_kill_switch(path):
             " VALUES ('c', 'usr_a', 'x', 'x')"
         )
         for i in range(2):
+            # what ConversationStore.reserve_action writes for each write
             state.execute(
-                "INSERT INTO assistant_pending_actions (id, conversation_id, tool_call_id,"
-                " tool_name, arguments_json, status, created_at) VALUES (?, 'c', 't', 'x', '{}',"
-                " 'done', ?)",
+                "INSERT INTO audit_log (actor, action, target_kind, target_id, created_at)"
+                " VALUES ('user:usr_a', 'assistant.write', 'assistant_action', ?, ?)",
                 [f"a{i}", NOW.isoformat(timespec="seconds")],
             )
         burst = guard.over_rate(state, "usr_a", env, NOW)
