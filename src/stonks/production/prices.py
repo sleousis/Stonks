@@ -99,7 +99,8 @@ def load_history(
     """The last ``bars`` daily bars at or before ``as_of`` per ticker, in one
     query: a date-indexed frame (oldest first) of adjusted
     ``open, high, low, close, volume``. OHLC are scaled by
-    ``adj_close / close`` (raw where either is missing). Tickers without
+    ``adj_close / close`` (raw where either is missing) and volume divided
+    by it, so ``close * volume`` is the dollar volume that traded. Tickers without
     bars are absent. ``major_units`` (production) reads pence as pounds; a
     backtest passes ``False`` to stay in the lake's units."""
     if not tickers or bars < 1:
@@ -121,11 +122,18 @@ def load_history(
     )
     if df.empty:
         return {}
-    factor = (df["adj_close"] / df["close"]).where(df["close"] > 0).fillna(1.0)
+    adjust = (df["adj_close"] / df["close"]).where(df["close"] > 0).fillna(1.0)
+    adjust = adjust.where(adjust > 0, 1.0)
+    factor = adjust
     if major_units:  # in the same query: no second read per call
         factor = factor * df["currency"].map(quote_scale).astype(float)
     for col in ("open", "high", "low", "close"):
         df[col] = df[col] * factor
+    # Volume in the same shares as the adjusted prices: before a past 4:1
+    # split the close is a quarter and the volume four times, so close x
+    # volume stays the dollar volume that traded (the liquidity rule's
+    # input). The pence-to-pounds scale is a price unit, never a share count.
+    df["volume"] = df["volume"] / adjust
     df["date"] = pd.to_datetime(df["date"])
     return {
         str(ticker): group.set_index("date")[_HISTORY_COLUMNS].rename_axis("date")

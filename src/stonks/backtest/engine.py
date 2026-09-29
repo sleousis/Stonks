@@ -961,8 +961,11 @@ class Backtester:
         for col in ("open", "high", "low", "close", "adj_close"):
             if col in out:
                 out[col] = out[col] * factor
-        # volume stays as loaded: ``load_history`` never adjusts it, so it
-        # is already in the raw shares the tick reads
+        # volume moves the other way (``load_history`` adjusted it with the
+        # prices), so close x volume stays the dollar volume that traded and
+        # a split after the slice drops out of the liquidity rule too
+        if "volume" in out:
+            out["volume"] = out["volume"] / factor
         return out
 
 
