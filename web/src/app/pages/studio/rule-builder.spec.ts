@@ -93,6 +93,15 @@ describe('RuleBuilder', () => {
     });
   });
 
+  it('keeps the stop-loss on when its box is cleared', () => {
+    setup(toDoc(RSI_TEMPLATE_SPEC));
+    change(el.querySelector('#rb-sl'), '5');
+    change(el.querySelector('#rb-sl'), '');
+    // Turning a risk exit off is the checkbox's job, not a blank box's.
+    expect(spec().risk.stop_loss_pct).toBe(0.05);
+    expect((el.querySelector('#rb-sl') as HTMLInputElement).value).toBe('5');
+  });
+
   it('adds and removes indicators', () => {
     setup(toDoc(RSI_TEMPLATE_SPEC));
     change(el.querySelector('#rb-new-kind'), 'sma');
