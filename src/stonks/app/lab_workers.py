@@ -217,8 +217,9 @@ class LabWorkerService:
         cancel = queue.cancel_requested(job_id)
         if running:
             queue.heartbeat(job_id, beat.worker_id)
-            if not cancel:  # keep the "cancellation requested" message
-                self._runner.store.set_progress(job_id, beat.progress, beat.message)
+            # Written only while no cancel is flagged, so the
+            # "cancellation requested" message is never overwritten.
+            queue.worker_progress(job_id, beat.worker_id, beat.progress, beat.message)
         queue.beat_worker(beat.worker_id, job_id if running else None)
         return HeartbeatReply(running=running, cancel_requested=cancel)
 
