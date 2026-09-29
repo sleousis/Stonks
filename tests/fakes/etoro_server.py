@@ -55,7 +55,7 @@ def default_instruments() -> dict[int, FakeInstrument]:
         FakeInstrument(1002, "MSFT", exchange_id=4, bid=399.0, ask=400.0),
         FakeInstrument(1003, "BARC.L", exchange_id=7, bid=2.0, ask=2.01),
         FakeInstrument(100000, "BTC", type="Crypto", exchange_id=8, bid=60000.0, ask=60010.0),
-        FakeInstrument(1, "EURUSD", type="Currencies", exchange_id=1, settlements=("cfd",)),
+        FakeInstrument(1, "EURUSD", type="Forex", exchange_id=1, settlements=("cfd",)),
         FakeInstrument(1004, "CFDONLY", exchange_id=4, settlements=("cfd",)),
         FakeInstrument(1005, "WHOLE", exchange_id=5, units_type="whole"),
         FakeInstrument(1006, "AMTONLY", exchange_id=5, quantity_type="amountOnly", ask=50.0),
