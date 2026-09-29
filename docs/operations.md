@@ -340,7 +340,9 @@ min_level = "warning"                    # info | warning | error
 - `store`: every alert, any level, in the `alerts` table, read by `GET /api/alerts`. Credentials are scrubbed first.
 - `webhook`: POSTs `{level, title, message, fields, text}` to `STONKS_NOTIFY_WEBHOOK_URL` (keep it in `.env`; Slack and Mattermost show `text`).
 
-A notifier never raises. What alerts:
+A notifier never raises. Admins never see holdings, so an operator alert about one book carries counts only (orders rejected, corporate actions deferred, orders not reconciled). The portfolio's owner gets the detailed alert with the tickers, and the structured log keeps them for the operator.
+
+What alerts:
 
 | Source | Level | When |
 |--------|-------|------|

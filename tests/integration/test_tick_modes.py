@@ -507,3 +507,26 @@ def test_a_real_money_connection_below_live_small_opens_nothing(world):
                      gate_report={"target": stage, "passed": True})  # fmt: skip
     world.tick(DAY2)
     assert world.book.orders, "at live_small the book opens"
+
+
+def test_a_rejection_alert_names_holdings_only_to_the_owner(world):
+    """Admins never see holdings: the operator alert of rejected orders
+    counts them, and the owner's own alert names the tickers."""
+    import json
+
+    from tests.integration.test_production_tick_notify import Recorder
+
+    world.book.quotes.pop("UP.US")  # the fake broker rejects an order without a quote
+    recorder = Recorder()
+    plan = load_tick_plan(world.state, SETTINGS, traders=world.traders)
+    run_tick(world.state, world.lake, world.registry, SETTINGS, as_of=DAY1, plan=plan,
+             notifier=recorder)  # fmt: skip
+    [alert] = [n for n in recorder.sent if n.title == "orders rejected"]
+    shown = alert.message + json.dumps(alert.fields, default=str)
+    assert "UP.US" not in shown and world.live not in shown
+    assert alert.fields["rejected"] == 1
+    owner = world.state.sql(
+        "SELECT message FROM alerts WHERE user_id = ? AND title LIKE '%rejected%'",
+        [world.bob.user_id],
+    )
+    assert owner and "UP.US" in owner[0]["message"]

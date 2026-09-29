@@ -1060,6 +1060,9 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
         for event in plan.deferred:
             log.warning("tick.corporate_action_deferred", **event_as_dict(event))
         if plan.deferred and not dry_run:
+            # Admins never see holdings: the operator alert counts the
+            # events, the owner's alert names them (the log line above
+            # keeps the detail for the operator's logs).
             _safe_notify(
                 run.notifier,
                 Notification(
@@ -1069,14 +1072,24 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                     fields={
                         "tick_id": tick_id,
                         "as_of": as_of.isoformat(),
-                        "portfolio_id": portfolio_id,
-                        "events": [
-                            f"{e.ticker} {event_as_dict(e)['kind']} {e.ex_date.isoformat()}"
-                            for e in plan.deferred
-                        ],
+                        "events": len(plan.deferred),
                     },
                 ),
                 log,
+            )
+            _alert_owner(
+                run,
+                portfolio_id,
+                category="system",
+                title="Corporate actions deferred",
+                body=(
+                    "No bar on or after the ex-date yet, applied once it is ingested: "
+                    + ", ".join(
+                        f"{e.ticker} {event_as_dict(e)['kind']} {e.ex_date.isoformat()}"
+                        for e in plan.deferred
+                    )
+                ),
+                key=f"ca_deferred:{portfolio_id}:{as_of.isoformat()}",
             )
     elif not external:
         applied = apply_corporate_actions(
@@ -1772,23 +1785,29 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
 
     rejected = [order.ticker for order, st, _ in outcomes if st == "rejected"]
     if rejected:
-        fields: dict[str, Any] = {
-            "tick_id": tick_id,
-            "as_of": as_of.isoformat(),
-            "rejected": rejected,
-        }
-        if not book.legacy:
-            fields["portfolio_id"] = portfolio_id
+        # Admins never see holdings: the operator alert counts, the owner
+        # hears which tickers, and the log line keeps the detail.
+        log.warning("tick.orders_rejected", tickers=rejected)
         _safe_notify(
             run.notifier,
             Notification(
                 level="warning",
                 title="orders rejected",
                 message=f"{len(rejected)} order(s) rejected by the broker",
-                fields=fields,
+                fields={"tick_id": tick_id, "as_of": as_of.isoformat(), "rejected": len(rejected)},
             ),
             log,
         )
+        if not dry_run:
+            _alert_owner(
+                run,
+                portfolio_id,
+                category="order",
+                title="Orders rejected",
+                body=f"The broker rejected {len(rejected)} order(s): {', '.join(rejected)}",
+                key=f"rejected:{portfolio_id}:{as_of.isoformat()}",
+                deep_link="/orders",
+            )
 
     ended: list[str] = []
     if retired and run.scoped and not dry_run:
@@ -1922,6 +1941,8 @@ def _unreconciled(run: _TickRun, book: TickBook, unresolved: Sequence[str]) -> B
     run.log.warning(
         "tick.orders_unreconciled", portfolio_id=book.portfolio_id, client_ids=list(unresolved)
     )
+    # Admins never see holdings: the client ids name tickers, so only the
+    # owner's alert (and the log line above) carries them.
     _safe_notify(
         run.notifier,
         Notification(
@@ -1931,14 +1952,23 @@ def _unreconciled(run: _TickRun, book: TickBook, unresolved: Sequence[str]) -> B
                 f"{len(unresolved)} order(s) in an unknown state at the broker;"
                 " the book waits for reconciliation"
             ),
-            fields={
-                "tick_id": run.tick_id,
-                "portfolio_id": book.portfolio_id,
-                "client_ids": list(unresolved)[:10],
-            },
+            fields={"tick_id": run.tick_id, "unknown_orders": len(unresolved)},
         ),
         run.log,
     )
+    if not run.dry_run:
+        _alert_owner(
+            run,
+            book.portfolio_id,
+            category="order",
+            title="Orders not reconciled",
+            body=(
+                f"{len(unresolved)} order(s) are in an unknown state at the broker, so the"
+                " book waits for reconciliation: " + ", ".join(list(unresolved)[:10])
+            ),
+            key=f"unreconciled:{book.portfolio_id}:{run.as_of.isoformat()}",
+            deep_link="/orders",
+        )
     return BookResult(
         portfolio_id=book.portfolio_id,
         status="noop",
@@ -2048,6 +2078,41 @@ def _what_if(broker: Broker | None, orders: Sequence[Order], log: Any) -> dict[s
             }
         }
     return out
+
+
+def _alert_owner(
+    run: _TickRun,
+    portfolio_id: str,
+    *,
+    category: str,
+    title: str,
+    body: str,
+    key: str,
+    deep_link: str | None = None,
+) -> None:
+    """The detailed version of an operator alert, for the portfolio's owner
+    only (admins see counts, never holdings). A book without accounts (the
+    legacy single book) has no owner to tell. Never raises."""
+    if not run.scoped:
+        return
+    from stonks.notify.events import Audience, Event
+    from stonks.notify.router import configured_router
+
+    try:
+        configured_router(run.state).publish(
+            Event(
+                category=category,  # type: ignore[arg-type]
+                level="warning",
+                title=title,
+                body=body,
+                audience=Audience.owner_of(portfolio_id),
+                dedupe_key=key,
+                deep_link=deep_link,
+                portfolio_id=portfolio_id,
+            )
+        )
+    except Exception as exc:
+        run.log.error("tick.owner_alert_failed", portfolio_id=portfolio_id, error=str(exc))
 
 
 def _notify_awaiting(run: _TickRun, portfolio_id: str, count: int) -> None:
