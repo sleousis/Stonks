@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Literal
 
 from stonks.logging import get_logger
-from stonks.ops.backup import _ID_RE, MANIFEST, DataPaths, read_manifest
+from stonks.ops.backup import _ID_RE, MANIFEST, DataPaths, backup_id_order, read_manifest
 from stonks.ops.restore import (
     _aside_name,
     _place_file,
@@ -76,7 +76,7 @@ def find_snapshot(root: str | Path) -> Snapshot:
         p.parent for p in root.rglob(MANIFEST) if p.parent.is_dir() and _ID_RE.match(p.parent.name)
     ]
     if backups:
-        return Snapshot("app_backup", max(backups, key=lambda p: p.name))
+        return Snapshot("app_backup", max(backups, key=lambda p: backup_id_order(p.name)))
     folders = {p.parent for name in ("state.sqlite", "lake.duckdb") for p in root.rglob(name)}
     if not folders:
         raise DisasterRestoreError(f"no Stonks data (app backup, lake or state) under {root}")

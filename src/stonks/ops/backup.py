@@ -69,6 +69,15 @@ LAKE_FILE = "lake/lake.duckdb"
 LAKE_BARS = "lake/bars"
 ARTIFACTS = "artifacts"
 _ID_RE = re.compile(r"^stonks-\d{8}T\d{6}Z(-\d+)?$")
+
+
+def backup_id_order(backup_id: str) -> tuple[str, int]:
+    """Sort key of a backup id: its timestamp, then its same-second counter
+    as a number (by name ``-10`` would sort before ``-9``)."""
+    stamp, _, counter = backup_id.partition("Z-")
+    return (stamp.rstrip("Z"), int(counter) if counter.isdigit() else 0)
+
+
 _CHUNK = 1 << 20
 
 _log = get_logger("stonks.ops.backup")
