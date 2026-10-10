@@ -129,6 +129,49 @@ def test_book_and_model_returns_give_the_tracking_difference(state):
     assert gate.tracking_diff == pytest.approx(0.006)
 
 
+def test_a_deposit_on_the_day_is_not_part_of_the_book_return(state):
+    _snapshot(state, DAY - timedelta(days=1), 1000.0)
+    _snapshot(state, DAY, 2010.0)
+    state.execute(
+        "INSERT INTO portfolio_cash_flows (portfolio_id, flow_date, kind, amount, created_at,"
+        " created_by) VALUES (?, ?, 'deposit', 1000, ?, 'test')",
+        [PF, DAY.isoformat(), f"{DAY.isoformat()}T12:00:00+00:00"],
+    )
+    gate = compute_gate_day(state, PF, DAY, drift=NO_DRIFT, model=NO_MODEL)
+    assert gate.live_return == pytest.approx(0.005)
+
+
+def test_a_foreign_deposit_on_the_day_is_converted_for_the_book_return(state, monkeypatch):
+    from stonks.fx import FxRates
+    from stonks.insights import flows
+    from stonks.insights.flows import RecordedFlow
+
+    eur = RecordedFlow(
+        day=DAY,
+        kind="deposit",
+        amount=1_000.0,
+        source="broker",
+        currency="EUR",
+        account_currency="USD",
+    )
+    old = RecordedFlow(
+        day=date(2024, 1, 2),
+        kind="deposit",
+        amount=500.0,
+        source="broker",
+        currency="GBP",
+        account_currency="USD",
+    )
+    monkeypatch.setattr(flows, "recorded_flows", lambda s, p: [old, eur])
+    _snapshot(state, DAY - timedelta(days=1), 1000.0)
+    _snapshot(state, DAY, 2110.5)  # 1,100 USD deposited, then +0.5%
+    rates = FxRates([("EUR", "USD", DAY, 1.10)])
+    gate = compute_gate_day(
+        state, PF, DAY, drift=NO_DRIFT, model=NO_MODEL, fx_loader=lambda codes: rates
+    )
+    assert gate.live_return == pytest.approx(0.005)
+
+
 def test_the_shadow_model_book_weights_its_subscriptions(state):
     from stonks.production.live.gates import ShadowModelBook
 

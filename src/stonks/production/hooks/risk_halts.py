@@ -2,7 +2,8 @@
 
 Before a portfolio's orders reach its broker the gate:
 
-1. evaluates the circuit breaker on the portfolio's snapshot curve when the
+1. evaluates the circuit breaker on the portfolio's snapshot curve, with
+   deposits and withdrawals taken out (``production.risk_curve``), when the
    book's policy switches it on (``GateContext.policy``), and opens a
    ``risk_halts`` row per new trip (a ``risk`` notification goes to the
    owner). A dry run halts the same way but writes nothing;
@@ -27,6 +28,7 @@ from stonks.production.halts import (
     trip_halt,
 )
 from stonks.production.hooks import GateContext, GateVerdict, TradeGate, register_gate
+from stonks.production.risk_curve import adjusted_curve
 from stonks.production.rules._common import settings_of
 from stonks.production.rules.circuit_breaker import (
     BreakerTrip,
@@ -113,7 +115,14 @@ class RiskHaltGate(TradeGate):
         if settings is None or not settings.active:
             return []
         state = ctx.state
-        curve = portfolio_curve(state, ctx.portfolio_id, ctx.as_of)
+        # deposits and withdrawals taken out (risk_curve): a flow is not a gain or a loss
+        curve = adjusted_curve(
+            state,
+            ctx.portfolio_id,
+            portfolio_curve(state, ctx.portfolio_id, ctx.as_of),
+            as_of=ctx.as_of,
+            fx_loader=ctx.fx_loader,
+        )
         trips = breaker_trips(
             curve, ctx.as_of, settings, since=last_clears(state, ctx.portfolio_id)
         )

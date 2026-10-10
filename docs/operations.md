@@ -900,6 +900,8 @@ The shipped `config/default.toml` turns on three protections for a new install. 
 
 Stonks finds `config/default.toml` under the working folder first, then in the project that holds the code, so running from another folder keeps these limits. Without any config file, `stonks serve`, `stonks tick` and the scheduler refuse to start, and other commands log a warning, because the code defaults drop every limit above.
 
+The circuit breaker and the drawdown scaler read the book's value with deposits and withdrawals taken out, in the same way as the time-weighted return (see [returns and cash flows](#returns-and-cash-flows)). A deposit after a 10% loss still shows a 10% drawdown, and a withdrawal is not a loss. A flow in another currency is converted on its own day. If no rate converts it, only that day counts as flat, and every other flow is still taken out. The value history on the P&L pages stays as it was.
+
 There is no one-day loss limit: the shortest breaker is the week loss over `week_sessions` runs (set it to 1 for a day). An existing install that keeps its own config file keeps its own values. To loosen a protection, change it in the file or in the console (below); a portfolio or follow can only tighten it.
 
 ### System settings in the console
@@ -1064,7 +1066,7 @@ uv run stonks registry promote <id> --override --reason "why"
 uv run stonks registry history <id>
 ```
 
-With `[golive] incubation = true` the gate needs at least 63 days (or MinTRL, capped at 252), 20 trades, live results inside the Monte Carlo band, no quit-rule breach, stored reports for every `promotion` preset test, non-zero costs, a recorded hypothesis, and at least 30 backtest trades. The gate never changes status; `registry promote` does, and refuses without a pass or an override.
+With `[golive] incubation = true` the gate needs at least 63 days (or MinTRL, capped at 252), 20 trades, live results inside the Monte Carlo band, no quit-rule breach, stored reports for every `promotion` preset test, non-zero costs, a recorded hypothesis, and at least 30 backtest trades. For an approved strategy the gate reads the default book with its deposits and withdrawals taken out, so moved money is never a gain or a drawdown. The gate never changes status; `registry promote` does, and refuses without a pass or an override.
 
 ## Reading P&L
 
@@ -1092,6 +1094,8 @@ Only deposits and withdrawals are flows. Dividends, interest and fees stay insid
 uv run stonks cash-flows record --kind deposit --amount 5000 [--date YYYY-MM-DD] [--note ...] --user you@example.com
 uv run stonks cash-flows list --user you@example.com
 ```
+
+The risk rules read the same flows. The circuit breaker, the drawdown scaler and the live stage gate's daily book return take them out, so moving money never trips or hides a halt. A broker flow in another currency with no FX rate leaves their curve as it was, and the log says so (`risk_curve.fx_missing`).
 
 The API does the same (`/api/portfolios/{id}/cash-flows`). A withdrawal larger than the cash, a date before the book's latest snapshot or in the future, and a running tick are refused.
 

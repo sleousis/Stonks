@@ -31,7 +31,7 @@ import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 
@@ -47,6 +47,9 @@ from stonks.production.live.stages import (
     stages_enabled,
 )
 from stonks.store.state import SqliteState
+
+if TYPE_CHECKING:
+    from stonks.production.risk_curve import FxLoader
 
 _log = get_logger("stonks.production.live.gates")
 
@@ -187,9 +190,11 @@ def compute_gate_day(
     model: ModelBook | None = None,
     stage: LiveStage | None = None,
     clock: Clock = SYSTEM_CLOCK,
+    fx_loader: FxLoader | None = None,
 ) -> GateDay:
     """The gate metrics of ``portfolio_id`` for the session ``day``, read
-    from the ledger. Writes nothing."""
+    from the ledger. Writes nothing. ``fx_loader`` converts a deposit or
+    withdrawal in another currency for the book return."""
     settings = settings or StageGateSettings()
     d = day.isoformat()
     orders = state.sql(
@@ -219,7 +224,7 @@ def compute_gate_day(
         fills_missing_commission=missing,
         tca_orders=len(gaps),
         tca_gap_bps=float(np.mean(gaps)) if gaps else None,
-        live_return=_book_return(state, portfolio_id, day),
+        live_return=_book_return(state, portfolio_id, day, fx_loader=fx_loader),
         model_return=(model or ShadowModelBook()).session_return(state, portfolio_id, day),
         drift_items=(drift or ReconcileReportDrift()).unexplained(state, portfolio_id, day),
         computed_at=iso_now(clock),
@@ -298,6 +303,7 @@ def record_gate_days(
     model: ModelBook | None = None,
     alert: Callable[[str, Sequence[GateDay]], None] | None = None,
     clock: Clock = SYSTEM_CLOCK,
+    fx_loader: FxLoader | None = None,
 ) -> GateDaysRun:
     """Compute and store ``day`` for every live portfolio, then alert the
     owner of each one whose last week was not clean. Only alerts: the
@@ -308,7 +314,14 @@ def record_gate_days(
     for portfolio_id in live_portfolios(state):
         try:
             gate = compute_gate_day(
-                state, portfolio_id, day, settings=settings, drift=drift, model=model, clock=clock
+                state,
+                portfolio_id,
+                day,
+                settings=settings,
+                drift=drift,
+                model=model,
+                clock=clock,
+                fx_loader=fx_loader,
             )
             with state.transaction():
                 record_gate_day(state, gate)
@@ -767,8 +780,11 @@ def _period_return(rows: Sequence[Any], day: date) -> float | None:
     return now / before - 1.0 if before > 0 else None
 
 
-def _book_return(state: SqliteState, portfolio_id: str, day: date) -> float | None:
-    """The book's return into ``day`` from its last snapshot of each day."""
+def _book_return(
+    state: SqliteState, portfolio_id: str, day: date, *, fx_loader: FxLoader | None = None
+) -> float | None:
+    """The book's return into ``day`` from its last snapshot of each day,
+    with deposits and withdrawals taken out (``production.risk_curve``)."""
     rows = state.sql(
         "SELECT as_of, total_value FROM portfolio_snapshots s WHERE portfolio_id = ?"
         " AND as_of <= ? AND id = (SELECT MAX(id) FROM portfolio_snapshots"
@@ -776,7 +792,14 @@ def _book_return(state: SqliteState, portfolio_id: str, day: date) -> float | No
         " ORDER BY as_of DESC LIMIT 2",
         [portfolio_id, day.isoformat()],
     )
-    return _period_return(rows, day)
+    if len(rows) < 2 or rows[0]["as_of"] != day.isoformat():
+        return None
+    from stonks.production.risk_curve import adjusted_curve
+
+    # a deposit or withdrawal between the two snapshots is not a return
+    points = [(date.fromisoformat(r["as_of"]), float(r["total_value"])) for r in reversed(rows)]
+    (_, before), (_, now) = adjusted_curve(state, portfolio_id, points, fx_loader=fx_loader)
+    return now / before - 1.0 if before > 0 else None
 
 
 def _tca_gaps(state: SqliteState, portfolio_id: str, start: date, end: date) -> list[float]:
