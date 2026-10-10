@@ -95,7 +95,7 @@ jobs:
           # Protect them from --delete, or every deploy would wipe them and
           # the gateway profiles could no longer start.
           rsync -az --delete \
-            --exclude .env --exclude .deployed-tag --exclude .previous-tag --exclude snapshots/ \
+            --exclude .env --exclude backup.env --exclude .deployed-tag --exclude .previous-tag --exclude snapshots/ \
             --filter 'protect /ibkr/secrets/*' \
             deploy/ "stonks:${DEPLOY_DIR}/"
 

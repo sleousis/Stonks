@@ -6,10 +6,15 @@ ALPINE_IMAGE="alpine:3.22"
 
 log() { printf '%s %s: %s\n' "$(date -u +%FT%TZ)" "${LOG_TAG:-stonks}" "$*" >&2; }
 
-# Read one KEY=value from deploy/.env without sourcing the whole file.
-env_get() {
-	local key="$1" default="${2:-}" line
-	line="$(grep -E "^${key}=" "$DEPLOY_DIR/.env" 2>/dev/null | tail -n 1 || true)"
+# Keys that only the backup tool and the host scripts read. They live in
+# deploy/backup.env, which only the restic container gets, never in
+# deploy/.env, which every app container gets (docs/deploy.md).
+BACKUP_ENV_KEYS="RESTIC_REPOSITORY RESTIC_PASSWORD AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION B2_ACCOUNT_ID B2_ACCOUNT_KEY HC_PING_BACKUP HC_PING_RESTORE_TEST HC_PING_HOST"
+
+# Read one KEY=value from a file without sourcing it: file_get FILE KEY [default].
+file_get() {
+	local file="$1" key="$2" default="${3:-}" line
+	line="$(grep -E "^${key}=" "$file" 2>/dev/null | tail -n 1 || true)"
 	if [ -n "$line" ]; then
 		line="${line#*=}"
 		line="${line%\"}"
@@ -18,6 +23,60 @@ env_get() {
 	else
 		printf '%s' "$default"
 	fi
+}
+
+# Read one KEY=value from deploy/.env.
+env_get() { file_get "$DEPLOY_DIR/.env" "$@"; }
+
+# Read a backup key: deploy/backup.env first, then deploy/.env (the old
+# layout, before migrate-backup-env.sh).
+backup_env_get() {
+	local key="$1" default="${2:-}"
+	if grep -qE "^${key}=" "$DEPLOY_DIR/backup.env" 2>/dev/null; then
+		file_get "$DEPLOY_DIR/backup.env" "$key"
+	else
+		env_get "$key" "$default"
+	fi
+}
+
+# Backup keys that still have a value in deploy/.env (the old layout).
+legacy_backup_keys() {
+	local key
+	for key in $BACKUP_ENV_KEYS; do
+		[ -n "$(env_get "$key")" ] && printf '%s
+' "$key"
+	done
+	return 0
+}
+
+# Warn while deploy/.env still holds backup secrets: every app container
+# can read them there. warn_legacy_backup_env [log|notify].
+warn_legacy_backup_env() {
+	local how="${1:-log}" keys text
+	keys="$(legacy_backup_keys | tr '
+' ' ')"
+	[ -n "$keys" ] || return 0
+	text="deploy/.env still holds backup secrets (${keys% }), so the app containers can read them. Move them to deploy/backup.env with deploy/scripts/migrate-backup-env.sh, then run docker compose up -d"
+	if [ "$how" = notify ]; then
+		notify warning "$text"
+	else
+		log "warning: $text"
+	fi
+}
+
+# Run the restic container. On the old layout, the backup keys still in
+# deploy/.env (and not in backup.env) go to the container by name from this
+# shell's environment, so they never show on a command line.
+restic_run() {
+	(
+		args=()
+		for key in $(legacy_backup_keys); do
+			grep -qE "^${key}=" "$DEPLOY_DIR/backup.env" 2>/dev/null && continue
+			export "$key=$(env_get "$key")"
+			args+=(-e "$key")
+		done
+		compose --profile backup run --rm -T "${args[@]}" restic "$@"
+	)
 }
 
 # Write KEY=value into deploy/.env (replace or append).

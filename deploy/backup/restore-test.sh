@@ -15,7 +15,8 @@ LOG_TAG=restore-test
 . "$DEPLOY_DIR/scripts/lib.sh"
 cd "$DEPLOY_DIR"
 
-hc="$(env_get HC_PING_RESTORE_TEST)"
+hc="$(backup_env_get HC_PING_RESTORE_TEST)"
+warn_legacy_backup_env notify
 ping_hc "$hc" start
 finish() {
 	local rc=$?
@@ -29,7 +30,7 @@ finish() {
 }
 trap finish EXIT
 
-restic() { compose --profile backup run --rm -T restic "$@"; }
+restic() { restic_run "$@"; }
 
 restic check --read-data-subset=10%
 compose --profile backup run --rm -T --entrypoint sh restic -c 'rm -rf /restore/* /restore/.[!.]*'
