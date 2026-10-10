@@ -55,6 +55,16 @@ describe('ModelsPage', () => {
   it('says when nothing waits', async () => {
     await render([]);
     expect(el.textContent).toContain('No candidates');
+    // Plain words: new versions and Retrain, never fits, refits or swaps.
+    const own = [
+      el.querySelector('app-page-header'),
+      el.querySelector('app-empty-state'),
+      el.querySelector('[aria-labelledby="retrain-title"] p'),
+    ]
+      .map((n) => n?.textContent ?? '')
+      .join(' ');
+    expect(own).toContain('new versions');
+    expect(own).not.toMatch(/\bfits?\b|refit|swap/i);
   });
 
   it('retrains every strategy and reloads the candidates', async () => {
