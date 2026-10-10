@@ -12225,6 +12225,10 @@ export type ProviderView = {
      */
     enabled: boolean;
     /**
+     * Gateways
+     */
+    gateways?: Array<string>;
+    /**
      * Has Paper
      */
     has_paper: boolean;

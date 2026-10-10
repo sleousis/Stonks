@@ -76,13 +76,12 @@ def test_scoped_routes_need_the_token_even_for_loopback_reads(client):
     assert client.get("/api/connections", headers=AUTH).status_code == 200
 
 
-def test_providers_lists_every_provider_and_marks_the_enabled_ones(client):
+def test_providers_lists_real_providers_and_marks_the_enabled_ones(client):
     resp = client.get("/api/connections/providers", headers=AUTH)
     assert resp.status_code == 200
     by_name = {p["name"]: p for p in resp.json()}
-    assert set(by_name) == {
-        "alpaca", "etoro", "fake", "fake_portal", "fake_trading", "ibkr", "snaptrade",
-    }  # fmt: skip
+    # An admin sees the turned-off real providers, never a turned-off test one.
+    assert set(by_name) == {"alpaca", "etoro", "fake", "fake_portal", "ibkr", "snaptrade"}
     assert {n for n, p in by_name.items() if p["enabled"]} == {"fake", "fake_portal"}
     assert by_name["fake"]["auth_flow"] == "api_key"
     assert by_name["fake"]["credential_fields"] == ["token"]

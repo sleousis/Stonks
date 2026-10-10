@@ -22200,6 +22200,13 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "gateways": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gateways",
+            "type": "array"
+          },
           "has_paper": {
             "title": "Has Paper",
             "type": "boolean"
