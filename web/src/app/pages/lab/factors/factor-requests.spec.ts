@@ -16,6 +16,7 @@ import {
   matchesQuery,
   maxMagnitude,
   tearsheetErrors,
+  historyText,
   warmupText,
 } from './factor-requests';
 import { MOM } from './factor-test-fixtures';
@@ -142,6 +143,10 @@ describe('factor display helpers', () => {
     expect(warmupText(1)).toBe('1 bar');
     expect(warmupText(252)).toBe('252 bars');
     expect(warmupText(null)).toBe('n/a');
+    expect(historyText(252)).toBe('1 year of history');
+    expect(historyText(63)).toBe('3 months of history');
+    expect(historyText(5)).toBe('5 days of history');
+    expect(historyText(0)).toBe('No history needed');
   });
 
   it('searches id, family, description and formula', () => {

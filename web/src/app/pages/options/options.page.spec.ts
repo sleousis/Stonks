@@ -126,6 +126,10 @@ describe('OptionsPage', () => {
 
   it('says it is research only and opens the first stored chain', async () => {
     await open();
+    expect(el.querySelector('app-page-header')!.textContent).toContain(
+      'Look at option prices and test option strategies on past prices. Nothing here trades.',
+    );
+    expect(el.querySelector('app-page-header')!.textContent).not.toContain('Greeks');
     expect(el.querySelector('[role="note"]')!.textContent).toContain(
       'Research only, nothing on this page trades options.',
     );

@@ -11,8 +11,14 @@ import { StatTile } from '../ui/stat-tile';
 import { StatusPill } from '../ui/status-pill';
 import { ParamHeatmap } from './param-heatmap';
 import { PreflightIssues } from './preflight-issues';
-import { testHint, testLabel } from './survival-tests';
-import { FigureGrid, benchmarkFigures, benchmarkName } from './result-figures';
+import { testHint, testLabel, testReason } from './survival-tests';
+import {
+  type Figure,
+  FigureGrid,
+  benchmarkFigures,
+  benchmarkName,
+  pctOrNa,
+} from './result-figures';
 import { robustnessWords } from './robustness';
 
 export { formatMetric, metricLabel } from '../metrics';
@@ -44,6 +50,32 @@ export function verdictSentence(
   );
 }
 
+/**
+ * "Yearly return vs benchmark" and "Worst drop vs benchmark", from the
+ * held-out test's figures and the benchmark over the same days.
+ */
+export function benchmarkHeadline(r: Pick<LabRunView, 'benchmark' | 'survival_reports'>): Figure[] {
+  const b = r.benchmark;
+  if (!b) return [];
+  const oos = r.survival_reports.find((t) => t.test_id === 'oos')?.metrics ?? {};
+  const cagr = oos['cagr_oos'];
+  const drop = oos['max_drawdown_oos'];
+  const versus = (own: number | null | undefined, bench: number | null | undefined) =>
+    own === undefined ? pctOrNa(bench) : `${pctOrNa(own)} vs ${pctOrNa(bench)}`;
+  return [
+    {
+      label: cagr === undefined ? 'Benchmark yearly return' : 'Yearly return vs benchmark',
+      value: versus(cagr, b.benchmark_cagr),
+      help: 'cagr',
+    },
+    {
+      label: drop === undefined ? 'Benchmark worst drop' : 'Worst drop vs benchmark',
+      value: versus(drop, b.benchmark_max_dd),
+      help: 'max_drawdown',
+    },
+  ];
+}
+
 /** The run's status from the API's `robustness`, else from its verdict. */
 export function heldUp(r: Pick<LabRunView, 'verdict' | 'robustness'>): boolean {
   return r.robustness ? r.robustness === 'survived' : r.verdict === 'pass';
@@ -56,10 +88,10 @@ function paramText(v: unknown): string {
 }
 
 /**
- * A plain verdict, trial counts, best settings, the benchmark comparison
- * and one pass/fail card per robustness test (what it guards against, its
- * deciding figures first, the rest folded away). The verdict is about the
- * robustness tests; trials are only the settings the search tried.
+ * One plain verdict, the settings tried, best settings, the benchmark
+ * comparison and one pass/fail card per robustness test (why it passed or
+ * failed in one sentence, its deciding figures first, the rest folded
+ * away).
  */
 @Component({
   selector: 'app-lab-run-result',
@@ -67,37 +99,21 @@ function paramText(v: unknown): string {
   imports: [FigureGrid, HelpTip, ParamHeatmap, PreflightIssues, RouterLink, StatTile, StatusPill],
   template: `
     @let r = result();
-    <div class="summary">
-      <app-stat-tile
-        class="verdict"
-        label="Status"
-        help="lab_verdict"
-        featured
-        [value]="status().label"
-        [detail]="passedText()"
-        [detailTone]="held() ? 'gain' : 'loss'"
-      />
-      <app-stat-tile label="Best score" [value]="score()" [detail]="className()" />
-      <app-stat-tile
-        label="Trials this run"
-        help="trials"
-        [value]="count(r.n_trials_run)"
-        detail="Settings the search tried"
-      />
-      <app-stat-tile
-        label="Trials of this strategy"
-        help="trials"
-        [value]="count(r.n_trials_class)"
-        detail="All runs so far"
-      />
+    <div class="plain" [class.failed]="!held()" role="note">
+      <p class="plain-verdict">
+        <strong>{{ status().label }}.</strong> {{ verdictText() }}
+        <app-help-tip term="lab_verdict" />
+      </p>
     </div>
 
-    <div class="plain" [class.failed]="!held()" role="note">
-      <p class="plain-verdict">{{ verdictText() }}</p>
-      <p class="muted">
-        Trials are the settings the search tried. A trial only says a setting ran. The verdict comes
-        from the robustness tests on the best one, so a run can fail with every trial done.
-      </p>
+    <div class="summary">
+      <app-stat-tile label="Best score" [value]="score()" [detail]="className()" />
+      <app-stat-tile label="Settings tried" [value]="count(r.n_trials_run)" detail="This run" />
+      <app-stat-tile
+        label="Settings tried in all runs"
+        [value]="count(r.n_trials_class)"
+        detail="Of this strategy"
+      />
     </div>
 
     @if (r.registered_strategy_id; as id) {
@@ -114,7 +130,7 @@ function paramText(v: unknown): string {
       </p>
     }
     <p class="ledger-link">
-      Every setting tried is kept in the <a routerLink="/lab/ledger">trial ledger</a>.
+      Every setting tried is kept in the <a routerLink="/lab/ledger">Lab history</a>.
     </p>
 
     @if (r.preflight) {
@@ -141,7 +157,11 @@ function paramText(v: unknown): string {
       <section aria-labelledby="lr-bench-title">
         <h3 id="lr-bench-title">Against the benchmark</h3>
         <p class="muted bench-name">{{ benchName() }}</p>
-        <app-figure-grid label="Benchmark figures" [figures]="bench()" />
+        <app-figure-grid label="Against the benchmark" [figures]="benchHeadline()" />
+        <details class="bench-all">
+          <summary>All figures</summary>
+          <app-figure-grid label="All benchmark figures" [figures]="bench()" />
+        </details>
       </section>
     }
 
@@ -161,6 +181,7 @@ function paramText(v: unknown): string {
               <span class="test-name">{{ t.label }} <app-help-tip [term]="t.id" /></span>
               <app-status-pill [status]="t.passed ? 'pass' : 'fail'" />
             </div>
+            <p class="reason">{{ t.reason }}</p>
             @if (t.hint) {
               <p class="hint">{{ t.hint }}</p>
             }
@@ -173,9 +194,6 @@ function paramText(v: unknown): string {
                   </div>
                 }
               </dl>
-            }
-            @if (t.notes) {
-              <p class="notes">{{ t.notes }}</p>
             }
             @if (t.rest.length) {
               <details>
@@ -207,10 +225,7 @@ function paramText(v: unknown): string {
     .summary {
       display: grid;
       gap: var(--space-3);
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .verdict {
-      grid-column: 1 / -1;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
     }
     .plain {
       display: grid;
@@ -295,10 +310,12 @@ function paramText(v: unknown): string {
     .test-name {
       font-weight: var(--weight-semibold);
     }
-    .notes {
+    .reason {
       font-size: var(--text-sm);
-      color: var(--color-ink-2);
       overflow-wrap: anywhere;
+    }
+    .bench-all {
+      margin-top: var(--space-2);
     }
     details summary {
       cursor: pointer;
@@ -330,12 +347,6 @@ export class LabRunResultView {
     return s === null ? 'n/a' : formatNumber(s, { digits: 3 });
   });
 
-  protected readonly passedText = computed(() => {
-    const reports = this.result().survival_reports;
-    const passed = reports.filter((r) => r.passed).length;
-    return `${passed} of ${reports.length} robustness tests passed`;
-  });
-
   /** The verdict in one plain sentence, naming what failed. */
   protected readonly verdictText = computed(() => verdictSentence(this.result()));
   /** The run's status in the Lab's words: Held up or Did not hold up. */
@@ -356,6 +367,8 @@ export class LabRunResultView {
     const b = this.result().benchmark;
     return b ? benchmarkFigures(b) : [];
   });
+  /** The two benchmark figures a trader reads first; the rest fold away. */
+  protected readonly benchHeadline = computed(() => benchmarkHeadline(this.result()));
   protected readonly benchName = computed(() => {
     const b = this.result().benchmark;
     return b ? benchmarkName(b) : '';
@@ -367,7 +380,7 @@ export class LabRunResultView {
       label: testLabel(r.test_id),
       hint: testHint(r.test_id),
       passed: r.passed,
-      notes: r.notes,
+      reason: testReason(r),
       ...splitMetrics(r.test_id, r.metrics),
     })),
   );

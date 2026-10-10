@@ -148,3 +148,40 @@ def test_tick_result_names_the_winner() -> None:
         dry_run=False,
     )
     assert result.winner_strategy_name == TREND
+
+
+def test_display_name_humanises_every_id_like_the_console() -> None:
+    from stonks.app.strategy_names import strategy_display_name
+
+    assert strategy_display_name("starter_trend") == TREND
+    assert strategy_display_name("etf_trend") == "ETF trend"
+    assert strategy_display_name("momentum_0a1b2c3d") == "Momentum 0a1b"
+    assert strategy_display_name("admin_trend_rule_e3001234", draft_name="Admin trend rule") == (
+        "Admin trend rule"
+    )
+    assert strategy_display_name("momentum-v3") == "momentum-v3"
+    # A ticker inside a snake_case id reads in capitals, as it is traded.
+    assert strategy_display_name("bah_btc-usd") == "Bah BTC-USD"
+    assert strategy_display_name("bah_btc-usd_0a1b2c3d") == "Bah BTC-USD 0a1b"
+
+
+def test_names_come_from_the_draft_a_strategy_was_registered_from(tmp_path) -> None:
+    from stonks.app.strategy_names import name_views, strategy_names
+    from stonks.store.state import SqliteState
+
+    with SqliteState(tmp_path / "state.sqlite") as state:
+        state.migrate()
+        state.execute(
+            "INSERT INTO strategy_drafts (id, name, kind, spec_json, status,"
+            " registered_strategy_id, created_at, updated_at)"
+            " VALUES ('d1', 'Admin trend rule', 'rule', '{}', 'registered',"
+            " 'admin_trend_rule_e3001234', '2026-01-01', '2026-01-01')"
+        )
+        names = strategy_names(state, ["admin_trend_rule_e3001234", "etf_trend", "starter_trend"])
+        assert names == {
+            "admin_trend_rule_e3001234": "Admin trend rule",
+            "etf_trend": "ETF trend",
+            "starter_trend": TREND,
+        }
+        views = name_views(state, [_order("admin_trend_rule_e3001234"), _order(None)])
+    assert [v.strategy_name for v in views] == ["Admin trend rule", None]

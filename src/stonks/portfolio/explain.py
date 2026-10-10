@@ -12,6 +12,7 @@ trimmed it:
 - ``risk_rule``: a named risk rule cut or trimmed the order;
 - ``lots``: the lot rule (roadmap 23.1) rounded the order, or skipped it
   as smaller than one tradable lot;
+- ``picked``: ``single_winner`` picked it, but no order bought it this run;
 - ``held``: held, and nothing asked for a trade;
 - ``traded``: the order went through untouched.
 
@@ -41,6 +42,7 @@ DecisionStep = Literal[
     "scope",
     "external",
     "halt",
+    "picked",
     "held",
     "traded",
 ]
@@ -50,14 +52,15 @@ DecisionOutcome = Literal["traded", "trimmed", "kept_out", "held"]
 STEP_TEXT: dict[str, str] = {
     "universe": "outside the book's universe",
     "rank": "another pick ranked higher",
-    "constructor": "the constructor gave it no weight",
-    "buffer": "inside the no-trade buffer, or the trade was too small",
+    "constructor": "the portfolio gave it no weight",
+    "buffer": "the change was too small to trade",
     "stale_price": "no fresh price, so the buy was dropped",
     "risk_rule": "a risk rule changed the order",
     "lots": "rounded to tradable lots",
     "scope": "outside this run's tickers",
     "external": "the trade would cross a holding outside Stonks",
     "halt": "a halt blocked new positions",
+    "picked": "picked, but not bought this run",
     "held": "held, no trade needed",
     "traded": "traded as planned",
 }
@@ -80,7 +83,10 @@ class TickerDecision:
     detail: dict[str, Any] = field(default_factory=dict[str, Any])
 
     def summary(self) -> str:
-        text = STEP_TEXT.get(self.step, self.step)
+        step = self.step
+        if step == "held" and self.outcome == "kept_out":
+            step = "picked"  # rows stored before the picked step existed
+        text = STEP_TEXT.get(step, step)
         rule = self.detail.get("rule")
         if self.step == "risk_rule" and rule:
             text = f"the risk rule {rule} {'trimmed' if self.outcome == 'trimmed' else 'cut'} it"
@@ -269,7 +275,9 @@ def _decide(
         )
     if weight is not None and abs(weight) > _EPS:
         if single:
-            return replace(base, step="held", outcome="held" if abs(held) > _EPS else "kept_out")
+            if abs(held) > _EPS:
+                return replace(base, step="held", outcome="held")
+            return replace(base, step="picked", outcome="kept_out")
         return replace(
             base,
             step="buffer",

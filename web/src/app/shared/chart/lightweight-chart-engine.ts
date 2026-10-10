@@ -21,7 +21,7 @@ import {
   createSeriesMarkers,
 } from 'lightweight-charts';
 
-import { formatMoney, formatNumber, formatPercent } from '../../core/format/format';
+import { axisFormatter } from './axis-format';
 import type {
   Candle,
   ChartEngine,
@@ -29,7 +29,6 @@ import type {
   ChartPoint,
   ChartSeries,
   ChartTheme,
-  ChartValueFormat,
   CrosshairReadout,
   PriceChartData,
   PriceChartHandle,
@@ -51,17 +50,6 @@ function fromTime(time: Time | undefined): string | null {
   if (typeof time === 'number') return new Date(time * 1000).toISOString();
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${time.year}-${pad(time.month)}-${pad(time.day)}`;
-}
-
-function formatter(format: ChartValueFormat | undefined): (v: number) => string {
-  switch (format) {
-    case 'money':
-      return (v) => formatMoney(v, { compact: Math.abs(v) >= 100_000 });
-    case 'percent':
-      return (v) => formatPercent(v, { digits: 1 });
-    default:
-      return (v) => formatNumber(v, { compact: Math.abs(v) >= 100_000, digits: 2 });
-  }
 }
 
 function toData(points: readonly ChartPoint[]): LineData<Time>[] {
@@ -127,6 +115,14 @@ class LightweightChart implements ChartHandle {
         this.series.delete(id);
       }
     }
+    // Each pane is one price axis: pick its label style once from all its values.
+    const paneValues = new Map<number, number[]>();
+    for (const spec of specs) {
+      const pane = spec.pane ?? 0;
+      const values = paneValues.get(pane) ?? [];
+      for (const p of spec.points) values.push(p.value);
+      paneValues.set(pane, values);
+    }
     for (const spec of specs) {
       let api = this.series.get(spec.id);
       if (!api) {
@@ -142,7 +138,11 @@ class LightweightChart implements ChartHandle {
       }
       api.applyOptions({
         ...this.seriesStyle(spec),
-        priceFormat: { type: 'custom', formatter: formatter(spec.format), minMove: 0.0001 },
+        priceFormat: {
+          type: 'custom',
+          formatter: axisFormatter(spec.format, paneValues.get(spec.pane ?? 0) ?? []),
+          minMove: 0.0001,
+        },
         title: '',
         lastValueVisible: true,
         priceLineVisible: false,

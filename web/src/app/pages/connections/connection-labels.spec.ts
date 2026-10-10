@@ -1,5 +1,7 @@
 import {
   fieldLabel,
+  fieldNoun,
+  providerFlow,
   offersPaper,
   providerGives,
   providerName,
@@ -13,6 +15,21 @@ describe('connection labels', () => {
     expect(fieldLabel('secret_key')).toBe('Secret key');
     expect(fieldLabel('client_id')).toBe('Client ID');
     expect(fieldLabel('user-secret')).toBe('User secret');
+  });
+
+  it('writes a field name for a sentence, keeping API', () => {
+    expect(fieldNoun('api_key')).toBe('API key');
+    expect(fieldNoun('secret_key')).toBe('secret key');
+  });
+
+  it('says a gateway provider runs through the server, not keys', () => {
+    expect(providerFlow({ ...ALPACA, needs_gateway: true })).toBe(
+      'Runs through an IB Gateway on the server. Pick the gateway your admin set up.',
+    );
+  });
+
+  it('calls the CSV connection CSV imports', () => {
+    expect(providerName([ALPACA], 'csv')).toBe('CSV imports');
   });
 
   it('says what a provider reads, in a fixed order', () => {

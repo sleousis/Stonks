@@ -58,8 +58,7 @@ STARTERS: tuple[StarterSpec, ...] = (
         id="starter_trend",
         class_path="stonks.strategies.examples.ewmac_trend:EWMACTrend",
         title="Starter: trend following",
-        summary="Holds funds whose moving averages point up and steps aside when they turn "
-        "down (Carver's EWMAC).",
+        summary="Holds funds whose moving averages point up and steps aside when they turn down.",
     ),
     StarterSpec(
         id="starter_momentum",

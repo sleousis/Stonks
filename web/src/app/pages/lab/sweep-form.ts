@@ -13,6 +13,7 @@ import type { IntervalInfo, StrategyClassInfo, SweepRequest, UniverseView } from
 import { SessionService } from '../../core/auth/session.service';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { SUITES } from './lab-requests';
+import { COMMON_INTERVALS } from './window-fields';
 import {
   type SweepForm,
   buildSweepRequest,
@@ -54,7 +55,9 @@ export class SweepFormView {
   });
 
   protected intervalOptions(): readonly IntervalInfo[] {
-    const list = this.intervals();
+    const list = this.intervals().filter(
+      (i) => COMMON_INTERVALS.includes(i.code) || i.code === this.form().interval,
+    );
     return list.length ? list : [{ code: '1d', is_intraday: false, seconds: 86_400 }];
   }
 

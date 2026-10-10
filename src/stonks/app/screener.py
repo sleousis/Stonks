@@ -403,9 +403,12 @@ class ScreenerService:
                 raise ValidationError("the screen matched no ticker today")
             if len(tickers) > MAX_SNAPSHOT:
                 raise ValidationError(f"a snapshot holds at most {MAX_SNAPSHOT} tickers")
+            # Survivorship bias (P14), said in words a trader reads (R22).
             warnings.append(
-                "a snapshot is today's matches as a fixed list: it carries survivorship "
-                "bias (P14); rule mode reruns the screen at each rebalance date"
+                "Today's matches are a fixed list. Companies that failed, merged or "
+                "were delisted since are missing, so a backtest on it looks better "
+                "than trading it would have been. Save it as a rule to rerun the "
+                "screen on each rebalance."
             )
             create = UniverseCreate(
                 id=request.universe_id,

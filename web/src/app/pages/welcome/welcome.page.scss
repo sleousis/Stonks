@@ -302,3 +302,11 @@
   font-size: var(--text-sm);
   color: var(--color-ink-2);
 }
+
+/* Turn on alerts: two equal choices, side by side when there is room (FR-07). */
+.channels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}

@@ -5,9 +5,10 @@ import { formatMoney, formatNumber, formatPercent, toneClass } from '../../core/
 import { ErrorState, LoadingState } from '../../shared/ui/states';
 
 /**
- * The tax owed so far this year: gains realised in the portfolio, short and
- * long term, and the estimated tax at the configured rates, in the base
- * currency. An estimate, not tax advice.
+ * The tax owed so far this year (on a paper portfolio, what it would be):
+ * gains realised in the portfolio, short and long term, and the estimated
+ * tax at the configured rates, in the base currency. An estimate, not tax
+ * advice.
  */
 @Component({
   selector: 'app-tax-year-card',
@@ -16,7 +17,7 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
   template: `
     <section class="panel" aria-labelledby="tax-year-title">
       <div class="panel-head">
-        <h2 id="tax-year-title">Tax owed this year</h2>
+        <h2 id="tax-year-title">{{ paper() ? 'Tax if this were real' : 'Tax owed this year' }}</h2>
       </div>
       <div class="panel-body">
         @if (year.error(); as err) {
@@ -47,8 +48,10 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
               </dd>
             </div>
             <div>
-              <dt>Rates</dt>
-              <dd class="num">{{ pct(y.rates.short_term) }} / {{ pct(y.rates.long_term) }}</dd>
+              <dt>Tax rates</dt>
+              <dd>
+                Short term {{ pct(y.rates.short_term) }}, long term {{ pct(y.rates.long_term) }}
+              </dd>
             </div>
           </dl>
           @if (y.unconverted > 0) {
@@ -82,6 +85,9 @@ import { ErrorState, LoadingState } from '../../shared/ui/states';
       color: var(--color-ink-2);
       font-size: var(--text-sm);
     }
+    .sums dd {
+      margin: 0;
+    }
     .gain {
       color: var(--color-gain);
     }
@@ -95,6 +101,8 @@ export class TaxYearCard {
 
   /** The portfolio shown; a change reloads the estimate. */
   readonly portfolio = input<string | null>(null);
+  /** Simulated money: the figure is what the tax would be, not what is owed. */
+  readonly paper = input(false);
 
   protected readonly year = resource({
     params: () => ({ portfolio: this.portfolio() }),

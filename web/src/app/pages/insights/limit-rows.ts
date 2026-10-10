@@ -1,4 +1,4 @@
-import type { InsightsView, RiskPolicy, RiskSummaryView } from '../../api/models';
+import type { InsightsView, RiskPolicy } from '../../api/models';
 import { formatNumber, formatPercent } from '../../core/format/format';
 
 /** How close one measure is to its limit. */
@@ -20,13 +20,10 @@ export interface LimitRow {
 
 /** A reading this share of its limit or more counts as near. */
 export const NEAR_SHARE = 0.8;
-/** The violation ratio is right near 1 and off outside this band. */
-export const VIOLATION_BAND: readonly [number, number] = [0.5, 1.5];
 
 type Fmt = (n: number | null | undefined) => string;
 const pct: Fmt = (n) => formatPercent(n, { digits: 1 });
 const count: Fmt = (n) => formatNumber(n, { digits: 0 });
-const ratio: Fmt = (n) => formatNumber(n, { digits: 2 });
 
 function status(now: number | null, limit: number | null): LimitStatus {
   if (limit == null || !(limit > 0)) return 'none';
@@ -100,7 +97,6 @@ function stricter(policy: RiskPolicy | null, system: RiskPolicy | null): Set<str
 export function limitRows(
   insights: InsightsView | null,
   policy: RiskPolicy | null,
-  live: RiskSummaryView | null,
   system: RiskPolicy | null = null,
 ): LimitRow[] {
   const yours = stricter(policy, system);
@@ -110,7 +106,9 @@ export function limitRows(
   const exposure = insights?.exposure ?? null;
   const stats = insights?.risk.holdings ?? insights?.risk.history ?? null;
   const drawdown = insights?.risk.history?.current_drawdown ?? null;
-  const maxTicker = policy?.max_weight_per_ticker ?? null;
+  // A cap of 100% of the book caps nothing.
+  const cap = policy?.max_weight_per_ticker ?? null;
+  const maxTicker = cap != null && cap < 1 ? cap : null;
 
   const topWeight = row('top_weight', 'Largest holding', conc?.top_weight ?? null, maxTicker, pct);
   topWeight.yours = yours.has('max_weight_per_ticker');
@@ -195,18 +193,33 @@ export function limitRows(
       'drawdown',
     ),
   );
-  const book = live?.portfolio ?? null;
-  const violation = book?.violation_ratio_95 ?? null;
-  rows.push({
-    key: 'violations',
-    label: 'VaR misses against the model',
-    now: ratio(violation),
-    limit: `${ratio(VIOLATION_BAND[0])} to ${ratio(VIOLATION_BAND[1])}`,
-    usage: violation == null ? null : violation / VIOLATION_BAND[1],
-    status: violation == null ? 'ok' : book?.ratio_out_of_band ? 'over' : 'ok',
-    help: 'violation_ratio',
-  });
   return rows;
+}
+
+/** Plain words for a measure that has no limit, in the order they show. */
+const NO_LIMIT_WORDS: Record<string, string> = {
+  top_weight: 'the largest holding',
+  positions: 'open positions',
+  sector: 'sector',
+  gross: 'exposure',
+  net: 'exposure',
+  volatility: 'volatility',
+  drawdown: 'drawdown',
+};
+
+/** "No limit on sector, exposure, volatility or drawdown.", or '' when every row has one. */
+export function noLimitText(rows: LimitRow[]): string {
+  const words = [
+    ...new Set(
+      rows
+        .filter((r) => r.status === 'none')
+        .map((r) => NO_LIMIT_WORDS[r.key] ?? r.label.toLowerCase()),
+    ),
+  ];
+  if (words.length === 0) return '';
+  const list =
+    words.length === 1 ? words[0] : `${words.slice(0, -1).join(', ')} or ${words.at(-1)}`;
+  return `No limit on ${list}.`;
 }
 
 /** Words for a status, shown next to the meter (never colour alone). */

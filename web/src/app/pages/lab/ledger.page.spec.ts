@@ -147,18 +147,49 @@ describe('LedgerRunPage', () => {
       fixture.detectChanges();
     }
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.textContent).toContain('Momentum has had 140 trials across every run');
+    expect(el.querySelector('.tiles')!.textContent).toContain('140');
     expect(el.textContent).toContain('the sp500 universe (500 tickers), 2025-10-01 to 2026-04-01');
     expect(el.textContent).toContain('Lookback days 60');
-    // Trials are settings that ran, and the verdict is about the robustness tests.
+    // "Trial" is kept for On trial: here they are settings tried, and each one Ran.
     const pills = [...el.querySelectorAll('tbody app-status-pill')].map((p) =>
       p.textContent!.trim(),
     );
     expect(pills).toEqual(['Done', 'Error']);
-    expect(el.textContent).toContain('a run can fail with every trial done');
-    expect(el.textContent).toContain('Random search, up to 20 trials');
+    expect(el.textContent).not.toMatch(/\btrials?\b/i);
+    expect(el.textContent).toContain('Random search, up to 20 settings');
+    expect(el.textContent).not.toContain('seed');
+    expect([...el.querySelectorAll('thead th')].map((t) => t.textContent!.trim())).toContain('Ran');
     expect(el.textContent).toContain('It stops working when trends vanish.');
     expect(el.querySelector('a.back')?.getAttribute('href')).toBe('/lab/ledger');
+    http.verify();
+  });
+
+  it('says in plain words why a crashed run failed, and falls back to the catalog idea', async () => {
+    TestBed.configureTestingModule({
+      providers: [...provideApi(), provideHttpClientTesting(), provideRouter([])],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(LedgerRunPage);
+    fixture.componentRef.setInput('runId', 'lab_2');
+    fixture.detectChanges();
+    const detail: LedgerRunDetail = {
+      ...run(2, { robustness: 'error', verdict: 'error', hypothesis: null, premortem: null }),
+      n_trials_class: 3,
+      trials: [],
+    };
+    (await nextRequest(http, '/api/lab/ledger/lab_2')).flush(detail);
+    (await nextRequest(http, '/api/catalog/strategies')).flush(CATALOG);
+    for (let i = 0; i < 3; i++) {
+      await tick();
+      fixture.detectChanges();
+    }
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('.failed-reason')!.textContent).toContain(
+      'The test stopped because of a problem on our side.',
+    );
+    expect(el.textContent).toContain('Buys the strongest trailing returns.');
+    expect(el.textContent).not.toContain('None written');
+    expect(el.textContent).not.toContain('Premortem');
     http.verify();
   });
 });

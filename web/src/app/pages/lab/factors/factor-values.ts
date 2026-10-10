@@ -30,14 +30,18 @@ import {
   imports: [BasketPicker, DataTable, EmptyState, ErrorState],
   template: `
     <form class="form" novalidate (submit)="$event.preventDefault(); show()">
-      <app-basket-picker
-        idPrefix="fv"
-        [basket]="basket()"
-        [universes]="universes()"
-        [watchlists]="watchlists()"
-        [error]="tried() ? basketMessage() : null"
-        (basketChange)="basket.set($event)"
-      />
+      @if (!sharedBasket()) {
+        <app-basket-picker
+          idPrefix="fv"
+          [basket]="basket()"
+          [universes]="universes()"
+          [watchlists]="watchlists()"
+          [error]="tried() ? basketMessage() : null"
+          (basketChange)="basket.set($event)"
+        />
+      } @else if (tried() && basketMessage(); as e) {
+        <p class="error" role="alert">{{ e }}</p>
+      }
       <div class="row">
         <div class="field">
           <label for="fv-date">On the close of</label>
@@ -117,15 +121,20 @@ export class FactorValues {
   readonly factor = input.required<string>();
   readonly universes = input<readonly UniverseView[]>([]);
   readonly watchlists = input<readonly WatchlistView[]>([]);
+  /** The page's one basket picker; when set, this section shows none of its own. */
+  readonly sharedBasket = input<Basket | null>(null);
 
   protected readonly basket = signal<Basket>(defaultBasket());
+  private readonly activeBasket = computed(() => this.sharedBasket() ?? this.basket());
   protected readonly asOf = signal(defaultWindow().end);
   protected readonly tried = signal(false);
   protected readonly loading = signal(false);
   protected readonly error = signal<unknown>(null);
   protected readonly view = signal<FactorValuesView | null>(null);
 
-  protected readonly basketMessage = computed(() => basketError(this.basket(), this.watchlists()));
+  protected readonly basketMessage = computed(() =>
+    basketError(this.activeBasket(), this.watchlists()),
+  );
   protected readonly missingText = computed(() => {
     const missing = this.view()?.missing ?? [];
     const shown = missing.slice(0, 20).join(', ');
@@ -155,7 +164,7 @@ export class FactorValues {
     try {
       this.view.set(
         await this.factors.values(
-          buildValuesRequest(this.factor(), this.asOf(), this.basket(), this.watchlists()),
+          buildValuesRequest(this.factor(), this.asOf(), this.activeBasket(), this.watchlists()),
         ),
       );
     } catch (err) {

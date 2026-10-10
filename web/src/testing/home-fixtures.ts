@@ -1,9 +1,16 @@
 import type { SubscriptionView } from '../app/api/subscriptions.service';
+import { strategyDisplayName } from '../app/shared/strategy-names';
 
+/**
+ * A follow as the API sends it. Like the server, `strategy_name` is the
+ * display name of the strategy id unless a test sets its own.
+ */
 export function sub(overrides: Partial<SubscriptionView> = {}): SubscriptionView {
+  const strategyId = overrides.strategy_id ?? 'momentum-v3';
   return {
     id: 'sub_1',
-    strategy_id: 'momentum-v3',
+    strategy_id: strategyId,
+    strategy_name: strategyDisplayName(strategyId),
     strategy_status: 'active',
     portfolio_id: 'pf_1',
     mode: 'paper',

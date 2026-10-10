@@ -44,8 +44,10 @@ describe('SetupCard', () => {
     await tick();
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.textContent).toContain('1 of 5 done, 1 skipped');
-    expect(el.textContent).toContain('Next: choose what to watch');
+    expect(el.textContent).toContain('1 of 3 done');
+    expect(el.querySelector('h2')!.textContent).toBe('Get set up');
+    // The no-broker path comes first (FR-01).
+    expect(el.textContent).toContain('Next: follow a strategy');
     expect(el.querySelector('a')?.getAttribute('href')).toBe('/welcome');
 
     [...el.querySelectorAll('button')].find((b) => b.textContent?.includes('Hide'))!.click();
@@ -55,6 +57,18 @@ describe('SetupCard', () => {
     await tick();
     fixture.detectChanges();
     expect(el.querySelector('section')).toBeNull();
+  });
+
+  it('leaves Today once only the optional steps are left (FR-01)', async () => {
+    const fixture = TestBed.createComponent(SetupCard);
+    fixture.detectChanges();
+    const steps = VIEW.steps.map((s) =>
+      s.id === 'follow' || s.id === 'alerts' ? { ...s, state: 'done' } : s,
+    );
+    (await nextRequest(http, '/api/onboarding')).flush({ ...VIEW, steps });
+    await tick();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('section')).toBeNull();
   });
 
   it('holds its place while loading only if it showed last time', async () => {

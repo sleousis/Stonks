@@ -1747,6 +1747,12 @@ export type ChartFillView = {
      * Strategy Id
      */
     strategy_id: string | null;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
 };
 
 /**
@@ -1769,6 +1775,12 @@ export type ChartSignalView = {
      * Strategy Id
      */
     strategy_id: string;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
     /**
      * Strength
      */
@@ -2985,6 +2997,30 @@ export type DriftItemView = {
      * Ours
      */
     ours: number | string | null;
+};
+
+/**
+ * DuplicateSource
+ *
+ * Where rows a preview calls duplicates were imported before.
+ */
+export type DuplicateSource = {
+    /**
+     * Import Id
+     */
+    import_id: string;
+    /**
+     * Imported On
+     */
+    imported_on: string;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Portfolio Name
+     */
+    portfolio_name: string | null;
 };
 
 /**
@@ -5357,6 +5393,10 @@ export type InstrumentView = {
      * Sector
      */
     sector: string | null;
+    /**
+     * Security Type
+     */
+    security_type?: string | null;
 };
 
 /**
@@ -7036,6 +7076,12 @@ export type LookThroughView = {
      * Reporting currency. Amounts are not FX-converted.
      */
     currency: string;
+    /**
+     * Funds Without List
+     *
+     * Held funds (ETFs) with no holdings list, counted as one name each.
+     */
+    funds_without_list?: Array<string>;
     look_through: LookThrough;
     /**
      * Notes
@@ -12219,6 +12265,10 @@ export type ProviderView = {
      */
     enabled: boolean;
     /**
+     * Gateways
+     */
+    gateways?: Array<string>;
+    /**
      * Has Paper
      */
     has_paper: boolean;
@@ -13558,7 +13608,7 @@ export type ScheduledJobView = {
     /**
      * Off Reason
      */
-    off_reason?: 'engine_off' | 'options_off' | 'no_gateway' | null;
+    off_reason?: 'engine_off' | 'options_off' | 'no_gateway' | 'no_live_portfolio' | 'no_connections' | 'no_learning_strategies' | null;
     /**
      * Trigger
      */
@@ -13813,6 +13863,10 @@ export type ScreenResult = {
  * ScreenRow
  */
 export type ScreenRow = {
+    /**
+     * Currency
+     */
+    currency?: string | null;
     /**
      * Exchange
      */
@@ -14955,6 +15009,7 @@ export type StatementPreview = {
      * Duplicate
      */
     duplicate: number;
+    duplicates_in?: DuplicateSource | null;
     /**
      * First Date
      */
@@ -15242,16 +15297,32 @@ export type StrategyDetail = {
      */
     created_at: string;
     /**
+     * Draft Id
+     */
+    draft_id?: string | null;
+    /**
      * Id
      */
     id: string;
+    /**
+     * Kind
+     */
+    kind?: string;
     metadata: StrategyMetadataView;
+    /**
+     * Name
+     */
+    name?: string;
     /**
      * Params
      */
     params: {
         [key: string]: unknown;
     };
+    /**
+     * Retrainable
+     */
+    retrainable?: boolean;
     /**
      * Set for a starter strategy: its plain title and summary.
      */
@@ -15369,16 +15440,32 @@ export type StrategySummary = {
      */
     created_at: string;
     /**
+     * Draft Id
+     */
+    draft_id?: string | null;
+    /**
      * Id
      */
     id: string;
+    /**
+     * Kind
+     */
+    kind?: string;
     metadata: StrategyMetadataView;
+    /**
+     * Name
+     */
+    name?: string;
     /**
      * Params
      */
     params: {
         [key: string]: unknown;
     };
+    /**
+     * Retrainable
+     */
+    retrainable?: boolean;
     /**
      * Set for a starter strategy: its plain title and summary.
      */
@@ -15630,6 +15717,10 @@ export type SubscriptionView = {
      * Strategy Id
      */
     strategy_id: string;
+    /**
+     * Strategy Name
+     */
+    strategy_name: string;
     /**
      * Strategy Status
      */
@@ -18471,6 +18562,10 @@ export type ListAlertsData = {
          * Level
          */
         level?: 'info' | 'warning' | 'error' | null;
+        /**
+         * Category
+         */
+        category?: Array<'signal' | 'order' | 'risk' | 'system' | 'price_alert' | 'event_alert' | 'screen_alert'> | null;
         /**
          * Limit
          *

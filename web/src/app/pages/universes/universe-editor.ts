@@ -16,13 +16,16 @@ import { ScreenerService } from '../../api/screener.service';
 import { UniversesService } from '../../api/universes.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { formatNumber } from '../../core/format/format';
-import { SOURCE_LABELS } from '../data/data-labels';
+import { DataCoverageService } from '../../shared/ui/data-plan-note';
+import { SOURCE_LABELS, exchangeLabel as exchangeName } from '../data/data-labels';
 import { ScreenFilters } from '../screener/screen-filters';
 import {
   ASSET_CLASSES,
   type AssetClass,
   type FilterRow,
   type ScreenForm,
+  plainMetrics,
+  universeSlug,
 } from '../screener/screen-form';
 import {
   DEFAULT_FIELDS,
@@ -75,12 +78,18 @@ export class UniverseEditor {
   private readonly api = inject(UniversesService);
   private readonly screener = inject(ScreenerService);
   private readonly toasts = inject(ToastService);
+  private readonly coverage = inject(DataCoverageService);
 
   readonly mode = input<'create' | 'edit'>('create');
   /** The universe to edit. */
   readonly universe = input<UniverseView | null>(null);
   /** Stored universes a rule can start from. */
   readonly universes = input<readonly UniverseView[]>([]);
+  /**
+   * Admins: the Advanced part (an index history file, the definition as
+   * JSON) and the choice of data source. Everyone else gets the plain form.
+   */
+  readonly advanced = input(false);
   readonly saved = output<UniverseView>();
   readonly cancelled = output<void>();
 
@@ -107,7 +116,11 @@ export class UniverseEditor {
     loader: () => this.screener.metrics(),
   });
   protected readonly metricList = computed<MetricView[]>(() =>
-    this.metrics.hasValue() ? this.metrics.value() : [],
+    this.metrics.hasValue() ? plainMetrics(this.metrics.value()) : [],
+  );
+  /** No fundamentals stored: their filters are greyed out. */
+  protected readonly fundamentalsMissing = computed(
+    () => this.coverage.has('fundamentals') === false,
   );
   protected readonly sortMetrics = computed(() =>
     [...this.metricList()].sort((a, b) => (a.group === b.group ? 0 : a.group === 'price' ? -1 : 1)),
@@ -121,8 +134,11 @@ export class UniverseEditor {
     params: () => (this.needsExchanges() ? {} : undefined),
     loader: () => this.api.exchanges(),
   });
-  protected readonly exchangeLabel = (e: { exchange: string; instruments: number }) =>
-    `${e.exchange}: ${formatNumber(e.instruments, { digits: 0 })} instruments`;
+  protected readonly exchangeLabel = (e: { exchange: string; instruments: number }) => {
+    const name = exchangeName(e.exchange);
+    const label = name === e.exchange ? name : `${name} (${e.exchange})`;
+    return `${label}: ${formatNumber(e.instruments, { digits: 0 })} instruments`;
+  };
 
   /** Universes a rule may start from: every other stored one. */
   protected readonly startFrom = computed(() =>
@@ -155,6 +171,15 @@ export class UniverseEditor {
 
   protected patch(change: Partial<UniverseForm>): void {
     this.form.update((f) => ({ ...f, ...change }));
+  }
+
+  /** A new universe takes its id from the name; an edit keeps its id. */
+  protected setName(name: string): void {
+    this.form.update((f) => ({
+      ...f,
+      name,
+      id: this.mode() === 'create' ? universeSlug(name) : f.id,
+    }));
   }
 
   protected patchFields(change: Partial<KindFields>): void {

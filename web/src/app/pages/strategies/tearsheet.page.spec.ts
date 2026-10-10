@@ -139,13 +139,13 @@ describe('TearsheetPage', () => {
     fixture.detectChanges();
     await tick(5);
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('h1')?.textContent).toContain('mom_v2');
+    expect(el.querySelector('h1')?.textContent).toContain('Mom v2');
     expect(el.textContent).toContain('Momentum. On trial.');
-    // Only trial days are short: promising, not yet judged (F33).
-    expect(el.querySelector('app-strategy-verdict')?.textContent).toContain(
-      'Promising, needs more data',
-    );
+    // Only trial days are short: on trial, information (R03, F33).
+    expect(el.querySelector('app-strategy-verdict')?.textContent).toContain('On trial');
     expect(el.textContent).toContain('Sharpe');
+    // A few weeks of trial say nothing about ratios (R09).
+    expect(el.textContent).toContain('Too early to tell');
     expect(el.textContent).toContain('Failed');
     expect(el.textContent).toContain('first paper run');
     expect(el.querySelectorAll('.months tbody tr').length).toBe(2);

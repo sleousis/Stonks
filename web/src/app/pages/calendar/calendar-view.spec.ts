@@ -2,6 +2,8 @@ import {
   filingItemsLabel,
   addDays,
   comparisonLabel,
+  economicRelease,
+  economicValue,
   importanceLabel,
   daysBetween,
   parseCountries,
@@ -115,5 +117,25 @@ describe('filingItemsLabel', () => {
     ).toBe('Results of operations, Exhibits');
     expect(filingItemsLabel({ items: ['5.02'], item_names: [] })).toBe('Item 5.02');
     expect(filingItemsLabel({ items: [], item_names: [] })).toBe('');
+  });
+
+  it('names an economic release with what it compares', () => {
+    expect(economicRelease({ event_type: 'CPI', comparison: 'yoy' })).toBe('CPI (year on year)');
+    expect(economicRelease({ event_type: 'GDP', comparison: 'qoq' })).toBe(
+      'GDP (quarter on quarter)',
+    );
+    expect(economicRelease({ event_type: 'ISM PMI', comparison: 'none' })).toBe('ISM PMI');
+  });
+
+  it('gives economic values their unit', () => {
+    expect(economicValue(2.5, { event_type: 'CPI', comparison: 'yoy' })).toBe('2.5%');
+    expect(economicValue(4.25, { event_type: 'Interest Rate Decision', comparison: 'none' })).toBe(
+      '4.25%',
+    );
+    expect(economicValue(210, { event_type: 'Non Farm Payrolls', comparison: 'none' })).toBe(
+      '210K jobs',
+    );
+    expect(economicValue(52.1, { event_type: 'ISM PMI', comparison: 'none' })).toBe('52.1');
+    expect(economicValue(null, { event_type: 'CPI', comparison: 'yoy' })).toBe('–');
   });
 });

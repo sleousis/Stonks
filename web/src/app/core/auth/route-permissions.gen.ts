@@ -22,6 +22,7 @@ export type RoutePermission =
   | 'settings.manage'
   | 'settings.read'
   | 'strategy.promote'
+  | 'strategy.trial'
   | 'tokens.manage'
   | 'tokens.revoke'
   | 'users.manage'
@@ -176,7 +177,7 @@ export const ROUTE_PERMISSIONS: Readonly<Record<string, RoutePermission>> = {
   'POST /api/studio/drafts/{draft_id}/disable': 'strategy.promote',
   'POST /api/studio/drafts/{draft_id}/enable': 'strategy.promote',
   'POST /api/studio/drafts/{draft_id}/lab-runs': 'lab.run',
-  'POST /api/studio/drafts/{draft_id}/register': 'strategy.promote',
+  'POST /api/studio/drafts/{draft_id}/register': 'strategy.trial',
   'POST /api/studio/drafts/{draft_id}/validate': 'lab.run',
   'POST /api/studio/spec/validate': 'lab.run',
   'POST /api/subscriptions': 'portfolio.trade',

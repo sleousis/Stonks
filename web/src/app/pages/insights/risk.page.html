@@ -25,32 +25,35 @@
       } @else if (limitsLoading()) {
         <app-loading-state label="Loading the limits" [rows]="6" />
       } @else {
-        <ul class="limits" aria-label="Each measure against its limit">
-          @for (r of rows(); track r.key) {
-            <li [class]="'limit limit-' + r.status">
-              <span class="limit-label">
-                {{ r.label }}
-                @if (r.help) {
-                  <app-help-tip [term]="r.help" />
-                }
-                @if (r.yours) {
-                  <span class="yours">Your limit</span>
-                }
-              </span>
-              <span class="limit-figures num">
-                <span class="visually-hidden">Now </span>{{ r.now }}
-                @if (r.status !== 'none') {
+        @if (limited().length) {
+          <ul class="limits" aria-label="Each measure against its limit">
+            @for (r of limited(); track r.key) {
+              <li [class]="'limit limit-' + r.status">
+                <span class="limit-label">
+                  {{ r.label }}
+                  @if (r.help) {
+                    <app-help-tip [term]="r.help" />
+                  }
+                  @if (r.yours) {
+                    <span class="yours">Your limit</span>
+                  }
+                </span>
+                <span class="limit-figures num">
+                  <span class="visually-hidden">Now </span>{{ r.now }}
                   <span class="muted"> of {{ r.limit }}</span>
-                }
-              </span>
-              <span class="meter" aria-hidden="true">
-                <span [style.width]="meterWidth(r)"></span>
-              </span>
-              <span class="limit-status">{{ statusText[r.status] }}</span>
-            </li>
-          }
-        </ul>
+                </span>
+                <span class="meter" aria-hidden="true">
+                  <span [style.width]="meterWidth(r)"></span>
+                </span>
+                <span class="limit-status">{{ statusText[r.status] }}</span>
+              </li>
+            }
+          </ul>
+        }
         <p class="panel-body hint">
+          @if (noLimit(); as text) {
+            {{ text }}
+          }
           @if (anyYours()) {
             Rows marked Your limit follow your own risk limits, stricter than the system's. The
             others are the system limits every portfolio trades under.
@@ -67,7 +70,9 @@
           @if (insights.error() || live.error()) {
             Some readings are missing because a panel below failed to load.
           }
-          <a routerLink="/settings">Change your risk limits</a>
+          <a class="touch-link" routerLink="/settings" [queryParams]="{ tab: 'risk' }"
+            >Change your risk limits</a
+          >
         </p>
       }
     </section>
@@ -96,40 +101,22 @@
           @let b = live.value().portfolio!;
           <dl class="figures">
             <div>
-              <dt>VaR 95% <app-help-tip term="var" /></dt>
-              <dd class="num">{{ pct(b.var_95) }}</dd>
+              <dt>Likely worst day (1 in 20) <app-help-tip term="var" /></dt>
+              <dd class="num">Could lose {{ loss(b.var_95) }}</dd>
             </div>
             <div>
-              <dt>VaR 99% <app-help-tip term="var" /></dt>
-              <dd class="num">{{ pct(b.var_99) }}</dd>
-            </div>
-            <div>
-              <dt>ES 95% <app-help-tip term="expected_shortfall" /></dt>
-              <dd class="num">{{ pct(b.es_95) }}</dd>
-            </div>
-            <div>
-              <dt>ES 99% <app-help-tip term="expected_shortfall" /></dt>
-              <dd class="num">{{ pct(b.es_99) }}</dd>
+              <dt>Average of the worst days <app-help-tip term="expected_shortfall" /></dt>
+              <dd class="num">Could lose {{ loss(b.es_95) }}</dd>
             </div>
           </dl>
           <p class="hint">
-            One-day losses as a share of value, {{ money(b.value) }} today. VaR 95%: on 19 days out
-            of 20 the loss should be smaller. ES 95%: the average loss on the other, worst days. The
-            99% figures are the same for 99 days out of 100.
+            One-day losses as a share of value, {{ money(b.value) }} today. On 19 days out of 20 the
+            loss should be smaller than the first figure.
           </p>
-          <dl class="misses">
-            <div>
-              <dt>Beat 95% VaR <app-help-tip term="violation_ratio" /></dt>
-              <dd>{{ violationText(b.violations_95, b.violation_ratio_95, b.kupiec_p_95) }}</dd>
-            </div>
-            <div>
-              <dt>Beat 99% VaR</dt>
-              <dd>{{ violationText(b.violations_99, b.violation_ratio_99, b.kupiec_p_99) }}</dd>
-            </div>
-          </dl>
-          <p class="hint">
-            Over the last {{ b.window_days }} days: how often a real day was worse than VaR said.
-            About 1 day in 20 is expected for 95%, so 1 times the expected rate is right.
+          <p class="misses">
+            Over the last {{ b.window_days }} days:
+            {{ violationText(b.violations_95, b.violation_ratio_95, b.kupiec_p_95) }}
+            <app-help-tip term="violation_ratio" />
           </p>
           @if (b.ratio_out_of_band) {
             <p class="warning" role="note">
@@ -166,7 +153,7 @@
             @if (s.decayed) {
               <span class="decay">Fading. {{ s.decay_reason }}</span>
             } @else {
-              <span class="muted">Holding up</span>
+              <span class="decay muted">Holding up</span>
             }
           </ng-template>
         </app-data-table>
@@ -197,7 +184,7 @@
           />
         } @else {
           <app-time-series-chart
-            ariaLabel="95% VaR and ES, with each day's loss below"
+            ariaLabel="Likely worst day and the average of the worst days, with each day's loss below"
             [summary]="chartSummary()"
             [series]="chartSeries()"
             [height]="300"

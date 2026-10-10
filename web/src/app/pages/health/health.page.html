@@ -57,23 +57,16 @@
     [detailTone]="freshTone()"
   />
   <app-stat-tile
-    label="Stuck runs"
-    [loading]="!report.hasValue() && !report.error()"
-    [value]="report.hasValue() ? '' + stuckCount() : '–'"
-    [detail]="stuckCount() ? 'Trading runs or data updates hung' : 'None running too long'"
-    [detailTone]="stuckCount() ? 'loss' : ''"
-  />
-  <app-stat-tile
     label="Failed data updates"
     [loading]="!failedIngest.hasValue() && !failedIngest.error()"
     [value]="failedIngest.hasValue() ? '' + failedIngest.value().total : '–'"
-    detail="All time; latest below"
+    detail="All time. Latest below."
   />
   <app-stat-tile
     label="Failed trading runs"
     [loading]="!failedTicks.hasValue() && !failedTicks.error()"
     [value]="failedTicks.hasValue() ? '' + failedTicks.value().total : '–'"
-    detail="All time; latest below"
+    detail="All time. Latest below."
   />
 </section>
 
@@ -142,16 +135,27 @@
           message="No universe is set for trading yet. An admin chooses which tickers are traded. Enter tickers above to check them now."
         />
       }
+    } @else if (staleRows().length === 0) {
+      <p class="panel-body all-fresh" role="status">
+        All {{ freshness().length }} {{ freshness().length === 1 ? 'ticker' : 'tickers' }} fresh.
+      </p>
     } @else {
+      @if (freshness().length > staleRows().length) {
+        <p class="panel-intro">
+          {{ freshness().length - staleRows().length }}
+          {{ freshness().length - staleRows().length === 1 ? 'other ticker' : 'other tickers' }}
+          fresh.
+        </p>
+      }
       <app-data-table
-        caption="Latest daily bar per ticker"
-        [rows]="freshness()"
+        caption="Stale tickers and their latest daily bar"
+        [rows]="staleRows()"
         [columns]="freshnessColumns"
         [rowKey]="freshnessKey"
         [initialSort]="{ key: 'level', dir: 'desc' }"
         [pageSize]="15"
       >
-        <ng-template appCell="level" [appCellOf]="freshness()" let-row>
+        <ng-template appCell="level" [appCellOf]="staleRows()" let-row>
           <app-status-pill
             [status]="row.level"
             [tone]="levelTone[row.level]"

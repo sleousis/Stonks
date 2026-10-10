@@ -130,6 +130,18 @@ def test_onboarding_completes_when_every_step_is_done_or_skipped(client, people)
     assert last.json()["complete"] is True and last.json()["show"] is False
 
 
+def test_onboarding_completes_without_the_optional_steps(client, people):
+    """FR-01: a paper portfolio and a watchlist are optional, as the console says."""
+    vic = people["vic"]["headers"]
+    for step in ("account", "follow"):
+        client.put(f"/api/onboarding/steps/{step}", json={"state": "done"}, headers=vic)
+    last = client.put("/api/onboarding/steps/alerts", json={"state": "skipped"}, headers=vic)
+    view = last.json()
+    states = {s["id"]: s["state"] for s in view["steps"]}
+    assert states["portfolio"] == "todo" and states["data"] == "todo"
+    assert view["complete"] is True and view["show"] is False
+
+
 def test_the_system_checklist_is_for_admins(client, people):
     assert (
         client.get("/api/onboarding/system", headers=people["alice"]["headers"]).status_code == 403
@@ -181,8 +193,11 @@ def test_a_chart_has_bars_your_fills_and_signals(client, settings, people):
             "kind": "entry",
             "strength": 0.5,
             "reason": "trend is up",
+            "strategy_name": None,
         }
     ]
+    # Fills and signals carry the strategy's plain title next to its id.
+    assert "strategy_name" in body["fills"][0]
     limited = client.get("/api/charts/UP.US", params={"limit": 10}, headers=LEGACY).json()
     assert len(limited["bars"]) == 10 and limited["truncated"] is True
 

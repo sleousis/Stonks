@@ -26,6 +26,7 @@ from stonks.app.context import AppContext
 from stonks.app.errors import ValidationError
 from stonks.app.market import BarView, MarketDataService
 from stonks.app.serialize import finite
+from stonks.app.strategy_names import StrategyNamed
 from stonks.production.ledger import ledger_filter
 from stonks.reporting.tearsheet import rolling_sharpe
 
@@ -43,7 +44,7 @@ MIN_ROLLING_WINDOW, MAX_ROLLING_WINDOW = 5, 252
 REBASE = 100.0
 
 
-class ChartFillView(BaseModel):
+class ChartFillView(StrategyNamed):
     filled_at: datetime
     #: ``buy`` or ``sell``; null when the order is gone.
     side: str | None
@@ -53,7 +54,7 @@ class ChartFillView(BaseModel):
     strategy_id: str | None
 
 
-class ChartSignalView(BaseModel):
+class ChartSignalView(StrategyNamed):
     as_of: date
     strategy_id: str
     #: ``entry``, ``exit``, ``increase``, ``decrease`` or ``risk``.

@@ -49,11 +49,17 @@
       </div>
       <div class="field">
         <label for="user-role">Role</label>
-        <select id="user-role" class="input" formControlName="role">
+        <select
+          id="user-role"
+          class="input"
+          formControlName="role"
+          aria-describedby="user-role-hint"
+        >
           @for (r of roles; track r.value) {
             <option [value]="r.value">{{ r.label }}</option>
           }
         </select>
+        <span id="user-role-hint" class="hint">{{ roleHelp() }}</span>
       </div>
       <div class="field">
         <label for="user-password">First password</label>
@@ -99,7 +105,7 @@
           >
         } @else {
           <span id="user-password-hint" class="hint"
-            >Share it privately. They set up their authenticator at first sign-in.</span
+            >Share it privately. They set up their authenticator app at first sign-in.</span
           >
         }
       </div>
@@ -152,7 +158,7 @@
             <app-status-pill
               [status]="u.mfa_enrolled ? 'ok' : 'warn'"
               [tone]="u.mfa_enrolled ? 'positive' : 'warn'"
-              [label]="u.mfa_enrolled ? 'Sign-in app set up' : 'Sign-in app not set up'"
+              [label]="u.mfa_enrolled ? 'Authenticator app set up' : 'Authenticator app not set up'"
             />
           </div>
           <div class="controls">
@@ -182,10 +188,10 @@
               type="button"
               class="btn"
               [disabled]="busy() === u.id || !u.mfa_enrolled || u.id === myId()"
-              [attr.aria-label]="'Reset authenticator for ' + u.display_name"
+              [attr.aria-label]="'Reset authenticator app for ' + u.display_name"
               (click)="resetMfa(u)"
             >
-              Reset sign-in app
+              Reset authenticator app
             </button>
             <button
               type="button"
@@ -205,8 +211,9 @@
         <p><strong>Only you so far.</strong></p>
         <p>
           Use Add person to invite a trader: choose their role and a first password, then give them
-          the password yourself. They set up the sign-in app the first time they sign in. Viewers
-          can look but not trade, traders follow strategies and place orders, admins run the system.
+          the password yourself. They set up the authenticator app the first time they sign in.
+          Viewers can look but not trade, traders follow strategies and place orders, admins run the
+          system.
         </p>
       </div>
     }

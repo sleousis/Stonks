@@ -150,6 +150,30 @@ def test_held_without_a_signal_is_held():
     assert why["H"].step == "held" and why["H"].outcome == "held"
 
 
+def test_a_single_winner_pick_that_is_not_bought_is_never_called_held():
+    class Idle(Buyer):
+        def decide(self, my_picks, portfolio, prices, as_of):
+            return []
+
+    book = BookInput(portfolio=Portfolio(cash=1_000.0))
+    result = build_orders(
+        {"a": {"X": 0.3}},
+        book,
+        MarketView(as_of=AS_OF, prices=PRICES),
+        strategies=lambda sid: Idle(sid),
+        exit_owner=lambda: None,
+    )
+    why = _by_ticker(explain({"a": {"X": 0.3}}, {"a": {"X": 0.3}}, result, book.portfolio, PRICES))
+    assert why["X"].outcome == "kept_out" and why["X"].step == "picked"
+    assert why["X"].summary() == "X: picked, but not bought this run"
+
+
+def test_an_old_held_row_that_was_kept_out_reads_as_picked():
+    old = TickerDecision(ticker="TLT.US", step="held", outcome="kept_out")
+    assert "held" not in old.summary()
+    assert old.summary() == "TLT.US: picked, but not bought this run"
+
+
 def test_mark_overrides_later_steps():
     _, why = _run({"a": {"X": 0.3}}, BookInput(portfolio=Portfolio(cash=1_000.0)))
     marked = _by_ticker(mark(list(why.values()), ["X"], "halt", {"halt": "all"}))

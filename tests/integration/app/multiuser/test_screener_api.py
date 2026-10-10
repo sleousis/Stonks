@@ -158,7 +158,8 @@ def test_save_a_snapshot_warns_about_survivorship(client, people, market):
     assert out["universe"]["kind"] == "list"
     assert out["universe"]["spec"]["tickers"] == ["AAA.US", "BBB.US"]
     assert out["refresh_job"] is None
-    assert "survivorship" in out["warnings"][0]
+    assert "were delisted since are missing" in out["warnings"][0]
+    assert "survivorship" not in out["warnings"][0]  # plain words for people (R22)
     empty = client.post(
         "/api/screener/universes",
         json={"universe_id": "none", "spec": {"sectors": ["Nope"]}, "mode": "snapshot"},

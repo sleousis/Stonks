@@ -3083,6 +3083,18 @@
               }
             ],
             "title": "Strategy Id"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           }
         },
         "required": [
@@ -3121,6 +3133,18 @@
           "strategy_id": {
             "title": "Strategy Id",
             "type": "string"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           },
           "strength": {
             "anyOf": [
@@ -5639,6 +5663,43 @@
           "detail"
         ],
         "title": "DriftItemView",
+        "type": "object"
+      },
+      "DuplicateSource": {
+        "description": "Where rows a preview calls duplicates were imported before.",
+        "properties": {
+          "import_id": {
+            "title": "Import Id",
+            "type": "string"
+          },
+          "imported_on": {
+            "format": "date",
+            "title": "Imported On",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "portfolio_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Name"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "portfolio_name",
+          "import_id",
+          "imported_on"
+        ],
+        "title": "DuplicateSource",
         "type": "object"
       },
       "EarningsEvent": {
@@ -9860,6 +9921,17 @@
               }
             ],
             "title": "Sector"
+          },
+          "security_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Security Type"
           }
         },
         "required": [
@@ -13145,6 +13217,14 @@
             "description": "Reporting currency. Amounts are not FX-converted.",
             "title": "Currency",
             "type": "string"
+          },
+          "funds_without_list": {
+            "description": "Held funds (ETFs) with no holdings list, counted as one name each.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Funds Without List",
+            "type": "array"
           },
           "look_through": {
             "$ref": "#/components/schemas/LookThrough"
@@ -22192,6 +22272,13 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "gateways": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gateways",
+            "type": "array"
+          },
           "has_paper": {
             "title": "Has Paper",
             "type": "boolean"
@@ -24928,7 +25015,10 @@
                 "enum": [
                   "engine_off",
                   "options_off",
-                  "no_gateway"
+                  "no_gateway",
+                  "no_live_portfolio",
+                  "no_connections",
+                  "no_learning_strategies"
                 ],
                 "type": "string"
               },
@@ -25360,6 +25450,17 @@
       },
       "ScreenRow": {
         "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
           "exchange": {
             "anyOf": [
               {
@@ -27537,6 +27638,16 @@
             "title": "Duplicate",
             "type": "integer"
           },
+          "duplicates_in": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DuplicateSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "first_date": {
             "anyOf": [
               {
@@ -28095,17 +28206,43 @@
             "title": "Created At",
             "type": "string"
           },
+          "draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Id"
+          },
           "id": {
             "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
             "type": "string"
           },
           "metadata": {
             "$ref": "#/components/schemas/StrategyMetadataView"
           },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
           "params": {
             "additionalProperties": true,
             "title": "Params",
             "type": "object"
+          },
+          "retrainable": {
+            "default": false,
+            "title": "Retrainable",
+            "type": "boolean"
           },
           "starter": {
             "anyOf": [
@@ -28292,17 +28429,43 @@
             "title": "Created At",
             "type": "string"
           },
+          "draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Id"
+          },
           "id": {
             "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
             "type": "string"
           },
           "metadata": {
             "$ref": "#/components/schemas/StrategyMetadataView"
           },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
           "params": {
             "additionalProperties": true,
             "title": "Params",
             "type": "object"
+          },
+          "retrainable": {
+            "default": false,
+            "title": "Retrainable",
+            "type": "boolean"
           },
           "starter": {
             "anyOf": [
@@ -28758,6 +28921,10 @@
             "title": "Strategy Id",
             "type": "string"
           },
+          "strategy_name": {
+            "title": "Strategy Name",
+            "type": "string"
+          },
           "strategy_status": {
             "anyOf": [
               {
@@ -28782,6 +28949,7 @@
         "required": [
           "id",
           "strategy_id",
+          "strategy_name",
           "strategy_status",
           "portfolio_id",
           "mode",
@@ -33928,7 +34096,7 @@
   "paths": {
     "/api/alerts": {
       "get": {
-        "description": "Your notifications, newest first. Admins also see the admin audience\n(operational alerts with no single recipient).",
+        "description": "Your notifications, newest first. Admins also see the admin audience\n(operational alerts with no single recipient). ``category`` keeps only\nthose categories (repeat it for more). ``system`` also keeps the\noperator alerts, which carry no category.",
         "operationId": "listAlerts",
         "parameters": [
           {
@@ -33950,6 +34118,34 @@
                 }
               ],
               "title": "Level"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "signal",
+                      "order",
+                      "risk",
+                      "system",
+                      "price_alert",
+                      "event_alert",
+                      "screen_alert"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
             }
           },
           {
@@ -62934,7 +63130,7 @@
     },
     "/api/studio/drafts/{draft_id}/register": {
       "post": {
-        "description": "Register the draft's strategy in ``shadow``.",
+        "description": "Put the draft's strategy On trial (``shadow``). Only the draft's owner\n(or an admin) may: another user's draft is a 404.",
         "operationId": "registerDraft",
         "parameters": [
           {
@@ -63028,7 +63224,7 @@
         "tags": [
           "studio"
         ],
-        "x-permission": "strategy.promote"
+        "x-permission": "strategy.trial"
       }
     },
     "/api/studio/drafts/{draft_id}/validate": {

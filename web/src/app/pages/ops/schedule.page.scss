@@ -58,13 +58,25 @@
   summary {
     display: flex;
     align-items: center;
-    min-height: 32px;
+    gap: var(--space-2);
+    min-height: var(--touch-min);
     cursor: pointer;
     font-weight: var(--weight-medium);
+    list-style: none;
 
-    @include bp.coarse {
-      min-height: var(--touch-min);
+    &::-webkit-details-marker {
+      display: none;
     }
+
+    &::before {
+      content: '▸';
+      color: var(--color-ink-3);
+      transition: transform 0.15s ease;
+    }
+  }
+
+  &[open] summary::before {
+    transform: rotate(90deg);
   }
 
   .off-intro {
@@ -142,6 +154,16 @@
 }
 
 @include bp.phone {
+  // Backups first on a phone: the job lists run long.
+  .backups {
+    order: -1;
+  }
+
+  // The Run now button says what it does: no cell label above it on a card.
+  :host ::ng-deep td[data-label='Run now']::before {
+    content: none;
+  }
+
   .head-action {
     width: 100%;
     justify-items: stretch;

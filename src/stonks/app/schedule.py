@@ -67,9 +67,23 @@ class RunNowView(BaseModel):
 
 
 #: Why a job has nothing to do on this install: the intraday engine is off,
-#: live options are off, or no IB Gateway is set up. The job still fires and
-#: skips; the console groups it apart and offers no Run now.
-JobOffReason = Literal["engine_off", "options_off", "no_gateway"]
+#: live options are off, no IB Gateway is set up, no portfolio trades at a
+#: broker, no broker connection exists, or no strategy learns from data.
+#: The job still fires and skips. The console groups it apart and offers no
+#: Run now.
+JobOffReason = Literal[
+    "engine_off",
+    "options_off",
+    "no_gateway",
+    "no_live_portfolio",
+    "no_connections",
+    "no_learning_strategies",
+]
+
+#: Jobs that act only on portfolios at a broker or past the simulated stage.
+_LIVE_ACTIONS = frozenset(
+    {"live_reconcile", "live_submit", "live_stops", "live_gate_days", "live_margin", "algo_slices"}
+)
 
 
 class ScheduledJobView(BaseModel):
@@ -302,7 +316,9 @@ class ScheduleService:
     def overview(self, *, limit: int = 50) -> ScheduleView:
         now = self._clock()
         jobs = []
-        for spec in self._specs():
+        specs = self._specs()
+        facts = self._install_facts({s.action for s in specs})
+        for spec in specs:
             fire = spec.trigger.next_fire(now)
             jobs.append(
                 ScheduledJobView(
@@ -312,7 +328,7 @@ class ScheduleService:
                     trigger_text=spec.trigger.plain(),
                     next_run_at=fire.scheduled_for if fire else None,
                     next_as_of=fire.as_of if fire else None,
-                    off_reason=self._off_reason(spec.action),
+                    off_reason=self._off_reason(spec.action, facts),
                 )
             )
         limit = min(limit, RECENT_RUNS_MAX)
@@ -330,7 +346,47 @@ class ScheduleService:
             market=self.market_sessions(now),
         )
 
-    def _off_reason(self, action: str) -> JobOffReason | None:
+    def _install_facts(self, actions: set[str]) -> dict[str, bool]:
+        """What this install has, read only for the jobs that need it: a
+        live portfolio, a broker connection, a strategy that learns. A read
+        that fails counts as present, so a job is never hidden by an error."""
+        facts: dict[str, bool] = {}
+        try:
+            with self._ctx.state() as state:
+                if actions & _LIVE_ACTIONS:
+                    facts["live_portfolio"] = bool(
+                        state.sql(
+                            "SELECT 1 FROM portfolios WHERE status != 'archived'"
+                            " AND (kind = 'broker' OR live_stage != 'sim_paper') LIMIT 1"
+                        )
+                    )
+                if "connections_sync" in actions:
+                    facts["connections"] = bool(
+                        state.sql("SELECT 1 FROM broker_connections LIMIT 1")
+                    )
+                if "model_retrain" in actions:
+                    facts["learning"] = self._has_learning_strategy(state)
+        except Exception as exc:
+            _log.warning("schedule.install_facts_failed", error_type=type(exc).__name__)
+        return facts
+
+    def _has_learning_strategy(self, state: Any) -> bool:
+        from stonks.lifecycle.retrain import is_retrainable
+        from stonks.strategies._wrapping import import_strategy_class
+
+        statuses = set(self._ctx.settings.lifecycle.statuses)
+        for handle in self._ctx.registry_on(state).list_all():
+            if handle.status not in statuses:
+                continue
+            try:
+                probe = import_strategy_class(handle.class_path)(dict(handle.params))
+            except Exception:
+                return True  # cannot tell: keep the job in the main list
+            if is_retrainable(probe):
+                return True
+        return False
+
+    def _off_reason(self, action: str, facts: dict[str, bool]) -> JobOffReason | None:
         settings = self._ctx.settings
         if action in ("engine_start", "engine_stop") and not settings.engine.enabled:
             return "engine_off"
@@ -341,6 +397,12 @@ class ScheduleService:
             and not settings.brokers.ibkr.gateways
         ):
             return "no_gateway"
+        if action in _LIVE_ACTIONS and not facts.get("live_portfolio", True):
+            return "no_live_portfolio"
+        if action == "connections_sync" and not facts.get("connections", True):
+            return "no_connections"
+        if action == "model_retrain" and not facts.get("learning", True):
+            return "no_learning_strategies"
         return None
 
     def _outside_runs(self, jobs: list[ScheduledJobView], limit: int) -> list[ScheduledRunView]:
@@ -358,8 +420,9 @@ class ScheduleService:
         self, store: RunStore, recent: list[ScheduledRunView], now: datetime
     ) -> bool:
         """A fresh heartbeat, or a scheduled run in progress (the heartbeat
-        is written between jobs, so a long trading run is not a silence)."""
-        if any(r.status == "running" and r.origin != "outside" for r in recent):
+        is written between jobs, so a long trading run is not a silence).
+        A Run now runs on serve's own thread, so it never counts."""
+        if any(r.status == "running" and r.origin == "schedule" for r in recent):
             return True
         silence = max(timedelta(minutes=5), timedelta(seconds=3 * self.config.watchdog_seconds))
         try:

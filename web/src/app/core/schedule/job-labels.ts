@@ -12,6 +12,11 @@ export const JOB_LABELS: Readonly<Record<string, string>> = {
   ingest_metadata: 'Company data update',
   universes_refresh: 'Universe update',
   connections_sync: 'Broker sync',
+  algo_slices: 'Order slicing',
+  lab_verify: 'Recheck lab results',
+  briefings: 'Briefing',
+  screen_alerts: 'Screen alerts',
+  price_check: 'Price check',
   health: 'Health check',
   report: 'Daily report',
   backup: 'Backup',
@@ -39,6 +44,8 @@ export const JOB_NAME_LABELS: Readonly<Record<string, string>> = {
   live_sod_check: 'Broker check before the open',
   live_eod_check: 'Broker check after the close',
   options_expiry_watch: 'Options expiry watch',
+  briefing_pre_open: 'Morning briefing',
+  briefing_post_close: 'Evening briefing',
 };
 
 /** The action that places orders. */

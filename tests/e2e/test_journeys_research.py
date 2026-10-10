@@ -38,17 +38,24 @@ def test_a_trader_reads_a_factor_and_checks_a_formula(browse, stack, viewport):
     # One factor: what it measures, then its values on the last market day.
     page.locator("#factor-search").fill("")
     page.get_by_role("link", name="mom_12_1", exact=True).click()
-    expect(page.get_by_role("heading", name="mom_12_1")).to_be_visible()
+    # R23: the description is the title, the id a small tag.
+    about = v.api("GET", "/api/factors/mom_12_1").json()
+    title = page.locator("#factor-title")
+    expect(title).to_have_text(about["description"])
+    expect(page.locator(".panel-head", has=title).locator(".tag")).to_have_text("mom_12_1")
     expect(page.get_by_text("Higher is better")).to_be_visible()
+    # One basket at the top, shared by Values, Tear sheet and Test as a strategy.
+    basket = page.get_by_role("region", name="Tickers to test")
+    basket.get_by_role("radio", name="Tickers").check()
+    basket.get_by_role("textbox", name="Tickers").fill(" ".join(EQUITIES))
     values = page.locator("section", has=page.get_by_role("heading", name="Values on a date"))
-    values.get_by_role("radio", name="Tickers").check()
-    values.get_by_role("textbox", name="Tickers").fill(" ".join(EQUITIES))
     values.get_by_label("On the close of").fill(stack.market_end.isoformat())
     values.get_by_role("button", name="Show values").click()
     expect(values.locator("app-data-table")).to_contain_text(EQUITIES[0])
     v.check_page("factor-detail")
 
     # A formula of your own, checked as you type.
+    page.get_by_text("Show formula").click()
     page.get_by_role("link", name="Edit as a formula").click()
     expect(page.get_by_role("heading", name="Your formula")).to_be_visible()
     status = page.locator("#formula-status")

@@ -77,14 +77,14 @@ export const RESEARCH_GLOSSARY = {
   lab_verdict: {
     term: 'Lab verdict',
     short:
-      'Passed only when every robustness test passed on the best settings. Trials are settings tried, not tests passed.',
+      'Passed only when every robustness test passed on the best settings. Settings tried are not tests passed.',
     aliases: ['Robustness verdict'],
   },
   trial_ledger: {
-    term: 'Trial ledger',
+    term: 'Lab history',
     short:
       'The record of every lab run and every setting it tried. The more tries, the stricter the tests get.',
-    aliases: ['Ledger'],
+    aliases: ['Ledger', 'Trial ledger'],
   },
   objective: {
     term: 'Pick the best by',

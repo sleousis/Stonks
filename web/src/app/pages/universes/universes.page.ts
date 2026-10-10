@@ -53,6 +53,8 @@ export class UniversesPage {
 
   /** Creating universes and importing index history (lab work). */
   protected readonly canEdit = computed(() => this.session.can('lab.run'));
+  /** Admins see the Advanced parts: index history and the definition as JSON. */
+  protected readonly isAdmin = computed(() => this.session.can('operations.run'));
 
   protected readonly universes = resource({ loader: () => this.api.list() });
 
@@ -72,11 +74,18 @@ export class UniversesPage {
   /** The definition changed after the last refresh: the members are behind. */
   protected readonly stale = isStale;
 
+  /** A list fills its members at once; other kinds wait for a Refresh. */
   async created(u: UniverseView): Promise<void> {
-    this.toasts.success(`Created ${u.id}. Refresh it to fill its members.`);
+    const name = u.name || u.id;
     this.creating.set(false);
     this.universes.reload();
-    await this.router.navigate(['/universes', u.id]);
+    if (u.kind === 'list') {
+      this.toasts.success(`Created ${name}. Filling its members now.`);
+      await this.router.navigate(['/universes', u.id], { queryParams: { fill: 1 } });
+    } else {
+      this.toasts.success(`Created ${name}. Refresh it to fill its members.`);
+      await this.router.navigate(['/universes', u.id]);
+    }
   }
 
   // ---- index history ------------------------------------------------------

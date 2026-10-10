@@ -6,6 +6,7 @@ import {
   input,
   linkedSignal,
   resource,
+  signal,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
@@ -16,7 +17,15 @@ import { PageHeader } from '../../../shared/ui/page-header';
 import { ErrorState, LoadingState } from '../../../shared/ui/states';
 import { LabNav } from '../lab-nav';
 import { FactorLabRun } from './factor-lab-run';
-import { FORMULA_ROUTE, directionText, warmupText } from './factor-requests';
+import { assetClassWords } from '../lab-requests';
+import { BasketPicker } from './basket-picker';
+import {
+  type Basket,
+  FORMULA_ROUTE,
+  defaultBasket,
+  directionText,
+  historyText,
+} from './factor-requests';
 import { FactorTearsheet } from './factor-tearsheet';
 import { FactorValues } from './factor-values';
 import { FormulaEditor } from './formula-editor';
@@ -37,6 +46,7 @@ import { FormulaEditor } from './formula-editor';
     FactorValues,
     FactorTearsheet,
     FactorLabRun,
+    BasketPicker,
     ErrorState,
     LoadingState,
   ],
@@ -70,11 +80,10 @@ import { FormulaEditor } from './formula-editor';
       @let f = info.value();
       <section class="panel" aria-labelledby="factor-title">
         <div class="panel-head">
-          <h2 id="factor-title" class="mono">{{ f.id }}</h2>
-          <span class="tag">{{ f.set ?? 'Formula' }}</span>
+          <h2 id="factor-title">{{ f.description || f.id }}</h2>
+          <span class="tag mono">{{ f.id }}</span>
         </div>
         <div class="panel-body">
-          <p class="lead">{{ f.description }}</p>
           <dl class="facts">
             <div>
               <dt>Why it should work</dt>
@@ -89,12 +98,12 @@ import { FormulaEditor } from './formula-editor';
               <dd>{{ f.family }}</dd>
             </div>
             <div>
-              <dt>Warm-up</dt>
-              <dd class="num">{{ warmup(f.lookback_bars) }}</dd>
+              <dt>Needs</dt>
+              <dd>{{ history(f.lookback_bars) }}</dd>
             </div>
             <div>
               <dt>Works on</dt>
-              <dd>{{ f.asset_classes.join(', ') || 'Any asset class' }}</dd>
+              <dd>{{ assets(f.asset_classes) || 'Any asset class' }}</dd>
             </div>
             <div>
               <dt>Kind</dt>
@@ -104,22 +113,36 @@ import { FormulaEditor } from './formula-editor';
             </div>
           </dl>
           @if (f.expression) {
-            <div class="formula">
-              <span class="label">Formula</span>
-              <code class="mono">{{ f.expression }}</code>
-              <a
-                class="btn btn-ghost"
-                [routerLink]="['/lab/factors', formulaRoute]"
-                [queryParams]="{ expression: f.expression }"
-                >Edit as a formula</a
-              >
-            </div>
+            <details class="formula-fold">
+              <summary>Show formula</summary>
+              <div class="formula">
+                <code class="mono">{{ f.expression }}</code>
+                <a
+                  class="btn btn-ghost"
+                  [routerLink]="['/lab/factors', formulaRoute]"
+                  [queryParams]="{ expression: f.expression }"
+                  >Edit as a formula</a
+                >
+              </div>
+            </details>
           }
         </div>
       </section>
     }
 
     @if (subject(); as s) {
+      <section class="panel" aria-label="Tickers to test">
+        <div class="panel-body">
+          <app-basket-picker
+            idPrefix="fd"
+            [basket]="basket()"
+            [universes]="universeList()"
+            [watchlists]="watchlistList()"
+            (basketChange)="basket.set($event)"
+          />
+        </div>
+      </section>
+
       <section class="panel" aria-labelledby="values-title">
         <div class="panel-head">
           <h2 id="values-title">Values on a date</h2>
@@ -129,6 +152,7 @@ import { FormulaEditor } from './formula-editor';
             [factor]="s"
             [universes]="universeList()"
             [watchlists]="watchlistList()"
+            [sharedBasket]="basket()"
           />
         </div>
       </section>
@@ -146,6 +170,7 @@ import { FormulaEditor } from './formula-editor';
             [factor]="s"
             [universes]="universeList()"
             [watchlists]="watchlistList()"
+            [sharedBasket]="basket()"
           />
         </div>
       </section>
@@ -157,14 +182,15 @@ import { FormulaEditor } from './formula-editor';
         <div class="panel-body">
           <p class="lead">
             A lab run of the factor strategy: it holds the top slice of the names by this factor,
-            equal weight, rebalanced on month ends. The lab tunes the slice and runs the checks you
-            pick. Nothing goes on trial from here.
+            equal weight, rebalanced on month ends. The lab tunes the slice and runs the robustness
+            tests you pick. Nothing goes on trial from here.
           </p>
           <app-factor-lab-run
             [factor]="s"
             [info]="isFormula() || !info.hasValue() ? null : info.value()"
             [universes]="universeList()"
             [watchlists]="watchlistList()"
+            [sharedBasket]="basket()"
           />
         </div>
       </section>
@@ -193,6 +219,14 @@ import { FormulaEditor } from './formula-editor';
       border: 1px solid var(--color-border);
       border-radius: var(--radius-sm);
       font-size: var(--text-xs);
+      color: var(--color-ink-2);
+    }
+    .formula-fold summary {
+      display: flex;
+      align-items: center;
+      min-height: var(--touch-min);
+      cursor: pointer;
+      font-size: var(--text-sm);
       color: var(--color-ink-2);
     }
     .formula {
@@ -233,7 +267,10 @@ export class FactorDetailPage {
 
   protected readonly formulaRoute = FORMULA_ROUTE;
   protected readonly direction = directionText;
-  protected readonly warmup = warmupText;
+  protected readonly history = historyText;
+  protected readonly assets = assetClassWords;
+  /** The one basket the three sections below share. */
+  protected readonly basket = signal<Basket>(defaultBasket());
 
   protected readonly isFormula = computed(() => this.factorId() === FORMULA_ROUTE);
 

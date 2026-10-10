@@ -533,7 +533,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/studio/drafts/{draft_id}/disable` | Disable Draft | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
 | POST | `/api/studio/drafts/{draft_id}/enable` | Enable Draft | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
 | POST | `/api/studio/drafts/{draft_id}/lab-runs` | Start Lab Run | `lab.run` | [DraftLabRunRequest](#draftlabrunrequest) | [Job](#job) |
-| POST | `/api/studio/drafts/{draft_id}/register` | Register Draft | `strategy.promote` |  | [Draft](#draft) |
+| POST | `/api/studio/drafts/{draft_id}/register` | Register Draft | `strategy.trial` |  | [Draft](#draft) |
 | POST | `/api/studio/drafts/{draft_id}/validate` | Validate Draft | `lab.run` | [ValidateRequest](#validaterequest) \| null | [DraftValidation](#draftvalidation) |
 | GET | `/api/studio/schema` | Schema | sign-in |  | object |
 | POST | `/api/studio/spec/validate` | Validate Spec | `lab.run` | [SpecValidateRequest](#specvalidaterequest) | [DraftValidation](#draftvalidation) |
@@ -1253,6 +1253,7 @@ Live calibration of a classifier version's probability forecasts (roadmap 23.9):
 | `quantity` | number | yes |  |
 | `side` | string \| null | yes |  |
 | `strategy_id` | string \| null | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 
 ### ChartSignalView
 
@@ -1262,6 +1263,7 @@ Live calibration of a classifier version's probability forecasts (roadmap 23.9):
 | `kind` | string | yes |  |
 | `reason` | string \| null | yes |  |
 | `strategy_id` | string | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 | `strength` | number \| null | yes |  |
 
 ### ChartView
@@ -1711,6 +1713,17 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `kind` | string | yes |  |
 | `material` | boolean | yes |  |
 | `ours` | number \| string \| null | yes |  |
+
+### DuplicateSource
+
+Where rows a preview calls duplicates were imported before.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `import_id` | string | yes |  |
+| `imported_on` | date | yes |  |
+| `portfolio_id` | string | yes |  |
+| `portfolio_name` | string \| null | yes |  |
 
 ### EarningsEvent
 
@@ -2576,6 +2589,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers, sect
 | `is_delisted` | boolean \| null | yes |  |
 | `name` | string \| null | yes |  |
 | `sector` | string \| null | yes |  |
+| `security_type` | string \| null | no |  |
 
 ### IntervalInfo
 
@@ -3135,6 +3149,7 @@ A portfolio's exposure with each held fund split into what it holds (roadmap 23.
 |-------|------|----------|-------------|
 | `as_of` | date | yes | Fund holdings are the lists known on this day. |
 | `currency` | string | yes | Reporting currency. Amounts are not FX-converted. |
+| `funds_without_list` | list[string] | no | Held funds (ETFs) with no holdings list, counted as one name each. |
 | `look_through` | [LookThrough](#lookthrough) | yes |  |
 | `notes` | list[string] | yes |  |
 | `portfolio_id` | string | yes |  |
@@ -5080,6 +5095,7 @@ The paper a published factor comes from (roadmap 23.13).
 | `credential_fields` | list[string] | yes |  |
 | `display_name` | string | yes |  |
 | `enabled` | boolean | yes |  |
+| `gateways` | list[string] | no |  |
 | `has_paper` | boolean | yes |  |
 | `name` | string | yes |  |
 | `needs_gateway` | boolean | yes |  |
@@ -5589,7 +5605,7 @@ Rename, replace the spec, or both. Unset fields stay.
 | `name` | string | yes |  |
 | `next_as_of` | date \| null | yes |  |
 | `next_run_at` | date-time \| null | yes |  |
-| `off_reason` | "engine_off" \| "options_off" \| "no_gateway" \| null | no |  |
+| `off_reason` | "engine_off" \| "options_off" \| "no_gateway" \| "no_live_portfolio" \| "no_connections" \| "no_learning_strategies" \| null | no |  |
 | `trigger` | string | yes |  |
 | `trigger_text` | string | no |  |
 
@@ -5682,6 +5698,7 @@ Turn an alert on for one of your saved screens, or change it.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `currency` | string \| null | no |  |
 | `exchange` | string \| null | no |  |
 | `name` | string \| null | no |  |
 | `sector` | string \| null | no |  |
@@ -6099,6 +6116,7 @@ A broker export Stonks reads without a mapping.
 |-------|------|----------|-------------|
 | `as_of` | date \| null | no |  |
 | `duplicate` | integer | yes |  |
+| `duplicates_in` | [DuplicateSource](#duplicatesource) \| null | no |  |
 | `first_date` | date \| null | yes |  |
 | `guessed` | boolean | yes |  |
 | `headers` | list[string] | yes |  |
@@ -6201,9 +6219,13 @@ One audited status change or intervention (BL-24).
 | `applicable_asset_classes` | list[string] | yes |  |
 | `class_path` | string | yes |  |
 | `created_at` | string | yes |  |
+| `draft_id` | string \| null | no |  |
 | `id` | string | yes |  |
+| `kind` | string | no |  |
 | `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
+| `name` | string | no |  |
 | `params` | object | yes |  |
+| `retrainable` | boolean | no |  |
 | `starter` | [StarterLabelView](#starterlabelview) \| null | no | Set for a starter strategy: its plain title and summary. |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
 | `status_history` | list[[StatusChangeView](#statuschangeview)] | yes |  |
@@ -6250,9 +6272,13 @@ How many registered strategies are in each lifecycle status.
 | `applicable_asset_classes` | list[string] | yes |  |
 | `class_path` | string | yes |  |
 | `created_at` | string | yes |  |
+| `draft_id` | string \| null | no |  |
 | `id` | string | yes |  |
+| `kind` | string | no |  |
 | `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
+| `name` | string | no |  |
 | `params` | object | yes |  |
+| `retrainable` | boolean | no |  |
 | `starter` | [StarterLabelView](#starterlabelview) \| null | no | Set for a starter strategy: its plain title and summary. |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
 | `updated_at` | string | yes |  |
@@ -6346,6 +6372,7 @@ What this server lets the Studio do.
 | `paused_reason` | string \| null | yes |  |
 | `portfolio_id` | string \| null | yes |  |
 | `strategy_id` | string | yes |  |
+| `strategy_name` | string | yes |  |
 | `strategy_status` | string \| null | yes |  |
 | `updated_at` | date-time | yes |  |
 | `weight` | number | yes |  |

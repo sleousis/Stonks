@@ -420,7 +420,7 @@ def price_check_health(state: SqliteState) -> list[HealthCheck]:
         return []
     row = latest_check(state)
     if row is None:
-        return [HealthCheck("price_check", True, "no price check yet")]
+        return [HealthCheck("price_check", True, "not run yet")]
     when = f"{row['source']} on {row['as_of']}"
     systematic = row["status"] == "systematic"
     checks = [

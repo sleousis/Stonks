@@ -25,6 +25,7 @@ import { PermissionNote } from '../../shared/ui/permission-note';
 import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
 import { ErrorState, LoadingState } from '../../shared/ui/states';
 import { InsightsNav } from './insights-nav';
+import { isReadOnly } from '../../shared/ui/portfolio-picker';
 import { LotPicks } from './lot-picks';
 import { TaxYearCard } from './tax-year-card';
 
@@ -88,7 +89,7 @@ const CURRENCY = /^[A-Z]{3}$/;
     @if (book() === 'none') {
       <app-no-book message="Tax settings and yearly files show here once you have a portfolio." />
     } @else {
-      <app-tax-year-card class="year-card" [portfolio]="portfolioId()" />
+      <app-tax-year-card class="year-card" [portfolio]="portfolioId()" [paper]="paper()" />
       <div class="page-grid">
         <section class="panel span-7" aria-labelledby="tax-settings-title">
           <div class="panel-head">
@@ -289,21 +290,16 @@ const CURRENCY = /^[A-Z]{3}$/;
           </div>
         </section>
 
-        <section class="panel span-12" aria-labelledby="tax-lots-title">
-          <div class="panel-head">
-            <h2 id="tax-lots-title">Specific lots <app-help-tip term="specific_lots" /></h2>
-          </div>
-          <div class="panel-body">
-            @if (settings.hasValue() && settings.value().lot_method === 'specific') {
+        @if (settings.hasValue() && settings.value().lot_method === 'specific') {
+          <section class="panel span-12" aria-labelledby="tax-lots-title">
+            <div class="panel-head">
+              <h2 id="tax-lots-title">Specific lots <app-help-tip term="specific_lots" /></h2>
+            </div>
+            <div class="panel-body">
               <app-lot-picks [portfolioId]="portfolioId()" [canManage]="canManage()" />
-            } @else {
-              <p class="muted">
-                Sales close their oldest shares first. Save "Specific lots" above to pick the buys
-                each sale closes.
-              </p>
-            }
-          </div>
-        </section>
+            </div>
+          </section>
+        }
       </div>
     }
   `,
@@ -369,6 +365,11 @@ export class TaxPage {
 
   protected readonly book = computed(() => bookState(this.ctx));
   protected readonly portfolioId = computed(() => this.ctx.selectedId());
+  /** Simulated money (not Live, not a real account Stonks only reads). */
+  protected readonly paper = computed(() => {
+    const p = this.ctx.current();
+    return !!p && p.trading !== 'live' && !isReadOnly(p);
+  });
   protected readonly canManage = computed(() => this.session.can('portfolio.manage'));
 
   protected readonly settings = resource({

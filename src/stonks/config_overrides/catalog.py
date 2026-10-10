@@ -1,7 +1,9 @@
 """The catalog of settings an admin may edit in the console.
 
 An allowlist: a key that is not here cannot be overridden. Each entry says
-which group it sits in, a label and one line of help for the console, and
+which group it sits in, a label and one line of help for the console (the
+risk limits use the names of the trader's own Risk limits tab, and the
+console shows fractions as percents), and
 when a change takes effect: ``next_run`` for blocks that read settings on
 every run (the trading run, its risk rules and notifier), ``restart`` for
 the scheduler, which builds its job table when it starts.
@@ -36,62 +38,63 @@ _STATIC: tuple[EditableSetting, ...] = (
     EditableSetting(
         f"{_RISK}.max_weight_per_ticker",
         "risk",
-        "Most in one ticker",
-        "Largest share of a portfolio one ticker may hold (0.25 = 25%).",
+        "Largest holding",
+        "Most of a portfolio one ticker may take.",
     ),
     EditableSetting(
         f"{_RISK}.max_open_positions",
         "risk",
-        "Most open positions",
+        "Open positions",
         "Most tickers held at once. Empty means no limit.",
     ),
     EditableSetting(
         f"{_RISK}.cash_buffer_fraction",
         "risk",
-        "Cash kept aside",
-        "Share of the portfolio that stays in cash after buys.",
+        "Cash to keep",
+        "Part of a portfolio that stays in cash after buys.",
     ),
     EditableSetting(
         f"{_RISK}.min_order_notional",
         "risk",
         "Smallest order",
-        "Buys smaller than this amount are dropped.",
+        "Buys worth less than this are skipped.",
     ),
     EditableSetting(
         f"{_RULES}.circuit_breaker.max_month_loss",
         "risk",
         "Monthly loss limit",
-        "Halts new buys after this loss from the month's start (0.06 = 6%). Empty turns it off.",
+        "Stops new buys after this loss since the month began. Empty turns it off.",
     ),
     EditableSetting(
         f"{_RULES}.circuit_breaker.max_week_loss",
         "risk",
         "Weekly loss limit",
-        "Halts new buys after this loss over the last five runs. Empty turns it off.",
+        "Stops new buys after this loss over the last five runs. Empty turns it off.",
     ),
     EditableSetting(
         f"{_RULES}.circuit_breaker.max_drawdown_halt",
         "risk",
         "Drop from the peak that halts buys",
-        "Halts new buys until an admin clears it. Empty turns it off.",
+        "Stops new buys until an admin clears it. Empty turns it off.",
     ),
     EditableSetting(
         f"{_RULES}.circuit_breaker.cooldown",
         "risk",
         "Breaker cooldown",
-        "rest_of_month holds a trip until the month ends; none lifts it once the loss is back.",
+        "How long a tripped loss limit keeps new buys stopped.",
     ),
     EditableSetting(
         f"{_RULES}.drawdown_scaling.schedule",
         "risk",
         "Size down in a drawdown",
-        "Pairs of [drop from the peak, size of new buys], e.g. [[0.1, 0.5], [0.2, 0]].",
+        "Pairs of a drop from the peak and the size of new buys, as fractions. "
+        "[[0.1, 0.5]] halves new buys after a 10% drop.",
     ),
     EditableSetting(
         f"{_RULES}.sector_cap.max_weight_per_sector",
         "risk",
         "Most in one sector",
-        "Largest share of a portfolio one sector may hold. Empty means no limit.",
+        "Most of a portfolio one sector may take. Empty means no limit.",
     ),
     EditableSetting(
         f"{_RULES}.max_holding.max_holding_bars",
@@ -103,21 +106,20 @@ _STATIC: tuple[EditableSetting, ...] = (
         f"{_RULES}.operational_halt.max_bar_age_days",
         "risk",
         "Stale data halt",
-        "Halts new buys when the newest price is older than this many days. Empty is off.",
+        "Stops new buys when the newest price is older than this many days. Empty is off.",
     ),
     # ---- trading run ---------------------------------------------------------------
     EditableSetting(
         "production.universe",
         "trading",
         "Trading universe",
-        "The tickers the trading run looks at: a list, or the id of a stored universe.",
+        "The tickers the trading run looks at: a stored universe, or a list of tickers.",
     ),
     EditableSetting(
         "production.model_books",
         "trading",
         "Test books",
-        "all keeps a test book for every strategy that is not retired; shadow only for "
-        "strategies on trial.",
+        "Which strategies keep a test book.",
     ),
     EditableSetting(
         "production.initial_cash",
@@ -136,20 +138,21 @@ _STATIC: tuple[EditableSetting, ...] = (
         "notify.min_level",
         "notifications",
         "Lowest alert level sent",
-        "info, warning or error. Lower levels are only stored.",
+        "Alerts below this level are only stored.",
     ),
     EditableSetting(
         "notify.backends",
         "notifications",
         "Where system alerts go",
-        "Any of log, store, outbox (admins' devices) and webhook.",
+        "Where operator alerts go.",
     ),
 )
 
-#: Trigger fields an admin may change per job, by trigger type.
+#: Trigger fields an admin may change per job, by trigger type. A session
+#: job's label names its edge: "minutes after the close".
 _TRIGGER_FIELDS: dict[str, tuple[str, str, str]] = {
-    "session": ("offset_minutes", "Minutes from the session", "Minutes after (or before, "
-                "negative) the market open or close the job runs."),
+    "session": ("offset_minutes", "Minutes after the {anchor}", "A negative number runs it "
+                "before."),
     "daily": ("at", "Time of day", "The time the job runs, in the job's time zone (HH:MM)."),
     "interval": ("every_minutes", "Every how many minutes", "How often the job runs."),
 }  # fmt: skip
@@ -172,6 +175,7 @@ def _job_settings(settings: Any) -> list[EditableSetting]:
         field = _TRIGGER_FIELDS.get(getattr(job.trigger, "type", ""))
         if field is not None:
             name, label, text = field
+            label = label.format(anchor=getattr(job.trigger, "anchor", "close"))
             out.append(
                 EditableSetting(f"{base}.trigger.{name}", "schedule", f"{job.name}: {label.lower()}",
                                 text, "restart")

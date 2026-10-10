@@ -1,47 +1,58 @@
 import { sub } from '../../../testing/home-fixtures';
-import { autoBlockedReason, paperProgress, unlockRule } from './follow-rules';
+import { blockerDetail, gatedModesLocked, lockedModesLine, paperProgress } from './follow-rules';
 
-describe('autoBlockedReason', () => {
-  it('is null once the gate passes', () => {
-    expect(autoBlockedReason(sub())).toBeNull();
+describe('follow rules (FR-03, PO-02)', () => {
+  it('opens the gated modes once the gate passes', () => {
+    expect(gatedModesLocked(sub())).toBe(false);
+    expect(lockedModesLine(sub())).toBeNull();
+    expect(blockerDetail(sub())).toBeNull();
   });
 
-  it('counts paper days first, without repeating the server line', () => {
+  it('says both modes need a broker portfolio and the paper days', () => {
     const waiting = sub({
-      paper_days_completed: 12,
-      auto_blockers: ['12 of 20 paper trading days', 'the portfolio is not a broker portfolio'],
+      mode: 'notify',
+      portfolio_id: null,
+      paper_days_completed: 0,
+      auto_blockers: ['auto mode needs a portfolio', '0 of 20 paper trading days completed'],
     });
-    expect(autoBlockedReason(waiting)).toBe(
-      'Approve each trade and Automatic open after 20 trading days on Paper. 12 of 20 done. ' +
-        'The portfolio is not a broker portfolio.',
+    expect(lockedModesLine(waiting)).toBe(
+      'More modes unlock with a broker portfolio after 20 paper days.',
     );
-    // Under a list that says the rule once (Today), only the progress.
-    expect(autoBlockedReason(waiting, { compact: true })).toBe(
-      'Paper days: 12 of 20. The portfolio is not a broker portfolio.',
+    // Alerts only collects no paper days and the portfolio is in the line.
+    expect(blockerDetail(waiting)).toBeNull();
+  });
+
+  it('a paper follow says how far it has come, never repeating the server line', () => {
+    const paper = sub({
+      paper_days_completed: 12,
+      auto_blockers: [
+        'auto mode needs a broker portfolio',
+        '12 of 20 paper trading days completed without a risk breach',
+      ],
+    });
+    expect(lockedModesLine(paper)).toBe(
+      'More modes unlock with a broker portfolio after 20 paper days.',
+    );
+    expect(blockerDetail(paper)).toBe('Your paper days: 12 of 20.');
+  });
+
+  it('names only what is missing', () => {
+    expect(lockedModesLine(sub({ paper_days_completed: 4 }))).toBe(
+      'More modes unlock after 20 paper days.',
+    );
+    expect(lockedModesLine(sub({ auto_blockers: ['auto mode needs a broker portfolio'] }))).toBe(
+      'More modes unlock with a broker portfolio.',
     );
   });
 
-  it('says the unlock rule once, in the vocabulary words (M8)', () => {
-    expect(unlockRule(20)).toBe('Approve each trade and Automatic unlock after 20 paper days.');
-    expect(paperProgress(sub({ paper_days_completed: 4 }))).toBe('Paper days: 4 of 20.');
+  it('shows other blockers as sentences in trader words (UX-09)', () => {
+    const s = sub({ auto_blockers: ['the strategy is not active', 'the portfolio is paused'] });
+    expect(lockedModesLine(s)).toBe('More modes are closed for now.');
+    expect(blockerDetail(s)).toBe('The strategy is not approved yet. The portfolio is paused.');
+  });
+
+  it('counts paper days in the vocabulary words (M8)', () => {
+    expect(paperProgress(sub({ paper_days_completed: 4 }))).toBe('Your paper days: 4 of 20.');
     expect(paperProgress(sub({ paper_days_completed: 20 }))).toBeNull();
-  });
-
-  it('names the mode as the vocabulary does', () => {
-    expect(autoBlockedReason(sub({ auto_blockers: ['auto mode needs a broker portfolio'] }))).toBe(
-      'Automatic needs a broker portfolio.',
-    );
-  });
-
-  it('shows other blockers as sentences', () => {
-    expect(autoBlockedReason(sub({ auto_blockers: ['the portfolio is paused'] }))).toBe(
-      'The portfolio is paused.',
-    );
-  });
-
-  it('says approved instead of the status key (UX-09)', () => {
-    expect(autoBlockedReason(sub({ auto_blockers: ['the strategy is not active'] }))).toBe(
-      'The strategy is not approved yet.',
-    );
   });
 });

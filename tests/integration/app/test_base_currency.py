@@ -66,7 +66,9 @@ def test_missing_rate_is_reported_not_guessed(settings, foreign, services):
     assert pnl.base_rows is None and pnl.fx_missing == ["EUR"]
     insights = services.insights.insights("pf_default")
     assert insights.total_value_base is None and insights.fx_missing == ["EUR"]
-    assert any("no FX rate for EUR" in n for n in insights.notes)
+    assert "EUR holdings are left out of the USD total until an exchange rate is loaded." in (
+        insights.notes
+    )
 
 
 def test_foreign_holding_converts_at_the_rate(settings, foreign, services):

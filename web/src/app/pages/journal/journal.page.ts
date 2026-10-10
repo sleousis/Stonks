@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  inject,
+  input,
+  linkedSignal,
+} from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { NoBook, bookState } from '../../shared/ui/no-book';
@@ -23,7 +31,7 @@ const VIEWS: readonly SegmentOption<JournalView>[] = [
 /**
  * The round-trip journal (roadmap 23.3): trades built from fills, the P&L
  * calendar, results split by what you wrote about each trade, and your
- * playbooks. Shares the Orders tab bar.
+ * playbooks. Shares the Orders tab bar. The view is kept in `?view=`.
  */
 @Component({
   selector: 'app-journal-page',
@@ -48,9 +56,14 @@ const VIEWS: readonly SegmentOption<JournalView>[] = [
     @switch (book()) {
       @case ('ready') {
         <div class="views">
-          <app-segmented label="Journal view" [options]="views" [(value)]="view" />
+          <app-segmented
+            label="Journal view"
+            [options]="views"
+            [value]="shown()"
+            (valueChange)="setView($event)"
+          />
         </div>
-        @switch (view()) {
+        @switch (shown()) {
           @case ('trades') {
             <app-journal-trades />
           }
@@ -83,5 +96,24 @@ export class JournalPage {
   private readonly portfolioCtx = inject(PortfolioContextService);
   protected readonly book = computed(() => bookState(this.portfolioCtx));
   protected readonly views = VIEWS;
-  readonly view = signal<JournalView>('trades');
+  private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
+  /** `?view=` so a view, such as Playbooks, can be linked to. */
+  readonly view = input<string | undefined>(undefined);
+  protected readonly shown = linkedSignal<JournalView>(() => journalView(this.view()));
+
+  protected setView(view: JournalView): void {
+    this.shown.set(view);
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { view: view === 'trades' ? null : view },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+}
+
+/** The view a `?view=` names, or Trades. */
+export function journalView(param: string | null | undefined): JournalView {
+  return VIEWS.some((v) => v.value === param) ? (param as JournalView) : 'trades';
 }

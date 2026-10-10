@@ -8,8 +8,41 @@ import { book } from '../../../testing/portfolio-fixtures';
 import { KillSheet } from './kill-sheet';
 
 describe('KillSheet', () => {
+  function render(books = [book({ id: 'pf_1', name: 'Main', is_default: true })]) {
+    const options = signal(books);
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: HaltsService, useValue: { kill: vi.fn() } },
+        {
+          provide: PortfolioContextService,
+          useValue: { options, current: computed(() => options()[0] ?? null) },
+        },
+        { provide: SessionService, useValue: { can: () => false, me: () => null } },
+      ],
+    });
+    const fixture = TestBed.createComponent(KillSheet);
+    fixture.componentRef.setInput('open', true);
+    return fixture;
+  }
+
+  it('asks no scope of a trader with one portfolio, and keeps the sheet short (PO-13)', async () => {
+    const fixture = render();
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).not.toContain('Stop for');
+    expect(el.querySelector('input[name="kill-sheet-scope"]')).toBeNull();
+    // No ticket repeating scope, stops and reason: only the stamp by the button.
+    expect(el.querySelector('[aria-label="Stop trading ticket"]')).toBeNull();
+    expect(el.querySelector('.sheet-actions app-mode-stamp')?.textContent).toContain('PAPER');
+    expect(el.textContent).toContain('You can resume from the red bar at the top.');
+    expect(el.querySelector<HTMLInputElement>('#kill-sheet-reason')!.value).toBe('Stopped by me.');
+  });
+
   it('keeps the chosen scope when the portfolio list is read again', async () => {
-    const options = signal([book({ id: 'pf_1', name: 'Main', is_default: true })]);
+    const options = signal([
+      book({ id: 'pf_1', name: 'Main', is_default: true }),
+      book({ id: 'pf_2', name: 'Side' }),
+    ]);
     TestBed.configureTestingModule({
       providers: [
         { provide: HaltsService, useValue: { kill: vi.fn() } },
@@ -32,7 +65,10 @@ describe('KillSheet', () => {
     await fixture.whenStable();
     expect(all.checked).toBe(true);
     // A re-read brings the same portfolio as a new object.
-    options.set([book({ id: 'pf_1', name: 'Main', is_default: true })]);
+    options.set([
+      book({ id: 'pf_1', name: 'Main', is_default: true }),
+      book({ id: 'pf_2', name: 'Side' }),
+    ]);
     await fixture.whenStable();
     expect(el.querySelector<HTMLInputElement>('input[value="user"]')!.checked).toBe(true);
   });

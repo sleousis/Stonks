@@ -87,9 +87,39 @@ describe('PortfolioCard', () => {
       },
     );
     expect(el.textContent).toContain('Value in EUR: €920.00');
+    // One day of history: the plain return only, no yearly rate (NB-14).
+    expect(el.querySelector('.returns')?.textContent).toContain(
+      'Since the start: return +5.1%. Deposits',
+    );
+  });
+
+  it('adds the yearly rate on your money after about three months (NB-14)', async () => {
+    const long = pnl('2026-09-25');
+    const rows = [{ ...long.rows[0], day: '2026-06-01' }, ...long.rows];
+    const el = await render([book({ id: 'pf_1', name: 'Main', is_default: true })], undefined, {
+      pnl: { rows, twr: 0.051, mwr: 0.12 },
+    });
     expect(el.querySelector('.returns')?.textContent).toContain(
       'Since the start: return +5.1%, +12.0% a year on your money.',
     );
+  });
+
+  it('rounds paper shares to two decimals (NB-14)', async () => {
+    const el = await render([book({ id: 'pf_1', name: 'Main', is_default: true })], undefined, {
+      portfolio: {
+        positions: [
+          {
+            ticker: 'AAPL.US',
+            quantity: 139.9214,
+            price: 1,
+            price_date: '2026-09-25',
+            market_value: 139.92,
+            weight: 1,
+          },
+        ],
+      },
+    });
+    expect(el.querySelector('.qty')?.textContent).toBe('139.92 shares');
   });
 
   it('shows each holding in its own currency', async () => {

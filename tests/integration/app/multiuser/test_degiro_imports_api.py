@@ -158,6 +158,8 @@ def test_a_portfolio_export_sets_the_holdings_on_its_day(client, people, isins):
     # the same export for the same day is a duplicate; undo brings the
     # holdings back to what the trades add up to
     assert client.post("/api/statement-imports", json=body, headers=alice).status_code == 409
+    again = client.post("/api/statement-imports/preview", json=body, headers=alice).json()
+    assert again["duplicates_in"]["import_id"] == m["id"]
     client.post(f"/api/statement-imports/{m['id']}/undo", headers=alice)
     back = client.get("/api/insights", params={"portfolio_id": pid}, headers=alice).json()
     assert back["cash"] == pytest.approx(-1939.44 - 1955.50 - 476.50 - 475.60 - 114.70 + 829.18)

@@ -24,6 +24,7 @@ import {
   buildTearsheetRequest,
   defaultTearsheetForm,
   tearsheetErrors,
+  type Basket,
 } from './factor-requests';
 import { FactorTearsheetResult } from './tearsheet-result';
 
@@ -45,14 +46,18 @@ import { FactorTearsheetResult } from './tearsheet-result';
   template: `
     @let f = form();
     <form class="form" novalidate (submit)="$event.preventDefault(); start()">
-      <app-basket-picker
-        idPrefix="ts"
-        [basket]="f.basket"
-        [universes]="universes()"
-        [watchlists]="watchlists()"
-        [error]="errors()['basket']"
-        (basketChange)="patch({ basket: $event })"
-      />
+      @if (!sharedBasket()) {
+        <app-basket-picker
+          idPrefix="ts"
+          [basket]="f.basket"
+          [universes]="universes()"
+          [watchlists]="watchlists()"
+          [error]="errors()['basket']"
+          (basketChange)="patch({ basket: $event })"
+        />
+      } @else if (errors()['basket']; as e) {
+        <p class="error" role="alert">{{ e }}</p>
+      }
       <div class="grid">
         <div class="field">
           <label for="ts-start">From</label>
@@ -191,12 +196,19 @@ export class FactorTearsheet {
   readonly factor = input.required<string>();
   readonly universes = input<readonly UniverseView[]>([]);
   readonly watchlists = input<readonly WatchlistView[]>([]);
+  /** The page's one basket picker; when set, this section shows none of its own. */
+  readonly sharedBasket = input<Basket | null>(null);
 
   protected readonly canRun = computed(() => this.session.can('lab.run'));
   protected readonly form = signal<TearsheetForm>(defaultTearsheetForm());
   protected readonly tried = signal(false);
   protected readonly starting = signal(false);
-  private readonly allErrors = computed(() => tearsheetErrors(this.form(), this.watchlists()));
+  /** The form with the shared basket laid over it. */
+  private readonly current = computed(() => {
+    const b = this.sharedBasket();
+    return b ? { ...this.form(), basket: b } : this.form();
+  });
+  private readonly allErrors = computed(() => tearsheetErrors(this.current(), this.watchlists()));
   protected readonly errors = computed(() => (this.tried() ? this.allErrors() : {}));
 
   protected readonly run = new JobFollower<FactorTearSheetView>(
@@ -218,7 +230,7 @@ export class FactorTearsheet {
     if (!this.canRun()) return;
     this.tried.set(true);
     if (Object.keys(this.allErrors()).length) return;
-    const f = this.form();
+    const f = this.current();
     const body = buildTearsheetRequest(this.factor(), f, this.watchlists());
     this.starting.set(true);
     let jobId: string;

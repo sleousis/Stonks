@@ -40,7 +40,7 @@ describe('SignalIcFormView', () => {
   function fillBasics(): void {
     el.querySelector<HTMLInputElement>(`input[value="${MOMENTUM.class_path}"]`)!.click();
     fixture.detectChanges();
-    type('#ic-tickers', 'aapl.us, msft.us');
+    type('#ic-tickers', 'a.us b.us c.us d.us e.us f.us g.us h.us i.us j.us');
   }
 
   function submit(): void {
@@ -61,10 +61,20 @@ describe('SignalIcFormView', () => {
     expect(emitted).toHaveLength(1);
     expect(emitted[0]).toMatchObject({
       strategy: { class_path: MOMENTUM.class_path },
-      universe: ['AAPL.US', 'MSFT.US'],
+      universe: ['A.US', 'B.US', 'C.US', 'D.US', 'E.US', 'F.US', 'G.US', 'H.US', 'I.US', 'J.US'],
       interval: '1d',
     });
     expect(emitted[0].horizons).toBeUndefined();
+  });
+
+  it('says it needs 10 tickers in the form, before running', () => {
+    el.querySelector<HTMLInputElement>(`input[value="${MOMENTUM.class_path}"]`)!.click();
+    type('#ic-tickers', 'aapl.us msft.us');
+    submit();
+    expect(emitted).toEqual([]);
+    expect(el.querySelector('#ic-tickers-hint')?.textContent).toContain(
+      'Needs at least 10 tickers.',
+    );
   });
 
   it('sends typed look-aheads sorted, and explains a wrong one', () => {

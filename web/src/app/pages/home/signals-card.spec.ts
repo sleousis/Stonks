@@ -9,7 +9,15 @@ import type { TickRun } from '../../api/models';
 import { formatWeekday } from '../../core/format/format';
 import { NotificationFeedService } from '../../core/notify/notification-feed.service';
 import { TradingDayService } from '../../core/schedule/trading-day.service';
-import { SignalsCard, ownRunCounts, runDetail, todaysRuns, todaysSignals } from './signals-card';
+import {
+  SignalsCard,
+  ownRunCounts,
+  quietRunsTitle,
+  runDetail,
+  runIsOwnRow,
+  todaysRuns,
+  todaysSignals,
+} from './signals-card';
 
 function run(overrides: Partial<TickRun>): TickRun {
   return {
@@ -83,6 +91,19 @@ describe('trading runs on the blotter', () => {
     expect(runDetail(run({ status: 'error', summary: { error: 'Broker down' } }))).toBe(
       'Broker down',
     );
+  });
+});
+
+describe('quiet runs (FR-04)', () => {
+  it('gives a run its own row only when it traded for you or did not finish cleanly', () => {
+    expect(runIsOwnRow(run({}))).toBe(true);
+    expect(runIsOwnRow(run({ summary: { orders_placed: null, fills: null } }))).toBe(false);
+    // Your portfolios took part but nothing traded: still nothing for you.
+    expect(runIsOwnRow(run({ summary: { orders_placed: 0, fills: 0 } }))).toBe(false);
+    expect(runIsOwnRow(run({ summary: { orders_placed: 0, fills: 1 } }))).toBe(true);
+    expect(runIsOwnRow(run({ status: 'error', summary: { error: 'Broker down' } }))).toBe(true);
+    expect(quietRunsTitle(10)).toBe('10 trading runs finished, nothing for you');
+    expect(quietRunsTitle(1)).toBe('1 trading run finished, nothing for you');
   });
 });
 
@@ -234,5 +255,51 @@ describe('SignalsCard', () => {
     // One word per state from the vocabulary: Done, not "succeeded" or "ok" (M5).
     expect(rows[0].querySelector('app-status-pill')?.textContent?.trim()).toBe('Done');
     expect(rows[0].textContent).toContain('3 orders, 1 fill in your portfolios.');
+  });
+
+  it('folds runs that did nothing for you into one line (FR-04)', async () => {
+    const fixture = TestBed.createComponent(SignalsCard);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/notifications')).flush({ items: [], unread_count: 0 });
+    const quiet = Array.from({ length: 9 }, (_, i) =>
+      run({ id: `q${i}`, summary: { orders_placed: null, fills: null } }),
+    );
+    (await nextRequest(controller, '/api/ticks')).flush({
+      items: [...quiet, run({ id: 'mine' })],
+      total: 10,
+      limit: 10,
+      offset: 0,
+    });
+    await tick();
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const titles = [...el.querySelectorAll('li.row[data-kind="run"] .title')].map((t) =>
+      t.textContent?.trim(),
+    );
+    expect(titles).toHaveLength(2);
+    expect(titles).toContain('9 trading runs finished, nothing for you');
+    expect(titles).toContain('Trading run finished');
+  });
+
+  it('shows the latest 8 signals and links to the rest (FR-23)', async () => {
+    const fixture = TestBed.createComponent(SignalsCard);
+    fixture.detectChanges();
+    const items = Array.from({ length: 11 }, (_, i) =>
+      item({ id: i + 1, created_at: new Date(Date.now() - i * 60_000).toISOString() }),
+    );
+    (await nextRequest(controller, '/api/notifications')).flush({ items, unread_count: 11 });
+    (await nextRequest(controller, '/api/ticks')).flush({
+      items: [],
+      total: 0,
+      limit: 10,
+      offset: 0,
+    });
+    await tick();
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelectorAll('li.row[data-kind="signal"]')).toHaveLength(8);
+    const more = el.querySelector<HTMLAnchorElement>('li.more a')!;
+    expect(more.textContent?.trim()).toBe('See all 11 in Notifications');
+    expect(more.getAttribute('href')).toBe('/notifications');
   });
 });

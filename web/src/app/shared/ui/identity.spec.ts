@@ -94,6 +94,6 @@ describe('StatusPill forms', () => {
     fixture.detectChanges();
     expect(el.getAttribute('data-form')).toBe('receipt');
     expect(el.getAttribute('data-tone')).toBe('positive');
-    expect(el.textContent).toContain('filled');
+    expect(el.textContent).toContain('Filled');
   });
 });

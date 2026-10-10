@@ -70,29 +70,31 @@ describe('Nav', () => {
     return (heading(el, title)?.parentElement as HTMLDetailsElement | undefined)?.open ?? false;
   }
 
-  it('gives a trader seven pages on top, the rest in folding groups (M1)', () => {
+  it('gives a trader seven pages on top, building and testing next to Strategies (M1, FR-08)', () => {
     const el = render(TRADER);
     expect(labels(el, 'ul[aria-label="Trading"]')).toEqual([
       'Today',
       'Strategies',
+      'Build a strategy',
+      'Lab',
       'Orders',
-      'Approvals',
       'Insights',
       'Charts',
-      'Notifications',
     ]);
     expect(group(el, 'More')).toEqual([
+      'Approvals',
       'Going live',
       'Watchlists',
       'Calendar',
       'Screener',
       'Trial results',
       'Leaderboard',
-      'Trade costs',
       'Assistant',
     ]);
-    expect(group(el, 'Advanced')).toEqual(['Studio', 'Lab', 'Options', 'Strategy review', 'Halts']);
+    expect(group(el, 'Advanced')).toEqual(['Strategy review', 'Options', 'Trade costs', 'Halts']);
     expect(group(el, 'System')).toEqual([]);
+    // The bell carries Notifications.
+    expect(labels(el)).not.toContain('Notifications');
   });
 
   it('never links a trader to an admin page (F11)', () => {
@@ -102,9 +104,9 @@ describe('Nav', () => {
     }
   });
 
-  it('opens More at first and keeps Advanced folded, remembering a choice', () => {
+  it('opens no group for a trader at first, remembering a choice (FR-08)', () => {
     const el = render(TRADER);
-    expect(isOpen(el, 'More')).toBe(true);
+    expect(isOpen(el, 'More')).toBe(false);
     expect(isOpen(el, 'Advanced')).toBe(false);
     const advanced = heading(el, 'Advanced')!.parentElement as HTMLDetailsElement;
     advanced.open = true;
@@ -112,9 +114,23 @@ describe('Nav', () => {
     expect(JSON.parse(localStorage.getItem(NAV_GROUPS_STORAGE_KEY)!)).toContain('Advanced');
   });
 
+  it('opens System and keeps More closed for admins at first (FR-08)', () => {
+    const el = render(ADMIN);
+    expect(isOpen(el, 'System')).toBe(true);
+    expect(isOpen(el, 'More')).toBe(false);
+  });
+
   it('hides the Assistant while the server has it off (F42)', () => {
     off.set(new Set(['assistant']));
     expect(group(render(TRADER), 'More')).not.toContain('Assistant');
+  });
+
+  it('hides Options, the engine and model versions while they are off (FR-08, AO-11)', () => {
+    off.set(new Set(['options', 'intraday', 'models']));
+    const el = render(ADMIN);
+    expect(labels(el)).not.toContain('Options');
+    expect(group(el, 'System')).not.toContain('Intraday engine');
+    expect(group(el, 'System')).not.toContain('Model versions');
   });
 
   it('a viewer does not see Schedule or Data quality, nor the build tools', () => {
@@ -123,12 +139,12 @@ describe('Nav', () => {
     expect(all).not.toContain('Schedule');
     expect(all).not.toContain('Data quality');
     expect(all).not.toContain('Users');
-    expect(all).not.toContain('Studio');
+    expect(all).not.toContain('Build a strategy');
     expect(all).not.toContain('Lab');
     expect(all).not.toContain('Approvals');
     // Viewers may still read strategies, trial results and the leaderboard.
     expect(all).toContain('Strategies');
-    expect(group(el, 'Advanced')).toEqual(['Options', 'Strategy review']);
+    expect(group(el, 'Advanced')).toEqual(['Strategy review', 'Options', 'Trade costs']);
   });
 
   it('gives admins the System group, with Dashboard, Halts and Users', () => {

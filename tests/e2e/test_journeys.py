@@ -148,21 +148,19 @@ def test_build_universe_from_csv_and_view_members(browse, stack, viewport, tmp_p
     expect(page.get_by_role("heading", name="Stored universes")).to_be_visible()
     v.check_page("universes")
     page.get_by_role("button", name="New universe").click()
-    page.get_by_label("Id", exact=True).fill(uid)
+    # R22: the name comes first and the id is made from it.
+    page.get_by_label("Name", exact=True).fill(uid)
     page.get_by_label("A CSV file").check()
     page.get_by_label("CSV file", exact=True).set_input_files(csv)
     v.check_page("universes-new")
     page.get_by_role("button", name="Create universe").click()
 
-    # Creating opens the universe; its members appear after a refresh.
+    # Creating opens the universe, and a list fills its members at once.
     expect(page.get_by_role("heading", level=1)).to_contain_text(uid)
-    expect(page.locator("main")).to_contain_text("Not refreshed")
-    v.check_page("universe-detail")
-    page.get_by_role("button", name="Refresh", exact=True).click()
-    page.get_by_role("dialog").get_by_role("button", name="Refresh").click()
+    expect(page).to_have_url(re.compile(r"/universes/e2e-csv-"))
     main = page.locator("main")
-    expect(main).to_contain_text("succeeded", timeout=60_000)
-    expect(main).to_contain_text("3 on ")
+    expect(main).to_contain_text("3 on ", timeout=60_000)
+    v.check_page("universe-detail")
     for ticker in ("AAA.US", "BBB.US", "CCC.US"):
         expect(main).to_contain_text(ticker)
     v.check_page("universe-members")
@@ -206,9 +204,10 @@ def test_lab_run_with_quick_preset_shows_results(browse, stack, viewport):
 
     result = page.locator("section", has=page.get_by_role("heading", name="Result"))
     expect(result).to_contain_text(re.compile("pass|fail", re.I), timeout=180_000)
-    # The verdict in words, and trials are not tests.
+    # The verdict in words, said once (R06), and "trial" only means On trial (R04).
     expect(result).to_contain_text(re.compile("It held up|It did not hold up"))
-    expect(result).to_contain_text("A trial only says a setting ran")
+    expect(result.locator(".plain-verdict")).to_have_count(1)
+    expect(result).not_to_contain_text(re.compile(r"\btrials?\b", re.I))
     v.check_page("lab-run-result")
 
 
@@ -225,7 +224,10 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     trader = browse(stack.trader)
     trader.guard.expect_refusal(403, promote_url, "traders cannot promote")
     page = trader.go(f"/strategies/{sid}")
-    expect(page.get_by_role("heading", level=1)).to_contain_text(sid)
+    # The page names it in words, never by its id (NAMES).
+    name = trader.api("GET", f"/api/strategies/{sid}").json()["name"]
+    assert name and name != sid
+    expect(page.get_by_role("heading", level=1)).to_have_text(name)
     expect(page.locator("app-strategy-verdict")).to_be_visible()
     expect(page.get_by_role("button", name="Approve", exact=True)).to_have_count(0)
     expect(page.get_by_role("button", name="Override…")).to_have_count(0)
@@ -368,7 +370,8 @@ def test_kill_switch_blocks_orders_until_resumed_with_a_fresh_code(
     # M7: the Halts page opens the same Stop trading sheet as the strip.
     page.get_by_role("button", name="Stop trading…").click()
     sheet = page.get_by_role("dialog", name="Stop trading")
-    expect(sheet.get_by_role("group", name="Stop trading ticket")).to_be_visible()
+    # PO-13: no ticket lines, only the PAPER or LIVE stamp next to the button.
+    expect(sheet.locator("app-mode-stamp")).to_be_visible()
     sheet.get_by_role("radio", name="Every portfolio, for every trader").check()
     sheet.get_by_label("Reason").fill(f"e2e kill switch drill ({viewport})")
     sheet.get_by_role("button", name="Stop trading").click()
@@ -386,7 +389,12 @@ def test_kill_switch_blocks_orders_until_resumed_with_a_fresh_code(
     page.get_by_role("button", name=re.compile("^Resume")).first.click()
     dialog = page.locator("dialog[open]")
     expect(dialog).to_contain_text("Resume trading?")
-    fill_status_dialog(dialog, "RESUME TRADING", "Drill over, trading again.")
+    # PO-07: no real money trades here, so resuming is one tap: no typed
+    # phrase, the reason filled in. The server still asks for a fresh code.
+    expect(dialog.locator("#resume-typed")).to_have_count(0)
+    expect(dialog.locator("#resume-reason")).to_have_count(0)
+    # The stale code comes back as 403 step_up_required, and the console asks.
+    v.guard.expect_refusal(403, r"/api/halts/\d+/resume$", "a stale code asks for a fresh one")
     dialog.get_by_role("button", name="Resume trading").click()
     step_up = page.locator(
         "dialog[open]", has=page.get_by_role("heading", name="Confirm it is you")
@@ -401,8 +409,32 @@ def test_stop_trading_from_the_strip_halts_the_picked_portfolio(
     browse, stack, viewport, lift_halts_after
 ):
     """UX-01: from any page, one tap on Stop trading opens the kill sheet,
-    preset to the portfolio on screen, and the strip turns red at once."""
-    v = browse(stack.trader)
+    preset to the portfolio on screen, and the strip turns red at once.
+
+    FR-06: the control shows only once the trader has something that trades,
+    so this trader starts with a portfolio and no follow, then follows on Paper."""
+    from tests.e2e.stack import ACTIVE_IDS
+
+    person = stack.add_person("trader", f"strip-{viewport}@e2e.test", "Strip Trader")
+    person.totp_secret = pyotp.random_base32()
+    enrol(stack, person)
+    v = browse(person)
+    book = f"Strip book {viewport}"
+    made = v.api("POST", "/api/portfolios", data={"name": book, "initial_cash": 100_000})
+    assert made.status == 201, made.text()
+    portfolio_id = made.json()["id"]
+    page = v.go("/strategies")
+    strip = page.locator("app-session-strip .strip")
+    stop = strip.get_by_role("button", name="Stop trading")
+    expect(page.get_by_role("heading", level=1)).to_be_visible()
+    expect(stop).to_have_count(0)
+
+    followed = v.api(
+        "POST",
+        "/api/subscriptions",
+        data={"strategy_id": ACTIVE_IDS["AAA.US"], "portfolio_id": portfolio_id, "mode": "paper"},
+    )
+    assert followed.status == 201, followed.text()
     page = v.go("/strategies")
     strip = page.locator("app-session-strip .strip")
     stop = strip.get_by_role("button", name="Stop trading")
@@ -414,15 +446,16 @@ def test_stop_trading_from_the_strip_halts_the_picked_portfolio(
 
     sheet = page.get_by_role("dialog", name="Stop trading")
     expect(sheet).to_be_visible()
-    expect(sheet.get_by_role("radio", name="Trader paper book")).to_be_checked()
+    # PO-13: a trader with one portfolio gets no scope choice, it is theirs.
+    expect(sheet.get_by_role("group", name="Stop for")).to_have_count(0)
     expect(sheet.get_by_role("radio", name="All new orders")).to_be_checked()
-    expect(sheet.get_by_role("group", name="Stop trading ticket")).to_contain_text("PAPER")
+    expect(sheet.locator("app-mode-stamp")).to_contain_text("PAPER")
     v.check_page("kill-sheet")
     sheet.get_by_label("Reason").fill(f"e2e stop from the strip ({viewport})")
     sheet.get_by_role("button", name="Stop trading").click()
 
     expect(strip).to_have_attribute("data-tone", "kill")
-    expect(page.get_by_role("region", name="Trading halted")).to_contain_text("Trader paper book")
+    expect(page.get_by_role("region", name="Trading halted")).to_contain_text(book)
     # A trader resumes from the strip itself: the Halts page is an admin page (F11).
     halted = page.get_by_role("region", name="Trading halted")
     expect(halted.get_by_role("button", name="Resume")).to_be_visible()
@@ -434,7 +467,7 @@ def test_stop_trading_from_the_strip_halts_the_picked_portfolio(
     mine = [h for h in rows if h.get("reason") == f"e2e stop from the strip ({viewport})"]
     assert len(mine) == 1, rows
     assert mine[0]["scope"] == "portfolio"
-    assert mine[0]["portfolio_id"] == stack.trader_portfolio
+    assert mine[0]["portfolio_id"] == portfolio_id
 
 
 def test_admin_backs_up_now_and_lists_backups(browse, stack, viewport):
@@ -444,7 +477,9 @@ def test_admin_backs_up_now_and_lists_backups(browse, stack, viewport):
     page.get_by_role("button", name="Back up now").click()
     page.locator("dialog[open]").get_by_role("button", name="Back up now").click()
     backups = page.locator("section", has=page.get_by_role("heading", name="Backups"))
-    expect(backups).to_contain_text(re.compile("succeeded", re.I), timeout=120_000)
+    # R17: job pills read in words ("Done"), and the new backup is listed.
+    expect(backups).to_contain_text("Done", timeout=120_000)
+    expect(backups).to_contain_text(re.compile(r"stonks-\d{8}T\d{6}Z"))
     v.check_page("schedule-backups")
 
 

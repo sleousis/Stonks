@@ -166,6 +166,9 @@ describe('ProfilePage', () => {
     await tick();
     fixture.detectChanges();
     expect(el.querySelector('.single')?.textContent).toBe('stk_new_secret');
+    // Off screen above the form otherwise: Copy takes the focus (AO-12).
+    await tick();
+    expect(document.activeElement?.textContent?.trim()).toBe('Copy');
   });
 
   it('limits a token to the MCP tool groups you pick', async () => {
@@ -176,12 +179,19 @@ describe('ProfilePage', () => {
     details.dispatchEvent(new Event('toggle'));
     (await nextRequest(controller, '/api/auth/toolsets')).flush(
       page([
-        { name: 'risk', about: 'Live risk monitoring tools.' },
-        { name: 'decisions', about: "Why did or didn't we trade." },
+        { name: 'risk', about: 'Risk: Read the live risk of your portfolios.' },
+        { name: 'decisions', about: 'Trade decisions: Read why a stock did or did not trade.' },
       ]),
     );
     await tick();
     fixture.detectChanges();
+    // A label, then one plain sentence, never the id run into the text (AO-02).
+    const first = details.querySelector('.scope')!;
+    expect(first.querySelector('strong')?.textContent).toBe('Risk');
+    expect(first.querySelector('.muted')?.textContent).toBe(
+      'Read the live risk of your portfolios.',
+    );
+    expect(details.textContent).not.toContain('riskRisk');
     const boxes = details.querySelectorAll<HTMLInputElement>('input[type=checkbox]');
     boxes[1].checked = true;
     boxes[1].dispatchEvent(new Event('change'));

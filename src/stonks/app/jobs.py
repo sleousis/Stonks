@@ -52,6 +52,7 @@ import json
 import sqlite3
 import threading
 import time
+import traceback
 import uuid
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -700,7 +701,8 @@ class JobRunner:
             return
         except Exception as exc:
             message = format_exception(exc, self.secrets())
-            log.error("job.crashed", error=message, error_type=type(exc).__name__)
+            trace = redact_secrets("".join(traceback.format_exception(exc)), self.secrets())
+            log.error("job.crashed", error=message, error_type=type(exc).__name__, traceback=trace)
             self._finish_safely(job_id, "failed", error=message)
             return
         try:

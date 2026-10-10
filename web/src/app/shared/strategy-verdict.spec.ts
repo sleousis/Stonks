@@ -24,12 +24,26 @@ function report(checks: GoLiveCheckView[]): GoLiveReport {
 const trial = { total_return: 0.03, max_drawdown: -0.04, days: 40 };
 
 describe('strategyVerdict (F33)', () => {
-  it('uses the three agreed words', () => {
+  it('uses the agreed words', () => {
     expect(Object.values(VERDICT_WORDS)).toEqual([
       'Worth following',
       'Promising, needs more data',
+      'On trial',
       'Not good enough yet',
     ]);
+  });
+
+  it('never calls no robustness tests a bad result (R03)', () => {
+    const v = strategyVerdict({
+      status: 'shadow',
+      golive: report([check('survival', false, 0, 0), check('min_days', false, 10, 63)]),
+      trial: { ...trial, days: 10 },
+    });
+    expect(v.level).toBe('on_trial');
+    expect(v.tone).toBe('info');
+    expect(v.reasons[0]).toBe('On trial: 10 of 63 days. Approval comes after the go-live check.');
+    expect(v.reasons).toContain('No robustness tests yet. Run a Lab test to add them.');
+    expect(v.reasons.join(' ')).not.toContain('0 of 0');
   });
 
   it('is worth following when every check passed and it made money on trial', () => {
@@ -44,16 +58,26 @@ describe('strategyVerdict (F33)', () => {
     expect(v.reasons[1]).toMatch(/^On trial it made \+3\.00% over 40 days/);
   });
 
-  it('needs more data when only time-bound checks fail', () => {
+  it('says how far the trial is when only time-bound checks fail', () => {
     const v = strategyVerdict({
       status: 'shadow',
       golive: report([check('min_days', false, 12, 63), check('min_trades', false, 2, 10)]),
       trial: { ...trial, days: 12 },
     });
-    expect(v.level).toBe('promising');
-    expect(v.label).toBe('Promising, needs more data');
-    expect(v.reasons).toContain('It has 12 of the 63 trial days it needs.');
+    expect(v.level).toBe('on_trial');
+    expect(v.label).toBe('On trial');
+    expect(v.reasons[0]).toBe('On trial: 12 of 63 days. Approval comes after the go-live check.');
     expect(v.reasons).toContain('It made 2 of the 10 trial trades it needs.');
+  });
+
+  it('needs more data when an approved strategy has time-bound gaps', () => {
+    const v = strategyVerdict({
+      status: 'active',
+      golive: report([check('min_days', false, 12, 63)]),
+      trial: { ...trial, days: 12 },
+    });
+    expect(v.level).toBe('promising');
+    expect(v.reasons).toContain('It has 12 of the 63 trial days it needs.');
   });
 
   it('is not good enough when a check shows a bad sign', () => {
@@ -96,8 +120,9 @@ describe('strategyVerdict (F33)', () => {
       strategyVerdict({ status: 'shadow', golive: null, golivePassed: true, trial }).level,
     ).toBe('worth');
     const none = strategyVerdict({ status: 'shadow', golive: null });
-    expect(none.level).toBe('promising');
+    expect(none.level).toBe('on_trial');
     expect(none.reasons).toContain('It has no trial record yet.');
+    expect(strategyVerdict({ status: 'active', golive: null }).level).toBe('promising');
   });
 
   it('never names a system word in a reason', () => {

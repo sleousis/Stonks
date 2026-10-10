@@ -3,6 +3,7 @@ import {
   filterRow,
   formatMetric,
   fromSpec,
+  plainMetrics,
   toSpec,
   UNIVERSE_ID,
   universeSlug,
@@ -97,11 +98,27 @@ describe('screen form', () => {
     ]);
   });
 
-  it('formats each unit', () => {
+  it('formats each unit, money in the row currency', () => {
     expect(formatMetric(0.1234, 'percent')).toBe('12.3%');
-    expect(formatMetric(2_500_000_000, 'money')).toBe('2.5B');
+    expect(formatMetric(2_500_000_000, 'money')).toBe('$2.5B');
+    expect(formatMetric(187.6, 'money', 'USD')).toBe('$187.60');
+    expect(formatMetric(62.5, 'money', 'EUR')).toBe('€62.50');
     expect(formatMetric(14.567, 'ratio')).toBe('14.57');
     expect(formatMetric(null, 'ratio')).toBe('–');
+  });
+
+  it('names chart setups in plain words', () => {
+    const plain = plainMetrics([
+      { id: 'setup_nr7', label: 'NR7', group: 'price', unit: 'ratio', description: 'x' },
+      { id: 'setup_squeeze', label: 'Squeeze', group: 'price', unit: 'ratio', description: 'y' },
+      METRICS[0],
+    ]);
+    expect(plain.map((m) => m.label)).toEqual([
+      'Narrowest range in 7 days',
+      'Tight range breakout setup',
+      'Price',
+    ]);
+    expect(plain[1].description).not.toContain('Keltner');
   });
 
   it('makes a valid universe id from a name', () => {

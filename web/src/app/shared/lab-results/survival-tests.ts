@@ -38,23 +38,23 @@ export const SURVIVAL_TESTS: readonly SurvivalTestInfo[] = [
   },
   {
     id: 'walk_forward',
-    label: 'Walk-forward',
+    label: 'Rolling retest',
     hint: 'Guards against settings that go stale: tunes on the past, tests on the next slice, and repeats.',
     slow: true,
   },
   {
     id: 'deflated_sharpe',
-    label: 'Deflated Sharpe',
-    hint: 'Guards against a good score found by trying many settings: discounts the Sharpe for every try.',
+    label: 'Luck from many tries',
+    hint: 'Guards against a good score found by trying many settings: discounts the score for every try.',
   },
   {
     id: 'pbo',
-    label: 'Overfitting (PBO)',
+    label: 'Picked the luckiest setting',
     hint: 'Guards against picking the luckiest setting: measures how often the best one loses on new data.',
   },
   {
     id: 'data_snooping',
-    label: 'Not luck from many tries',
+    label: 'Beats cash after many tries',
     hint: 'Guards against a winner found by trying many settings: the best one must still beat cash once every try is counted.',
   },
   {
@@ -84,7 +84,7 @@ export const SURVIVAL_TESTS: readonly SurvivalTestInfo[] = [
   },
   {
     id: 'mcpt',
-    label: 'Shuffled prices (MCPT)',
+    label: 'Shuffled prices',
     hint: 'Guards against patterns found in noise: it must beat the same strategy on shuffled prices.',
     slow: true,
   },
@@ -101,7 +101,7 @@ export const SURVIVAL_TESTS: readonly SurvivalTestInfo[] = [
   },
   {
     id: 'cpcv',
-    label: 'Many splits (CPCV)',
+    label: 'Many data splits',
     hint: 'Guards against one lucky split of the data: tests on many train and test splits it never saw.',
     slow: true,
   },
@@ -112,7 +112,7 @@ export const SURVIVAL_TESTS: readonly SurvivalTestInfo[] = [
   },
   {
     id: 'signal_ic',
-    label: 'Signal ranking (IC)',
+    label: 'Signal ranking',
     hint: 'Shows how well its scores ranked the moves that followed. For information: it never fails a run.',
     informational: true,
   },
@@ -139,19 +139,19 @@ export const SURVIVAL_TESTS: readonly SurvivalTestInfo[] = [
   },
   {
     id: 'walk_forward_mcpt',
-    label: 'Walk-forward permutation',
-    hint: 'Guards against a walk-forward result that noise could match: repeats it on shuffled prices.',
+    label: 'Rolling retest on shuffled prices',
+    hint: 'Guards against a rolling retest result that noise could match: repeats it on shuffled prices.',
     slow: true,
   },
   {
     id: 'forecast_skill',
     label: 'Beats simple forecasts',
-    hint: 'Guards against a forecasting model with no skill: it must beat the random walk, ETS and Theta.',
+    hint: 'Guards against a forecasting model with no skill: it must beat simple forecasts, such as tomorrow equals today.',
   },
   // Legacy alias of `mcpt`, still in stored reports.
   {
     id: 'permutation',
-    label: 'Shuffled prices (MCPT)',
+    label: 'Shuffled prices',
     hint: 'Guards against patterns found in noise: it must beat the same strategy on shuffled prices.',
     slow: true,
   },
@@ -173,4 +173,76 @@ export function testLabel(id: string): string {
 /** What a robustness test guards against, in one line ('' when unknown). */
 export function testHint(id: string): string {
   return testInfo(id)?.hint ?? '';
+}
+
+const pct = (v: string) => `${(Number(v) * 100).toFixed(1)}%`;
+
+/** Machine notes the engine writes, and how each reads in plain words. */
+const NOTE_WORDS: readonly [RegExp, (m: RegExpExecArray) => string][] = [
+  [
+    /insufficient trades: (\d+) < (\d+)/,
+    (m) => `Only ${m[1]} trades on the unseen data, it needs ${m[2]}.`,
+  ],
+  [
+    /insufficient data: (\d+) validation returns < (\d+)/,
+    (m) => `Only ${m[1]} days of unseen data, it needs ${m[2]}. Try a longer window.`,
+  ],
+  [/no trades in the validation window/, () => 'It made no trades on the unseen data.'],
+  [/insufficient data/, () => 'There was not enough data for this test. Try a longer window.'],
+  [/Sharpe of exactly 0|no trading/, () => 'It never traded in any period.'],
+  [
+    /max drawdown (-?[\d.]+) below (-?[\d.]+)/,
+    (m) => `Its worst drop on the unseen data was ${pct(m[1])}, the limit is ${pct(m[2])}.`,
+  ],
+  [/^(Sharpe|PSR\(0\)) /, () => 'Its return for the risk taken was too low on the unseen data.'],
+  [/^DSR /, () => 'After counting every setting tried, the result could still be luck.'],
+  [/break-even multiple/, () => 'Higher trading costs would wipe out its gains.'],
+  [/speed limit/, () => 'It trades so often that costs eat too much of its return.'],
+  [/borrow fees/, () => 'Higher borrowing fees would wipe out its gains.'],
+  [/positive_share/, () => 'Too few of the retests made money.'],
+  [/oos_score_mean/, () => 'On average the retests lost money.'],
+  [/^wfe /, () => 'It kept too little of its past return in the retests.'],
+  [/^matrix/, () => 'It did not hold up across different retest lengths.'],
+];
+
+/** Why a test passed, when its notes say nothing plain. */
+const PASS_WORDS: Readonly<Record<string, string>> = {
+  oos: 'It did well on data the search never saw.',
+  period_stability: 'It did about as well in each part of the window.',
+  perturbation: 'Small noise in the prices barely changed its results.',
+  walk_forward: 'It kept working when retested on each next slice of time.',
+  deflated_sharpe: 'The result still stands after counting every setting tried.',
+  cost_stress: 'Its gains survive double and triple trading costs.',
+  signal_ic: 'For information only. It never fails a run.',
+};
+
+/** Why a test failed, when its notes say nothing plain. */
+const FAIL_WORDS: Readonly<Record<string, string>> = {
+  oos: 'It did not do well enough on data the search never saw.',
+  period_stability: 'Its results swung too much from one part of the window to the next.',
+  perturbation: 'Small noise in the prices changed its results too much.',
+  walk_forward: 'It stopped working when retested on later slices of time.',
+  deflated_sharpe: 'After counting every setting tried, the result could still be luck.',
+  cost_stress: 'Higher trading costs would wipe out its gains.',
+};
+
+/**
+ * One plain sentence on why a robustness test passed or failed, from its
+ * notes when the engine wrote a known reason, else from the test's id.
+ * Raw notes ("window=val", "insufficient trades: 5 < 20") never show.
+ */
+export function testReason(report: { test_id: string; passed: boolean; notes: string }): string {
+  const tickers = /universe has (\d+) tickers?; .*needs at least (\d+)/.exec(report.notes ?? '');
+  if (tickers) return `It needs at least ${tickers[2]} tickers, this run had ${tickers[1]}.`;
+  const sentences: string[] = [];
+  for (const part of (report.notes ?? '').split(/;\s*/)) {
+    const note = part.replace(/^failed:\s*/, '').trim();
+    const known = NOTE_WORDS.find(([pattern]) => pattern.test(note));
+    if (!known) continue;
+    const sentence = known[1](known[0].exec(note)!);
+    if (!sentences.includes(sentence)) sentences.push(sentence);
+  }
+  if (sentences.length) return sentences.join(' ');
+  if (report.passed) return PASS_WORDS[report.test_id] ?? 'It passed this test.';
+  return FAIL_WORDS[report.test_id] ?? 'It did not pass this test.';
 }

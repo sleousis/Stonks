@@ -29,14 +29,41 @@ export function decisionDetail(d: TradeDecisionView): string {
     return `${x['original_quantity']} to ${x['adjusted_quantity']} shares`;
   }
   if (d.step === 'buffer' && x['target_weight'] != null) {
-    return `target ${x['target_weight']}, now ${x['current_weight'] ?? 'n/a'}`;
+    const now = x['current_weight'];
+    return `target ${pct(x['target_weight'])}, now ${now == null ? 'n/a' : pct(now)}`;
   }
   if (d.step === 'rank' && x['winner']) return `${x['winner']} won the book`;
   return '';
 }
 
+function pct(v: unknown): string {
+  return `${Math.round(Number(v) * 1000) / 10}%`;
+}
+
+/** One trading day of decisions. */
+export interface DecisionDay {
+  day: string;
+  rows: TradeDecisionView[];
+}
+
 /**
- * "Why not X": ask why a ticker did or did not trade. On a strategy page it
+ * The rows to show, grouped by day (newest first). By default only the
+ * latest run, without the plain holds that make up most rows.
+ */
+export function groupDecisions(items: TradeDecisionView[], showAll: boolean): DecisionDay[] {
+  const latest = items[0]?.tick_id;
+  const shown = showAll ? items : items.filter((d) => d.tick_id === latest && d.outcome !== 'held');
+  const days: DecisionDay[] = [];
+  for (const d of shown) {
+    const last = days.at(-1);
+    if (last?.day === d.as_of) last.rows.push(d);
+    else days.push({ day: d.as_of, rows: [d] });
+  }
+  return days;
+}
+
+/**
+ * Why did a ticker trade or not? Ask about one ticker, or read the latest run. On a strategy page it
  * reads that strategy's rows, on a portfolio page the whole book's.
  */
 @Component({
@@ -46,7 +73,11 @@ export function decisionDetail(d: TradeDecisionView): string {
   template: `
     <section class="panel" aria-labelledby="why-not-title">
       <div class="panel-head">
-        <h2 id="why-not-title">Why not {{ shownTicker() || 'X' }}?</h2>
+        <h2 id="why-not-title">
+          {{
+            strategyId() ? 'Why did it trade a ticker or not?' : 'Why did a ticker trade or not?'
+          }}
+        </h2>
       </div>
       <div class="panel-body">
         <form class="ask" (submit)="$event.preventDefault(); ask()" role="search">
@@ -78,25 +109,39 @@ export function decisionDetail(d: TradeDecisionView): string {
             message="Each trading run records why a ticker did or did not trade."
           />
         } @else {
-          <ul class="rows">
-            @for (d of rows.value().items; track d.tick_id + d.ticker) {
-              <li class="row">
-                <span class="chip" [attr.data-outcome]="d.outcome">{{ label(d.outcome) }}</span>
-                <span class="what">
-                  <strong>{{ d.summary }}</strong>
-                  <span class="muted">
-                    {{ d.as_of }}
-                    @if (d.strategy_id) {
-                      · {{ strategyName(d.strategy_id) }}
-                    }
-                    @if (detail(d); as extra) {
-                      · {{ extra }}
+          @for (g of groups(); track g.day) {
+            <h3 class="day">{{ g.day }}</h3>
+            <ul class="rows">
+              @for (d of g.rows; track d.tick_id + d.ticker) {
+                <li class="row">
+                  <span class="chip" [attr.data-outcome]="d.outcome">{{ label(d.outcome) }}</span>
+                  <span class="what">
+                    <strong>{{ d.summary }}</strong>
+                    @if (d.strategy_id || detail(d)) {
+                      <span class="muted">
+                        @if (d.strategy_id) {
+                          {{ strategyName(d.strategy_id) }}
+                        }
+                        @if (detail(d); as extra) {
+                          @if (d.strategy_id) {
+                            ·
+                          }
+                          {{ extra }}
+                        }
+                      </span>
                     }
                   </span>
-                </span>
-              </li>
-            }
-          </ul>
+                </li>
+              }
+            </ul>
+          } @empty {
+            <p class="muted">Nothing traded or was left out on the latest run.</p>
+          }
+          @if (!ticker()) {
+            <button type="button" class="btn btn-ghost toggle" (click)="showAll.set(!showAll())">
+              {{ showAll() ? 'Show the latest run only' : 'Show all' }}
+            </button>
+          }
         }
       </div>
     </section>
@@ -144,6 +189,18 @@ export function decisionDetail(d: TradeDecisionView): string {
       background: var(--color-info-soft);
       font-size: var(--text-sm);
     }
+    .day {
+      margin: var(--space-3) 0 var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--color-ink-3);
+    }
+    .day:first-of-type {
+      margin-top: 0;
+    }
+    .toggle {
+      margin-top: var(--space-3);
+      min-height: var(--touch-min);
+    }
     .chip[data-outcome='kept_out'] {
       background: var(--color-warn-soft);
     }
@@ -160,7 +217,7 @@ export class WhyNotPanel {
 
   protected readonly draft = signal('');
   protected readonly ticker = signal('');
-  protected readonly shownTicker = computed(() => this.ticker().toUpperCase());
+  protected readonly showAll = signal(false);
 
   protected readonly rows = resource({
     params: () => ({
@@ -168,8 +225,15 @@ export class WhyNotPanel {
       strategyId: this.strategyId(),
       ticker: this.ticker(),
     }),
-    loader: ({ params }) => this.api.list({ ...params, limit: 20 }),
+    loader: ({ params }) => this.api.list({ ...params, limit: 50 }),
   });
+
+  /** An asked ticker shows all its rows, otherwise the latest run's trades and cuts. */
+  protected readonly groups = computed(() =>
+    this.rows.hasValue()
+      ? groupDecisions(this.rows.value().items, this.showAll() || !!this.ticker())
+      : [],
+  );
 
   protected ask(): void {
     this.ticker.set(this.draft().trim());

@@ -2,7 +2,9 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
+  output,
   resource,
   signal,
 } from '@angular/core';
@@ -105,15 +107,15 @@ export function botLink(username: string | null | undefined): string | null {
               />
               <ol class="steps">
                 <li>
-                  Open
                   @if (bot(); as href) {
+                    Open
                     <a [href]="href" target="_blank" rel="noopener noreferrer">{{
                       '@' + botName()
                     }}</a>
+                    in Telegram.
                   } @else {
-                    the bot
+                    Ask your admin for the bot's name.
                   }
-                  in Telegram.
                 </li>
                 <li>Send the message above in a private chat.</li>
                 <li>Come back and check the link.</li>
@@ -182,6 +184,8 @@ export class TelegramLink {
   private readonly toasts = inject(ToastService);
 
   protected readonly link = resource({ loader: () => this.api.status() });
+  /** The chat just got linked (the setup guide ticks its step). */
+  readonly linked = output<void>();
   /** The code just made. Kept only while this panel lives. */
   protected readonly code = signal<TelegramLinkCodeView | null>(null);
   protected readonly busy = signal(false);
@@ -194,6 +198,16 @@ export class TelegramLink {
     return (fromCode ?? fromLink ?? '').replace(/^@/, '');
   });
   protected readonly bot = computed(() => botLink(this.botName()));
+
+  constructor() {
+    let before: boolean | null = null;
+    effect(() => {
+      if (!this.link.hasValue()) return;
+      const now = this.link.value().linked;
+      if (now && before === false) this.linked.emit();
+      before = now;
+    });
+  }
 
   protected day(v: string): string {
     return formatDate(v);

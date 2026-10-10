@@ -18,8 +18,26 @@ import {
   FALLBACK_KINDS,
   blankSpec,
   describePath,
+  indicatorWords,
+  intervalWord,
+  kindLabel,
 } from './rule-spec';
 import { RSI_TEMPLATE_SPEC, SCHEMA } from '../../../testing/studio-fixtures';
+
+describe('rule spec words (NB-08)', () => {
+  it('names indicators and candles in words', () => {
+    expect(indicatorWords({ id: 'rsi14', kind: 'rsi', period: 14 }, '1d')).toBe('RSI over 14 days');
+    expect(indicatorWords({ id: 'sma50', kind: 'sma', period: 50, source: 'close' }, '1w')).toBe(
+      'Moving average over 50 weeks',
+    );
+    expect(indicatorWords({ id: 'c', kind: 'close' }, '1d')).toBe('Close');
+    expect(intervalWord('1d')).toBe('1 day');
+    expect(kindLabel('kama')).toBe('Adaptive moving average (KAMA)');
+    expect(kindLabel('efficiency_ratio')).toBe('Efficiency ratio');
+    const hints = FALLBACK_KINDS.map((k) => k.description).join(' ');
+    expect(hints).not.toMatch(/Wilder|\.\.|;/);
+  });
+});
 
 describe('rule spec helpers', () => {
   it('round-trips a template spec unchanged', () => {

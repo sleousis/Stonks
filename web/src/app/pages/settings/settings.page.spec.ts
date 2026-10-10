@@ -11,16 +11,12 @@ import type {
   RiskPolicy,
 } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
-import { AuthTokenService } from '../../core/auth/auth-token.service';
 import { SessionService } from '../../core/auth/session.service';
 import { FeatureFlagsService } from '../../core/features/feature-flags.service';
-import { ToastService } from '../../core/notify/toast.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { SettingsPage } from './settings.page';
 import { provideFakeCalendars } from '../../../testing/fake-calendars';
-
-const SECRET = 'sk-test-7f3a9c2e1d';
 
 const BROKER: BrokerInfo = {
   kind: 'simulated',
@@ -70,7 +66,6 @@ describe('SettingsPage', () => {
     fixture.detectChanges();
     if (me.role === 'admin') {
       (await nextRequest(http, '/api/brokers')).flush(broker);
-      (await nextRequest(http, '/api/risk/policy')).flush(RISK);
       (await nextRequest(http, '/api/sources')).flush(SOURCES);
       (await nextRequest(http, '/api/lab/cost-models')).flush(COSTS);
       // The System settings form asks only once its tab is open.
@@ -117,13 +112,6 @@ describe('SettingsPage', () => {
     return found;
   }
 
-  function typeToken(value: string): void {
-    const input = el.querySelector<HTMLInputElement>('#api-token')!;
-    input.value = value;
-    input.dispatchEvent(new Event('input'));
-    fixture.detectChanges();
-  }
-
   beforeEach(() => {
     sessionStorage.clear();
     assistantOff.set(false);
@@ -147,59 +135,29 @@ describe('SettingsPage', () => {
     sessionStorage.clear();
   });
 
-  it('sends alert settings to their one page instead of hosting them (F39)', async () => {
-    await setup(TRADER);
-    await open('Alerts');
-    expect(el.querySelector('app-notification-prefs')).toBeNull();
-    expect(el.querySelector('app-telegram-link')).toBeNull();
-    const link = el.querySelector<HTMLAnchorElement>('a[href="/notifications/settings"]');
-    expect(link?.textContent?.trim()).toBe('Open alert settings');
-    http.verify();
-  });
-
   function headings(): string[] {
     return [...el.querySelectorAll('h2, h3')].map((h) => h.textContent?.trim() ?? '');
   }
 
   it('splits Settings into sections, one on screen at a time (M14)', async () => {
     await setup(TRADER);
-    expect(tabs()).toEqual(['Account', 'Alerts', 'Display', 'Risk limits']);
+    // Sign-in lives on Profile and alert settings on Notifications: no signpost tabs.
+    expect(tabs()).toEqual(['Display', 'Risk limits']);
     expect(el.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.trim()).toBe(
-      'Account',
+      'Display',
     );
     const panel = el.querySelector('[role="tabpanel"]')!;
-    expect(panel.getAttribute('aria-labelledby')).toBe('settings-tab-account');
+    expect(panel.getAttribute('aria-labelledby')).toBe('settings-tab-display');
     const h = headings();
-    expect(h).toContain('Sign-in and security');
-    expect(h).toContain('API token');
-    expect(h).not.toContain('Theme');
-    expect(h).not.toContain('Telegram');
-    expect(el.querySelector('a[href="/profile"]')?.textContent).toContain('Open profile');
-    // UX-43: the token panel is folded away under For scripts.
-    const scripts = el.querySelector<HTMLDetailsElement>('details.scripts')!;
-    expect(scripts.querySelector('summary')?.textContent?.trim()).toBe('For scripts');
-    expect(scripts.open).toBe(false);
-    expect(scripts.contains(el.querySelector('#api-token'))).toBe(true);
+    expect(h).toContain('Theme');
+    expect(h).toContain('Keyboard');
+    expect(h).not.toContain('API token');
+    expect(el.querySelector('#api-token')).toBeNull();
+    expect(el.querySelector('details.scripts')).toBeNull();
     expect(el.textContent).not.toContain('Reload system settings');
     // No system reads for a trader.
     http.expectNone('/api/brokers');
     http.expectNone('/api/risk/policy');
-    http.verify();
-  });
-
-  it('keeps alerts, display and risk limits each in their own section', async () => {
-    await setup(TRADER);
-    await open('Alerts');
-    // Every alert setting lives on one page (F39): the section links there.
-    expect(headings()).toContain('Alert settings');
-    expect(el.querySelector('a[href="/notifications/settings"]')?.textContent).toContain(
-      'Open alert settings',
-    );
-    expect(el.querySelector('a[href="/notifications"]')).not.toBeNull();
-    await open('Display');
-    expect(headings()).toContain('Theme');
-    expect(headings()).toContain('Keyboard');
-    expect(headings()).not.toContain('Telegram');
     await open('Risk limits');
     expect(headings()).toContain('Your risk limits');
     http.verify();
@@ -223,13 +181,14 @@ describe('SettingsPage', () => {
 
   it('gives an admin the System section too', async () => {
     await setup(ADMIN);
-    expect(tabs()).toEqual(['Account', 'Alerts', 'Display', 'Risk limits', 'System']);
+    expect(tabs()).toEqual(['Display', 'Risk limits', 'System']);
     await open('System');
     const h = headings();
     expect(h).toContain('System');
     expect(h).toContain('Broker');
-    expect(h).toContain('Risk policy');
-    expect(h.filter((x) => x === 'Risk policy')).toHaveLength(1);
+    // The editable System settings hold the risk limits: no read-only copy.
+    expect(h).not.toContain('Risk policy');
+    http.expectNone('/api/risk/policy');
     expect(el.textContent).toContain('Reload system settings');
   });
 
@@ -245,15 +204,13 @@ describe('SettingsPage', () => {
     expect(el.querySelector('#assistant-title')).toBeNull();
   });
 
-  it('shows the broker, risk policy, data sources and cost presets', async () => {
+  it('shows the broker, data sources and cost presets', async () => {
     await setup();
     await open('System');
     const text = el.textContent ?? '';
     expect(text).not.toContain('[production');
     expect(text).toContain('Simulated');
     expect(text).toContain('Paper');
-    expect(text).toContain('25.0%');
-    expect(text).toContain('Max weight, crypto');
     expect(text).toContain('EODHD');
     expect(text).toContain('install the yahoo extra');
     expect(text).toContain('realistic');
@@ -277,117 +234,6 @@ describe('SettingsPage', () => {
     fixture.detectChanges();
     expect(el.textContent).toContain('Not connected');
     expect(el.textContent).toContain('missing API keys');
-  });
-
-  it('keeps the token masked and in sessionStorage only', async () => {
-    await setup(TRADER);
-    const input = el.querySelector<HTMLInputElement>('#api-token')!;
-    expect(input.type).toBe('password');
-    typeToken(SECRET);
-    button('Save token').click();
-    (await nextRequest(http, '/api/auth/me')).flush({ ...TRADER, via: 'token' });
-    await tick();
-    fixture.detectChanges();
-
-    expect(TestBed.inject(AuthTokenService).token()).toBe(SECRET);
-    expect(sessionStorage.getItem('stonks.apiToken')).toBe(SECRET);
-    expect(JSON.stringify({ ...localStorage })).not.toContain(SECRET);
-    expect(input.value).toBe('');
-  });
-
-  it('never logs, toasts or renders the token while saving and testing it', async () => {
-    const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((m) =>
-      vi.spyOn(console, m).mockImplementation(() => undefined),
-    );
-    const toasts = TestBed.inject(ToastService);
-    await setup(TRADER);
-
-    typeToken(SECRET);
-    button('Save token').click();
-    (await nextRequest(http, '/api/auth/me')).flush({ ...TRADER, via: 'token' });
-    await tick();
-    fixture.detectChanges();
-    button('Test token').click();
-
-    const probe = await nextRequest(http, '/api/auth/check', 'GET');
-    expect(probe.request.headers.get('Authorization')).toBe(`Bearer ${SECRET}`);
-    expect(probe.request.urlWithParams).not.toContain(SECRET);
-    probe.flush({ authenticated: true });
-    await tick();
-    fixture.detectChanges();
-
-    expect(el.textContent).toContain('Accepted');
-    expect(el.textContent).not.toContain(SECRET);
-    for (const spy of spies) {
-      expect(JSON.stringify(spy.mock.calls)).not.toContain(SECRET);
-    }
-    expect(JSON.stringify(toasts.toasts())).not.toContain(SECRET);
-  });
-
-  it('reports a rejected token without a toast', async () => {
-    const toasts = TestBed.inject(ToastService);
-    await setup(TRADER);
-    typeToken('wrong');
-    button('Save token').click();
-    (await nextRequest(http, '/api/auth/me')).flush({ ...TRADER, via: 'token' });
-    await tick();
-    fixture.detectChanges();
-    const before = toasts.toasts().length;
-    button('Test token').click();
-
-    (await nextRequest(http, '/api/auth/check', 'GET')).flush(
-      { title: 'Unauthorized', status: 401, detail: 'missing or invalid bearer token' },
-      { status: 401, statusText: 'Unauthorized' },
-    );
-    await tick();
-    fixture.detectChanges();
-
-    expect(el.textContent).toContain('Rejected');
-    expect(toasts.toasts().length).toBe(before);
-  });
-
-  it('saving a token calls /api/auth/me with the new bearer and updates the role (UX-37)', async () => {
-    const success = vi.spyOn(TestBed.inject(ToastService), 'success');
-    await setup(TRADER);
-    typeToken(SECRET);
-    button('Save token').click();
-    const me = await nextRequest(http, '/api/auth/me');
-    expect(me.request.headers.get('Authorization')).toBe(`Bearer ${SECRET}`);
-    me.flush({ ...TRADER, role: 'viewer', via: 'token' });
-    await tick();
-    expect(TestBed.inject(SessionService).role()).toBe('viewer');
-    expect(success).toHaveBeenCalledWith(
-      'Token saved for this tab. You are Ann, viewer.',
-      'Token saved',
-    );
-  });
-
-  it('drops a saved token the server refuses (UX-37)', async () => {
-    const error = vi.spyOn(TestBed.inject(ToastService), 'error');
-    await setup(TRADER);
-    typeToken('wrong');
-    button('Save token').click();
-    (await nextRequest(http, '/api/auth/me')).flush(
-      { title: 'x', status: 401, detail: 'not_authenticated' },
-      { status: 401, statusText: 'Unauthorized' },
-    );
-    const again = await nextRequest(http, '/api/auth/me');
-    expect(again.request.headers.has('Authorization')).toBe(false);
-    again.flush(TRADER);
-    await tick();
-    expect(TestBed.inject(AuthTokenService).token()).toBeNull();
-    expect(TestBed.inject(SessionService).me()?.role).toBe('trader');
-    expect(error).toHaveBeenCalledWith(
-      'That token did not work, so it was not kept. Check it and try again.',
-    );
-  });
-
-  it('explains that a token cannot be verified when none is saved', async () => {
-    await setup(TRADER);
-    button('Test token').click();
-    fixture.detectChanges();
-    expect(el.textContent).toContain('Save a token first');
-    http.verify();
   });
 
   it('saves your own risk limits, percents as fractions', async () => {

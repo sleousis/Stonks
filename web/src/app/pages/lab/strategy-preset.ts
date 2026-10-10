@@ -19,6 +19,21 @@ export function presetFromStrategy(
 }
 
 /**
+ * The tickers a registered strategy trades, from its own settings
+ * (`ticker`, `tickers` or `universe`), as the tickers field reads them.
+ * Empty when it names none: it then runs on the production universe.
+ */
+export function presetTickers(params: Record<string, unknown>): string {
+  const out: string[] = [];
+  for (const key of ['ticker', 'tickers', 'universe']) {
+    const v = params[key];
+    if (typeof v === 'string') out.push(...v.split(/[\s,;]+/));
+    else if (Array.isArray(v)) out.push(...v.filter((t): t is string => typeof t === 'string'));
+  }
+  return [...new Set(out.map((t) => t.trim().toUpperCase()).filter(Boolean))].join(', ');
+}
+
+/**
  * The class's defaults with the registered values laid over them. Only
  * declared parameters with a scalar value are taken, so a stale or odd
  * stored value can't reach the form.

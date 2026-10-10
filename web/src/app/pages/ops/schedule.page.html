@@ -94,9 +94,9 @@
       </app-data-table>
       @if (offJobs().length) {
         <details class="off-jobs">
-          <summary>Waiting on a feature that is off ({{ offJobs().length }})</summary>
+          <summary>Not in use yet ({{ offJobs().length }})</summary>
           <p class="muted off-intro">
-            These jobs fire on schedule but skip until their feature is turned on.
+            These jobs fire on schedule but skip until there is something for them to do.
           </p>
           <ul>
             @for (j of offJobs(); track j.name) {
@@ -155,7 +155,7 @@
   </section>
 
   <!-- Backups --------------------------------------------------------------->
-  <section class="panel span-12" aria-labelledby="backups-title">
+  <section class="panel span-12 backups" aria-labelledby="backups-title">
     <div class="panel-head">
       <h2 id="backups-title">Backups</h2>
       <div class="head-action">

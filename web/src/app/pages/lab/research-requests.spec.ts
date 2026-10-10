@@ -50,18 +50,25 @@ describe('sweep requests', () => {
   });
 });
 
-describe('signal IC requests', () => {
+const TEN = 'a.us b.us c.us d.us e.us f.us g.us h.us i.us j.us';
+
+describe('signal check requests', () => {
   it('sends the strategy, tickers and window, horizons only when typed', () => {
-    const f = { ...defaultSignalIcForm(TODAY), classPath: 'pkg.mod:Momentum', tickers: 'aapl.us' };
+    const f = { ...defaultSignalIcForm(TODAY), classPath: 'pkg.mod:Momentum', tickers: TEN };
     expect(signalIcErrors(f)).toEqual({});
     expect(buildSignalIcRequest(f)).toEqual({
       strategy: { class_path: 'pkg.mod:Momentum' },
-      universe: ['AAPL.US'],
+      universe: ['A.US', 'B.US', 'C.US', 'D.US', 'E.US', 'F.US', 'G.US', 'H.US', 'I.US', 'J.US'],
       start: '2025-09-26',
       end: '2026-09-26',
       interval: '1d',
     });
     expect(buildSignalIcRequest({ ...f, horizons: '21, 1 5' }).horizons).toEqual([1, 5, 21]);
+  });
+
+  it('needs at least 10 tickers before it runs', () => {
+    const f = { ...defaultSignalIcForm(TODAY), classPath: 'x:Y', tickers: 'a.us b.us' };
+    expect(signalIcErrors(f)['tickers']).toBe('Needs at least 10 tickers.');
   });
 
   it('checks horizons', () => {

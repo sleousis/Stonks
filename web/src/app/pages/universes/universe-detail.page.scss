@@ -137,11 +137,16 @@
 .lab-hint {
   margin: 0 0 var(--space-4);
   font-size: var(--text-sm);
+}
 
-  a {
-    display: inline-flex;
-    align-items: center;
-    min-height: var(--touch-min);
+// The definition as JSON is an admin tool, folded away under Advanced.
+details.advanced > summary {
+  min-height: var(--touch-min);
+  cursor: pointer;
+  list-style: none;
+
+  &::-webkit-details-marker {
+    display: none;
   }
 }
 

@@ -93,7 +93,7 @@ def test_universe_from_a_screen(runner, workdir):
     )
     # no metric filter: every listed name today, stored as a fixed list
     assert snap.exit_code == 0, snap.output
-    assert "survivorship" in snap.output
+    assert "delisted" in snap.output  # the plain snapshot warning (R22)
 
 
 def test_screen_alerts_from_the_shell(runner, workdir):

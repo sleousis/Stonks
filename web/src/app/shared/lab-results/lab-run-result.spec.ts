@@ -19,9 +19,9 @@ describe('LabRunResultView', () => {
     );
   });
 
-  it('says nothing about a data job when there was none, and links the trial ledger', () => {
+  it('says nothing about a data job when there was none, and links the Lab history', () => {
     const el = render(null);
     expect(el.querySelector('.data-job')).toBeNull();
-    expect(el.querySelector('a[href="/lab/ledger"]')?.textContent).toContain('trial ledger');
+    expect(el.querySelector('a[href="/lab/ledger"]')?.textContent).toContain('Lab history');
   });
 });

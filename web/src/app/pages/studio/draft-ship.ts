@@ -59,7 +59,9 @@ export class DraftShip {
 
   protected readonly busy = signal(false);
   protected readonly labels = LIFECYCLE;
-  /** Putting on trial, approving and stepping back need `strategy.promote`. */
+  /** The draft's owner may put it on trial (`strategy.trial`, NB-02). */
+  protected readonly canTrial = computed(() => this.session.can('strategy.trial'));
+  /** Approving and stepping back need `strategy.promote` (admins). */
   protected readonly canShip = computed(() => this.session.can('strategy.promote'));
 
   protected readonly stage = computed<Stage>(() => {
@@ -77,13 +79,13 @@ export class DraftShip {
   });
 
   async register(): Promise<void> {
-    if (!this.canShip()) return;
+    if (!this.canTrial()) return;
     const d = this.draft();
     const ok = await this.confirm.confirm({
       title: `Put ${d.name} on trial?`,
       message:
-        'The saved rules become a strategy on trial: the system paper-tests it on its own ' +
-        'test book every run. No portfolio trades it until someone approves it. Later edits ' +
+        'The saved rules become a strategy on trial. The system paper-tests it every run, ' +
+        'with no real money. You can follow it with Alerts only right away. Later edits ' +
         'to the draft do not change it.',
       confirmLabel: LIFECYCLE.paper.label,
     });

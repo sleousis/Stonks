@@ -3,6 +3,9 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
 import type { IntervalInfo } from '../../api/models';
 import type { FormErrors, WindowForm } from './lab-requests';
 
+/** The bar sizes most research needs; the rest stay in the full lab forms. */
+export const COMMON_INTERVALS: readonly string[] = ['1d', '1w', '1h', '15m', '5m'];
+
 /** Tickers, date window and bar interval: the inputs both lab forms share. */
 @Component({
   selector: 'app-window-fields',
@@ -11,7 +14,7 @@ import type { FormErrors, WindowForm } from './lab-requests';
     @let p = idPrefix();
     @if (showTickers()) {
       <div class="field tickers">
-        <label [for]="p + '-tickers'">Tickers</label>
+        <label [for]="p + '-tickers'">{{ tickersLabel() }}</label>
         <textarea
           class="input"
           rows="2"
@@ -28,9 +31,7 @@ import type { FormErrors, WindowForm } from './lab-requests';
         @if (errors()['tickers']; as e) {
           <span class="error" [id]="p + '-tickers-hint'">{{ e }}</span>
         } @else {
-          <span class="hint" [id]="p + '-tickers-hint'">
-            Separate with commas, spaces or new lines. Each needs price history in our data.
-          </span>
+          <span class="hint" [id]="p + '-tickers-hint'">{{ tickersHint() }}</span>
         }
       </div>
     }
@@ -139,11 +140,21 @@ export class WindowFields {
   readonly showTickers = input(true);
   /** Off in the simple test, which always uses daily bars. */
   readonly showInterval = input(true);
+  /** Offer only the common bar sizes (Sweep, Signal check). */
+  readonly commonIntervals = input(false);
+  /** The tickers field's label: "Tickers to test" on every lab form. */
+  readonly tickersLabel = input('Tickers to test');
+  readonly tickersHint = input(
+    'Separate with commas, spaces or new lines. Each needs price history in our data.',
+  );
   readonly patch = output<Partial<WindowForm>>();
 
   /** Falls back to daily bars while the catalog loads (or if it failed). */
   protected intervalOptions(): readonly IntervalInfo[] {
-    const list = this.intervals();
+    const all = this.intervals();
+    const list = this.commonIntervals()
+      ? all.filter((i) => COMMON_INTERVALS.includes(i.code) || i.code === this.value().interval)
+      : all;
     return list.length ? list : [{ code: '1d', is_intraday: false, seconds: 86_400 }];
   }
 }

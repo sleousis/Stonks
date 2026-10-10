@@ -28,6 +28,12 @@ describe('job labels', () => {
     expect(jobLabel(job('broker_health', null))).toBe('Broker gateway check');
     expect(jobLabel(job('engine_start', null))).toBe('Intraday engine start');
     expect(jobLabel(job('ingest_borrow', null))).toBe('Borrow rates update');
+    expect(jobLabel(job('algo_slices', null))).toBe('Order slicing');
+    expect(jobLabel(job('lab_verify', null))).toBe('Recheck lab results');
+    expect(jobLabel(job('briefings', null, 'briefing_pre_open'))).toBe('Morning briefing');
+    expect(jobLabel(job('briefings', null, 'briefing_post_close'))).toBe('Evening briefing');
+    expect(jobLabel(job('screen_alerts', null))).toBe('Screen alerts');
+    expect(jobLabel(job('price_check', null))).toBe('Price check');
   });
 
   it('humanizes an unknown action from its name', () => {

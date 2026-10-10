@@ -5,34 +5,19 @@
     @let f = form();
     <div class="form-grid form-grid-2">
       <div class="field">
-        <label for="u-id">Id</label>
-        <input
-          id="u-id"
-          class="input"
-          placeholder="e.g. us-large-caps"
-          spellcheck="false"
-          autocapitalize="off"
-          [readOnly]="mode() === 'edit'"
-          [attr.aria-describedby]="mode() === 'edit' ? 'u-id-hint' : null"
-          [attr.aria-invalid]="submitted() && !!errors().id"
-          [value]="f.id"
-          (input)="patch({ id: $any($event.target).value })"
-        />
-        @if (mode() === 'edit') {
-          <p id="u-id-hint" class="hint">Lab runs and trading runs name it, so it stays.</p>
-        }
-        @if (submitted() && errors().id; as e) {
-          <p class="error">{{ e }}</p>
-        }
-      </div>
-      <div class="field">
-        <label for="u-name">Name (optional)</label>
+        <label for="u-name">Name</label>
         <input
           id="u-name"
           class="input"
+          maxlength="120"
+          placeholder="e.g. US large caps"
+          [attr.aria-invalid]="submitted() && !!errors().name"
           [value]="f.name"
-          (input)="patch({ name: $any($event.target).value })"
+          (input)="setName($any($event.target).value)"
         />
+        @if (submitted() && (errors().name || errors().id); as e) {
+          <p class="error">{{ e }}</p>
+        }
       </div>
       <div class="field">
         <label for="u-kind">Kind</label>
@@ -152,7 +137,7 @@
               }
             </div>
             <div class="field">
-              <label for="u-start-date">Members from</label>
+              <label for="u-start-date">Members since</label>
               <input
                 id="u-start-date"
                 class="input"
@@ -196,21 +181,23 @@
                 <p class="error">{{ e }}</p>
               }
             </div>
+            @if (advanced()) {
+              <div class="field">
+                <label for="u-data-source">Source</label>
+                <select
+                  id="u-data-source"
+                  class="input"
+                  [value]="k.dataSource"
+                  (change)="patchFields({ dataSource: $any($event.target).value })"
+                >
+                  @for (s of dataSources; track s[0]) {
+                    <option [value]="s[0]" [selected]="s[0] === k.dataSource">{{ s[1] }}</option>
+                  }
+                </select>
+              </div>
+            }
             <div class="field">
-              <label for="u-data-source">Source</label>
-              <select
-                id="u-data-source"
-                class="input"
-                [value]="k.dataSource"
-                (change)="patchFields({ dataSource: $any($event.target).value })"
-              >
-                @for (s of dataSources; track s[0]) {
-                  <option [value]="s[0]" [selected]="s[0] === k.dataSource">{{ s[1] }}</option>
-                }
-              </select>
-            </div>
-            <div class="field">
-              <label for="u-start-date">Members from</label>
+              <label for="u-start-date">Members since</label>
               <input
                 id="u-start-date"
                 class="input"
@@ -226,7 +213,7 @@
                 [checked]="k.includeDelisted"
                 (change)="patchFields({ includeDelisted: $any($event.target).checked })"
               />
-              Include delisted names (avoids survivorship bias)
+              Include delisted names, so tests count the companies that failed
             </label>
           }
           @case ('rule') {
@@ -362,6 +349,7 @@
               <app-screen-filters
                 idPrefix="u"
                 [metrics]="metricList()"
+                [fundamentalsMissing]="fundamentalsMissing()"
                 [filters]="s.filters"
                 (filtersChange)="setFilters($event)"
               />
@@ -447,7 +435,7 @@
               </p>
             </div>
             <div class="field">
-              <label for="u-start-date">Members from</label>
+              <label for="u-start-date">Members since</label>
               <input
                 id="u-start-date"
                 class="input"
@@ -456,33 +444,40 @@
                 (change)="patchFields({ startDate: $any($event.target).value })"
               />
             </div>
-            <div class="field">
-              <label for="u-index-file">History file (optional)</label>
-              <input
-                #indexInput
-                id="u-index-file"
-                class="input file"
-                type="file"
-                accept=".csv,.json,text/csv,application/json,text/plain"
-                aria-describedby="u-index-file-hint"
-                (change)="pickIndexFile(indexInput)"
-              />
-              <p id="u-index-file-hint" class="hint">
-                CSV columns date, ticker, action (member, add or remove), or JSON. Imported for this
-                index before the save.
-                @if (indexFile(); as n) {
-                  Chosen: {{ n }}.
-                }
-              </p>
-            </div>
           }
         }
-        <div class="span-all">
-          <button type="button" class="btn btn-ghost json-toggle" (click)="editAsJson()">
-            Edit as JSON
-          </button>
-          <span class="hint">Advanced: every setting the definition takes.</span>
-        </div>
+        @if (advanced()) {
+          <details class="span-all advanced">
+            <summary>Advanced</summary>
+            @if (f.kind === 'index') {
+              <div class="field">
+                <label for="u-index-file">History file (optional)</label>
+                <input
+                  #indexInput
+                  id="u-index-file"
+                  class="input file"
+                  type="file"
+                  accept=".csv,.json,text/csv,application/json,text/plain"
+                  aria-describedby="u-index-file-hint"
+                  (change)="pickIndexFile(indexInput)"
+                />
+                <p id="u-index-file-hint" class="hint">
+                  CSV columns date, ticker, action (member, add or remove), or JSON. Imported for
+                  this index before the save.
+                  @if (indexFile(); as n) {
+                    Chosen: {{ n }}.
+                  }
+                </p>
+              </div>
+            }
+            <div>
+              <button type="button" class="btn btn-ghost json-toggle" (click)="editAsJson()">
+                Edit as JSON
+              </button>
+              <span class="hint">Every setting the definition takes.</span>
+            </div>
+          </details>
+        }
       }
     </div>
     <div class="form-actions">

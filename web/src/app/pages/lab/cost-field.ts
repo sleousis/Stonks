@@ -3,6 +3,18 @@ import { ChangeDetectionStrategy, Component, computed, input, output } from '@an
 import type { CostModelPreset } from '../../api/models';
 import { type CostForm, type FormErrors, costHint } from './lab-requests';
 
+/** Cost presets in words, never their ids (NB-07). */
+const PRESET_WORDS: Readonly<Record<string, string>> = {
+  zero: 'No costs',
+  realistic: 'Typical',
+  ibkr_tiered: 'IBKR tiered fees',
+  ibkr_fixed: 'IBKR fixed fees',
+};
+
+export function presetWord(name: string): string {
+  return PRESET_WORDS[name] ?? name.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+}
+
 /**
  * The cost model of a backtest: the configured costs (the default), a named
  * preset, or a flat slippage and fee. Shared by the Lab backtest form and the
@@ -23,7 +35,7 @@ import { type CostForm, type FormErrors, costHint } from './lab-requests';
         <option value="configured" [selected]="value().cost === 'configured'">Default costs</option>
         @for (m of costModels(); track m.name) {
           <option [value]="m.name" [selected]="value().cost === m.name">
-            Preset: {{ m.name }}
+            {{ presetWord(m.name) }}
           </option>
         }
         <option value="flat" [selected]="value().cost === 'flat'">Flat slippage and fee</option>
@@ -77,6 +89,7 @@ export class CostField {
   readonly idPrefix = input.required<string>();
   readonly value = input.required<CostForm>();
   readonly costModels = input<readonly CostModelPreset[]>([]);
+  protected readonly presetWord = presetWord;
   readonly errors = input<FormErrors>({});
   /** An extra sentence after the choice's own hint. */
   readonly note = input('');

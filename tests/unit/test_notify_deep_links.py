@@ -249,6 +249,9 @@ def _resolve(segments: list[str], routes: list[Route], top: list[Route], depth: 
         if rest is None:
             continue
         if route.redirect is not None:
+            if not route.path and rest:
+                # an empty path redirects only the bare parent (pathMatch full)
+                continue
             if route.redirect == "<fn>":
                 return True
             target = route.redirect if route.redirect.startswith("/") else f"/{route.redirect}"

@@ -5,7 +5,7 @@
   news, and finds the upcoming-event alerts in Settings,
 - the order ticket asks about earnings for its ticker,
 - a trader runs a screen, saves it, stores it as a snapshot universe (with
-  the survivorship warning) and deletes it.
+  the plain warning that a fixed list leaves out delisted names) and deletes it.
 
 The seeded stack has prices but no calendars or news, so the calendar shows
 its empty states. Each test runs on desktop and on a 375px phone.
@@ -145,13 +145,14 @@ def test_a_trader_screens_saves_and_makes_a_universe(browse, stack, viewport):
     dialog = page.get_by_role("dialog")
     expect(dialog.get_by_role("heading", name="Save as a universe")).to_be_visible()
     dialog.get_by_role("radio", name="Today's matches").click()
-    expect(dialog).to_contain_text("Survivorship bias.")
+    expect(dialog).to_contain_text("Backtests look too good.")
     v.check_page("screener-universe-sheet")
     dialog.get_by_label("Short name").fill(f"stocks-over-1-{viewport}")
     dialog.get_by_role("button", name="Save universe").click()
     universe = page.locator("section.universe")
     expect(universe).to_contain_text("Saved as a universe")
-    expect(universe).to_contain_text("survivorship")
+    expect(universe).to_contain_text("were delisted since are missing")
+    expect(universe).not_to_contain_text("survivorship")
     stored = v.api("GET", f"/api/universes/stocks-over-1-{viewport}")
     assert stored.ok, stored.text()
     assert stored.json()["kind"] == "list"

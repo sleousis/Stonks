@@ -18,8 +18,51 @@ export interface DisplayNameHints {
 }
 
 /**
- * `stocks_on_the_move_3fa9c21b` -> `Stocks on the move 3fa9`. A starter's
- * title (or the API's `strategy_name`), then a draft name, wins when known. An id without the generated suffix is shown as it is.
+ * A snake_case id such as `etf_trend` or `starter_buy_and_hold`. A word may
+ * hold a hyphen (a ticker such as `btc-usd`) once the id has an underscore,
+ * so `momentum-v3` stays as it is.
+ */
+const SNAKE_ID = /^(?:[a-z0-9]+(?:_[a-z0-9]+)*|[a-z0-9-]+(?:_[a-z0-9-]+)+)$/;
+
+/** Words that read as capitals in a name. */
+const ACRONYMS: Readonly<Record<string, string>> = {
+  etf: 'ETF',
+  etfs: 'ETFs',
+  rsi: 'RSI',
+  sma: 'SMA',
+  ema: 'EMA',
+  macd: 'MACD',
+  atr: 'ATR',
+  ath: 'ATH',
+  vwap: 'VWAP',
+  orb: 'ORB',
+  ewmac: 'EWMAC',
+  tsmom: 'TSMOM',
+  kama: 'KAMA',
+  ic: 'IC',
+  ml: 'ML',
+  us: 'US',
+  eu: 'EU',
+  uk: 'UK',
+  vix: 'VIX',
+  hrp: 'HRP',
+};
+
+/** `etf_trend` -> `ETF trend`, `bah_btc-usd` -> `Bah BTC-USD`. */
+function humanise(snake: string): string {
+  const words = snake
+    .split(/_+/)
+    .filter(Boolean)
+    .map((w) => (w.includes('-') ? w.toUpperCase() : (ACRONYMS[w] ?? w)));
+  const text = words.join(' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * `stocks_on_the_move_3fa9c21b` -> `Stocks on the move 3fa9`, `etf_trend`
+ * -> `ETF trend`. A starter's title (or the API's `strategy_name`), then a
+ * draft name, wins when known, with no hex suffix. Any other snake_case id
+ * reads as words. Anything else is shown as it is.
  */
 export function strategyDisplayName(id: string, hints: DisplayNameHints = {}): string {
   const starter = hints.starter?.title.trim() || hints.name?.trim();
@@ -27,9 +70,9 @@ export function strategyDisplayName(id: string, hints: DisplayNameHints = {}): s
   const draft = hints.draftName?.trim();
   if (draft) return draft;
   const match = GENERATED_ID.exec(id);
-  if (!match) return id;
-  const words = match[1].replace(/_+/g, ' ').trim();
-  return `${words.charAt(0).toUpperCase()}${words.slice(1)} ${match[2].slice(0, 4)}`;
+  if (match && SNAKE_ID.test(match[1])) return `${humanise(match[1])} ${match[2].slice(0, 4)}`;
+  if (match) return `${match[1]} ${match[2].slice(0, 4)}`;
+  return SNAKE_ID.test(id) ? humanise(id) : id;
 }
 
 /** A row's strategy name from the API's `strategy_id` and `strategy_name`; null without a strategy. */

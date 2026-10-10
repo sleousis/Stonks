@@ -31,10 +31,19 @@ export function providerReach(provider: Pick<ProviderView, 'can_trade'>): string
 
 /** How the trader connects: typing keys here, or signing in on the provider's site. */
 export function providerFlow(provider: ProviderView): string {
+  if (provider.needs_gateway) {
+    return 'Runs through an IB Gateway on the server. Pick the gateway your admin set up.';
+  }
   return provider.auth_flow === 'portal'
     ? `You sign in on the ${provider.display_name} site. Stonks never sees your password.`
     : `You paste API keys from your ${provider.display_name} account.`;
 }
+
+/** Where to find the keys, for providers where that is not obvious. */
+export const KEY_HINTS: Record<string, string> = {
+  etoro:
+    'In eToro open Settings, then Trading, then API keys. Create a key pair for your demo or real account.',
+};
 
 /** Brokers with a paper endpoint take an extra `paper` field (Alpaca). */
 export function offersPaper(provider: ProviderView): boolean {
@@ -42,6 +51,7 @@ export function offersPaper(provider: ProviderView): boolean {
 }
 
 const FIELD_WORDS: Record<string, string> = {
+  gateway: 'Gateway',
   api_key: 'API key',
   secret_key: 'Secret key',
   api_secret: 'API secret',
@@ -55,6 +65,15 @@ export function fieldLabel(field: string): string {
   const text = words.replace(/\bapi\b/g, 'API').replace(/\bid\b/g, 'ID');
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
+
+/** The field name inside a sentence: "secret key", but "API key" keeps its capitals. */
+export function fieldNoun(field: string): string {
+  const label = fieldLabel(field);
+  return /^[A-Z][a-z]/.test(label) ? label.charAt(0).toLowerCase() + label.slice(1) : label;
+}
+
+/** The CSV statements connection (23.17) is not a provider: name it here. */
+export const CSV_PROVIDER = 'csv';
 
 export const CONNECTION_STATUS_LABEL: Record<ConnectionView['status'], string> = {
   pending: 'Waiting to finish',
@@ -70,7 +89,13 @@ export const SYNC_STATUS_LABEL: Record<SyncResultView['status'], string> = {
 
 /** The provider's display name, or its short name when the list is not loaded. */
 export function providerName(providers: readonly ProviderView[] | undefined, name: string): string {
+  if (name === CSV_PROVIDER) return 'CSV imports';
   return providers?.find((p) => p.name === name)?.display_name ?? name;
+}
+
+/** "Alpaca, IBKR and SnapTrade". */
+export function joinNames(names: readonly string[]): string {
+  return joinWords(names);
 }
 
 function joinWords(words: readonly string[]): string {

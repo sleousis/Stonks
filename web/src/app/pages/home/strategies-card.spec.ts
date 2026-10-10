@@ -74,12 +74,12 @@ describe('StrategiesCard', () => {
       sub({ paper_days_completed: 12 }),
       sub({ id: 'sub_2', strategy_id: 'value_1a2b3c4d', paper_days_completed: 3 }),
     ]);
-    expect(option(el, 'auto').disabled).toBe(true);
-    const rule = 'Approve each trade and Automatic unlock after 20 paper days.';
+    expect(option(el, 'auto')).toBeNull();
+    const rule = 'More modes unlock after 20 paper days.';
     expect(el.querySelectorAll('.rule').length).toBe(1);
     expect(el.querySelector('.rule')!.textContent).toContain(rule);
-    expect(el.textContent).toContain('Paper days: 12 of 20.');
-    expect(el.textContent).toContain('Paper days: 3 of 20.');
+    expect(el.textContent).toContain('Your paper days: 12 of 20.');
+    expect(el.textContent).toContain('Your paper days: 3 of 20.');
   });
 
   it('switches notify and paper straight away', async () => {
@@ -154,9 +154,11 @@ describe('StrategiesCard', () => {
 
   it('keeps approve each trade locked with auto until the gate passes (19.8)', async () => {
     const el = await render([sub({ paper_days_completed: 12 })]);
-    expect(option(el, 'approve').disabled).toBe(true);
-    const why = option(el, 'approve').getAttribute('aria-describedby')!;
-    expect(el.querySelector(`[id="${why}"]`)!.textContent).toContain('Paper days: 12 of 20.');
+    expect(option(el, 'approve')).toBeNull();
+    const why = el.querySelector('fieldset.modes')!.getAttribute('aria-describedby')!;
+    expect(el.querySelector(`[id="${why}"]`)!.textContent).toContain(
+      'More modes unlock after 20 paper days.',
+    );
   });
 
   it('turns on approve each trade after a step-up and a ticket, no typed name', async () => {

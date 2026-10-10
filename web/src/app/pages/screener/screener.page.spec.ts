@@ -18,7 +18,7 @@ import {
   screenSize,
 } from '../../../testing/screener-fixtures';
 import { ScreenerPage } from './screener.page';
-import { provideFakeDataCoverage } from '../../../testing/fake-data-coverage';
+import { DataCoverageService } from '../../shared/ui/data-plan-note';
 
 describe('ScreenerPage', () => {
   let http: HttpTestingController;
@@ -26,13 +26,17 @@ describe('ScreenerPage', () => {
   let job = controlledJob('job_1');
   const track = vi.fn(() => job.handle);
 
+  /** Paid data kinds the lake lacks; empty means everything is stored. */
+  const missing = new Set<string>();
+
   beforeEach(async () => {
+    missing.clear();
     confirm.mockReset();
     job = controlledJob('job_1');
     track.mockClear();
     TestBed.configureTestingModule({
       providers: [
-        provideFakeDataCoverage(),
+        { provide: DataCoverageService, useValue: { has: (k: string) => !missing.has(k) } },
         provideRouter([]),
         ...provideApi(),
         provideHttpClientTesting(),
@@ -124,7 +128,25 @@ describe('ScreenerPage', () => {
     expect(root.querySelector('a[href="/charts/KO.US"]')).not.toBeNull();
     const cells = [...root.querySelectorAll('td')].map((td) => td.textContent?.trim());
     expect(cells).toContain('3.1%');
-    expect(cells).toContain('62.5');
+    expect(cells).toContain('$62.50');
+  });
+
+  it('greys out fundamentals that need a data plan, with no separate warning', async () => {
+    missing.add('fundamentals');
+    const fixture = await render();
+    const root = el(fixture);
+    expect(root.textContent).not.toContain('Needs a data plan');
+    const sort = root.querySelector<HTMLSelectElement>('#sc-sort')!;
+    const pe = [...sort.options].find((o) => o.value === 'pe_ratio')!;
+    expect(pe.disabled).toBe(true);
+    expect(pe.textContent?.trim()).toBe('P/E (needs a data plan)');
+    button(root, 'Add a filter').click();
+    fixture.detectChanges();
+    const metric = root.querySelector<HTMLSelectElement>('select[id^="sc-f-metric-"]')!;
+    const dy = [...metric.options].find((o) => o.value === 'dividend_yield')!;
+    expect(dy.disabled).toBe(true);
+    expect(dy.textContent?.trim()).toBe('Dividend yield (needs a data plan)');
+    expect([...metric.options].find((o) => o.value === 'price')!.disabled).toBe(false);
   });
 
   it('says what is wrong and runs nothing', async () => {
@@ -318,7 +340,7 @@ describe('ScreenerPage', () => {
     )!;
     snapshot.click();
     fixture.detectChanges();
-    expect(dialog.textContent).toContain('Survivorship bias.');
+    expect(dialog.textContent).toContain('Backtests look too good.');
     expect(dialog.querySelector('#su-start')).toBeNull();
     button(dialog as HTMLElement, 'Save universe').click();
     const req = await nextRequest(http, '/api/screener/universes', 'POST');

@@ -37,9 +37,9 @@ export function scoreText(score: number | null | undefined): string {
 }
 
 /**
- * The trial ledger: every lab run anyone recorded, newest first, with what
- * it set out to show and how many trials it took. Filter by strategy; open
- * a run for its trials.
+ * The Lab history: every lab run anyone recorded, newest first, with what
+ * it set out to show and how many settings it tried. Filter by strategy,
+ * open a run for the settings it tried.
  */
 @Component({
   selector: 'app-ledger-page',
@@ -61,28 +61,27 @@ export function scoreText(score: number | null | undefined): string {
       title="Lab"
       description="Every lab run on record, the idea it tested and how many settings it tried."
     >
-      <app-export-button actions kind="lab-trials" label="All trials CSV" [ghost]="true" />
+      <app-export-button actions kind="lab-trials" label="All settings CSV" [ghost]="true" />
     </app-page-header>
     <app-lab-nav />
 
     <section class="panel" aria-labelledby="ledger-title">
       <div class="panel-head">
-        <h2 id="ledger-title">Trial ledger</h2>
+        <h2 id="ledger-title">Lab history</h2>
         @if (page(); as p) {
           <span class="count num">{{ p.total }} runs</span>
         }
       </div>
       <div class="panel-body">
         <p class="lead">
-          Each lab run is written down before it starts, with its hypothesis, then every setting it
-          tries (its trials). The more trials a strategy has had, the more likely a good result is
-          luck, so the robustness tests count them all. The verdict is about those tests, not the
-          trials.
+          Each lab run is written down before it starts, with the idea it tests, then every setting
+          it tries. The more settings a strategy has tried, the more likely a good result is luck,
+          so the robustness tests count them all.
         </p>
         <form
           class="filters"
           role="search"
-          aria-label="Filter the ledger"
+          aria-label="Filter the Lab history"
           (submit)="$event.preventDefault()"
         >
           <div class="field">
@@ -100,7 +99,7 @@ export function scoreText(score: number | null | undefined): string {
 
         @if (runs.error(); as err) {
           <app-error-state
-            title="Could not load the ledger"
+            title="Could not load the Lab history"
             [error]="err"
             (retry)="runs.reload()"
           />
@@ -108,7 +107,7 @@ export function scoreText(score: number | null | undefined): string {
           @if (p.items.length === 0) {
             <app-empty-state
               [title]="strategy() ? 'No runs of this strategy yet' : 'No lab runs yet'"
-              message="Every lab run and sweep is recorded here with its trials as soon as it starts."
+              message="Every lab run and sweep is recorded here with the settings it tries as soon as it starts."
             >
               <a class="btn" routerLink="/lab">Test a strategy</a>
             </app-empty-state>
@@ -138,7 +137,7 @@ export function scoreText(score: number | null | undefined): string {
             }
           }
         } @else {
-          <app-loading-state label="Loading the ledger" [rows]="6" />
+          <app-loading-state label="Loading the Lab history" [rows]="6" />
         }
       </div>
     </section>
@@ -170,6 +169,10 @@ export class LedgerPage {
   private readonly titles = computed(
     () => new Map(this.classOptions().map((c) => [c.class_path, strategyTitle(c)])),
   );
+  /** Class path to the catalog's description, the idea a run tests when none was written. */
+  private readonly ideas = computed(
+    () => new Map(this.classOptions().map((c) => [c.class_path, c.description])),
+  );
 
   protected readonly offset = linkedSignal({ source: () => this.strategy(), computation: () => 0 });
   protected readonly runs = resource({
@@ -193,12 +196,12 @@ export class LedgerPage {
     },
     {
       key: 'hypothesis',
-      label: 'Hypothesis',
+      label: 'Idea',
       sortable: false,
-      value: (r) => r.hypothesis ?? 'None written',
+      value: (r) => r.hypothesis || this.ideas().get(r.strategy_class ?? '') || '',
       mobile: 'hide',
     },
-    { key: 'n_trials', label: 'Trials', format: 'number', sortable: false, help: 'trials' },
+    { key: 'n_trials', label: 'Settings tried', format: 'number', sortable: false, help: false },
     { key: 'n_failed', label: 'Errors', format: 'number', sortable: false, mobile: 'hide' },
     {
       key: 'best_score',

@@ -2,7 +2,9 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   Injectable,
+  afterNextRender,
   computed,
   effect,
   inject,
@@ -20,9 +22,9 @@ import { TicketCountService } from '../core/tickets/ticket-count.service';
 import {
   type FoldingGroup,
   NAV_GROUPS,
-  NAV_GROUPS_OPEN_BY_DEFAULT,
   NAV_ITEMS,
   type NavItem,
+  defaultOpenGroups,
   groupsForUrl,
   navItemVisible,
   navViewer,
@@ -38,7 +40,13 @@ export const NAV_GROUPS_STORAGE_KEY = 'stonks.nav.groups';
 @Injectable({ providedIn: 'root' })
 export class NavGroupsState {
   private readonly router = inject(Router);
-  readonly open = signal<ReadonlySet<FoldingGroup>>(readOpen());
+  private readonly session = inject(SessionService);
+  /** What the person chose, or null while they never touched a group. */
+  private readonly chosen = signal<ReadonlySet<FoldingGroup> | null>(readOpen());
+  /** The open groups: the person's choice, else the defaults for their role. */
+  readonly open = computed<ReadonlySet<FoldingGroup>>(
+    () => this.chosen() ?? new Set(defaultOpenGroups(this.session.isAdmin())),
+  );
 
   constructor() {
     this.reveal(this.router.url);
@@ -55,7 +63,7 @@ export class NavGroupsState {
     const next = new Set(this.open());
     if (on) next.add(group);
     else next.delete(group);
-    this.open.set(next);
+    this.chosen.set(next);
     try {
       localStorage.setItem(NAV_GROUPS_STORAGE_KEY, JSON.stringify([...next]));
     } catch {
@@ -70,7 +78,7 @@ export class NavGroupsState {
   }
 }
 
-function readOpen(): ReadonlySet<FoldingGroup> {
+function readOpen(): ReadonlySet<FoldingGroup> | null {
   try {
     const raw = localStorage.getItem(NAV_GROUPS_STORAGE_KEY);
     if (raw) {
@@ -84,15 +92,17 @@ function readOpen(): ReadonlySet<FoldingGroup> {
   } catch {
     // Unreadable or blocked: fall back to the defaults.
   }
-  return new Set(NAV_GROUPS_OPEN_BY_DEFAULT);
+  return null;
 }
 
 /**
- * Main navigation (M1). About seven trader pages sit on top with nothing to
- * open: Today, Strategies, Orders, Approvals, Insights, Charts and
- * Notifications. Below them, folding groups: More (markets, trial results,
- * trade costs, the assistant when it is on), Advanced (the build tools and
- * the strategy review) and, for admins, System. Each group is a disclosure
+ * Main navigation (M1, FR-08). About seven trader pages sit on top with
+ * nothing to open: Today, Strategies, Build a strategy, Lab, Orders,
+ * Insights and Charts. Notifications live behind the bell. Below them,
+ * folding groups, closed at first: More (approvals, markets, trial
+ * results, the assistant when it is on), Advanced (the strategy review,
+ * options when chains are stored, trade costs) and, for admins, System,
+ * open at first. Each group is a disclosure
  * that remembers whether it is open, and the one holding the current page
  * opens by itself. Account pages live in the account menu, pinned below.
  *
@@ -131,7 +141,11 @@ const TICKETS = '/tickets';
       </ul>
       @for (group of groups(); track group.title) {
         <details class="fold" [open]="isOpen(group.title)" (toggle)="onToggle(group.title, $event)">
-          <summary class="group" [id]="idPrefix() + '-group-' + group.title">
+          <summary
+            class="group"
+            [id]="idPrefix() + '-group-' + group.title"
+            (click)="asked = group.title"
+          >
             <span>{{ group.title }}</span>
             <span class="chev" aria-hidden="true"></span>
           </summary>
@@ -142,9 +156,13 @@ const TICKETS = '/tickets';
                   [routerLink]="item.path"
                   routerLinkActive="active"
                   ariaCurrentWhenActive="page"
+                  [attr.aria-label]="spoken(item)"
                   (click)="navigate.emit()"
                 >
                   <span>{{ item.label }}</span>
+                  @if (badge(item); as n) {
+                    <b class="count" aria-hidden="true">{{ n }}</b>
+                  }
                   @if (item.key) {
                     <kbd aria-hidden="true">g {{ item.key }}</kbd>
                   }
@@ -288,7 +306,15 @@ export class Nav {
   protected readonly main = computed(() => this.visible().filter((i) => i.group === 'Main'));
   private readonly tickets = inject(TicketCountService);
 
+  /** The group the person just clicked open, so groups the page opened never scroll the rail. */
+  protected asked: FoldingGroup | null = null;
+
   constructor() {
+    const host = inject<ElementRef<HTMLElement>>(ElementRef);
+    // The page on screen is in view in the rail on load (FR-09).
+    afterNextRender(() => {
+      host.nativeElement.querySelector('a.active')?.scrollIntoView?.({ block: 'nearest' });
+    });
     const destroyRef = inject(DestroyRef);
     let watching = false;
     effect(() => {
@@ -303,7 +329,13 @@ export class Nav {
   }
 
   protected onToggle(group: FoldingGroup, event: Event): void {
-    this.folds.set(group, (event.target as HTMLDetailsElement).open);
+    const details = event.target as HTMLDetailsElement;
+    this.folds.set(group, details.open);
+    // A group opening below the fold shows its items, not just a cut first one (FR-09).
+    if (details.open && this.asked === group) {
+      details.querySelector('li:last-child a')?.scrollIntoView?.({ block: 'nearest' });
+    }
+    this.asked = null;
   }
 
   /** The count shown on an item, or 0 for none. */

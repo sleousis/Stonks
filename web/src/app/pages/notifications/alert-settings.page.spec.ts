@@ -77,17 +77,18 @@ describe('AlertSettingsPage', () => {
     const groups = [...el.querySelectorAll('h2')].map((h) => h.textContent?.trim());
     expect(groups).toEqual(['Where alerts reach you', 'What reaches you, and when']);
     const panels = [...el.querySelectorAll('h3')].map((h) => h.textContent?.trim());
+    // Telegram first, and no Briefings while the install has them off (FR-16).
     expect(panels).toEqual([
+      'Telegram',
       'Push on this device',
       'Your devices',
-      'Telegram',
-      'Your webhook',
+      'More channels',
       'Which alerts go where',
       'Upcoming events',
       'Quiet hours',
-      'Briefings',
       'Price alerts',
     ]);
+    expect(el.textContent).not.toMatch(/;/);
   });
 
   it('says price alerts check daily closes and links to them', async () => {

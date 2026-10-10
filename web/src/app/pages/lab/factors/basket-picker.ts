@@ -16,8 +16,8 @@ import type { Basket, BasketKind } from './factor-requests';
   template: `
     @let b = basket();
     <fieldset class="basket">
-      <legend>Names</legend>
-      <div class="kinds" role="radiogroup" [attr.aria-label]="'Measure on'">
+      <legend>Tickers to test</legend>
+      <div class="kinds" role="radiogroup" aria-label="Tickers to test">
         @for (k of kinds; track k.id) {
           <label class="kind">
             <input

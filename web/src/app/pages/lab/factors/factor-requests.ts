@@ -231,6 +231,19 @@ export function warmupText(bars: number | null | undefined): string {
   return `${bars} ${bars === 1 ? 'bar' : 'bars'}`;
 }
 
+/** History a factor needs first, in plain words: 252 bars -> "1 year of history". */
+export function historyText(bars: number | null | undefined): string {
+  if (bars == null) return 'Not known';
+  if (bars === 0) return 'No history needed';
+  const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`;
+  if (bars >= 252) return `${plural(Math.round((bars / 252) * 10) / 10, 'year')} of history`;
+  if (bars >= 21) return `${plural(Math.round(bars / 21), 'month')} of history`;
+  return `${plural(bars, 'day')} of history`;
+}
+
+/** Sets for research use only, hidden from the library until asked for. */
+export const RESEARCH_SETS: readonly string[] = ['alpha158'];
+
 /** Text search over a factor's id, set, family and description. */
 export function matchesQuery(f: FactorView, query: string): boolean {
   const q = query.trim().toLowerCase();

@@ -20,6 +20,7 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { jobLabel, nextTradingRun } from '../../core/schedule/job-labels';
 import { KillSheet } from './kill-sheet';
+import { StopTradingVisibility } from '../../shell/stop-visibility';
 import { PortfolioPicker } from './portfolio-picker';
 import { StripHaltActions } from './strip-halt-actions';
 
@@ -544,8 +545,11 @@ export class SessionStrip {
 
   protected readonly halted = this.halts.summary;
   protected readonly killOn = this.halts.killOn;
-  /** Traders and admins can stop trading; viewers never see the control. */
-  protected readonly canKill = computed(() => this.session.can('killswitch.user'));
+  /**
+   * Traders and admins can stop trading; viewers never see the control. A
+   * trader sees it once something trades for them (FR-06).
+   */
+  protected readonly canKill = inject(StopTradingVisibility).show;
   /** Real money on the shown portfolio: the Stop control wears the brass ring. */
   protected readonly live = this.portfolios.live;
   protected readonly sheetOpen = inject(StopTradingService).open;

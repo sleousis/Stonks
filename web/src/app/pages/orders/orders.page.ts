@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { filter, map } from 'rxjs';
 
 import { RefreshStatus, UpdatedAgo } from '../../shared/auto-refresh';
@@ -20,7 +20,16 @@ import { OrdersTabs } from './orders-tabs';
 @Component({
   selector: 'app-orders-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, PageHeader, UpdatedAgo, ExportButton, OrdersTabs, NoBook, LoadingState],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    PageHeader,
+    UpdatedAgo,
+    ExportButton,
+    OrdersTabs,
+    NoBook,
+    LoadingState,
+  ],
   providers: [RefreshStatus],
   template: `
     <app-page-header
@@ -28,12 +37,18 @@ import { OrdersTabs } from './orders-tabs';
       description="Orders placed by trading runs and by hand, the fills they received, and the runs themselves."
     >
       <app-updated-ago [at]="status.updatedAt()" />
-      @if (showExports() && book() !== 'none') {
-        <ng-container ngProjectAs="[actions]">
-          <app-export-button kind="orders" label="Orders CSV" [ghost]="true" />
-          <app-export-button kind="fills" label="Fills CSV" [ghost]="true" />
-        </ng-container>
-      }
+      <ng-container ngProjectAs="[actions]">
+        @if (book() !== 'none') {
+          @if (!onNew()) {
+            <a class="btn btn-primary" routerLink="/orders/new">New order</a>
+          }
+          <a class="btn" routerLink="/orders/rebalance">Rebalance</a>
+          @if (showExports()) {
+            <app-export-button kind="orders" label="Orders CSV" [ghost]="true" />
+            <app-export-button kind="fills" label="Fills CSV" [ghost]="true" />
+          }
+        }
+      </ng-container>
     </app-page-header>
 
     <app-orders-tabs />
@@ -64,6 +79,8 @@ export class OrdersPage {
   );
   /** On the runs tab the CSV downloads give way to the runner. */
   protected readonly onRuns = computed(() => this.url().startsWith('/orders/ticks'));
+  /** On the ticket itself the New order button would point to itself. */
+  protected readonly onNew = computed(() => this.url().split(/[?#]/)[0] === '/orders/new');
   /** The CSV downloads belong to the orders and fills lists only. */
   protected readonly showExports = computed(() => {
     const path = this.url().split(/[?#]/)[0];

@@ -75,7 +75,9 @@ describe('ConnectionsPage', () => {
       limit: 500,
       offset: 0,
     });
-    (await nextRequest(http, '/api/statement-imports/presets')).flush(DEGIRO_PRESETS);
+    (await nextRequest(http, '/api/statement-imports/presets')).flush(
+      [...DEGIRO_PRESETS].reverse(),
+    );
     await settle();
   }
 
@@ -93,19 +95,52 @@ describe('ConnectionsPage', () => {
     expect(button('Sign in at SnapTrade')).toBeDefined();
   });
 
-  it('says exactly when Stonks trades, per broker (F53)', async () => {
+  it('says exactly when Stonks trades, per broker, in two sentences (F53)', async () => {
     await setUp();
     const cards = el.querySelectorAll('.provider');
     expect(cards[0].textContent).toContain('Reads, and places orders when you allow it.');
     expect(cards[1].textContent).toContain('Reads only. It never places an order there.');
-    const when = el.querySelector('[aria-labelledby="when-title"]')!;
+    const when = el.querySelector('.when')!;
+    expect(when.textContent).toContain('Read-only brokers never get orders.');
     expect(when.textContent).toContain('Approve each trade');
     expect(when.textContent).toContain('Automatic');
-    expect(when.textContent).toContain('Alerts only');
-    expect(when.textContent).toContain('Real money, small');
-    expect(when.textContent).toContain('Broker paper');
-    expect(el.textContent).not.toContain('It never places trades there');
-    expect(el.textContent).not.toContain('Stonks only reads');
+    expect(when.textContent).not.toContain(';');
+    expect(when.querySelector('a')?.getAttribute('href')).toBe('/going-live');
+  });
+
+  it('puts Connect a broker right under your connections', async () => {
+    await setUp();
+    const headings = [...el.querySelectorAll('h2')].map((h) => h.textContent?.trim());
+    expect(headings.slice(0, 2)).toEqual(['Your connections', 'Connect a broker']);
+  });
+
+  it('runs IBKR through a gateway picked from a list, never a password', async () => {
+    const ibkr: ProviderView = {
+      ...ALPACA,
+      name: 'ibkr',
+      display_name: 'Interactive Brokers',
+      credential_fields: ['gateway'],
+      has_paper: false,
+      needs_gateway: true,
+      gateways: ['live', 'paper'],
+    };
+    await setUp({ providers: [ibkr] });
+    const card = el.querySelector('.provider')!;
+    expect(card.textContent).toContain('Runs through an IB Gateway on the server.');
+    expect(card.textContent).not.toContain('API keys');
+    button('Connect')!.click();
+    fixture.detectChanges();
+    expect(el.querySelector('form.keys input[type="password"]')).toBeNull();
+    const select = el.querySelector<HTMLSelectElement>('#key-ibkr-gateway')!;
+    expect([...select.options].map((o) => o.value)).toEqual(['', 'live', 'paper']);
+  });
+
+  it('tells an admin which brokers are turned off and where to turn them on', async () => {
+    await setUp({ providers: [ALPACA, { ...SNAPTRADE, enabled: false }] });
+    expect(el.querySelectorAll('.provider').length).toBe(1);
+    const off = el.querySelector('.turned-off')!;
+    expect(off.textContent).toContain('SnapTrade is turned off. Turn it on in Settings, System.');
+    expect(off.querySelector('a')?.getAttribute('href')).toBe('/settings?tab=system');
   });
 
   it('explains the empty state and offers to connect', async () => {
@@ -121,7 +156,7 @@ describe('ConnectionsPage', () => {
     expect(el.textContent).toContain('An admin must turn on a broker');
   });
 
-  it('lists providers that are turned off without a way to connect them', async () => {
+  it('shows no card for a provider that is turned off', async () => {
     await setUp({
       providers: [
         { ...ALPACA, enabled: false },
@@ -129,11 +164,9 @@ describe('ConnectionsPage', () => {
       ],
     });
     expect(el.textContent).toContain('No brokers are turned on yet');
-    const cards = el.querySelectorAll('.provider');
-    expect(cards.length).toBe(2);
-    expect(cards[0].textContent).toContain('Turned off');
+    expect(el.querySelectorAll('.provider').length).toBe(0);
+    expect(el.textContent).toContain('Alpaca and SnapTrade are turned off.');
     expect(button('Connect with keys')).toBeUndefined();
-    expect(button('Sign in at SnapTrade')).toBeUndefined();
   });
 
   it('says when a provider has paper accounts', async () => {
@@ -141,6 +174,18 @@ describe('ConnectionsPage', () => {
     const cards = el.querySelectorAll('.provider');
     expect(cards[0].textContent).toContain('Paper accounts work too.');
     expect(cards[1].textContent).not.toContain('Paper accounts');
+  });
+
+  it('names CSV imports plainly and links them to the import page', async () => {
+    await setUp({
+      connections: [connection({ provider: 'csv', label: 'CSV statements' })],
+    });
+    const row = el.querySelector('.connection')!;
+    expect(row.getAttribute('href')).toBe('/connections/import');
+    expect(row.textContent).toContain('CSV imports');
+    expect(row.textContent).not.toContain('CSV statements');
+    expect(row.textContent).toContain('Last import');
+    expect(row.textContent).not.toContain('Last sync');
   });
 
   it('lists connections with status, last sync and account count', async () => {
@@ -174,6 +219,7 @@ describe('ConnectionsPage', () => {
     await settle();
     expect(confirm).not.toHaveBeenCalled();
     expect(el.textContent).toContain('Enter the secret key.');
+    expect(el.textContent).toContain('Enter the API key.');
 
     type('#key-alpaca-api_key', ' AK1 ');
     type('#key-alpaca-secret_key', 'SK1');
@@ -202,6 +248,8 @@ describe('ConnectionsPage', () => {
     expect(card.textContent).toContain('You paste API keys from your eToro account.');
     button('Connect with keys')!.click();
     fixture.detectChanges();
+    expect(card.textContent).toContain('In eToro open Settings, then Trading, then API keys.');
+    expect(card.textContent).toContain('Untick only for real-money keys.');
     expect(el.querySelector('label[for="key-etoro-api_key"]')?.textContent).toContain('API key');
     expect(el.querySelector('label[for="key-etoro-user_key"]')?.textContent).toContain('User key');
     expect(el.textContent).toContain('paper or demo account keys');
@@ -264,13 +312,18 @@ describe('ConnectionsPage', () => {
     expect(panel.textContent).toContain('Brokers without a connection');
     expect(panel.textContent).toContain('DEGIRO');
     expect(panel.textContent).toContain('Reads only');
-    const links = [...panel.querySelectorAll<HTMLAnchorElement>('a.export-link')];
-    expect(links.map((a) => a.textContent?.trim())).toEqual([
-      'Transactions',
-      'Account statement',
-      'Portfolio',
+    // In the order to import them, whatever order the server sends.
+    const steps = [...panel.querySelectorAll('ol.exports > li strong')].map((x) =>
+      x.textContent?.trim(),
+    );
+    expect(steps).toEqual([
+      'Transactions (your trades)',
+      'Account statement (dividends, fees, cash in and out)',
+      "Portfolio (optional, today's holdings)",
     ]);
-    expect(links[0].getAttribute('href')).toBe('/connections/import?preset=degiro_transactions');
+    const go = panel.querySelector<HTMLAnchorElement>('a.btn')!;
+    expect(go.textContent?.trim()).toBe('Import DEGIRO files');
+    expect(go.getAttribute('href')).toBe('/connections/import?preset=degiro_transactions');
     // DEGIRO is not offered as a provider to sign in to
     expect([...el.querySelectorAll('.provider h3')].map((h) => h.textContent)).not.toContain(
       'DEGIRO',

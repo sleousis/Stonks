@@ -171,7 +171,8 @@ def test_a_solo_owner_gets_signals_on_telegram_with_no_broker(browse, stack, vie
         push.uncheck()
     expect(push).not_to_be_checked()
     expect(grid.get_by_role("checkbox", name="Signals by Telegram")).to_be_checked()
-    expect(grid.get_by_role("checkbox", name="Signals by Email")).not_to_be_checked()
+    # FR-16: a channel that is not set up has no column, so Email is not offered yet.
+    expect(grid.get_by_role("checkbox", name="Signals by Email")).to_have_count(0)
     v.check_page("no-broker-alert-settings")
 
     # 5. A trading run.
@@ -186,7 +187,10 @@ def test_a_solo_owner_gets_signals_on_telegram_with_no_broker(browse, stack, vie
 
     # 6. The signal is in the feed...
     feed = v.api("GET", "/api/notifications").json()["items"]
-    signals = [n for n in feed if n["category"] == "signal" and sid in (n["message"] or "")]
+    # NB-10: the text is for the follower, so the strategy is found by its link.
+    signals = [
+        n for n in feed if n["category"] == "signal" and n["deep_link"] == f"/strategies/{sid}"
+    ]
     assert signals, feed
     title = signals[0]["title"]
     v.go("/notifications")

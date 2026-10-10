@@ -123,3 +123,23 @@ def test_the_store_keeps_overrides_and_audits_each_change(tmp_path):
 def test_the_store_reads_nothing_before_the_table_exists(tmp_path):
     with SqliteState(tmp_path / "state.sqlite") as state:
         assert OverrideStore(state).values() == {}
+
+
+def test_risk_labels_match_the_traders_own_limits(base):
+    """One name per limit everywhere (the trader's Risk limits tab)."""
+    labels = {s.key: s.label for s in editable_settings(base)}
+    assert labels["production.risk.max_weight_per_ticker"] == "Largest holding"
+    assert labels["production.risk.max_open_positions"] == "Open positions"
+    assert labels["production.risk.cash_buffer_fraction"] == "Cash to keep"
+    assert labels["production.risk.min_order_notional"] == "Smallest order"
+    helps = " ".join(s.help for s in editable_settings(base))
+    for raw in ("rest_of_month", "0.25 = 25%", "outbox", "shadow only"):
+        assert raw not in helps
+
+
+def test_a_session_job_says_which_edge_its_minutes_count_from(base):
+    labels = {s.key: s.label for s in editable_settings(base)}
+    assert labels["scheduler.jobs.tick.trigger.offset_minutes"] == "tick: minutes after the close"
+    assert labels["scheduler.jobs.live_submit.trigger.offset_minutes"] == (
+        "live_submit: minutes after the open"
+    )

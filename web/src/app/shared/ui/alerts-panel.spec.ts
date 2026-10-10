@@ -40,6 +40,10 @@ describe('AlertsPanel', () => {
   it('lists alerts with the level as text and a relative time', async () => {
     const req = await flush({ items: [ALERT], total: 1, limit: 2, offset: 0 });
     expect(req.request.urlWithParams).toContain('limit=2');
+    // Only operational alerts: signals and price alerts stay on Notifications.
+    expect(req.request.urlWithParams).toContain('category=system');
+    expect(req.request.urlWithParams).toContain('category=risk');
+    expect(req.request.urlWithParams).not.toContain('category=signal');
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Price ingest failed');
     expect(el.querySelector('app-status-pill')?.textContent?.trim()).toBe('Error');
@@ -79,12 +83,12 @@ describe('AlertsPanel', () => {
     await flush({ items: [ALERT], total: 1, limit: 2, offset: 0 });
     fixture.componentInstance.reload();
     await flush({ items: [], total: 0, limit: 2, offset: 0 });
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('No alerts');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('No system alerts');
   });
 
   it('explains what lands here when there are none', async () => {
     await flush({ items: [], total: 0, limit: 2, offset: 0 });
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('No alerts');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('No system alerts');
   });
 });
 

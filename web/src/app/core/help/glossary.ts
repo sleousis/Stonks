@@ -676,10 +676,11 @@ export const GLOSSARY: Record<GlossaryKey, GlossaryEntry> = {
     aliases: ['Benchmark comparison'],
   },
   trials: {
-    term: 'Trials',
+    term: 'Settings tried',
     short:
-      'Parameter sets tried. The more tried, the likelier a good score is luck, so it is always shown.',
+      'How many settings the search tried. The more tried, the likelier a good score is luck, so it is always shown.',
     aliases: [
+      'Trials',
       'n_trials',
       'n_trials_run',
       'n_trials_class',

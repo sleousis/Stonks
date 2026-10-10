@@ -2,14 +2,22 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   input,
   linkedSignal,
   output,
+  resource,
   signal,
 } from '@angular/core';
 
-import type { LabRunRequest, StrategyClassInfo, UniverseView } from '../../api/models';
+import { MarketService } from '../../api/market.service';
+import type {
+  LabRunRequest,
+  StrategyClassInfo,
+  UniverseView,
+  WatchlistView,
+} from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import {
@@ -18,6 +26,7 @@ import {
   buildLabRunRequest,
   defaultLabRunForm,
   labRunErrors,
+  parseTickers,
 } from './lab-requests';
 import { StrategyPicker } from './strategy-picker';
 import { WindowFields } from './window-fields';
@@ -35,16 +44,37 @@ export type SimpleTestForm = Pick<
  * The request a simple test sends: a lab run with the Standard robustness
  * tests and every other setting at its default. Nothing goes on trial.
  */
-export function simpleTestRequest(f: SimpleTestForm, today?: Date): LabRunRequest {
+export function simpleTestRequest(f: SimpleTestForm, today?: Date, idea = ''): LabRunRequest {
   const form: LabRunForm = {
     ...defaultLabRunForm(today),
     ...f,
     interval: '1d',
     suite: SIMPLE_SUITE,
     ensureData: !!f.universeId,
+    // The ledger shows the catalog's idea when the trader wrote none.
+    hypothesis: idea,
   };
   return buildLabRunRequest(form);
 }
+
+/**
+ * The latest first day of data across the tickers: the earliest start where
+ * every one of them has prices. `null` when any ticker has no data.
+ */
+export function earliestCommonStart(
+  firstBars: readonly (string | null | undefined)[],
+): string | null {
+  if (!firstBars.length || firstBars.some((d) => !d)) return null;
+  return firstBars.map((d) => d!.slice(0, 10)).reduce((a, b) => (a > b ? a : b));
+}
+
+/** Tickers looked up for their first day of data; more than this keeps the default start. */
+const MAX_COVERAGE_LOOKUPS = 20;
+/** Typing pauses this long before the lookup runs. */
+const COVERAGE_DEBOUNCE_MS = 400;
+
+/** The basket choice's value for a watchlist (universes use their own id). */
+const WATCHLIST = 'watchlist:';
 
 /** Field errors of a simple test, in the same words as the full form. */
 export function simpleTestErrors(f: SimpleTestForm): Record<string, string> {
@@ -88,27 +118,45 @@ export function simpleTestErrors(f: SimpleTestForm): Record<string, string> {
       />
 
       <fieldset class="group">
-        <legend>What to trade</legend>
-        @if (universes().length) {
+        <legend>What to test it on</legend>
+        @if (hasLists()) {
           <div class="field">
-            <label for="st-universe">Trade</label>
+            <label for="st-universe">Tickers to test</label>
             <select
               id="st-universe"
               class="input"
-              aria-describedby="st-universe-hint"
-              (change)="patch({ universeId: $any($event.target).value })"
+              [attr.aria-describedby]="form().universeId ? 'st-universe-hint' : null"
+              (change)="pickBasket($any($event.target).value)"
             >
-              <option value="" [selected]="form().universeId === ''">Tickers I type</option>
-              @for (u of universes(); track u.id) {
-                <option [value]="u.id" [selected]="form().universeId === u.id">
-                  {{ u.name || u.id }}
-                </option>
+              <option value="" [selected]="basket() === ''">Tickers I type</option>
+              @if (watchlists().length) {
+                <optgroup label="Watchlists">
+                  @for (w of watchlists(); track w.id) {
+                    <option
+                      [value]="watchlistValue(w.id)"
+                      [selected]="basket() === watchlistValue(w.id)"
+                    >
+                      {{ w.name }}
+                    </option>
+                  }
+                </optgroup>
+              }
+              @if (universes().length) {
+                <optgroup label="Universes">
+                  @for (u of universes(); track u.id) {
+                    <option [value]="u.id" [selected]="basket() === u.id">
+                      {{ u.name || u.id }}
+                    </option>
+                  }
+                </optgroup>
               }
             </select>
-            <span class="hint" id="st-universe-hint">
-              A saved list includes names that were members then, even ones that later left, and any
-              missing prices are fetched first.
-            </span>
+            @if (form().universeId) {
+              <span class="hint" id="st-universe-hint">
+                A universe includes names that were members then, even ones that later left, and any
+                missing prices are fetched first.
+              </span>
+            }
           </div>
         }
         <app-window-fields
@@ -117,8 +165,12 @@ export function simpleTestErrors(f: SimpleTestForm): Record<string, string> {
           [errors]="errors()"
           [showTickers]="!form().universeId"
           [showInterval]="false"
+          [tickersLabel]="hasLists() ? 'Tickers' : 'Tickers to test'"
           (patch)="patch($event)"
         />
+        @if (dataStart() && !startTouched()) {
+          <p class="hint start-note">Starts on the first day with prices for every ticker.</p>
+        }
       </fieldset>
 
       <div class="form-actions">
@@ -156,33 +208,46 @@ export function simpleTestErrors(f: SimpleTestForm): Record<string, string> {
       flex: 1 1 14rem;
       margin: 0;
     }
+    .start-note {
+      margin: 0;
+    }
   `,
 })
 export class SimpleTestFormView {
   readonly classes = input.required<readonly StrategyClassInfo[]>();
   readonly universes = input<readonly UniverseView[]>([]);
-  /** Tickers to start from (a watchlist opened in the lab). */
+  /** The viewer's watchlists, offered next to the universes. */
+  readonly watchlists = input<readonly WatchlistView[]>([]);
+  /** Tickers to start from (a watchlist opened in the lab, or a strategy's own). */
   readonly tickers = input<string | null>(null);
   /** A stored universe to start from (`?universe=`). */
   readonly universe = input<string | null>(null);
+  /** A strategy to start from ("Test again in Lab"). */
+  readonly classPath = input<string | null>(null);
   /** How many tests the Standard suite runs (from the server's presets). */
   readonly testCount = input(SUITES.find((s) => s.id === SIMPLE_SUITE)?.tests.length ?? 7);
   readonly busy = input(false);
   readonly submitted = output<LabRunRequest>();
 
   private readonly session = inject(SessionService);
+  private readonly market = inject(MarketService);
   protected readonly canRun = computed(() => this.session.can('lab.run'));
   protected readonly suiteLabel = SUITES.find((s) => s.id === SIMPLE_SUITE)?.label ?? 'Standard';
 
   protected readonly form = linkedSignal<
-    { tickers: string | null; universe: string | null },
+    { tickers: string | null; universe: string | null; classPath: string | null },
     SimpleTestForm
   >({
-    source: () => ({ tickers: this.tickers(), universe: this.universe() }),
-    computation: ({ tickers, universe }) => {
+    source: () => ({
+      tickers: this.tickers(),
+      universe: this.universe(),
+      classPath: this.classPath(),
+    }),
+    computation: ({ tickers, universe, classPath }) => {
       const d = defaultLabRunForm();
+      const known = !!classPath && this.classes().some((c) => c.class_path === classPath);
       return {
-        classPath: '',
+        classPath: known ? classPath : '',
         tickers: tickers ?? '',
         universeId: universe ?? '',
         start: d.start,
@@ -190,20 +255,75 @@ export class SimpleTestFormView {
       };
     },
   });
+  /** The basket select's value: '' (typed), a watchlist or a universe id. */
+  protected readonly basket = linkedSignal(() => this.universe() ?? '');
+  protected readonly hasLists = computed(
+    () => this.universes().length > 0 || this.watchlists().length > 0,
+  );
+  protected readonly watchlistValue = (id: string) => WATCHLIST + id;
+  /** Set once the trader picks a start date: the data lookup no longer moves it. */
+  protected readonly startTouched = signal(false);
+  /** The first day every typed ticker has prices, looked up after typing pauses. */
+  private readonly lookupKey = computed(() => {
+    const f = this.form();
+    if (this.startTouched() || f.universeId) return '';
+    const tickers = parseTickers(f.tickers);
+    return tickers.length <= MAX_COVERAGE_LOOKUPS ? tickers.join(',') : '';
+  });
+  private readonly coverage = resource({
+    params: () => {
+      const key = this.lookupKey();
+      return key ? { tickers: key.split(',') } : undefined;
+    },
+    loader: async ({ params, abortSignal }) => {
+      await new Promise((resolve) => setTimeout(resolve, COVERAGE_DEBOUNCE_MS));
+      if (abortSignal.aborted) return null;
+      const pages = await Promise.all(
+        params.tickers.map((ticker) => this.market.coverage({ ticker, interval: '1d', limit: 1 })),
+      );
+      return earliestCommonStart(pages.map((p) => p.items[0]?.first_bar));
+    },
+  });
+  protected readonly dataStart = computed(() =>
+    this.coverage.hasValue() ? this.coverage.value() : null,
+  );
   protected readonly windowValue = computed(() => ({ ...this.form(), interval: '1d' }));
   protected readonly tried = signal(false);
   protected readonly errors = computed<Record<string, string>>(() =>
     this.tried() ? simpleTestErrors(this.form()) : {},
   );
 
+  constructor() {
+    // The longest window the data allows: start on the first day with prices.
+    effect(() => {
+      const start = this.dataStart();
+      if (start && !this.startTouched() && start < this.form().end) {
+        this.form.update((f) => (f.start === start ? f : { ...f, start }));
+      }
+    });
+  }
+
   protected patch(p: Partial<SimpleTestForm>): void {
+    if (p.start !== undefined) this.startTouched.set(true);
     this.form.update((f) => ({ ...f, ...p }));
+  }
+
+  /** Typed tickers, a watchlist (its tickers fill the field) or a universe. */
+  protected pickBasket(value: string): void {
+    this.basket.set(value);
+    if (value.startsWith(WATCHLIST)) {
+      const list = this.watchlists().find((w) => WATCHLIST + w.id === value);
+      this.form.update((f) => ({ ...f, universeId: '', tickers: list?.tickers.join(', ') ?? '' }));
+      return;
+    }
+    this.form.update((f) => ({ ...f, universeId: value }));
   }
 
   protected submit(): void {
     if (!this.canRun()) return;
     this.tried.set(true);
     if (Object.keys(simpleTestErrors(this.form())).length) return;
-    this.submitted.emit(simpleTestRequest(this.form()));
+    const idea = this.classes().find((c) => c.class_path === this.form().classPath)?.description;
+    this.submitted.emit(simpleTestRequest(this.form(), undefined, idea ?? ''));
   }
 }

@@ -3,8 +3,9 @@ latest signal says about it.
 
 A strategy's signal for a ticker is its ``estimate_return`` on the latest
 priced day, the same call the tick's signal phase makes. A positive
-estimate agrees with a long holding and disagrees with a short one; a zero
-or missing estimate is no view. A strategy never scores an asset class it
+estimate agrees with a long holding and disagrees with a short one, and a
+zero or missing estimate is no view. The value is shown only when the
+strategy sets ``estimate_is_return``, since most give a score. A strategy never scores an asset class it
 does not trade, nor a holding no ticker maps to.
 """
 
@@ -22,18 +23,21 @@ from stonks.logging import get_logger
 _log = get_logger("stonks.insights.agreement")
 
 
-def judge(side: Side, expected: float | None, ticker: str, as_of: date) -> tuple[Stance, str]:
-    """The stance of one estimate on one holding, with the reason."""
-    day = as_of.isoformat()
+def judge(side: Side, expected: float | None, *, is_return: bool = False) -> tuple[Stance, str]:
+    """The stance of one estimate on one holding, with the reason.
+
+    Most strategies give a score, not a return, so the reason only says
+    which way the strategy leans. A number shows only when the strategy
+    declares ``estimate_is_return`` (PB-01).
+    """
     if expected is None or math.isnan(expected):
-        return "no_view", f"no estimate for {ticker} on {day}"
+        return "no_view", "No signal today."
     if expected == 0:
-        return "no_view", f"expects no move for {ticker} on {day}"
-    shown = f"{expected:+.2%}"
-    held = f"you hold it {side}"
-    if (expected > 0) == (side == "long"):
-        return "agree", f"expects {shown} for {ticker} on {day}; {held}"
-    return "disagree", f"expects {shown} for {ticker} on {day}; {held}"
+        return "no_view", "No lean either way."
+    lean = "leans long" if expected > 0 else "leans short"
+    reason = f"Expects {expected:+.1%}, {lean}." if is_return else f"{lean.capitalize()}."
+    stance: Stance = "agree" if (expected > 0) == (side == "long") else "disagree"
+    return stance, reason
 
 
 def _opinion(
@@ -45,15 +49,13 @@ def _opinion(
         )
 
     if holding.ticker is None:
-        return say("not_applicable", f"not covered: no ticker maps to {holding.symbol}")
+        return say("not_applicable", "Not covered. No ticker matches this holding.")
     classes = tuple(getattr(strategy, "applicable_asset_classes", ("equity",)))
     if holding.asset_class not in classes:
-        kind = holding.asset_class or "of an unknown asset class"
-        return say(
-            "not_applicable", f"trades {', '.join(classes)} only; {holding.ticker} is {kind}"
-        )
+        kind = holding.asset_class or "an unknown asset class"
+        return say("not_applicable", f"Only trades {', '.join(classes)}, this is {kind}.")
     if as_of is None:
-        return say("no_view", f"no prices for {holding.ticker} yet")
+        return say("no_view", "No prices yet.")
     try:
         expected = strategy.estimate_return(holding.ticker, as_of, lake)
     except Exception as exc:  # one strategy must not break the page
@@ -63,10 +65,11 @@ def _opinion(
             ticker=holding.ticker,
             error=str(exc),
         )
-        return say("error", f"could not score {holding.ticker} ({type(exc).__name__})")
+        return say("error", f"Could not score it ({type(exc).__name__}).")
     value = None if expected is None else float(expected)
-    stance, reason = judge(holding.side, value, holding.ticker, as_of)
-    if value is not None and math.isnan(value):
+    is_return = bool(getattr(strategy, "estimate_is_return", False))
+    stance, reason = judge(holding.side, value, is_return=is_return)
+    if value is not None and (math.isnan(value) or not is_return):
         value = None
     return say(stance, reason, value)
 

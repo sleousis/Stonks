@@ -11,8 +11,8 @@ import { RouterLink } from '@angular/router';
 import { type SubscriptionView, SubscriptionsService } from '../../api/subscriptions.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { FollowControl } from '../../shared/follow/follow-control';
-import { isGatedMode, unlockRule } from '../../shared/follow/follow-rules';
-import { strategyDisplayName } from '../../shared/strategy-names';
+import { isGatedMode, lockedModesLine } from '../../shared/follow/follow-rules';
+import { rowStrategyName, strategyDisplayName } from '../../shared/strategy-names';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -71,7 +71,7 @@ interface Row {
         </app-empty-state>
       } @else {
         @if (rule(); as r) {
-          <p class="rule">{{ r }} <app-help-tip term="Approve each trade" /></p>
+          <p class="rule">{{ r }} <app-help-tip term="Paper" /></p>
         }
         <ul class="list">
           @for (row of rows(); track row.sub.id) {
@@ -157,17 +157,18 @@ export class StrategiesCard {
     const several = new Set(this.items().map((s) => s.portfolio_id)).size > 1;
     return this.items().map((sub) => ({
       sub,
-      name: strategyDisplayName(sub.strategy_id),
+      name: rowStrategyName(sub) ?? strategyDisplayName(sub.strategy_id),
       portfolio: several ? (books.find((p) => p.id === sub.portfolio_id)?.name ?? null) : null,
     }));
   });
 
-  /** The unlock rule once, while any follow still waits on its paper days (M8). */
+  /** The unlock line once, for the follows whose gated modes are still closed (M8, FR-03). */
   protected readonly rule = computed(() => {
-    const waiting = this.items().filter(
-      (s) => s.paper_days_completed < s.paper_days_required && !isGatedMode(s.mode),
-    );
-    return waiting.length ? unlockRule(waiting[0].paper_days_required) : null;
+    for (const s of this.items()) {
+      const line = isGatedMode(s.mode) ? null : lockedModesLine(s);
+      if (line) return line;
+    }
+    return null;
   });
 
   /** Keep the list in step with a change the follow control made. */

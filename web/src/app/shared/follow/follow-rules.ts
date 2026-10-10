@@ -6,48 +6,60 @@ export function isGatedMode(mode: string): boolean {
   return mode === 'approve' || mode === 'auto';
 }
 
-/**
- * The unlock rule, said once above a list of follows (M8): the two gated
- * modes open after this many paper days (decision 2026-09-26: 20 trading
- * days).
- */
-export function unlockRule(required: number): string {
-  return `Approve each trade and Automatic unlock after ${required} paper days.`;
+const PAPER_DAYS = /paper trading day/i;
+/** The server says "auto mode needs a portfolio" or "... a broker portfolio" (PO-02). */
+const NEEDS_PORTFOLIO = /needs a (broker )?portfolio/i;
+
+/** Both gated modes need a broker portfolio, and this follow has none yet. */
+export function needsBrokerPortfolio(sub: SubscriptionView): boolean {
+  return sub.auto_blockers.some((b) => NEEDS_PORTFOLIO.test(b));
 }
 
-/** "Paper days: 4 of 20.", or null once the count is met (F4). */
+function shortOfPaperDays(sub: SubscriptionView): boolean {
+  return sub.paper_days_completed < sub.paper_days_required;
+}
+
+/** "Your paper days: 4 of 20.", or null once the count is met (F4, NB-13). */
 export function paperProgress(sub: SubscriptionView): string | null {
-  const needed = sub.paper_days_required;
-  if (sub.paper_days_completed >= needed) return null;
-  return `Paper days: ${sub.paper_days_completed} of ${needed}.`;
+  if (!shortOfPaperDays(sub)) return null;
+  return `Your paper days: ${sub.paper_days_completed} of ${sub.paper_days_required}.`;
 }
 
-/** Whatever else the server's auto gate reported, besides the paper-day count. */
+/** Whatever else the server's auto gate reported, besides paper days and the portfolio. */
 export function otherBlockers(sub: SubscriptionView): string[] {
   return sub.auto_blockers
-    .filter((b) => !/paper trading day/i.test(b))
-    .map((b) => sentence(toTraderWords(b).replace(/\bauto mode\b/gi, 'Automatic')));
+    .filter((b) => !PAPER_DAYS.test(b) && !NEEDS_PORTFOLIO.test(b))
+    .map((b) => sentence(toTraderWords(b)));
+}
+
+/** Whether the gate keeps Approve each trade and Automatic closed for this follow. */
+export function gatedModesLocked(sub: SubscriptionView): boolean {
+  return shortOfPaperDays(sub) || sub.auto_blockers.length > 0;
 }
 
 /**
- * Why Approve each trade and Automatic are closed for this follow, in plain
- * words, or null when they may be turned on. The count of days on Paper
- * comes first, then anything else the server's auto gate reported.
- *
- * `compact` is for a list that says the unlock rule once above it
- * (`unlockRule()`): each row then says only how far it has come.
+ * The one short line that stands in for the two closed modes (FR-03), or
+ * null when they may be turned on. Both modes need a broker portfolio and
+ * the paper days, so the line names both whenever both are missing.
  */
-export function autoBlockedReason(
-  sub: SubscriptionView,
-  opts: { compact?: boolean } = {},
-): string | null {
-  const needed = sub.paper_days_required;
-  const days = opts.compact
-    ? paperProgress(sub)
-    : sub.paper_days_completed < needed
-      ? `Approve each trade and Automatic open after ${needed} trading days on Paper. ` +
-        `${sub.paper_days_completed} of ${needed} done.`
-      : null;
+export function lockedModesLine(sub: SubscriptionView): string | null {
+  if (!gatedModesLocked(sub)) return null;
+  const broker = needsBrokerPortfolio(sub);
+  const days = shortOfPaperDays(sub);
+  const n = sub.paper_days_required;
+  if (broker && days) return `More modes unlock with a broker portfolio after ${n} paper days.`;
+  if (days) return `More modes unlock after ${n} paper days.`;
+  if (broker) return 'More modes unlock with a broker portfolio.';
+  return 'More modes are closed for now.';
+}
+
+/**
+ * How far this follow has come and anything else the gate reported, in
+ * plain words, or null when there is nothing to add. Alerts only follows
+ * collect no paper days, so they get no count.
+ */
+export function blockerDetail(sub: SubscriptionView): string | null {
+  const days = sub.mode === 'notify' ? null : paperProgress(sub);
   const reasons = [days, ...otherBlockers(sub)].filter((r): r is string => r !== null);
   return reasons.length ? reasons.join(' ') : null;
 }

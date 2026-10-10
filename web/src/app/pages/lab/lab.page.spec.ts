@@ -153,6 +153,10 @@ describe('LabPage', () => {
         return req.flush([]);
       case '/api/universes':
         return req.flush({ items: universes, total: universes.length, limit: 200, offset: 0 });
+      case '/api/watchlists':
+        return req.flush({ items: [], total: 0, limit: 200, offset: 0 });
+      case '/api/strategies':
+        return req.flush({ items: [], total: 0, limit: 200, offset: 0 });
       case '/api/lab/sweeps/sw-1/result':
         return req.flush(SWEEP_RESULT);
     }
@@ -248,6 +252,31 @@ describe('LabPage', () => {
     );
   });
 
+  it('a crashed run reads as one plain sentence, the exception under Details (R02)', async () => {
+    await settle();
+    const simple = el.querySelector('#lab-simple')!;
+    simple.querySelector<HTMLInputElement>(`input[value="${MOMENTUM.class_path}"]`)!.click();
+    input('#st-tickers', 'spy.us');
+    jobStatus['new-lr'] = job({
+      id: 'new-lr',
+      kind: 'lab_run',
+      status: 'failed',
+      error: "TypeError: cannot pickle '_thread.lock' object",
+    });
+    simple.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    await settle(12);
+    const failure = el.querySelector('.job-error')!;
+    expect(failure.querySelector('p')!.textContent).toContain(
+      'The test stopped because of a problem on our side.',
+    );
+    expect(failure.querySelector('details summary')!.textContent!.trim()).toBe('Details');
+    expect(failure.querySelector('details code')!.textContent).toContain('cannot pickle');
+    // The simple test records the strategy's idea as its hypothesis.
+    expect((posted[0].body as Record<string, unknown>)['hypothesis']).toBe(
+      'Buys the strongest trailing returns.',
+    );
+  });
+
   it('remembers Advanced in this browser', async () => {
     await settle();
     advanced();
@@ -321,11 +350,11 @@ describe('LabPage', () => {
     fixture.detectChanges();
   }
 
-  it('starts a standard-preset run with walk-forward and advanced test options', async () => {
+  it('starts a standard-preset run with rolling retests and advanced test options', async () => {
     await openLabRunForm();
     pickSuite('Standard');
     expect(el.querySelector('#lab-panel-lab_run .suite.chosen')?.textContent).toContain(
-      'walk-forward',
+      'rolling retests',
     );
     input('#lr-wf-splits', '3');
 
@@ -415,7 +444,9 @@ describe('LabPage', () => {
     it('passed, unregistered result renders a next step', async () => {
       await finishRun({ ...LAB_RUN_VIEW, verdict: 'pass', registered_strategy_id: null });
       const next = el.querySelector('.next-step')!;
-      expect(next.textContent).toContain('It passed.');
+      // The verdict is said once, in the result: the next step is only what to do.
+      expect(next.textContent).toContain('To put it on trial, run it again');
+      expect(next.textContent).not.toContain('It passed.');
       const start = [...next.querySelectorAll<HTMLButtonElement>('button')].find(
         (b) => b.textContent!.trim() === 'Put it on trial',
       )!;
@@ -437,7 +468,8 @@ describe('LabPage', () => {
     it('a failed run says what failed and offers a prefilled re-run', async () => {
       await finishRun(LAB_RUN_VIEW);
       const next = el.querySelector('.next-step')!;
-      expect(next.textContent).toContain('It failed 1 of 3 robustness tests: Walk-forward.');
+      expect(next.textContent).toContain('Change the window, tickers or tests');
+      expect(next.textContent).not.toContain('It failed');
       [...next.querySelectorAll<HTMLButtonElement>('button')]
         .find((b) => b.textContent!.includes('Change and run again'))!
         .click();
@@ -576,6 +608,6 @@ describe('LabPage', () => {
     expect(jobStrategy({ params: { start: 'x', strategies: ['a:B', 'c:D'] } })).toBe(
       '2 strategies',
     );
-    expect(kindLabel('signal_ic')).toBe('Signal IC');
+    expect(kindLabel('signal_ic')).toBe('Signal check');
   });
 });

@@ -14,7 +14,7 @@ import { MarketService } from '../../api/market.service';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
-import { assetClassLabel } from './data-labels';
+import { assetClassLabel, exchangeLabel, instrumentClassLabel } from './data-labels';
 
 type AssetClass = NonNullable<NonNullable<ListInstrumentsData['query']>['asset_class']>;
 
@@ -142,8 +142,13 @@ export class InstrumentSearch {
   protected readonly columns: TableColumn<InstrumentView>[] = [
     { key: 'id', label: 'Ticker', mobile: 'title' },
     { key: 'name', label: 'Name' },
-    { key: 'asset_class', label: 'Class', value: (r) => assetClassLabel(r.asset_class) },
-    { key: 'exchange', label: 'Exchange', mobile: 'hide' },
+    { key: 'asset_class', label: 'Class', value: (r) => instrumentClassLabel(r) },
+    {
+      key: 'exchange',
+      label: 'Exchange',
+      value: (r) => exchangeLabel(r.exchange),
+      mobile: 'hide',
+    },
   ];
   protected readonly key = (r: InstrumentView) => r.id;
 

@@ -79,7 +79,7 @@ describe('AdminUsersPage', () => {
     expect(button(rowOf(el, 'Boss'), 'Disable').disabled).toBe(true);
     expect(button(rowOf(el, 'Ann'), 'Disable').disabled).toBe(false);
     // Resetting your own sign-in would end your session: Profile is the place for that.
-    expect(button(rowOf(el, 'Boss'), 'Reset sign-in app').disabled).toBe(true);
+    expect(button(rowOf(el, 'Boss'), 'Reset authenticator app').disabled).toBe(true);
     expect(button(rowOf(el, 'Boss'), 'Reset password').disabled).toBe(true);
     expect(button(rowOf(el, 'Ann'), 'Reset password').disabled).toBe(false);
   });
@@ -101,6 +101,17 @@ describe('AdminUsersPage', () => {
     const el = await render();
     button(el, 'Add person').click();
     fixture.detectChanges();
+    // The role says what it may do (AO-13).
+    expect(el.querySelector('#user-role-hint')?.textContent).toBe('Trades their own portfolios.');
+    const role = el.querySelector<HTMLSelectElement>('#user-role')!;
+    role.value = 'viewer';
+    role.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(el.querySelector('#user-role-hint')?.textContent).toBe(
+      'Sees data and their own portfolio.',
+    );
+    role.value = 'trader';
+    role.dispatchEvent(new Event('change'));
     type(el, '#user-name', 'Cal');
     type(el, '#user-email', ' cal@example.com ');
     type(el, '#user-password', 'a long first password');
@@ -199,13 +210,16 @@ describe('AdminUsersPage', () => {
 
   it('resets the authenticator', async () => {
     const el = await render();
-    button(rowOf(el, 'Ann'), 'Reset sign-in app').click();
+    // The spoken name starts with the visible words (WCAG 2.5.3, FR-14).
+    const reset = button(rowOf(el, 'Ann'), 'Reset authenticator app');
+    expect(reset.getAttribute('aria-label')).toMatch(/^Reset authenticator app for /);
+    reset.click();
     (await nextRequest(controller, '/api/auth/users/usr_1/mfa', 'DELETE')).flush(null, {
       status: 204,
       statusText: 'No Content',
     });
     await reload([{ ...ANN, mfa_enrolled: false }, ME]);
-    expect(rowOf(el, 'Ann').textContent).toContain('Sign-in app not set up');
+    expect(rowOf(el, 'Ann').textContent).toContain('Authenticator app not set up');
   });
 
   it('resets a password after the email is typed', async () => {

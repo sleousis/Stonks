@@ -85,26 +85,42 @@
   </section>
 
   <!-- Stop trading: the same sheet as the session strip (M7) ------------->
-  <section class="panel span-12 kill" [class.live]="anyLive()" aria-labelledby="kill-title">
-    <div class="panel-head">
-      <h2 id="kill-title">Stop trading <app-help-tip term="Stop trading" /></h2>
-    </div>
-    <div class="panel-body">
-      <p class="muted intro">
-        Stops new orders at once. No position is closed. Approved tickets not yet sent are held, and
-        orders still working at your broker are cancelled. It starts on
-        <strong>{{ onScreen() }}</strong
-        >; you pick the scope, what stops and the reason on the ticket. Resuming needs the typed
-        words <strong>RESUME TRADING</strong> and a fresh code.
-      </p>
-      <div class="form-actions">
-        <button type="button" class="btn btn-danger" [disabled]="!canKill()" (click)="stop()">
-          Stop trading…
-        </button>
-        <app-permission-note permission="killswitch.user" />
+  @if (killHere()) {
+    <!-- Already stopped here: Resume above is the one big action (AO-18). -->
+    <p class="span-12 kill-more">
+      <button type="button" class="btn btn-ghost" [disabled]="!canKill()" (click)="stop()">
+        Stop trading…
+      </button>
+      <span class="muted">Stop another portfolio, or every order.</span>
+      <app-permission-note permission="killswitch.user" />
+    </p>
+  } @else {
+    <section class="panel span-12 kill" [class.live]="anyLive()" aria-labelledby="kill-title">
+      <div class="panel-head">
+        <h2 id="kill-title">Stop trading <app-help-tip term="Stop trading" /></h2>
       </div>
-    </div>
-  </section>
+      <div class="panel-body">
+        <p class="muted intro">
+          Stops new orders at once. No position is closed. Approved tickets not yet sent are held,
+          and orders still working at your broker are cancelled.
+        </p>
+        <p class="muted intro">
+          It starts on <strong>{{ onScreen() }}</strong
+          >. You pick the scope, what stops and the reason.
+          @if (anyLive()) {
+            Resuming real money needs the typed words <strong>RESUME TRADING</strong> and a fresh
+            code.
+          }
+        </p>
+        <div class="form-actions">
+          <button type="button" class="btn btn-danger" [disabled]="!canKill()" (click)="stop()">
+            Stop trading…
+          </button>
+          <app-permission-note permission="killswitch.user" />
+        </div>
+      </div>
+    </section>
+  }
 
   <!-- Past ------------------------------------------------------------------>
   <section class="panel span-12" aria-labelledby="past-title">

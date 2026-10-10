@@ -62,9 +62,7 @@
       The definition changed after the last refresh. Refresh to rebuild the members from it.
     </p>
   }
-  <p class="muted lab-hint">
-    To test a strategy on it, open the <a routerLink="/lab">lab</a> and pick it under Run on.
-  </p>
+  <p class="muted lab-hint">Test in the lab opens the lab with it picked under Tickers to test.</p>
 }
 
 <div class="page-grid">
@@ -78,6 +76,7 @@
           mode="edit"
           [universe]="u"
           [universes]="allUniverses.hasValue() ? allUniverses.value() : []"
+          [advanced]="isAdmin()"
           (saved)="edited($event)"
           (cancelled)="editing.set(false)"
         />
@@ -312,19 +311,21 @@
             }
           </select>
         </div>
-        <div class="field">
-          <label for="e-source">Source</label>
-          <select
-            id="e-source"
-            class="input"
-            [value]="source()"
-            (change)="source.set($any($event.target).value)"
-          >
-            @for (s of sources; track s.value) {
-              <option [value]="s.value" [selected]="s.value === source()">{{ s.label }}</option>
-            }
-          </select>
-        </div>
+        @if (isAdmin()) {
+          <div class="field">
+            <label for="e-source">Source</label>
+            <select
+              id="e-source"
+              class="input"
+              [value]="source()"
+              (change)="source.set($any($event.target).value)"
+            >
+              @for (s of sources; track s.value) {
+                <option [value]="s.value" [selected]="s.value === source()">{{ s.label }}</option>
+              }
+            </select>
+          </div>
+        }
       </div>
       @if (ensureSubmitted() && windowError(); as e) {
         <p class="error">{{ e }}</p>
@@ -379,12 +380,13 @@
     </form>
   </section>
 
-  @if (u) {
-    <section class="panel span-12" aria-labelledby="spec-title">
-      <div class="panel-head">
+  @if (u && isAdmin()) {
+    <details class="panel span-12 advanced" aria-labelledby="spec-title">
+      <summary class="panel-head">
         <h2 id="spec-title">Definition</h2>
-      </div>
+        <span class="muted">Advanced</span>
+      </summary>
       <pre class="panel-body spec">{{ specJson() }}</pre>
-    </section>
+    </details>
   }
 </div>

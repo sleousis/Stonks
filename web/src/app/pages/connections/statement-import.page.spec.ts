@@ -7,6 +7,7 @@ import type { StatementPreview } from '../../api/models';
 import { provideApi } from '../../api/provide-api';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
+import { formatDate } from '../../core/format/format';
 import { TRADER, problem } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { DEGIRO_PRESETS } from './connections.fixtures';
@@ -121,10 +122,18 @@ describe('StatementImportPage', () => {
     await tick();
     fixture.detectChanges();
     expect(root.textContent).toContain('A first guess from the headers');
-    expect(root.textContent).toContain('1 new, 0 already imported, 0 skipped');
+    const jan5 = formatDate('2026-01-05');
+    expect(root.textContent).toContain(`1 new, 0 already imported, 0 skipped, ${jan5} to ${jan5}.`);
     expect((root.querySelector('#imp-col-symbol') as HTMLSelectElement).value).toBe('Symbol');
+    // The expert fields wait under More options while nothing was skipped.
+    const more = root.querySelector('details.more') as HTMLDetailsElement;
+    expect(more.open).toBe(false);
+    expect(more.querySelector('#imp-types')).not.toBeNull();
+    // After a good preview the import is the main action.
+    expect(button(root, 'Import 1 new row').classList).toContain('btn-primary');
+    expect(button(root, 'Preview again').classList).not.toContain('btn-primary');
 
-    button(root, 'Import 1 new rows').click();
+    button(root, 'Import 1 new row').click();
     const commit = await nextRequest(http, '/api/statement-imports', 'POST');
     expect(commit.request.body.mapping).toMatchObject({ date: 'Date', types: { BUY: 'trade' } });
     commit.flush({
@@ -164,6 +173,56 @@ describe('StatementImportPage', () => {
     expect(root.textContent).toContain('Old broker: 1 added');
   });
 
+  it('offers dates and exchanges as examples to pick, and opens More options on skipped rows', async () => {
+    const fixture = await render();
+    const root = fixture.nativeElement as HTMLElement;
+    await pick(fixture);
+    button(root, 'Preview').click();
+    (await nextRequest(http, '/api/statement-imports/preview', 'POST')).flush({
+      ...PREVIEW,
+      skipped: 1,
+    });
+    await tick();
+    fixture.detectChanges();
+    expect((root.querySelector('details.more') as HTMLDetailsElement).open).toBe(true);
+    const dates = root.querySelector('#imp-datefmt') as HTMLSelectElement;
+    expect(dates.tagName).toBe('SELECT');
+    expect([...dates.options].map((o) => o.textContent?.trim())).toContain('31/12/2025');
+    const where = root.querySelector('#imp-exchange') as HTMLSelectElement;
+    expect(where.tagName).toBe('SELECT');
+    expect([...where.options].map((o) => o.textContent?.trim())).toContain('London');
+  });
+
+  it('says where duplicate rows already are, with no empty import button', async () => {
+    const fixture = await render();
+    const root = fixture.nativeElement as HTMLElement;
+    await pick(fixture);
+    button(root, 'Preview').click();
+    (await nextRequest(http, '/api/statement-imports/preview', 'POST')).flush({
+      ...PREVIEW,
+      new: 0,
+      duplicate: 6,
+      first_date: null,
+      last_date: null,
+      duplicates_in: {
+        portfolio_id: 'pf_9',
+        portfolio_name: 'DEGIRO',
+        import_id: 'imp_9',
+        imported_on: '2026-10-10',
+      },
+    });
+    await tick();
+    fixture.detectChanges();
+    expect(root.textContent).toContain(
+      `These rows are already in DEGIRO (imported ${formatDate('2026-10-10')}). Pick An earlier import to add to it, or undo that import first.`,
+    );
+    expect(root.textContent).toContain('0 new, 6 already imported, 0 skipped.');
+    expect(root.textContent).not.toContain('skipped ,');
+    expect(
+      [...root.querySelectorAll('button')].some((b) => b.textContent?.includes('Import 0')),
+    ).toBe(false);
+  });
+
   it('never imports settings other than the previewed ones', async () => {
     const fixture = await render();
     const root = fixture.nativeElement as HTMLElement;
@@ -176,7 +235,7 @@ describe('StatementImportPage', () => {
     name.value = 'Another broker';
     name.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    button(root, 'Import 1 new rows').click();
+    button(root, 'Import 1 new row').click();
     await tick();
     fixture.detectChanges();
     http.expectNone({ method: 'POST', url: '/api/statement-imports' });
@@ -243,7 +302,7 @@ describe('StatementImportPage', () => {
     expect(root.textContent).toContain('BE0974293251 (ANHEUSER-BUSCH INBEV)');
     // nothing to map
     expect(root.querySelector('#imp-col-date')).toBeNull();
-    button(root, 'Import 1 new rows').click();
+    button(root, 'Import 1 new row').click();
     const commit = await nextRequest(http, '/api/statement-imports', 'POST');
     expect(commit.request.body.mapping).toBeUndefined();
     commit.flush({ ...IMPORTED, preset: 'degiro_transactions' });

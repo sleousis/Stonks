@@ -14,6 +14,7 @@ from stonks.app.pagination import Page
 from stonks.auth.policy import Permission, allowed, require
 from stonks.auth.principal import Principal
 from stonks.notify import NotificationLevel
+from stonks.notify.events import Category
 
 
 class AlertView(BaseModel):
@@ -35,6 +36,7 @@ class AlertService:
         principal: Principal,
         *,
         level: NotificationLevel | None = None,
+        categories: list[Category] | None = None,
         limit: int,
         offset: int,
     ) -> Page[AlertView]:
@@ -48,6 +50,12 @@ class AlertService:
         if level:
             clause += " AND level = ?"
             params.append(level)
+        if categories:
+            # The operator store writes no category: those count as system.
+            marks = ", ".join("?" for _ in categories)
+            nulls = " OR category IS NULL" if "system" in categories else ""
+            clause += f" AND (category IN ({marks}){nulls})"
+            params.extend(categories)
         with self._ctx.state() as state:
             total = int(state.sql(f"SELECT COUNT(*) FROM alerts{clause}", params)[0][0])
             rows = state.sql(

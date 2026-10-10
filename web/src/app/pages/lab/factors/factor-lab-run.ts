@@ -31,6 +31,7 @@ import {
   buildFactorRunRequest,
   defaultFactorRunForm,
   factorRunErrors,
+  type Basket,
 } from './factor-requests';
 
 const SUITES: readonly { id: FactorSuite; label: string }[] = [
@@ -52,14 +53,18 @@ const SUITES: readonly { id: FactorSuite; label: string }[] = [
   template: `
     @let f = form();
     <form class="form" novalidate (submit)="$event.preventDefault(); start()">
-      <app-basket-picker
-        idPrefix="fr"
-        [basket]="f.basket"
-        [universes]="universes()"
-        [watchlists]="watchlists()"
-        [error]="errors()['basket']"
-        (basketChange)="patch({ basket: $event })"
-      />
+      @if (!sharedBasket()) {
+        <app-basket-picker
+          idPrefix="fr"
+          [basket]="f.basket"
+          [universes]="universes()"
+          [watchlists]="watchlists()"
+          [error]="errors()['basket']"
+          (basketChange)="patch({ basket: $event })"
+        />
+      } @else if (errors()['basket']; as e) {
+        <p class="error" role="alert">{{ e }}</p>
+      }
       <div class="grid">
         <div class="field">
           <label for="fr-start">From</label>
@@ -90,7 +95,7 @@ const SUITES: readonly { id: FactorSuite; label: string }[] = [
           }
         </div>
         <div class="field">
-          <label for="fr-suite">Checks</label>
+          <label for="fr-suite">Robustness tests</label>
           <select
             id="fr-suite"
             class="input"
@@ -212,6 +217,8 @@ export class FactorLabRun {
   readonly info = input<FactorView | null>(null);
   readonly universes = input<readonly UniverseView[]>([]);
   readonly watchlists = input<readonly WatchlistView[]>([]);
+  /** The page's one basket picker; when set, this section shows none of its own. */
+  readonly sharedBasket = input<Basket | null>(null);
 
   protected readonly suites = SUITES;
   protected readonly canRun = computed(() => this.session.can('lab.run'));
@@ -221,7 +228,12 @@ export class FactorLabRun {
   });
   protected readonly tried = signal(false);
   protected readonly starting = signal(false);
-  private readonly allErrors = computed(() => factorRunErrors(this.form(), this.watchlists()));
+  /** The form with the shared basket laid over it. */
+  private readonly current = computed(() => {
+    const b = this.sharedBasket();
+    return b ? { ...this.form(), basket: b } : this.form();
+  });
+  private readonly allErrors = computed(() => factorRunErrors(this.current(), this.watchlists()));
   protected readonly errors = computed(() => (this.tried() ? this.allErrors() : {}));
   protected readonly hypothesisHint = computed(() =>
     this.info()
@@ -255,11 +267,11 @@ export class FactorLabRun {
     if (!this.canRun()) return;
     this.tried.set(true);
     if (Object.keys(this.allErrors()).length) return;
-    const f = this.form();
+    const f = this.current();
     const where = basketText(f.basket, this.watchlists());
     const ok = await this.confirm.confirm({
       title: `Test ${this.shortName()} as a strategy?`,
-      message: `It holds the top slice of ${where} by this factor, rebalanced each month end, ${f.start} to ${f.end}. Every trial is counted in the trial ledger. It runs in the background.`,
+      message: `It holds the top slice of ${where} by this factor, rebalanced each month end, ${f.start} to ${f.end}. Every setting tried is kept in the Lab history. It runs in the background.`,
       confirmLabel: 'Start lab run',
     });
     if (!ok) return;

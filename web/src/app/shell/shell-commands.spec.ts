@@ -82,12 +82,24 @@ describe('registerShellCommands', () => {
     expect(press('r', 1100)).toBe(false);
   });
 
+  it('still finds Notifications with g n, though the rail leaves it to the bell (FR-08)', () => {
+    expect(labels()).toContain('Notifications');
+    expect(labels()).toContain('Alert settings');
+    const gn = shortcuts.allSequences.find((s) => s.prefix === 'g' && s.key === 'n');
+    expect(gn?.path).toBe('/notifications');
+  });
+
   it('keeps g t for Trade costs, now a tab under Orders', () => {
     const gt = shortcuts.allSequences.find((s) => s.prefix === 'g' && s.key === 't');
     expect(gt?.path).toBe('/trades');
   });
 
+  it("keeps Stop trading out of a new trader's palette, with nothing to stop (NB-15)", () => {
+    expect(labels()).not.toContain('Stop trading');
+  });
+
   it('Stop trading opens the kill switch sheet', async () => {
+    me.set(ADMIN);
     const stop = registry.available().find((c) => c.label === 'Stop trading')!;
     await stop.run();
     expect(TestBed.inject(StopTradingService).open()).toBe(true);

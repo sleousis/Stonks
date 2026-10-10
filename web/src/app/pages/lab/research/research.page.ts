@@ -103,7 +103,7 @@ export function buildResearchStart(f: ResearchForm): ResearchStart {
   template: `
     <app-page-header
       title="Lab"
-      description="Let the assistant propose and run lab trials for a goal, under a budget."
+      description="Let the assistant propose and run lab tests for a goal, under a budget."
     />
     <app-lab-nav />
 
@@ -188,7 +188,7 @@ export function buildResearchStart(f: ResearchForm): ResearchStart {
             </div>
 
             <div class="field">
-              <label for="rs-universe">Run on</label>
+              <label for="rs-universe">Tickers to test</label>
               <select
                 id="rs-universe"
                 class="input"
@@ -229,7 +229,7 @@ export function buildResearchStart(f: ResearchForm): ResearchStart {
               </legend>
               <div class="budget-grid">
                 <div class="field">
-                  <label for="rs-trials">Most trials</label>
+                  <label for="rs-trials">Most settings tried</label>
                   <input
                     id="rs-trials"
                     class="input num"
@@ -408,7 +408,7 @@ export class ResearchPage {
     { key: 'status', label: 'Status', sortable: false },
     {
       key: 'trials',
-      label: 'Trials used',
+      label: 'Settings tried',
       sortable: false,
       help: 'trials',
       value: (s) => usedOf(s.trials_used, s.max_trials),

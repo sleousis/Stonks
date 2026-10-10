@@ -10,7 +10,7 @@ import {
 
 /**
  * Form state and request builders for the Lab's research screens: sweeps
- * (every strategy through the lab on one basket) and signal IC. Pure, so
+ * (every strategy through the lab on one basket) and the signal check. Pure, so
  * the payloads are easy to test.
  */
 
@@ -100,8 +100,14 @@ export function parseHorizons(text: string): number[] | null {
   return [...new Set(nums)].sort((a, b) => a - b);
 }
 
+/** The fewest tickers a signal check can rank (the server's minimum). */
+export const MIN_SIGNAL_TICKERS = 10;
+
 export function signalIcErrors(f: SignalIcForm): FormErrors {
   const e = windowErrors(f);
+  const n = parseTickers(f.tickers).length;
+  if (n > 0 && n < MIN_SIGNAL_TICKERS)
+    e['tickers'] = `Needs at least ${MIN_SIGNAL_TICKERS} tickers.`;
   if (f.horizons.trim()) {
     const h = parseHorizons(f.horizons);
     if (!h) e['horizons'] = `Whole numbers of bars from 1 to ${MAX_HORIZON_BARS}, e.g. 1, 5, 21.`;

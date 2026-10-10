@@ -6,11 +6,11 @@ export const STEP_COPY: Record<OnboardingStepId, { title: string; lead: string; 
   account: {
     title: 'Protect your account',
     lead: 'Your password and a code from your authenticator app keep your money safe.',
-    done: 'Your authenticator is set up.',
+    done: 'Your authenticator app is set up.',
   },
   portfolio: {
-    title: 'Pick a portfolio',
-    lead: 'A portfolio holds the trades a strategy makes for you. Start with a paper one.',
+    title: 'Open a paper portfolio',
+    lead: 'A portfolio holds the trades a strategy makes for you. Following on Paper opens one for you.',
     done: 'You have a portfolio.',
   },
   data: {
@@ -25,7 +25,7 @@ export const STEP_COPY: Record<OnboardingStepId, { title: string; lead: string; 
   },
   alerts: {
     title: 'Turn on alerts',
-    lead: 'Signals and fills reach this device or your Telegram chat, even when the console is closed.',
+    lead: 'Pick one. Signals reach this device or your Telegram chat, even when the console is closed.',
     done: 'This account gets alerts on a device or in Telegram.',
   },
 };
@@ -54,16 +54,51 @@ export const SYSTEM_COPY: Record<
   },
 };
 
-/** The step to open first: the first still to do, else none. */
-export function currentStep(view: OnboardingView): OnboardingStepId | null {
-  return view.steps.find((s) => s.state === 'todo')?.id ?? null;
+/**
+ * The order the guide shows its steps (FR-01): the no-broker path first
+ * (follow a strategy, turn on alerts), then the optional ones.
+ */
+export const STEP_ORDER: readonly OnboardingStepId[] = [
+  'account',
+  'follow',
+  'alerts',
+  'portfolio',
+  'data',
+];
+
+/** Steps you may leave: following on Paper opens a portfolio when you have none. */
+export const OPTIONAL_STEPS: ReadonlySet<OnboardingStepId> = new Set(['portfolio', 'data']);
+
+/** The steps in the guide's order. */
+export function orderedSteps(steps: readonly OnboardingStepView[]): OnboardingStepView[] {
+  const rank = (id: OnboardingStepId) => {
+    const i = STEP_ORDER.indexOf(id);
+    return i < 0 ? STEP_ORDER.length : i;
+  };
+  return [...steps].sort((a, b) => rank(a.id) - rank(b.id));
 }
 
-/** "3 of 5 done" (skipped steps count as handled). */
+/** Every step that matters is done or skipped: the optional ones may wait. */
+export function setupComplete(steps: readonly OnboardingStepView[]): boolean {
+  return steps.every((s) => s.state !== 'todo' || OPTIONAL_STEPS.has(s.id));
+}
+
+/** Whether Today shows the guide: not closed and something that matters is left. */
+export function showSetup(view: OnboardingView): boolean {
+  return view.show && !view.dismissed && !setupComplete(view.steps);
+}
+
+/** The step to open first: the first still to do in the guide's order, else none. */
+export function currentStep(view: OnboardingView): OnboardingStepId | null {
+  return orderedSteps(view.steps).find((s) => s.state === 'todo')?.id ?? null;
+}
+
+/** "2 of 3 done": the steps that matter, so the optional ones never hold it back (FR-01). */
 export function progressText(steps: readonly OnboardingStepView[]): string {
-  const done = steps.filter((s) => s.state === 'done').length;
-  const skipped = steps.filter((s) => s.state === 'skipped').length;
-  const base = `${done} of ${steps.length} done`;
+  const counted = steps.filter((s) => !OPTIONAL_STEPS.has(s.id));
+  const done = counted.filter((s) => s.state === 'done').length;
+  const skipped = counted.filter((s) => s.state === 'skipped').length;
+  const base = `${done} of ${counted.length} done`;
   return skipped ? `${base}, ${skipped} skipped` : base;
 }
 

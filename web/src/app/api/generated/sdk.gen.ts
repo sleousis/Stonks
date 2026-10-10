@@ -22,7 +22,9 @@ export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends 
  * List Alerts
  *
  * Your notifications, newest first. Admins also see the admin audience
- * (operational alerts with no single recipient).
+ * (operational alerts with no single recipient). ``category`` keeps only
+ * those categories (repeat it for more). ``system`` also keeps the
+ * operator alerts, which carry no category.
  */
 export const listAlerts = <ThrowOnError extends boolean = false>(options?: Options<ListAlertsData, ThrowOnError>): RequestResult<ListAlertsResponses, ListAlertsErrors, ThrowOnError> => (options?.client ?? client).get<ListAlertsResponses, ListAlertsErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],
@@ -3782,7 +3784,8 @@ export const startDraftLabRun = <ThrowOnError extends boolean = false>(options: 
 /**
  * Register Draft
  *
- * Register the draft's strategy in ``shadow``.
+ * Put the draft's strategy On trial (``shadow``). Only the draft's owner
+ * (or an admin) may: another user's draft is a 404.
  */
 export const registerDraft = <ThrowOnError extends boolean = false>(options: Options<RegisterDraftData, ThrowOnError>): RequestResult<RegisterDraftResponses, RegisterDraftErrors, ThrowOnError> => (options.client ?? client).post<RegisterDraftResponses, RegisterDraftErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

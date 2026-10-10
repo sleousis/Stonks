@@ -4,10 +4,12 @@ describe('nav items', () => {
   it('finds the group of the page on screen, by the longest matching path', () => {
     expect(groupForUrl('/')).toBe('Main');
     expect(groupForUrl('/strategies/momentum_1a2b3c4d')).toBe('Main');
-    expect(groupForUrl('/lab/ledger?x=1')).toBe('Advanced');
+    expect(groupForUrl('/lab/ledger?x=1')).toBe('Main');
+    expect(groupForUrl('/studio')).toBe('Main');
     expect(groupsForUrl('/ops/halts')).toEqual(['Advanced', 'System']);
     expect(groupForUrl('/ops/schedule')).toBe('System');
-    expect(groupForUrl('/trades')).toBe('More');
+    expect(groupForUrl('/trades')).toBe('Advanced');
+    expect(groupForUrl('/tickets')).toBe('More');
     expect(groupForUrl('/nowhere')).toBeNull();
   });
 

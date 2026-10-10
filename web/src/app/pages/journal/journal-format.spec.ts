@@ -1,8 +1,12 @@
+import { journalView } from './journal.page';
 import {
   exitLabel,
   formatHolding,
+  formatProfitFactor,
   formatR,
+  formatRate,
   groupLabel,
+  plural,
   monthGrid,
   parseLabels,
   planLabel,
@@ -20,6 +24,18 @@ describe('journal format', () => {
     expect(formatR(0.06)).toBe('+0.1R');
   });
 
+  it('writes rates with one decimal and profit factors with two', () => {
+    expect(formatRate(0.272727)).toBe('27.3%');
+    expect(formatRate(null)).toBe('n/a');
+    expect(formatProfitFactor(2.8466)).toBe('2.85');
+    expect(formatProfitFactor(null)).toBe('n/a');
+  });
+
+  it('counts in the singular and the plural', () => {
+    expect(plural(1, 'trade')).toBe('1 trade');
+    expect(plural(3, 'trade')).toBe('3 trades');
+  });
+
   it('says holding time in plain words', () => {
     expect(formatHolding(0.01)).toBe('Under an hour');
     expect(formatHolding(0.25)).toBe('6 hours');
@@ -33,7 +49,7 @@ describe('journal format', () => {
     expect(exitLabel('signal', true)).toBe('Still open');
     expect(exitLabel(null, false)).toBe('Not recorded');
     expect(sleeveLabel('manual')).toBe('By hand');
-    expect(sleeveLabel('momentum')).toBe('momentum');
+    expect(sleeveLabel('momentum')).toBe('Momentum');
     expect(planLabel(false)).toBe('Broke the plan');
     expect(planLabel(null)).toBe('Not said');
     expect(groupLabel('broke', 'plan')).toBe('Broke the plan');
@@ -57,6 +73,12 @@ describe('journal format', () => {
     expect(weeks[1].total).toBe(6);
     expect(weeks[1].trades).toBe(3);
     expect(weeks.every((w) => w.cells.length === 7)).toBe(true);
+  });
+
+  it('reads the view from the address, falling back to Trades', () => {
+    expect(journalView('playbooks')).toBe('playbooks');
+    expect(journalView('nonsense')).toBe('trades');
+    expect(journalView(undefined)).toBe('trades');
   });
 
   it('steps months across years', () => {

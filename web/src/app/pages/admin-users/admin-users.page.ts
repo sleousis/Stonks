@@ -6,6 +6,7 @@ import {
   resource,
   signal,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
 import type { Role, UserView } from '../../api/models';
@@ -77,6 +78,13 @@ export class AdminUsersPage {
       [Validators.required, Validators.minLength(PASSWORD_MIN), Validators.maxLength(PASSWORD_MAX)],
     ],
   });
+  /** What the picked role may do, under the Role select (AO-13). */
+  private readonly pickedRole = toSignal(this.form.controls.role.valueChanges, {
+    initialValue: this.form.controls.role.value,
+  });
+  protected readonly roleHelp = computed(
+    () => ROLES.find((r) => r.value === this.pickedRole())?.help ?? '',
+  );
 
   protected readonly showNewPassword = signal(false);
 
@@ -157,9 +165,9 @@ export class AdminUsersPage {
 
   protected async resetMfa(user: UserView): Promise<void> {
     const ok = await this.confirm.confirm({
-      title: `Reset the authenticator for ${user.display_name}?`,
+      title: `Reset the authenticator app for ${user.display_name}?`,
       message: 'Use this when they lost their phone. They set up a new app at their next sign-in.',
-      confirmLabel: 'Reset authenticator',
+      confirmLabel: 'Reset authenticator app',
       tone: 'danger',
     });
     if (!ok) return;

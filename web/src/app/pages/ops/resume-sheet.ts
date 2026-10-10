@@ -26,6 +26,9 @@ interface Open extends ResumeRequest {
   resolve: (answer: ResumeAnswer | null) => void;
 }
 
+/** Paper resumes in one tap: the reason the audit log keeps for it (PO-07). */
+export const PAPER_RESUME_REASON = 'Resumed by me.';
+
 const CHECK_LABEL: Record<string, string> = {
   broker: 'Broker',
   gateway_up: 'Gateway up',
@@ -36,10 +39,12 @@ const CHECK_LABEL: Record<string, string> = {
 
 /**
  * Resuming after Stop trading, as a ticket (UX-51): what starts again and
- * for whom, with the PAPER or LIVE stamp, a reason for the audit log and
- * the typed words RESUME TRADING. Above the phrase it shows the resume
- * checks (roadmap 23.15): the gateway, the last reconcile, the account and
- * the equity cover. A failed check needs a ticked override. The confirm
+ * for whom, with the PAPER or LIVE stamp. Paper resumes in one tap: the
+ * reason is filled in and there is no phrase to type (PO-07). Real money
+ * asks for a reason and the typed words RESUME TRADING, and above them
+ * shows the resume checks (roadmap 23.15): the gateway, the last
+ * reconcile, the account and the equity cover. A failed check shows on
+ * paper too and needs a ticked override. The confirm
  * button is red only at a real money stage, the primary button on paper. The page hosts
  * one, calls `open()` and then `setChecks()`. `open()` resolves to the
  * answer, or null when cancelled.
@@ -76,70 +81,74 @@ const CHECK_LABEL: Record<string, string> = {
           <p id="resume-message" class="sheet-message">
             Ends Stop trading. Orders go out again from the next trading run.
           </p>
-          <section class="checks" aria-labelledby="resume-checks-title">
-            <h3 id="resume-checks-title">Checks before resuming</h3>
-            @switch (stateKind()) {
-              @case ('loading') {
-                <p class="hint" role="status">Checking the broker...</p>
+          @if (req.live || failed()) {
+            <section class="checks" aria-labelledby="resume-checks-title">
+              <h3 id="resume-checks-title">Checks before resuming</h3>
+              @switch (stateKind()) {
+                @case ('loading') {
+                  <p class="hint" role="status">Checking the broker...</p>
+                }
+                @case ('error') {
+                  <p class="hint" role="status">
+                    The checks could not be read. The server runs them again when you resume.
+                  </p>
+                }
+                @default {
+                  @if (checkList().length === 0) {
+                    <p class="hint">No portfolio here trades at a real broker. Nothing to check.</p>
+                  } @else {
+                    <ul class="check-list">
+                      @for (c of checkList(); track c.name + (c.portfolio_id ?? '')) {
+                        <li [class.fail]="c.passed === false" [class.ok]="c.passed === true">
+                          <span class="check-mark" aria-hidden="true">{{ mark(c.passed) }}</span>
+                          <span class="visually-hidden">{{ spoken(c.passed) }}:</span>
+                          <strong>{{ label(c.name) }}</strong>
+                          @if (c.portfolio_id) {
+                            <span class="muted">{{ c.portfolio_id }}</span>
+                          }
+                          <span class="check-detail">{{ c.detail }}</span>
+                        </li>
+                      }
+                    </ul>
+                  }
+                  @if (failed()) {
+                    <label class="override" for="resume-override">
+                      <input
+                        id="resume-override"
+                        type="checkbox"
+                        [checked]="override()"
+                        (change)="override.set($any($event.target).checked)"
+                      />
+                      Resume anyway. I know why these checks failed (kept in the audit log).
+                    </label>
+                  }
+                }
               }
-              @case ('error') {
-                <p class="hint" role="status">
-                  The checks could not be read. The server runs them again when you resume.
+            </section>
+          }
+          @if (req.live) {
+            <div class="field">
+              <label for="resume-reason">Reason</label>
+              <textarea
+                id="resume-reason"
+                class="input"
+                rows="2"
+                maxlength="500"
+                aria-describedby="resume-reason-hint"
+                [attr.aria-invalid]="tried() && !reason().trim()"
+                [value]="reason()"
+                (input)="reason.set($any($event.target).value)"
+              ></textarea>
+              @if (tried() && !reason().trim()) {
+                <p id="resume-reason-hint" class="error" role="alert">
+                  Say why it is safe to trade again.
                 </p>
+              } @else {
+                <p id="resume-reason-hint" class="hint">Kept in the audit log.</p>
               }
-              @default {
-                @if (checkList().length === 0) {
-                  <p class="hint">No portfolio here trades at a real broker. Nothing to check.</p>
-                } @else {
-                  <ul class="check-list">
-                    @for (c of checkList(); track c.name + (c.portfolio_id ?? '')) {
-                      <li [class.fail]="c.passed === false" [class.ok]="c.passed === true">
-                        <span class="check-mark" aria-hidden="true">{{ mark(c.passed) }}</span>
-                        <span class="visually-hidden">{{ spoken(c.passed) }}:</span>
-                        <strong>{{ label(c.name) }}</strong>
-                        @if (c.portfolio_id) {
-                          <span class="muted">{{ c.portfolio_id }}</span>
-                        }
-                        <span class="check-detail">{{ c.detail }}</span>
-                      </li>
-                    }
-                  </ul>
-                }
-                @if (failed()) {
-                  <label class="override" for="resume-override">
-                    <input
-                      id="resume-override"
-                      type="checkbox"
-                      [checked]="override()"
-                      (change)="override.set($any($event.target).checked)"
-                    />
-                    Resume anyway. I know why these checks failed (kept in the audit log).
-                  </label>
-                }
-              }
-            }
-          </section>
-          <div class="field">
-            <label for="resume-reason">Reason</label>
-            <textarea
-              id="resume-reason"
-              class="input"
-              rows="2"
-              maxlength="500"
-              aria-describedby="resume-reason-hint"
-              [attr.aria-invalid]="tried() && !reason().trim()"
-              [value]="reason()"
-              (input)="reason.set($any($event.target).value)"
-            ></textarea>
-            @if (tried() && !reason().trim()) {
-              <p id="resume-reason-hint" class="error" role="alert">
-                Say why it is safe to trade again.
-              </p>
-            } @else {
-              <p id="resume-reason-hint" class="hint">Kept in the audit log.</p>
-            }
-          </div>
-          <app-typed-confirm inputId="resume-typed" [phrase]="phrase" [(value)]="typed" />
+            </div>
+            <app-typed-confirm inputId="resume-typed" [phrase]="phrase" [(value)]="typed" />
+          }
           <div class="sheet-actions">
             <button type="button" class="btn" (click)="answer(false)">Cancel</button>
             <!-- Red only when real money moves again; paper resumes with the primary button. -->
@@ -207,7 +216,10 @@ const CHECK_LABEL: Record<string, string> = {
 export class ResumeSheet {
   protected readonly phrase = RESUME_CONFIRMATION;
   protected readonly current = signal<Open | null>(null);
-  protected readonly reason = linkedSignal({ source: this.current, computation: () => '' });
+  protected readonly reason = linkedSignal({
+    source: this.current,
+    computation: (req) => (req && !req.live ? PAPER_RESUME_REASON : ''),
+  });
   protected readonly typed = linkedSignal({ source: this.current, computation: () => '' });
   protected readonly tried = linkedSignal({ source: this.current, computation: () => false });
   protected readonly checks = linkedSignal<Open | null, ChecksState>({
@@ -225,7 +237,9 @@ export class ResumeSheet {
   });
   protected readonly failed = computed(() => this.checkList().some((c) => c.passed === false));
   protected readonly canConfirm = computed(
-    () => typedMatches(this.phrase, this.typed()) && (!this.failed() || this.override()),
+    () =>
+      (!this.current()?.live || typedMatches(this.phrase, this.typed())) &&
+      (!this.failed() || this.override()),
   );
 
   open(request: ResumeRequest): Promise<ResumeAnswer | null> {

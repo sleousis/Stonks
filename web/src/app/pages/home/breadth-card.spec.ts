@@ -66,7 +66,11 @@ describe('BreadthCard', () => {
     expect(text).toContain('320 up, 160 down');
     expect(text).toContain('60% (300 of 500)');
     expect(text).toContain('25 highs, 4 lows');
-    expect(text).toContain('Distribution days on SPY');
+    expect(text).toContain('Distribution days');
+    expect(text).toContain('Down days on heavy volume on SPY');
+    // Never our storage word (FR-18).
+    expect(text).toContain('Measured over every stock Stonks tracks.');
+    expect(text).not.toContain('lake');
     expect(text).toContain('3 in 25 sessions');
     expect(text).toContain('More stocks rose than fell');
     expect(text).toContain('nothing trades on it');

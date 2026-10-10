@@ -20,7 +20,7 @@ export const KIND_LABEL: Record<UniverseKind, string> = {
 };
 
 export const KIND_HINT: Record<UniverseKind, string> = {
-  list: 'Fixed tickers, or dated spans. Without spans a list has survivorship bias.',
+  list: 'The tickers you name, or a CSV file with the dates each one joined and left.',
   exchange: 'Every symbol a source lists on an exchange, delisted ones too.',
   rule: 'A screen checked against our data at each rebalance date.',
   index: 'Index members rebuilt from an imported change history.',
@@ -42,7 +42,7 @@ export const EARLIEST = '1900-01-01';
 export interface KindFields {
   /** list: tickers, commas, spaces or new lines. */
   tickers: string;
-  /** list, exchange, index: members from this date. */
+  /** list, exchange, index: members since this date. */
   startDate: string;
   /** exchange */
   exchange: string;
@@ -201,7 +201,7 @@ export function formFromUniverse(
   }
   return {
     id: u.id,
-    name: u.name ?? '',
+    name: u.name || u.id,
     description: u.description ?? '',
     kind: u.kind,
     source: extra ? 'json' : 'fields',
@@ -232,7 +232,10 @@ export interface UniverseForm {
 }
 
 export type UniverseFormErrors = Partial<
-  Record<'id' | 'spec' | 'csv' | 'tickers' | 'exchange' | 'indexId' | 'screen' | 'window', string>
+  Record<
+    'name' | 'id' | 'spec' | 'csv' | 'tickers' | 'exchange' | 'indexId' | 'screen' | 'window',
+    string
+  >
 >;
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9_.-]*$/i;
@@ -276,6 +279,7 @@ export function universeFormErrors(
   metrics: readonly MetricView[] = [],
 ): UniverseFormErrors {
   const errors: UniverseFormErrors = {};
+  if (!f.name.trim()) errors.name = 'Enter a name.';
   const id = f.id.trim();
   if (!id) errors.id = 'Enter an id.';
   else if (!ID_PATTERN.test(id)) errors.id = 'Use letters, digits, dots, dashes or underscores.';

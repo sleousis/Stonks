@@ -32,11 +32,13 @@ const DIMENSIONS: readonly SegmentOption<Dimension>[] = [
   { value: 'country', label: 'Country' },
 ];
 
+const NOT_LISTED = 'Not in the fund list';
+
 /** Readable labels for the groups the API names in lower case. */
 function groupLabel(key: string): string {
   if (key === 'cash') return 'Cash';
   if (key === 'unknown') return 'Unknown';
-  if (key === 'not listed') return 'Not in the fund lists';
+  if (key === 'not listed') return NOT_LISTED;
   return key;
 }
 
@@ -48,15 +50,34 @@ function split(direct: number, viaFunds: number, total: number, funds: readonly 
 }
 
 /** Rows for one view of the look-through, largest first as the API sends them. */
-export function lookThroughRows(lt: LookThrough, by: Dimension, total: number): Row[] {
+export function lookThroughRows(
+  lt: LookThrough,
+  by: Dimension,
+  total: number,
+  unlisted: readonly string[] = [],
+): Row[] {
   if (by === 'names') {
-    return lt.names.map((n) => ({
+    const rows: Row[] = lt.names.map((n) => ({
       key: n.key,
       label: n.name ? `${n.name} (${n.key})` : n.key,
       value: n.value,
       weight: n.weight,
-      detail: split(n.direct_value, n.fund_value, total, n.funds) || null,
+      detail: unlisted.includes(n.key)
+        ? 'fund, no list'
+        : split(n.direct_value, n.fund_value, total, n.funds) || null,
     }));
+    // The part of the funds their lists leave out, so the weights add up.
+    const rest = lt.fund_value - lt.listed_fund_value;
+    if (rest > 0) {
+      rows.push({
+        key: 'not listed',
+        label: NOT_LISTED,
+        value: rest,
+        weight: total > 0 ? rest / total : null,
+        detail: null,
+      });
+    }
+    return rows;
   }
   return lt[by].map((s) => ({
     key: s.key,
@@ -76,7 +97,7 @@ export function lookThroughRows(lt: LookThrough, by: Dimension, total: number): 
   selector: 'app-look-through',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [Segmented, LoadingState, ErrorState, EmptyState],
-  host: { class: 'span-12' },
+  host: { class: 'span-12', '[class.is-hidden]': 'hidden()' },
   template: `
     <section class="panel" aria-labelledby="look-title">
       <div class="panel-head">
@@ -113,14 +134,10 @@ export function lookThroughRows(lt: LookThrough, by: Dimension, total: number): 
               </li>
             }
           </ul>
-          @if (funds().length) {
+          @for (f of funds(); track f.fund) {
             <p class="hint">
-              Fund lists:
-              @for (f of funds(); track f.fund; let last = $last) {
-                {{ f.fund }} as of {{ day(f.as_of) }} ({{ pct(f.covered) }} listed){{
-                  last ? '.' : ','
-                }}
-              }
+              {{ f.fund }}: {{ share(f.covered) }} of its holdings are listed, as of
+              {{ day(f.as_of) }}.
             </p>
           }
           @for (note of notes(); track note) {
@@ -134,6 +151,9 @@ export function lookThroughRows(lt: LookThrough, by: Dimension, total: number): 
     :host {
       display: block;
       min-width: 0;
+    }
+    :host(.is-hidden) {
+      display: none;
     }
     .body {
       display: grid;
@@ -186,8 +206,17 @@ export class LookThroughPanel {
   protected readonly rows = computed(() => {
     if (!this.data.hasValue()) return [];
     const v = this.data.value();
-    return lookThroughRows(v.look_through, this.dimension(), v.total_value);
+    return lookThroughRows(
+      v.look_through,
+      this.dimension(),
+      v.total_value,
+      v.funds_without_list ?? [],
+    );
   });
+  /** Only worth a panel when a held fund has a published list (or the load failed). */
+  protected readonly hidden = computed(
+    () => !this.data.error() && (!this.data.hasValue() || this.funds().length === 0),
+  );
   protected readonly funds = computed(() =>
     this.data.hasValue() ? this.data.value().look_through.funds : [],
   );
@@ -203,6 +232,9 @@ export class LookThroughPanel {
   }
   protected pct(value: number | null | undefined): string {
     return formatPercent(value, { digits: 1 });
+  }
+  protected share(value: number): string {
+    return formatPercent(value, { digits: 0 });
   }
   protected day(value: string): string {
     return formatDate(value);

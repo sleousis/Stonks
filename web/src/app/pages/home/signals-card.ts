@@ -29,6 +29,8 @@ import { RUN_WORDS } from '../../shared/status-words';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FEED_LIMIT = 100;
 const TICKS_LIMIT = 10;
+/** Today shows the latest signals only; the rest are in Notifications. */
+export const SIGNALS_SHOWN = 8;
 
 /**
  * Signals from the last 24 hours, newest first. Ticks run after the close,
@@ -70,6 +72,23 @@ export function runDetail(run: TickRun): string {
   if (!own) return '';
   const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
   return `${plural(own.orders, 'order')}, ${plural(own.fills, 'fill')} in your portfolios.`;
+}
+
+/**
+ * Runs that matter to the reader get their own row: one that traded in
+ * their portfolios, failed, had problems or is still going. Quiet runs
+ * fold into one line (FR-04).
+ */
+export function runIsOwnRow(run: TickRun): boolean {
+  if (run.status !== 'ok') return true;
+  const own = ownRunCounts(run);
+  // Your portfolios took part but nothing traded: nothing for you either.
+  return own !== null && (own.orders > 0 || own.fills > 0);
+}
+
+/** "10 trading runs finished, nothing for you". */
+export function quietRunsTitle(n: number): string {
+  return `${n} trading ${n === 1 ? 'run' : 'runs'} finished, nothing for you`;
 }
 
 const RUN_TITLE: Record<TickRun['status'], string> = {
@@ -161,6 +180,15 @@ interface BlotterRow {
               @if (r.status; as st) {
                 <app-status-pill class="status" [status]="st.status" [label]="st.label" />
               }
+            </li>
+          }
+          @if (signals().length > shownLimit) {
+            <li class="row more">
+              <span class="time"></span>
+              <span class="node" aria-hidden="true"></span>
+              <a routerLink="/notifications" class="title"
+                >See all {{ signals().length }} in Notifications</a
+              >
             </li>
           }
           @if (signals().length === 0) {
@@ -264,6 +292,14 @@ interface BlotterRow {
       font-weight: var(--weight-semibold);
       overflow-wrap: anywhere;
     }
+    /* A 44px target that still lays out as one 24px line (FR-23). */
+    a.title {
+      min-height: var(--touch-min);
+      margin-block: calc((24px - var(--touch-min)) / 2);
+    }
+    .more a.title {
+      font-weight: var(--weight-medium);
+    }
     /* The whole row is the link's target (44px at least). */
     .row:has(a.title) {
       min-height: var(--touch-min);
@@ -333,10 +369,14 @@ export class SignalsCard {
     });
   });
   protected readonly unread = computed(() => this.signals().filter((s) => !s.read_at));
+  protected readonly shownLimit = SIGNALS_SHOWN;
   protected readonly marking = signal(false);
 
   protected readonly rows = computed<BlotterRow[]>(() => {
-    const signals: BlotterRow[] = this.signals().map((s) => ({
+    const latest = [...this.signals()]
+      .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
+      .slice(0, SIGNALS_SHOWN);
+    const signals: BlotterRow[] = latest.map((s) => ({
       key: `s${s.id}`,
       kind: 'signal',
       at: s.created_at,
@@ -347,19 +387,35 @@ export class SignalsCard {
       unread: !s.read_at,
       status: null,
     }));
-    const runs: BlotterRow[] = todaysRuns(this.ticks.hasValue() ? this.ticks.value() : []).map(
-      (r) => ({
-        key: `t${r.id}`,
+    const today = todaysRuns(this.ticks.hasValue() ? this.ticks.value() : []);
+    const runs: BlotterRow[] = today.filter(runIsOwnRow).map((r) => ({
+      key: `t${r.id}`,
+      kind: 'run',
+      at: r.finished_at ?? r.started_at,
+      time: formatTime(r.finished_at ?? r.started_at),
+      title: RUN_TITLE[r.status],
+      message: runDetail(r),
+      link: `/orders/ticks/${r.id}`,
+      unread: false,
+      status: RUN_WORDS[r.status],
+    }));
+    const quiet = today.filter((r) => !runIsOwnRow(r));
+    if (quiet.length) {
+      const at = quiet
+        .map((r) => r.finished_at ?? r.started_at)
+        .reduce((a, b) => (Date.parse(a) >= Date.parse(b) ? a : b));
+      runs.push({
+        key: 'quiet-runs',
         kind: 'run',
-        at: r.finished_at ?? r.started_at,
-        time: formatTime(r.finished_at ?? r.started_at),
-        title: RUN_TITLE[r.status],
-        message: runDetail(r),
-        link: `/orders/ticks/${r.id}`,
+        at,
+        time: formatTime(at),
+        title: quietRunsTitle(quiet.length),
+        message: '',
+        link: '/orders/ticks',
         unread: false,
-        status: RUN_WORDS[r.status],
-      }),
-    );
+        status: null,
+      });
+    }
     return [...signals, ...runs].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   });
 

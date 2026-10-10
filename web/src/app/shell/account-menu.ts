@@ -78,7 +78,7 @@ const ROLE_LABEL: Readonly<Record<Role, string>> = {
       display: flex;
       align-items: center;
       gap: var(--space-2);
-      min-height: 40px;
+      min-height: var(--touch-min);
       padding: var(--space-1) var(--space-3);
       border-radius: var(--radius-sm);
       font-size: var(--text-xs);

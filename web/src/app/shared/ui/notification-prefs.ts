@@ -12,6 +12,7 @@ import { RouterLink } from '@angular/router';
 
 import type { PreferenceItem, PreferencesView } from '../../api/models';
 import { NotificationsService } from '../../api/notifications.service';
+import { TelegramService } from '../../api/telegram.service';
 import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
@@ -48,11 +49,14 @@ export type PrefsPart = 'channels' | 'events' | 'quiet' | 'webhook';
 const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook'];
 
 /**
- * Which alerts go where (push, email, webhook, Telegram), upcoming event
- * alerts, quiet hours and your webhook, one panel each. A switch with no
- * saved choice shows as on: the server's channel default applies until the
- * trader picks. `[only]` picks some of the panels (the Alert settings page
- * puts the webhook with the other channels); by default all show.
+ * Which alerts go where, upcoming event alerts, quiet hours and more
+ * channels (your webhook, email), one panel each. The grid has a column
+ * only for a channel that is set up (FR-16): push when the server offers
+ * it, Telegram once your chat is linked, a webhook once you saved one, and
+ * email once you add it. So it fits a phone, and Telegram never shows
+ * ticked before it is linked. A switch with no saved choice shows the
+ * server's channel default until the trader picks. `[only]` picks some of
+ * the panels; by default all show.
  */
 @Component({
   selector: 'app-notification-prefs',
@@ -79,11 +83,15 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
           </div>
           <div class="panel-body body">
             <p class="lead">
-              Everything shows in the Feed. Choose what else reaches you, and on which channel.
+              Everything always shows in the Feed. These choose what else reaches you.
             </p>
             <app-permission-note permission="notifications.manage" />
-            @if (channels().length === 0) {
+            @if (offered().length === 0) {
               <p class="note">This server has no push, email or webhook delivery set up yet.</p>
+            } @else if (channels().length === 0) {
+              <p class="note">
+                Turn on push on this device or link Telegram, and a column for it shows here.
+              </p>
             } @else {
               <div class="grid-scroll">
                 <table class="grid">
@@ -248,11 +256,11 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
               <legend class="visually-hidden">Quiet hours</legend>
               <p class="hint">
                 Signals, fills, price alerts and upcoming events wait for a morning summary. Risk
-                alerts always come through. Times are in {{ view()?.timezone }}.
+                alerts always come through.
               </p>
               <div class="times">
                 <div class="field">
-                  <label for="quiet-start">From</label>
+                  <label for="quiet-start">From ({{ zone() }})</label>
                   <input
                     id="quiet-start"
                     class="input"
@@ -263,7 +271,7 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
                   />
                 </div>
                 <div class="field">
-                  <label for="quiet-end">Until</label>
+                  <label for="quiet-end">Until ({{ zone() }})</label>
                   <input
                     id="quiet-end"
                     class="input"
@@ -297,64 +305,86 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
         </section>
       }
 
-      @if (show('webhook') && hasWebhook()) {
+      @if (show('webhook') && (hasWebhook() || hasEmail())) {
         <section class="panel" aria-labelledby="webhook-title">
-          <div class="panel-head">
-            <h3 id="webhook-title">Your webhook</h3>
-          </div>
-          <div class="panel-body body">
-            <fieldset class="quiet">
-              <legend class="visually-hidden">Your webhook</legend>
-              <p class="hint">
-                Alerts you send to Webhook in
-                <a routerLink="/notifications/settings" fragment="prefs-title"
-                  >Which alerts go where</a
-                >
-                are posted to this address. It must start with https. For your safety the full
-                address is never shown again after you save it.
-              </p>
-              @if (view()?.webhook; as current) {
-                <p class="current">
-                  Sending to <span class="num">{{ current }}</span>
-                </p>
-              } @else {
-                <p class="current muted">No webhook set.</p>
-              }
-              <div class="field">
-                <label for="webhook-url">{{ view()?.webhook ? 'New address' : 'Address' }}</label>
-                <input
-                  id="webhook-url"
-                  class="input"
-                  type="url"
-                  inputmode="url"
-                  autocomplete="off"
-                  spellcheck="false"
-                  placeholder="https://"
-                  [disabled]="!canManage()"
-                  [value]="webhookUrl()"
-                  (input)="webhookUrl.set($any($event.target).value)"
-                />
-              </div>
-              @if (webhookError(); as err) {
-                <p class="error" role="alert">{{ err }}</p>
-              }
-              <div class="actions">
-                <button type="button" class="btn" [disabled]="locked()" (click)="saveWebhook()">
-                  Save webhook
-                </button>
-                @if (view()?.webhook) {
-                  <button
-                    type="button"
-                    class="btn btn-ghost"
+          <details class="more-fold" [open]="!!view()?.webhook">
+            <summary class="panel-head">
+              <h3 id="webhook-title">More channels</h3>
+              <span class="chev" aria-hidden="true"></span>
+            </summary>
+            <div class="panel-body body">
+              @if (hasEmail()) {
+                <label class="kind">
+                  <input
+                    type="checkbox"
+                    [checked]="emailShown()"
                     [disabled]="locked()"
-                    (click)="removeWebhook()"
-                  >
-                    Remove webhook
-                  </button>
-                }
-              </div>
-            </fieldset>
-          </div>
+                    (change)="emailAdded.set($any($event.target).checked)"
+                  />
+                  <span>Email</span>
+                </label>
+                <p class="hint">
+                  Adds an Email column to Which alerts go where. Email arrives once your admin sets
+                  up sending.
+                </p>
+              }
+              @if (hasWebhook()) {
+                <fieldset class="quiet">
+                  <legend>Your webhook</legend>
+                  <p class="hint">
+                    Alerts you send to Webhook in
+                    <a routerLink="/notifications/settings" fragment="prefs-title"
+                      >Which alerts go where</a
+                    >
+                    are posted to this address. It must start with https. For your safety the full
+                    address is never shown again after you save it.
+                  </p>
+                  @if (view()?.webhook; as current) {
+                    <p class="current">
+                      Sending to <span class="num">{{ current }}</span>
+                    </p>
+                  } @else {
+                    <p class="current muted">No webhook set.</p>
+                  }
+                  <div class="field">
+                    <label for="webhook-url">{{
+                      view()?.webhook ? 'New address' : 'Address'
+                    }}</label>
+                    <input
+                      id="webhook-url"
+                      class="input"
+                      type="url"
+                      inputmode="url"
+                      autocomplete="off"
+                      spellcheck="false"
+                      placeholder="https://"
+                      [disabled]="!canManage()"
+                      [value]="webhookUrl()"
+                      (input)="webhookUrl.set($any($event.target).value)"
+                    />
+                  </div>
+                  @if (webhookError(); as err) {
+                    <p class="error" role="alert">{{ err }}</p>
+                  }
+                  <div class="actions">
+                    <button type="button" class="btn" [disabled]="locked()" (click)="saveWebhook()">
+                      Save webhook
+                    </button>
+                    @if (view()?.webhook) {
+                      <button
+                        type="button"
+                        class="btn btn-ghost"
+                        [disabled]="locked()"
+                        (click)="removeWebhook()"
+                      >
+                        Remove webhook
+                      </button>
+                    }
+                  </div>
+                </fieldset>
+              }
+            </div>
+          </details>
         </section>
       }
     }
@@ -450,9 +480,32 @@ const ALL_PARTS: readonly PrefsPart[] = ['channels', 'events', 'quiet', 'webhook
       cursor: pointer;
     }
     .cell input {
-      width: 18px;
-      height: 18px;
+      width: 22px;
+      height: 22px;
       accent-color: var(--color-primary);
+    }
+    .more-fold > summary {
+      cursor: pointer;
+      list-style: none;
+    }
+    .more-fold > summary::-webkit-details-marker {
+      display: none;
+    }
+    .more-fold > summary {
+      min-height: var(--touch-min);
+    }
+    .chev {
+      width: 0.5em;
+      height: 0.5em;
+      margin-right: 4px;
+      border-right: 1.5px solid currentColor;
+      border-bottom: 1.5px solid currentColor;
+      color: var(--color-ink-3);
+      transform: rotate(-45deg);
+      transition: transform var(--dur-fast) var(--ease);
+    }
+    .more-fold[open] .chev {
+      transform: rotate(45deg);
     }
     .quiet {
       display: grid;
@@ -524,6 +577,7 @@ export class NotificationPrefs {
   private readonly toasts = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
   private readonly session = inject(SessionService);
+  private readonly telegram = inject(TelegramService);
 
   /** Which panels to show; all of them when not set. */
   readonly only = input<readonly PrefsPart[] | null>(null);
@@ -537,9 +591,45 @@ export class NotificationPrefs {
   protected readonly view = linkedSignal<PreferencesView | null>(() =>
     this.prefs.hasValue() ? this.prefs.value() : null,
   );
-  protected readonly channels = computed(
+  /** The channels the server offers people. */
+  protected readonly offered = computed(
     () => this.view()?.channels.filter((c) => !HIDDEN.has(c)) ?? [],
   );
+  /** Your Telegram link, read only when the grid could show a Telegram column. */
+  private readonly telegramLink = resource({
+    params: () =>
+      this.show('channels') && this.offered().includes('telegram') ? { telegram: true } : undefined,
+    loader: async () => {
+      try {
+        return await this.telegram.status();
+      } catch {
+        return null;
+      }
+    },
+  });
+  /** Email was ticked under More channels on this visit. */
+  protected readonly emailAdded = signal(false);
+  /** Email shows once added here or already on for an alert. */
+  protected readonly emailShown = computed(
+    () =>
+      this.emailAdded() ||
+      (this.view()?.preferences.some((p) => p.channel === 'email' && p.enabled) ?? false),
+  );
+  protected readonly hasEmail = computed(() => this.offered().includes('email'));
+  /** The grid's columns: only the channels that are set up (FR-16). */
+  protected readonly channels = computed(() =>
+    this.offered().filter((c) => {
+      if (c === 'telegram') {
+        const link = this.telegramLink.hasValue() ? this.telegramLink.value() : null;
+        return link?.linked === true;
+      }
+      if (c === 'webhook') return !!this.view()?.webhook;
+      if (c === 'email') return this.emailShown();
+      return true;
+    }),
+  );
+  /** The quiet hours' time zone, named in each time's label. */
+  protected readonly zone = computed(() => this.view()?.timezone || 'UTC');
   /** One switch per kind of upcoming-event alert (earnings, dividends, economic). */
   protected readonly eventAlerts = computed(() => this.view()?.event_alerts ?? []);
   /** Countries and importance threshold of economic release alerts. */

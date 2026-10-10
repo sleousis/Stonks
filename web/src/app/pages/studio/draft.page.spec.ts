@@ -179,6 +179,14 @@ describe('DraftPage', () => {
     });
   });
 
+  it('opens the Test tab from ?tab=test ("Test again", NB-09)', async () => {
+    await answerValidation(VALID);
+    fixture.componentRef.setInput('tab', 'test');
+    fixture.detectChanges();
+    await settle();
+    expect(el.querySelector('#tab-test')?.getAttribute('aria-selected')).toBe('true');
+  });
+
   it('a registered draft shows the note (UX-63)', async () => {
     await answerValidation(VALID);
     expect(el.querySelector('#registered-note')).toBeNull();
