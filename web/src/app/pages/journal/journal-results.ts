@@ -13,7 +13,7 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
 import { DataTable, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
-import { formatR, formatShare, groupLabel } from './journal-format';
+import { formatProfitFactor, formatR, formatRate, groupLabel } from './journal-format';
 
 export type ResultsBy = 'plan' | 'tag' | 'mistake' | 'playbook' | 'sleeve' | 'exit_trigger';
 
@@ -92,7 +92,12 @@ export class JournalResults {
         value: (g) => groupLabel(g.key, by),
       },
       { key: 'trades', label: 'Closed', format: 'number' },
-      { key: 'win_rate', label: 'Win rate', format: 'percent' },
+      {
+        key: 'win_rate',
+        label: 'Win rate',
+        format: 'number',
+        display: (g) => formatRate(g.win_rate),
+      },
       { key: 'pnl', label: 'P&L', format: 'signedMoney', tone: true, currency: () => base },
       {
         key: 'avg_r',
@@ -106,15 +111,8 @@ export class JournalResults {
         label: 'Profit factor',
         format: 'number',
         mobile: 'hide',
+        display: (g) => formatProfitFactor(g.profit_factor),
       },
-      {
-        key: 'avg_exit_efficiency',
-        label: 'Exit efficiency',
-        format: 'number',
-        mobile: 'hide',
-        display: (g) => formatShare(g.avg_exit_efficiency),
-      },
-      { key: 'open', label: 'Open', format: 'number', mobile: 'hide' },
     ];
   });
 

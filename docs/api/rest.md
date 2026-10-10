@@ -1712,6 +1712,17 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `material` | boolean | yes |  |
 | `ours` | number \| string \| null | yes |  |
 
+### DuplicateSource
+
+Where rows a preview calls duplicates were imported before.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `import_id` | string | yes |  |
+| `imported_on` | date | yes |  |
+| `portfolio_id` | string | yes |  |
+| `portfolio_name` | string \| null | yes |  |
+
 ### EarningsEvent
 
 | Field | Type | Required | Description |
@@ -3135,6 +3146,7 @@ A portfolio's exposure with each held fund split into what it holds (roadmap 23.
 |-------|------|----------|-------------|
 | `as_of` | date | yes | Fund holdings are the lists known on this day. |
 | `currency` | string | yes | Reporting currency. Amounts are not FX-converted. |
+| `funds_without_list` | list[string] | no | Held funds (ETFs) with no holdings list, counted as one name each. |
 | `look_through` | [LookThrough](#lookthrough) | yes |  |
 | `notes` | list[string] | yes |  |
 | `portfolio_id` | string | yes |  |
@@ -5080,6 +5092,7 @@ The paper a published factor comes from (roadmap 23.13).
 | `credential_fields` | list[string] | yes |  |
 | `display_name` | string | yes |  |
 | `enabled` | boolean | yes |  |
+| `gateways` | list[string] | no |  |
 | `has_paper` | boolean | yes |  |
 | `name` | string | yes |  |
 | `needs_gateway` | boolean | yes |  |
@@ -6099,6 +6112,7 @@ A broker export Stonks reads without a mapping.
 |-------|------|----------|-------------|
 | `as_of` | date \| null | no |  |
 | `duplicate` | integer | yes |  |
+| `duplicates_in` | [DuplicateSource](#duplicatesource) \| null | no |  |
 | `first_date` | date \| null | yes |  |
 | `guessed` | boolean | yes |  |
 | `headers` | list[string] | yes |  |

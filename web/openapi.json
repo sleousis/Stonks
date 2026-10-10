@@ -5641,6 +5641,43 @@
         "title": "DriftItemView",
         "type": "object"
       },
+      "DuplicateSource": {
+        "description": "Where rows a preview calls duplicates were imported before.",
+        "properties": {
+          "import_id": {
+            "title": "Import Id",
+            "type": "string"
+          },
+          "imported_on": {
+            "format": "date",
+            "title": "Imported On",
+            "type": "string"
+          },
+          "portfolio_id": {
+            "title": "Portfolio Id",
+            "type": "string"
+          },
+          "portfolio_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Name"
+          }
+        },
+        "required": [
+          "portfolio_id",
+          "portfolio_name",
+          "import_id",
+          "imported_on"
+        ],
+        "title": "DuplicateSource",
+        "type": "object"
+      },
       "EarningsEvent": {
         "properties": {
           "before_after_market": {
@@ -13145,6 +13182,14 @@
             "description": "Reporting currency. Amounts are not FX-converted.",
             "title": "Currency",
             "type": "string"
+          },
+          "funds_without_list": {
+            "description": "Held funds (ETFs) with no holdings list, counted as one name each.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Funds Without List",
+            "type": "array"
           },
           "look_through": {
             "$ref": "#/components/schemas/LookThrough"
@@ -22192,6 +22237,13 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "gateways": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gateways",
+            "type": "array"
+          },
           "has_paper": {
             "title": "Has Paper",
             "type": "boolean"
@@ -27536,6 +27588,16 @@
           "duplicate": {
             "title": "Duplicate",
             "type": "integer"
+          },
+          "duplicates_in": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DuplicateSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "first_date": {
             "anyOf": [

@@ -16,8 +16,6 @@ import { SessionService } from '../../core/auth/session.service';
 import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { AgoPipe } from '../../shared/format.pipes';
-import { STAGES, STAGE_WORDS } from '../../shared/live-stages';
-import { HelpTip } from '../../shared/ui/help-tip';
 import { PageHeader } from '../../shared/ui/page-header';
 import { PermissionNote } from '../../shared/ui/permission-note';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -26,7 +24,11 @@ import { BrokerExportsPanel } from './broker-exports-panel';
 import { BROWSER_REDIRECT } from './browser-redirect';
 import {
   CONNECTION_STATUS_LABEL,
+  CSV_PROVIDER,
+  KEY_HINTS,
   fieldLabel,
+  fieldNoun,
+  joinNames,
   offersPaper,
   providerFlow,
   providerGives,
@@ -46,10 +48,9 @@ export const CALLBACK_PATH = '/connections/callback';
 /**
  * The trader's broker connections (sync of positions, cash and activity)
  * and the providers an admin turned on. Connecting takes API keys typed
- * here, or a hosted sign-in on the provider's site. "When Stonks trades"
- * says exactly when a connection that can trade places orders (F53): only
- * for Approve each trade and Automatic follows, manual orders and approved
- * suggestions in the linked portfolio, at the portfolio's stage.
+ * here, a gateway picked from a list (IBKR), or a hosted sign-in on the
+ * provider's site. Two sentences say exactly when a connection that can
+ * trade gets orders (F53), with Going live for the details.
  */
 @Component({
   selector: 'app-connections-page',
@@ -63,7 +64,6 @@ export const CALLBACK_PATH = '/connections/callback';
     StatusPill,
     RouterLink,
     AgoPipe,
-    HelpTip,
     BrokerExportsPanel,
   ],
   templateUrl: './connections.page.html',
@@ -87,18 +87,34 @@ export class ConnectionsPage {
         accounts: connection.accounts_count ?? null,
       })),
   });
+  /** Only providers that are turned on get a card. */
+  protected readonly enabled = computed(() =>
+    this.providers.hasValue() ? this.providers.value().filter((p) => p.enabled) : [],
+  );
   /** Nothing can be connected until an admin turns a provider on. */
   protected readonly noneEnabled = computed(
-    () => this.providers.hasValue() && !this.providers.value().some((p) => p.enabled),
+    () => this.providers.hasValue() && this.enabled().length === 0,
   );
+  /**
+   * The server lists turned-off providers to admins only, so an admin gets
+   * one line naming them and where to turn them on.
+   */
+  protected readonly turnedOff = computed(() => {
+    if (!this.providers.hasValue()) return '';
+    const off = this.providers
+      .value()
+      .filter((p) => !p.enabled)
+      .map((p) => p.display_name);
+    if (off.length === 0) return '';
+    const one = off.length === 1;
+    return `${joinNames(off)} ${one ? 'is' : 'are'} turned off. Turn ${one ? 'it' : 'them'} on in`;
+  });
 
   protected readonly canManage = computed(() => this.session.can('connection.manage'));
   protected readonly statusLabel = CONNECTION_STATUS_LABEL;
   protected readonly gives = providerGives;
   protected readonly flow = providerFlow;
   protected readonly reach = providerReach;
-  /** Where an order goes at each portfolio stage, for "When Stonks trades". */
-  protected readonly stages = STAGES.map((stage) => ({ stage, ...STAGE_WORDS[stage] }));
   protected readonly fieldLabel = fieldLabel;
   protected readonly offersPaper = offersPaper;
 
@@ -111,6 +127,24 @@ export class ConnectionsPage {
   protected readonly paper = signal(true);
   protected readonly keysSubmitted = signal(false);
   protected readonly busy = signal<string | null>(null);
+
+  protected isCsv(c: ConnectionView): boolean {
+    return c.provider === CSV_PROVIDER;
+  }
+
+  protected connectLabel(p: ProviderView): string {
+    return p.needs_gateway ? 'Connect' : 'Connect with keys';
+  }
+
+  protected keyHint(p: ProviderView): string | null {
+    return KEY_HINTS[p.name] ?? null;
+  }
+
+  protected missingText(p: ProviderView, field: string): string {
+    return p.needs_gateway && field === 'gateway'
+      ? 'Pick a gateway.'
+      : `Enter the ${fieldNoun(field)}.`;
+  }
 
   protected providerName(name: string): string {
     return providerName(this.providers.hasValue() ? this.providers.value() : undefined, name);
@@ -145,8 +179,9 @@ export class ConnectionsPage {
     if (p.credential_fields.some((f) => !(values[f] ?? '').trim()) || this.busy()) return;
     const ok = await this.confirm.confirm({
       title: `Connect ${p.display_name}?`,
-      message:
-        'Stonks checks the keys, then reads your accounts. It keeps the keys encrypted and never shows them again.',
+      message: p.needs_gateway
+        ? 'Stonks checks the gateway, then reads your accounts.'
+        : 'Stonks checks the keys, then reads your accounts. It keeps the keys encrypted and never shows them again.',
       confirmLabel: 'Connect',
     });
     if (!ok) return;

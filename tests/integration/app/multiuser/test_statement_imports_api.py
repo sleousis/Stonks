@@ -38,6 +38,7 @@ def test_preview_import_dedupe_and_undo(client, people):
     assert (p["total"], p["new"], p["duplicate"], p["skipped"]) == (5, 4, 0, 1)
     assert p["rows"][4]["status"] == "skipped" and "TRANSFER" in p["rows"][4]["reason"]
     assert p["rows"][1]["ticker"] == "AAPL.US" and p["guessed"] is False
+    assert p["duplicates_in"] is None
     # nothing was written by the preview
     assert client.get("/api/statement-imports", headers=alice).json()["total"] == 0
 
@@ -62,6 +63,14 @@ def test_preview_import_dedupe_and_undo(client, people):
         "/api/statement-imports/preview", json=_body(portfolio_id=pid), headers=alice
     ).json()
     assert again["duplicate"] == 4 and again["new"] == 0
+    # into a new portfolio, the preview says where the rows already are
+    elsewhere = client.post(
+        "/api/statement-imports/preview", json=_body(new_portfolio="Another"), headers=alice
+    ).json()
+    assert elsewhere["duplicates_in"]["portfolio_id"] == pid
+    assert elsewhere["duplicates_in"]["portfolio_name"] == "Old broker"
+    assert elsewhere["duplicates_in"]["import_id"] == imp["id"]
+    assert elsewhere["duplicates_in"]["imported_on"] == imp["created_at"][:10]
     refused = client.post("/api/statement-imports", json=_body(portfolio_id=pid), headers=alice)
     assert refused.status_code == 409
 

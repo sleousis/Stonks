@@ -77,6 +77,39 @@ const AUTO = 'auto';
 /** Skip the broker exports: map the columns by hand. */
 const NO_PRESET = 'none';
 
+interface Choice {
+  value: string;
+  label: string;
+}
+
+/** Date formats shown as an example date (31 December 2025). */
+const DATE_FORMATS: Choice[] = [
+  { value: '', label: 'Find it out' },
+  { value: '%d/%m/%Y', label: '31/12/2025' },
+  { value: '%m/%d/%Y', label: '12/31/2025' },
+  { value: '%Y-%m-%d', label: '2025-12-31' },
+  { value: '%d.%m.%Y', label: '31.12.2025' },
+  { value: '%d-%m-%Y', label: '31-12-2025' },
+];
+
+/** Exchanges a plain symbol can trade on, as the symbol mapping knows them. */
+const EXCHANGES: Choice[] = [
+  { value: '', label: 'Not set: dollar trades count as US' },
+  { value: 'US', label: 'United States' },
+  { value: 'LSE', label: 'London' },
+  { value: 'XETRA', label: 'Germany (Xetra)' },
+  { value: 'TSX', label: 'Toronto' },
+  { value: 'TSXV', label: 'TSX Venture' },
+  { value: 'ASX', label: 'Australia' },
+];
+
+/** The choices, plus the current value when a guess set one that is not listed. */
+function withCurrent(list: Choice[], current: string): Choice[] {
+  return !current || list.some((c) => c.value === current)
+    ? list
+    : [...list, { value: current, label: current }];
+}
+
 /** Rough bytes cap for a file read in the browser (the API allows 5 MB of text). */
 const MAX_FILE_BYTES = 5_000_000;
 
@@ -245,54 +278,63 @@ const MAX_FILE_BYTES = 5_000_000;
               </div>
             }
           </div>
-          <div class="grid-2">
-            <div class="field">
-              <label for="imp-types">Type values</label>
-              <input
-                id="imp-types"
-                class="input"
-                aria-describedby="imp-types-hint"
-                [value]="typesText()"
-                (input)="typesText.set($any($event.target).value)"
-              />
-              <span id="imp-types-hint" class="hint"
-                >Value=kind, comma separated. Kinds: trade, dividend, interest, fee, deposit,
-                withdrawal, split, other.</span
-              >
+          <details class="more" [open]="moreOpen()">
+            <summary>More options</summary>
+            <div class="grid-2">
+              <div class="field">
+                <label for="imp-types">Type values</label>
+                <input
+                  id="imp-types"
+                  class="input"
+                  aria-describedby="imp-types-hint"
+                  [value]="typesText()"
+                  (input)="typesText.set($any($event.target).value)"
+                />
+                <span id="imp-types-hint" class="hint"
+                  >What each value in the type column means, for example BUY=trade, DIV=dividend.
+                  Kinds: trade, dividend, interest, fee, deposit, withdrawal, split, other.</span
+                >
+              </div>
+              <div class="field">
+                <label for="imp-sells">Values that mean a sale</label>
+                <input
+                  id="imp-sells"
+                  class="input"
+                  placeholder="SELL"
+                  [value]="sellsText()"
+                  (input)="sellsText.set($any($event.target).value)"
+                />
+              </div>
+              <div class="field">
+                <label for="imp-datefmt">How dates look</label>
+                <select
+                  id="imp-datefmt"
+                  class="input"
+                  (change)="dateFormat.set($any($event.target).value)"
+                >
+                  @for (d of dateFormats(); track d.value) {
+                    <option [value]="d.value" [selected]="dateFormat() === d.value">
+                      {{ d.label }}
+                    </option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label for="imp-exchange">Where your symbols trade</label>
+                <select
+                  id="imp-exchange"
+                  class="input"
+                  (change)="exchange.set($any($event.target).value)"
+                >
+                  @for (x of exchanges(); track x.value) {
+                    <option [value]="x.value" [selected]="exchange() === x.value">
+                      {{ x.label }}
+                    </option>
+                  }
+                </select>
+              </div>
             </div>
-            <div class="field">
-              <label for="imp-sells">Values that mean a sale</label>
-              <input
-                id="imp-sells"
-                class="input"
-                [value]="sellsText()"
-                (input)="sellsText.set($any($event.target).value)"
-              />
-            </div>
-            <div class="field">
-              <label for="imp-datefmt">Date format</label>
-              <input
-                id="imp-datefmt"
-                class="input"
-                placeholder="%d/%m/%Y"
-                aria-describedby="imp-datefmt-hint"
-                [value]="dateFormat()"
-                (input)="dateFormat.set($any($event.target).value)"
-              />
-              <span id="imp-datefmt-hint" class="hint">Empty tries the common formats.</span>
-            </div>
-            <div class="field">
-              <label for="imp-exchange">Exchange of plain symbols</label>
-              <input
-                id="imp-exchange"
-                class="input"
-                placeholder="NASDAQ, LSE"
-                autocapitalize="characters"
-                [value]="exchange()"
-                (input)="exchange.set($any($event.target).value.toUpperCase())"
-              />
-            </div>
-          </div>
+          </details>
           @if (badTypes().length) {
             <p class="error" role="alert">Not understood: {{ badTypes().join(', ') }}</p>
           }
@@ -301,22 +343,24 @@ const MAX_FILE_BYTES = 5_000_000;
     }
 
     <div class="actions">
+      @let ready = result()?.new ?? 0;
       <button
         type="button"
-        class="btn btn-primary"
+        class="btn"
+        [class.btn-primary]="!ready"
         [disabled]="!canPreview() || busy()"
         (click)="preview()"
       >
-        {{ busy() === 'preview' ? 'Reading…' : 'Preview' }}
+        {{ busy() === 'preview' ? 'Reading…' : result() ? 'Preview again' : 'Preview' }}
       </button>
-      @if (result(); as r) {
+      @if (ready) {
         <button
           type="button"
-          class="btn"
-          [disabled]="!r.new || !!busy() || !canImport()"
+          class="btn btn-primary"
+          [disabled]="!!busy() || !canImport()"
           (click)="commit()"
         >
-          {{ busy() === 'commit' ? 'Importing…' : 'Import ' + r.new + ' new rows' }}
+          {{ busy() === 'commit' ? 'Importing…' : 'Import ' + rowsText(ready) }}
         </button>
       }
     </div>
@@ -329,16 +373,11 @@ const MAX_FILE_BYTES = 5_000_000;
       <section class="panel" aria-labelledby="preview-title">
         <div class="panel-head">
           <h2 id="preview-title">3. Preview</h2>
-          <span class="hint" role="status">
-            @if (r.preset_label) {
-              Read as {{ r.preset_label }}{{ r.locale ? ', ' + localeName(r.locale) : '' }}.
-            }
-            {{ r.new }} new, {{ r.duplicate }} already imported, {{ r.skipped }} skipped
-            @if (r.first_date) {
-              , {{ day(r.first_date) }} to {{ day(r.last_date) }}
-            }
-          </span>
+          <span class="hint" role="status">{{ summary(r) }}</span>
         </div>
+        @if (duplicateText(r); as dup) {
+          <p class="panel-body note" role="note">{{ dup }}</p>
+        }
         @if (r.unmapped.length) {
           <p class="panel-body note">Not covered, kept by symbol: {{ r.unmapped.join(', ') }}</p>
         }
@@ -439,6 +478,16 @@ const MAX_FILE_BYTES = 5_000_000;
     .import .btn {
       min-height: 44px;
     }
+    .more summary {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--touch-min);
+      cursor: pointer;
+      color: var(--color-ink-2);
+    }
+    .more .grid-2 {
+      margin-top: var(--space-2);
+    }
     .notes {
       display: grid;
       gap: var(--space-1);
@@ -501,6 +550,11 @@ export class StatementImportPage {
   protected readonly dateFormat = signal('');
   protected readonly exchange = signal('');
   protected readonly result = signal<StatementPreview | null>(null);
+  /** More options opens by itself when the preview skipped rows. */
+  protected readonly moreOpen = computed(() => (this.result()?.skipped ?? 0) > 0);
+  /** Date formats as examples, plus the guessed one when it is not listed. */
+  protected readonly dateFormats = computed(() => withCurrent(DATE_FORMATS, this.dateFormat()));
+  protected readonly exchanges = computed(() => withCurrent(EXCHANGES, this.exchange()));
   /** The request the shown preview was made from; Import sends only this. */
   private previewed: string | null = null;
   protected readonly error = signal<string | null>(null);
@@ -549,6 +603,28 @@ export class StatementImportPage {
 
   protected localeName(code: string): string {
     return LOCALE_NAMES[code] ?? code;
+  }
+
+  protected rowsText(n: number): string {
+    return `${n} new ${n === 1 ? 'row' : 'rows'}`;
+  }
+
+  /** "Read as DEGIRO Transactions, Dutch. 4 new, 0 already imported, 1 skipped, 5 Jan to 9 Jan." */
+  protected summary(r: StatementPreview): string {
+    const read = r.preset_label
+      ? `Read as ${r.preset_label}${r.locale ? ', ' + this.localeName(r.locale) : ''}. `
+      : '';
+    const range = r.first_date ? `, ${this.day(r.first_date)} to ${this.day(r.last_date)}` : '';
+    return `${read}${r.new} new, ${r.duplicate} already imported, ${r.skipped} skipped${range}.`;
+  }
+
+  /** Where the duplicate rows already are, and what to do about it. */
+  protected duplicateText(r: StatementPreview): string | null {
+    const src = r.duplicates_in;
+    if (!r.duplicate || !src) return null;
+    const where = `${src.portfolio_name ?? src.portfolio_id} (imported ${this.day(src.imported_on)})`;
+    if (r.new) return `${r.duplicate} rows are already in ${where} and are left out.`;
+    return `These rows are already in ${where}. Pick An earlier import to add to it, or undo that import first.`;
   }
 
   protected choosePreset(value: string): void {

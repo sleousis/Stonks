@@ -15,6 +15,22 @@ export function formatShare(value: number | null | undefined, signed = false): s
   return formatPercent(value, { digits: 1, signed });
 }
 
+/** A rate such as the win rate, with one decimal: "27.3%". */
+export function formatRate(value: number | null | undefined): string {
+  return formatShare(value);
+}
+
+/** A profit factor with two decimals: "2.85". */
+export function formatProfitFactor(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return 'n/a';
+  return formatNumber(value, { digits: 2 });
+}
+
+/** "1 trade", "3 trades". */
+export function plural(n: number, word: string): string {
+  return `${n} ${n === 1 ? word : word + 's'}`;
+}
+
 /** Holding time in plain words. */
 export function formatHolding(days: number): string {
   if (!Number.isFinite(days) || days < 0) return 'n/a';

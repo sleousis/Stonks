@@ -250,6 +250,18 @@ export class InsightsPage {
     if (!this.insights.hasValue()) return null;
     return baseCurrencyLine(this.insights.value(), this.portfolioCtx.current()?.base_currency);
   });
+  /** The API's notes, less the exchange-rate one when the base line already says it. */
+  protected readonly notes = computed(() => {
+    if (!this.insights.hasValue()) return [];
+    const v = this.insights.value();
+    const missing = v.fx_missing ?? [];
+    if (!this.baseLine() || !missing.length) return v.notes;
+    const fx = `${missing.join(', ')} holdings are left out`;
+    return v.notes.filter((n) => !n.startsWith(fx));
+  });
+  /** A loss as a positive share with one decimal, the same on the Risk page. */
+  protected readonly loss = (value: number | null | undefined) =>
+    formatPercent(value == null ? value : Math.abs(value), { digits: 1 });
   protected readonly stance = STANCE;
   protected readonly agreementLine = agreementLine;
 

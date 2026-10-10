@@ -250,7 +250,9 @@ export const LOOK_THROUGH: LookThroughView = {
   as_of: '2026-09-28',
   currency: 'USD',
   total_value: 10_000,
-  notes: ['90% of your fund value is in holdings the lists leave out (shown as not listed)'],
+  notes: [
+    '90% of your fund value is in holdings the lists leave out, shown as Not in the fund list.',
+  ],
   look_through: {
     fund_value: 5_000,
     listed_fund_value: 500,

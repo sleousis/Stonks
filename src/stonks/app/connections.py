@@ -17,7 +17,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
-from stonks.accounts import AccountsError, NotFound, Scope
+from stonks.accounts import AccountsError, NotFound, Role, Scope
 from stonks.app.context import AppContext
 from stonks.app.errors import ConfigurationError, NotFoundError, ValidationError
 from stonks.connections.base import (
@@ -104,6 +104,26 @@ class ProviderView(BaseModel):
     #: Trading needs a gateway an admin runs on the server (IBKR). eToro
     #: and the other API providers need none.
     needs_gateway: bool
+    #: For a gateway provider, the gateways an admin set up, to pick from.
+    gateways: list[str] = Field(default_factory=list)
+
+
+def visible_providers(
+    views: list[ProviderView], *, admin: bool, gateways: list[str]
+) -> list[ProviderView]:
+    """The providers a person can act on: test providers only when turned
+    on, turned-off ones only for an admin (who can turn them on), and each
+    gateway provider with the configured gateways to pick from."""
+    shown: list[ProviderView] = []
+    for v in views:
+        if v.name.startswith("fake") and not v.enabled:
+            continue
+        if not v.enabled and not admin:
+            continue
+        if v.needs_gateway:
+            v = v.model_copy(update={"gateways": sorted(gateways)})
+        shown.append(v)
+    return shown
 
 
 class ConnectionView(BaseModel):
@@ -268,7 +288,7 @@ class ConnectionsAppService:
 
     def providers(self, scope: Scope) -> list[ProviderView]:
         with self._service() as svc:
-            return [
+            views = [
                 ProviderView(
                     name=p.name,
                     display_name=p.display_name,
@@ -282,6 +302,8 @@ class ConnectionsAppService:
                 )
                 for p in svc.providers(scope)
             ]
+        gateways = list(self._ctx.settings.brokers.ibkr.gateways)
+        return visible_providers(views, admin=scope.role == Role.ADMIN, gateways=gateways)
 
     def list(self, scope: Scope) -> list[ConnectionView]:
         with self._service() as svc:

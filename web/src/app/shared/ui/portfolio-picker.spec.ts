@@ -86,6 +86,23 @@ describe('PortfolioPicker', () => {
     expect(stamp.getAttribute('data-mode')).toBe('paper');
   });
 
+  it('stamps a portfolio fed by a read-only broker or CSV imports READ ONLY, never brass', async () => {
+    const { fixture, el } = await render([
+      book({ id: 'pf_1', name: 'Main', is_default: true }),
+      book({ id: 'pf_2', name: 'DEGIRO', kind: 'broker', broker_connection_id: 'conn_1' }),
+    ]);
+    expect(options(el)[1]).toEqual({ text: 'DEGIRO (read only)', selected: false });
+    const select = el.querySelector('select')!;
+    select.value = 'pf_2';
+    select.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    const stamp = el.querySelector('app-mode-stamp .stamp')!;
+    expect(stamp.textContent).toContain('READ ONLY');
+    expect(stamp.textContent).toContain(', real money, read only');
+    expect(stamp.textContent).not.toContain('simulated');
+    expect(stamp.getAttribute('data-mode')).toBe('read-only');
+  });
+
   it('asks for a pick when no portfolio is the default', async () => {
     const { el } = await render([book({ id: 'pf_1', name: 'A' }), book({ id: 'pf_2', name: 'B' })]);
     expect(options(el)[0]).toEqual({ text: 'Pick a portfolio', selected: true });

@@ -146,6 +146,15 @@ class StatementPresetView(BaseModel):
     how_to_export: str
 
 
+class DuplicateSource(BaseModel):
+    """Where rows a preview calls duplicates were imported before."""
+
+    portfolio_id: str
+    portfolio_name: str | None
+    import_id: str
+    imported_on: date
+
+
 class StatementPreview(BaseModel):
     headers: list[str]
     #: The column mapping used; ``None`` when a preset read the file.
@@ -172,6 +181,8 @@ class StatementPreview(BaseModel):
     last_date: date | None
     #: Symbols no ticker maps to ("not covered"); they are kept by symbol.
     unmapped: list[str]
+    #: The newest earlier import that holds this file's duplicate rows.
+    duplicates_in: DuplicateSource | None = None
 
 
 class StatementImportView(BaseModel):
@@ -256,7 +267,13 @@ class StatementImportService:
                 known = self._known_holdings(state, scope.user_id)
             else:
                 known = self._known(state, scope.user_id)
-        return _preview(read_headers(body.content), reading, known, self._clock().date())
+            preview = _preview(read_headers(body.content), reading, known, self._clock().date())
+            if preview.duplicate:
+                ids = _row_ids(reading, self._clock().date()) & known
+                preview.duplicates_in = self._duplicate_source(
+                    state, scope.user_id, ids, holdings=reading.kind == "holdings"
+                )
+        return preview
 
     def commit(self, principal: Principal, body: StatementImportRequest) -> StatementImportView:
         """Import the new rows. Duplicates and skipped rows are counted,
@@ -470,6 +487,39 @@ class StatementImportService:
         }
 
     @staticmethod
+    def _duplicate_source(
+        state: SqliteState, user_id: str, ids: set[str], *, holdings: bool
+    ) -> DuplicateSource | None:
+        """The newest live import of yours that holds any of ``ids``."""
+        if not ids:
+            return None
+        marks = ", ".join("?" for _ in ids)
+        rows_sql = (
+            f"SELECT h.import_id FROM statement_import_holdings h WHERE h.row_id IN ({marks})"
+            if holdings
+            else "SELECT a.import_id FROM broker_activities a"
+            " JOIN broker_connections c ON c.id = a.connection_id"
+            f" WHERE c.provider = ? AND a.provider_activity_id IN ({marks})"
+        )
+        params: list[Any] = sorted(ids) if holdings else [CSV_PROVIDER, *sorted(ids)]
+        rows = state.sql(
+            "SELECT i.id, i.portfolio_id, p.name AS portfolio_name, i.created_at"
+            " FROM statement_imports i LEFT JOIN portfolios p ON p.id = i.portfolio_id"
+            f" WHERE i.user_id = ? AND i.undone_at IS NULL AND i.id IN ({rows_sql})"
+            " ORDER BY i.created_at DESC, i.id DESC LIMIT 1",
+            [user_id, *params],
+        )
+        if not rows:
+            return None
+        r = rows[0]
+        return DuplicateSource(
+            portfolio_id=r["portfolio_id"],
+            portfolio_name=r["portfolio_name"],
+            import_id=r["id"],
+            imported_on=datetime.fromisoformat(r["created_at"]).date(),
+        )
+
+    @staticmethod
     def _known_holdings(state: SqliteState, user_id: str) -> set[str]:
         return {
             r[0]
@@ -640,6 +690,15 @@ def _insert_import(
             as_of.isoformat() if as_of else None,
         ],
     )
+
+
+def _row_ids(reading: _Reading, today: date) -> set[str]:
+    """The stable ids of a file's rows, as duplicate checks compare them."""
+    parsed = reading.parsed
+    if parsed is not None and parsed.kind == "holdings":
+        as_of = reading.as_of or today
+        return {_holding_id(as_of, h) for h in parsed.holdings}
+    return {r.activity.provider_activity_id for r in reading.rows if r.activity is not None}
 
 
 def _preview(

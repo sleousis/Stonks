@@ -2988,6 +2988,30 @@ export type DriftItemView = {
 };
 
 /**
+ * DuplicateSource
+ *
+ * Where rows a preview calls duplicates were imported before.
+ */
+export type DuplicateSource = {
+    /**
+     * Import Id
+     */
+    import_id: string;
+    /**
+     * Imported On
+     */
+    imported_on: string;
+    /**
+     * Portfolio Id
+     */
+    portfolio_id: string;
+    /**
+     * Portfolio Name
+     */
+    portfolio_name: string | null;
+};
+
+/**
  * EarningsEvent
  */
 export type EarningsEvent = {
@@ -7036,6 +7060,12 @@ export type LookThroughView = {
      * Reporting currency. Amounts are not FX-converted.
      */
     currency: string;
+    /**
+     * Funds Without List
+     *
+     * Held funds (ETFs) with no holdings list, counted as one name each.
+     */
+    funds_without_list?: Array<string>;
     look_through: LookThrough;
     /**
      * Notes
@@ -12219,6 +12249,10 @@ export type ProviderView = {
      */
     enabled: boolean;
     /**
+     * Gateways
+     */
+    gateways?: Array<string>;
+    /**
      * Has Paper
      */
     has_paper: boolean;
@@ -14955,6 +14989,7 @@ export type StatementPreview = {
      * Duplicate
      */
     duplicate: number;
+    duplicates_in?: DuplicateSource | null;
     /**
      * First Date
      */

@@ -44,10 +44,12 @@ describe('TaxPage', () => {
   let el: HTMLElement;
   let allowed: boolean;
   let settings: TaxSettingsView;
+  let current: { kind: string; trading: string; live_stage?: string } | null;
 
   beforeEach(() => {
     allowed = true;
     settings = SETTINGS;
+    current = null;
     TestBed.configureTestingModule({
       providers: [
         ...provideApi(),
@@ -57,7 +59,7 @@ describe('TaxPage', () => {
           provide: PortfolioContextService,
           useValue: {
             selectedId: () => 'pf_1',
-            current: () => null,
+            current: () => current,
             live: () => false,
             state: () => 'ready',
             noBook: () => false,
@@ -255,5 +257,16 @@ describe('TaxPage', () => {
     expect(card.textContent).toContain('Tax owed this year');
     expect(card.textContent).toContain('$139.00');
     expect(card.textContent).toContain('3 sales in 2026');
+    expect(card.textContent).toContain('Short term 32%, long term 15%');
+    // Sales close their oldest shares first: no Specific lots panel to repeat it.
+    expect(el.textContent).not.toContain('Save "Specific lots" above');
+  });
+
+  it('says the tax is what it would be on a paper portfolio', async () => {
+    current = { kind: 'simulated', trading: 'paper', live_stage: 'sim_paper' };
+    await render();
+    const card = el.querySelector('app-tax-year-card')!;
+    expect(card.textContent).toContain('Tax if this were real');
+    expect(card.textContent).not.toContain('Tax owed this year');
   });
 });

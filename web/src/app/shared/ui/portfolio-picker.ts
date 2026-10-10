@@ -2,6 +2,25 @@ import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/cor
 
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { portfolioModeNote } from '../live-stages';
+
+interface PortfolioMode {
+  kind?: string;
+  trading: string;
+  live_stage?: string | null;
+}
+
+/**
+ * A broker portfolio that neither trades real money nor sits at Broker
+ * paper is a real account Stonks only reads: a read-only connection or CSV
+ * imports (DEGIRO). It is never paper money.
+ */
+export function isReadOnly(p: PortfolioMode): boolean {
+  return p.kind === 'broker' && p.trading !== 'live' && p.live_stage !== 'broker_paper';
+}
+
+function modeNote(p: PortfolioMode): string {
+  return isReadOnly(p) ? ' (read only)' : portfolioModeNote(p);
+}
 import { ModeStamp } from './mode-stamp';
 
 /**
@@ -9,7 +28,8 @@ import { ModeStamp } from './mode-stamp';
  * only when the user has more than one portfolio (and the server lists
  * them). One option per portfolio (UX-69): with no pick yet, the default
  * portfolio shows as chosen. A portfolio at a Real money stage carries a
- * brass LIVE stamp, a paper one a grey PAPER (or BROKER PAPER) stamp.
+ * brass LIVE stamp, a paper one a grey PAPER (or BROKER PAPER) stamp, and
+ * one fed by a read-only connection or CSV imports a grey READ ONLY stamp.
  */
 @Component({
   selector: 'app-portfolio-picker',
@@ -34,7 +54,11 @@ import { ModeStamp } from './mode-stamp';
           }
         </select>
         @if (ctx.current(); as p) {
-          <app-mode-stamp [live]="p.trading === 'live'" [stage]="p.live_stage" />
+          <app-mode-stamp
+            [live]="p.trading === 'live'"
+            [stage]="p.live_stage"
+            [readOnly]="readOnly(p)"
+          />
         }
       </span>
     }
@@ -71,7 +95,8 @@ import { ModeStamp } from './mode-stamp';
 })
 export class PortfolioPicker implements OnInit {
   protected readonly ctx = inject(PortfolioContextService);
-  protected readonly note = portfolioModeNote;
+  protected readonly note = modeNote;
+  protected readonly readOnly = isReadOnly;
 
   ngOnInit(): void {
     void this.ctx.load();
