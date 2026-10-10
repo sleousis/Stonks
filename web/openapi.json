@@ -25015,7 +25015,10 @@
                 "enum": [
                   "engine_off",
                   "options_off",
-                  "no_gateway"
+                  "no_gateway",
+                  "no_live_portfolio",
+                  "no_connections",
+                  "no_learning_strategies"
                 ],
                 "type": "string"
               },
@@ -34093,7 +34096,7 @@
   "paths": {
     "/api/alerts": {
       "get": {
-        "description": "Your notifications, newest first. Admins also see the admin audience\n(operational alerts with no single recipient).",
+        "description": "Your notifications, newest first. Admins also see the admin audience\n(operational alerts with no single recipient). ``category`` keeps only\nthose categories (repeat it for more). ``system`` also keeps the\noperator alerts, which carry no category.",
         "operationId": "listAlerts",
         "parameters": [
           {
@@ -34115,6 +34118,34 @@
                 }
               ],
               "title": "Level"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "signal",
+                      "order",
+                      "risk",
+                      "system",
+                      "price_alert",
+                      "event_alert",
+                      "screen_alert"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
             }
           },
           {

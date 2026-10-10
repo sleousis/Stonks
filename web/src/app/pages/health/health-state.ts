@@ -53,6 +53,15 @@ export function checkLevel(check: HealthCheckView): HealthLevel {
   return 'critical';
 }
 
+/** Lab workers while none are in use: nothing to say, so the list leaves it out. */
+function idle(check: HealthCheckView): boolean {
+  if (check.name !== 'lab_queue' || !check.ok) return false;
+  return (
+    check.detail === 'no lab queue table' ||
+    /^0 queued, 0 running, 0 worker\(s\) alive$/.test(check.detail)
+  );
+}
+
 export function worstLevel(levels: Iterable<HealthLevel>): HealthLevel {
   let worst: HealthLevel = 'good';
   for (const level of levels) if (RANK[level] > RANK[worst]) worst = level;
@@ -93,7 +102,7 @@ export function splitChecks(checks: readonly HealthCheckView[]): {
         level,
         detail: plainDetail(c),
       });
-    } else if (!c.name.startsWith(BROKER_PREFIX)) {
+    } else if (!c.name.startsWith(BROKER_PREFIX) && !idle(c)) {
       other.push({ ...c, level });
     }
   }
@@ -210,6 +219,9 @@ export function checkMeaning(name: string): string | null {
   return CHECKS[base]?.meaning ?? null;
 }
 
+/** What the server says about a check that has never run (the price check). */
+const NOT_RUN = 'not run yet';
+
 /** What the server says when a check passes only for lack of data. */
 const NO_DATA_DETAILS = new Set(['not enough days yet']);
 
@@ -221,6 +233,7 @@ export function checkOutcome(check: HealthCheckView): CheckOutcome {
 
 /** The pill for one check: its word and tone. */
 export function checkPill(check: HealthCheckView): { label: string; tone: PillTone } {
+  if (check.ok && check.detail === NOT_RUN) return { label: 'Not run yet', tone: 'neutral' };
   if (checkOutcome(check) === 'no_data') return { label: CHECK_WORDS.no_data, tone: 'neutral' };
   const level = checkLevel(check);
   return { label: LEVEL_LABEL[level], tone: LEVEL_TONE[level] };

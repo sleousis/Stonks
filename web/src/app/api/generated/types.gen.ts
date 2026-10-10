@@ -13608,7 +13608,7 @@ export type ScheduledJobView = {
     /**
      * Off Reason
      */
-    off_reason?: 'engine_off' | 'options_off' | 'no_gateway' | null;
+    off_reason?: 'engine_off' | 'options_off' | 'no_gateway' | 'no_live_portfolio' | 'no_connections' | 'no_learning_strategies' | null;
     /**
      * Trigger
      */
@@ -18562,6 +18562,10 @@ export type ListAlertsData = {
          * Level
          */
         level?: 'info' | 'warning' | 'error' | null;
+        /**
+         * Category
+         */
+        category?: Array<'signal' | 'order' | 'risk' | 'system' | 'price_alert' | 'event_alert' | 'screen_alert'> | null;
         /**
          * Limit
          *

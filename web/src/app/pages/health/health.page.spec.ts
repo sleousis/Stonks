@@ -124,12 +124,34 @@ describe('HealthPage', () => {
     expect(el.querySelectorAll('app-price-check-panel').length).toBe(1);
   });
 
-  it('lists freshness per ticker, worst first', async () => {
+  it('lists only the stale tickers', async () => {
     await flushAll();
     const text = el.querySelector('[aria-labelledby="fresh-title"]')!.textContent!;
-    expect(text.indexOf('MSFT.US')).toBeLessThan(text.indexOf('AAPL.US'));
+    expect(text).toContain('MSFT.US');
     expect(text).toContain('Latest price 2026-09-19, 7 days old.');
+    expect(text).not.toContain('AAPL.US');
+    expect(text).toContain('1 other ticker fresh.');
     expect(text).not.toContain('Good');
+  });
+
+  it('says all tickers are fresh instead of listing them', async () => {
+    await flushAll({
+      ...REPORT,
+      checks: REPORT.checks.map((c) =>
+        c.name === 'freshness:MSFT.US' ? { ...c, ok: true, detail: c.detail } : c,
+      ),
+    });
+    const panel = el.querySelector('[aria-labelledby="fresh-title"]')!;
+    expect(panel.textContent).toContain('All 2 tickers fresh.');
+    expect(panel.querySelector('app-data-table')).toBeNull();
+  });
+
+  it('keeps one summary tile per thing, in sentences', async () => {
+    await flushAll();
+    const tiles = el.querySelector('.tiles')!.textContent!;
+    expect(tiles).not.toContain('Stuck runs');
+    expect(tiles).toContain('All time. Latest below.');
+    expect(tiles).not.toContain(';');
   });
 
   it('names every system check in words with what it watches', async () => {
@@ -137,7 +159,7 @@ describe('HealthPage', () => {
       ...REPORT,
       checks: [
         ...REPORT.checks,
-        { name: 'lab_queue', ok: true, detail: '0 queued, 0 running, 0 worker(s) alive' },
+        { name: 'lab_queue', ok: true, detail: '1 queued, 0 running, 1 worker(s) alive' },
         { name: 'risk_halts', ok: true, detail: 'no halt in force' },
         { name: 'var_violations', ok: true, detail: 'not enough days yet' },
       ],
@@ -148,7 +170,7 @@ describe('HealthPage', () => {
     expect(text).toContain('Trading stops');
     expect(text).toContain('Risk estimate accuracy');
     expect(text).toContain('Not enough data yet');
-    expect(text).toContain('0 waiting, 0 running, 0 workers up.');
+    expect(text).toContain('1 waiting, 0 running, 1 worker up.');
     expect(text).toContain('Lab jobs sent to separate workers');
     expect(text).not.toMatch(/lab_queue|risk_halts|var_violations|worker\(s\)/);
     expect(text).not.toContain('Good');

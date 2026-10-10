@@ -6,7 +6,7 @@
   }
 </app-page-header>
 
-<!-- One section at a time (M14): Account, Alerts, Display, Risk limits, and System for admins. -->
+<!-- One section at a time (M14): Display, Risk limits, and System for admins. -->
 <app-page-tabs
   #tabs
   idPrefix="settings"
@@ -17,79 +17,6 @@
 />
 
 @switch (section()) {
-  @case ('alerts') {
-    <section
-      class="column wide"
-      role="tabpanel"
-      [id]="tabs.panelId('alerts')"
-      [attr.aria-labelledby]="tabs.tabId('alerts')"
-    >
-      <h2 class="visually-hidden">Alerts</h2>
-      <!-- Every alert setting lives on one page (F39). -->
-      <section class="panel" aria-labelledby="alerts-title">
-        <div class="panel-head">
-          <h3 id="alerts-title">Alert settings</h3>
-        </div>
-        <div class="panel-body">
-          <p class="lead">
-            What reaches you and where: push on this device, email, Telegram, your webhook, quiet
-            hours, upcoming events and price alerts, all in one place. The feed and your price
-            alerts are on <a routerLink="/notifications">Notifications</a>.
-          </p>
-          <a class="btn" routerLink="/notifications/settings">Open alert settings</a>
-        </div>
-      </section>
-    </section>
-  }
-  @case ('display') {
-    <section
-      class="column wide"
-      role="tabpanel"
-      [id]="tabs.panelId('display')"
-      [attr.aria-labelledby]="tabs.tabId('display')"
-    >
-      <h2 class="visually-hidden">Display</h2>
-      <!-- Theme ----------------------------------------------------------------->
-      <section class="panel" aria-labelledby="theme-title">
-        <div class="panel-head">
-          <h3 id="theme-title">Theme</h3>
-          <span class="muted">Now {{ theme.resolved() }}</span>
-        </div>
-        <div class="panel-body">
-          <fieldset class="themes">
-            <legend class="visually-hidden">Theme</legend>
-            @for (option of themes; track option.value) {
-              <label class="check">
-                <input
-                  type="radio"
-                  name="theme"
-                  [value]="option.value"
-                  [checked]="theme.mode() === option.value"
-                  (change)="setTheme(option.value)"
-                />
-                {{ option.label }}
-              </label>
-            }
-          </fieldset>
-        </div>
-      </section>
-
-      <app-display-prefs />
-      <!-- Keyboard -------------------------------------------------------------->
-      <section class="panel" aria-labelledby="keys-title">
-        <div class="panel-head">
-          <h3 id="keys-title">Keyboard</h3>
-        </div>
-        <div class="panel-body">
-          <p class="lead">
-            Press <kbd>Ctrl</kbd> + <kbd>K</kbd> (<kbd>⌘</kbd> + <kbd>K</kbd> on a Mac) to search
-            pages, strategies, tickers and jobs, or to run a command. Press <kbd>?</kbd> for every
-            shortcut, including <kbd>g</kbd> then a letter to jump to a page.
-          </p>
-        </div>
-      </section>
-    </section>
-  }
   @case ('risk') {
     <section
       class="column"
@@ -195,31 +122,6 @@
         }
       </section>
 
-      <!-- Risk ------------------------------------------------------------------>
-      <section class="panel" aria-labelledby="risk-title">
-        <div class="panel-head">
-          <h3 id="risk-title">Risk policy</h3>
-        </div>
-        @if (risk.error(); as err) {
-          <app-error-state
-            title="Could not load the risk policy"
-            [error]="err"
-            (retry)="risk.reload()"
-          />
-        } @else if (!risk.hasValue()) {
-          <app-loading-state label="Loading risk policy" [rows]="5" />
-        } @else {
-          <dl class="facts">
-            @for (f of riskFacts(); track f.label) {
-              <div>
-                <dt>{{ f.label }}</dt>
-                <dd class="num">{{ f.value }}</dd>
-              </div>
-            }
-          </dl>
-        }
-      </section>
-
       <!-- Sources --------------------------------------------------------------->
       <section class="panel" aria-labelledby="sources-title">
         <div class="panel-head">
@@ -318,122 +220,49 @@
     <section
       class="column wide"
       role="tabpanel"
-      [id]="tabs.panelId('account')"
-      [attr.aria-labelledby]="tabs.tabId('account')"
+      [id]="tabs.panelId('display')"
+      [attr.aria-labelledby]="tabs.tabId('display')"
     >
-      <h2 class="visually-hidden">Account</h2>
-      <!-- Profile -------------------------------------------------------------->
-      <section class="panel" aria-labelledby="profile-title">
+      <h2 class="visually-hidden">Display</h2>
+      <!-- Theme ----------------------------------------------------------------->
+      <section class="panel" aria-labelledby="theme-title">
         <div class="panel-head">
-          <h3 id="profile-title">Sign-in and security</h3>
+          <h3 id="theme-title">Theme</h3>
+          <span class="muted">Now {{ theme.resolved() }}</span>
         </div>
         <div class="panel-body">
-          <p class="lead">
-            Change your password, get new recovery codes and manage your API tokens on your Profile
-            page.
-          </p>
-          <a class="btn" routerLink="/profile">Open profile</a>
+          <fieldset class="themes">
+            <legend class="visually-hidden">Theme</legend>
+            @for (option of themes; track option.value) {
+              <label class="check">
+                <input
+                  type="radio"
+                  name="theme"
+                  [value]="option.value"
+                  [checked]="theme.mode() === option.value"
+                  (change)="setTheme(option.value)"
+                />
+                {{ option.label }}
+              </label>
+            }
+          </fieldset>
         </div>
       </section>
 
-      <!-- For scripts: the tab's API token, folded away (UX-43) ------------------>
-      <details class="scripts full">
-        <summary>For scripts</summary>
-        <section class="panel" aria-labelledby="token-title">
-          <div class="panel-head">
-            <h3 id="token-title">API token</h3>
-            <app-status-pill
-              [status]="hasToken() ? 'ok' : 'disabled'"
-              [label]="hasToken() ? 'Set for this tab' : 'Not set'"
-            />
-          </div>
-          <div class="panel-body">
-            <p class="lead">
-              Signed in? You need no token. To use one, create it on your Profile page and paste it
-              here. It stays in this tab only and is cleared when the tab closes.
-            </p>
-
-            <form class="form-grid" [formGroup]="tokenForm" (ngSubmit)="saveToken()">
-              <div class="field">
-                <label for="api-token">{{ hasToken() ? 'Replace token' : 'Token' }}</label>
-                <div class="with-button">
-                  <input
-                    id="api-token"
-                    class="input"
-                    formControlName="token"
-                    autocomplete="off"
-                    autocapitalize="off"
-                    spellcheck="false"
-                    [type]="showToken() ? 'text' : 'password'"
-                    [attr.aria-invalid]="
-                      tokenForm.controls.token.touched && tokenForm.controls.token.invalid
-                    "
-                    aria-describedby="api-token-hint api-token-error"
-                  />
-                  <button
-                    type="button"
-                    class="btn"
-                    [attr.aria-pressed]="showToken()"
-                    [attr.aria-label]="showToken() ? 'Hide token' : 'Show token'"
-                    (click)="showToken.set(!showToken())"
-                  >
-                    {{ showToken() ? 'Hide' : 'Show' }}
-                  </button>
-                </div>
-                @if (
-                  tokenForm.controls.token.touched && tokenForm.controls.token.hasError('required')
-                ) {
-                  <span id="api-token-error" class="error">Enter the token to save it.</span>
-                } @else {
-                  <span id="api-token-hint" class="hint"
-                    >Paste a token from your Profile page.</span
-                  >
-                }
-              </div>
-              <div class="actions">
-                <button type="submit" class="btn btn-primary">Save token</button>
-                <button
-                  type="button"
-                  class="btn"
-                  [disabled]="testing()"
-                  [attr.aria-busy]="testing()"
-                  (click)="testToken()"
-                >
-                  {{ testing() ? 'Testing…' : 'Test token' }}
-                </button>
-                @if (hasToken()) {
-                  <button type="button" class="btn" (click)="clearToken()">Remove token</button>
-                }
-              </div>
-            </form>
-
-            <div class="token-result" role="status" aria-live="polite">
-              @if (tokenCheck(); as check) {
-                <p class="check-result" [attr.data-state]="check.state">
-                  <app-status-pill
-                    [status]="check.state"
-                    [tone]="
-                      check.state === 'valid'
-                        ? 'positive'
-                        : check.state === 'invalid'
-                          ? 'negative'
-                          : 'warn'
-                    "
-                    [label]="
-                      check.state === 'valid'
-                        ? 'Accepted'
-                        : check.state === 'invalid'
-                          ? 'Rejected'
-                          : 'Not verified'
-                    "
-                  />
-                  <span>{{ check.message }}</span>
-                </p>
-              }
-            </div>
-          </div>
-        </section>
-      </details>
+      <app-display-prefs />
+      <!-- Keyboard -------------------------------------------------------------->
+      <section class="panel" aria-labelledby="keys-title">
+        <div class="panel-head">
+          <h3 id="keys-title">Keyboard</h3>
+        </div>
+        <div class="panel-body">
+          <p class="lead">
+            Press <kbd>Ctrl</kbd> + <kbd>K</kbd> (<kbd>⌘</kbd> + <kbd>K</kbd> on a Mac) to search
+            pages, strategies, tickers and jobs, or to run a command. Press <kbd>?</kbd> for every
+            shortcut, including <kbd>g</kbd> then a letter to jump to a page.
+          </p>
+        </div>
+      </section>
     </section>
   }
 }

@@ -22,6 +22,9 @@ export function levelPill(level: string | null | undefined): { tone: PillTone; l
   );
 }
 
+/** Operational alerts only. Signals and price alerts stay on Notifications. */
+const SYSTEM_CATEGORIES: ('system' | 'risk')[] = ['system', 'risk'];
+
 /**
  * Recent system alerts (data gaps, failed runs, broker trouble), newest
  * first, one server page at a time. The shown page stays, dimmed, while the
@@ -45,7 +48,7 @@ export function levelPill(level: string | null | undefined): { tone: PillTone; l
         <app-loading-state label="Loading alerts" [rows]="4" />
       } @else if (page.items.length === 0) {
         <app-empty-state
-          title="No alerts"
+          title="No system alerts"
           message="Problems the server notices, like missing data, a failed run or a broker it cannot reach, show here."
         />
       } @else {
@@ -160,7 +163,7 @@ export class AlertsPanel {
   readonly limit = input(20);
   protected readonly offset = signal(0);
   protected readonly alerts = resource({
-    params: () => ({ limit: this.limit(), offset: this.offset() }),
+    params: () => ({ limit: this.limit(), offset: this.offset(), category: SYSTEM_CATEGORIES }),
     loader: ({ params }) => this.api.list(params),
   });
   /** The last loaded page stays on screen while the next one loads. */

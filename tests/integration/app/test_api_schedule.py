@@ -355,3 +355,82 @@ def test_jobs_for_features_that_are_off_say_why(settings, seeded, fake_source, t
         "options_live": "options_off",
         "broker_health": "no_gateway",
     }
+
+
+def test_a_run_now_in_progress_is_not_a_running_scheduler(services):
+    """Run now from the console runs on serve's own thread: no scheduler
+    heartbeat, so the page must not claim a scheduler service runs."""
+    from datetime import UTC, datetime
+
+    from stonks.app.schedule import ScheduledRunView
+
+    now = datetime.now(UTC)
+    run = ScheduledRunView(
+        id="r1",
+        job_name="health",
+        action="health",
+        run_key=f"manual:{now.isoformat()}",
+        scheduled_for=now,
+        as_of=None,
+        status="running",
+        catch_up=False,
+        started_at=now,
+        finished_at=None,
+        detail=None,
+        error=None,
+        origin="run_now",
+    )
+    schedule = services.schedule
+    assert schedule._scheduler_running(schedule._store(), [run], now) is False
+    scheduled = run.model_copy(update={"origin": "schedule", "run_key": "fire:1"})
+    assert schedule._scheduler_running(schedule._store(), [scheduled], now) is True
+
+
+def test_live_and_learning_jobs_say_why_on_a_no_broker_install(
+    settings, seeded, fake_source, tmp_path
+):
+    config = _config(tmp_path)
+    for name, action in [
+        ("live_sod_check", "live_reconcile"),
+        ("live_submit", "live_submit"),
+        ("live_stops", "live_stops"),
+        ("live_gate_days", "live_gate_days"),
+        ("live_margin", "live_margin"),
+        ("algo_slices", "algo_slices"),
+        ("connections_sync", "connections_sync"),
+        ("model_retrain", "model_retrain"),
+    ]:
+        config.jobs.append(
+            JobConfig(name=name, action=action, trigger=IntervalTriggerConfig(every_minutes=60))
+        )
+    services = _services(settings, fake_source, config)
+    with TestClient(create_app(settings, services=services), client=LOOPBACK) as c:
+        jobs = {j["name"]: j["off_reason"] for j in c.get("/api/schedule").json()["jobs"]}
+    assert jobs == {
+        "health": None,
+        "live_sod_check": "no_live_portfolio",
+        "live_submit": "no_live_portfolio",
+        "live_stops": "no_live_portfolio",
+        "live_gate_days": "no_live_portfolio",
+        "live_margin": "no_live_portfolio",
+        "algo_slices": "no_live_portfolio",
+        "connections_sync": "no_connections",
+        "model_retrain": "no_learning_strategies",
+    }
+
+
+def test_a_broker_portfolio_turns_the_live_jobs_on(settings, seeded, fake_source, tmp_path):
+    config = _config(tmp_path)
+    config.jobs.append(
+        JobConfig(
+            name="live_submit",
+            action="live_submit",
+            trigger=IntervalTriggerConfig(every_minutes=60),
+        )
+    )
+    with SqliteState(settings.state.path) as state:
+        state.execute("UPDATE portfolios SET kind = 'broker' WHERE id = 'pf_default'")
+    services = _services(settings, fake_source, config)
+    with TestClient(create_app(settings, services=services), client=LOOPBACK) as c:
+        jobs = {j["name"]: j["off_reason"] for j in c.get("/api/schedule").json()["jobs"]}
+    assert jobs["live_submit"] is None

@@ -12,7 +12,14 @@ import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
-import { DUE_GRACE_MS, SchedulePage, formatSize, jobRows } from './schedule.page';
+import {
+  DUE_GRACE_MS,
+  OFF_REASONS,
+  SchedulePage,
+  formatSize,
+  jobRows,
+  localWhen,
+} from './schedule.page';
 
 const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
 
@@ -132,6 +139,33 @@ describe('schedule helpers', () => {
     expect(formatSize(1536)).toBe('1.5 KB');
     expect(formatSize(5 * 1024 * 1024)).toBe('5 MB');
     expect(formatSize(null)).toBe('–');
+  });
+
+  it('says in words why a live, sync or retrain job waits', () => {
+    expect(OFF_REASONS['no_live_portfolio']).toBe('No portfolio trades at a broker.');
+    expect(OFF_REASONS['no_connections']).toBe('No broker is connected.');
+    expect(OFF_REASONS['no_learning_strategies']).toBe('No strategy learns from data.');
+  });
+
+  it('gives a daily time in the viewer zone with the server zone in brackets', () => {
+    const at = '2026-10-11T05:00:00Z';
+    const local = new Date(at);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const hhmm = `${pad(local.getHours())}:${pad(local.getMinutes())}`;
+    const text = localWhen({
+      trigger_text: 'Every day at 05:00 UTC',
+      trigger: '',
+      next_run_at: at,
+    });
+    expect(text).toBe(
+      hhmm === '05:00' ? 'Every day at 05:00 UTC' : `Every day at ${hhmm} (05:00 UTC)`,
+    );
+    expect(
+      localWhen({ trigger_text: 'Every 5 minutes', trigger: 'every 5m', next_run_at: at }),
+    ).toBe('Every 5 minutes');
+    expect(localWhen({ trigger_text: '', trigger: 'every 5m', next_run_at: null })).toBe(
+      'every 5m',
+    );
   });
 });
 
@@ -358,7 +392,7 @@ describe('SchedulePage', () => {
       const jobs = el.querySelector('[aria-labelledby="jobs-title"]')!;
       expect(jobs.querySelector('button[aria-label="Run now: Intraday engine start"]')).toBeNull();
       const off = jobs.querySelector('details.off-jobs')!;
-      expect(off.textContent).toContain('Waiting on a feature that is off (1)');
+      expect(off.textContent).toContain('Not in use yet (1)');
       expect(off.textContent).toContain('Intraday engine start');
       expect(off.textContent).toContain('Intraday trading is off.');
       expect(jobs.textContent).not.toContain('engine_start');

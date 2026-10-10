@@ -89,8 +89,17 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-bottom: var(--space-4);
 
+  // Three tiles: the freshness one spans the row until there is room for all.
+  > :first-child {
+    grid-column: 1 / -1;
+  }
+
   @include bp.from-desktop {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+    > :first-child {
+      grid-column: auto;
+    }
   }
 }
 

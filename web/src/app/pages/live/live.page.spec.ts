@@ -91,6 +91,10 @@ describe('LivePage', () => {
     expect(el.querySelector('section.panel app-empty-state')).not.toBeNull();
     expect(el.querySelector('h1')!.textContent).toContain('Intraday engine');
     expect(el.textContent).not.toMatch(/live engine/i);
+    // One empty state while it is off: no P&L panel, no alarm footnote.
+    expect(el.querySelectorAll('section.panel').length).toBe(1);
+    expect(el.querySelector('.pnl')).toBeNull();
+    expect(el.textContent).not.toContain('closed bar');
   });
 
   it('points to the schedule when minute prices are on but no engine reported', async () => {
@@ -105,7 +109,7 @@ describe('LivePage', () => {
     expect(pnl.querySelector('h2')!.textContent).toContain('Intraday P&L by portfolio');
     expect(pnl.textContent).toContain('not kept');
     expect(pnl.querySelector('.pnl-line')).toBeNull();
-    expect(el.querySelector('.footnote')!.textContent).toContain('5 minutes');
+    expect(el.querySelector('.footnote')).toBeNull();
   });
 
   it('shows the latest intraday P&L of the default portfolio', async () => {

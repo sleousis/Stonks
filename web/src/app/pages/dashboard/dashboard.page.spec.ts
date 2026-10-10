@@ -101,7 +101,7 @@ const HEALTH: HealthReportView = {
   checks: [
     { name: 'freshness:AAPL.US', ok: false, detail: 'latest bar 2026-09-19 (7d old, max 4d)' },
     { name: 'freshness:MSFT.US', ok: true, detail: 'latest bar 2026-09-25 (1d old, max 4d)' },
-    { name: 'lab_queue', ok: true, detail: '0 queued, 0 running, 0 worker(s) alive' },
+    { name: 'lab_queue', ok: true, detail: '1 queued, 0 running, 1 worker(s) alive' },
     { name: 'var_violations', ok: true, detail: 'not enough days yet' },
   ],
 };

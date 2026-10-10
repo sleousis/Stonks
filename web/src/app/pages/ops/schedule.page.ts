@@ -66,7 +66,41 @@ export const OFF_REASONS: Readonly<Record<string, string>> = {
   engine_off: 'Intraday trading is off.',
   options_off: 'Live options are off.',
   no_gateway: 'No Interactive Brokers gateway is set up.',
+  no_live_portfolio: 'No portfolio trades at a broker.',
+  no_connections: 'No broker is connected.',
+  no_learning_strategies: 'No strategy learns from data.',
 };
+
+const DAILY_AT = /\bat (\d{2}):(\d{2}) (\S+)$/;
+
+/** The viewer's own zone, or null when the browser does not say. */
+function viewerZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * When a job runs, with a daily time in the viewer's zone and the server's
+ * zone in brackets ("Every day at 06:00 (05:00 UTC)"), so it matches Next
+ * run. Other triggers keep their words.
+ */
+export function localWhen(
+  job: Pick<ScheduledJobView, 'trigger_text' | 'trigger' | 'next_run_at'>,
+): string {
+  const text = job.trigger_text || job.trigger;
+  const match = DAILY_AT.exec(text);
+  if (!match || !job.next_run_at) return text;
+  const next = new Date(job.next_run_at);
+  if (Number.isNaN(next.getTime())) return text;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const local = `${pad(next.getHours())}:${pad(next.getMinutes())}`;
+  const server = `${match[1]}:${match[2]}`;
+  if (local === server || match[3] === viewerZone()) return text;
+  return `${text.slice(0, match.index)}at ${local} (${server} ${match[3]})`;
+}
 
 /** Who started a run. */
 export const RUN_ORIGINS: Readonly<Record<string, string>> = {
@@ -219,7 +253,7 @@ export class SchedulePage {
       key: 'trigger',
       label: 'When',
       sortable: false,
-      value: (j) => j.trigger_text || j.trigger,
+      value: (j) => localWhen(j),
     },
     { key: 'next_run_at', label: 'Next run' },
     { key: 'last_status', label: 'Last run', value: (j) => runWord(j.last_status) },
@@ -227,7 +261,10 @@ export class SchedulePage {
   /** Run now only for those who may use it. */
   protected readonly jobColumns = computed<TableColumn<JobRow>[]>(() =>
     this.canRun()
-      ? [...this.baseJobColumns, { key: 'run', label: 'Run now', sortable: false, value: () => '' }]
+      ? [
+          ...this.baseJobColumns,
+          { key: 'run', label: 'Run now', sortable: false, value: () => '', help: false },
+        ]
       : this.baseJobColumns,
   );
 

@@ -31,7 +31,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
   template: `
     <app-page-header
       title="Model versions"
-      description="New fits of strategies that learn from data. Each trades on its own test book until an admin swaps it in or rejects it."
+      description="New versions of strategies that learn from data. Each trades on its own test book until an admin puts it in use or rejects it."
     />
 
     <section class="panel" aria-labelledby="candidates-title">
@@ -52,7 +52,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
       } @else if (candidates.value().length === 0) {
         <app-empty-state
           title="No candidates"
-          message="A retrain runs every Saturday and each new fit waits here until it is swapped in or rejected. Only strategies that learn from data get new fits, so this stays empty while none of them is approved or on trial. Use Retrain all below to refit now."
+          message="A retrain runs every Saturday and each new version waits here until it is put in use or rejected. Only strategies that learn from data get new versions, so this stays empty while none of them is approved or on trial. Use Retrain all below to retrain now."
         />
       } @else {
         <app-data-table
@@ -82,8 +82,8 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
       </div>
       <div class="panel-body">
         <p class="muted">
-          Refits every strategy that learns from data on its latest data. The weekly run does the
-          same. A strategy fitted in the last few days is skipped unless you refit anyway.
+          Retrains every strategy that learns from data on its latest data. The weekly run does the
+          same. A strategy retrained in the last few days is skipped unless you check the box.
         </p>
         <app-retrain-job label="Retrain all" (finished)="candidates.reload()" />
       </div>
