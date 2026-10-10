@@ -43,8 +43,7 @@ backup_env_get() {
 legacy_backup_keys() {
 	local key
 	for key in $BACKUP_ENV_KEYS; do
-		[ -n "$(env_get "$key")" ] && printf '%s
-' "$key"
+		[ -n "$(env_get "$key")" ] && printf '%s\n' "$key"
 	done
 	return 0
 }
@@ -53,8 +52,7 @@ legacy_backup_keys() {
 # can read them there. warn_legacy_backup_env [log|notify].
 warn_legacy_backup_env() {
 	local how="${1:-log}" keys text
-	keys="$(legacy_backup_keys | tr '
-' ' ')"
+	keys="$(legacy_backup_keys | tr '\n' ' ')"
 	[ -n "$keys" ] || return 0
 	text="deploy/.env still holds backup secrets (${keys% }), so the app containers can read them. Move them to deploy/backup.env with deploy/scripts/migrate-backup-env.sh, then run docker compose up -d"
 	if [ "$how" = notify ]; then
