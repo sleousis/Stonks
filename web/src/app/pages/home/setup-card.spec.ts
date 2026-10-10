@@ -44,7 +44,7 @@ describe('SetupCard', () => {
     await tick();
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.textContent).toContain('1 of 5 done, 1 skipped');
+    expect(el.textContent).toContain('1 of 3 done');
     expect(el.querySelector('h2')!.textContent).toBe('Get set up');
     // The no-broker path comes first (FR-01).
     expect(el.textContent).toContain('Next: follow a strategy');

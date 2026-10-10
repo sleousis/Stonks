@@ -93,11 +93,12 @@ export function currentStep(view: OnboardingView): OnboardingStepId | null {
   return orderedSteps(view.steps).find((s) => s.state === 'todo')?.id ?? null;
 }
 
-/** "3 of 5 done" (skipped steps count as handled). */
+/** "2 of 3 done": the steps that matter, so the optional ones never hold it back (FR-01). */
 export function progressText(steps: readonly OnboardingStepView[]): string {
-  const done = steps.filter((s) => s.state === 'done').length;
-  const skipped = steps.filter((s) => s.state === 'skipped').length;
-  const base = `${done} of ${steps.length} done`;
+  const counted = steps.filter((s) => !OPTIONAL_STEPS.has(s.id));
+  const done = counted.filter((s) => s.state === 'done').length;
+  const skipped = counted.filter((s) => s.state === 'skipped').length;
+  const base = `${done} of ${counted.length} done`;
   return skipped ? `${base}, ${skipped} skipped` : base;
 }
 

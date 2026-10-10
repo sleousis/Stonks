@@ -3,10 +3,14 @@
 A new install or a new trader is walked through a few plain steps:
 
 1. ``account``: sign in and set up the second factor,
-2. ``portfolio``: pick or open a portfolio,
-3. ``data``: choose the data to watch (a watchlist, or a universe),
+2. ``portfolio``: pick or open a portfolio (optional),
+3. ``data``: choose the data to watch, a watchlist or a universe (optional),
 4. ``follow``: follow a strategy for signals or paper trading,
 5. ``alerts``: turn on push alerts on a device, or link Telegram.
+
+The console shows them as account, follow, alerts, then the two optional
+steps (FR-01). The guide is complete once every step that is not optional
+is done or skipped.
 
 Each step is **done** when the data already shows it (a second factor, a
 portfolio, a watchlist, a subscription, a push device or a Telegram chat) or when the person
@@ -46,6 +50,8 @@ StepState = Literal["done", "skipped", "todo"]
 SystemCheckId = Literal["data_source", "first_ingest", "strategies", "backup", "scheduler"]
 
 STEPS: tuple[StepId, ...] = get_args(StepId)
+#: Steps the guide may leave open: following for signals needs neither (FR-01).
+OPTIONAL_STEPS: frozenset[StepId] = frozenset({"portfolio", "data"})
 
 
 class OnboardingStepView(BaseModel):
@@ -57,7 +63,7 @@ class OnboardingStepView(BaseModel):
 
 class OnboardingView(BaseModel):
     steps: list[OnboardingStepView]
-    #: Every step is done or skipped.
+    #: Every step that is not optional is done or skipped.
     complete: bool
     #: The person closed the guide.
     dismissed: bool
@@ -163,7 +169,7 @@ class OnboardingService:
             "SELECT dismissed_at FROM onboarding_status WHERE user_id = ?", [user_id]
         )
         dismissed = bool(dismissed_rows and dismissed_rows[0]["dismissed_at"])
-        complete = all(s.state != "todo" for s in steps)
+        complete = all(s.state != "todo" or s.id in OPTIONAL_STEPS for s in steps)
         return OnboardingView(
             steps=steps, complete=complete, dismissed=dismissed, show=not (complete or dismissed)
         )

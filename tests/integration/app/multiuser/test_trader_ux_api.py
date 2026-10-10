@@ -130,6 +130,18 @@ def test_onboarding_completes_when_every_step_is_done_or_skipped(client, people)
     assert last.json()["complete"] is True and last.json()["show"] is False
 
 
+def test_onboarding_completes_without_the_optional_steps(client, people):
+    """FR-01: a paper portfolio and a watchlist are optional, as the console says."""
+    vic = people["vic"]["headers"]
+    for step in ("account", "follow"):
+        client.put(f"/api/onboarding/steps/{step}", json={"state": "done"}, headers=vic)
+    last = client.put("/api/onboarding/steps/alerts", json={"state": "skipped"}, headers=vic)
+    view = last.json()
+    states = {s["id"]: s["state"] for s in view["steps"]}
+    assert states["portfolio"] == "todo" and states["data"] == "todo"
+    assert view["complete"] is True and view["show"] is False
+
+
 def test_the_system_checklist_is_for_admins(client, people):
     assert (
         client.get("/api/onboarding/system", headers=people["alice"]["headers"]).status_code == 403

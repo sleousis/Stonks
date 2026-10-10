@@ -32,7 +32,11 @@ describe('welcome steps', () => {
     expect(currentStep(guide({ account: 'done', follow: 'done', alerts: 'done' }))).toBe(
       'portfolio',
     );
-    expect(progressText(v.steps)).toBe('1 of 5 done, 1 skipped');
+    // Progress counts the steps that matter, never the optional ones (FR-01).
+    expect(progressText(v.steps)).toBe('1 of 3 done');
+    expect(progressText(guide({ account: 'done', alerts: 'skipped' }).steps)).toBe(
+      '1 of 3 done, 1 skipped',
+    );
     expect(currentStep(guide(Object.fromEntries(IDS.map((i) => [i, 'done']))))).toBeNull();
   });
 
@@ -152,7 +156,7 @@ describe('WelcomePage', () => {
     expect(el.querySelector('.step.open .step-title')?.textContent).toContain('Follow a strategy');
     const tags = [...el.querySelectorAll('.step .tag')].map((t) => t.textContent?.trim());
     expect(tags).toEqual(['Done', 'To do', 'To do', 'Optional', 'Optional']);
-    expect(el.textContent).toContain('1 of 5 done');
+    expect(el.textContent).toContain('1 of 3 done');
     expect(el.textContent).not.toContain('Your install');
   });
 

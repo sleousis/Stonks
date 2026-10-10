@@ -29,40 +29,40 @@ def test_a_new_trader_walks_the_first_run_guide(browse, stack, viewport):
     v: Visit = browse(person)
     page = v.page
 
-    # Today offers the guide until it is done.
+    # Today offers the guide until the steps that matter are done (FR-01).
     card = page.locator("app-setup-card")
-    expect(card).to_contain_text("Finish setting up")
-    expect(card).to_contain_text("1 of 5 done")
+    expect(card).to_contain_text("Get set up")
+    expect(card).to_contain_text("1 of 3 done")
     card.get_by_role("link", name="Continue setup").click()
     expect(page.get_by_role("heading", level=1)).to_have_text("Get set up")
     step = page.locator(".step.open")
-    expect(step).to_contain_text("Pick a portfolio")
+    # The no-broker path comes first: follow a strategy, then alerts.
+    expect(step).to_contain_text("Follow a strategy")
     v.check_page("welcome")
 
-    # A paper portfolio.
-    step.get_by_label("New paper portfolio").fill(f"Guide {viewport}")
-    step.get_by_role("button", name="Open paper portfolio").click()
-    expect(page.locator(".step.open")).to_contain_text("Choose what to watch")
-
-    # A watchlist.
-    step = page.locator(".step.open")
-    step.get_by_label("Tickers").fill("aaa.us bbb.us")
-    step.get_by_role("button", name="Save watchlist").click()
-    expect(page.locator(".step.open")).to_contain_text("Follow a strategy")
-
-    # Follow a live strategy for signals.
-    step = page.locator(".step.open")
+    # Follow an approved strategy for signals.
     sid = ACTIVE_IDS["AAA.US"]
     step.get_by_label("Strategy").select_option(sid)
     step.get_by_label("Alerts only").check()
     step.get_by_role("button", name="Follow", exact=True).click()
     expect(page.locator(".step.open")).to_contain_text("Turn on alerts")
 
-    # Skip alerts: every step is handled.
+    # Skip alerts: the steps that matter are handled, the optional ones wait.
     page.locator(".step.open").get_by_role("button", name="Skip this step").click()
     expect(page.get_by_text("You are set up")).to_be_visible()
-    expect(page.locator(".progress")).to_contain_text("4 of 5 done, 1 skipped")
+    expect(page.locator(".progress")).to_contain_text("2 of 3 done, 1 skipped")
+    expect(page.locator(".step.open")).to_contain_text("Open a paper portfolio")
     v.check_page("welcome-done")
+
+    # The optional steps still work: a paper portfolio, then a watchlist.
+    step = page.locator(".step.open")
+    step.get_by_label("New paper portfolio").fill(f"Guide {viewport}")
+    step.get_by_role("button", name="Open paper portfolio").click()
+    expect(page.locator(".step.open")).to_contain_text("Choose what to watch")
+    step = page.locator(".step.open")
+    step.get_by_label("Tickers").fill("aaa.us bbb.us")
+    step.get_by_role("button", name="Save watchlist").click()
+    expect(page.locator(".step.open")).to_have_count(0)
 
     # The server kept it: Today no longer offers the guide, and shows the watchlist filter.
     guide = v.api("GET", "/api/onboarding").json()
