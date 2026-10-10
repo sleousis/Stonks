@@ -89,6 +89,39 @@ def test_runner_marks_crashed_job_failed(runner):
     assert runner.wait(runner.submit("ok", {}).id, timeout=10).status == "succeeded"
 
 
+def test_a_crashed_job_logs_its_traceback(store, monkeypatch):
+    import stonks.app.jobs as jobs_module
+
+    events: list[tuple[str, dict]] = []
+
+    class _Log:
+        def bind(self, **kw):
+            return self
+
+        def info(self, event, **kw):
+            pass
+
+        def warning(self, event, **kw):
+            pass
+
+        def error(self, event, **kw):
+            events.append((event, kw))
+
+    monkeypatch.setattr(jobs_module, "_log", _Log())
+    runner = JobRunner(store, max_workers=1)
+    try:
+
+        def boom(params: dict, ctx: JobContext) -> None:
+            raise RuntimeError("kaboom")
+
+        runner.register("boom", boom)
+        runner.wait(runner.submit("boom", {}).id, timeout=10)
+    finally:
+        runner.shutdown()
+    (crash,) = [kw for event, kw in events if event == "job.crashed"]
+    assert "Traceback" in crash["traceback"] and "in boom" in crash["traceback"]
+
+
 def test_submit_unknown_kind_is_validation_error(runner):
     with pytest.raises(ValidationError):
         runner.submit("unknown-kind", {})

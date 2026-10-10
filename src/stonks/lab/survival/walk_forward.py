@@ -78,8 +78,9 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import pickle
 from collections.abc import Sequence
-from contextlib import nullcontext, suppress
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Literal
@@ -417,7 +418,12 @@ def run_folds(
     seed: int | None = 0,
 ) -> list[FoldResult]:
     """Tune, fit and score every fold, in fold order, on ``max_workers``
-    processes (a lake snapshot is built only when a pool is used)."""
+    processes (a lake snapshot is built only when a pool is used).
+
+    As in ``tuning.base.evaluate_candidates``, the pool gets the
+    objective's ``worker_objective`` (a job objective keeps its cancel
+    checkpoint, which cannot be pickled, in this process), and the folds
+    run in-process when the work still cannot be pickled."""
     job = _FoldJob(
         dataset=context,
         strategy_cls=type(strategy),
@@ -425,17 +431,43 @@ def run_folds(
         fixed=setup.retune_fixed_params(strategy),  # e.g. a wrapper's inner strategy
         embargo_bars=_embargo_bars(context, strategy),
     )
-    pooled = planned_workers(len(folds), max_workers=max_workers) > 1
-    extra = strategy_data_tickers(strategy)
-    with dataset_snapshot(context, extra) if pooled else nullcontext(context) as shipped:
-        return run_tasks(
-            _run_fold,
-            list(folds),
-            setup=_open_job,
-            payload=dataclasses.replace(job, dataset=shipped),
-            max_workers=max_workers,
-            root_seed=seed,
+    workers = planned_workers(len(folds), max_workers=max_workers)
+    if workers > 1 and folds:
+        objective = setup.objective
+        worker_setup = dataclasses.replace(
+            setup, objective=getattr(objective, "worker_objective", objective)
         )
+        worker_job = dataclasses.replace(job, setup=worker_setup)
+        probe = dataclasses.replace(worker_job, dataset=_without_lake(context))
+        problem = _unpicklable(probe, folds[0])
+        if problem is None:
+            extra = strategy_data_tickers(strategy)
+            with dataset_snapshot(context, extra) as shipped:
+                return run_tasks(
+                    _run_fold,
+                    list(folds),
+                    setup=_open_job,
+                    payload=dataclasses.replace(worker_job, dataset=shipped),
+                    max_workers=max_workers,
+                    root_seed=seed,
+                    checkpoint=getattr(objective, "checkpoint", None),
+                )
+        _log.warning("walk_forward.parallel.unavailable", workers=workers, reason=problem)
+    return run_tasks(_run_fold, list(folds), payload=job, max_workers=1, root_seed=seed)
+
+
+def _without_lake(dataset: Any) -> Any:
+    if dataclasses.is_dataclass(dataset) and hasattr(dataset, "lake"):
+        return dataclasses.replace(dataset, lake=None)
+    return dataset
+
+
+def _unpicklable(*objects: Any) -> str | None:
+    try:
+        pickle.dumps(objects)
+    except Exception as exc:  # pickle raises many types (PicklingError, TypeError, ...)
+        return f"{type(exc).__name__}: {exc}"
+    return None
 
 
 # ---- stitching and efficiency --------------------------------------------------
