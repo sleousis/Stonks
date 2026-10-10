@@ -12,7 +12,14 @@ import { type JobHandle, JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
-import { DUE_GRACE_MS, SchedulePage, formatSize, jobRows } from './schedule.page';
+import {
+  DUE_GRACE_MS,
+  OFF_REASONS,
+  SchedulePage,
+  formatSize,
+  jobRows,
+  localWhen,
+} from './schedule.page';
 
 const inDays = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
 
@@ -358,7 +365,7 @@ describe('SchedulePage', () => {
       const jobs = el.querySelector('[aria-labelledby="jobs-title"]')!;
       expect(jobs.querySelector('button[aria-label="Run now: Intraday engine start"]')).toBeNull();
       const off = jobs.querySelector('details.off-jobs')!;
-      expect(off.textContent).toContain('Waiting on a feature that is off (1)');
+      expect(off.textContent).toContain('Not in use yet (1)');
       expect(off.textContent).toContain('Intraday engine start');
       expect(off.textContent).toContain('Intraday trading is off.');
       expect(jobs.textContent).not.toContain('engine_start');

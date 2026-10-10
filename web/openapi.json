@@ -24928,7 +24928,10 @@
                 "enum": [
                   "engine_off",
                   "options_off",
-                  "no_gateway"
+                  "no_gateway",
+                  "no_live_portfolio",
+                  "no_connections",
+                  "no_learning_strategies"
                 ],
                 "type": "string"
               },

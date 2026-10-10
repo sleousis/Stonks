@@ -13558,7 +13558,7 @@ export type ScheduledJobView = {
     /**
      * Off Reason
      */
-    off_reason?: 'engine_off' | 'options_off' | 'no_gateway' | null;
+    off_reason?: 'engine_off' | 'options_off' | 'no_gateway' | 'no_live_portfolio' | 'no_connections' | 'no_learning_strategies' | null;
     /**
      * Trigger
      */

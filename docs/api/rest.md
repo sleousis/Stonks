@@ -5589,7 +5589,7 @@ Rename, replace the spec, or both. Unset fields stay.
 | `name` | string | yes |  |
 | `next_as_of` | date \| null | yes |  |
 | `next_run_at` | date-time \| null | yes |  |
-| `off_reason` | "engine_off" \| "options_off" \| "no_gateway" \| null | no |  |
+| `off_reason` | "engine_off" \| "options_off" \| "no_gateway" \| "no_live_portfolio" \| "no_connections" \| "no_learning_strategies" \| null | no |  |
 | `trigger` | string | yes |  |
 | `trigger_text` | string | no |  |
 
