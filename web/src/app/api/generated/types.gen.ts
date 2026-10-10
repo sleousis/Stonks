@@ -18472,6 +18472,10 @@ export type ListAlertsData = {
          */
         level?: 'info' | 'warning' | 'error' | null;
         /**
+         * Category
+         */
+        category?: Array<'signal' | 'order' | 'risk' | 'system' | 'price_alert' | 'event_alert' | 'screen_alert'> | null;
+        /**
          * Limit
          *
          * page size

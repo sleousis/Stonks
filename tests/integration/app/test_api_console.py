@@ -280,3 +280,25 @@ def test_tick_alerts_land_in_the_store(client, settings):
     assert len(rows) == before + 1
     # The configured API token is scrubbed before the row is written.
     assert "test-token-123" not in json.dumps([dict(r) for r in rows])
+
+
+def test_alerts_filter_by_category(client, settings):
+    """Health lists only operational alerts: the operator store writes no
+    category (counted as system), the router writes risk and signal ones."""
+    _store_alerts(settings)
+    with SqliteState(settings.state.path) as state:
+        for category in ("signal", "price_alert", "risk"):
+            state.execute(
+                "INSERT INTO alerts (level, title, message, context_json, created_at, category)"
+                " VALUES ('info', ?, '', '{}', '2026-10-10T00:00:00+00:00', ?)",
+                [f"a {category}", category],
+            )
+    page = client.get(
+        "/api/alerts", headers=AUTH, params=[("category", "system"), ("category", "risk")]
+    ).json()
+    titles = {a["title"] for a in page["items"]}
+    assert page["total"] == 5
+    assert "a risk" in titles and "alert 0" in titles
+    assert not titles & {"a signal", "a price_alert"}
+    bad = client.get("/api/alerts", headers=AUTH, params={"category": "bogus"})
+    assert bad.status_code == 422

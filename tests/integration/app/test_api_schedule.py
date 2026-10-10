@@ -423,7 +423,9 @@ def test_a_broker_portfolio_turns_the_live_jobs_on(settings, seeded, fake_source
     config = _config(tmp_path)
     config.jobs.append(
         JobConfig(
-            name="live_submit", action="live_submit", trigger=IntervalTriggerConfig(every_minutes=60)
+            name="live_submit",
+            action="live_submit",
+            trigger=IntervalTriggerConfig(every_minutes=60),
         )
     )
     with SqliteState(settings.state.path) as state:
