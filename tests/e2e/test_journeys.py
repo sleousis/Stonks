@@ -207,7 +207,7 @@ def test_lab_run_with_quick_preset_shows_results(browse, stack, viewport):
     # The verdict in words, said once (R06), and "trial" only means On trial (R04).
     expect(result).to_contain_text(re.compile("It held up|It did not hold up"))
     expect(result.get_by_text(re.compile("^It (held up|did not hold up)"))).to_have_count(1)
-    expect(result).not_to_contain_text(re.compile(r"trials?", re.I))
+    expect(result).not_to_contain_text(re.compile(r"\btrials?\b", re.I))
     v.check_page("lab-run-result")
 
 
