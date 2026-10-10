@@ -23,7 +23,7 @@
     } @else if (connections.value().length === 0) {
       <app-empty-state
         title="No broker connected yet"
-        message="Connecting lets Stonks read your real positions, cash and activity, so you can see them next to your strategies. What else it may do depends on the broker: see When Stonks trades below."
+        message="Connecting lets Stonks read your real positions, cash and activity, so you can see them next to your strategies."
       >
         @if (canManage()) {
           <button type="button" class="btn btn-primary" (click)="showProviders()">
@@ -35,10 +35,14 @@
       <ul class="connection-list">
         @for (row of connections.value(); track row.connection.id) {
           <li>
-            <a class="connection" [routerLink]="['/connections', row.connection.id]">
+            @let csv = isCsv(row.connection);
+            <a
+              class="connection"
+              [routerLink]="csv ? ['/connections', 'import'] : ['/connections', row.connection.id]"
+            >
               <span class="connection-name">
                 {{ providerName(row.connection.provider) }}
-                @if (row.connection.label) {
+                @if (row.connection.label && !csv) {
                   <span class="muted">{{ row.connection.label }}</span>
                 }
               </span>
@@ -47,7 +51,7 @@
                 [label]="statusLabel[row.connection.status]"
               />
               <span class="fact">
-                <span class="muted">Last sync</span>
+                <span class="muted">{{ csv ? 'Last import' : 'Last sync' }}</span>
                 {{ row.connection.last_sync_at ? (row.connection.last_sync_at | ago) : 'Not yet' }}
               </span>
               <span class="fact">
@@ -61,57 +65,17 @@
     }
   </section>
 
-  <!-- When Stonks trades (F53): the most sensitive promise, said exactly ---->
-  <section class="panel span-12" aria-labelledby="when-title">
-    <div class="panel-head">
-      <h2 id="when-title">When Stonks trades</h2>
-    </div>
-    <div class="panel-body when">
-      <div>
-        <h3>A broker that only reads</h3>
-        <p>
-          Stonks reads positions, cash and activity. It never places an order there, whatever your
-          follows or your portfolio's stage.
-        </p>
-      </div>
-      <div>
-        <h3>A broker that can trade, such as Interactive Brokers</h3>
-        <p>Stonks places orders only in the portfolio linked to this account, and only for:</p>
-        <ul>
-          <li>
-            strategies you follow there with <strong>Approve each trade</strong>, after you approve
-            each ticket;
-          </li>
-          <li>strategies you follow there with <strong>Automatic</strong>;</li>
-          <li>orders you place by hand there, or suggested orders you approve.</li>
-        </ul>
-        <p>
-          Follows with <strong>Alerts only</strong> or <strong>Paper</strong> never place an order
-          at the broker. Where an order goes depends on the portfolio's stage
-          <app-help-tip term="Portfolio stage" />:
-        </p>
-        <dl class="stages">
-          @for (s of stages; track s.stage) {
-            <div>
-              <dt>{{ s.label }}</dt>
-              <dd>{{ s.means }}</dd>
-            </div>
-          }
-        </dl>
-        <p class="muted">
-          You can stop trading from any page at any time.
-          <a routerLink="/going-live">See every step to real money</a>.
-        </p>
-      </div>
-    </div>
-  </section>
-
   <!-- Providers ------------------------------------------------------------->
   <section class="panel span-12" aria-labelledby="providers-title">
     <div class="panel-head">
       <h2 id="providers-title" tabindex="-1" #providersHeading>Connect a broker</h2>
     </div>
     <div class="panel-body">
+      <p class="when">
+        Read-only brokers never get orders. A broker that can trade only gets orders from follows
+        set to <strong>Approve each trade</strong> or <strong>Automatic</strong>.
+        <a class="touch-link" routerLink="/going-live">Going live</a>
+      </p>
       <app-permission-note permission="connection.manage" />
       @if (providers.error(); as err) {
         <app-error-state
@@ -128,16 +92,19 @@
             message="An admin must turn on a broker before anyone can connect one. Ask your admin."
           />
         }
+        @if (turnedOff(); as off) {
+          <p class="turned-off muted">
+            {{ off }}
+            <a class="touch-link" routerLink="/settings" [queryParams]="{ tab: 'system' }"
+              >Settings, System</a
+            >.
+          </p>
+        }
         <ul class="providers">
-          @for (p of providers.value(); track p.name) {
-            <li class="provider" [class.off]="!p.enabled">
+          @for (p of enabled(); track p.name) {
+            <li class="provider">
               <div class="provider-head">
                 <h3>{{ p.display_name }}</h3>
-                @if (p.enabled) {
-                  <app-status-pill status="active" label="Turned on" />
-                } @else {
-                  <app-status-pill status="disabled" tone="neutral" label="Turned off" />
-                }
               </div>
               <p>
                 {{ gives(p) }} {{ reach(p) }}
@@ -146,7 +113,7 @@
                 }
               </p>
               <p class="muted">{{ flow(p) }}</p>
-              @if (canManage() && p.enabled) {
+              @if (canManage()) {
                 @if (p.auth_flow === 'portal') {
                   <button
                     type="button"
@@ -165,7 +132,7 @@
                     [attr.aria-controls]="'keys-' + p.name"
                     (click)="toggleKeys(p)"
                   >
-                    {{ keysFor() === p.name ? 'Close' : 'Connect with keys' }}
+                    {{ keysFor() === p.name ? 'Close' : connectLabel(p) }}
                   </button>
                   @if (keysFor() === p.name) {
                     <form
@@ -175,9 +142,32 @@
                       novalidate
                       (submit)="$event.preventDefault(); connectWithKeys(p)"
                     >
+                      @if (keyHint(p); as hint) {
+                        <p class="hint">{{ hint }}</p>
+                      }
                       @for (f of p.credential_fields; track f) {
                         <div class="field">
                           <label [for]="'key-' + p.name + '-' + f">{{ fieldLabel(f) }}</label>
+                          @if (p.needs_gateway && f === 'gateway') {
+                            <select
+                              class="input"
+                              [id]="'key-' + p.name + '-' + f"
+                              [attr.name]="f"
+                              [attr.aria-invalid]="missing(p, f)"
+                              [attr.aria-describedby]="
+                                missing(p, f) ? 'key-' + p.name + '-' + f + '-error' : null
+                              "
+                              (change)="setKey(f, $any($event.target).value)"
+                            >
+                              <option value="">Pick a gateway</option>
+                              @for (g of p.gateways ?? []; track g) {
+                                <option [value]="g">{{ g }}</option>
+                              }
+                            </select>
+                            @if (!(p.gateways ?? []).length) {
+                              <p class="hint">No gateway is set up yet. Ask your admin.</p>
+                            }
+                          } @else {
                           <input
                             class="input"
                             type="password"
@@ -191,9 +181,10 @@
                             "
                             (input)="setKey(f, $any($event.target).value)"
                           />
+                          }
                           @if (missing(p, f)) {
                             <p class="error" [id]="'key-' + p.name + '-' + f + '-error'">
-                              Enter the {{ fieldLabel(f).toLowerCase() }}.
+                              {{ missingText(p, f) }}
                             </p>
                           }
                         </div>
@@ -219,6 +210,12 @@
                           />
                           These are paper or demo account keys (no real money)
                         </label>
+                        <p class="hint">
+                          Untick only for real-money keys.
+                          @if (!p.can_trade) {
+                            Stonks still only reads until trading is turned on.
+                          }
+                        </p>
                       }
                       <div class="form-actions">
                         <button

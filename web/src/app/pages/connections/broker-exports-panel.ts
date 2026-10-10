@@ -11,17 +11,33 @@ export interface BrokerExports {
   presets: StatementPresetView[];
 }
 
-/** The presets grouped by broker, in the server's order. */
+/** What each export holds, and the order to import them: trades first. */
+const PRESET_STEPS: Record<string, { rank: number; text: string }> = {
+  degiro_transactions: { rank: 0, text: 'Transactions (your trades)' },
+  degiro_account: { rank: 1, text: 'Account statement (dividends, fees, cash in and out)' },
+  degiro_portfolio: { rank: 2, text: "Portfolio (optional, today's holdings)" },
+};
+
+/** The words for one export step. */
+export function presetStep(p: StatementPresetView): string {
+  return PRESET_STEPS[p.id]?.text ?? p.label;
+}
+
+/** The presets grouped by broker, each in the order to import them. */
 export function groupByBroker(presets: readonly StatementPresetView[]): BrokerExports[] {
   const out = new Map<string, StatementPresetView[]>();
   for (const p of presets) out.set(p.broker, [...(out.get(p.broker) ?? []), p]);
-  return [...out].map(([broker, list]) => ({ broker, presets: list }));
+  const rank = (p: StatementPresetView) => PRESET_STEPS[p.id]?.rank ?? 99;
+  return [...out].map(([broker, list]) => ({
+    broker,
+    presets: [...list].sort((a, b) => rank(a) - rank(b)),
+  }));
 }
 
 /**
  * Brokers Stonks cannot connect to, such as DEGIRO: no API it may use, so
- * their accounts come in from the files the trader exports. Each export
- * links to the import page with its preset chosen.
+ * their accounts come in from the files the trader exports, listed in the
+ * order to import them, with one button to the import page.
  */
 @Component({
   selector: 'app-broker-exports-panel',
@@ -35,8 +51,7 @@ export function groupByBroker(presets: readonly StatementPresetView[]): BrokerEx
       <div class="panel-body">
         <p class="muted">
           These brokers offer no connection Stonks may use, so Stonks never asks for your password
-          there. Export the files below from the broker and import them. Stonks reads them only, and
-          never places an order there.
+          there. Export the files below from the broker and import them. Stonks only reads them.
         </p>
         @if (presets.error(); as err) {
           <app-error-state
@@ -51,20 +66,20 @@ export function groupByBroker(presets: readonly StatementPresetView[]): BrokerEx
             @for (b of brokers(); track b.broker) {
               <li class="broker">
                 <h3>{{ b.broker }}</h3>
-                <p class="muted">Reads only. Import its exports.</p>
-                <ul class="exports">
+                <p class="muted">Reads only. Export these files, in this order:</p>
+                <ol class="exports">
                   @for (p of b.presets; track p.id) {
                     <li>
-                      <a
-                        class="export-link"
-                        routerLink="/connections/import"
-                        [queryParams]="{ preset: p.id }"
-                        >{{ p.label }}</a
-                      >
+                      <strong>{{ step(p) }}</strong>
                       <span class="muted">{{ p.how_to_export }}</span>
                     </li>
                   }
-                </ul>
+                </ol>
+                @if (b.presets[0]; as first) {
+                  <a class="btn" routerLink="/connections/import" [queryParams]="{ preset: first.id }"
+                    >Import {{ b.broker }} files</a
+                  >
+                }
               </li>
             }
           </ul>
@@ -97,19 +112,20 @@ export function groupByBroker(presets: readonly StatementPresetView[]): BrokerEx
     .exports {
       display: grid;
       gap: var(--space-2);
-      margin-top: var(--space-2);
+      margin: var(--space-2) 0 var(--space-3);
+      padding-left: var(--space-5);
+      list-style: decimal;
+    }
+    .btn {
+      min-height: var(--touch-min);
     }
     .exports li {
-      display: grid;
-      gap: 2px;
+      display: list-item;
       min-width: 0;
       overflow-wrap: anywhere;
     }
-    .export-link {
-      display: inline-flex;
-      align-items: center;
-      min-height: 44px;
-      font-weight: var(--weight-semibold);
+    .exports .muted {
+      display: block;
     }
   `,
 })
@@ -117,6 +133,7 @@ export class BrokerExportsPanel {
   private readonly api = inject(StatementImportsService);
 
   protected readonly presets = resource({ loader: () => this.api.presets() });
+  protected readonly step = presetStep;
   protected readonly brokers = computed(() =>
     this.presets.hasValue() ? groupByBroker(this.presets.value()) : [],
   );
