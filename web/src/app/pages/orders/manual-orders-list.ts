@@ -77,7 +77,7 @@ export function isWorking(order: Pick<OrderView, 'status'>): boolean {
         <app-data-table
           caption="Orders you placed by hand, newest first"
           [rows]="orders.value().items"
-          [columns]="columns"
+          [columns]="columns()"
           [rowKey]="key"
           [pageSize]="20"
           [initialSort]="{ key: 'created_at', dir: 'desc' }"
@@ -111,8 +111,6 @@ export function isWorking(order: Pick<OrderView, 'status'>): boolean {
                   Cancel<span class="visually-hidden"> the order for {{ o.ticker }}</span>
                 </button>
               </span>
-            } @else {
-              <span class="muted">None</span>
             }
           </ng-template>
         </app-data-table>
@@ -150,15 +148,24 @@ export class ManualOrdersList {
   protected readonly busy = signal<string | null>(null);
   protected readonly canTrade = computed(() => this.session.can('portfolio.trade'));
 
-  protected readonly columns: TableColumn<OrderView>[] = [
+  private readonly baseColumns: TableColumn<OrderView>[] = [
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
     { key: 'side', label: 'Side' },
     { key: 'quantity', label: 'Qty', format: 'number' },
     { key: 'limit_price', label: 'Limit', format: 'money', mobile: 'hide' },
     { key: 'status', label: 'Status' },
     { key: 'created_at', label: 'Placed', format: 'datetime' },
-    { key: 'actions', label: 'Actions', sortable: false, value: () => null },
   ];
+  /** Actions only while some order can still change or cancel (PO-10). */
+  protected readonly columns = computed<TableColumn<OrderView>[]>(() => {
+    const items = this.orders.hasValue() ? this.orders.value().items : [];
+    return this.canTrade() && items.some(isWorking)
+      ? [
+          ...this.baseColumns,
+          { key: 'actions', label: 'Actions', sortable: false, value: () => null },
+        ]
+      : this.baseColumns;
+  });
   protected readonly key = (o: OrderView) => o.client_id;
   protected readonly reason = orderReason;
   protected readonly working = isWorking;

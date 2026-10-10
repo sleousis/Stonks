@@ -329,7 +329,8 @@ describe('SessionStrip', () => {
     fixture.detectChanges();
     const sheet = el.querySelector('app-resume-sheet')!;
     expect(sheet.textContent).toContain('Portfolio Main book');
-    expect(sheet.textContent).toContain('RESUME TRADING');
+    // Paper resumes in one tap: no typed words (PO-07).
+    expect(sheet.textContent).not.toContain('RESUME TRADING');
   });
 
   it('names the portfolio in the banner, never its id (UX-17)', async () => {
@@ -414,12 +415,11 @@ describe('SessionStrip', () => {
       const picked = el.querySelector<HTMLInputElement>('input[name="kill-sheet-scope"]:checked')!;
       expect(picked.value).toBe('portfolio');
       expect(picked.closest('label')!.textContent).toContain('Main book');
-      // The ticket: scope, what stops, reason and the stamp.
-      const ticket = el.querySelector('[aria-label="Stop trading ticket"]')!;
-      expect(ticket.textContent).toContain('Portfolio Main book');
-      expect(ticket.textContent).toContain('All new orders');
-      expect(ticket.textContent).toContain(DEFAULT_KILL_REASON);
-      expect(ticket.querySelector('.stamp')!.textContent).toContain('PAPER');
+      // The stamp sits by the button, the reason is filled in.
+      expect(el.querySelector('.kill-form .sheet-actions .stamp')!.textContent).toContain('PAPER');
+      expect(el.querySelector<HTMLInputElement>('#kill-sheet-reason')!.value).toBe(
+        DEFAULT_KILL_REASON,
+      );
 
       el.querySelector<HTMLFormElement>('.kill-form')!.dispatchEvent(new Event('submit'));
       const http = TestBed.inject(HttpTestingController);
@@ -453,7 +453,10 @@ describe('SessionStrip', () => {
     });
 
     it('stops new buys only across all your portfolios, with an edited reason', async () => {
-      options.set([book({ id: 'pf_main', name: 'Main book', is_default: true })]);
+      options.set([
+        book({ id: 'pf_main', name: 'Main book', is_default: true }),
+        book({ id: 'pf_side', name: 'Side book' }),
+      ]);
       const fixture = await render();
       const el = fixture.nativeElement as HTMLElement;
       el.querySelector<HTMLButtonElement>('button.stop')!.click();
@@ -484,10 +487,6 @@ describe('SessionStrip', () => {
       reason.value = 'Fed day';
       reason.dispatchEvent(new Event('input'));
       fixture.detectChanges();
-      const ticket = el.querySelector('[aria-label="Stop trading ticket"]')!;
-      expect(ticket.textContent).toContain('Your portfolios');
-      expect(ticket.textContent).toContain('New buys');
-      expect(ticket.textContent).toContain('Sells and exits');
       el.querySelector<HTMLFormElement>('.kill-form')!.dispatchEvent(new Event('submit'));
       const req = await nextRequest(http, '/api/halts/kill', 'POST');
       expect(req.request.body).toEqual({
@@ -508,9 +507,7 @@ describe('SessionStrip', () => {
       expect(stop.classList).toContain('live');
       stop.click();
       fixture.detectChanges();
-      expect(el.querySelector('[aria-label="Stop trading ticket"] .stamp')!.textContent).toContain(
-        'LIVE',
-      );
+      expect(el.querySelector('.kill-form .sheet-actions .stamp')!.textContent).toContain('LIVE');
     });
 
     it('lets admins stop every portfolio; viewers never see the control', async () => {

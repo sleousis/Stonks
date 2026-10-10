@@ -161,10 +161,10 @@ function facts(over: Partial<GoingLiveFacts> = {}): GoingLiveFacts {
 const byKey = (f: GoingLiveFacts) => Object.fromEntries(goingLiveSteps(f).map((s) => [s.key, s]));
 
 describe('goingLiveSteps', () => {
-  it('walks the eight steps in order', () => {
+  it('walks the eight steps in order, broker first (PO-12)', () => {
     expect(goingLiveSteps(facts()).map((s) => s.key)).toEqual([
-      'gateway',
       'broker',
+      'gateway',
       'stage',
       'allocation',
       'profile',
@@ -214,23 +214,25 @@ describe('goingLiveSteps', () => {
     expect(s['mode'].detail).toContain('1 follow here uses Approve each trade or Automatic');
   });
 
-  it('names who acts on the server gateway', () => {
+  it('names who acts on the server link to Interactive Brokers, without jargon', () => {
     const none = byKey(facts({ gateways: { configured: false, gateways: [] } }));
     expect(none['gateway']).toMatchObject({ state: 'admin', link: null });
-    expect(none['gateway'].detail).toContain('Your admin sets up');
+    expect(none['gateway'].title).toBe('Server linked to Interactive Brokers');
+    expect(none['gateway'].detail).toBe('Your admin connects the server to Interactive Brokers.');
+    expect(none['gateway'].detail).not.toContain('IB Gateway');
     const admin = byKey(facts({ isAdmin: true, gateways: { configured: false, gateways: [] } }));
     expect(admin['gateway'].link).toMatchObject({ path: '/health' });
     const down = byKey(
       facts({ gateways: { configured: true, gateways: [gateway({ connected: false })] } }),
     );
-    expect(down['gateway'].detail).toContain('not connected');
+    expect(down['gateway'].detail).toContain('down right now');
     const other = byKey(
       facts({ gateways: { configured: true, gateways: [gateway({ your_portfolios: [] })] } }),
     );
     expect(other['gateway'].detail).toContain('not for this portfolio');
   });
 
-  it('needs no server gateway for eToro, which trades over its own API', () => {
+  it('shows no server step for eToro, which trades over its own API', () => {
     const s = byKey(
       facts({
         gateways: { configured: false, gateways: [] },
@@ -238,8 +240,7 @@ describe('goingLiveSteps', () => {
         providers: [IBKR, SNAP, ETORO],
       }),
     );
-    expect(s['gateway']).toMatchObject({ state: 'done', link: null });
-    expect(s['gateway'].detail).toBe('eToro needs no gateway on the server.');
+    expect(s['gateway']).toBeUndefined();
     expect(s['broker'].state).toBe('done');
     expect(s['broker'].detail).toContain('Linked to eToro');
   });
@@ -255,13 +256,23 @@ describe('goingLiveSteps', () => {
     expect(s['broker'].detail).toContain('SnapTrade only reads');
   });
 
-  it('holds the later steps of a paper portfolio behind the broker step', () => {
-    const s = byKey(facts({ portfolio: book({ id: 'pf_p', name: 'Paper' }) }));
+  it('folds the later steps of a paper portfolio into one line until a broker is linked', () => {
+    const steps = goingLiveSteps(facts({ portfolio: book({ id: 'pf_p', name: 'Paper' }) }));
+    expect(steps.map((s) => s.key)).toEqual(['broker', 'later', 'mode']);
+    const s = Object.fromEntries(steps.map((x) => [x.key, x]));
     expect(s['broker'].state).toBe('todo');
     expect(s['broker'].link).toMatchObject({ path: '/connections' });
-    for (const key of ['stage', 'allocation', 'profile', 'safeguards', 'preview']) {
-      expect(s[key].state).toBe('blocked');
-    }
+    expect(s['later']).toMatchObject({
+      state: 'blocked',
+      span: 5,
+      title: 'Steps 2 to 6 open once a broker is linked.',
+    });
+  });
+
+  it('says where to switch a follow', () => {
+    expect(byKey(facts())['mode'].detail).toContain(
+      'Switch a follow on Today or on the strategy page.',
+    );
   });
 
   it('checks while the facts load', () => {

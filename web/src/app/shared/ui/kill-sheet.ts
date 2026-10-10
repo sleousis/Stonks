@@ -12,7 +12,6 @@ import { HaltsService } from '../../api/halts.service';
 import type { KillSwitchRequest } from '../../api/models';
 import { SessionService } from '../../core/auth/session.service';
 import { HaltStateService } from '../../core/halts/halt-state.service';
-import { killTicket } from '../../core/halts/kill-ticket';
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { ModeStamp } from './mode-stamp';
@@ -21,14 +20,14 @@ import { Sheet } from './sheet';
 type KillScope = KillSwitchRequest['scope'];
 
 /** Filled in so a trader in a hurry can stop with one more tap. The audit log records who. */
-export const DEFAULT_KILL_REASON = 'Stopped from the console.';
+export const DEFAULT_KILL_REASON = 'Stopped by me.';
 
 /**
  * The Stop trading sheet (UX-01): the kill switch in two taps from any
  * page. Scope starts on the portfolio the trader is looking at, the reason
- * is filled in, and the sheet itself is the ticket: scope, what stops, what
- * still goes out, the reason and the PAPER or LIVE stamp, then one red
- * button. Resuming stays on the halts page, behind the typed words.
+ * is filled in, and the PAPER or LIVE stamp sits next to the one red
+ * button. A trader with one portfolio sees no scope choice: theirs and all
+ * of theirs are the same (PO-13). Resuming is the red bar's Resume.
  */
 @Component({
   selector: 'app-kill-sheet',
@@ -47,46 +46,49 @@ export const DEFAULT_KILL_REASON = 'Stopped from the console.';
           <h2 id="kill-sheet-title">Stop trading</h2>
           <p id="kill-sheet-message" class="sheet-message">
             New orders stop at once. No position is closed. Approved tickets not yet sent are held,
-            and orders still working at your broker are cancelled. You can resume on the Halts page.
+            and orders still working at your broker are cancelled. You can resume from the red bar
+            at the top.
           </p>
 
-          <fieldset class="choices">
-            <legend>Stop for</legend>
-            @if (picked(); as p) {
+          @if (showScope()) {
+            <fieldset class="choices">
+              <legend>Stop for</legend>
+              @if (picked(); as p) {
+                <label class="check">
+                  <input
+                    type="radio"
+                    name="kill-sheet-scope"
+                    value="portfolio"
+                    [checked]="scope() === 'portfolio'"
+                    (change)="scope.set('portfolio')"
+                  />
+                  <span>{{ p.name }}</span>
+                </label>
+              }
               <label class="check">
                 <input
                   type="radio"
                   name="kill-sheet-scope"
-                  value="portfolio"
-                  [checked]="scope() === 'portfolio'"
-                  (change)="scope.set('portfolio')"
+                  value="user"
+                  [checked]="scope() === 'user'"
+                  (change)="scope.set('user')"
                 />
-                <span>{{ p.name }}</span>
+                <span>All your portfolios</span>
               </label>
-            }
-            <label class="check">
-              <input
-                type="radio"
-                name="kill-sheet-scope"
-                value="user"
-                [checked]="scope() === 'user'"
-                (change)="scope.set('user')"
-              />
-              <span>All your portfolios</span>
-            </label>
-            @if (canGlobal()) {
-              <label class="check">
-                <input
-                  type="radio"
-                  name="kill-sheet-scope"
-                  value="global"
-                  [checked]="scope() === 'global'"
-                  (change)="scope.set('global')"
-                />
-                <span>Every portfolio, for every trader</span>
-              </label>
-            }
-          </fieldset>
+              @if (canGlobal()) {
+                <label class="check">
+                  <input
+                    type="radio"
+                    name="kill-sheet-scope"
+                    value="global"
+                    [checked]="scope() === 'global'"
+                    (change)="scope.set('global')"
+                  />
+                  <span>Every portfolio, for every trader</span>
+                </label>
+              }
+            </fieldset>
+          }
 
           <fieldset class="choices">
             <legend>What stops</legend>
@@ -134,27 +136,8 @@ export const DEFAULT_KILL_REASON = 'Stopped from the console.';
             }
           </div>
 
-          <div
-            class="ticket"
-            [class.live]="ticket().live"
-            role="group"
-            aria-label="Stop trading ticket"
-          >
-            <p class="ticket-head">
-              <span class="ticket-kind">{{ ticket().kind }}</span>
-              <app-mode-stamp [live]="ticket().live" />
-            </p>
-            <dl class="ticket-lines">
-              @for (line of ticket().lines; track line.label) {
-                <div>
-                  <dt>{{ line.label }}</dt>
-                  <dd>{{ line.value }}</dd>
-                </div>
-              }
-            </dl>
-          </div>
-
           <div class="sheet-actions">
+            <app-mode-stamp [live]="live()" />
             <button type="button" class="btn" (click)="close()">Cancel</button>
             <button
               type="submit"
@@ -195,6 +178,11 @@ export const DEFAULT_KILL_REASON = 'Stopped from the console.';
     .check span {
       overflow-wrap: anywhere;
     }
+    .sheet-actions app-mode-stamp {
+      width: auto;
+      margin-inline-end: auto;
+      align-self: center;
+    }
   `,
 })
 export class KillSheet {
@@ -208,6 +196,13 @@ export class KillSheet {
   private readonly toasts = inject(ToastService);
 
   protected readonly canGlobal = computed(() => this.session.can('killswitch.global'));
+  /**
+   * The scope choice, only when it changes something: an admin, or a trader
+   * with more than one portfolio.
+   */
+  protected readonly showScope = computed(
+    () => this.canGlobal() || this.portfolios.options().length > 1,
+  );
   /** The portfolio the trader is looking at (the picker's choice or their default). */
   protected readonly picked = this.portfolios.current;
 
@@ -249,19 +244,10 @@ export class KillSheet {
   });
 
   /** Real money when the covered portfolio (or any of the trader's) trades live. */
-  private readonly live = computed(() =>
+  protected readonly live = computed(() =>
     this.scope() === 'portfolio'
       ? this.picked()?.trading === 'live'
       : this.portfolios.options().some((p) => p.trading === 'live'),
-  );
-
-  protected readonly ticket = computed(() =>
-    killTicket({
-      scopeText: this.scopeText(),
-      buysOnly: this.buysOnly(),
-      reason: this.reason(),
-      live: this.live(),
-    }),
   );
 
   protected close(): void {

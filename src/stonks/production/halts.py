@@ -25,6 +25,7 @@ only keeps the rows consistent.
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -440,6 +441,30 @@ def halt_title(kind: str) -> str:
     return f"Trading stopped: {kind.replace('_', ' ')}"
 
 
+def _covers_words(state: SqliteState, halt: Halt) -> str:
+    """Who a halt covers in a trader's words: the portfolio's name, "all
+    your portfolios" or "every portfolio". Never an id (PO-06)."""
+    if halt.scope == "global":
+        return "every portfolio"
+    if halt.scope == "user":
+        return "all your portfolios"
+    try:
+        rows = state.sql("SELECT name FROM portfolios WHERE id = ?", [halt.portfolio_id])
+    except sqlite3.Error:
+        rows = []
+    name = str(rows[0]["name"]).strip() if rows and rows[0]["name"] else ""
+    return name or "your portfolio"
+
+
+def _sentence(text: str) -> str:
+    """``text`` with a capital first letter and a full stop."""
+    text = text.strip()
+    if not text:
+        return ""
+    text = text[0].upper() + text[1:]
+    return text if text[-1] in ".!?" else f"{text}."
+
+
 def notify_trip(state: SqliteState, halt: Halt, publish: Publish | None = None) -> None:
     """Send the ``risk`` notification (high urgency) for a trip: to the
     portfolio's owner, the user, or the admins for a global halt. A failed
@@ -457,11 +482,18 @@ def notify_trip(state: SqliteState, halt: Halt, publish: Publish | None = None) 
         category="risk",
         level="error",
         title=halt_title(halt.kind),
-        body=f"{'New orders' if halt.halt == 'all' else 'New buys'} are blocked for "
-        f"{halt.target}: {halt.reason}",
+        body=" ".join(
+            part
+            for part in (
+                f"{'New orders' if halt.halt == 'all' else 'New buys'} are blocked for "
+                f"{_covers_words(state, halt)}.",
+                _sentence(halt.reason),
+            )
+            if part
+        ),
         audience=audience,
         dedupe_key=f"halt:{halt.id}",
-        deep_link="/health",
+        deep_link="/ops/halts",
         portfolio_id=halt.portfolio_id,
     )
     try:

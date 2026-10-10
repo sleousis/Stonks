@@ -29,8 +29,21 @@ export interface StepLink {
 
 export interface GoingLiveStep {
   key:
-    'gateway' | 'broker' | 'stage' | 'allocation' | 'profile' | 'safeguards' | 'preview' | 'mode';
+    | 'gateway'
+    | 'broker'
+    | 'stage'
+    | 'allocation'
+    | 'profile'
+    | 'safeguards'
+    | 'preview'
+    | 'mode'
+    | 'later';
   title: string;
+  /**
+   * How many steps this entry stands for: 1, or more for `later`, the one
+   * muted line in place of the steps that wait for a broker.
+   */
+  span?: number;
   state: StepState;
   /** One plain sentence: what is true now, or what to do. */
   detail: string;
@@ -73,113 +86,114 @@ const checking = (key: GoingLiveStep['key'], title: string): GoingLiveStep => ({
 
 export { atBroker };
 
+/** The steps that wait for a broker, while none is linked. */
+const BROKER_STEPS = 5;
+
 /**
  * The whole path to real money for one portfolio, in order (F52): the
- * server's broker gateway, the broker connection, the portfolio's stage,
- * the allocation, the account profile, the safeguards, a dry-run preview,
- * and a follow switched to Approve each trade or Automatic. Each step says
- * whether it is done, who acts, and where.
+ * broker connection, the server's link to Interactive Brokers (only for an
+ * IBKR account), the portfolio's stage, the allocation, the account
+ * profile, the safeguards, a dry-run preview, and a follow switched to
+ * Approve each trade or Automatic. Each step says whether it is done, who
+ * acts, and where. Before a broker is linked, the steps that need one are
+ * a single muted line (PO-12).
  */
 export function goingLiveSteps(f: GoingLiveFacts): GoingLiveStep[] {
   const p = f.portfolio;
-  const broker = atBroker(p);
   const settings = (fragment: string, label: string): StepLink => ({
     label,
     path: `/profile/live/${p.id}`,
     fragment,
   });
-  const needsBroker = (key: GoingLiveStep['key'], title: string): GoingLiveStep => ({
-    key,
-    title,
-    state: 'blocked',
-    detail: 'Link this portfolio to a broker account first (step 2).',
-    link: null,
-  });
 
+  if (!atBroker(p)) {
+    const first = 2;
+    return [
+      brokerStep(f),
+      {
+        key: 'later',
+        title: `Steps ${first} to ${first + BROKER_STEPS - 1} open once a broker is linked.`,
+        state: 'blocked',
+        detail: '',
+        link: null,
+        span: BROKER_STEPS,
+      },
+      modeStep(f),
+    ];
+  }
+
+  const gateway = gatewayStep(f);
   return [
-    gatewayStep(f),
     brokerStep(f),
-    !broker
-      ? needsBroker('stage', 'Portfolio stage')
-      : stageStep(f, settings('stage', 'Open the stage')),
-    !broker
-      ? needsBroker('allocation', 'Allocation')
-      : f.allocation === undefined
-        ? checking('allocation', 'Allocation')
-        : f.allocation.amount == null
-          ? {
-              key: 'allocation',
-              title: 'Allocation',
-              state: 'todo',
-              detail: 'Set the most Stonks may hold in this account. Nothing opens until you do.',
-              link: settings('allocation', 'Set the allocation'),
-            }
-          : {
-              key: 'allocation',
-              title: 'Allocation',
-              state: 'done',
-              detail: `Set to ${formatMoney(f.allocation.amount, { currency: f.allocation.currency ?? p.base_currency })}. Only you change it.`,
-              link: settings('allocation', 'Change it'),
-            },
-    !broker
-      ? needsBroker('profile', 'Account profile')
-      : f.profile === undefined
-        ? checking('profile', 'Account profile')
-        : f.profile === null
-          ? {
-              key: 'profile',
-              title: 'Account profile',
-              state: 'todo',
-              detail: 'Say where the broker holds the account and whether it is cash or margin.',
-              link: settings('account-profile', 'Save the profile'),
-            }
-          : {
-              key: 'profile',
-              title: 'Account profile',
-              state: 'done',
-              detail: 'Saved. It picks the account rules for this account.',
-              link: settings('account-profile', 'Review it'),
-            },
-    !broker ? needsBroker('safeguards', 'Safeguards') : safeguardsStep(f, settings),
-    !broker
-      ? needsBroker('preview', 'Preview the next orders')
-      : f.previewedAt
+    ...(gateway ? [gateway] : []),
+    stageStep(f, settings('stage', 'Open the stage')),
+    f.allocation === undefined
+      ? checking('allocation', 'Allocation')
+      : f.allocation.amount == null
         ? {
-            key: 'preview',
-            title: 'Preview the next orders',
-            state: 'done',
-            detail: `Previewed on ${formatDate(f.previewedAt)} on this device. Nothing was sent.`,
-            link: settings('preview', 'Preview again'),
+            key: 'allocation',
+            title: 'Allocation',
+            state: 'todo',
+            detail: 'Set the most Stonks may hold in this account. Nothing opens until you do.',
+            link: settings('allocation', 'Set the allocation'),
           }
         : {
-            key: 'preview',
-            title: 'Preview the next orders',
-            state: 'todo',
-            detail: "Run a dry run through the broker's own check. It never sends an order.",
-            link: settings('preview', 'Preview now'),
+            key: 'allocation',
+            title: 'Allocation',
+            state: 'done',
+            detail: `Set to ${formatMoney(f.allocation.amount, { currency: f.allocation.currency ?? p.base_currency })}. Only you change it.`,
+            link: settings('allocation', 'Change it'),
           },
+    f.profile === undefined
+      ? checking('profile', 'Account profile')
+      : f.profile === null
+        ? {
+            key: 'profile',
+            title: 'Account profile',
+            state: 'todo',
+            detail: 'Say where the broker holds the account and whether it is cash or margin.',
+            link: settings('account-profile', 'Save the profile'),
+          }
+        : {
+            key: 'profile',
+            title: 'Account profile',
+            state: 'done',
+            detail: 'Saved. It picks the account rules for this account.',
+            link: settings('account-profile', 'Review it'),
+          },
+    safeguardsStep(f, settings),
+    f.previewedAt
+      ? {
+          key: 'preview',
+          title: 'Preview the next orders',
+          state: 'done',
+          detail: `Previewed on ${formatDate(f.previewedAt)} on this device. Nothing was sent.`,
+          link: settings('preview', 'Preview again'),
+        }
+      : {
+          key: 'preview',
+          title: 'Preview the next orders',
+          state: 'todo',
+          detail: "Run a dry run through the broker's own check. It never sends an order.",
+          link: settings('preview', 'Preview now'),
+        },
     modeStep(f),
   ];
 }
 
-function gatewayStep(f: GoingLiveFacts): GoingLiveStep {
-  const title = 'Server gateway set up';
+/**
+ * The server's link to Interactive Brokers, or null for a broker reached
+ * over its own web API (eToro, say), which needs none.
+ */
+function gatewayStep(f: GoingLiveFacts): GoingLiveStep | null {
+  const title = 'Server linked to Interactive Brokers';
   if (f.portfolio.broker_connection_id) {
-    // A broker reached over its own web API (eToro, say) needs no gateway.
     if (f.connections === undefined || f.providers === undefined) {
       return checking('gateway', title);
     }
     const conn = f.connections.find((c) => c.id === f.portfolio.broker_connection_id);
     const provider = conn ? f.providers.find((x) => x.name === conn.provider) : undefined;
-    if (provider && !provider.needs_gateway) {
-      return {
-        key: 'gateway',
-        title,
-        state: 'done',
-        detail: `${provider.display_name} needs no gateway on the server.`,
-        link: null,
-      };
-    }
+    if (!provider?.needs_gateway) return null;
   }
   if (f.gateways === undefined) return checking('gateway', title);
   const health = f.isAdmin ? { label: 'Open Health', path: '/health' } : null;
@@ -189,8 +203,8 @@ function gatewayStep(f: GoingLiveFacts): GoingLiveStep {
       title,
       state: 'admin',
       detail: f.isAdmin
-        ? 'Set up an IB Gateway on the server and list this portfolio for it.'
-        : 'Your admin sets up an IB Gateway on the server for this portfolio.',
+        ? 'Connect the server to Interactive Brokers and list this portfolio for it.'
+        : 'Your admin connects the server to Interactive Brokers.',
       link: health,
     };
   }
@@ -200,7 +214,8 @@ function gatewayStep(f: GoingLiveFacts): GoingLiveStep {
       key: 'gateway',
       title,
       state: 'admin',
-      detail: 'A gateway runs on the server, but not for this portfolio yet. Your admin adds it.',
+      detail:
+        'The server talks to Interactive Brokers, but not for this portfolio yet. Your admin adds it.',
       link: health,
     };
   }
@@ -210,7 +225,7 @@ function gatewayStep(f: GoingLiveFacts): GoingLiveStep {
       key: 'gateway',
       title,
       state: 'admin',
-      detail: `The ${kind} gateway for this portfolio is not connected right now.`,
+      detail: `The server's ${kind} link to Interactive Brokers is down right now.`,
       link: health,
     };
   }
@@ -218,7 +233,7 @@ function gatewayStep(f: GoingLiveFacts): GoingLiveStep {
     key: 'gateway',
     title,
     state: 'done',
-    detail: `The ${kind} gateway for this portfolio is connected.`,
+    detail: `The server's ${kind} link to Interactive Brokers is up.`,
     link: health,
   };
 }
@@ -238,7 +253,7 @@ function brokerStep(f: GoingLiveFacts): GoingLiveStep {
     };
   }
   if (!p.broker_connection_id) {
-    // The server's own broker book (no connection row): the gateway is the link.
+    // The server's own broker book (no connection row): the server's link is the broker.
     return {
       key: 'broker',
       title,
@@ -361,7 +376,7 @@ function modeStep(f: GoingLiveFacts): GoingLiveStep {
     title,
     state: 'todo',
     detail:
-      'Your follows here are Alerts only or Paper. Switch one on Today. Automatic opens after enough paper days.',
+      'Your follows here are Alerts only or Paper. Switch a follow on Today or on the strategy page. Automatic opens after enough paper days.',
     link: today,
   };
 }
