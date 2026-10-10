@@ -98,6 +98,9 @@ describe('quiet runs (FR-04)', () => {
   it('gives a run its own row only when it traded for you or did not finish cleanly', () => {
     expect(runIsOwnRow(run({}))).toBe(true);
     expect(runIsOwnRow(run({ summary: { orders_placed: null, fills: null } }))).toBe(false);
+    // Your portfolios took part but nothing traded: still nothing for you.
+    expect(runIsOwnRow(run({ summary: { orders_placed: 0, fills: 0 } }))).toBe(false);
+    expect(runIsOwnRow(run({ summary: { orders_placed: 0, fills: 1 } }))).toBe(true);
     expect(runIsOwnRow(run({ status: 'error', summary: { error: 'Broker down' } }))).toBe(true);
     expect(quietRunsTitle(10)).toBe('10 trading runs finished, nothing for you');
     expect(quietRunsTitle(1)).toBe('1 trading run finished, nothing for you');

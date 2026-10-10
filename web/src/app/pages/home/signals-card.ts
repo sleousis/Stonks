@@ -80,7 +80,10 @@ export function runDetail(run: TickRun): string {
  * fold into one line (FR-04).
  */
 export function runIsOwnRow(run: TickRun): boolean {
-  return run.status !== 'ok' || ownRunCounts(run) !== null;
+  if (run.status !== 'ok') return true;
+  const own = ownRunCounts(run);
+  // Your portfolios took part but nothing traded: nothing for you either.
+  return own !== null && (own.orders > 0 || own.fills > 0);
 }
 
 /** "10 trading runs finished, nothing for you". */
