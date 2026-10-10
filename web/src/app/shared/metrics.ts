@@ -7,9 +7,12 @@ import { formatNumber, formatPercent } from '../core/format/format';
  */
 export const NA = 'n/a';
 
-/** Keys shown as percentages (the API sends fractions). */
+/**
+ * Keys shown as percentages (the API sends fractions), also with a held-out,
+ * in-sample or stitched suffix (`max_drawdown_oos`, `cagr_oos_stitched`).
+ */
 const PERCENT_KEY =
-  /(return|returns|drawdown|_dd|share|cagr|cagr_oos|ruin|prob_profit|cost_drag_annual|alpha_annual|tracking_error|var_95|es_95|exposure|win_rate|ratio_pct)$/;
+  /(return|returns|drawdown|_dd|share|cagr|cagr_oos|cagr_mean|ruin|prob_profit|cost_drag_annual|alpha_annual|tracking_error|var_95|es_95|exposure|win_rate|ratio_pct|fee_rate)(_oos|_is|_stitched)?$/;
 const MULTIPLE_KEY =
   /(break_even_multiple|stress_multiplier|capture|return_to_dd|turnover_annual)$/;
 const FLAG_KEY = /^(used_realistic_costs)$/;
@@ -24,59 +27,82 @@ export function formatMetric(key: string, value: number | null | undefined): str
 }
 
 const LABELS: Record<string, string> = {
-  is_score: 'In-sample score',
-  oos_score: 'Out-of-sample score',
-  p_value: 'p-value',
-  n_splits: 'Folds',
-  n_folds: 'Folds',
-  sharpe_oos: 'Sharpe (held out)',
-  cagr_oos: 'CAGR (held out)',
-  max_drawdown_oos: 'Max drawdown (held out)',
-  final_return_oos: 'Return (held out)',
+  is_score: 'Past score',
+  oos_score: 'Score on unseen data',
+  p_value: 'Chance it is luck',
+  n_splits: 'Retest periods',
+  n_folds: 'Retest periods',
+  n_bars: 'Data points tested',
+  sharpe_oos: 'Sharpe on unseen data',
+  cagr_oos: 'Yearly return on unseen data',
+  max_drawdown_oos: 'Worst drop on unseen data',
+  final_return_oos: 'Return on unseen data',
+  psr: 'Probabilistic Sharpe vs target',
   psr0: 'Probabilistic Sharpe',
-  psr0_stitched: 'Probabilistic Sharpe (stitched)',
+  psr0_stitched: 'Probabilistic Sharpe across retests',
   dsr: 'Deflated Sharpe',
-  n_trials: 'Trials',
-  n_trials_run: 'Trials this run',
-  n_trials_usable: 'Usable trials',
-  n_eff: 'Independent trials',
+  skew: 'Skew of returns',
+  kurtosis: 'Fat tails of returns',
+  rho: 'Day to day carry-over',
+  var_sr: 'Sharpe variance',
+  sr0_per_bar: 'Luck threshold per bar',
+  n_trials: 'Settings tried',
+  n_trials_run: 'Settings tried this run',
+  n_trials_usable: 'Usable settings',
+  n_eff: 'Independent settings',
   n_trades: 'Trades',
-  pbo: 'PBO',
+  pbo: 'Chance the best setting was luck',
   spa_p: 'SPA p-value',
   spa_p_lower: 'SPA p-value (lower)',
   spa_p_upper: 'SPA p-value (upper)',
   reality_check_p: 'Reality Check p-value',
-  romano_wolf_rejected: 'Trials that beat cash (Romano-Wolf)',
-  selected_rejected: 'Chosen trial beats cash',
-  selected_p: 'Chosen trial adjusted p-value',
+  romano_wolf_rejected: 'Settings that beat cash',
+  selected_rejected: 'Chosen setting beats cash',
+  selected_p: 'Chosen setting adjusted p-value',
   n_family_runs: 'Runs in the family',
-  degradation_slope: 'Degradation slope',
-  p_loss: 'Chance of a loss out of sample',
+  degradation_slope: 'Drop from past to new data',
+  p_loss: 'Chance of a loss on unseen data',
   risk_of_ruin: 'Risk of ruin',
-  median_max_dd: 'Median drawdown (MC)',
-  p95_max_dd: '95th percentile drawdown (MC)',
-  median_return: 'Median return (MC)',
-  p05_return: '5th percentile return (MC)',
+  median_max_dd: 'Typical worst drop',
+  p95_max_dd: 'Bad case worst drop',
+  median_return: 'Typical return',
+  p05_return: 'Bad case return',
   return_to_dd: 'Return to drawdown',
   prob_profit: 'Chance of profit',
-  break_even_multiple: 'Break-even cost multiple',
+  break_even_multiple: 'Costs it can bear',
   cost_sr: 'Sharpe lost to costs',
-  cost_sr_limit: 'Cost Sharpe limit',
+  cost_sr_limit: 'Most Sharpe costs may take',
   cost_drag_annual: 'Cost drag per year',
   turnover_annual: 'Turnover per year',
   used_realistic_costs: 'Realistic costs',
-  wfe: 'Walk-forward efficiency',
-  sharpe_stitched: 'Sharpe (stitched out of sample)',
-  cagr_oos_stitched: 'CAGR (stitched out of sample)',
-  oos_score_mean: 'Mean out-of-sample score',
-  is_score_mean: 'Mean in-sample score',
-  is_cagr_mean: 'Mean in-sample CAGR',
-  positive_share: 'Positive folds',
-  matrix_pass_share: 'Matrix cells passed',
-  matrix_cells: 'Matrix cells',
-  matrix_cells_passed: 'Matrix cells that passed',
-  n_bars_stitched: 'Stitched bars',
-  excess_cagr: 'Excess CAGR',
+  borrow_fee_rate: 'Borrow fee per year',
+  borrow_stress_multiplier: 'Borrow fee stress',
+  sharpe_borrow_stress: 'Sharpe at higher borrow fees',
+  financing_paid: 'Financing paid',
+  sharpe_std: 'Spread of scores between periods',
+  sharpe_min: 'Worst period score',
+  sharpe_max: 'Best period score',
+  max_sharpe_std: 'Most spread allowed',
+  min_period_sharpe: 'Lowest period score allowed',
+  n_windows: 'Periods checked',
+  correlation_mean: 'Average match with noisy prices',
+  correlation_min: 'Lowest match with noisy prices',
+  level_correlation_min: 'Lowest value match with noisy prices',
+  levels_tested: 'Noise levels tried',
+  wfe: 'Share of past return kept',
+  sharpe_stitched: 'Sharpe across all retests',
+  cagr_oos_stitched: 'Yearly return across all retests',
+  oos_score_mean: 'Average retest score',
+  is_score_mean: 'Average past score',
+  is_cagr_mean: 'Average past yearly return',
+  positive_share: 'Retests that made money',
+  matrix_pass_share: 'Retest lengths passed',
+  matrix_cells: 'Retest lengths tried',
+  matrix_cells_passed: 'Retest lengths that passed',
+  n_bars_stitched: 'Data points across retests',
+  excess_cagr: 'Yearly return above the benchmark',
+  benchmark_cagr: 'Benchmark yearly return',
+  benchmark_max_dd: 'Benchmark worst drop',
   information_ratio: 'Information ratio',
   alpha_annual: 'Alpha per year',
   alpha_tstat: 'Alpha t-stat',
@@ -86,11 +112,41 @@ const LABELS: Record<string, string> = {
   tracking_error: 'Tracking error',
   sr_per_bar: 'Sharpe per bar',
   sharpe_se: 'Sharpe standard error',
-  min_trl_bars: 'Minimum track record (bars)',
-  sharpe_ci_low: 'Sharpe interval, low',
-  sharpe_ci_high: 'Sharpe interval, high',
-  trade_expectancy: 'Expectancy per trade',
+  min_trl_bars: 'Shortest track record needed (bars)',
+  sharpe_ci_low: 'Sharpe range, low',
+  sharpe_ci_high: 'Sharpe range, high',
+  trade_expectancy: 'Average result per trade',
+  n_tickers: 'Tickers',
+  n_dates: 'Dates checked',
+  ic_estimate: 'Ranking skill',
+  ic_horizon: 'Days ahead checked',
+  score_turnover: 'Score turnover',
+  top_quantile_turnover: 'Top group turnover',
+  lot_orders: 'Orders',
+  lot_rounded_orders: 'Orders rounded to whole shares',
+  lot_skipped_orders: 'Orders too small to place',
+  lot_skipped_share: 'Share of orders too small',
+  lot_skipped_notional: 'Value of orders too small',
+  lot_mean_drift: 'Average drift from rounding',
+  lot_max_drift: 'Largest drift from rounding',
+  min_capital: 'Smallest account that works',
 };
+
+/** Keys with a number in them: walk-forward folds, matrix cells, IC horizons. */
+const PATTERN_LABELS: readonly [RegExp, (m: RegExpExecArray) => string][] = [
+  [/^sharpe_(\d+(?:\.\d+)?)x$/, (m) => `Sharpe at ${m[1]}× costs`],
+  [/^fold(\d+)_oos_score$/, (m) => `Retest ${+m[1] + 1} score`],
+  [/^fold(\d+)_is_score$/, (m) => `Retest ${+m[1] + 1} past score`],
+  [/^fold(\d+)_max_drawdown_oos$/, (m) => `Retest ${+m[1] + 1} worst drop`],
+  [/^fold(\d+)_cagr_oos$/, (m) => `Retest ${+m[1] + 1} yearly return`],
+  [/^fold(\d+)_cagr_is$/, (m) => `Retest ${+m[1] + 1} past yearly return`],
+  [/^matrix_(\d+)x(\d+)_passed$/, (m) => `${m[1]} by ${m[2]} bar retest passed`],
+  [/^matrix_(\d+)x(\d+)_wfe$/, (m) => `${m[1]} by ${m[2]} bar retest, past return kept`],
+  [/^ic_mean_h(\d+)$/, (m) => `Ranking skill ${m[1]} days ahead`],
+  [/^icir_h(\d+)$/, (m) => `Ranking steadiness ${m[1]} days ahead`],
+  [/^ic_t_hac_h(\d+)$/, (m) => `Ranking t-stat ${m[1]} days ahead`],
+  [/^spread_h(\d+)$/, (m) => `Top minus bottom ${m[1]} days ahead`],
+];
 
 export function humanizeKey(key: string): string {
   const words = key.replace(/_/g, ' ').trim();
@@ -98,9 +154,12 @@ export function humanizeKey(key: string): string {
 }
 
 export function metricLabel(key: string): string {
-  const stress = /^sharpe_(\d+(?:\.\d+)?)x$/.exec(key);
-  if (stress) return `Sharpe at ${stress[1]}× costs`;
-  return LABELS[key] ?? humanizeKey(key);
+  if (LABELS[key]) return LABELS[key];
+  for (const [pattern, label] of PATTERN_LABELS) {
+    const m = pattern.exec(key);
+    if (m) return label(m);
+  }
+  return humanizeKey(key);
 }
 
 /**
