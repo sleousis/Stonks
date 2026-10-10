@@ -42,6 +42,8 @@ import { WindowFields } from './window-fields';
           [value]="form()"
           [errors]="errors()"
           [intervals]="intervals()"
+          [commonIntervals]="true"
+          tickersHint="At least 10 tickers, separated with commas, spaces or new lines."
           (patch)="patch($event)"
         />
         <div class="field">

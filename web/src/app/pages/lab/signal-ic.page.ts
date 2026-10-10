@@ -11,7 +11,6 @@ import {
 import type { SignalIcRequest, SignalIcView } from '../../api/models';
 import { SignalsService } from '../../api/signals.service';
 import { SystemService } from '../../api/system.service';
-import { ConfirmService } from '../../core/confirm/confirm.service';
 import { JobsService } from '../../core/jobs/jobs.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { SignalIcResult } from '../../shared/lab-results/signal-ic-result';
@@ -22,7 +21,7 @@ import { JobFollower } from './job-follower';
 import { LabNav } from './lab-nav';
 import { SignalIcFormView } from './signal-ic-form';
 
-/** Signal IC: how well a strategy's scores ranked the moves that came next. */
+/** The signal check: how well a strategy's scores ranked the moves that came next. */
 @Component({
   selector: 'app-signal-ic-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -80,7 +79,7 @@ import { SignalIcFormView } from './signal-ic-form';
         <div class="panel-body result-body">
           @if (run.handle(); as h) {
             @if (!h.done() || h.status() !== 'succeeded') {
-              <app-job-progress label="Signal IC" [handle]="h" />
+              <app-job-progress label="Signal check" [handle]="h" />
             }
             @if (run.error(); as err) {
               <app-error-state
@@ -96,7 +95,7 @@ import { SignalIcFormView } from './signal-ic-form';
           } @else {
             <app-empty-state
               title="Nothing measured yet"
-              message="Pick a strategy and a few tickers, then measure. The IC for each look-ahead shows here."
+              message="Pick a strategy and at least 10 tickers, then measure. How well it ranked them shows here."
             />
           }
         </div>
@@ -114,7 +113,6 @@ import { SignalIcFormView } from './signal-ic-form';
 export class SignalIcPage {
   private readonly signals = inject(SignalsService);
   private readonly system = inject(SystemService);
-  private readonly confirm = inject(ConfirmService);
   private readonly toasts = inject(ToastService);
 
   protected readonly classes = resource({ loader: () => this.system.strategyClasses() });
@@ -130,15 +128,9 @@ export class SignalIcPage {
     (id) => this.signals.signalIcResult(id),
   );
 
+  /** A read-only check: it starts at once, no confirmation. */
   async start(request: SignalIcRequest): Promise<void> {
     const name = request.strategy.class_path?.split(':').at(-1) ?? 'the strategy';
-    const n = request.universe.length;
-    const ok = await this.confirm.confirm({
-      title: `Measure the signal of ${name}?`,
-      message: `${n} ticker${n === 1 ? '' : 's'}, ${request.start} to ${request.end}. It runs in the background.`,
-      confirmLabel: 'Measure signal',
-    });
-    if (!ok) return;
     this.starting.set(true);
     let jobId: string;
     try {

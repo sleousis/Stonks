@@ -1,7 +1,7 @@
 <form class="lab-form" novalidate (submit)="$event.preventDefault(); submit()">
   <fieldset class="group">
-    <legend>Basket</legend>
-    <div class="basket" role="radiogroup" aria-label="What to run on">
+    <legend>Tickers to test</legend>
+    <div class="basket" role="radiogroup" aria-label="Tickers to test">
       <label class="check">
         <input
           type="radio"
@@ -24,7 +24,7 @@
 
     @if (form().basket === 'tickers') {
       <div class="field">
-        <label for="sw-tickers">Tickers</label>
+        <label for="sw-tickers">Type the tickers</label>
         <textarea
           id="sw-tickers"
           class="input textarea"
@@ -152,7 +152,7 @@
   </fieldset>
 
   <fieldset class="group">
-    <legend>Tests and search</legend>
+    <legend>Tests</legend>
     <div class="grid-2">
       <div class="field span-2">
         <label for="sw-suite">Robustness tests</label>
@@ -168,33 +168,44 @@
         </select>
         <span class="hint" id="sw-suite-hint">{{ suiteHint() }}</span>
       </div>
-      <div class="field">
-        <label for="sw-tuner">Search method</label>
-        <select id="sw-tuner" class="input" (change)="patch({ tuner: $any($event.target).value })">
-          <option value="random" [selected]="form().tuner === 'random'">
-            Random: samples the space
-          </option>
-          <option value="grid" [selected]="form().tuner === 'grid'">
-            Grid: tries every combination
-          </option>
-        </select>
+    </div>
+    <details class="advanced">
+      <summary>Advanced</summary>
+      <div class="grid-2">
+        <div class="field">
+          <label for="sw-tuner">Search method</label>
+          <select
+            id="sw-tuner"
+            class="input"
+            (change)="patch({ tuner: $any($event.target).value })"
+          >
+            <option value="random" [selected]="form().tuner === 'random'">
+              Random: samples the space
+            </option>
+            <option value="grid" [selected]="form().tuner === 'grid'">
+              Grid: tries every combination
+            </option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="sw-objective">Pick the best by</label>
+          <select
+            id="sw-objective"
+            class="input"
+            (change)="patch({ objective: $any($event.target).value })"
+          >
+            <option value="sharpe" [selected]="form().objective === 'sharpe'">Sharpe</option>
+            <option value="cagr" [selected]="form().objective === 'cagr'">CAGR</option>
+            <option value="final_return" [selected]="form().objective === 'final_return'">
+              Total return
+            </option>
+          </select>
+        </div>
       </div>
+    </details>
+    <div class="grid-2">
       <div class="field">
-        <label for="sw-objective">Pick the best by</label>
-        <select
-          id="sw-objective"
-          class="input"
-          (change)="patch({ objective: $any($event.target).value })"
-        >
-          <option value="sharpe" [selected]="form().objective === 'sharpe'">Sharpe</option>
-          <option value="cagr" [selected]="form().objective === 'cagr'">CAGR</option>
-          <option value="final_return" [selected]="form().objective === 'final_return'">
-            Total return
-          </option>
-        </select>
-      </div>
-      <div class="field">
-        <label for="sw-budget">Trials per strategy</label>
+        <label for="sw-budget">Settings tried per strategy</label>
         <input
           id="sw-budget"
           class="input num"
@@ -211,7 +222,7 @@
         @if (errors()['budget']; as e) {
           <span class="error" id="sw-budget-hint">{{ e }}</span>
         } @else {
-          <span class="hint" id="sw-budget-hint">Parameter sets tried for each strategy.</span>
+          <span class="hint" id="sw-budget-hint">How many settings to try for each strategy.</span>
         }
       </div>
     </div>
