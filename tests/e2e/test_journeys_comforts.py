@@ -124,7 +124,9 @@ def test_a_degiro_export_needs_no_mapping(browse, stack, viewport):
     panel = page.locator("app-broker-exports-panel")
     expect(panel.get_by_role("heading", name="Brokers without a connection")).to_be_visible()
     expect(panel).to_contain_text("Reads only")
-    panel.get_by_role("link", name="Transactions").click()
+    # PB-14: the files in order, then one button that starts with the first.
+    expect(panel.locator("ol.exports li").first).to_contain_text("Transactions")
+    panel.get_by_role("link", name="Import DEGIRO files").click()
     expect(page.get_by_role("heading", level=1)).to_have_text("Import a CSV statement")
     expect(page.get_by_label("What file is it?")).to_have_value("degiro_transactions")
     page.get_by_label("CSV file").set_input_files(

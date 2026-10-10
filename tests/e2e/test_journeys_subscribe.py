@@ -51,12 +51,18 @@ def test_a_trader_opens_a_portfolio_and_follows_a_strategy(browse, stack, viewpo
     control = follow.locator("app-follow-control")
     expect(control).to_be_visible()
     expect(control.get_by_role("radio", name="Alerts only")).to_be_checked()
-    expect(control.get_by_role("radio")).to_have_count(4)
+    # FR-03: until the gate opens, only Alerts only and Paper, with one line.
+    expect(control.get_by_role("radio")).to_have_count(2)
+    expect(control).to_contain_text(
+        "More modes unlock with a broker portfolio after 20 paper days."
+    )
 
-    # Today lists it with its switches.
-    v.go("/")
-    card = page.locator("app-strategies-card")
-    expect(card.get_by_role("link", name=sid)).to_be_visible()
+    # Today lists it by name, with its switches.
     subs = v.api("GET", "/api/subscriptions").json()["items"]
     assert [(s["strategy_id"], s["mode"]) for s in subs] == [(sid, "notify")]
+    name = subs[0]["strategy_name"]
+    assert name and name != sid
+    v.go("/")
+    card = page.locator("app-strategies-card")
+    expect(card.get_by_role("link", name=name)).to_be_visible()
     v.guard.assert_clean()

@@ -99,7 +99,9 @@ def test_a_trader_reads_insights_on_their_own_book(browse, stack, viewport):
         expect(months.locator("thead")).to_contain_text("Year total")
     agreement = page.locator(".holdings")
     expect(agreement).to_contain_text("AAA.US")
-    expect(agreement).to_contain_text("bah_aaa")
+    # NAMES and PB-01: the strategy by name, its view in words, no made-up percent.
+    expect(agreement).to_contain_text("Bah aaa agrees. Leans long.")
+    expect(agreement).not_to_contain_text("bah_aaa")
     history = page.get_by_role("heading", name="Portfolio history")
     expect(history).to_be_visible()
     expect(page.get_by_text("2 snapshots")).to_be_visible()
@@ -110,7 +112,10 @@ def test_a_trader_reads_insights_on_their_own_book(browse, stack, viewport):
     expect(page.get_by_role("heading", level=1)).to_have_text("Risk")
     limits = page.locator(".limits")
     expect(limits).to_contain_text("Largest holding")
-    expect(limits).to_contain_text("No limit set")
+    # PB-02: only limits that exist get a row, the others fold into one line.
+    expect(limits).not_to_contain_text("No limit set")
+    against = page.locator("section", has=page.get_by_role("heading", name="Against the limits"))
+    expect(against).to_contain_text("No limit on")
     expect(page.get_by_role("link", name="Change your risk limits")).to_be_visible()
     expect(page.get_by_role("heading", name="On a bad day")).to_be_visible()
     expect(page.get_by_text("No risk readings yet")).to_be_visible()

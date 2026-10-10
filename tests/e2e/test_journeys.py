@@ -206,7 +206,7 @@ def test_lab_run_with_quick_preset_shows_results(browse, stack, viewport):
     expect(result).to_contain_text(re.compile("pass|fail", re.I), timeout=180_000)
     # The verdict in words, said once (R06), and "trial" only means On trial (R04).
     expect(result).to_contain_text(re.compile("It held up|It did not hold up"))
-    expect(result.get_by_text(re.compile("^It (held up|did not hold up)"))).to_have_count(1)
+    expect(result.locator(".plain-verdict")).to_have_count(1)
     expect(result).not_to_contain_text(re.compile(r"\btrials?\b", re.I))
     v.check_page("lab-run-result")
 
@@ -224,7 +224,10 @@ def test_promote_gate_refuses_then_admin_overrides_and_trader_is_refused(browse,
     trader = browse(stack.trader)
     trader.guard.expect_refusal(403, promote_url, "traders cannot promote")
     page = trader.go(f"/strategies/{sid}")
-    expect(page.get_by_role("heading", level=1)).to_contain_text(sid)
+    # The page names it in words, never by its id (NAMES).
+    name = trader.api("GET", f"/api/strategies/{sid}").json()["name"]
+    assert name and name != sid
+    expect(page.get_by_role("heading", level=1)).to_have_text(name)
     expect(page.locator("app-strategy-verdict")).to_be_visible()
     expect(page.get_by_role("button", name="Approve", exact=True)).to_have_count(0)
     expect(page.get_by_role("button", name="Override…")).to_have_count(0)
@@ -367,7 +370,8 @@ def test_kill_switch_blocks_orders_until_resumed_with_a_fresh_code(
     # M7: the Halts page opens the same Stop trading sheet as the strip.
     page.get_by_role("button", name="Stop trading…").click()
     sheet = page.get_by_role("dialog", name="Stop trading")
-    expect(sheet.get_by_role("group", name="Stop trading ticket")).to_be_visible()
+    # PO-13: no ticket lines, only the PAPER or LIVE stamp next to the button.
+    expect(sheet.locator("app-mode-stamp")).to_be_visible()
     sheet.get_by_role("radio", name="Every portfolio, for every trader").check()
     sheet.get_by_label("Reason").fill(f"e2e kill switch drill ({viewport})")
     sheet.get_by_role("button", name="Stop trading").click()
@@ -400,8 +404,32 @@ def test_stop_trading_from_the_strip_halts_the_picked_portfolio(
     browse, stack, viewport, lift_halts_after
 ):
     """UX-01: from any page, one tap on Stop trading opens the kill sheet,
-    preset to the portfolio on screen, and the strip turns red at once."""
-    v = browse(stack.trader)
+    preset to the portfolio on screen, and the strip turns red at once.
+
+    FR-06: the control shows only once the trader has something that trades,
+    so this trader starts with a portfolio and no follow, then follows on Paper."""
+    from tests.e2e.stack import ACTIVE_IDS
+
+    person = stack.add_person("trader", f"strip-{viewport}@e2e.test", "Strip Trader")
+    person.totp_secret = pyotp.random_base32()
+    enrol(stack, person)
+    v = browse(person)
+    book = f"Strip book {viewport}"
+    made = v.api("POST", "/api/portfolios", data={"name": book, "initial_cash": 100_000})
+    assert made.status == 201, made.text()
+    portfolio_id = made.json()["id"]
+    page = v.go("/strategies")
+    strip = page.locator("app-session-strip .strip")
+    stop = strip.get_by_role("button", name="Stop trading")
+    expect(page.get_by_role("heading", level=1)).to_be_visible()
+    expect(stop).to_have_count(0)
+
+    followed = v.api(
+        "POST",
+        "/api/subscriptions",
+        data={"strategy_id": ACTIVE_IDS["AAA.US"], "portfolio_id": portfolio_id, "mode": "paper"},
+    )
+    assert followed.status == 201, followed.text()
     page = v.go("/strategies")
     strip = page.locator("app-session-strip .strip")
     stop = strip.get_by_role("button", name="Stop trading")
@@ -413,15 +441,16 @@ def test_stop_trading_from_the_strip_halts_the_picked_portfolio(
 
     sheet = page.get_by_role("dialog", name="Stop trading")
     expect(sheet).to_be_visible()
-    expect(sheet.get_by_role("radio", name="Trader paper book")).to_be_checked()
+    # PO-13: a trader with one portfolio gets no scope choice, it is theirs.
+    expect(sheet.get_by_role("group", name="Stop for")).to_have_count(0)
     expect(sheet.get_by_role("radio", name="All new orders")).to_be_checked()
-    expect(sheet.get_by_role("group", name="Stop trading ticket")).to_contain_text("PAPER")
+    expect(sheet.locator("app-mode-stamp")).to_contain_text("PAPER")
     v.check_page("kill-sheet")
     sheet.get_by_label("Reason").fill(f"e2e stop from the strip ({viewport})")
     sheet.get_by_role("button", name="Stop trading").click()
 
     expect(strip).to_have_attribute("data-tone", "kill")
-    expect(page.get_by_role("region", name="Trading halted")).to_contain_text("Trader paper book")
+    expect(page.get_by_role("region", name="Trading halted")).to_contain_text(book)
     # A trader resumes from the strip itself: the Halts page is an admin page (F11).
     halted = page.get_by_role("region", name="Trading halted")
     expect(halted.get_by_role("button", name="Resume")).to_be_visible()
@@ -433,7 +462,7 @@ def test_stop_trading_from_the_strip_halts_the_picked_portfolio(
     mine = [h for h in rows if h.get("reason") == f"e2e stop from the strip ({viewport})"]
     assert len(mine) == 1, rows
     assert mine[0]["scope"] == "portfolio"
-    assert mine[0]["portfolio_id"] == stack.trader_portfolio
+    assert mine[0]["portfolio_id"] == portfolio_id
 
 
 def test_admin_backs_up_now_and_lists_backups(browse, stack, viewport):
@@ -443,7 +472,9 @@ def test_admin_backs_up_now_and_lists_backups(browse, stack, viewport):
     page.get_by_role("button", name="Back up now").click()
     page.locator("dialog[open]").get_by_role("button", name="Back up now").click()
     backups = page.locator("section", has=page.get_by_role("heading", name="Backups"))
-    expect(backups).to_contain_text(re.compile("succeeded", re.I), timeout=120_000)
+    # R17: job pills read in words ("Done"), and the new backup is listed.
+    expect(backups).to_contain_text("Done", timeout=120_000)
+    expect(backups).to_contain_text(re.compile(r"stonks-\d{8}T\d{6}Z"))
     v.check_page("schedule-backups")
 
 

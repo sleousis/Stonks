@@ -145,7 +145,7 @@ def test_a_trader_screens_saves_and_makes_a_universe(browse, stack, viewport):
     dialog = page.get_by_role("dialog")
     expect(dialog.get_by_role("heading", name="Save as a universe")).to_be_visible()
     dialog.get_by_role("radio", name="Today's matches").click()
-    expect(dialog).to_contain_text("Survivorship bias.")
+    expect(dialog).to_contain_text("Backtests look too good.")
     v.check_page("screener-universe-sheet")
     dialog.get_by_label("Short name").fill(f"stocks-over-1-{viewport}")
     dialog.get_by_role("button", name="Save universe").click()
