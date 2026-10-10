@@ -48,6 +48,21 @@ def test_third_party_actions_are_pinned_to_a_commit(path):
         assert SHA.match(ref), f"{path.name}: pin {uses} to a full commit SHA"
 
 
+#: ``uses: owner/repo@<sha> # v1.2.3`` on one line.
+PINNED_LINE = re.compile(r"uses:\s*(?P<action>[^@\s]+)@(?P<ref>\S+)(?P<rest>.*)$")
+
+
+@pytest.mark.parametrize("path", WORKFLOWS, ids=lambda p: p.name)
+def test_every_pin_names_its_tag(path):
+    """A bare SHA says nothing to a reviewer. Each pin keeps the release tag
+    it points at in a trailing comment, which Dependabot updates with it."""
+    for line in path.read_text(encoding="utf-8").splitlines():
+        m = PINNED_LINE.search(line)
+        if not m or m["action"].startswith(FIRST_PARTY):
+            continue
+        assert re.search(r"#\s*v\d", m["rest"]), f"{path.name}: name the tag of {m['action']}"
+
+
 def test_a_release_only_ships_commits_that_are_on_main():
     """The Release run feeds the automatic deploy, so a tag on an unmerged
     branch must fail before anything is built."""
