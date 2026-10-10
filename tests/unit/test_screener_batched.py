@@ -18,6 +18,10 @@ from stonks.screener.data import FILING_LAG_DAYS, ScreenData, finite
 
 AS_OF = date(2024, 12, 31)
 N = 40
+# names with a long history by construction (not by the random draw), so every
+# screen date in the tests has enough bars behind it for the volatility metric
+LONG_HISTORY = frozenset(range(2, N, 4))
+LONG_BARS = 300
 
 
 # ---- a random lake ----------------------------------------------------------------------
@@ -29,7 +33,8 @@ def _seed(lake, rng: np.random.Generator) -> list[str]:
     for i, t in enumerate(names):
         # stale names stop trading before the date, young names have few bars
         end = AS_OF - timedelta(days=int(rng.choice([0, 1, 3, 30]))) if i % 7 else AS_OF
-        days = pd.bdate_range(end=end, periods=int(rng.choice([15, 30, 70, 200, 300])))
+        periods = int(rng.choice([15, 30, 70, 200, LONG_BARS]))
+        days = pd.bdate_range(end=end, periods=LONG_BARS if i in LONG_HISTORY else periods)
         close = 30.0 * np.exp(np.cumsum(rng.normal(0, 0.02, len(days))))
         adj = close * 0.97
         adj[rng.random(len(days)) < 0.1] = np.nan  # the vendor gave no adjusted close
@@ -315,8 +320,10 @@ def test_batched_metrics_match_the_per_ticker_reference(random_lake):
         assert set(want) == set(batched)
         for metric in batched:
             _assert_same(data.metric(metric), want[metric], metric)
-        # the reference sees some of everything, so the comparison means something
-        assert len(want["volatility_3m"]) > 5 and len(want["revenue_growth"]) > 5
+        # the reference sees some of everything, so the comparison means something:
+        # at least the long-history names have a volatility on every date
+        assert len(want["volatility_3m"]) >= len(LONG_HISTORY)
+        assert len(want["revenue_growth"]) > 5
         assert len(want["debt_to_equity"]) > 5
 
 

@@ -98,7 +98,7 @@ def _hourly_as_ofs() -> list[datetime]:
     return base
 
 
-def _enc(x: float | None) -> float | None | str:
+def _enc(x: float | None) -> float | str | None:
     if x is None:
         return None
     if isinstance(x, float) and math.isnan(x):
@@ -106,7 +106,7 @@ def _enc(x: float | None) -> float | None | str:
     return float(x)
 
 
-def _features(strategy, ticker, as_of, lake) -> dict[str, float | None | str]:
+def _features(strategy, ticker, as_of, lake) -> dict[str, float | str | None]:
     return {
         k: _enc(v) for k, v in sorted(strategy.extract_features(ticker, as_of, lake).values.items())
     }
