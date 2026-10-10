@@ -87,7 +87,12 @@ describe('registerShellCommands', () => {
     expect(gt?.path).toBe('/trades');
   });
 
+  it("keeps Stop trading out of a new trader's palette, with nothing to stop (NB-15)", () => {
+    expect(labels()).not.toContain('Stop trading');
+  });
+
   it('Stop trading opens the kill switch sheet', async () => {
+    me.set(ADMIN);
     const stop = registry.available().find((c) => c.label === 'Stop trading')!;
     await stop.run();
     expect(TestBed.inject(StopTradingService).open()).toBe(true);

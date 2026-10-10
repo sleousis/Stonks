@@ -9,6 +9,7 @@ import { type PaletteCommand, CommandRegistry } from '../core/commands/command-r
 import { type KeySequence, ShortcutsService } from '../core/commands/shortcuts.service';
 import { ConfirmService } from '../core/confirm/confirm.service';
 import { StopTradingService } from '../core/halts/stop-trading.service';
+import { StopTradingVisibility } from './stop-visibility';
 import { GLOSSARY_PATH } from '../core/help/glossary';
 import { JobsService } from '../core/jobs/jobs.service';
 import { ToastService } from '../core/notify/toast.service';
@@ -49,7 +50,9 @@ export function registerShellCommands(): void {
   const toasts = inject(ToastService);
   const theme = inject(ThemeService);
   const privacy = inject(PrivacyService);
-  const viewer = navViewer(inject(SessionService), inject(FeatureFlagsService));
+  const session = inject(SessionService);
+  const viewer = navViewer(session, inject(FeatureFlagsService));
+  const stopVisible = inject(StopTradingVisibility).show;
   const stopTrading = inject(StopTradingService);
   const destroyRef = inject(DestroyRef);
 
@@ -123,7 +126,8 @@ export function registerShellCommands(): void {
       label: 'Stop trading',
       group: 'Actions',
       keywords: ['kill switch', 'halt', 'emergency'],
-      visible: allowedTo('killswitch.user'),
+      // Only once something trades for you (FR-06); open reads keep it.
+      visible: () => viewer.can('killswitch.user') && (session.me() === null || stopVisible()),
       run: () => stopTrading.open.set(true),
     },
     {

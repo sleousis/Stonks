@@ -14,6 +14,7 @@ import { type HaltScope, haltScopeText, haltSummary } from '../../core/halts/hal
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
+import { StopTradingVisibility } from '../../shell/stop-visibility';
 import { activeFormat, browserFormat } from '../../core/format/format';
 import { DEFAULT_KILL_REASON } from './kill-sheet';
 import { SCHEDULE_POLL_MS, SessionStrip, countdown, nextJob, sessionPhase } from './session-strip';
@@ -141,6 +142,9 @@ describe('SessionStrip', () => {
   };
   let overview: ReturnType<typeof vi.fn>;
   const canRead = signal(true);
+  /** The rule itself is tested in stop-visibility.spec.ts. */
+  const stopShows = computed(() => allowed(me(), 'killswitch.user') && !hideStop());
+  const hideStop = signal(false);
   const session = {
     canRead,
     me,
@@ -160,6 +164,7 @@ describe('SessionStrip', () => {
         { provide: SCHEDULE_POLL_MS, useValue: 0 },
         { provide: PortfolioContextService, useValue: portfolios },
         { provide: SessionService, useValue: session },
+        { provide: StopTradingVisibility, useValue: { show: stopShows } },
       ],
     });
     const fixture = TestBed.createComponent(SessionStrip);
@@ -178,6 +183,7 @@ describe('SessionStrip', () => {
     activeFormat.set({ locale: 'en-US', timeZone: 'UTC', dateStyle: 'iso' });
     overview = vi.fn().mockResolvedValue(schedule());
     active.set([]);
+    hideStop.set(false);
     options.set([]);
     me.set(TRADER);
     canRead.set(true);
@@ -357,6 +363,7 @@ describe('SessionStrip', () => {
 
     TestBed.resetTestingModule();
     active.set([]);
+    hideStop.set(false);
     const empty = await renderEl();
     expect(empty.querySelector('.strip')).toBeNull();
   });
@@ -382,6 +389,13 @@ describe('SessionStrip', () => {
   });
 
   describe('Stop trading (UX-01)', () => {
+    it('leaves the control out while nothing trades for you (FR-06)', async () => {
+      hideStop.set(true);
+      const el = await renderEl();
+      expect(el.querySelector('.stop')).toBeNull();
+      expect(el.querySelector('app-kill-sheet')).toBeNull();
+    });
+
     it('Stop trading opens the kill sheet in one tap at 375px, and the POST carries the picked portfolio', async () => {
       options.set([
         book({ id: 'pf_other', name: 'Side book' }),
