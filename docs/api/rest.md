@@ -1253,6 +1253,7 @@ Live calibration of a classifier version's probability forecasts (roadmap 23.9):
 | `quantity` | number | yes |  |
 | `side` | string \| null | yes |  |
 | `strategy_id` | string \| null | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 
 ### ChartSignalView
 
@@ -1262,6 +1263,7 @@ Live calibration of a classifier version's probability forecasts (roadmap 23.9):
 | `kind` | string | yes |  |
 | `reason` | string \| null | yes |  |
 | `strategy_id` | string | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 | `strength` | number \| null | yes |  |
 
 ### ChartView
@@ -2587,6 +2589,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers, sect
 | `is_delisted` | boolean \| null | yes |  |
 | `name` | string \| null | yes |  |
 | `sector` | string \| null | yes |  |
+| `security_type` | string \| null | no |  |
 
 ### IntervalInfo
 
@@ -5695,6 +5698,7 @@ Turn an alert on for one of your saved screens, or change it.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `currency` | string \| null | no |  |
 | `exchange` | string \| null | no |  |
 | `name` | string \| null | no |  |
 | `sector` | string \| null | no |  |

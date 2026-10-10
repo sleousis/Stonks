@@ -1747,6 +1747,12 @@ export type ChartFillView = {
      * Strategy Id
      */
     strategy_id: string | null;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
 };
 
 /**
@@ -1769,6 +1775,12 @@ export type ChartSignalView = {
      * Strategy Id
      */
     strategy_id: string;
+    /**
+     * Strategy Name
+     *
+     * The strategy's plain title (a starter's), or null: the console names it from the id.
+     */
+    strategy_name?: string | null;
     /**
      * Strength
      */
@@ -5381,6 +5393,10 @@ export type InstrumentView = {
      * Sector
      */
     sector: string | null;
+    /**
+     * Security Type
+     */
+    security_type?: string | null;
 };
 
 /**
@@ -13847,6 +13863,10 @@ export type ScreenResult = {
  * ScreenRow
  */
 export type ScreenRow = {
+    /**
+     * Currency
+     */
+    currency?: string | null;
     /**
      * Exchange
      */

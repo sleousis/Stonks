@@ -43,6 +43,7 @@ function view(over: Partial<CalendarView> = {}): CalendarView {
         report_date: '2026-10-29',
         before_after_market: 'after',
         eps_estimate: 1.6,
+        currency: 'USD',
         eps_actual: null,
         surprise_percent: null,
       },
@@ -60,6 +61,26 @@ function view(over: Partial<CalendarView> = {}): CalendarView {
         actual: null,
         estimate: 2.9,
         previous: 3.0,
+      },
+      {
+        country: 'US',
+        event_time: '2026-10-02T12:30:00Z',
+        event_type: 'Non Farm Payrolls',
+        comparison: 'none',
+        importance: 'high',
+        actual: 210,
+        estimate: 180,
+        previous: 150,
+      },
+      {
+        country: 'US',
+        event_time: '2026-10-02T12:30:00Z',
+        event_type: 'Unemployment Rate',
+        comparison: 'none',
+        importance: 'medium',
+        actual: 4.1,
+        estimate: 4.2,
+        previous: 4.2,
       },
     ],
     truncated: false,
@@ -130,9 +151,19 @@ describe('CalendarPage', () => {
     expect(radio(el, 'Ex-dividend').textContent).toContain('(1)');
   });
 
-  it('shows SEC filings with a link to each document', async () => {
+  it('shows SEC filings of the last 30 days with a link to each document', async () => {
     const fixture = await render();
-    (await nextRequest(http, '/api/calendars')).flush(
+    (await nextRequest(http, '/api/calendars')).flush(view());
+    await settle(fixture);
+    const el: HTMLElement = fixture.nativeElement;
+    radio(el, 'Filings').click();
+    fixture.detectChanges();
+    // Filings are past events: the tab reads the last 30 days, not the next 30.
+    const req = await nextRequest(http, '/api/calendars');
+    expect(qs(req).get('start')).toBe(addDays(isoDay(), -30));
+    expect(qs(req).get('end')).toBe(isoDay());
+    expect(el.querySelector<HTMLInputElement>('#cal-start')!.value).toBe(addDays(isoDay(), -30));
+    req.flush(
       view({
         filings: [
           {
@@ -156,10 +187,7 @@ describe('CalendarPage', () => {
       }),
     );
     await settle(fixture);
-    const el: HTMLElement = fixture.nativeElement;
     expect(radio(el, 'Filings').textContent).toContain('(2)');
-    radio(el, 'Filings').click();
-    fixture.detectChanges();
     expect(el.querySelector('h2#cal-events-title')?.textContent).toContain('SEC filings');
     expect(el.textContent).toContain('Results of operations');
     expect(el.textContent).toContain('Item 5.02');
@@ -169,15 +197,30 @@ describe('CalendarPage', () => {
     ]);
     expect(links[0].getAttribute('rel')).toContain('noopener');
     expect(links[0].getAttribute('target')).toBe('_blank');
+
+    // Back on Earnings, the next 30 days show again.
+    radio(el, 'Earnings').click();
+    fixture.detectChanges();
+    expect(el.querySelector<HTMLInputElement>('#cal-start')!.value).toBe(isoDay());
+  });
+
+  it('shows EPS as money in the report currency', async () => {
+    const fixture = await render();
+    (await nextRequest(http, '/api/calendars')).flush(view());
+    await settle(fixture);
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.textContent).toContain('$1.60');
   });
 
   it('says why filings are empty: they are past events', async () => {
     const fixture = await render();
-    (await nextRequest(http, '/api/calendars')).flush(view({ filings: [] }));
+    (await nextRequest(http, '/api/calendars')).flush(view());
     await settle(fixture);
     const el: HTMLElement = fixture.nativeElement;
     radio(el, 'Filings').click();
     fixture.detectChanges();
+    (await nextRequest(http, '/api/calendars')).flush(view({ filings: [] }));
+    await settle(fixture);
     expect(el.textContent).toContain('No filings in these days');
     expect(el.textContent).toContain('earlier From date');
   });
@@ -194,8 +237,12 @@ describe('CalendarPage', () => {
 
     radio(el, 'Economic').click();
     fixture.detectChanges();
-    expect(el.textContent).toContain('CPI');
-    expect(el.textContent).toContain('Year on year');
+    expect(el.textContent).toContain('CPI (year on year)');
+    // Values carry their unit, and no separate Compared column.
+    expect(el.textContent).toContain('2.9%');
+    expect(el.textContent).toContain('210K jobs');
+    expect(el.textContent).toContain('4.1%');
+    expect(el.textContent).not.toContain('Compared');
 
     const countries = el.querySelector<HTMLInputElement>('#cal-countries')!;
     countries.value = 'us, de';

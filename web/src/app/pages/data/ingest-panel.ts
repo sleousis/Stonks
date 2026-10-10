@@ -3,6 +3,7 @@ import {
   Component,
   DestroyRef,
   computed,
+  effect,
   inject,
   input,
   output,
@@ -51,20 +52,22 @@ const FALLBACK_SOURCES: readonly IngestSource[] = ['eodhd'];
         <h2 id="ingest-title">Update data</h2>
       </div>
       <form class="panel-body form-grid form-grid-2" [formGroup]="form" (ngSubmit)="run()">
-        <div class="field">
-          <label for="ingest-source">Source</label>
-          <select id="ingest-source" class="input" formControlName="source">
-            @for (s of sourceOptions(); track s.id) {
-              <option [value]="s.id">
-                {{ sourceName(s.id) }}{{ s.default ? ' (default)' : ''
-                }}{{ s.configured ? '' : ' (not configured)' }}
-              </option>
+        @if (allowed()) {
+          <div class="field">
+            <label for="ingest-source">Source</label>
+            <select id="ingest-source" class="input" formControlName="source">
+              @for (s of sourceOptions(); track s.id) {
+                <option [value]="s.id">
+                  {{ sourceName(s.id) }}{{ s.default ? ' (default)' : ''
+                  }}{{ s.configured ? '' : ' (not configured)' }}
+                </option>
+              }
+            </select>
+            @if (sourceNote(); as note) {
+              <span class="hint">{{ note }}</span>
             }
-          </select>
-          @if (sourceNote(); as note) {
-            <span class="hint">{{ note }}</span>
-          }
-        </div>
+          </div>
+        }
         <div class="field">
           <label for="ingest-kind">What</label>
           <select id="ingest-kind" class="input" formControlName="kind">
@@ -219,6 +222,15 @@ export class IngestPanel {
   });
   protected readonly outcome = updateOutcome;
   protected readonly sourceName = sourceLabel;
+
+  constructor() {
+    // Start on the source the server is set to use, until someone picks another.
+    effect(() => {
+      const preferred = this.sourceOptions().find((s) => s.default);
+      const control = this.form.controls.source;
+      if (preferred && !control.dirty) control.setValue(preferred.id);
+    });
+  }
 
   /** Validate, confirm, start the job and follow it to the end. */
   async run(): Promise<void> {

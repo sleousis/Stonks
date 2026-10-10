@@ -117,6 +117,13 @@ def test_base_filters_come_from_the_universe_rule(market):
     assert result.rows[0].name == "Aaa Inc"
 
 
+def test_rows_carry_the_instrument_currency(market):
+    market.con.execute("UPDATE instruments SET currency = 'EUR' WHERE id = 'AAA.US'")
+    rows = run_screen(market, ScreenSpec(sectors=["Tech"]), END).rows
+    assert rows[0].currency == "EUR"
+    assert rows[1].currency is None
+
+
 def test_filters_sort_and_limit(market):
     spec = ScreenSpec(filters=[{"metric": "return_12m", "min": 0.5}])
     assert [r.ticker for r in run_screen(market, spec, END).rows] == ["AAA.US"]

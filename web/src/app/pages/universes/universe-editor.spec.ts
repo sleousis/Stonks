@@ -7,6 +7,7 @@ import { provideApi } from '../../api/provide-api';
 import { ToastService } from '../../core/notify/toast.service';
 import { nextRequest, tick } from '../../../testing/http';
 import { METRICS } from '../../../testing/screener-fixtures';
+import { provideFakeDataCoverage } from '../../../testing/fake-data-coverage';
 import { UniverseEditor } from './universe-editor';
 
 @Component({
@@ -16,6 +17,7 @@ import { UniverseEditor } from './universe-editor';
       [mode]="mode()"
       [universe]="universe()"
       [universes]="universes"
+      [advanced]="advanced()"
       (saved)="saved.push($event)"
       (cancelled)="cancelled = cancelled + 1"
     />
@@ -24,6 +26,7 @@ import { UniverseEditor } from './universe-editor';
 class Host {
   readonly mode = signal<'create' | 'edit'>('create');
   readonly universe = signal<UniverseView | null>(null);
+  readonly advanced = signal(false);
   universes: UniverseView[] = [
     { id: 'sp500', name: 'S&P 500', kind: 'index', spec: {} },
     { id: 'cheap', name: 'Cheap', kind: 'rule', spec: {} },
@@ -72,7 +75,9 @@ describe('UniverseEditor', () => {
   }
 
   beforeEach(() => {
-    TestBed.configureTestingModule({ providers: [...provideApi(), provideHttpClientTesting()] });
+    TestBed.configureTestingModule({
+      providers: [provideFakeDataCoverage(), ...provideApi(), provideHttpClientTesting()],
+    });
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(Host);
     host = fixture.componentInstance;
@@ -83,7 +88,7 @@ describe('UniverseEditor', () => {
 
   it('builds a rule from the screener filter builder', async () => {
     fixture.detectChanges();
-    type('#u-id', 'payers');
+    type('#u-name', 'Payers');
     type('#u-kind', 'rule', 'change');
     (await nextRequest(http, '/api/screener/metrics')).flush(METRICS);
     await settle();
@@ -122,7 +127,7 @@ describe('UniverseEditor', () => {
 
   it('says what is wrong with a rule before sending it', async () => {
     fixture.detectChanges();
-    type('#u-id', 'bad');
+    type('#u-name', 'bad');
     type('#u-kind', 'rule', 'change');
     (await nextRequest(http, '/api/screener/metrics')).flush(METRICS);
     await settle();
@@ -137,7 +142,9 @@ describe('UniverseEditor', () => {
   it('imports an index history file before creating the index universe', async () => {
     const success = vi.spyOn(TestBed.inject(ToastService), 'success');
     fixture.detectChanges();
-    type('#u-id', 'toy');
+    host.advanced.set(true);
+    fixture.detectChanges();
+    type('#u-name', 'Toy');
     type('#u-kind', 'index', 'change');
     type('#u-index-id', 'toy');
     const file = new File(['date,ticker,action\n2026-01-02,AAA.US,member\n'], 'toy.csv');
@@ -171,9 +178,9 @@ describe('UniverseEditor', () => {
     (await nextRequest(http, '/api/screener/metrics')).flush(METRICS);
     await settle();
 
-    const id = el.querySelector<HTMLInputElement>('#u-id')!;
-    expect(id.value).toBe('cheap');
-    expect(id.readOnly).toBe(true);
+    // The name is editable, the id stays: it is not a field.
+    expect(el.querySelector('#u-id')).toBeNull();
+    type('#u-name', 'Cheap payers');
     expect(el.querySelector<HTMLSelectElement>('#u-rebalance')!.value).toBe('weekly');
     // Percent metrics come back in percent.
     expect(el.querySelector<HTMLInputElement>('input[id^="u-f-min-"]')!.value).toBe('4');
@@ -185,6 +192,7 @@ describe('UniverseEditor', () => {
     button('Save changes').click();
     const put = await nextRequest(http, '/api/universes/cheap', 'PUT');
     expect(put.request.body.id).toBeUndefined();
+    expect(put.request.body.name).toBe('Cheap payers');
     expect(put.request.body.spec).toMatchObject({
       start: '2025-01-02',
       rebalance: 'weekly',
@@ -194,6 +202,37 @@ describe('UniverseEditor', () => {
     put.flush({ ...RULE, spec: { ...RULE.spec, limit: 10 } });
     await settle();
     expect(host.saved[0].spec['limit']).toBe(10);
+  });
+
+  it('asks for a name first and makes the id from it', async () => {
+    fixture.detectChanges();
+    const labels = [...el.querySelectorAll('label')].map((l) => l.textContent?.trim());
+    expect(labels[0]).toBe('Name');
+    expect(el.querySelector('#u-id')).toBeNull();
+    button('Create universe').click();
+    fixture.detectChanges();
+    expect(el.textContent).toContain('Enter a name.');
+    type('#u-name', 'My Tech names');
+    button('Create universe').click();
+    const post = await nextRequest(http, '/api/universes', 'POST');
+    expect(post.request.body).toMatchObject({ id: 'my-tech-names', name: 'My Tech names' });
+    post.flush({ id: 'my-tech-names', kind: 'list', spec: {} });
+    await settle();
+  });
+
+  it('keeps the index history and JSON for admins, under Advanced', async () => {
+    fixture.detectChanges();
+    type('#u-kind', 'index', 'change');
+    expect(el.querySelector('#u-index-file')).toBeNull();
+    expect(button('Edit as JSON')).toBeUndefined();
+    expect(el.textContent).toContain('Members since');
+    expect(el.textContent).not.toContain('Members from');
+    host.advanced.set(true);
+    fixture.detectChanges();
+    const advanced = el.querySelector('details.advanced')!;
+    expect(advanced.querySelector('summary')!.textContent).toContain('Advanced');
+    expect(advanced.querySelector('#u-index-file')).not.toBeNull();
+    expect(advanced.textContent).toContain('Edit as JSON');
   });
 
   it('opens a definition the fields cannot hold as JSON, so nothing is lost', async () => {

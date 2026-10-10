@@ -3083,6 +3083,18 @@
               }
             ],
             "title": "Strategy Id"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           }
         },
         "required": [
@@ -3121,6 +3133,18 @@
           "strategy_id": {
             "title": "Strategy Id",
             "type": "string"
+          },
+          "strategy_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The strategy's plain title (a starter's), or null: the console names it from the id.",
+            "title": "Strategy Name"
           },
           "strength": {
             "anyOf": [
@@ -9897,6 +9921,17 @@
               }
             ],
             "title": "Sector"
+          },
+          "security_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Security Type"
           }
         },
         "required": [
@@ -25412,6 +25447,17 @@
       },
       "ScreenRow": {
         "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
           "exchange": {
             "anyOf": [
               {

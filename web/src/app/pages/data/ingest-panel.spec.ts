@@ -53,7 +53,7 @@ describe('IngestPanel', () => {
     fixture.detectChanges();
   }
 
-  async function setup(me = ADMIN): Promise<void> {
+  async function setup(me = ADMIN, sources = SOURCES): Promise<void> {
     TestBed.configureTestingModule({
       providers: [
         ...provideApi(),
@@ -71,7 +71,7 @@ describe('IngestPanel', () => {
     fixture = TestBed.createComponent(IngestPanel);
     el = fixture.nativeElement;
     fixture.detectChanges();
-    (await nextRequest(http, '/api/sources')).flush(SOURCES);
+    (await nextRequest(http, '/api/sources')).flush(sources);
     await tick();
     fixture.detectChanges();
   }
@@ -98,6 +98,8 @@ describe('IngestPanel', () => {
     const button = el.querySelector<HTMLButtonElement>('button[type=submit]')!;
     expect(button.disabled).toBe(true);
     expect(el.querySelector('.permission-note')?.textContent).toContain('Admins only.');
+    // Picking a data vendor is an admin choice: others never see it.
+    expect(el.querySelector('#ingest-source')).toBeNull();
     expect(el.textContent).not.toContain('API token');
     set('ingest-tickers', 'aapl.us');
     submit();
@@ -167,6 +169,15 @@ describe('IngestPanel', () => {
     for (const r of http.match((req) => req.url.endsWith('/api/jobs/job_1'))) {
       r.flush(job('cancelled'));
     }
+  });
+
+  it('starts on the source the server is set to use', async () => {
+    TestBed.resetTestingModule();
+    await setup(ADMIN, [
+      { id: 'eodhd', configured: true, default: false, detail: null },
+      { id: 'yahoo', configured: true, default: true, detail: null },
+    ]);
+    expect(el.querySelector<HTMLSelectElement>('#ingest-source')!.value).toBe('yahoo');
   });
 
   it('offers every source the API lists and flags unconfigured ones', () => {

@@ -90,6 +90,10 @@
       min-height: var(--touch-min);
     }
   }
+
+  .off {
+    color: var(--color-ink-3);
+  }
 }
 
 .columns summary {

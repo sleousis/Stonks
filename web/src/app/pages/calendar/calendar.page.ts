@@ -23,7 +23,8 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import {
   type CalendarScope,
   addDays,
-  comparisonLabel,
+  economicRelease,
+  economicValue,
   filingItemsLabel,
   importanceLabel,
   parseCountries,
@@ -44,8 +45,28 @@ const SCOPES: SegmentOption<CalendarScope>[] = [
   { value: 'all', label: 'Everything' },
 ];
 
-/** Days shown by default, from today. */
+/** Days shown by default: the next 30, or the last 30 for filings. */
 const DEFAULT_DAYS = 30;
+
+/** A From and To pair. */
+interface DayRange {
+  start: string;
+  end: string;
+}
+
+/** An economic figure with its unit: "2.5%", "210K jobs". Sorts by the number. */
+function economicFigure(
+  key: 'actual' | 'estimate' | 'previous',
+  label: string,
+): TableColumn<EconomicEvent> {
+  return {
+    key,
+    label,
+    format: 'number',
+    help: false,
+    display: (e) => economicValue(e[key], e),
+  };
+}
 
 /**
  * Earnings, ex-dividend dates and economic releases for your holdings, a
@@ -133,7 +154,7 @@ const DEFAULT_DAYS = 30;
               class="input"
               type="date"
               [value]="start()"
-              (change)="start.set($any($event.target).value)"
+              (change)="setRange({ start: $any($event.target).value })"
             />
           </div>
           <div class="field">
@@ -143,7 +164,7 @@ const DEFAULT_DAYS = 30;
               class="input"
               type="date"
               [value]="end()"
-              (change)="end.set($any($event.target).value)"
+              (change)="setRange({ end: $any($event.target).value })"
             />
           </div>
         </div>
@@ -204,41 +225,42 @@ const DEFAULT_DAYS = 30;
             title="Name some tickers"
             message="Type the tickers whose events you want, then show them."
           />
-        } @else if (calendar.error(); as err) {
+        } @else if (shown().error(); as err) {
           <app-error-state
             title="Could not load the calendar"
             [error]="err"
-            (retry)="calendar.reload()"
+            (retry)="shown().reload()"
           />
-        } @else if (!calendar.hasValue()) {
+        } @else if (!shown().hasValue()) {
           <app-loading-state label="Loading the calendar" [rows]="5" />
         } @else {
-          @if (calendar.value().truncated) {
+          @let v = shown().value()!;
+          @if (v.truncated) {
             <p class="note" role="status">
               Only the first events show. Pick fewer days or fewer tickers to see them all.
             </p>
           }
           @switch (tab()) {
             @case ('earnings') {
-              @if (calendar.value().earnings.length === 0) {
+              @if (v.earnings.length === 0) {
                 <app-empty-state title="No earnings in these days" [message]="emptyMessage()" />
               } @else {
                 <app-data-table
                   caption="Earnings reports"
-                  [rows]="calendar.value().earnings"
+                  [rows]="v.earnings"
                   [columns]="earningsColumns"
                   [rowKey]="earningsKey"
                   [initialSort]="{ key: 'report_date', dir: 'asc' }"
                   [pageSize]="50"
                 >
-                  <ng-template appCell="ticker" [appCellOf]="calendar.value().earnings" let-e>
-                    <a [routerLink]="['/charts', e.ticker]">{{ e.ticker }}</a>
+                  <ng-template appCell="ticker" [appCellOf]="v.earnings" let-e>
+                    <a class="ticker-link" [routerLink]="['/charts', e.ticker]">{{ e.ticker }}</a>
                   </ng-template>
                 </app-data-table>
               }
             }
             @case ('dividends') {
-              @if (calendar.value().dividends.length === 0) {
+              @if (v.dividends.length === 0) {
                 <app-empty-state
                   title="No ex-dividend dates in these days"
                   [message]="emptyMessage()"
@@ -246,20 +268,20 @@ const DEFAULT_DAYS = 30;
               } @else {
                 <app-data-table
                   caption="Ex-dividend dates"
-                  [rows]="calendar.value().dividends"
+                  [rows]="v.dividends"
                   [columns]="dividendColumns"
                   [rowKey]="dividendKey"
                   [initialSort]="{ key: 'ex_date', dir: 'asc' }"
                   [pageSize]="50"
                 >
-                  <ng-template appCell="ticker" [appCellOf]="calendar.value().dividends" let-d>
-                    <a [routerLink]="['/charts', d.ticker]">{{ d.ticker }}</a>
+                  <ng-template appCell="ticker" [appCellOf]="v.dividends" let-d>
+                    <a class="ticker-link" [routerLink]="['/charts', d.ticker]">{{ d.ticker }}</a>
                   </ng-template>
                 </app-data-table>
               }
             }
             @case ('economic') {
-              @if (calendar.value().economic.length === 0) {
+              @if (v.economic.length === 0) {
                 <app-empty-state
                   title="No economic releases in these days"
                   message="Releases arrive with the morning calendar update. Try more days or other countries."
@@ -267,7 +289,7 @@ const DEFAULT_DAYS = 30;
               } @else {
                 <app-data-table
                   caption="Economic releases"
-                  [rows]="calendar.value().economic"
+                  [rows]="v.economic"
                   [columns]="economicColumns"
                   [rowKey]="economicKey"
                   [initialSort]="{ key: 'event_time', dir: 'asc' }"
@@ -276,7 +298,7 @@ const DEFAULT_DAYS = 30;
               }
             }
             @case ('filings') {
-              @let filings = calendar.value().filings ?? [];
+              @let filings = v.filings ?? [];
               @if (filings.length === 0) {
                 <app-empty-state
                   title="No filings in these days"
@@ -292,7 +314,7 @@ const DEFAULT_DAYS = 30;
                   [pageSize]="50"
                 >
                   <ng-template appCell="ticker" [appCellOf]="filings" let-f>
-                    <a [routerLink]="['/charts', f.ticker]">{{ f.ticker }}</a>
+                    <a class="ticker-link" [routerLink]="['/charts', f.ticker]">{{ f.ticker }}</a>
                   </ng-template>
                   <ng-template appCell="url" [appCellOf]="filings" let-f>
                     @if (safeUrl(f.url); as href) {
@@ -350,6 +372,16 @@ const DEFAULT_DAYS = 30;
       max-width: 26rem;
     }
     /* 44px targets on phones, like every link in a row card. */
+    .ticker-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--touch-min);
+      padding-block: var(--space-2);
+      @include bp.from-tablet {
+        min-height: 0;
+        padding-block: 0;
+      }
+    }
     .filing-link {
       display: inline-flex;
       align-items: center;
@@ -387,8 +419,20 @@ export class CalendarPage implements OnInit {
   /** What is typed; `tickers` is what was last shown. */
   protected readonly tickersText = signal('');
   private readonly tickers = signal<readonly string[]>([]);
-  protected readonly start = signal(isoDay());
-  protected readonly end = signal(addDays(isoDay(), DEFAULT_DAYS));
+  /** The window of earnings, dividends and releases: the next 30 days. */
+  private readonly ahead = signal<DayRange>({
+    start: isoDay(),
+    end: addDays(isoDay(), DEFAULT_DAYS),
+  });
+  /** The window of filings, which are past events: the last 30 days. */
+  private readonly past = signal<DayRange>({
+    start: addDays(isoDay(), -DEFAULT_DAYS),
+    end: isoDay(),
+  });
+  /** From and To show the window of the open tab. */
+  private readonly range = computed(() => (this.tab() === 'filings' ? this.past() : this.ahead()));
+  protected readonly start = computed(() => this.range().start);
+  protected readonly end = computed(() => this.range().end);
   protected readonly countriesText = signal('');
   private readonly countries = signal<readonly string[]>([]);
   protected readonly tab = signal<Tab>('earnings');
@@ -407,17 +451,34 @@ export class CalendarPage implements OnInit {
   protected readonly calendar = resource({
     params: () => {
       const q = this.query();
-      if (!q || this.rangeError()) return undefined;
+      const { start, end } = this.ahead();
+      if (!q || windowError(start, end)) return undefined;
       const countries = this.countries();
       return {
         ...q,
-        start: this.start(),
-        end: this.end(),
+        start,
+        end,
         ...(countries.length ? { countries: countries.join(',') } : {}),
       };
     },
     loader: ({ params }) => this.api.calendar(params),
   });
+
+  /** Filings over the past window, read once the Filings tab opens. */
+  protected readonly filingsCalendar = resource({
+    params: () => {
+      const q = this.query();
+      const { start, end } = this.past();
+      if (this.tab() !== 'filings' || !q || windowError(start, end)) return undefined;
+      return { ...q, start, end };
+    },
+    loader: ({ params }) => this.api.calendar(params),
+  });
+
+  /** The read behind the open tab. */
+  protected readonly shown = computed(() =>
+    this.tab() === 'filings' ? this.filingsCalendar : this.calendar,
+  );
 
   /** News has no "everything" scope. */
   protected readonly newsQuery = computed<NewsQuery | null>(() => {
@@ -432,7 +493,7 @@ export class CalendarPage implements OnInit {
       { value: 'earnings', label: `Earnings${count(v?.earnings.length)}` },
       { value: 'dividends', label: `Ex-dividend${count(v?.dividends.length)}` },
       { value: 'economic', label: `Economic${count(v?.economic.length)}` },
-      { value: 'filings', label: `Filings${count(v ? (v.filings ?? []).length : undefined)}` },
+      { value: 'filings', label: `Filings${count(this.filingsCalendar.value()?.filings?.length)}` },
       { value: 'news', label: 'News' },
     ];
   });
@@ -476,8 +537,8 @@ export class CalendarPage implements OnInit {
     { key: 'name', label: 'Company', mobile: 'hide' },
     { key: 'when', label: 'When', value: (e) => timingLabel(e.before_after_market) },
     { key: 'period_end', label: 'Quarter ending', format: 'date', mobile: 'hide' },
-    { key: 'eps_estimate', label: 'EPS estimate', format: 'number' },
-    { key: 'eps_actual', label: 'EPS actual', format: 'number' },
+    { key: 'eps_estimate', label: 'EPS estimate', format: 'money', currency: (e) => e.currency },
+    { key: 'eps_actual', label: 'EPS actual', format: 'money', currency: (e) => e.currency },
     {
       key: 'surprise',
       label: 'Surprise',
@@ -499,19 +560,13 @@ export class CalendarPage implements OnInit {
 
   protected readonly economicColumns: TableColumn<EconomicEvent>[] = [
     { key: 'event_time', label: 'Time', format: 'datetime' },
-    { key: 'event_type', label: 'Release', mobile: 'title' },
+    { key: 'event_type', label: 'Release', mobile: 'title', value: (e) => economicRelease(e) },
     { key: 'country', label: 'Country' },
     { key: 'importance', label: 'Importance', value: (e) => importanceLabel(e.importance) },
     { key: 'period', label: 'Period', mobile: 'hide' },
-    { key: 'actual', label: 'Actual', format: 'number' },
-    { key: 'estimate', label: 'Estimate', format: 'number' },
-    { key: 'previous', label: 'Previous', format: 'number', mobile: 'hide' },
-    {
-      key: 'comparison',
-      label: 'Compared',
-      value: (e) => comparisonLabel(e.comparison),
-      mobile: 'hide',
-    },
+    economicFigure('actual', 'Actual'),
+    economicFigure('estimate', 'Estimate'),
+    { ...economicFigure('previous', 'Previous'), mobile: 'hide' },
   ];
 
   protected readonly filingColumns: TableColumn<FilingEvent>[] = [
@@ -557,9 +612,14 @@ export class CalendarPage implements OnInit {
     }
     const d = this.date();
     if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
-      this.start.set(d);
-      this.end.set(addDays(d, DEFAULT_DAYS));
+      this.ahead.set({ start: d, end: addDays(d, DEFAULT_DAYS) });
     }
+  }
+
+  /** A typed From or To, for the window of the open tab. */
+  protected setRange(change: Partial<DayRange>): void {
+    const window = this.tab() === 'filings' ? this.past : this.ahead;
+    window.update((r) => ({ ...r, ...change }));
   }
 
   protected apply(): void {

@@ -13,6 +13,7 @@ import { RouterLink } from '@angular/router';
 
 import { SystemService } from '../../api/system.service';
 import { PageHeader } from '../../shared/ui/page-header';
+import { commonIntervals } from './data-labels';
 import { type CoveragePick, CoveragePanel } from './coverage-panel';
 import { IngestPanel } from './ingest-panel';
 import { IngestRunsPanel } from './ingest-runs-panel';
@@ -60,6 +61,10 @@ export class DataPage {
       : FALLBACK_INTERVALS,
   );
   protected readonly intervalCodes = computed(() => this.intervals().map((i) => i.code));
+  /** The price chart offers the common intervals only, plus the one picked from coverage. */
+  protected readonly priceIntervals = computed(() =>
+    commonIntervals(this.intervalCodes(), this.interval()),
+  );
 
   protected pickTicker(ticker: string): void {
     this.ticker.set(ticker);

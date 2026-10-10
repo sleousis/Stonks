@@ -14,7 +14,75 @@ export const SOURCE_LABELS: Readonly<Record<string, string>> = {
 /** "EODHD" for `eodhd`; an unknown provider is humanized. */
 export function sourceLabel(id: string | null | undefined): string {
   if (!id) return '';
+  // The canned source of a demo install: never "Fake".
+  if (id === 'fake') return 'Demo data';
   return SOURCE_LABELS[id] ?? humanize(id);
+}
+
+/** Exchange codes our data uses, in words. An unknown code shows as it is. */
+export const EXCHANGE_LABELS: Readonly<Record<string, string>> = {
+  AS: 'Amsterdam',
+  AT: 'Athens',
+  BR: 'Brussels',
+  CC: 'Crypto',
+  COMM: 'Commodities',
+  CO: 'Copenhagen',
+  F: 'Frankfurt',
+  FOREX: 'Currencies',
+  HE: 'Helsinki',
+  INDX: 'Indices',
+  IR: 'Dublin',
+  LIS: 'Lisbon',
+  LSE: 'London',
+  MC: 'Madrid',
+  MI: 'Milan',
+  OL: 'Oslo',
+  PA: 'Paris',
+  ST: 'Stockholm',
+  SW: 'Swiss',
+  TO: 'Toronto',
+  VI: 'Vienna',
+  XETRA: 'Xetra',
+};
+
+/** "Brussels" for `BR`; `US` and unknown codes as they are. */
+export function exchangeLabel(code: string | null | undefined): string {
+  if (!code) return '';
+  return EXCHANGE_LABELS[code.toUpperCase()] ?? code;
+}
+
+/** A row's kind: funds read "Fund (ETF)", not "Stocks". */
+export function instrumentClassLabel(r: {
+  asset_class: string | null | undefined;
+  security_type?: string | null;
+}): string {
+  if (r.security_type === 'etf' || r.security_type === 'fund') return 'Fund (ETF)';
+  return assetClassLabel(r.asset_class);
+}
+
+/** The intervals most people chart, smallest first. */
+const COMMON_INTERVALS = ['1m', '5m', '15m', '1h', '1d', '1w', '1mo'];
+
+const INTERVAL_LABELS: Readonly<Record<string, string>> = {
+  '1m': '1 minute',
+  '5m': '5 minutes',
+  '15m': '15 minutes',
+  '1h': '1 hour',
+  '1d': 'Daily',
+  '1w': 'Weekly',
+  '1mo': 'Monthly',
+};
+
+/** The common intervals the server knows, plus `current` when it is another one. */
+export function commonIntervals(codes: readonly string[], current: string): string[] {
+  const out = COMMON_INTERVALS.filter((c) => codes.includes(c));
+  if (current && !out.includes(current)) out.push(current);
+  return out.length ? out : [...codes];
+}
+
+/** "Daily" for `1d`; an uncommon code as it is. */
+export function intervalLabel(code: string): string {
+  return INTERVAL_LABELS[code] ?? code;
 }
 
 export const KIND_LABELS: Readonly<Record<string, string>> = {

@@ -181,8 +181,11 @@ def test_a_chart_has_bars_your_fills_and_signals(client, settings, people):
             "kind": "entry",
             "strength": 0.5,
             "reason": "trend is up",
+            "strategy_name": None,
         }
     ]
+    # Fills and signals carry the strategy's plain title next to its id.
+    assert "strategy_name" in body["fills"][0]
     limited = client.get("/api/charts/UP.US", params={"limit": 10}, headers=LEGACY).json()
     assert len(limited["bars"]) == 10 and limited["truncated"] is True
 

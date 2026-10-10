@@ -58,6 +58,7 @@ export interface NumberOptions {
   signed?: boolean;
   /** 1.2K / 3.4M (axes, tight tiles). */
   compact?: boolean;
+  /** Decimals. formatNumber defaults to 2 (1 when compact), formatMoney to 2. */
   digits?: number;
   /** ISO 4217 code from the API (`PortfolioView.currency`); defaults to USD. */
   currency?: string | null;
@@ -107,15 +108,16 @@ export function formatMoney(value: Num, opts: NumberOptions = {}): string {
         style: 'currency',
         currency: opts.currency || DEFAULT_CURRENCY,
         notation: 'compact',
+        minimumFractionDigits: 0,
         maximumFractionDigits: 1,
       }
     : {
         style: 'currency',
         currency: opts.currency || DEFAULT_CURRENCY,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: opts.digits ?? 2,
+        maximumFractionDigits: opts.digits ?? 2,
       };
-  return signedText(numberFormat(locale, options), value, opts.signed);
+  return capitalSuffix(signedText(numberFormat(locale, options), value, opts.signed), locale);
 }
 
 /** `value` is a fraction: 0.0123 → "1.23%". */
@@ -130,13 +132,34 @@ export function formatPercent(value: Num, opts: NumberOptions = {}): string {
   return signedText(fmt, value, opts.signed);
 }
 
+/**
+ * A plain figure: at most 2 decimals (1 when compact) unless `digits` says
+ * otherwise. A tiny real value (a crypto quantity) keeps two significant
+ * digits so it never reads as zero.
+ */
 export function formatNumber(value: Num, opts: NumberOptions = {}): string {
   if (!isNum(value)) return MISSING;
-  const fmt = numberFormat(activeFormat().locale, {
-    notation: opts.compact ? 'compact' : 'standard',
-    maximumFractionDigits: opts.digits ?? 4,
-  });
-  return signedText(fmt, value, opts.signed);
+  const { locale } = activeFormat();
+  const tiny = opts.digits === undefined && value !== 0 && Math.abs(value) < 0.01;
+  const fmt = numberFormat(
+    locale,
+    tiny
+      ? { maximumSignificantDigits: 2 }
+      : {
+          notation: opts.compact ? 'compact' : 'standard',
+          maximumFractionDigits: opts.digits ?? (opts.compact ? 1 : 2),
+        },
+  );
+  return capitalSuffix(signedText(fmt, value, opts.signed), locale);
+}
+
+/**
+ * English locales such as en-GB write compact figures as "61.5m" and "3bn".
+ * Show K, M, B and T everywhere so volumes and axes read the same.
+ */
+function capitalSuffix(text: string, locale: string): string {
+  if (!locale.toLowerCase().startsWith('en')) return text;
+  return text.replace(/(\d)(k|m|bn|tn)$/, (_, d: string, s: string) => d + s[0].toUpperCase());
 }
 
 /**

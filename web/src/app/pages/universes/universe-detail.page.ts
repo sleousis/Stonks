@@ -3,10 +3,12 @@ import {
   Component,
   DestroyRef,
   computed,
+  effect,
   inject,
   input,
   resource,
   signal,
+  untracked,
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
@@ -91,8 +93,13 @@ export class UniverseDetailPage {
   /** Refresh and Ensure data are lab work; delete breaks strategies, so admins only. */
   protected readonly canRefresh = computed(() => this.session.can('lab.run'));
   protected readonly canDelete = computed(() => this.session.can('strategy.promote'));
+  /** Admins see the Advanced parts: the definition as JSON and the data source. */
+  protected readonly isAdmin = computed(() => this.session.can('operations.run'));
 
   readonly id = input.required<string>();
+  /** `?fill=1`: a list just created fills its members at once, without asking. */
+  readonly fill = input<string>();
+  private filled = false;
 
   protected readonly universe = resource({
     params: () => ({ id: this.id() }),
@@ -132,6 +139,14 @@ export class UniverseDetailPage {
   protected readonly specJson = computed(() =>
     this.universe.hasValue() ? JSON.stringify(this.universe.value().spec, null, 2) : '',
   );
+
+  constructor() {
+    effect(() => {
+      if (this.fill() !== '1' || !this.universe.hasValue() || this.filled) return;
+      this.filled = true;
+      untracked(() => void this.refresh(false));
+    });
+  }
 
   /** The definition changed after the last refresh. */
   protected readonly stale = computed(
@@ -182,10 +197,16 @@ export class UniverseDetailPage {
     loader: () => this.api.list(),
   });
 
+  /** A list rebuilds its members on save; other kinds wait for a Refresh. */
   protected edited(u: UniverseView): void {
     this.editing.set(false);
     this.universe.set(u);
-    this.toasts.success(`Saved ${u.name || u.id}. Refresh it to rebuild the members.`);
+    if (u.kind === 'list') {
+      this.toasts.success(`Saved ${u.name || u.id}. Rebuilding its members now.`);
+      void this.refresh(false);
+    } else {
+      this.toasts.success(`Saved ${u.name || u.id}. Refresh it to rebuild the members.`);
+    }
   }
 
   // ---- refresh ------------------------------------------------------------
@@ -194,15 +215,18 @@ export class UniverseDetailPage {
   protected readonly refreshResult = new JobResult<UniverseRefreshView>();
   protected readonly refreshing = signal(false);
 
-  async refresh(): Promise<void> {
+  /** `ask` false: a list saved just now, where the refresh is part of the save. */
+  async refresh(ask = true): Promise<void> {
     if (this.refreshing() || !this.canRefresh()) return;
     const id = this.id();
-    const ok = await this.confirm.confirm({
-      title: `Refresh ${this.name()}?`,
-      message:
-        'Rebuilds the membership from the definition. Running it twice changes nothing. Lab runs and trading runs use the new members.',
-      confirmLabel: 'Refresh',
-    });
+    const ok =
+      !ask ||
+      (await this.confirm.confirm({
+        title: `Refresh ${this.name()}?`,
+        message:
+          'Rebuilds the membership from the definition. Running it twice changes nothing. Lab runs and trading runs use the new members.',
+        confirmLabel: 'Refresh',
+      }));
     if (!ok) return;
     this.refreshing.set(true);
     this.refreshResult.reset();

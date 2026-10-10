@@ -20,7 +20,8 @@ import type {
   ScreenSpec,
   ScreenUniverseView,
 } from '../../api/models';
-import { DataPlanNote } from '../../shared/ui/data-plan-note';
+import { DataCoverageService } from '../../shared/ui/data-plan-note';
+import { exchangeLabel } from '../data/data-labels';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { JobsApiService } from '../../api/jobs-api.service';
 import { ScreenerService } from '../../api/screener.service';
@@ -45,8 +46,10 @@ import {
   type AssetClass,
   type ScreenForm,
   emptyForm,
+  NEEDS_PLAN,
   formatMetric,
   fromSpec,
+  plainMetrics,
   toSpec,
 } from './screen-form';
 
@@ -85,7 +88,6 @@ interface OpenScreen {
     ScreenAlerts,
     JobProgress,
     ScreenFilters,
-    DataPlanNote,
     HelpTip,
   ],
   templateUrl: './screener.page.html',
@@ -100,6 +102,7 @@ export class ScreenerPage {
   private readonly jobs = inject(JobsService);
   private readonly jobsApi = inject(JobsApiService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly coverage = inject(DataCoverageService);
 
   private readonly sheet = viewChild.required(SaveUniverseSheet);
 
@@ -130,8 +133,13 @@ export class ScreenerPage {
   protected readonly canUniverse = computed(() => this.session.can('lab.run'));
 
   protected readonly metricList = computed<MetricView[]>(() =>
-    this.metrics.hasValue() ? this.metrics.value() : [],
+    this.metrics.hasValue() ? plainMetrics(this.metrics.value()) : [],
   );
+  /** No fundamentals stored: their metrics are greyed out, not offered. */
+  protected readonly fundamentalsMissing = computed(
+    () => this.coverage.has('fundamentals') === false,
+  );
+  protected readonly needsPlan = NEEDS_PLAN;
   protected readonly priceMetrics = computed(() =>
     this.metricList().filter((m) => m.group === 'price'),
   );
@@ -153,7 +161,12 @@ export class ScreenerPage {
       { key: 'ticker', label: 'Ticker', mobile: 'title' },
       { key: 'name', label: 'Name' },
       { key: 'sector', label: 'Sector', mobile: 'hide' },
-      { key: 'exchange', label: 'Exchange', mobile: 'hide' },
+      {
+        key: 'exchange',
+        label: 'Exchange',
+        value: (row) => exchangeLabel(row.exchange),
+        mobile: 'hide',
+      },
     ];
     for (const id of r?.metrics ?? []) {
       const m = this.metricList().find((x) => x.id === id);
@@ -164,7 +177,7 @@ export class ScreenerPage {
         format: 'number',
         help: false,
         value: (row) => row.values[id] ?? null,
-        display: (row) => formatMetric(row.values[id], unit),
+        display: (row) => formatMetric(row.values[id], unit, row.currency),
       });
     }
     return cols;

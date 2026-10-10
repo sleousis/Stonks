@@ -1,5 +1,9 @@
 import {
   assetClassLabel,
+  commonIntervals,
+  exchangeLabel,
+  instrumentClassLabel,
+  intervalLabel,
   kindLabel,
   runStatusLabel,
   sourceLabel,
@@ -7,6 +11,42 @@ import {
 } from './data-labels';
 
 describe('data labels', () => {
+  it('shows the demo source as Demo data', () => {
+    expect(sourceLabel('fake')).toBe('Demo data');
+  });
+
+  it('names exchanges, and keeps a code it does not know', () => {
+    expect(exchangeLabel('BR')).toBe('Brussels');
+    expect(exchangeLabel('AS')).toBe('Amsterdam');
+    expect(exchangeLabel('CC')).toBe('Crypto');
+    expect(exchangeLabel('US')).toBe('US');
+    expect(exchangeLabel('ZZ')).toBe('ZZ');
+    expect(exchangeLabel(null)).toBe('');
+  });
+
+  it('calls funds Fund (ETF), not Stocks', () => {
+    expect(instrumentClassLabel({ asset_class: 'equity', security_type: 'etf' })).toBe(
+      'Fund (ETF)',
+    );
+    expect(instrumentClassLabel({ asset_class: 'equity', security_type: 'fund' })).toBe(
+      'Fund (ETF)',
+    );
+    expect(instrumentClassLabel({ asset_class: 'equity', security_type: 'common_stock' })).toBe(
+      'Stocks',
+    );
+    expect(instrumentClassLabel({ asset_class: 'crypto' })).toBe('Crypto');
+  });
+
+  it('offers the common intervals only, plus the one in use', () => {
+    const all = ['1m', '2m', '5m', '15m', '30m', '1h', '4h', '1d', '1w', '1mo', '3mo', '1y'];
+    expect(commonIntervals(all, '1d')).toEqual(['1m', '5m', '15m', '1h', '1d', '1w', '1mo']);
+    expect(commonIntervals(all, '4h')).toContain('4h');
+    expect(commonIntervals(['1d'], '1d')).toEqual(['1d']);
+    expect(intervalLabel('1d')).toBe('Daily');
+    expect(intervalLabel('15m')).toBe('15 minutes');
+    expect(intervalLabel('4h')).toBe('4h');
+  });
+
   it('names providers, kinds and outcomes in trader words', () => {
     expect(sourceLabel('eodhd')).toBe('EODHD');
     expect(sourceLabel('yahoo')).toBe('Yahoo Finance');
