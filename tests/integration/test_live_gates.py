@@ -76,6 +76,21 @@ def _promote(state, *targets):
         )  # fmt: skip
 
 
+def _passing_drill(state, day=DAY):
+    from stonks.production.drills import DrillReport, DrillStep, record_drill
+
+    when = datetime.combine(day, datetime.min.time(), tzinfo=UTC)
+    report = DrillReport(
+        broker="simulated",
+        portfolio_id="pf_drill",
+        client_id="drill-1",
+        started_at=when,
+        finished_at=when,
+        steps=(DrillStep("engage_kill", True, "engaged", 1.0),),
+    )
+    record_drill(state, report, ran_by="cli:ops")
+
+
 def test_a_session_counts_orders_fills_and_stuck_orders(state):
     _order(state, "o1")
     _fill(state, "o1")
@@ -210,10 +225,13 @@ def test_gate_two_counts_clean_sessions_in_broker_paper(state):
     early = gate_report(state, PF, facts=facts, settings=settings, clock=CLOCK)
     assert early.target == "live_small" and not early.passed
     _clean_days(state, 5, "broker_paper")
+    undrilled = gate_report(state, PF, facts=facts, settings=settings, clock=CLOCK)
+    assert not undrilled.passed  # no kill switch drill yet: blocked
+    _passing_drill(state)
     report = gate_report(state, PF, facts=facts, settings=settings, clock=CLOCK)
     by = {c.name: c for c in report.checks}
     assert by["sessions"].passed and by["clean_sessions"].passed
-    assert by["kill_switch_drill"].passed is None  # 19.11 not built: not blocking
+    assert by["kill_switch_drill"].passed is True
     assert report.passed
     assert report.as_dict()["metrics"]["sessions"] == 5
 
@@ -221,6 +239,7 @@ def test_gate_two_counts_clean_sessions_in_broker_paper(state):
 def test_gate_two_needs_the_allocation_and_profile(state):
     _promote(state, "broker_paper")
     settings = StageGateSettings(min_broker_paper_sessions=0, broker_paper_clean_sessions=0)
+    _passing_drill(state, datetime.now(UTC).date())
     report = gate_report(state, PF, facts=GateFacts(broker_linked=True), settings=settings)
     failed = {c.name for c in report.checks if c.passed is False}
     assert failed == {"allocation_set", "account_profile_set"}
@@ -231,6 +250,7 @@ def test_gate_three_needs_fills_and_the_tca_interval(state):
     settings = StageGateSettings(min_live_small_sessions=3, live_small_clean_sessions=3,
                                  min_live_fills=6)  # fmt: skip
     _clean_days(state, 3, "live_small")
+    _passing_drill(state)
     report = gate_report(state, PF, settings=settings, clock=CLOCK)
     by = {c.name: c for c in report.checks}
     assert by["filled_orders"].passed and by["filled_orders"].value == 6

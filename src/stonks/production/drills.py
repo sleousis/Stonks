@@ -29,6 +29,7 @@ cancel. It never talks to a real broker.
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
@@ -59,6 +60,8 @@ __all__ = [
     "DrillStep",
     "SimulatedWorkingBroker",
     "engage_global_kill",
+    "last_passing_drill",
+    "record_drill",
     "run_kill_switch_drill",
 ]
 
@@ -112,6 +115,61 @@ class DrillReport:
         data["finished_at"] = self.finished_at.isoformat()
         data["passed"] = self.passed
         return data
+
+
+# ---- the drill record ----------------------------------------------------------------
+
+
+def record_drill(
+    state: SqliteState,
+    report: DrillReport,
+    *,
+    ran_by: str,
+    portfolio_id: str | None = None,
+    ran_at: datetime | None = None,
+) -> int:
+    """Store one drill run in ``kill_switch_drills`` and return its id.
+
+    ``state`` is the real state DB, never the drill's scratch one.
+    ``portfolio_id`` is ``None`` for a drill of the global kill switch,
+    which counts for every portfolio."""
+    when = ran_at if ran_at is not None else report.finished_at
+    cur = state.execute(
+        "INSERT INTO kill_switch_drills (ran_at, ran_by, portfolio_id, broker, passed,"
+        " report_json) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+            when.astimezone(UTC).isoformat(),
+            ran_by,
+            portfolio_id,
+            report.broker,
+            int(report.passed),
+            json.dumps(report.to_dict(), default=str),
+        ],
+    )
+    rid = int(cur.lastrowid or 0)
+    _log.info(
+        "kill_switch_drill_recorded",
+        drill_id=rid,
+        passed=report.passed,
+        portfolio_id=portfolio_id,
+        ran_by=ran_by,
+    )
+    return rid
+
+
+def last_passing_drill(state: SqliteState, portfolio_id: str) -> datetime | None:
+    """When the last passing drill for ``portfolio_id`` ran: its own drills
+    and global ones (``portfolio_id`` NULL). ``None`` when there is none."""
+    rows = state.sql(
+        "SELECT MAX(ran_at) AS last FROM kill_switch_drills WHERE passed = 1"
+        " AND (portfolio_id = ? OR portfolio_id IS NULL)",
+        [portfolio_id],
+    )
+    last = rows[0]["last"] if rows else None
+    if last is None:
+        return None
+    when = datetime.fromisoformat(str(last))
+    return when if when.tzinfo is not None else when.replace(tzinfo=UTC)
 
 
 # ---- the default broker ----------------------------------------------------------------
