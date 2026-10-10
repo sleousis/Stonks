@@ -13,7 +13,7 @@ describe('strategyDisplayName (UX-27)', () => {
       'Buy and hold the market',
     );
     expect(strategyDisplayName('starter_buy_and_hold', { starter: null })).toBe(
-      'starter_buy_and_hold',
+      'Starter buy and hold',
     );
   });
 
@@ -39,7 +39,20 @@ describe('strategyDisplayName (UX-27)', () => {
     expect(strategyDisplayName('momentum_0a1b2c3d')).toBe('Momentum 0a1b');
   });
 
-  it('keeps an id that has no generated suffix', () => {
+  it('turns any snake_case id into words (NB-03)', () => {
+    expect(strategyDisplayName('etf_trend')).toBe('ETF trend');
+    expect(strategyDisplayName('stock_momentum')).toBe('Stock momentum');
+    expect(strategyDisplayName('starter_trend')).toBe('Starter trend');
+    expect(strategyDisplayName('rsi_mean_reversion_1a2b3c4d')).toBe('RSI mean reversion 1a2b');
+  });
+
+  it('drops the hex suffix when the draft name is known', () => {
+    expect(strategyDisplayName('admin_trend_rule_e3001234', { draftName: 'Admin trend rule' })).toBe(
+      'Admin trend rule',
+    );
+  });
+
+  it('keeps an id that is not snake_case', () => {
     expect(strategyDisplayName('momentum-v3')).toBe('momentum-v3');
     expect(strategyDisplayName('')).toBe('');
   });

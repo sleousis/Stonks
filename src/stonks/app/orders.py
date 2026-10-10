@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from stonks.app.context import AppContext
 from stonks.app.pagination import Page
-from stonks.app.strategy_names import StrategyNamed
+from stonks.app.strategy_names import StrategyNamed, name_views
 from stonks.production.ledger import ledger_filter
 
 
@@ -101,7 +101,7 @@ class OrdersService:
                 "LIMIT ? OFFSET ?",
                 [*params, limit, offset],
             )
-        items = [OrderView(**dict(r)) for r in rows]
+            items = list(name_views(state, [OrderView(**dict(r)) for r in rows]))
         return Page[OrderView](items=items, total=total, limit=limit, offset=offset)
 
     def fills(

@@ -15631,6 +15631,10 @@ export type SubscriptionView = {
      */
     strategy_id: string;
     /**
+     * Strategy Name
+     */
+    strategy_name: string;
+    /**
      * Strategy Status
      */
     strategy_status: string | null;

@@ -28758,6 +28758,10 @@
             "title": "Strategy Id",
             "type": "string"
           },
+          "strategy_name": {
+            "title": "Strategy Name",
+            "type": "string"
+          },
           "strategy_status": {
             "anyOf": [
               {
@@ -28782,6 +28786,7 @@
         "required": [
           "id",
           "strategy_id",
+          "strategy_name",
           "strategy_status",
           "portfolio_id",
           "mode",

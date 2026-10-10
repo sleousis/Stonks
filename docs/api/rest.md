@@ -6346,6 +6346,7 @@ What this server lets the Studio do.
 | `paused_reason` | string \| null | yes |  |
 | `portfolio_id` | string \| null | yes |  |
 | `strategy_id` | string | yes |  |
+| `strategy_name` | string | yes |  |
 | `strategy_status` | string \| null | yes |  |
 | `updated_at` | date-time | yes |  |
 | `weight` | number | yes |  |

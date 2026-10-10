@@ -401,29 +401,34 @@ def _expected(settings: Settings, strategy_ids: list[str]) -> list[tuple[str, st
     """What the notify hook announces, as (title, strategy) pairs: each
     followed strategy's signal events of the day, risk events left out, at
     most three each."""
+    from stonks.app.strategy_names import strategy_names
     from stonks.production.hooks.notifications import MAX_PICKS
-    from stonks.production.signals import events_for
+    from stonks.production.signals import events_for, signal_action
 
     with SqliteState(settings.state.path) as state:
         events = events_for(state, AS_OF, sorted(strategy_ids))
+        names = strategy_names(state, strategy_ids)
     out: list[tuple[str, str]] = []
     per: dict[str, int] = {}
     for e in events:
         if e.kind == "risk" or per.get(e.strategy_id, 0) >= MAX_PICKS:
             continue
         per[e.strategy_id] = per.get(e.strategy_id, 0) + 1
-        out.append((f"{e.ticker}: {e.kind} signal", e.strategy_id))
+        action = signal_action(e.kind, e.ticker)
+        title = f"{names[e.strategy_id]}: {action[:1].lower()}{action[1:]}"
+        out.append((title, e.strategy_id))
     return sorted(out)
 
 
-def _sent(api: FakeTelegramApi) -> list[tuple[str, str]]:
+def _sent(api: FakeTelegramApi, expected: list[tuple[str, str]]) -> list[tuple[str, str]]:
     """(title, strategy) of each message sent to the owner's chat: the
-    first line is the title, the second starts with the strategy id."""
+    first line is the title, which starts with the strategy's name (NB-10)."""
+    by_title = dict(expected)
     out = []
     for chat, text in api.sent:
         assert chat == str(CHAT), chat
-        title, body = text.splitlines()[:2]
-        out.append((title, body.split(" on ", 1)[0]))
+        title = text.splitlines()[0]
+        out.append((title, by_title.get(title, "?")))
     return sorted(out)
 
 
@@ -472,10 +477,11 @@ def test_a_solo_owner_gets_signals_on_telegram_with_no_broker(
     assert {sid for _, sid in expected} == {code_id, rule_id}, expected
     assert _channels(settings) == {"telegram"}
     assert _deliver(settings, datetime.now(UTC) + timedelta(seconds=1)) == len(expected)
-    assert _sent(telegram) == expected
+    assert _sent(telegram, expected) == expected
+    by_title = dict(expected)
     for _, text in telegram.sent:  # each links to its strategy's page
-        _, body, link = text.splitlines()[:3]
-        assert link.endswith(f"/strategies/{body.split(' on ', 1)[0]}"), text
+        title, _, link = text.splitlines()[:3]
+        assert link.endswith(f"/strategies/{by_title[title]}"), text
 
     # The feed shows them too.
     feed = client.get("/api/notifications", headers=owner).json()
@@ -485,7 +491,7 @@ def test_a_solo_owner_gets_signals_on_telegram_with_no_broker(
     # A rerun of the same day sends nothing twice.
     _job(client, owner, "/api/ticks", {"as_of": AS_OF.isoformat()})
     assert _deliver(settings, datetime.now(UTC) + timedelta(seconds=2)) == 0
-    assert _sent(telegram) == expected
+    assert _sent(telegram, expected) == expected
     _nothing_traded(settings, spy)
 
 
@@ -632,7 +638,7 @@ def test_the_scheduled_tick_sends_the_signals_on_every_backend(
     assert {sid for _, sid in expected} == {code_id, rule_id}
     assert _channels(settings) == {"telegram"}
     assert _deliver(settings, datetime.now(UTC) + timedelta(seconds=1)) == len(expected)
-    assert _sent(telegram) == expected
+    assert _sent(telegram, expected) == expected
 
 
 def test_the_broker_jobs_skip_cleanly_and_open_no_halt(settings, spy):
@@ -768,7 +774,10 @@ def test_the_cli_walks_the_same_path(cli_home, spy, telegram):
         fills = state.sql("SELECT COUNT(*) FROM fills")[0][0]
     assert (orders, fills) == (0, 0)
     assert spy.calls == []
-    sent = _sent(telegram)
+    from types import SimpleNamespace
+
+    at = SimpleNamespace(state=SimpleNamespace(path=state_path))
+    sent = _sent(telegram, _expected(at, [sid]))  # type: ignore[arg-type]
     assert sent and {s for _, s in sent} == {sid}
 
 
