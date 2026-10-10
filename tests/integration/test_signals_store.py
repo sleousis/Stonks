@@ -98,12 +98,14 @@ def test_every_scored_strategy_is_recorded_once_with_reasons(env):
     assert flat.strength == pytest.approx(0.5, abs=0.02)
     down = events[("bh_down", "DOWN.US", "entry")]
     assert down.reason["explain_error"] == "RuntimeError: no words"
-    # Vocabulary: a test book, and no "expected return" read off a book's score.
-    assert down.text.startswith("The test book bought DOWN.US")
-    assert "expected return" not in down.text and "rank 1 of" in down.text
+    # NB-10: the action in plain words, no rank, no test book, and no
+    # "expected return" read off a book's score.
+    assert down.text.startswith("Bought DOWN.US. It now holds")
+    assert "xpected return" not in down.text and "rank" not in down.text
+    assert "book" not in down.text
     [up] = [e for (sid, t, k), e in events.items() if sid == "mom" and t == "UP.US"]
     assert up.kind == "entry" and up.reason["source"] == "scores"
-    assert up.text.startswith("mom now scores UP.US: expected return")
+    assert up.text.startswith("Buy UP.US. Expected return")
 
     count = state.count_rows("signal_events")
     run_tick(state, lake, registry, SETTINGS, as_of=DAY1)  # a re-run writes nothing twice
@@ -155,7 +157,7 @@ def test_notify_subscribers_get_the_stored_events_with_their_reason(env):
     plan = load_tick_plan(state, SETTINGS)
     run_tick(state, lake, registry, SETTINGS, as_of=DAY1, plan=plan)
     [row] = state.sql("SELECT title, body FROM notification_outbox WHERE category = 'signal'")
-    assert row["title"] == "FLAT.US: entry signal"
+    assert row["title"] == "Bh flat: buy FLAT.US"
     assert "FLAT.US is the one asset this benchmark holds." in row["body"]
 
 
@@ -167,7 +169,7 @@ def test_record_signals_skips_strategies_already_recorded(env):
     [row] = state.sql("SELECT tick_id, score FROM signals WHERE strategy_id = 'x'")
     assert (row["tick_id"], row["score"]) == ("t1", 0.1)
     assert json.loads(state.sql("SELECT reason_json FROM signal_events")[0][0])["text"].startswith(
-        "x now scores UP.US"
+        "Buy UP.US"
     )
     assert signals_mod.events_for(state, DAY1, []) == []
 
@@ -206,7 +208,7 @@ def test_be16_notify_subscribers_get_the_exit_notice(env):
             "SELECT title FROM notification_outbox WHERE category = 'signal' ORDER BY id"
         )
     ]
-    assert titles == ["UP.US: entry signal", "UP.US: exit signal"]
+    assert titles == ["Once: buy UP.US", "Once: sell all of UP.US"]
 
 
 # ---- next-open fills: a signal is sent on the day the book decides -----------------
@@ -229,9 +231,9 @@ def test_a_next_open_book_signals_on_the_day_it_decides(env):
     flat = _events(state, DAY1)[("bh_flat", "FLAT.US", "entry")]
     assert flat.strength == pytest.approx(0.5, abs=0.02)
     down = _events(state, DAY1)[("bh_down", "DOWN.US", "entry")]
-    assert down.text.startswith("The test book buys DOWN.US at the next open")
+    assert down.text.startswith("Buy DOWN.US at the next open. It would hold")
     [row] = state.sql("SELECT title FROM notification_outbox WHERE category = 'signal'")
-    assert row["title"] == "FLAT.US: entry signal"
+    assert row["title"] == "Bh flat: buy FLAT.US"
 
     # The next run fills the order at the open: nothing new to say.
     run_tick(state, lake, registry, NEXT_OPEN, as_of=DAY2, plan=load_tick_plan(state, NEXT_OPEN))

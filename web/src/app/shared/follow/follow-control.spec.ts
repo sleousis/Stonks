@@ -77,7 +77,7 @@ describe('FollowControl (M8)', () => {
     expect(radio(el, 'auto').disabled).toBe(true);
     expect(radio(el, 'approve').disabled).toBe(true);
     expect(el.textContent).toContain(
-      'Approve each trade and Automatic open after 20 trading days on Paper. 12 of 20 done.',
+      'Approve each trade and Automatic need a broker portfolio and 20 paper days. Your paper days: 12 of 20.',
     );
   });
 
@@ -191,7 +191,7 @@ describe('autoBlockedReason', () => {
         }),
       ),
     ).toBe(
-      'Approve each trade and Automatic open after 20 trading days on Paper. 12 of 20 done. The strategy is not approved yet.',
+      'Approve each trade and Automatic need a broker portfolio and 20 paper days. Your paper days: 12 of 20. The strategy is not approved yet.',
     );
     expect(autoBlockedReason(sub())).toBeNull();
   });

@@ -164,6 +164,13 @@ def test_policy_by_role():
         require(_principal(Role.TRADER), Permission.USERS_MANAGE)
 
 
+def test_traders_may_put_drafts_on_trial_but_not_approve():
+    # NB-02: On trial is paper only. Approval stays with admins.
+    assert allowed(_principal(Role.TRADER), Permission.STRATEGY_TRIAL)
+    assert not allowed(_principal(Role.VIEWER), Permission.STRATEGY_TRIAL)
+    assert not allowed(_principal(Role.TRADER), Permission.STRATEGY_PROMOTE)
+
+
 def test_policy_by_token_scope():
     read_only = _principal(Role.ADMIN, {ApiScope.READ}, via="token")
     assert allowed(read_only, Permission.READ)

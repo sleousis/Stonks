@@ -29,8 +29,8 @@ def _cmp(left: dict, op: str, right: dict) -> dict[str, Any]:
 RSI_MEAN_REVERSION = RuleTemplate(
     id="rsi_mean_reversion",
     title="RSI mean reversion",
-    description="Buy oversold names (RSI(14) < 30) that still trade above their 50-bar "
-    "average; sell once RSI recovers above 55. Most oversold first.",
+    description="Buys a stock that fell hard (RSI under 30) while still above its 50 day "
+    "average. Sells when it recovers.",
     spec={
         "version": 1,
         "name": "RSI mean reversion",
@@ -59,8 +59,8 @@ RSI_MEAN_REVERSION = RuleTemplate(
 SMA_TREND_FOLLOWING = RuleTemplate(
     id="sma_trend_following",
     title="SMA trend following",
-    description="Hold names whose 20-bar SMA is above their 50-bar SMA; exit when the "
-    "fast average crosses back below. Strongest 20-bar momentum first.",
+    description="Holds a stock while its 20 day average is above its 50 day average. "
+    "Sells when it drops back below.",
     spec={
         "version": 1,
         "name": "SMA trend following",
@@ -83,8 +83,8 @@ SMA_TREND_FOLLOWING = RuleTemplate(
 DONCHIAN_BREAKOUT = RuleTemplate(
     id="donchian_breakout",
     title="Donchian breakout",
-    description="Buy when the close breaks above the prior 20-bar high; exit below the "
-    "prior 10-bar low or on a 10% stop. Strongest 20-bar momentum first.",
+    description="Buys when the price closes above its highest close of the last 20 days. "
+    "Sells below the lowest of the last 10 days, or after a 10% fall.",
     spec={
         "version": 1,
         "name": "Donchian breakout",

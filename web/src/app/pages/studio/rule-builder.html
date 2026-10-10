@@ -20,7 +20,7 @@
       }
     </div>
     <div class="field">
-      <label for="rb-interval">Bar interval</label>
+      <label for="rb-interval">Each candle is</label>
       <select
         id="rb-interval"
         class="input"
@@ -29,13 +29,12 @@
         (change)="setText('interval', $any($event.target).value)"
       >
         @for (iv of intervals; track iv) {
-          <option [selected]="iv === s.interval" [value]="iv">{{ iv }}</option>
+          <option [selected]="iv === s.interval" [value]="iv">{{ intervalWord(iv) }}</option>
         }
         @if (!intervals.includes($any(s.interval))) {
-          <option selected [value]="s.interval">{{ s.interval }}</option>
+          <option selected [value]="s.interval">{{ intervalWord(s.interval) }}</option>
         }
       </select>
-      <p class="hint">Periods below count bars of this size.</p>
       @for (m of err('interval'); track $index) {
         <p class="error">{{ m }}</p>
       }
@@ -68,7 +67,7 @@
             [checked]="s.universe.asset_classes.includes(ac)"
             (change)="toggleAssetClass(ac, $any($event.target).checked)"
           />
-          {{ ac }}
+          {{ assetWord(ac) }}
         </label>
       }
     </div>
@@ -102,7 +101,7 @@
     <h3 id="rb-indicators">Indicators</h3>
     <span class="muted num">{{ s.indicators.length }} of 32</span>
   </div>
-  <p class="hint">Name each series once, then use it in the rules below.</p>
+  <p class="hint">Add what the rules look at, then use it below.</p>
   @for (m of err('indicators'); track $index) {
     <p class="error" data-path="indicators">{{ m }}</p>
   }
@@ -170,7 +169,7 @@
             >
               @for (src of sources; track src) {
                 <option [selected]="src === (ind.source ?? 'close')" [value]="src">
-                  {{ src }}
+                  {{ sourceWord(src) }}
                 </option>
               }
             </select>
@@ -187,7 +186,9 @@
           <span aria-hidden="true">×</span>
         </button>
         @if (k) {
-          <p class="hint describe">{{ k.description }}</p>
+          <p class="hint describe">
+            <strong>{{ indicatorLabels()[ind.id] }}.</strong> {{ k.description }}
+          </p>
         }
         @for (field of ['', '.id', '.kind', '.period', '.source']; track field) {
           @for (m of err(at + field); track $index) {
@@ -213,12 +214,13 @@
 <!-- Entry ------------------------------------------------------------------->
 <section class="block" aria-labelledby="rb-entry">
   <h3 id="rb-entry">Buy when</h3>
-  <p class="hint">Checked on every bar for each ticker in the universe.</p>
+  <p class="hint">Checked on every candle for each ticker it may trade.</p>
   <app-condition-editor
     class="tree"
     path="entry"
     [node]="s.entry"
     [indicatorIds]="indicatorIds()"
+    [indicatorLabels]="indicatorLabels()"
     [issues]="issues()"
     [removable]="false"
     (nodeChange)="setEntry($event)"
@@ -242,6 +244,7 @@
       path="exit"
       [node]="exitNode"
       [indicatorIds]="indicatorIds()"
+      [indicatorLabels]="indicatorLabels()"
       [issues]="issues()"
       [removable]="false"
       (nodeChange)="setExit($event)"
@@ -272,7 +275,9 @@
         (change)="setRank('by', $any($event.target).value)"
       >
         @for (id of indicatorIds(); track $index) {
-          <option [selected]="id === s.rank.by" [value]="id">{{ id }}</option>
+          <option [selected]="id === s.rank.by" [value]="id">
+            {{ indicatorLabels()[id] || id }}
+          </option>
         }
         @if (!indicatorIds().includes(s.rank.by)) {
           <option selected [value]="s.rank.by">{{ s.rank.by || 'Choose an indicator' }}</option>
@@ -337,7 +342,7 @@
       }
     </div>
     <div class="field">
-      <label for="rb-topk">New entries per bar <span class="muted">(optional)</span></label>
+      <label for="rb-topk">New buys per candle <span class="muted">(optional)</span></label>
       <input
         id="rb-topk"
         class="input"

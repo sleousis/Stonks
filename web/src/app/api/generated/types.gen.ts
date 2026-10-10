@@ -15242,16 +15242,32 @@ export type StrategyDetail = {
      */
     created_at: string;
     /**
+     * Draft Id
+     */
+    draft_id?: string | null;
+    /**
      * Id
      */
     id: string;
+    /**
+     * Kind
+     */
+    kind?: string;
     metadata: StrategyMetadataView;
+    /**
+     * Name
+     */
+    name?: string;
     /**
      * Params
      */
     params: {
         [key: string]: unknown;
     };
+    /**
+     * Retrainable
+     */
+    retrainable?: boolean;
     /**
      * Set for a starter strategy: its plain title and summary.
      */
@@ -15369,16 +15385,32 @@ export type StrategySummary = {
      */
     created_at: string;
     /**
+     * Draft Id
+     */
+    draft_id?: string | null;
+    /**
      * Id
      */
     id: string;
+    /**
+     * Kind
+     */
+    kind?: string;
     metadata: StrategyMetadataView;
+    /**
+     * Name
+     */
+    name?: string;
     /**
      * Params
      */
     params: {
         [key: string]: unknown;
     };
+    /**
+     * Retrainable
+     */
+    retrainable?: boolean;
     /**
      * Set for a starter strategy: its plain title and summary.
      */
@@ -15630,6 +15662,10 @@ export type SubscriptionView = {
      * Strategy Id
      */
     strategy_id: string;
+    /**
+     * Strategy Name
+     */
+    strategy_name: string;
     /**
      * Strategy Status
      */

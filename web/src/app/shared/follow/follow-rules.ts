@@ -15,11 +15,11 @@ export function unlockRule(required: number): string {
   return `Approve each trade and Automatic unlock after ${required} paper days.`;
 }
 
-/** "Paper days: 4 of 20.", or null once the count is met (F4). */
+/** "Your paper days: 4 of 20.", or null once the count is met (F4, NB-13). */
 export function paperProgress(sub: SubscriptionView): string | null {
   const needed = sub.paper_days_required;
   if (sub.paper_days_completed >= needed) return null;
-  return `Paper days: ${sub.paper_days_completed} of ${needed}.`;
+  return `Your paper days: ${sub.paper_days_completed} of ${needed}.`;
 }
 
 /** Whatever else the server's auto gate reported, besides the paper-day count. */
@@ -45,8 +45,8 @@ export function autoBlockedReason(
   const days = opts.compact
     ? paperProgress(sub)
     : sub.paper_days_completed < needed
-      ? `Approve each trade and Automatic open after ${needed} trading days on Paper. ` +
-        `${sub.paper_days_completed} of ${needed} done.`
+      ? `Approve each trade and Automatic need a broker portfolio and ${needed} paper days. ` +
+        `Your paper days: ${sub.paper_days_completed} of ${needed}.`
       : null;
   const reasons = [days, ...otherBlockers(sub)].filter((r): r is string => r !== null);
   return reasons.length ? reasons.join(' ') : null;

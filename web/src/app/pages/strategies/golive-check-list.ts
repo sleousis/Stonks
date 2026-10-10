@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { RouterLink } from '@angular/router';
 
 import type { GoLiveReport } from '../../api/models';
-import { type CheckRow, checkRow, checklistItems } from '../../shared/golive-checks';
+import { checklistItems, traderChecks } from '../../shared/golive-checks';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { StatusPill } from '../../shared/ui/status-pill';
 
@@ -14,10 +14,10 @@ export function sourceWords(source: GoLiveReport['source']): string {
 }
 
 /**
- * The go-live check of one strategy, every check with its value against the
- * limit, what it measures and how to fix it, then the checklist a reviewer
- * reads before approving (it never changes the verdict). The strategy
- * page's Review tab.
+ * The go-live check of one strategy as a trader reads it (R13): how many
+ * checks pass, then each failing check in one plain sentence with how to fix
+ * it. The checklist a reviewer reads before approving folds away below (it
+ * never changes the verdict). The strategy page's Review tab.
  */
 @Component({
   selector: 'app-golive-check-list',
@@ -25,47 +25,36 @@ export function sourceWords(source: GoLiveReport['source']): string {
   imports: [RouterLink, HelpTip, StatusPill],
   template: `
     <p class="summary panel-body">
-      @if (report().passed) {
-        All {{ rows().length }} checks passed.
+      @if (checks().failing.length === 0) {
+        All {{ checks().total }} checks pass.
       } @else {
-        {{ failedCount() }} of {{ rows().length }} checks failed.
+        {{ checks().passed }} of {{ checks().total }} checks pass.
       }
       <span class="source">Trial result from {{ source() }}.</span>
     </p>
-    <ul class="checks" aria-label="Go-live checks">
-      @for (c of rows(); track c.name) {
-        <li [class.failed]="!c.passed">
-          <div class="check-head">
-            <span class="check-label">{{ c.label }}</span>
-            <app-status-pill [status]="c.passed ? 'pass' : 'fail'" />
-          </div>
-          @if (c.name !== 'status') {
-            <dl class="check-figures">
-              <div>
-                <dt>Value</dt>
-                <dd class="num check-value">{{ c.value }}</dd>
-              </div>
-              <div>
-                <dt>Limit</dt>
-                <dd class="num check-limit">{{ c.limit }}</dd>
-              </div>
-            </dl>
-          }
-          <p class="check-detail">{{ c.detail }}</p>
-          <p class="check-measures">{{ c.measures }}</p>
-          @if (c.fix; as f) {
-            <p class="check-fix">
-              {{ f.text }}
-              @if (f.link; as l) {
-                <a [routerLink]="l.commands" [queryParams]="l.query ?? null">{{ l.label }}</a>
-              }
-            </p>
-          }
-        </li>
-      }
-    </ul>
-    <section class="checklist panel-body" aria-labelledby="checklist-title">
-      <h3 id="checklist-title">Before you approve</h3>
+    @if (checks().failing.length) {
+      <ul class="checks" aria-label="Checks that do not pass yet">
+        @for (c of checks().failing; track c.name) {
+          <li>
+            <div class="check-head">
+              <span class="check-label">{{ c.label }}</span>
+              <app-status-pill status="fail" label="Not yet" />
+            </div>
+            <p class="check-detail">{{ c.sentence }}</p>
+            @if (c.fix; as f) {
+              <p class="check-fix">
+                {{ f.text }}
+                @if (f.link; as l) {
+                  <a [routerLink]="l.commands" [queryParams]="l.query ?? null">{{ l.label }}</a>
+                }
+              </p>
+            }
+          </li>
+        }
+      </ul>
+    }
+    <details class="checklist panel-body">
+      <summary>Before you approve</summary>
       <p class="muted checklist-lead">
         What a reviewer reads before approving. It does not change the verdict.
       </p>
@@ -82,7 +71,7 @@ export function sourceWords(source: GoLiveReport['source']): string {
           </div>
         }
       </dl>
-    </section>
+    </details>
   `,
   styles: `
     @use 'breakpoints' as bp;
@@ -115,32 +104,6 @@ export function sourceWords(source: GoLiveReport['source']): string {
     .checks li:first-child {
       border-top: 0;
     }
-    @include bp.from-tablet {
-      .checks li {
-        grid-template-columns: 12rem 13rem minmax(0, 1fr);
-        grid-template-areas:
-          'head figures detail'
-          'head figures measures'
-          'head figures fix';
-        column-gap: var(--space-4);
-        align-items: start;
-      }
-      .check-head {
-        grid-area: head;
-      }
-      .check-figures {
-        grid-area: figures;
-      }
-      .check-detail {
-        grid-area: detail;
-      }
-      .check-measures {
-        grid-area: measures;
-      }
-      .check-fix {
-        grid-area: fix;
-      }
-    }
     .check-head {
       display: flex;
       flex-wrap: wrap;
@@ -150,30 +113,9 @@ export function sourceWords(source: GoLiveReport['source']): string {
     .check-label {
       font-weight: var(--weight-semibold);
     }
-    .check-figures {
-      display: flex;
-      gap: var(--space-4);
-      margin: 0;
-    }
-    .check-figures div {
-      display: grid;
-    }
-    .check-figures dt {
-      color: var(--color-ink-2);
-      font-size: var(--text-xs);
-    }
-    .check-figures dd {
-      margin: 0;
-      font-size: var(--text-sm);
-      font-weight: var(--weight-medium);
-    }
     .check-detail {
       font-size: var(--text-sm);
       overflow-wrap: anywhere;
-    }
-    .check-measures {
-      color: var(--color-ink-2);
-      font-size: var(--text-xs);
     }
     .check-fix {
       font-size: var(--text-sm);
@@ -189,8 +131,12 @@ export function sourceWords(source: GoLiveReport['source']): string {
       gap: var(--space-2);
       border-top: 1px solid var(--color-border);
     }
-    .checklist h3 {
-      font-size: var(--text-md);
+    .checklist summary {
+      display: flex;
+      align-items: center;
+      min-height: var(--touch-min);
+      font-weight: var(--weight-semibold);
+      cursor: pointer;
     }
     .checklist-lead {
       font-size: var(--text-sm);
@@ -239,11 +185,7 @@ export function sourceWords(source: GoLiveReport['source']): string {
 export class GoliveCheckList {
   readonly report = input.required<GoLiveReport>();
 
-  protected readonly rows = computed<CheckRow[]>(() => {
-    const r = this.report();
-    return r.checks.map((c) => checkRow(c, r.strategy_id));
-  });
-  protected readonly failedCount = computed(() => this.rows().filter((r) => !r.passed).length);
+  protected readonly checks = computed(() => traderChecks(this.report()));
   protected readonly checklist = computed(() => checklistItems(this.report().checklist));
   protected readonly source = computed(() => sourceWords(this.report().source));
 }

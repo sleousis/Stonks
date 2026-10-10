@@ -62,7 +62,7 @@ let nextId = 0;
         (click)="toggle()"
       >
         <span class="track" aria-hidden="true"><span class="thumb"></span></span>
-        <span class="state">{{ current().enabled ? 'On' : 'Off' }}</span>
+        <span class="state">{{ current().enabled ? 'Following' : 'Paused' }}</span>
       </button>
     </div>
 

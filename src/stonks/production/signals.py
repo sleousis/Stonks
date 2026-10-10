@@ -323,22 +323,28 @@ def _record_one(
     return events
 
 
-_VERBS: dict[str, tuple[str, str]] = {
-    "entry": ("bought", "now scores"),
-    "exit": ("sold out of", "no longer scores"),
-    "increase": ("added to", "scores"),
-    "decrease": ("trimmed", "scores"),
-    "risk": ("flagged", "flags"),
+#: The action for a follower, in the words of an order ticket (NB-10).
+ACTIONS: dict[str, str] = {
+    "entry": "Buy",
+    "exit": "Sell all of",
+    "increase": "Add to",
+    "decrease": "Sell some",
+    "risk": "Check",
 }
 
-#: What a test book does at the next open, for an order still to fill.
-_NEXT_OPEN_VERBS: dict[str, str] = {
-    "entry": "buys",
-    "exit": "sells out of",
-    "increase": "adds to",
-    "decrease": "trims",
-    "risk": "flags",
+#: What the strategy already did, for an order that filled.
+_DONE: dict[str, str] = {
+    "entry": "Bought",
+    "exit": "Sold all of",
+    "increase": "Added to",
+    "decrease": "Sold some",
+    "risk": "Flagged",
 }
+
+
+def signal_action(kind: str, ticker: str) -> str:
+    """``Buy NVDA.US``, ``Sell some GLD.US``: the one-line action of a signal."""
+    return f"{ACTIONS.get(kind, 'Check')} {ticker}"
 
 
 def _reason(
@@ -357,24 +363,23 @@ def _reason(
     model_book: bool,
     next_open: bool = False,
 ) -> dict[str, Any]:
-    book_verb, score_verb = _VERBS[kind]
-    if model_book:
-        # A test book's score is the strategy's own scale, not a return:
-        # the text gives its weight and rank only.
-        if next_open:
-            text = f"The test book {_NEXT_OPEN_VERBS[kind]} {ticker} at the next open"
-            if after is not None and kind != "exit":
-                text += f" ({after:.1%} of the book after it)"
-        else:
-            text = f"The test book {book_verb} {ticker}"
-            if after is not None and kind != "exit":
-                text += f" (now {after:.1%} of the book)"
-        if rank is not None:
-            text += f", rank {rank} of {of}"
+    # Written for the person who follows it (NB-10): the action first, in
+    # plain words, never a rank or the test book. ``rank`` stays a field.
+    holds = after is not None and kind not in ("exit", "risk")
+    if model_book and not next_open:
+        text = f"{_DONE[kind]} {ticker}"
+        if holds:
+            text += f". It now holds {after:.1%}"
+    elif model_book:
+        text = f"{signal_action(kind, ticker)} at the next open"
+        if holds:
+            text += f". It would hold {after:.1%} after"
     else:
-        text = f"{sid} {score_verb} {ticker}"
-        if score is not None and rank is not None:
-            text += f": expected return {score:.2%}, rank {rank} of {of}"
+        text = signal_action(kind, ticker)
+        if kind == "entry" and score is not None:
+            text += f". Expected return {score:.2%}"
+        elif kind == "exit":
+            text += ". It no longer picks it"
     reason: dict[str, Any] = {
         "text": text + ".",
         "score": score,

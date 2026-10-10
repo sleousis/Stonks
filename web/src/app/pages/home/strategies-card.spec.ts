@@ -78,8 +78,8 @@ describe('StrategiesCard', () => {
     const rule = 'Approve each trade and Automatic unlock after 20 paper days.';
     expect(el.querySelectorAll('.rule').length).toBe(1);
     expect(el.querySelector('.rule')!.textContent).toContain(rule);
-    expect(el.textContent).toContain('Paper days: 12 of 20.');
-    expect(el.textContent).toContain('Paper days: 3 of 20.');
+    expect(el.textContent).toContain('Your paper days: 12 of 20.');
+    expect(el.textContent).toContain('Your paper days: 3 of 20.');
   });
 
   it('switches notify and paper straight away', async () => {
@@ -156,7 +156,7 @@ describe('StrategiesCard', () => {
     const el = await render([sub({ paper_days_completed: 12 })]);
     expect(option(el, 'approve').disabled).toBe(true);
     const why = option(el, 'approve').getAttribute('aria-describedby')!;
-    expect(el.querySelector(`[id="${why}"]`)!.textContent).toContain('Paper days: 12 of 20.');
+    expect(el.querySelector(`[id="${why}"]`)!.textContent).toContain('Your paper days: 12 of 20.');
   });
 
   it('turns on approve each trade after a step-up and a ticket, no typed name', async () => {

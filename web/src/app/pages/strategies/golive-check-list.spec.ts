@@ -77,28 +77,30 @@ describe('GoliveCheckList', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  it('shows each check with its value against the limit, and how to fix it (UX-28)', () => {
+  it('shows only failing checks, each in one sentence, and passing ones as a count (R13)', () => {
     const el = render(report(false));
-    expect(el.textContent).toContain('1 of 12 checks failed');
+    // status and the hypothesis length are internal: 10 checks a trader reads
+    expect(el.textContent).toContain('9 of 10 checks pass.');
     expect(el.textContent).toContain('Trial result from its own test book.');
     const rows = Array.from(el.querySelectorAll('.checks li'));
-    expect(rows.length).toBe(12);
-    const minDays = rows[1];
-    expect(minDays.textContent).toContain('Trial days');
-    expect(el.textContent).not.toContain('min_days');
-    expect(minDays.querySelector('app-status-pill')?.textContent).toContain('Failed');
-    expect(minDays.querySelector('.check-fix')?.textContent).toContain(
+    expect(rows.length).toBe(1);
+    expect(rows[0].textContent).toContain('Trial days');
+    expect(rows[0].querySelector('.check-detail')?.textContent).toContain(
+      'It has 3 of the 20 trial days it needs.',
+    );
+    expect(rows[0].querySelector('.check-fix')?.textContent).toContain(
       'About 17 more trading days on trial.',
     );
-    expect(minDays.querySelector('.check-detail')?.textContent).toContain('3 days on trial');
-    expect(minDays.querySelector('.check-value')?.textContent).toContain('3');
-    expect(minDays.querySelector('.check-limit')?.textContent).toContain('20');
-    expect(rows[2].querySelector('.check-value')?.textContent).toContain('4.20%');
-    expect(rows[3].querySelector('.check-value')?.textContent).toContain('-1.30%');
+    expect(el.textContent).not.toContain('min_days');
+    expect(el.textContent).not.toContain('against');
+    expect(el.textContent).not.toContain('Hypothesis 64 chars');
     expect(checkRow({ ...report(true).checks[2], value: -0 }).value).toBe('0.00%');
-    expect(rows[5].querySelector('.check-value')?.textContent).toContain('4 of 4');
-    expect(rows[6].querySelector('.check-limit')?.textContent).toContain('≤ 12.00%');
-    expect(rows[10].querySelector('.check-limit')?.textContent).toContain('≥ 40 chars');
+  });
+
+  it('says all checks pass with no list', () => {
+    const el = render(report(true));
+    expect(el.textContent).toContain('All 10 checks pass.');
+    expect(el.querySelectorAll('.checks li').length).toBe(0);
   });
 
   it('links a failing full-tests row to Lab with the full suite picked (UX-28)', () => {

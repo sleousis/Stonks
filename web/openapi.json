@@ -28095,17 +28095,43 @@
             "title": "Created At",
             "type": "string"
           },
+          "draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Id"
+          },
           "id": {
             "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
             "type": "string"
           },
           "metadata": {
             "$ref": "#/components/schemas/StrategyMetadataView"
           },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
           "params": {
             "additionalProperties": true,
             "title": "Params",
             "type": "object"
+          },
+          "retrainable": {
+            "default": false,
+            "title": "Retrainable",
+            "type": "boolean"
           },
           "starter": {
             "anyOf": [
@@ -28292,17 +28318,43 @@
             "title": "Created At",
             "type": "string"
           },
+          "draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Id"
+          },
           "id": {
             "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
             "type": "string"
           },
           "metadata": {
             "$ref": "#/components/schemas/StrategyMetadataView"
           },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
           "params": {
             "additionalProperties": true,
             "title": "Params",
             "type": "object"
+          },
+          "retrainable": {
+            "default": false,
+            "title": "Retrainable",
+            "type": "boolean"
           },
           "starter": {
             "anyOf": [
@@ -28758,6 +28810,10 @@
             "title": "Strategy Id",
             "type": "string"
           },
+          "strategy_name": {
+            "title": "Strategy Name",
+            "type": "string"
+          },
           "strategy_status": {
             "anyOf": [
               {
@@ -28782,6 +28838,7 @@
         "required": [
           "id",
           "strategy_id",
+          "strategy_name",
           "strategy_status",
           "portfolio_id",
           "mode",
@@ -62934,7 +62991,7 @@
     },
     "/api/studio/drafts/{draft_id}/register": {
       "post": {
-        "description": "Register the draft's strategy in ``shadow``.",
+        "description": "Put the draft's strategy On trial (``shadow``). Only the draft's owner\n(or an admin) may: another user's draft is a 404.",
         "operationId": "registerDraft",
         "parameters": [
           {
@@ -63028,7 +63085,7 @@
         "tags": [
           "studio"
         ],
-        "x-permission": "strategy.promote"
+        "x-permission": "strategy.trial"
       }
     },
     "/api/studio/drafts/{draft_id}/validate": {

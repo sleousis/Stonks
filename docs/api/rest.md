@@ -533,7 +533,7 @@ Tags: [alerts](#alerts-endpoints) · [assistant](#assistant-endpoints) · [auth]
 | POST | `/api/studio/drafts/{draft_id}/disable` | Disable Draft | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
 | POST | `/api/studio/drafts/{draft_id}/enable` | Enable Draft | `strategy.promote` | [StatusChangeRequest](#statuschangerequest) \| null | [Draft](#draft) |
 | POST | `/api/studio/drafts/{draft_id}/lab-runs` | Start Lab Run | `lab.run` | [DraftLabRunRequest](#draftlabrunrequest) | [Job](#job) |
-| POST | `/api/studio/drafts/{draft_id}/register` | Register Draft | `strategy.promote` |  | [Draft](#draft) |
+| POST | `/api/studio/drafts/{draft_id}/register` | Register Draft | `strategy.trial` |  | [Draft](#draft) |
 | POST | `/api/studio/drafts/{draft_id}/validate` | Validate Draft | `lab.run` | [ValidateRequest](#validaterequest) \| null | [DraftValidation](#draftvalidation) |
 | GET | `/api/studio/schema` | Schema | sign-in |  | object |
 | POST | `/api/studio/spec/validate` | Validate Spec | `lab.run` | [SpecValidateRequest](#specvalidaterequest) | [DraftValidation](#draftvalidation) |
@@ -6201,9 +6201,13 @@ One audited status change or intervention (BL-24).
 | `applicable_asset_classes` | list[string] | yes |  |
 | `class_path` | string | yes |  |
 | `created_at` | string | yes |  |
+| `draft_id` | string \| null | no |  |
 | `id` | string | yes |  |
+| `kind` | string | no |  |
 | `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
+| `name` | string | no |  |
 | `params` | object | yes |  |
+| `retrainable` | boolean | no |  |
 | `starter` | [StarterLabelView](#starterlabelview) \| null | no | Set for a starter strategy: its plain title and summary. |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
 | `status_history` | list[[StatusChangeView](#statuschangeview)] | yes |  |
@@ -6250,9 +6254,13 @@ How many registered strategies are in each lifecycle status.
 | `applicable_asset_classes` | list[string] | yes |  |
 | `class_path` | string | yes |  |
 | `created_at` | string | yes |  |
+| `draft_id` | string \| null | no |  |
 | `id` | string | yes |  |
+| `kind` | string | no |  |
 | `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
+| `name` | string | no |  |
 | `params` | object | yes |  |
+| `retrainable` | boolean | no |  |
 | `starter` | [StarterLabelView](#starterlabelview) \| null | no | Set for a starter strategy: its plain title and summary. |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
 | `updated_at` | string | yes |  |
@@ -6346,6 +6354,7 @@ What this server lets the Studio do.
 | `paused_reason` | string \| null | yes |  |
 | `portfolio_id` | string \| null | yes |  |
 | `strategy_id` | string | yes |  |
+| `strategy_name` | string | yes |  |
 | `strategy_status` | string \| null | yes |  |
 | `updated_at` | date-time | yes |  |
 | `weight` | number | yes |  |

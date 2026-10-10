@@ -28,7 +28,11 @@
           }
         </datalist>
         <p id="t-tickers-hint" class="hint">
-          Separate with commas or spaces. Each needs price history in our data for the window below.
+          @if (usesStarterTickers()) {
+            A small starter set of funds to begin with. Change them as you like.
+          } @else {
+            Separate with commas or spaces. Each needs price history for the dates below.
+          }
         </p>
         @if (submitted() && tickersError(); as e) {
           <p class="error">{{ e }}</p>
@@ -67,22 +71,6 @@
         }
       </div>
       <div class="field">
-        <label for="t-interval">Interval</label>
-        <select id="t-interval" class="input" (change)="interval.set($any($event.target).value)">
-          @for (iv of intervals; track iv) {
-            <option [selected]="iv === interval()" [value]="iv">{{ iv }}</option>
-          }
-        </select>
-      </div>
-      <app-cost-field
-        idPrefix="t"
-        [value]="costForm()"
-        [costModels]="presets()"
-        [errors]="costErrors()"
-        [note]="costNote()"
-        (patch)="patchCost($event)"
-      />
-      <div class="field">
         <label for="t-cash">Starting cash ($)</label>
         <input
           id="t-cash"
@@ -95,20 +83,42 @@
           (change)="initialCash.set(numberValue($any($event.target).value, 10000))"
         />
       </div>
-      <div class="field">
-        <label for="t-rebalance">Decide every (bars)</label>
-        <input
-          id="t-rebalance"
-          class="input"
-          type="number"
-          min="1"
-          step="1"
-          inputmode="numeric"
-          [value]="rebalanceEvery()"
-          (change)="rebalanceEvery.set(numberValue($any($event.target).value, 1))"
-        />
-      </div>
     </div>
+    <!-- Costs, candle size and how often it decides: sensible defaults, tucked away (NB-07). -->
+    <details class="more">
+      <summary>More options</summary>
+      <div class="form-grid form-grid-2 wide">
+        <app-cost-field
+          idPrefix="t"
+          [value]="costForm()"
+          [costModels]="presets()"
+          [errors]="costErrors()"
+          [note]="costNote()"
+          (patch)="patchCost($event)"
+        />
+        <div class="field">
+          <label for="t-interval">Each candle is</label>
+          <select id="t-interval" class="input" (change)="interval.set($any($event.target).value)">
+            @for (iv of intervals; track iv) {
+              <option [selected]="iv === interval()" [value]="iv">{{ intervalWord(iv) }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label for="t-rebalance">Decide every (candles)</label>
+          <input
+            id="t-rebalance"
+            class="input"
+            type="number"
+            min="1"
+            step="1"
+            inputmode="numeric"
+            [value]="rebalanceEvery()"
+            (change)="rebalanceEvery.set(numberValue($any($event.target).value, 1))"
+          />
+        </div>
+      </div>
+    </details>
   </div>
 </section>
 
@@ -152,7 +162,14 @@
   }
   @if (btResult(); as r) {
     <div class="panel-body">
-      <app-backtest-result [result]="r" />
+      @if (noTrades(r)) {
+        <p class="no-trades" role="status">
+          No trades: the buy rule was never true on these tickers and dates. Try more tickers, a
+          longer window or a looser rule.
+        </p>
+      } @else {
+        <app-backtest-result [result]="r" />
+      }
     </div>
   } @else if (!bt) {
     <p class="panel-body muted">
@@ -228,19 +245,22 @@
         <p class="error">Pick at least one robustness test.</p>
       }
     </fieldset>
-    <div class="field objective">
-      <label for="t-objective">Score by</label>
-      <select
-        id="t-objective"
-        class="input"
-        [value]="objective()"
-        (change)="objective.set($any($event.target).value)"
-      >
-        <option value="sharpe">Sharpe ratio</option>
-        <option value="cagr">CAGR</option>
-        <option value="final_return">Total return</option>
-      </select>
-    </div>
+    <details class="more">
+      <summary>More options</summary>
+      <div class="field objective">
+        <label for="t-objective">Pick the best settings by</label>
+        <select
+          id="t-objective"
+          class="input"
+          [value]="objective()"
+          (change)="objective.set($any($event.target).value)"
+        >
+          <option value="sharpe">Steadiest return (Sharpe ratio)</option>
+          <option value="cagr">Growth per year</option>
+          <option value="final_return">Total return</option>
+        </select>
+      </div>
+    </details>
   </div>
   @let lr = labRun();
   @if (lr) {

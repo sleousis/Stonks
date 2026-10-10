@@ -78,16 +78,70 @@ export interface IndicatorKind {
 const KIND_LABELS: Record<string, string> = {
   close: 'Close',
   volume: 'Volume',
-  sma: 'Simple moving average',
+  sma: 'Moving average',
   ema: 'Exponential moving average',
   rsi: 'RSI',
   roc: 'Rate of change',
-  trailing_return: 'Trailing return',
+  trailing_return: 'Return',
   zscore: 'Z-score',
-  atr: 'Average true range',
-  donchian_high: 'Donchian high',
-  donchian_low: 'Donchian low',
+  atr: 'Average daily move (ATR)',
+  donchian_high: 'Highest high',
+  donchian_low: 'Lowest low',
+  efficiency_ratio: 'Efficiency ratio',
+  kama: 'Adaptive moving average (KAMA)',
 };
+
+/** What each kind measures, in words a trader reads (NB-08). The schema's text is the fallback. */
+const KIND_HINTS: Record<string, string> = {
+  close: 'The price at the end of each candle.',
+  volume: 'How many shares traded in each candle.',
+  sma: 'The average price over the last few candles.',
+  ema: 'An average price that counts recent candles more.',
+  rsi: 'How hard the price rose or fell lately, from 0 to 100. Under 30 means it fell hard.',
+  roc: 'How much the price changed over the last few candles. 0.05 means up 5%.',
+  trailing_return: 'How much the price changed over the last few candles. 0.05 means up 5%.',
+  zscore: 'How far the price is from its usual level, in standard steps.',
+  atr: 'How far the price usually moves in one candle.',
+  donchian_high: 'The highest price of the last few candles, not counting this one.',
+  donchian_low: 'The lowest price of the last few candles, not counting this one.',
+  efficiency_ratio: 'How straight the price moved, from 0 (choppy) to 1 (a clean trend).',
+  kama: 'A moving average that speeds up in trends and slows down when prices chop around.',
+};
+
+/** Candle sizes in words: `1d` reads "1 day" (NB-08). */
+const INTERVAL_WORDS: Record<string, { one: string; unit: string }> = {
+  '1m': { one: '1 minute', unit: 'minutes' },
+  '5m': { one: '5 minutes', unit: '5-minute candles' },
+  '15m': { one: '15 minutes', unit: '15-minute candles' },
+  '30m': { one: '30 minutes', unit: '30-minute candles' },
+  '1h': { one: '1 hour', unit: 'hours' },
+  '4h': { one: '4 hours', unit: '4-hour candles' },
+  '12h': { one: '12 hours', unit: '12-hour candles' },
+  '1d': { one: '1 day', unit: 'days' },
+  '1w': { one: '1 week', unit: 'weeks' },
+};
+
+/** `1d` -> "1 day", `4h` -> "4 hours". */
+export function intervalWord(code: string): string {
+  return INTERVAL_WORDS[code]?.one ?? code;
+}
+
+/** The plain name of a kind ("RSI", "Adaptive moving average (KAMA)"). */
+export function kindLabel(kind: string): string {
+  return KIND_LABELS[kind] ?? kind.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+}
+
+/**
+ * An indicator in words for pickers and rules: `rsi` over 14 on daily candles
+ * reads "RSI over 14 days" (NB-08). Kinds without a period read as their name.
+ */
+export function indicatorWords(ind: IndicatorDef, interval: string): string {
+  const name = kindLabel(ind.kind);
+  if (ind.period == null)
+    return ind.source && ind.source !== 'close' ? `${name} of ${ind.source}` : name;
+  const unit = INTERVAL_WORDS[interval]?.unit ?? 'candles';
+  return `${name} over ${ind.period} ${unit}`;
+}
 
 /** Used until the schema loads, or if it fails; mirrors spec.py. */
 export const FALLBACK_KINDS: readonly IndicatorKind[] = [
@@ -117,8 +171,8 @@ function kind(
 ): IndicatorKind {
   return {
     kind: k,
-    label: KIND_LABELS[k] ?? k,
-    description,
+    label: kindLabel(k),
+    description: KIND_HINTS[k] ?? description,
     period: period ? { min: period[0], max: period[1] } : null,
     sources,
   };
@@ -154,8 +208,8 @@ export function indicatorKindsFromSchema(schema: unknown): IndicatorKind[] {
     for (const k of values) {
       kinds.push({
         kind: k,
-        label: KIND_LABELS[k] ?? k,
-        description,
+        label: kindLabel(k),
+        description: KIND_HINTS[k] ?? description,
         period: period
           ? { min: Number(period['minimum'] ?? 1), max: Number(period['maximum'] ?? 1000) }
           : null,

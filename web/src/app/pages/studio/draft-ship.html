@@ -15,20 +15,20 @@
     @switch (stage()) {
       @case ('draft') {
         <p>
-          Put the saved rules on trial. The system paper-tests them on their own test book every
-          run, with no real money, so you can watch them before anyone follows them.
+          Put the saved rules on trial. The system paper-tests them every run, with no real money.
+          You can follow them with Alerts only to get their signals.
         </p>
         <div>
           <button
             type="button"
             class="btn btn-primary"
-            [disabled]="busy() || !canShip()"
+            [disabled]="busy() || !canTrial()"
             [attr.aria-busy]="busy()"
             (click)="register()"
           >
             {{ busy() ? 'Starting…' : labels.paper.label }}
           </button>
-          <app-permission-note permission="strategy.promote" />
+          <app-permission-note permission="strategy.trial" />
         </div>
       }
       @case ('retired') {
@@ -45,29 +45,36 @@
             It is <strong>on trial</strong>: the system paper-tests it every run. No real money.
           }
         </p>
-        <div class="actions">
-          <button
-            type="button"
-            class="btn"
-            [class.btn-primary]="!enabled()"
-            [disabled]="busy() || !canShip()"
-            [attr.aria-busy]="busy()"
-            (click)="enabled() ? disable() : enable()"
-          >
-            {{ busy() ? 'Working…' : enabled() ? labels.pause.label : labels.live.label }}
-          </button>
-          <app-permission-note permission="strategy.promote" />
-        </div>
-        <p class="hint">
-          {{
-            enabled()
-              ? 'People can no longer follow it for trades. You will be asked for a reason.'
-              : 'You will see the go-live check, give a reason and hold to confirm.'
-          }}
-        </p>
+        @if (canShip()) {
+          <div class="actions">
+            <button
+              type="button"
+              class="btn"
+              [class.btn-primary]="!enabled()"
+              [disabled]="busy()"
+              [attr.aria-busy]="busy()"
+              (click)="enabled() ? disable() : enable()"
+            >
+              {{ busy() ? 'Working…' : enabled() ? labels.pause.label : labels.live.label }}
+            </button>
+          </div>
+          <p class="hint">
+            {{
+              enabled()
+                ? 'People can no longer follow it for trades. You will be asked for a reason.'
+                : 'You will see the go-live check, give a reason and hold to confirm.'
+            }}
+          </p>
+        } @else if (!enabled()) {
+          <p class="hint">An admin approves it after the go-live check.</p>
+        }
         <div class="links">
-          <a class="btn btn-ghost" [routerLink]="['/strategies', strategyId()]"
-            >Open the strategy</a
+          <a
+            class="btn"
+            [class.btn-primary]="!canShip()"
+            [class.btn-ghost]="canShip()"
+            [routerLink]="['/strategies', strategyId()]"
+            >{{ canShip() ? 'Open the strategy' : 'Follow it' }}</a
           >
           <a
             class="btn btn-ghost"

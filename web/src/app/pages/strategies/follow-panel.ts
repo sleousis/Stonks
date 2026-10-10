@@ -67,16 +67,19 @@ export const FOLLOW_MODES = MODES.filter(
         <div class="panel-body following">
           <p class="lead">
             You follow {{ name() }}.
-            @if (status() && status() !== 'active') {
+            @if (status() && status() !== 'active' && trades()) {
               It trades for you only once it is approved.
             }
           </p>
+          @if (daysLine(); as line) {
+            <p class="muted days">{{ line }}</p>
+          }
           <ul class="follows">
             @for (s of mine(); track s.id) {
               <li>
                 <app-follow-control [sub]="s" [strategyName]="name()" (changed)="replace($event)">
                   <span>{{
-                    s.portfolio_id ? 'In ' + portfolioName(s.portfolio_id) : 'Alerts'
+                    s.portfolio_id ? 'In ' + portfolioName(s.portfolio_id) : 'No portfolio'
                   }}</span>
                 </app-follow-control>
               </li>
@@ -92,8 +95,8 @@ export const FOLLOW_MODES = MODES.filter(
         >
           <p id="follow-lead" class="lead">
             Get its signals, or let it trade your paper portfolio. Approve each trade and Automatic
-            open later, after 20 trading days on Paper.
-            @if (status() && status() !== 'active') {
+            need a broker portfolio and 20 paper days.
+            @if (status() && status() !== 'active' && mode() === 'paper') {
               It is not approved yet, so it trades for you only once it is.
             }
           </p>
@@ -185,6 +188,9 @@ export const FOLLOW_MODES = MODES.filter(
     .lead {
       color: var(--color-ink-2);
     }
+    .days {
+      font-size: var(--text-sm);
+    }
     .follows {
       display: grid;
       gap: var(--space-3);
@@ -265,6 +271,8 @@ export class FollowPanel {
   readonly strategyName = input<string | null>(null);
   /** The strategy's status, to say that one not yet approved trades only once it is. */
   readonly status = input<StrategyStatus | null>(null);
+  /** Trial days the go-live check needs before approval, when known. */
+  readonly trialDaysNeeded = input<number | null>(null);
 
   private readonly api = inject(SubscriptionsService);
   private readonly ctx = inject(PortfolioContextService);
@@ -283,6 +291,21 @@ export class FollowPanel {
   protected readonly mine = computed(() =>
     this.items().filter((s) => s.strategy_id === this.strategyId()),
   );
+  /** Some follow does more than send alerts (Paper and up). */
+  protected readonly trades = computed(() => this.mine().some((s) => s.mode !== 'notify'));
+  /**
+   * The two day counts, said once (NB-13): trial days are for approval,
+   * your own paper days are for how you may follow it.
+   */
+  protected readonly daysLine = computed(() => {
+    const trial = this.trialDaysNeeded();
+    const paper = this.mine().find((s) => s.mode === 'paper');
+    if (!paper || this.status() === 'active' || !trial) return null;
+    return (
+      `Approval needs ${trial} days on trial. ` +
+      `Your ${paper.paper_days_required} paper days only open Approve each trade and Automatic for you.`
+    );
+  });
   protected readonly portfolios = computed(() =>
     this.ctx.options().filter((p) => p.status !== 'archived'),
   );

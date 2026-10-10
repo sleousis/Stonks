@@ -43,6 +43,7 @@ from stonks.accounts import (
 )
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
+from stonks.app.strategy_names import strategy_names
 from stonks.auth.policy import Permission, require
 from stonks.auth.principal import Principal
 from stonks.store.state import SqliteState
@@ -66,6 +67,9 @@ class AutoBlocked(ConflictError):
 class SubscriptionView(BaseModel):
     id: str
     strategy_id: str
+    #: The strategy's name people read (a starter's title, the Studio
+    #: draft's name, or the id in words).
+    strategy_name: str
     #: The strategy's catalog status (``active``, ``shadow``, ``retired``).
     strategy_status: str | None
     portfolio_id: str | None
@@ -203,6 +207,7 @@ class SubscriptionService:
         return SubscriptionView(
             id=s.id,
             strategy_id=s.strategy_id,
+            strategy_name=strategy_names(state, [s.strategy_id])[s.strategy_id],
             strategy_status=rows[0]["status"] if rows else None,
             portfolio_id=s.portfolio_id,
             mode=s.mode.value,

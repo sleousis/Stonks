@@ -33,7 +33,7 @@ describe('journal format', () => {
     expect(exitLabel('signal', true)).toBe('Still open');
     expect(exitLabel(null, false)).toBe('Not recorded');
     expect(sleeveLabel('manual')).toBe('By hand');
-    expect(sleeveLabel('momentum')).toBe('momentum');
+    expect(sleeveLabel('momentum')).toBe('Momentum');
     expect(planLabel(false)).toBe('Broke the plan');
     expect(planLabel(null)).toBe('Not said');
     expect(groupLabel('broke', 'plan')).toBe('Broke the plan');

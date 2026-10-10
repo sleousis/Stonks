@@ -139,7 +139,7 @@ describe('RuleBuilder', () => {
 
     // Negate the first comparison, then make its right side a number.
     const first = entryTree().querySelector('.children > li') as HTMLElement;
-    button('Not', first).click();
+    button('Is not', first).click();
     fixture.detectChanges();
     expect(entry().conditions[0]).toMatchObject({ type: 'not', condition: { type: 'compare' } });
 

@@ -83,17 +83,22 @@
       @if (!s.golive) {
         <p class="panel-body muted">A retired strategy is not checked.</p>
       } @else {
-        <ul class="rows">
-          @for (c of checks(); track c.name) {
-            <li class="row">
-              <app-status-pill [status]="c.passed ? 'passed' : 'failed'" />
-              <div class="row-text">
-                <span class="row-title">{{ c.label }}</span>
-                <span class="row-detail num">{{ c.value }} against {{ c.limit }}</span>
-              </div>
-            </li>
+        @if (checks(); as gc) {
+          <p class="panel-body muted">{{ gc.passed }} of {{ gc.total }} checks pass.</p>
+          @if (gc.failing.length) {
+            <ul class="rows">
+              @for (c of gc.failing; track c.name) {
+                <li class="row">
+                  <app-status-pill status="failed" label="Not yet" />
+                  <div class="row-text">
+                    <span class="row-title">{{ c.label }}</span>
+                    <span class="row-detail">{{ c.sentence }}</span>
+                  </div>
+                </li>
+              }
+            </ul>
           }
-        </ul>
+        }
       }
     </section>
 
@@ -159,12 +164,14 @@
           @for (h of history(); track h.id) {
             <li>
               <span class="num when">{{ when(h.created_at) }}</span>
-              <span class="what"
-                >{{ statusName(h.from_status) }} to {{ statusName(h.to_status) }}
-                @if (h.override) {
-                  <strong>(override)</strong>
-                }
-              </span>
+              @if (move(h.from_status, h.to_status); as m) {
+                <span class="what"
+                  >{{ m }}
+                  @if (h.override) {
+                    <strong>(override)</strong>
+                  }
+                </span>
+              }
               @if (h.reason) {
                 <span class="why">{{ h.reason }}</span>
               }

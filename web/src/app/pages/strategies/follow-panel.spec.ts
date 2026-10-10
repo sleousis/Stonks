@@ -78,10 +78,12 @@ describe('FollowPanel', () => {
     );
     await tick();
     fixture.detectChanges();
-    expect(el.textContent).toContain('You follow mom');
+    expect(el.textContent).toContain('You follow Mom');
     expect(
       el.querySelector<HTMLInputElement>('app-follow-control input[value="notify"]')!.checked,
     ).toBe(true);
+    // The switch reads Following, never a second "Alerts" (NB-12).
+    expect(el.querySelector('app-follow-control .state')?.textContent).toContain('Following');
   });
 
   it('paper trades in the portfolio you pick', async () => {
@@ -126,9 +128,14 @@ describe('FollowPanel', () => {
     (await nextRequest(controller, '/api/subscriptions')).flush(page([]));
     await tick();
     fixture.detectChanges();
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
-      'trades for you only once it is',
+    const el = fixture.nativeElement as HTMLElement;
+    // Alerts only trades nothing, so the approval sentence waits for Paper (NB-12).
+    expect(el.textContent).not.toContain('trades for you only once it is');
+    expect(el.textContent).toContain(
+      'Approve each trade and Automatic need a broker portfolio and 20 paper days.',
     );
+    pick(el, 'paper');
+    expect(el.textContent).toContain('trades for you only once it is');
   });
 
   it('locks following without portfolio.trade', async () => {

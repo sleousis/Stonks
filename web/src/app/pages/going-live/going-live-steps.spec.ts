@@ -88,6 +88,7 @@ function follow(over: Partial<SubscriptionView> = {}): SubscriptionView {
   return {
     id: 'sub_1',
     strategy_id: 'momentum_1a2b3c4d',
+    strategy_name: 'Momentum 1a2b',
     portfolio_id: 'pf_b',
     mode: 'paper',
     enabled: true,

@@ -11,7 +11,7 @@
         >
           @for (id of operandOptions(c.left); track id) {
             <option [selected]="operandKey(c.left) === 'i:' + id" [value]="'i:' + id">
-              {{ id || '(no id)' }}
+              {{ indicatorLabels()[id] || id || '(no id)' }}
             </option>
           }
           <option [selected]="c.left.type === 'constant'" value="const">Number…</option>
@@ -52,7 +52,7 @@
         >
           @for (id of operandOptions(c.right); track id) {
             <option [selected]="operandKey(c.right) === 'i:' + id" [value]="'i:' + id">
-              {{ id || '(no id)' }}
+              {{ indicatorLabels()[id] || id || '(no id)' }}
             </option>
           }
           <option [selected]="c.right.type === 'constant'" value="const">Number…</option>
@@ -75,7 +75,9 @@
         @if (isRoot()) {
           <button type="button" class="btn btn-ghost" (click)="addSibling()">Add condition</button>
         }
-        <button type="button" class="btn btn-ghost" title="Negate" (click)="negate()">Not</button>
+        <button type="button" class="btn btn-ghost" title="Turn it around" (click)="negate()">
+          Is not
+        </button>
         @if (removable()) {
           <button
             type="button"
@@ -107,7 +109,9 @@
         <option value="any">Any of these is true</option>
       </select>
       <div class="node-actions">
-        <button type="button" class="btn btn-ghost" title="Negate" (click)="negate()">Not</button>
+        <button type="button" class="btn btn-ghost" title="Turn it around" (click)="negate()">
+          Is not
+        </button>
         @if (removable()) {
           <button
             type="button"
@@ -131,6 +135,7 @@
             [node]="child"
             [path]="childPath(i)"
             [indicatorIds]="indicatorIds()"
+            [indicatorLabels]="indicatorLabels()"
             [issues]="issues()"
             [depth]="depth() + 1"
             (nodeChange)="childChanged(i, $event)"
@@ -156,16 +161,17 @@
 } @else if (notNode(); as n) {
   <div class="not" [class.root]="isRoot()">
     <div class="not-head">
-      <span class="not-label">Not</span>
+      <span class="not-label">Is not</span>
       <span class="muted">true when the condition below is false</span>
       <div class="node-actions">
-        <button type="button" class="btn btn-ghost" (click)="unwrapNot()">Remove not</button>
+        <button type="button" class="btn btn-ghost" (click)="unwrapNot()">Remove “is not”</button>
       </div>
     </div>
     <app-condition-editor
       [node]="n.condition"
       [path]="path() + '.condition'"
       [indicatorIds]="indicatorIds()"
+      [indicatorLabels]="indicatorLabels()"
       [issues]="issues()"
       [depth]="depth() + 1"
       [removable]="removable()"

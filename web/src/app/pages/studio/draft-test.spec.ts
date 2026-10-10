@@ -192,6 +192,32 @@ describe('DraftTest', () => {
     expect(series[1].points[2].value).toBeCloseTo(-0.1);
   });
 
+  it('says why in words when the backtest made no trades (NB-07)', async () => {
+    buttonNamed('Run backtest').click();
+    const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/backtests', 'POST');
+    req.flush({ ...job('job_bt', null), status: 'queued', progress: 0 });
+    (await nextRequest(controller, '/api/jobs/job_bt')).flush(
+      job('job_bt', { ...RESULT, trade_count: 0 }),
+    );
+    await settle();
+    expect(el.querySelector('app-backtest-result')).toBeNull();
+    expect(el.textContent).toContain(
+      'No trades: the buy rule was never true on these tickers and dates.',
+    );
+  });
+
+  it('starts from the starter funds when the draft names no tickers (NB-07)', async () => {
+    fixture.componentRef.setInput('specTickers', null);
+    fixture.detectChanges();
+    const tickers = el.querySelector('#t-tickers') as HTMLInputElement;
+    expect(tickers.value).toContain('SPY.US');
+    expect(el.textContent).toContain('A small starter set of funds');
+    // Costs, candle size and how often it decides sit under More options.
+    expect(el.querySelector('details.more #t-cost')).not.toBeNull();
+    expect(el.querySelector('details.more #t-interval')).not.toBeNull();
+    expect(el.textContent).not.toContain('Preset: ');
+  });
+
   it('says so when the finished result cannot be read', async () => {
     const error = vi.spyOn(TestBed.inject(ToastService), 'error');
     buttonNamed('Run backtest').click();

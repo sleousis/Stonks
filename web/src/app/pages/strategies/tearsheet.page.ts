@@ -11,7 +11,7 @@ import { RouterLink } from '@angular/router';
 import type { ShadowDecisionView, StatusChangeView } from '../../api/models';
 import { StrategiesService } from '../../api/strategies.service';
 import { formatDate, formatDateTime, formatNumber, formatPercent } from '../../core/format/format';
-import { checkRow } from '../../shared/golive-checks';
+import { traderChecks } from '../../shared/golive-checks';
 import { STATUS_WORDS } from '../../shared/governance-labels';
 import { splitMetrics } from '../../shared/metrics';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
@@ -26,7 +26,7 @@ import { StatusPill } from '../../shared/ui/status-pill';
 import { StrategyVerdict } from '../../shared/ui/strategy-verdict';
 import { type Verdict, strategyVerdict } from '../../shared/strategy-verdict';
 import { goliveLabel } from './leaderboard.page';
-import { curveSeries, curveSummary } from './tearsheet-data';
+import { DAYS_FOR_RATIOS, TOO_EARLY, curveSeries, curveSummary } from './tearsheet-data';
 import { testLabel } from '../../shared/lab-results/survival-tests';
 import { strategyDisplayName, strategyKindName } from '../../shared/strategy-names';
 
@@ -86,12 +86,14 @@ export class TearsheetPage {
       v === null || v === undefined ? NA : formatPercent(v, { signed });
     const num = (v: number | null | undefined) =>
       v === null || v === undefined ? NA : formatNumber(v, { digits: 2 });
+    // Ratios over a few weeks say nothing: CAGR +109% after 10 days (R09).
+    const early = p.days < DAYS_FOR_RATIOS;
     return [
       { label: 'Total return', value: pct(p.total_return, true), help: 'total_return' },
-      { label: 'CAGR', value: pct(p.cagr, true), help: 'cagr' },
-      { label: 'Sharpe', value: num(p.sharpe), help: 'sharpe' },
-      { label: 'Sortino', value: num(p.sortino), help: 'sortino' },
-      { label: 'Max drawdown', value: pct(p.max_drawdown), help: 'max_drawdown' },
+      { label: 'CAGR', value: early ? TOO_EARLY : pct(p.cagr, true), help: 'cagr' },
+      { label: 'Sharpe', value: early ? TOO_EARLY : num(p.sharpe), help: 'sharpe' },
+      { label: 'Sortino', value: early ? TOO_EARLY : num(p.sortino), help: 'sortino' },
+      { label: 'Worst drop', value: pct(p.max_drawdown), help: 'max_drawdown' },
       { label: 'Volatility', value: pct(p.volatility), help: 'volatility' },
       { label: 'Days on trial', value: formatNumber(p.days), help: false as const },
       {
@@ -111,6 +113,7 @@ export class TearsheetPage {
   protected readonly displayName = computed(() =>
     strategyDisplayName(this.id(), {
       starter: this.sheet.hasValue() ? this.sheet.value().strategy.starter : null,
+      name: this.sheet.hasValue() ? this.sheet.value().strategy.name : null,
     }),
   );
   protected readonly tests = computed(() =>
@@ -126,7 +129,7 @@ export class TearsheetPage {
   );
   protected readonly checks = computed(() => {
     const g = this.sheet.hasValue() ? this.sheet.value().golive : null;
-    return g ? g.checks.map((c) => checkRow(c, g.strategy_id)) : [];
+    return g ? traderChecks(g) : null;
   });
   protected readonly golive = computed(() =>
     goliveLabel(this.sheet.hasValue() ? this.sheet.value().golive?.passed : null),
@@ -179,7 +182,13 @@ export class TearsheetPage {
     return formatDateTime(v);
   }
 
-  protected statusName(s: string | null): string {
-    return s ? (STATUS_WORDS[s as keyof typeof STATUS_WORDS] ?? s) : 'New';
+  /**
+   * A status change in words (R21): "On trial to Approved", "Added as On
+   * trial" for the first status, and nothing when the row only has a reason.
+   */
+  protected move(from: string | null, to: string | null): string {
+    const word = (s: string) => STATUS_WORDS[s as keyof typeof STATUS_WORDS] ?? s;
+    if (!to) return '';
+    return from ? `${word(from)} to ${word(to)}` : `Added as ${word(to)}`;
   }
 }

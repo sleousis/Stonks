@@ -44,6 +44,7 @@ class FollowPanelStub {
   readonly strategyId = input.required<string>();
   readonly strategyName = input<string | null>(null);
   readonly status = input<string | null>(null);
+  readonly trialDaysNeeded = input<number | null>(null);
 }
 
 /** The why-not panel has its own spec. */
@@ -165,7 +166,8 @@ function sheetFor(
   return {
     strategy: detail,
     paper: paper({
-      days: curve.length ? 21 : 0,
+      // The server counts one day per row (leaderboard.paper_figures).
+      days: curve.length,
       total_return: curve.length ? 0.08 : null,
       max_drawdown: curve.length ? -0.05 : null,
       trades: 2,
@@ -302,11 +304,16 @@ describe('StrategyDetailPage', () => {
   it('opens on a plain verdict with the reasons and the figures under Details (F33)', async () => {
     await load(DETAIL, HISTORY, { passed: false });
     const verdict = el.querySelector('app-strategy-verdict')!;
-    expect(verdict.textContent).toContain('Promising, needs more data');
-    expect(verdict.textContent).toContain('It has 3 of the 20 trial days it needs.');
+    // On trial is information, not a warning (R03).
+    expect(verdict.textContent).toContain('On trial');
+    expect(verdict.textContent).toContain(
+      'On trial: 3 of 20 days. Approval comes after the go-live check.',
+    );
     const details = verdict.querySelector('details')!;
     expect(details.querySelector('summary')!.textContent).toContain('Details');
-    expect(details.textContent).toContain('3 against ≥ 20');
+    // A count, never rows of "value against limit" (R13).
+    expect(details.textContent).toContain('Go-live check: 0 of 1 pass.');
+    expect(details.textContent).not.toContain('against');
     expect(details.textContent).toContain('Robustness tests: 1 of 2 passed.');
   });
 
@@ -315,7 +322,8 @@ describe('StrategyDetailPage', () => {
     const perf = el.querySelector('.perf')!.textContent!;
     expect(perf).toContain('+8.00%');
     expect(perf).toContain('-5.00%');
-    expect(perf).toContain('21');
+    // Days on trial from the rows, the same count as the verdict (NB-13).
+    expect(perf).toContain('Days on trial3');
     expect(el.querySelector('#perf-title')!.textContent).toBe('Trial results');
     const summary = el.querySelector('app-time-series-chart')!.textContent!;
     expect(summary).toContain('a return of +8.00%');
@@ -655,8 +663,33 @@ describe('StrategyDetailPage', () => {
     });
   });
 
-  it('opens the Model versions tab and keeps it in the address', async () => {
+  it('names it once, in words, and tests a Studio strategy again in Studio (NAMES, NB-09)', async () => {
+    await load({ ...DETAIL, name: 'Admin trend rule', draft_id: 'draft_9', kind: 'Studio rules' });
+    expect(el.querySelector('h1')?.textContent).toContain('Admin trend rule');
+    const again = [...el.querySelectorAll('nav.related a')].find((a) =>
+      a.textContent?.includes('Test again'),
+    );
+    expect(again?.getAttribute('href')).toBe('/studio/draft_9?tab=test');
+    expect(el.textContent).toContain('Stocks, Crypto');
+    expect(el.textContent).toContain('Studio rules');
+  });
+
+  it('says Too early to tell for ratios after a few trial days (R09)', async () => {
     await load();
+    await openTab('Results');
+    const tiles = el.querySelector('.tiles')!.textContent!;
+    expect(tiles).toContain('Too early to tell');
+    expect(tiles).toContain('+8.00%');
+  });
+
+  it('hides Model versions for a strategy that learns nothing (NB-16)', async () => {
+    await load();
+    const tabs = [...el.querySelectorAll('app-page-tabs button')].map((b) => b.textContent?.trim());
+    expect(tabs).not.toContain('Model versions');
+  });
+
+  it('opens the Model versions tab and keeps it in the address', async () => {
+    await load({ ...DETAIL, retrainable: true });
     await openTab('Model versions');
     (await nextRequest(controller, '/api/strategies/momentum-v3/versions')).flush(page([]));
     (await nextRequest(controller, '/api/strategies/momentum-v3/versions/history')).flush(page([]));
@@ -669,7 +702,7 @@ describe('StrategyDetailPage', () => {
   it('opens on the versions tab from ?tab=versions', async () => {
     fixture.componentRef.setInput('tab', 'versions');
     fixture.detectChanges();
-    await load();
+    await load({ ...DETAIL, retrainable: true });
     (await nextRequest(controller, '/api/strategies/momentum-v3/versions')).flush(page([]));
     (await nextRequest(controller, '/api/strategies/momentum-v3/versions/history')).flush(page([]));
     await settle();
@@ -702,7 +735,29 @@ describe('strategy page helpers', () => {
     expect(paperPerformance(PNL)).toMatchObject({
       totalReturn: 0.08,
       maxDrawdown: -0.05,
-      days: 21,
+      days: 3,
+    });
+  });
+
+  it('counts one trial day per snapshot row, never days_elapsed (NB-13)', () => {
+    const rows = Array.from({ length: 10 }, (_, i) => ({
+      ...PNL[0],
+      day: `2026-09-${String(i + 1).padStart(2, '0')}`,
+      days_elapsed: i === 9 ? 1 : i,
+    }));
+    expect(paperPerformance(rows)?.days).toBe(10);
+  });
+
+  it('says Added as for the first status and only the reason without one (R21)', () => {
+    const entries = historyEntries([
+      { ...HISTORY[0], id: 7, from_status: null, to_status: 'shadow' },
+      { ...HISTORY[0], id: 8, from_status: null, to_status: null, kind: 'config' },
+      { ...HISTORY[1], id: 9 },
+    ]);
+    expect(Object.fromEntries(entries.map((e) => [e.id, e.shape]))).toEqual({
+      7: 'added',
+      8: 'note',
+      9: 'move',
     });
   });
 });

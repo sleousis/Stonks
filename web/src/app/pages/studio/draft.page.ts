@@ -89,8 +89,12 @@ export class DraftPage {
 
   /** Saving, renaming, checking and testing need `lab.run`. */
   protected readonly canLab = computed(() => this.session.can('lab.run'));
+  /** The raw JSON is an admin's tool, folded away (NB-08). */
+  protected readonly canSeeJson = computed(() => this.session.can('strategy.promote'));
 
   readonly id = input.required<string>();
+  /** Query param `?tab=test|ship` opens that tab ("Test again" on a strategy page). */
+  readonly tab = input<string | undefined>(undefined);
 
   protected readonly draftRes = resource({
     params: () => ({ id: this.id() }),
@@ -154,7 +158,7 @@ export class DraftPage {
   });
 
   protected readonly saving = signal(false);
-  protected readonly tab = signal<DraftTab>('build');
+  protected readonly activeTab = signal<DraftTab>('build');
   protected readonly renaming = signal(false);
   protected readonly nameDraft = signal('');
 
@@ -206,9 +210,12 @@ export class DraftPage {
   protected readonly ensureSaved = (): Promise<boolean> => this.save();
 
   constructor() {
-    // A fresh draft id starts on the build tab with no stale smoke result.
+    // A fresh draft id starts on the build tab (or the linked one) with no
+    // stale smoke result.
     effect(() => {
       this.id();
+      const start = this.tab();
+      this.activeTab.set(start === 'test' || start === 'ship' ? start : 'build');
       this.smoke.set(null);
     });
   }
@@ -235,7 +242,7 @@ export class DraftPage {
 
   protected onTabKey(event: KeyboardEvent): void {
     const order = this.tabs.map((t) => t.id);
-    const i = order.indexOf(this.tab());
+    const i = order.indexOf(this.activeTab());
     const next =
       event.key === 'ArrowRight'
         ? order[(i + 1) % order.length]
@@ -248,7 +255,7 @@ export class DraftPage {
               : null;
     if (!next) return;
     event.preventDefault();
-    this.tab.set(next);
+    this.activeTab.set(next);
     this.host.nativeElement.querySelector<HTMLElement>(`#tab-${next}`)?.focus();
   }
 

@@ -305,7 +305,9 @@ def test_notify_signal_is_minimal_and_idempotent_per_as_of(state, users, router)
     [row] = state.sql("SELECT * FROM notification_outbox")
     assert row["category"] == "signal" and row["strategy_id"] == "mom"
     assert row["dedupe_key"] == "signal:mom:AAPL.US:entry:2026-01-05"
-    assert row["title"] == "AAPL.US: entry signal"
+    # NB-10: the strategy's name, then what to do, for the follower.
+    assert row["title"] == "Mom: buy AAPL.US"
+    assert row["body"] == "Buy AAPL.US. Decided on 2026-01-05."
     # The console has a page for it (there is no /signals page): the
     # strategy, whose page shows its signals and test book.
     assert row["deep_link"] == "/strategies/mom"
@@ -317,7 +319,8 @@ def test_notify_signal_labels_strategies_on_trial(state, users, router):
     _strategy_with_subscriber(state, users["alice"].id, status="shadow")
     notify_signal(router, strategy_id="mom", ticker="MSFT.US", kind="exit", as_of="2026-01-05")
     [row] = state.sql("SELECT body FROM notification_outbox")
-    assert "(on trial)" in row["body"] and "incubating" not in row["body"]
+    assert "It is on trial, with no real money." in row["body"]
+    assert "incubating" not in row["body"]
 
 
 def test_notify_signals_batches_in_one_transaction(state, users, router):

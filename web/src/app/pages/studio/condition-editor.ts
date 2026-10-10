@@ -41,6 +41,8 @@ export class ConditionEditor {
   readonly node = input.required<ConditionNode>();
   readonly path = input.required<string>();
   readonly indicatorIds = input.required<readonly string[]>();
+  /** Each indicator id in words ("RSI over 14 days"); the id when missing (NB-08). */
+  readonly indicatorLabels = input<Readonly<Record<string, string>>>({});
   readonly issues = input<IssueMap>({});
   /** Root nodes cannot be removed, only replaced. */
   readonly removable = input(true);

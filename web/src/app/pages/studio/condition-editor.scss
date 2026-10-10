@@ -54,10 +54,13 @@
   gap: var(--space-1);
 
   .btn {
+    min-height: var(--touch-min);
     font-size: var(--text-xs);
   }
 
   .remove {
+    min-width: var(--touch-min);
+    min-height: var(--touch-min);
     font-size: var(--text-lg);
     color: var(--color-ink-3);
 

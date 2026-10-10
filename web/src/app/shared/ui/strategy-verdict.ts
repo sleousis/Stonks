@@ -3,10 +3,14 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import type { Verdict, VerdictLevel } from '../strategy-verdict';
 import { StatusPill } from './status-pill';
 
-/** The receipt a verdict shows: a tick, a triangle or a cross next to its words. */
-export const VERDICT_PILL: Readonly<Record<VerdictLevel, 'pass' | 'warn' | 'fail'>> = {
+/**
+ * The receipt a verdict shows: a tick, a triangle or a cross next to its
+ * words. On trial shows the status lamp (information, R03).
+ */
+export const VERDICT_PILL: Readonly<Record<VerdictLevel, 'pass' | 'warn' | 'shadow' | 'fail'>> = {
   worth: 'pass',
   promising: 'warn',
+  on_trial: 'shadow',
   not_yet: 'fail',
 };
 
@@ -94,6 +98,9 @@ export const REASONS_SHOWN = 4;
     }
     :host([data-level='promising']) .verdict {
       border-left-color: var(--color-warn);
+    }
+    :host([data-level='on_trial']) .verdict {
+      border-left-color: var(--color-info);
     }
     :host([data-level='not_yet']) .verdict {
       border-left-color: var(--color-loss);

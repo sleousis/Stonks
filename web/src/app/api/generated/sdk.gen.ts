@@ -3782,7 +3782,8 @@ export const startDraftLabRun = <ThrowOnError extends boolean = false>(options: 
 /**
  * Register Draft
  *
- * Register the draft's strategy in ``shadow``.
+ * Put the draft's strategy On trial (``shadow``). Only the draft's owner
+ * (or an admin) may: another user's draft is a 404.
  */
 export const registerDraft = <ThrowOnError extends boolean = false>(options: Options<RegisterDraftData, ThrowOnError>): RequestResult<RegisterDraftResponses, RegisterDraftErrors, ThrowOnError> => (options.client ?? client).post<RegisterDraftResponses, RegisterDraftErrors, ThrowOnError>({
     security: [{ scheme: 'bearer', type: 'http' }],

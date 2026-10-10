@@ -118,7 +118,6 @@ def _token(auth, user_id: str, role: Role, scopes: list[str]) -> dict:
         ("POST", "/api/ingest/runs", {"tickers": ["NEW.US"]}),
         ("POST", "/api/schedule/tick/run-now", {}),
         ("POST", "/api/studio/drafts/d_x/enable", {}),
-        ("POST", "/api/studio/drafts/d_x/register", None),
     ],
 )
 def test_traders_cannot_call_admin_routes(app, settings, auth, method, url, body):
@@ -127,6 +126,38 @@ def test_traders_cannot_call_admin_routes(app, settings, auth, method, url, body
     with TestClient(app, client=REMOTE, base_url=BASE) as c:
         resp = c.request(method, url, json=body, headers=headers)
     assert resp.status_code == 403, resp.text
+
+
+def test_trader_puts_own_draft_on_trial_but_not_another_traders(app, settings, auth):
+    """NB-02: On trial is paper only, so the draft's owner may register it.
+    Another trader's draft stays out of reach, and approval stays admin."""
+    from tests.integration.app.test_studio import TREND
+
+    owner = _token(
+        auth,
+        add_user(settings.state.path, "owner@example.com", Role.TRADER),
+        Role.TRADER,
+        ["read", "trade", "lab"],
+    )
+    other = _token(
+        auth,
+        add_user(settings.state.path, "other@example.com", Role.TRADER),
+        Role.TRADER,
+        ["read", "trade", "lab"],
+    )
+    with TestClient(app, client=REMOTE, base_url=BASE) as c:
+        created = c.post(
+            "/api/studio/drafts", json={"name": "My trend", "spec": TREND}, headers=owner
+        )
+        assert created.status_code == 201, created.text
+        draft_id = created.json()["id"]
+        refused = c.post(f"/api/studio/drafts/{draft_id}/register", headers=other)
+        assert refused.status_code == 404, refused.text
+        resp = c.post(f"/api/studio/drafts/{draft_id}/register", headers=owner)
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["strategy_status"] == "shadow"
+        approve = c.post(f"/api/studio/drafts/{draft_id}/enable", json={}, headers=owner)
+        assert approve.status_code == 403, approve.text
 
 
 def test_lab_only_token_cannot_trade_or_run_ticks(app, settings, auth):

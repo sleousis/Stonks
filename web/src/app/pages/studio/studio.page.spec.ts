@@ -163,18 +163,21 @@ describe('StudioPage', () => {
     expect(buttonNamed('Create draft').disabled).toBe(true);
   });
 
-  it('turns the code option off up front when the server says so', async () => {
+  it('opens the template picker from ?step=new (NB-05)', async () => {
+    fixture.componentRef.setInput('step', 'new');
+    await load([], false);
+    expect(el.querySelector('#create-title')?.textContent).toContain('New draft');
+  });
+
+  it('hides the code option when the server turns it off (NB-08)', async () => {
     await load([], false);
     buttonNamed('New draft', el.querySelector('app-page-header') as HTMLElement).click();
     fixture.detectChanges();
     const code = [...el.querySelectorAll<HTMLInputElement>('input[type=radio]')].find(
       (r) => r.value === 'code',
     );
-    expect(code?.closest('label')?.textContent).toContain('Turned off on this server');
-    code?.click();
-    fixture.detectChanges();
-    expect(el.textContent).toContain('Code strategies are turned off');
-    expect(buttonNamed('Create draft').disabled).toBe(true);
+    expect(code).toBeUndefined();
+    expect(el.textContent).not.toContain('Python code');
   });
 
   it('keeps the code option on when the server allows it', async () => {

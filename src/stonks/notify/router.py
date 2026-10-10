@@ -256,16 +256,21 @@ class SignalNotice:
 
 
 def _signal_event(router: NotificationRouter, notice: SignalNotice) -> Event:
+    from stonks.app.strategy_names import strategy_names
+    from stonks.production.signals import signal_action
+
     rows = router.state.sql("SELECT status FROM strategies WHERE id = ?", [notice.strategy_id])
     on_trial = bool(rows) and rows[0]["status"] == "shadow"
-    body = f"{notice.strategy_id} on {notice.as_of}"
+    name = strategy_names(router.state, [notice.strategy_id])[notice.strategy_id]
+    action = signal_action(notice.kind, notice.ticker)
+    # Written for the follower (NB-10): the strategy's name, then what to do.
+    body = notice.reason or f"{action}."
     if on_trial:
-        body += " (on trial)"
-    if notice.reason:
-        body += f". {notice.reason}"
+        body += " It is on trial, with no real money."
+    body += f" Decided on {notice.as_of}."
     return Event(
         category="signal",
-        title=f"{notice.ticker}: {notice.kind} signal",
+        title=f"{name}: {action[:1].lower()}{action[1:]}",
         body=body,
         audience=Audience.subscribers(notice.strategy_id),
         urgency=notice.urgency,

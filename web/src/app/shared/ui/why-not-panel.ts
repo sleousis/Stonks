@@ -46,7 +46,9 @@ export function decisionDetail(d: TradeDecisionView): string {
   template: `
     <section class="panel" aria-labelledby="why-not-title">
       <div class="panel-head">
-        <h2 id="why-not-title">Why not {{ shownTicker() || 'X' }}?</h2>
+        <h2 id="why-not-title">
+          {{ strategyId() ? 'Why did it not trade a ticker?' : 'Why did a ticker not trade?' }}
+        </h2>
       </div>
       <div class="panel-body">
         <form class="ask" (submit)="$event.preventDefault(); ask()" role="search">
