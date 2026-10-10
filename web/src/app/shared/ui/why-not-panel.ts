@@ -74,7 +74,9 @@ export function groupDecisions(items: TradeDecisionView[], showAll: boolean): De
     <section class="panel" aria-labelledby="why-not-title">
       <div class="panel-head">
         <h2 id="why-not-title">
-          {{ strategyId() ? 'Why did it trade a ticker or not?' : 'Why did a ticker trade or not?' }}
+          {{
+            strategyId() ? 'Why did it trade a ticker or not?' : 'Why did a ticker trade or not?'
+          }}
         </h2>
       </div>
       <div class="panel-body">
