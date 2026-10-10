@@ -499,3 +499,57 @@ def test_accepted_delayed_bars_reach_subscribers_but_never_the_lake(lake):
     assert [b.delayed for b in seen] == [True, True]
     assert stored(lake).empty
     assert r.writer is not None and r.writer.delayed_skipped == 2
+
+
+def test_the_delayed_backfill_setting_has_a_default():
+    assert StreamingSettings().delayed_backfill_seconds == 300
+
+
+def test_minutes_kept_out_for_delayed_bars_are_backfilled_through_rest(lake):
+    backfill = FakeBackfiller()
+    r, _, _ = runner(
+        [[_delayed(s) for s in (1, 61, 121, 181, 241)]],
+        lake=lake,
+        finite=True,
+        cfg=settings(accept_delayed_quotes=True, delayed_backfill_seconds=120),
+        backfiller=backfill,
+    )
+    health = r.run()
+    assert stored(lake).empty  # the delayed bars themselves never land
+    assert [(c[1], c[2]) for c in backfill.calls] == [
+        (at(0), at(120)),
+        (at(120), at(240)),
+        (at(240), at(300)),  # the rest at shutdown
+    ]
+    assert health.gaps_total["delayed"] == 3
+    assert health.backfills_ok == 3
+
+
+def test_the_delayed_backfill_leaves_the_newest_minutes_to_the_vendor(lake):
+    backfill = FakeBackfiller()
+    r, _, _ = runner(
+        [[_delayed(s) for s in (1, 61, 121, 181)]],
+        lake=lake,
+        finite=True,
+        cfg=settings(
+            accept_delayed_quotes=True, delayed_backfill_seconds=120, backfill_delay_seconds=60
+        ),
+        backfiller=backfill,
+    )
+    r.run()
+    assert [(c[1], c[2]) for c in backfill.calls] == [
+        (at(0), at(61)),
+        (at(61), at(121)),
+        (at(121), at(240)),
+    ]
+
+
+def test_no_delayed_backfill_without_a_backfiller(lake):
+    r, _, _ = runner(
+        [[_delayed(s) for s in (1, 61, 121, 181)]],
+        lake=lake,
+        finite=True,
+        cfg=settings(accept_delayed_quotes=True, delayed_backfill_seconds=60),
+    )
+    health = r.run()
+    assert health.backfills_ok == 0 and health.backfills_failed == 0

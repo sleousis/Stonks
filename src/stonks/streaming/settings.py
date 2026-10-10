@@ -144,6 +144,9 @@ class StreamingSettings(BaseModel):
     accept_delayed_quotes: bool = False
     #: How far a delayed feed runs behind the market (IBKR: 15 minutes).
     delayed_lag_seconds: float = Field(default=900.0, ge=0)
+    #: While delayed bars are kept out of the lake, the REST backfill fills
+    #: their minutes this often, so strategies that read the lake see them.
+    delayed_backfill_seconds: float = Field(default=300.0, gt=0)
     #: A bar closes this long after its minute ends, for late ticks.
     bar_grace_seconds: float = Field(default=2.0, ge=0)
     #: Closed bars are written after this many seconds or bars.

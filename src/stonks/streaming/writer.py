@@ -9,8 +9,9 @@ duplicates it. Inside one batch the last bar per key wins too.
 A delayed bar (built from delayed quotes) is never written. The ``bars``
 table has no flag for it, so every later reader would take it for a live
 bar stamped at the wrong minute. It is counted in
-:attr:`BarWriter.delayed_skipped`, and the REST backfill or the daily
-ingest fills the minute later.
+:attr:`BarWriter.delayed_skipped`. The stream runner notes those minutes
+as a ``delayed`` gap, and its REST backfill fills them every
+``delayed_backfill_seconds``.
 
 A failed write keeps the buffer, so the next flush tries again and no bar
 is lost to a short store error. Timestamps are stored as naive UTC, like

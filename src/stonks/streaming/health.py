@@ -30,13 +30,15 @@ STREAM_STATES: tuple[StreamState, ...] = (
     "stopped",
     "failed",
 )
-GapReason = Literal["startup", "disconnect", "stale"]
+GapReason = Literal["startup", "disconnect", "stale", "delayed"]
+GAP_REASONS: tuple[GapReason, ...] = ("startup", "disconnect", "stale", "delayed")
 _KINDS = ("trade", "quote", "bar", "heartbeat")
 
 
 @dataclass
 class Gap:
-    """A stretch with no stream data. ``backfilled`` is ``None`` until a
+    """A stretch with no stream bars in the lake: no data at all, or for
+    ``delayed`` only delayed bars, which stay out. ``backfilled`` is ``None`` until a
     backfill ran (or when none was needed), then whether it worked."""
 
     start: datetime
@@ -72,9 +74,7 @@ class StreamHealth:
     backfills_ok: int = 0
     backfills_failed: int = 0
     gaps: deque[Gap] = field(default_factory=lambda: deque[Gap](maxlen=50))
-    gaps_total: dict[str, int] = field(
-        default_factory=lambda: {"startup": 0, "disconnect": 0, "stale": 0}
-    )
+    gaps_total: dict[str, int] = field(default_factory=lambda: dict.fromkeys(GAP_REASONS, 0))
     last_error: str | None = None
     #: Delayed quotes and bars received.
     delayed_events: int = 0
@@ -172,7 +172,7 @@ class StreamHealth:
                 Gap(
                     start=datetime.fromisoformat(start),
                     end=datetime.fromisoformat(end) if isinstance(end, str) else None,
-                    reason=reason if reason in ("startup", "disconnect", "stale") else "stale",
+                    reason=reason if reason in GAP_REASONS else "stale",
                     backfilled=gap.get("backfilled"),
                 )
             )
