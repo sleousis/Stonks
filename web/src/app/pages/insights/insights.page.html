@@ -163,7 +163,7 @@
                   } @else {
                     {{ signedMoney(p.change) }}
                   }
-                  @if (p.twr != null) {
+                  @if (p.twr !== null && p.twr !== undefined) {
                     <span class="twr">{{ twrText(p) }}</span>
                   }
                 </dd>

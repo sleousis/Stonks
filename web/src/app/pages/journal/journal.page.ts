@@ -59,11 +59,11 @@ const VIEWS: readonly SegmentOption<JournalView>[] = [
           <app-segmented
             label="Journal view"
             [options]="views"
-            [value]="view()"
+            [value]="shown()"
             (valueChange)="setView($event)"
           />
         </div>
-        @switch (view()) {
+        @switch (shown()) {
           @case ('trades') {
             <app-journal-trades />
           }
@@ -99,11 +99,11 @@ export class JournalPage {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   /** `?view=` so a view, such as Playbooks, can be linked to. */
-  readonly viewParam = input<string | undefined>(undefined, { alias: 'view' });
-  readonly view = linkedSignal<JournalView>(() => journalView(this.viewParam()));
+  readonly view = input<string | undefined>(undefined);
+  protected readonly shown = linkedSignal<JournalView>(() => journalView(this.view()));
 
   protected setView(view: JournalView): void {
-    this.view.set(view);
+    this.shown.set(view);
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: { view: view === 'trades' ? null : view },

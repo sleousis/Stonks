@@ -26,9 +26,7 @@ describe('limitRows', () => {
 
   it('folds the measures without a limit into one sentence', () => {
     const rows = limitRows(INSIGHTS, { ...POLICY, rules: {} });
-    expect(noLimitText(rows)).toBe(
-      'No limit on sector, exposure, volatility or drawdown.',
-    );
+    expect(noLimitText(rows)).toBe('No limit on sector, exposure, volatility or drawdown.');
     expect(noLimitText(rows.filter((r) => r.key === 'positions'))).toBe('');
   });
 

@@ -189,7 +189,9 @@ describe('InsightsPage', () => {
     expect(explain.textContent).toContain('Beta');
     // The worked example lives on Cash flows, one link away.
     expect(el.querySelector('.hint.example')).toBeNull();
-    const why = [...el.querySelectorAll('a')].find((a) => a.textContent?.includes('Why two returns'));
+    const why = [...el.querySelectorAll('a')].find((a) =>
+      a.textContent?.includes('Why two returns'),
+    );
     expect(why?.getAttribute('href')).toBe('/insights/cash-flows#two-returns');
   });
 
@@ -214,7 +216,9 @@ describe('InsightsPage', () => {
               ...INSIGHTS,
               fx_missing: ['USD'],
               total_value_base: null,
-              notes: ['USD holdings are left out of the EUR total until an exchange rate is loaded.'],
+              notes: [
+                'USD holdings are left out of the EUR total until an exchange rate is loaded.',
+              ],
             });
           } else respond(req);
         });

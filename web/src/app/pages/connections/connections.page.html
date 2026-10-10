@@ -168,19 +168,19 @@
                               <p class="hint">No gateway is set up yet. Ask your admin.</p>
                             }
                           } @else {
-                          <input
-                            class="input"
-                            type="password"
-                            autocomplete="off"
-                            spellcheck="false"
-                            [id]="'key-' + p.name + '-' + f"
-                            [attr.name]="f"
-                            [attr.aria-invalid]="missing(p, f)"
-                            [attr.aria-describedby]="
-                              missing(p, f) ? 'key-' + p.name + '-' + f + '-error' : null
-                            "
-                            (input)="setKey(f, $any($event.target).value)"
-                          />
+                            <input
+                              class="input"
+                              type="password"
+                              autocomplete="off"
+                              spellcheck="false"
+                              [id]="'key-' + p.name + '-' + f"
+                              [attr.name]="f"
+                              [attr.aria-invalid]="missing(p, f)"
+                              [attr.aria-describedby]="
+                                missing(p, f) ? 'key-' + p.name + '-' + f + '-error' : null
+                              "
+                              (input)="setKey(f, $any($event.target).value)"
+                            />
                           }
                           @if (missing(p, f)) {
                             <p class="error" [id]="'key-' + p.name + '-' + f + '-error'">

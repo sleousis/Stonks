@@ -52,9 +52,7 @@ export interface DecisionDay {
  */
 export function groupDecisions(items: TradeDecisionView[], showAll: boolean): DecisionDay[] {
   const latest = items[0]?.tick_id;
-  const shown = showAll
-    ? items
-    : items.filter((d) => d.tick_id === latest && d.outcome !== 'held');
+  const shown = showAll ? items : items.filter((d) => d.tick_id === latest && d.outcome !== 'held');
   const days: DecisionDay[] = [];
   for (const d of shown) {
     const last = days.at(-1);

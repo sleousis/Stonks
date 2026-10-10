@@ -76,7 +76,10 @@ export function groupByBroker(presets: readonly StatementPresetView[]): BrokerEx
                   }
                 </ol>
                 @if (b.presets[0]; as first) {
-                  <a class="btn" routerLink="/connections/import" [queryParams]="{ preset: first.id }"
+                  <a
+                    class="btn"
+                    routerLink="/connections/import"
+                    [queryParams]="{ preset: first.id }"
                     >Import {{ b.broker }} files</a
                   >
                 }

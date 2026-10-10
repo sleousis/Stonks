@@ -218,9 +218,9 @@ describe('StatementImportPage', () => {
     );
     expect(root.textContent).toContain('0 new, 6 already imported, 0 skipped.');
     expect(root.textContent).not.toContain('skipped ,');
-    expect([...root.querySelectorAll('button')].some((b) => b.textContent?.includes('Import 0'))).toBe(
-      false,
-    );
+    expect(
+      [...root.querySelectorAll('button')].some((b) => b.textContent?.includes('Import 0')),
+    ).toBe(false);
   });
 
   it('never imports settings other than the previewed ones', async () => {

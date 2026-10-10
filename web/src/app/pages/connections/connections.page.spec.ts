@@ -75,7 +75,9 @@ describe('ConnectionsPage', () => {
       limit: 500,
       offset: 0,
     });
-    (await nextRequest(http, '/api/statement-imports/presets')).flush([...DEGIRO_PRESETS].reverse());
+    (await nextRequest(http, '/api/statement-imports/presets')).flush(
+      [...DEGIRO_PRESETS].reverse(),
+    );
     await settle();
   }
 

@@ -59,7 +59,12 @@ describe('LookThroughPanel', () => {
     const { fixture, el } = await render();
     (await nextRequest(http, '/api/insights/look-through')).flush({
       ...LOOK_THROUGH,
-      look_through: { ...LOOK_THROUGH.look_through, funds: [], fund_value: 0, listed_fund_value: 0 },
+      look_through: {
+        ...LOOK_THROUGH.look_through,
+        funds: [],
+        fund_value: 0,
+        listed_fund_value: 0,
+      },
     });
     await settle(fixture);
     expect(el.classList).toContain('is-hidden');
