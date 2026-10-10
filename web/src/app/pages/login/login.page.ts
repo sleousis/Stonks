@@ -136,7 +136,7 @@ export class LoginPage implements OnInit {
       } catch (err) {
         this.failedTries += 1;
         if (this.failedTries < 2) throw err;
-        throw new Error(`${errorMessage(err)} ${FORGOT}`);
+        throw new Error(`${errorMessage(err)} ${FORGOT}`, { cause: err });
       }
     });
   }
