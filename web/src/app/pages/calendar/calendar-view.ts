@@ -1,4 +1,5 @@
 import type { EarningsEvent, EconomicEvent, SentimentDay } from '../../api/models';
+import { MISSING, formatNumber } from '../../core/format/format';
 
 export type CalendarScope = 'holdings' | 'watchlists' | 'tickers' | 'all';
 
@@ -112,6 +113,36 @@ export function comparisonLabel(value: EconomicEvent['comparison']): string {
     default:
       return 'Level';
   }
+}
+
+type ReleaseKind = Pick<EconomicEvent, 'event_type' | 'comparison'>;
+
+/** "CPI (year on year)": the release with what it compares, in one cell. */
+export function economicRelease(e: ReleaseKind): string {
+  if (e.comparison === 'none') return e.event_type;
+  return `${e.event_type} (${comparisonLabel(e.comparison).toLowerCase()})`;
+}
+
+/**
+ * The unit of a release's figures, read from what it is: changes and rates
+ * are percent, payrolls are thousands of jobs, anything else (an index such
+ * as a PMI) has none.
+ */
+function economicUnit(e: ReleaseKind): '%' | 'K jobs' | '' {
+  const name = e.event_type.toLowerCase();
+  if (/payroll|employment change|\bjobs\b/.test(name)) return 'K jobs';
+  if (e.comparison !== 'none' || /\brate\b|inflation|\bcpi\b|\bppi\b|yield/.test(name)) return '%';
+  return '';
+}
+
+/** "2.5%", "210K jobs", "52.1". */
+export function economicValue(value: number | null | undefined, e: ReleaseKind): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return MISSING;
+  const unit = economicUnit(e);
+  const text = formatNumber(value);
+  if (unit === '%') return `${text}%`;
+  if (unit === 'K jobs') return `${text}K jobs`;
+  return text;
 }
 
 /** Sentiment scores run from -1 to 1. Words, so it never rests on colour alone. */
