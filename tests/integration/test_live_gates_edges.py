@@ -206,7 +206,23 @@ def test_no_drill_blocks_the_gate_and_says_how_to_run_one(state):
 def test_a_failed_drill_does_not_count(state):
     _drill(state, age=1, passed=False)
     check = _live_small_checks(state, StageGateSettings())["kill_switch_drill"]
-    assert check.passed is False and "no passing kill switch drill" in check.detail
+    assert check.passed is False and "last kill switch drill failed" in check.detail
+
+
+def test_a_failed_drill_after_a_pass_blocks_the_gate(state):
+    _drill(state, age=9, passed=True)
+    _drill(state, age=1, passed=False)
+    check = _live_small_checks(state, StageGateSettings())["kill_switch_drill"]
+    assert check.passed is False
+    assert "last kill switch drill failed" in check.detail
+    assert "stonks halts drill" in check.detail
+
+
+def test_a_pass_after_a_failed_drill_clears_the_gate(state):
+    _drill(state, age=5, passed=False)
+    _drill(state, age=1, passed=True)
+    check = _live_small_checks(state, StageGateSettings())["kill_switch_drill"]
+    assert check.passed is True
 
 
 def test_a_drill_of_another_portfolio_does_not_count(state):

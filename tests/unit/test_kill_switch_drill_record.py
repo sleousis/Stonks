@@ -13,7 +13,7 @@ import pytest
 from stonks.production.drills import (
     DrillReport,
     DrillStep,
-    last_passing_drill,
+    latest_drill,
     record_drill,
 )
 from stonks.store.state import SqliteState
@@ -58,7 +58,7 @@ def test_a_failed_drill_is_recorded_as_failed(state):
     assert (row["passed"], row["portfolio_id"]) == (0, "pf_a")
 
 
-def test_the_last_passing_drill_counts_global_and_own_runs_only(state):
+def test_the_latest_drill_counts_global_and_own_runs_only(state):
     record_drill(state, _report(), ran_by="a", ran_at=datetime(2026, 9, 1, tzinfo=UTC))
     record_drill(
         state, _report(), ran_by="a", portfolio_id="pf_a", ran_at=datetime(2026, 9, 5, tzinfo=UTC)
@@ -66,10 +66,22 @@ def test_the_last_passing_drill_counts_global_and_own_runs_only(state):
     record_drill(
         state, _report(), ran_by="a", portfolio_id="pf_b", ran_at=datetime(2026, 9, 9, tzinfo=UTC)
     )
+    latest = latest_drill(state, "pf_a")
+    assert latest is not None
+    assert (latest.ran_at, latest.passed) == (datetime(2026, 9, 5, tzinfo=UTC), True)
+    other = latest_drill(state, "pf_c")
+    assert other is not None and other.ran_at == datetime(2026, 9, 1, tzinfo=UTC)
+
+
+def test_a_later_failed_drill_supersedes_an_earlier_pass(state):
+    record_drill(
+        state, _report(), ran_by="a", portfolio_id="pf_a", ran_at=datetime(2026, 9, 1, tzinfo=UTC)
+    )
     record_drill(state, _report(ok=False), ran_by="a", ran_at=datetime(2026, 9, 10, tzinfo=UTC))
-    assert last_passing_drill(state, "pf_a") == datetime(2026, 9, 5, tzinfo=UTC)
-    assert last_passing_drill(state, "pf_c") == datetime(2026, 9, 1, tzinfo=UTC)
+    latest = latest_drill(state, "pf_a")
+    assert latest is not None
+    assert (latest.ran_at, latest.passed) == (datetime(2026, 9, 10, tzinfo=UTC), False)
 
 
 def test_no_drill_means_none(state):
-    assert last_passing_drill(state, "pf_a") is None
+    assert latest_drill(state, "pf_a") is None

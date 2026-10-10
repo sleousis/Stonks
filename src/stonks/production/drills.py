@@ -55,12 +55,13 @@ from stonks.store.state import SqliteState
 __all__ = [
     "DRILL_ACTOR",
     "DRILL_REASON",
+    "DrillRecord",
     "DrillRefusedError",
     "DrillReport",
     "DrillStep",
     "SimulatedWorkingBroker",
     "engage_global_kill",
-    "last_passing_drill",
+    "latest_drill",
     "record_drill",
     "run_kill_switch_drill",
 ]
@@ -157,19 +158,29 @@ def record_drill(
     return rid
 
 
-def last_passing_drill(state: SqliteState, portfolio_id: str) -> datetime | None:
-    """When the last passing drill for ``portfolio_id`` ran: its own drills
-    and global ones (``portfolio_id`` NULL). ``None`` when there is none."""
+@dataclass(frozen=True)
+class DrillRecord:
+    """One stored drill run: when it ran and whether it passed."""
+
+    ran_at: datetime
+    passed: bool
+
+
+def latest_drill(state: SqliteState, portfolio_id: str) -> DrillRecord | None:
+    """The most recent drill that counts for ``portfolio_id``: its own drills
+    and global ones (``portfolio_id`` NULL), passed or failed. A failed drill
+    after a pass supersedes it. ``None`` when there is none."""
     rows = state.sql(
-        "SELECT MAX(ran_at) AS last FROM kill_switch_drills WHERE passed = 1"
-        " AND (portfolio_id = ? OR portfolio_id IS NULL)",
+        "SELECT ran_at, passed FROM kill_switch_drills"
+        " WHERE portfolio_id = ? OR portfolio_id IS NULL"
+        " ORDER BY ran_at DESC, id DESC LIMIT 1",
         [portfolio_id],
     )
-    last = rows[0]["last"] if rows else None
-    if last is None:
+    if not rows:
         return None
-    when = datetime.fromisoformat(str(last))
-    return when if when.tzinfo is not None else when.replace(tzinfo=UTC)
+    when = datetime.fromisoformat(str(rows[0]["ran_at"]))
+    when = when if when.tzinfo is not None else when.replace(tzinfo=UTC)
+    return DrillRecord(ran_at=when, passed=bool(rows[0]["passed"]))
 
 
 # ---- the default broker ----------------------------------------------------------------

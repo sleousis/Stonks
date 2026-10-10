@@ -668,10 +668,11 @@ def _drift_known(metrics: Mapping[str, Any]) -> GateCheck:
 
 
 def _drill(state: SqliteState, portfolio_id: str, today: date, max_age_days: int) -> GateCheck:
-    """A passing kill switch drill for the portfolio, or a global one, in
-    the last ``max_age_days`` days (``[production.live.stages]
-    drill_max_age_days``). Without one the gate is blocked."""
-    from stonks.production.drills import last_passing_drill
+    """The latest kill switch drill for the portfolio, or a global one,
+    passed and ran in the last ``max_age_days`` days (``[production.live.stages]
+    drill_max_age_days``). Without one, or when the latest failed, the gate
+    is blocked."""
+    from stonks.production.drills import latest_drill
 
     run = "run `stonks halts drill`"
     if not _table_exists(state, "kill_switch_drills"):
@@ -681,15 +682,23 @@ def _drill(state: SqliteState, portfolio_id: str, today: date, max_age_days: int
             f"no drills table: run `stonks db init`, then {run}",
             required=max_age_days,
         )
-    last = last_passing_drill(state, portfolio_id)
-    if last is None:
+    latest = latest_drill(state, portfolio_id)
+    if latest is None:
         return GateCheck(
             "kill_switch_drill",
             False,
             f"no passing kill switch drill yet: {run}",
             required=max_age_days,
         )
-    age = (today - last.astimezone(UTC).date()).days
+    age = (today - latest.ran_at.astimezone(UTC).date()).days
+    if not latest.passed:
+        return GateCheck(
+            "kill_switch_drill",
+            False,
+            f"last kill switch drill failed {age} day(s) ago: fix it and {run}",
+            value=age,
+            required=max_age_days,
+        )
     ok = age <= max_age_days
     return GateCheck(
         "kill_switch_drill",
