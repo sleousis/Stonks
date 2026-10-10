@@ -66,7 +66,9 @@ describe('plainRefusal (PO-03)', () => {
       [],
       ctx,
     );
-    expect(r.message).toBe("Trading is stopped for Jamie's paper portfolio. Resume it to place orders.");
+    expect(r.message).toBe(
+      "Trading is stopped for Jamie's paper portfolio. Resume it to place orders.",
+    );
     expect(r.halted).toBe(true);
     expect(r.message).not.toContain('pf_');
   });
@@ -91,9 +93,9 @@ describe('plainRefusal (PO-03)', () => {
     expect(plainRefusal('the stop of a buy must be below the entry 187', [], ctx).message).toBe(
       'For a buy, the stop goes below the price.',
     );
-    expect(plainRefusal('the stop of a short sale must be above the entry 5', [], ctx).message).toBe(
-      'For a sale, the stop goes above the price.',
-    );
+    expect(
+      plainRefusal('the stop of a short sale must be above the entry 5', [], ctx).message,
+    ).toBe('For a sale, the stop goes above the price.');
   });
 
   it('tidies anything else: capital first letter, no ids, no 10.0', () => {

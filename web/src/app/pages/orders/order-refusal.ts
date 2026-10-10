@@ -30,7 +30,10 @@ export interface RefusalContext {
 const DEFAULT_CONTEXT: RefusalContext = { portfolio: 'this portfolio', currency: 'USD' };
 
 /** A 409 `order_refused` as an OrderRefusal, or null for any other failure. */
-export function refusalOf(err: unknown, ctx: RefusalContext = DEFAULT_CONTEXT): OrderRefusal | null {
+export function refusalOf(
+  err: unknown,
+  ctx: RefusalContext = DEFAULT_CONTEXT,
+): OrderRefusal | null {
   if (!(err instanceof ApiError) || err.status !== 409 || err.code !== 'order_refused') {
     return null;
   }
@@ -95,7 +98,9 @@ export function plainRefusal(
   if (side) {
     const what = side[1].toLowerCase();
     const buy = side[2].toLowerCase() === 'buy';
-    return plain(`For a ${buy ? 'buy' : 'sale'}, the ${what} goes ${side[3].toLowerCase()} the price.`);
+    return plain(
+      `For a ${buy ? 'buy' : 'sale'}, the ${what} goes ${side[3].toLowerCase()} the price.`,
+    );
   }
   if (/would close a position and open the other way/i.test(m)) {
     return plain(

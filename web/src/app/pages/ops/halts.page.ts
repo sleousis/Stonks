@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 
 import { HaltsService, RESUME_CONFIRMATION } from '../../api/halts.service';
+import { UsersService } from '../../api/users.service';
 import type { HaltView, KillSwitchRequest } from '../../api/models';
 import type { Permission } from '../../core/auth/permissions';
 import { SessionService } from '../../core/auth/session.service';
@@ -30,6 +31,35 @@ import { HALT_KIND_LABEL, HALT_STOPS_LABEL, haltAction } from './halt-labels';
 import { ResumeSheet } from './resume-sheet';
 
 type KillScope = KillSwitchRequest['scope'];
+
+/**
+ * Who started or ended a halt, in words: "You", the person's name, or
+ * "Automatic" for a rule, a check or the server. Never an id (AO-17).
+ */
+export function actorText(
+  actor: string | null | undefined,
+  meId: string | null,
+  names: ReadonlyMap<string, string> = new Map(),
+): string {
+  const raw = (actor ?? '').trim();
+  const person = raw.startsWith('user:') || raw.startsWith('usr_');
+  if (!person) return 'Automatic';
+  const id = raw.replace(/^user:/, '');
+  if (id === meId) return 'You';
+  return names.get(id) ?? 'Another person';
+}
+
+/** "You, 10 Oct 15:39": who started a halt and when. */
+export function startedText(h: HaltView, meId: string | null, names?: ReadonlyMap<string, string>) {
+  return `${actorText(h.tripped_by, meId, names)}, ${formatDateTime(h.tripped_at)}`;
+}
+
+/** "Automatic, 20 Sep 10:00" or "Expired, ...": who ended a halt and when. */
+export function endedText(h: HaltView, meId: string | null, names?: ReadonlyMap<string, string>) {
+  const expired = !h.cleared_by || (h.cleared_by === 'system' && h.clear_reason === 'expired');
+  const who = expired ? 'Expired' : actorText(h.cleared_by, meId, names);
+  return h.cleared_at ? `${who}, ${formatDateTime(h.cleared_at)}` : who;
+}
 
 /**
  * Halts stop new orders before they reach the broker. Shows the active
@@ -70,6 +100,7 @@ export class HaltsPage {
   private readonly resumeSheet = viewChild.required(ResumeSheet);
   protected readonly session = inject(SessionService);
   private readonly portfolios = inject(PortfolioContextService);
+  private readonly users = inject(UsersService);
 
   /** Turning the kill switch on (one portfolio). */
   protected readonly canKill = computed(() => this.session.can('killswitch.user'));
@@ -101,6 +132,37 @@ export class HaltsPage {
   /** A kill switch is on: the page head turns red, like the session strip. */
   protected readonly killOn = computed(() => this.active().some((h) => h.kind === 'kill'));
 
+  /**
+   * A kill switch already covers the portfolio on screen: the Stop trading
+   * card folds to a small link, so Resume is the one big action (AO-18).
+   */
+  protected readonly killHere = computed(() => {
+    const meId = this.session.me()?.user_id ?? null;
+    const picked = this.portfolios.current()?.id ?? null;
+    return this.active().some(
+      (h) =>
+        h.kind === 'kill' &&
+        (h.scope === 'global' ||
+          (h.scope === 'user' && h.user_id === meId) ||
+          (h.scope === 'portfolio' && h.portfolio_id === picked)),
+    );
+  });
+
+  /** People's names for an admin, who sees halts others started. */
+  private readonly people = resource({
+    params: () => (this.session.isAdmin() ? true : undefined),
+    loader: () => this.users.list(),
+  });
+  private readonly names = computed(
+    () =>
+      new Map(
+        this.people.hasValue()
+          ? (this.people.value() ?? []).map((u) => [u.id, u.display_name] as const)
+          : [],
+      ),
+  );
+  private readonly meId = computed(() => this.session.me()?.user_id ?? null);
+
   protected readonly busyId = signal<number | null>(null);
 
   /** Where the Stop trading sheet starts: the portfolio on screen. */
@@ -121,8 +183,11 @@ export class HaltsPage {
     { key: 'scope', label: 'Scope', value: this.scopeText },
     { key: 'halt', label: 'Stops', value: (h) => HALT_STOPS_LABEL[h.halt] },
     { key: 'reason', label: 'Reason' },
-    { key: 'tripped_by', label: 'By' },
-    { key: 'tripped_at', label: 'Since', format: 'datetime' },
+    {
+      key: 'tripped_at',
+      label: 'Started',
+      display: (h) => startedText(h, this.meId(), this.names()),
+    },
     { key: 'action', label: 'Action', sortable: false, value: () => '' },
   ];
 
@@ -130,10 +195,16 @@ export class HaltsPage {
     { key: 'kind', label: 'Kind', value: (h) => HALT_KIND_LABEL[h.kind], mobile: 'title' },
     { key: 'scope', label: 'Scope', value: this.scopeText },
     { key: 'reason', label: 'Reason' },
-    { key: 'tripped_by', label: 'Tripped by', mobile: 'hide' },
-    { key: 'tripped_at', label: 'Tripped', format: 'datetime' },
-    { key: 'cleared_by', label: 'Ended by', value: (h) => h.cleared_by ?? 'Expired' },
-    { key: 'cleared_at', label: 'Ended', format: 'datetime' },
+    {
+      key: 'tripped_at',
+      label: 'Started',
+      display: (h) => startedText(h, this.meId(), this.names()),
+    },
+    {
+      key: 'cleared_at',
+      label: 'Ended',
+      display: (h) => endedText(h, this.meId(), this.names()),
+    },
     { key: 'clear_reason', label: 'Why it ended', mobile: 'hide' },
   ];
 
@@ -170,8 +241,9 @@ export class HaltsPage {
 
   async resume(h: HaltView): Promise<void> {
     const sheet = this.resumeSheet();
+    const live = this.liveFor(h.scope, h.portfolio_id);
     const opened = sheet.open({
-      live: this.liveFor(h.scope, h.portfolio_id),
+      live,
       lines: [
         { label: 'Scope', value: this.scopeText(h) },
         { label: 'Starts again', value: HALT_STOPS_LABEL[h.halt] },
@@ -189,7 +261,9 @@ export class HaltsPage {
     );
     const answer = await opened;
     if (answer === null) return;
-    if (!(await this.stepUp.ensure('Resume trading'))) return;
+    // A fresh code first for real money. Paper asks only when the server
+    // says the last code is too old (the session interceptor prompts).
+    if (live && !(await this.stepUp.ensure('Resume trading'))) return;
     this.busyId.set(h.id);
     try {
       // A stale second factor comes back as 403 step_up_required: the session

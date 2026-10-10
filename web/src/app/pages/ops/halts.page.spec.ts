@@ -14,7 +14,7 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
 import { answerDialog, confirmButton, dialogForm } from '../../../testing/status-dialog';
-import { HaltsPage } from './halts.page';
+import { HaltsPage, actorText, endedText } from './halts.page';
 import { book } from '../../../testing/portfolio-fixtures';
 
 function halt(over: Partial<HaltView>): HaltView {
@@ -99,7 +99,11 @@ describe('HaltsPage', () => {
     return [...el.querySelectorAll('button')].find((b) => b.textContent?.trim() === text);
   }
 
-  async function setup(me: MeView = ADMIN, portfolios: PortfolioRef[] = []): Promise<void> {
+  async function setup(
+    me: MeView = ADMIN,
+    portfolios: PortfolioRef[] = [],
+    halts: HaltView[] = [KILL, BREAKER, OLD],
+  ): Promise<void> {
     confirm = vi.fn().mockResolvedValue(true);
     stepUp = vi.fn().mockResolvedValue(true);
     const options = signal(portfolios);
@@ -126,7 +130,13 @@ describe('HaltsPage', () => {
     fixture = TestBed.createComponent(HaltsPage);
     el = fixture.nativeElement;
     fixture.detectChanges();
-    await flushAll([KILL, BREAKER, OLD]);
+    if (me.role === 'admin') {
+      // An admin sees halts others started: the page reads people's names.
+      (await nextRequest(http, '/api/auth/users')).flush(
+        page([{ id: 'usr_owner', display_name: 'Olive' }]),
+      );
+    }
+    await flushAll(halts);
   }
 
   afterEach(() => http.verify());
@@ -148,18 +158,29 @@ describe('HaltsPage', () => {
       expect(button('Resume trading')).toBeDefined();
       expect(button('Clear')).toBeDefined();
 
+      // Who started it in words, with the time, never an id (AO-17).
+      expect(active.textContent).toContain('Olive, ');
+      expect(active.textContent).toContain('Automatic, ');
+      expect(active.textContent).not.toContain('usr_owner');
+      expect(active.textContent).not.toContain('rule:circuit_breaker');
+
       const past = el.querySelector('[aria-labelledby="past-title"]')!;
       expect(past.textContent).toContain('Operational');
-      expect(past.textContent).toContain('service:health');
+      expect(past.textContent).toContain('Automatic, ');
+      expect(past.textContent).not.toContain('service:health');
       expect(past.textContent).toContain('health passed');
+      // Started and Ended each one cell: six columns, not eight.
+      const heads = [...past.querySelectorAll('thead th')].map((th) => th.textContent?.trim());
+      expect(heads).toHaveLength(6);
     });
 
-    it('opens the one Stop trading sheet, never an inline form (M7)', () => {
+    it('folds Stop trading to a small link while a kill switch covers everything (AO-18)', () => {
       const open = TestBed.inject(StopTradingService).open;
       expect(el.querySelector('#kill-reason')).toBeNull();
       expect(button('Engage kill switch')).toBeUndefined();
+      expect(el.querySelector('[aria-labelledby="kill-title"]')).toBeNull();
       const stop = button('Stop trading…')!;
-      expect(stop.classList).toContain('btn-danger');
+      expect(stop.classList).not.toContain('btn-danger');
       stop.click();
       expect(open()).toBe(true);
       expect(http.match('/api/halts/kill')).toEqual([]);
@@ -179,7 +200,7 @@ describe('HaltsPage', () => {
       expect(el.querySelector('app-page-header')!.classList).toContain('kill-on');
     });
 
-    it('shows the resume checks and needs an override when one failed (23.15)', async () => {
+    it('shows a failed resume check and needs an override, even on paper (23.15)', async () => {
       button('Resume trading')!.click();
       await settle();
       const checks = await nextRequest(http, '/api/halts/1/resume-checks');
@@ -193,27 +214,13 @@ describe('HaltsPage', () => {
             detail: 'the broker did not answer',
             portfolio_id: 'pf_default',
           },
-          {
-            name: 'last_reconcile_clean',
-            passed: null,
-            detail: 'no reconcile report yet',
-            portfolio_id: 'pf_default',
-          },
         ],
       });
       await settle();
       const form = el.querySelector<HTMLFormElement>('app-resume-sheet form')!;
       expect(form.textContent).toContain('Gateway up');
       expect(form.textContent).toContain('the broker did not answer');
-      const type = (sel: string, text: string) => {
-        const input = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(sel)!;
-        input.value = text;
-        input.dispatchEvent(new Event('input'));
-        fixture.detectChanges();
-      };
       const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-      type('#resume-reason', 'Gateway restarting');
-      type('#resume-typed', 'RESUME TRADING');
       expect(submit.disabled).toBe(true);
       const override = form.querySelector<HTMLInputElement>('#resume-override')!;
       override.checked = true;
@@ -225,7 +232,7 @@ describe('HaltsPage', () => {
       const post = await nextRequest(http, '/api/halts/1/resume', 'POST');
       expect(post.request.body).toEqual({
         confirmation: 'RESUME TRADING',
-        reason: 'Gateway restarting',
+        reason: 'Resumed by me.',
         override_checks: true,
       });
       post.flush({ ...KILL, active: false, cleared_by: 'usr_owner' });
@@ -257,7 +264,7 @@ describe('HaltsPage', () => {
       expect(form.querySelector('#resume-override')).not.toBeNull();
     });
 
-    it('resumes only with the typed words and after a step-up', async () => {
+    it('resumes a paper stop in one tap: no phrase, no checks, no code (PO-07)', async () => {
       button('Resume trading')!.click();
       await settle();
       (await nextRequest(http, '/api/halts/1/resume-checks')).flush({
@@ -267,31 +274,25 @@ describe('HaltsPage', () => {
       });
       await settle();
       const form = el.querySelector<HTMLFormElement>('app-resume-sheet form')!;
-      expect(form.textContent).toContain('Nothing to check');
+      expect(form.textContent).not.toContain('Nothing to check');
+      expect(form.querySelector('#resume-typed')).toBeNull();
       // A ticket: scope, what starts again, and the stamp.
       const ticket = form.querySelector('[aria-label="Resume trading"]')!;
       expect(ticket.textContent).toContain('Every portfolio');
       expect(ticket.textContent).toContain('All new orders');
       expect(ticket.textContent).toContain('Broker outage');
       expect(ticket.querySelector('.stamp')!.textContent).toContain('PAPER');
-      const type = (sel: string, text: string) => {
-        const input = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(sel)!;
-        input.value = text;
-        input.dispatchEvent(new Event('input'));
-        fixture.detectChanges();
-      };
       const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-      type('#resume-reason', 'Broker back');
-      type('#resume-typed', 'resume');
-      expect(submit.disabled).toBe(true);
-      type('#resume-typed', 'RESUME TRADING');
       expect(submit.disabled).toBe(false);
       submit.click();
       fixture.detectChanges();
 
       const post = await nextRequest(http, '/api/halts/1/resume', 'POST');
-      expect(stepUp).toHaveBeenCalledWith('Resume trading');
-      expect(post.request.body).toEqual({ confirmation: 'RESUME TRADING', reason: 'Broker back' });
+      expect(stepUp).not.toHaveBeenCalled();
+      expect(post.request.body).toEqual({
+        confirmation: 'RESUME TRADING',
+        reason: 'Resumed by me.',
+      });
       post.flush({ ...KILL, active: false, cleared_by: 'usr_owner' });
       await flushAll([BREAKER]);
       expect(button('Resume trading')).toBeUndefined();
@@ -313,6 +314,47 @@ describe('HaltsPage', () => {
     });
   });
 
+  describe('with real money', () => {
+    beforeEach(() =>
+      setup(ADMIN, [book({ id: 'pf_live', name: 'Live book', is_default: true, trading: 'live' })]),
+    );
+
+    it('resumes only with a reason, the typed words and after a step-up', async () => {
+      button('Resume trading')!.click();
+      await settle();
+      (await nextRequest(http, '/api/halts/1/resume-checks')).flush({
+        halt_id: 1,
+        passed: true,
+        checks: [],
+      });
+      await settle();
+      const form = el.querySelector<HTMLFormElement>('app-resume-sheet form')!;
+      expect(form.querySelector('[aria-label="Resume trading"] .stamp')!.textContent).toContain(
+        'LIVE',
+      );
+      const type = (sel: string, text: string) => {
+        const input = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(sel)!;
+        input.value = text;
+        input.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+      };
+      const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+      type('#resume-reason', 'Broker back');
+      type('#resume-typed', 'resume');
+      expect(submit.disabled).toBe(true);
+      type('#resume-typed', 'RESUME TRADING');
+      expect(submit.disabled).toBe(false);
+      submit.click();
+      fixture.detectChanges();
+
+      const post = await nextRequest(http, '/api/halts/1/resume', 'POST');
+      expect(stepUp).toHaveBeenCalledWith('Resume trading');
+      expect(post.request.body).toEqual({ confirmation: 'RESUME TRADING', reason: 'Broker back' });
+      post.flush({ ...KILL, active: false, cleared_by: 'usr_owner' });
+      await flushAll([BREAKER]);
+    });
+  });
+
   describe('as a trader', () => {
     const BOOKS: PortfolioRef[] = [
       book({ id: 'pf_default', name: 'Main book', is_default: true }),
@@ -321,9 +363,7 @@ describe('HaltsPage', () => {
 
     beforeEach(() => setup(TRADER, BOOKS));
 
-    it('says the sheet starts on the portfolio on screen, and names portfolios', () => {
-      const panel = el.querySelector('[aria-labelledby="kill-title"]')!;
-      expect(panel.textContent).toContain('Main book');
+    it('names portfolios, never ids', () => {
       // Scope column names the portfolio, not its id.
       const active = el.querySelector('[aria-labelledby="active-title"]')!;
       expect(active.textContent).toContain('Portfolio Main book');
@@ -341,6 +381,27 @@ describe('HaltsPage', () => {
     });
   });
 
+  describe('as a trader with no kill switch on', () => {
+    beforeEach(() =>
+      setup(
+        TRADER,
+        [book({ id: 'pf_default', name: "Jamie's paper portfolio", is_default: true })],
+        [BREAKER, OLD],
+      ),
+    );
+
+    it('says where the sheet starts in short sentences, with a red Stop trading button', () => {
+      const panel = el.querySelector('[aria-labelledby="kill-title"]')!;
+      expect(panel.textContent).toContain(
+        "It starts on Jamie's paper portfolio. You pick the scope, what stops and the reason.",
+      );
+      expect(panel.textContent).not.toContain(';');
+      // No real money here: no word about typed phrases.
+      expect(panel.textContent).not.toContain('RESUME TRADING');
+      expect(button('Stop trading…')!.classList).toContain('btn-danger');
+    });
+  });
+
   describe('as a viewer', () => {
     beforeEach(() => setup({ ...TRADER, role: 'viewer', scopes: ['read'] }));
 
@@ -350,5 +411,24 @@ describe('HaltsPage', () => {
       expect(engage.parentElement!.textContent).toContain('Traders and admins only.');
       expect(button('Clear')!.disabled).toBe(true);
     });
+  });
+});
+
+describe('halt actor words (AO-17)', () => {
+  it('says You, a name, Another person or Automatic, never an id', () => {
+    const names = new Map([['usr_2', 'Jamie']]);
+    expect(actorText('user:usr_1', 'usr_1')).toBe('You');
+    expect(actorText('user:usr_2', 'usr_1', names)).toBe('Jamie');
+    expect(actorText('user:usr_40c14a8cc23e', 'usr_1')).toBe('Another person');
+    expect(actorText('rule:circuit_breaker', 'usr_1')).toBe('Automatic');
+    expect(actorText('service:health', 'usr_1')).toBe('Automatic');
+    expect(actorText('system', 'usr_1')).toBe('Automatic');
+  });
+
+  it('says Expired for a halt that ran out', () => {
+    expect(endedText(halt({ cleared_by: null, cleared_at: null }), 'usr_1')).toBe('Expired');
+    expect(
+      endedText(halt({ cleared_by: 'user:usr_1', cleared_at: '2026-09-20T10:00:00Z' }), 'usr_1'),
+    ).toMatch(/^You, /);
   });
 });
