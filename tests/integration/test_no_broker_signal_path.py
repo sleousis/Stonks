@@ -4,7 +4,8 @@ Stonks must always work with no broker at all: no IB Gateway, no broker
 connection, the simulated broker as the default. These tests build the app
 that way and walk the journey of a solo owner who only wants alerts:
 
-1. daily prices and profiles from a canned source standing in for Yahoo;
+1. daily prices from a canned source standing in for Yahoo, with no
+   metadata run (the price ingest records each ticker's minimal profile);
 2. a Strategy Studio rule draft and a catalog strategy, each tested;
 3. both registered (On trial), the catalog one approved with the
    documented override and reason (the go-live check has no trial days);
@@ -46,7 +47,7 @@ from stonks.auth import AuthService
 from stonks.config import ApiConfig, LakeConfig, RegistryConfig, Settings, StateConfig
 from stonks.connections.settings import ConnectionsConfig
 from stonks.ingest.metadata_bundle import MetadataBundle
-from stonks.ingest.schemas import FinancialStatementsBundle, RawPriceBar, TickerProfile
+from stonks.ingest.schemas import FinancialStatementsBundle, RawPriceBar
 from stonks.ingest.sources.base import DataSource
 from stonks.notify.channels import build_channels
 from stonks.notify.prefs import Preference, PreferenceStore
@@ -101,7 +102,7 @@ BROKER_JOBS = (
 )
 
 
-# ---- the free data a solo owner has: Yahoo prices and profiles ----------------------
+# ---- the free data a solo owner has: Yahoo prices ----------------------
 
 
 def _closes(ticker: str, n: int) -> list[float]:
@@ -130,8 +131,8 @@ def _bars(ticker: str) -> list[RawPriceBar]:
 
 
 class YahooLikeSource(DataSource):
-    """What the free Yahoo source gives: daily bars and each ticker's
-    profile (its name and asset class). No fundamentals."""
+    """What the free Yahoo source gives: daily bars. The journey never asks
+    it for metadata or fundamentals."""
 
     source_id = "yahoo"
 
@@ -154,8 +155,7 @@ class YahooLikeSource(DataSource):
         return FinancialStatementsBundle()
 
     def fetch_metadata(self, ticker: str) -> MetadataBundle:
-        name = ticker.split(".")[0].title()
-        return MetadataBundle(profile=TickerProfile(id=ticker, name=name, asset_class="equity"))
+        raise AssertionError("the no-broker journey needs no metadata run")
 
 
 # ---- fixtures: an app with no broker of any kind -------------------------------------
@@ -273,12 +273,10 @@ def _job(client: TestClient, headers: dict, path: str, body: dict) -> dict:
 def _strategies(client: TestClient, owner: dict) -> tuple[str, str]:
     """Load the data, make both strategies, test them, put them on trial
     and approve the catalog one. Returns (catalog id, Studio rule id)."""
-    since = START.isoformat()
-    for kind in ("prices", "metadata"):
-        body = {"kind": kind, "source": "yahoo", "tickers": TICKERS}
-        _job(
-            client, owner, "/api/ingest/runs", body | ({"since": since} if kind == "prices" else {})
-        )
+    # Prices only: the price ingest records each ticker's minimal profile,
+    # so the trading run knows its asset class with no metadata run.
+    body = {"kind": "prices", "source": "yahoo", "tickers": TICKERS, "since": START.isoformat()}
+    _job(client, owner, "/api/ingest/runs", body)
 
     # A Studio rule draft, backtested, then put on trial.
     draft = client.post(
@@ -705,7 +703,6 @@ def test_the_cli_walks_the_same_path(cli_home, spy, telegram):
     tickers = ",".join(TICKERS)
     _invoke("db", "init")
     _invoke("ingest", "prices", "--source", "yahoo", "--tickers", tickers, "--since", "2024-10-01")
-    _invoke("ingest", "metadata", "--source", "yahoo", "--tickers", tickers)
 
     lab_json = cli_home / "lab.json"
     _invoke(
@@ -820,4 +817,7 @@ def test_a_keyless_install_keeps_its_prices_fresh_on_every_backend(
     assert outcome.status == "succeeded", outcome.detail
     with DuckDBLake(settings.lake.path) as lake:
         latest = lake.sql("SELECT MAX(date) FROM prices WHERE ticker = 'RISE.US'")
+        classes = lake.get_asset_classes(list(TICKERS))
     assert str(latest.iloc[0, 0])[:10] == AS_OF.isoformat()
+    # the scheduled update records the minimal profiles a trading run needs
+    assert classes == dict.fromkeys(TICKERS, "equity")

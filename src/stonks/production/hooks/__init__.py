@@ -143,6 +143,10 @@ class GateContext:
     #: The broker portfolio whose paper account this book is: halts on it
     #: (the portfolio kill switch) stop the paper account too.
     parent_portfolio_id: str | None = None
+    #: Reads FX rates for currencies (``insights.flows.FxLoader``): the
+    #: breaker's curve converts a deposit or withdrawal in another
+    #: currency with it. ``None`` leaves such a curve as it is.
+    fx_loader: Any = None
 
 
 @dataclass(frozen=True)

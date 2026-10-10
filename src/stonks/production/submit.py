@@ -344,7 +344,7 @@ def _alert_gaps(
         "The next tick decides afresh.",
         audience=Audience.owner_of(portfolio_id),
         dedupe_key=f"preopen_gap:{portfolio_id}:{today(clock).isoformat()}",
-        deep_link="/approvals",
+        deep_link="/tickets",
         portfolio_id=portfolio_id,
     )
     try:

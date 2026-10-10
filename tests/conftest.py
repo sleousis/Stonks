@@ -95,6 +95,9 @@ def _isolate_environment(request: pytest.FixtureRequest, monkeypatch: pytest.Mon
     # (Patched on the module, not through STONKS_LAB_MAX_WORKERS, which the
     # isolation above must strip like every STONKS_ variable.)
     monkeypatch.setattr("stonks.lab.parallel.default_max_workers", lambda: 1)
+    # ``stonks serve`` delivers alerts on its own thread by default. API
+    # tests keep the deliveries they queued unless they ask for it.
+    monkeypatch.setattr("stonks.scheduling.delivery.SERVE_DELIVERY_ENABLED", False)
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

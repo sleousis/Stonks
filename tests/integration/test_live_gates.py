@@ -76,6 +76,21 @@ def _promote(state, *targets):
         )  # fmt: skip
 
 
+def _passing_drill(state, day=DAY):
+    from stonks.production.drills import DrillReport, DrillStep, record_drill
+
+    when = datetime.combine(day, datetime.min.time(), tzinfo=UTC)
+    report = DrillReport(
+        broker="simulated",
+        portfolio_id="pf_drill",
+        client_id="drill-1",
+        started_at=when,
+        finished_at=when,
+        steps=(DrillStep("engage_kill", True, "engaged", 1.0),),
+    )
+    record_drill(state, report, ran_by="cli:ops")
+
+
 def test_a_session_counts_orders_fills_and_stuck_orders(state):
     _order(state, "o1")
     _fill(state, "o1")
@@ -112,6 +127,49 @@ def test_book_and_model_returns_give_the_tracking_difference(state):
     gate = compute_gate_day(state, PF, DAY, drift=NO_DRIFT, model=model)
     assert gate.live_return == pytest.approx(0.01)
     assert gate.tracking_diff == pytest.approx(0.006)
+
+
+def test_a_deposit_on_the_day_is_not_part_of_the_book_return(state):
+    _snapshot(state, DAY - timedelta(days=1), 1000.0)
+    _snapshot(state, DAY, 2010.0)
+    state.execute(
+        "INSERT INTO portfolio_cash_flows (portfolio_id, flow_date, kind, amount, created_at,"
+        " created_by) VALUES (?, ?, 'deposit', 1000, ?, 'test')",
+        [PF, DAY.isoformat(), f"{DAY.isoformat()}T12:00:00+00:00"],
+    )
+    gate = compute_gate_day(state, PF, DAY, drift=NO_DRIFT, model=NO_MODEL)
+    assert gate.live_return == pytest.approx(0.005)
+
+
+def test_a_foreign_deposit_on_the_day_is_converted_for_the_book_return(state, monkeypatch):
+    from stonks.fx import FxRates
+    from stonks.insights import flows
+    from stonks.insights.flows import RecordedFlow
+
+    eur = RecordedFlow(
+        day=DAY,
+        kind="deposit",
+        amount=1_000.0,
+        source="broker",
+        currency="EUR",
+        account_currency="USD",
+    )
+    old = RecordedFlow(
+        day=date(2024, 1, 2),
+        kind="deposit",
+        amount=500.0,
+        source="broker",
+        currency="GBP",
+        account_currency="USD",
+    )
+    monkeypatch.setattr(flows, "recorded_flows", lambda s, p: [old, eur])
+    _snapshot(state, DAY - timedelta(days=1), 1000.0)
+    _snapshot(state, DAY, 2110.5)  # 1,100 USD deposited, then +0.5%
+    rates = FxRates([("EUR", "USD", DAY, 1.10)])
+    gate = compute_gate_day(
+        state, PF, DAY, drift=NO_DRIFT, model=NO_MODEL, fx_loader=lambda codes: rates
+    )
+    assert gate.live_return == pytest.approx(0.005)
 
 
 def test_the_shadow_model_book_weights_its_subscriptions(state):
@@ -210,10 +268,13 @@ def test_gate_two_counts_clean_sessions_in_broker_paper(state):
     early = gate_report(state, PF, facts=facts, settings=settings, clock=CLOCK)
     assert early.target == "live_small" and not early.passed
     _clean_days(state, 5, "broker_paper")
+    undrilled = gate_report(state, PF, facts=facts, settings=settings, clock=CLOCK)
+    assert not undrilled.passed  # no kill switch drill yet: blocked
+    _passing_drill(state)
     report = gate_report(state, PF, facts=facts, settings=settings, clock=CLOCK)
     by = {c.name: c for c in report.checks}
     assert by["sessions"].passed and by["clean_sessions"].passed
-    assert by["kill_switch_drill"].passed is None  # 19.11 not built: not blocking
+    assert by["kill_switch_drill"].passed is True
     assert report.passed
     assert report.as_dict()["metrics"]["sessions"] == 5
 
@@ -221,6 +282,7 @@ def test_gate_two_counts_clean_sessions_in_broker_paper(state):
 def test_gate_two_needs_the_allocation_and_profile(state):
     _promote(state, "broker_paper")
     settings = StageGateSettings(min_broker_paper_sessions=0, broker_paper_clean_sessions=0)
+    _passing_drill(state, datetime.now(UTC).date())
     report = gate_report(state, PF, facts=GateFacts(broker_linked=True), settings=settings)
     failed = {c.name for c in report.checks if c.passed is False}
     assert failed == {"allocation_set", "account_profile_set"}
@@ -231,6 +293,7 @@ def test_gate_three_needs_fills_and_the_tca_interval(state):
     settings = StageGateSettings(min_live_small_sessions=3, live_small_clean_sessions=3,
                                  min_live_fills=6)  # fmt: skip
     _clean_days(state, 3, "live_small")
+    _passing_drill(state)
     report = gate_report(state, PF, settings=settings, clock=CLOCK)
     by = {c.name: c for c in report.checks}
     assert by["filled_orders"].passed and by["filled_orders"].value == 6

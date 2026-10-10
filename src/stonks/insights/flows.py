@@ -46,7 +46,12 @@ def _has_table(state: SqliteState, name: str) -> bool:
 def recorded_flows(state: SqliteState, portfolio_id: str) -> list[RecordedFlow]:
     """Every deposit and withdrawal of ``portfolio_id``, oldest first."""
     out: list[RecordedFlow] = []
-    found = state.sql("SELECT base_currency FROM portfolios WHERE id = ?", [portfolio_id])
+    # A pre-accounts state (no portfolios table yet) has no base currency.
+    found = (
+        state.sql("SELECT base_currency FROM portfolios WHERE id = ?", [portfolio_id])
+        if _has_table(state, "portfolios")
+        else []
+    )
     base = _code(found[0]["base_currency"] if found else None, "USD")
     if _has_table(state, "portfolio_cash_flows"):
         for r in state.sql(

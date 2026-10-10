@@ -25,8 +25,12 @@ def cal(name: str) -> MarketCalendar:
     return OneDay()
 
 
-def status(*, updated=OPEN + timedelta(minutes=10), stopped=None, error=None) -> EngineStatus:
+def status(
+    *, updated=OPEN + timedelta(minutes=10), stopped=None, error=None, delayed=0
+) -> EngineStatus:
     health = StreamHealth(source="eodhd", state="streaming", bars_written=9, late_ticks=1)
+    health.delayed_events = delayed
+    health.live_events = 0 if delayed else 5
     health.last_event_at = OPEN + timedelta(minutes=10)
     health.last_error = error
     lag = LatencyHistogram()
@@ -100,6 +104,13 @@ def test_stream_errors_are_scrubbed():
     v = view(s, OPEN + timedelta(minutes=11))
     assert v.stream is not None
     assert "SECRET123" not in (v.stream.last_error or "")
+
+
+def test_a_stream_of_only_delayed_data_is_reported():
+    healthy = view(status(), OPEN + timedelta(minutes=11)).stream
+    assert healthy is not None and healthy.delayed_only is False
+    v = view(status(delayed=3), OPEN + timedelta(minutes=11)).stream
+    assert v is not None and v.delayed_only is True and v.delayed_events == 3
 
 
 def test_latency_view_mean():

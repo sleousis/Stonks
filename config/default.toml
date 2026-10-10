@@ -228,6 +228,7 @@ live_small_clean_sessions = 30     # gate 3: the last 6 weeks clean
 min_live_fills = 30                # gate 3: filled live orders
 max_reject_rate = 0.02             # a clean session rejects under 2%
 week_sessions = 5
+drill_max_age_days = 30            # gates 2 and 3: a passing kill switch drill this recent
 
 [production.live.reconcile]
 # The end-of-day check's cash and statement comparisons (roadmap 19.15).
@@ -436,6 +437,9 @@ source = "eodhd"          # eodhd | ibkr | replay
 tickers = []
 calendar = "XNYS"         # when a silent stream counts as stale
 bar_mode = "auto"         # auto | trades | quotes
+accept_delayed_quotes = false  # bars from delayed quotes (IBKR paper), kept out of the lake
+delayed_lag_seconds = 900 # how far a delayed feed runs behind
+delayed_backfill_seconds = 300  # REST backfill of the minutes delayed bars leave out
 stale_after_seconds = 60
 backfill = true           # fill gaps from the REST intraday ingest
 backfill_source = "eodhd"
@@ -503,6 +507,12 @@ backends = ["log", "store"]
 # Drop notifications below this level: info | warning | error. "store" keeps
 # every level.
 min_level = "warning"
+# Send queued alerts (Web Push, email, Telegram, webhooks) from stonks serve:
+# "auto" whenever no scheduler delivers them (checked before every pass, so
+# serve steps back when a scheduler starts and takes over when it stops),
+# "on" always, "off" never. A delivery is never sent twice, even with two
+# workers running.
+deliver_in_serve = "auto"
 
 [notify.webhook]
 # Set the URL via STONKS_NOTIFY_WEBHOOK_URL in .env; it usually embeds a token.

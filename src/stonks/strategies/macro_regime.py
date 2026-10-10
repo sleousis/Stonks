@@ -27,9 +27,10 @@ the inner strategy's class path and fully-resolved params, and the inner
 strategy saves itself into an ``inner/`` sub-directory so fitted state
 survives.
 
-Known limit: the lake keeps the latest vintage of each observation, so a
-later revision of an old data point is seen as if it had been published
-originally.
+Vendor revisions stay point in time (P12): the lake keeps every version of
+an observation with the time Stonks first saw it (DuckDB 025), and a
+decision reads the version known then, so a later revision of an old data
+point is not seen before it was stored.
 """
 
 from __future__ import annotations

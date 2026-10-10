@@ -440,6 +440,11 @@ class NotifyConfig(BaseModel):
     # Notifications below this level are dropped (except by "store").
     min_level: Literal["info", "warning", "error"] = "warning"
     webhook: WebhookConfig = WebhookConfig()
+    # Run the per-user delivery worker inside ``stonks serve``: "auto"
+    # whenever no scheduler delivers (none hosted, none holding the lock,
+    # checked before every pass), "on" always, "off" never. The outbox
+    # claim never sends a delivery twice.
+    deliver_in_serve: Literal["auto", "on", "off"] = "auto"
 
 
 def _api_token_from_env() -> SecretStr | None:

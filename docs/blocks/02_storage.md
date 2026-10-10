@@ -83,6 +83,7 @@ The copy is checked per ticker and interval (row count and checksum) before the 
 | 014 | `statement_flags` (statement audit, BL-36) |
 | 015 | `universe_membership` (point-in-time universes, BL-37) |
 | 018 | `income_statement_versions`, `balance_sheet_versions`, `cash_flow_statement_versions` (P12) |
+| 025 | `macro_indicators_versions`, `fund_holdings_versions` (P12) |
 
 ### Statement versions
 
@@ -104,6 +105,16 @@ flowchart LR
   U --> V[income_statement_versions: every change + known_at]
   V --> P[PointInTimeLake: version known at the decision]
 ```
+
+### Macro and fund holdings versions
+
+Vendors revise macro prints and fund lists in place too. Migration `025` gives `macro_indicators` and `fund_holdings` the same kind of `_versions` twin, with `known_at`.
+
+- `upsert_macro_indicators(df, known_at=...)` adds a version when a value changes. `get_macro_series(..., as_of=...)` and `PointInTimeLake` read, per observation, the latest version seen by the decision. The first version counts from its publication date, like a first statement version.
+- `get_macro_series_versions(...)` returns every version with `known_at`.
+- `upsert_fund_holdings(df, known_at=...)` treats each `(fund, as_of, source)` in `df` as the whole list. A changed weight adds a version. A holding missing from the list gets a `removed` version and leaves the current table.
+- `fund_holdings(funds, as_of=...)` reads, per holding, the latest version stored by the end of that day and skips removed ones.
+- Migration `025` copied the existing rows in as first versions: macro rows stamped with their observation date, holdings with their own `known_at`.
 
 ### Statement audit and universe membership
 
