@@ -1540,6 +1540,11 @@ which admins also see without a single recipient.
   `{"notification": {"title": "...", "body": "...", "icon": "icons/icon-192.png",
   "data": {"onActionClick": {"default": {"operation": "navigateLastFocusedOrOpen",
   "url": "/strategies/momentum-v3"}}}}}`.
+- Every deep link a notification carries must open a console page.
+  `tests/unit/test_notify_deep_links.py` reads the links the backend writes
+  and checks them against `app.routes.ts`. Old links (`/alerts`,
+  `/approvals`, `/subscriptions`, `/signals`) redirect to the page that
+  replaced them: Price alerts, Approvals and Today.
 - `stonks serve` sends `ngsw-worker.js` and `ngsw.json` with
   `Cache-Control: no-cache` so updates are picked up, and
   `manifest.webmanifest` as `application/manifest+json`.
