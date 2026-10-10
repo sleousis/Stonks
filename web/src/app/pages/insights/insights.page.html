@@ -81,11 +81,11 @@
   @if (insights.hasValue()) {
     @let i = insights.value();
     @if (baseLine(); as line) {
-      <p class="base-line num">{{ line }}</p>
+      <p class="base-line">{{ line }}</p>
     }
-    @if (i.notes.length || i.unpriced.length || i.uncovered.length) {
+    @if (notes().length || i.unpriced.length || i.uncovered.length) {
       <ul class="notes" aria-label="About these numbers">
-        @for (note of i.notes; track note) {
+        @for (note of notes(); track note) {
           <li>{{ note }}</li>
         }
         @if (i.unpriced.length) {
@@ -137,8 +137,6 @@
       </div>
     </section>
 
-    <app-look-through [portfolio]="lookThroughFor()" />
-
     <!-- Returns ------------------------------------------------------------->
     <section class="panel span-5" aria-labelledby="returns-title">
       <div class="panel-head">
@@ -163,9 +161,11 @@
                   @if (p.change === null) {
                     <span class="muted">n/a</span>
                   } @else {
-                    {{ signedMoney(p.change) }} ({{ pct(p.change_pct, true) }})
+                    {{ signedMoney(p.change) }}
                   }
-                  <span class="twr">Return {{ twrText(p) }}</span>
+                  @if (p.twr != null) {
+                    <span class="twr">{{ twrText(p) }}</span>
+                  }
                 </dd>
               </div>
             }
@@ -181,18 +181,20 @@
             </div>
           </dl>
           <p class="hint">
-            Change counts deposits and withdrawals. Return is time-weighted
+            The money change counts deposits and withdrawals. The return under it is time-weighted
             <app-help-tip term="twr" />, so they are left out.
-            <a routerLink="/insights/cash-flows">Record a deposit or withdrawal</a>
-          </p>
-          <p class="hint example">
-            For example: you start with 10,000, it rises 10%, you add 10,000, then it falls 10%.
-            Change says +9,000 (your deposit counts). The time-weighted return is about -1%. The
-            money-weighted return is worse, because more of your money was in for the fall.
+            <a class="touch-link" routerLink="/insights/cash-flows" fragment="two-returns"
+              >Why two returns?</a
+            >
+            <a class="touch-link" routerLink="/insights/cash-flows"
+              >Record a deposit or withdrawal</a
+            >
           </p>
         }
       </div>
     </section>
+
+    <app-look-through [portfolio]="lookThroughFor()" />
 
     <!-- Monthly returns ----------------------------------------------------->
     <section class="panel span-12" aria-labelledby="months-title">
@@ -242,12 +244,12 @@
                 <dd class="num">{{ pct(stats.volatility) }}</dd>
               </div>
               <div>
-                <dt>VaR 95% <app-help-tip term="var" /></dt>
-                <dd class="num">{{ pct(stats.var_95) }}</dd>
+                <dt>Likely worst day (1 in 20) <app-help-tip term="var" /></dt>
+                <dd class="num">Could lose {{ loss(stats.var_95) }}</dd>
               </div>
               <div>
-                <dt>ES 95% <app-help-tip term="expected_shortfall" /></dt>
-                <dd class="num">{{ pct(stats.expected_shortfall_95) }}</dd>
+                <dt>Average of the worst days <app-help-tip term="expected_shortfall" /></dt>
+                <dd class="num">Could lose {{ loss(stats.expected_shortfall_95) }}</dd>
               </div>
               <div>
                 <dt>Max drawdown <app-help-tip term="max_drawdown" /></dt>
@@ -273,8 +275,7 @@
             @if (r.holdings) {
               Today's weights over the last year of prices.
             }
-            VaR 95% is a one-day loss beaten on about 1 day in 20. ES 95% is the average loss on
-            those worse days.
+            On 19 days out of 20 a day's loss should be smaller than the likely worst day.
           </p>
         }
       </div>

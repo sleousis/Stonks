@@ -118,11 +118,3 @@
   font-weight: var(--weight-medium);
   white-space: nowrap;
 }
-
-.touch-link {
-  @include bp.coarse {
-    display: inline-block;
-    min-height: var(--touch-min);
-    line-height: var(--touch-min);
-  }
-}

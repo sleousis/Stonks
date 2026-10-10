@@ -27,8 +27,26 @@
     color: var(--color-ink-3);
   }
 
+  > div {
+    min-width: 0;
+  }
+
   dd {
+    min-width: 0;
     margin: 0;
     font-size: var(--text-lg);
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 479.98px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.touch-link {
+  @include bp.coarse {
+    display: inline-block;
+    min-height: var(--touch-min);
+    line-height: var(--touch-min);
   }
 }

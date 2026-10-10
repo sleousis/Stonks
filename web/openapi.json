@@ -13146,6 +13146,14 @@
             "title": "Currency",
             "type": "string"
           },
+          "funds_without_list": {
+            "description": "Held funds (ETFs) with no holdings list, counted as one name each.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Funds Without List",
+            "type": "array"
+          },
           "look_through": {
             "$ref": "#/components/schemas/LookThrough"
           },

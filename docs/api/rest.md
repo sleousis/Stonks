@@ -3135,6 +3135,7 @@ A portfolio's exposure with each held fund split into what it holds (roadmap 23.
 |-------|------|----------|-------------|
 | `as_of` | date | yes | Fund holdings are the lists known on this day. |
 | `currency` | string | yes | Reporting currency. Amounts are not FX-converted. |
+| `funds_without_list` | list[string] | no | Held funds (ETFs) with no holdings list, counted as one name each. |
 | `look_through` | [LookThrough](#lookthrough) | yes |  |
 | `notes` | list[string] | yes |  |
 | `portfolio_id` | string | yes |  |

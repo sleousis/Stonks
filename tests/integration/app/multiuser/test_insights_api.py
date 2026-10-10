@@ -96,7 +96,7 @@ def test_insights_of_a_synced_broker_account(client, settings, people):
     assert tickers == {"UP.US": 300.0, "XYZ123": 300.0, "cash": 500.0}
     currencies = {s["key"] for s in body["allocation"]["currency"]}
     assert currencies == {"USD"}
-    assert any("no ticker" in n for n in body["notes"])
+    assert any("no matching ticker" in n for n in body["notes"])
 
     agreement = client.get(
         "/api/insights/agreement", params={"portfolio_id": pid}, headers=people["alice"]["headers"]
@@ -197,11 +197,31 @@ def test_look_through_splits_a_held_fund(client, settings, people):
     assert up["fund_value"] == pytest.approx(flat_value * 0.5)
     assert up["funds"] == ["FLAT.US"]
     assert any(s["key"] == "not listed" for s in lt["sector"])
-    assert any("not listed" in n for n in body["notes"])
+    assert any("Not in the fund list" in n for n in body["notes"])
+    assert body["funds_without_list"] == []
     # Bob may not read Alice's book.
     bob = people["bob"]["headers"]
     other = client.get("/api/insights/look-through", params={"portfolio_id": pid}, headers=bob)
     assert other.status_code == 404
+
+
+def test_look_through_names_a_fund_without_a_list(client, settings, people):
+    """A held ETF with no holdings list is named, so the console can tag it."""
+    from stonks.store.lake import DuckDBLake
+
+    pid = _portfolio(settings.state.path, people["alice"]["id"], "Alice plain funds")
+    _snapshot(settings.state.path, pid, "2026-03-31", 0.0, '{"UP.US": 10, "FLAT.US": 100}', 1.0)
+    lake = DuckDBLake(settings.lake.path)
+    lake.sql("DELETE FROM instruments WHERE id = 'FLAT.US'")
+    lake.sql(
+        "INSERT INTO instruments (id, asset_class, security_type) VALUES ('FLAT.US', 'equity', 'etf')"
+    )
+    lake.close()
+    alice = people["alice"]["headers"]
+    body = client.get(
+        "/api/insights/look-through", params={"portfolio_id": pid}, headers=alice
+    ).json()
+    assert body["funds_without_list"] == ["FLAT.US"]
 
 
 def _manual_fill(path, pid: str, cid: str, side: str, qty: float, price: float, at: str) -> None:

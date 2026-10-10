@@ -50,9 +50,39 @@ describe('LookThroughPanel', () => {
     expect(text).toContain('23.5%');
     expect(text).toContain('20.0% direct, 3.5% through SPY.US');
     expect(text).toContain('All through SPY.US');
-    expect(text).toContain('SPY.US as of');
-    expect(text).toContain('10.0% listed');
+    expect(text).toContain('SPY.US: 10% of its holdings are listed, as of');
+    expect(text).toContain('Not in the fund list');
     expect(text).toContain('leave out');
+  });
+
+  it('hides itself when no held fund has a list', async () => {
+    const { fixture, el } = await render();
+    (await nextRequest(http, '/api/insights/look-through')).flush({
+      ...LOOK_THROUGH,
+      look_through: { ...LOOK_THROUGH.look_through, funds: [], fund_value: 0, listed_fund_value: 0 },
+    });
+    await settle(fixture);
+    expect(el.classList).toContain('is-hidden');
+  });
+
+  it('tags a fund that has no list', () => {
+    const lt = {
+      ...LOOK_THROUGH.look_through,
+      names: [
+        {
+          key: 'VWRL.LSE',
+          name: null,
+          value: 1_000,
+          weight: 0.1,
+          direct_value: 1_000,
+          fund_value: 0,
+          funds: [],
+        },
+      ],
+    };
+    const rows = lookThroughRows(lt, 'names', 10_000, ['VWRL.LSE']);
+    expect(rows[0].detail).toBe('fund, no list');
+    expect(rows.at(-1)).toMatchObject({ label: 'Not in the fund list', value: 4_500 });
   });
 
   it('switches to sectors and names the unlisted rest plainly', async () => {
@@ -65,7 +95,7 @@ describe('LookThroughPanel', () => {
     sector.click();
     fixture.detectChanges();
     const list = el.querySelector('ul[aria-label="Sector"]');
-    expect(list?.textContent).toContain('Not in the fund lists');
+    expect(list?.textContent).toContain('Not in the fund list');
     expect(list?.textContent).toContain('Cash');
     expect(list?.textContent).toContain('Technology');
   });

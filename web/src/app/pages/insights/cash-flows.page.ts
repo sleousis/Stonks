@@ -90,7 +90,7 @@ export function signedAmount(f: Pick<CashFlowView, 'kind' | 'amount'>): number {
           detail="Deposits less withdrawals"
         />
       </section>
-      <p class="explain">
+      <p class="explain" id="two-returns">
         Why two returns? Say you start with 10,000, it rises 10%, you add 10,000, then it falls 10%.
         The time-weighted return is about -1%: it judges the investments and ignores when you added
         money. The money-weighted return is worse, because more of your money was in for the fall:

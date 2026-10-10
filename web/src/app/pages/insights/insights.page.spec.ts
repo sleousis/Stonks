@@ -115,7 +115,10 @@ describe('InsightsPage', () => {
     setup();
     await flushAll();
     const returns = el.querySelector('section[aria-labelledby="returns-title"]')!.textContent!;
-    expect(returns).toContain('Return +0.4%');
+    // One figure per period: the money change, the return small under it.
+    expect(returns).toContain('+0.4%');
+    expect(returns).not.toContain('Return +');
+    expect(returns).not.toMatch(/\(\+[\d.]+%\)/);
     expect(returns).toContain('Money-weighted, per year');
     expect(returns).toContain('+8.5%');
     expect(returns).toContain('+$5,000.00');
@@ -184,10 +187,42 @@ describe('InsightsPage', () => {
     expect(explain.textContent).toContain('Gross exposure');
     expect(explain.textContent).toContain('Net exposure');
     expect(explain.textContent).toContain('Beta');
-    // TWR and MWR with one worked example, in the Returns panel.
-    const example = el.querySelector('.hint.example')?.textContent ?? '';
-    expect(example).toContain('about -1%');
-    expect(example).toContain('money-weighted return is worse');
+    // The worked example lives on Cash flows, one link away.
+    expect(el.querySelector('.hint.example')).toBeNull();
+    const why = [...el.querySelectorAll('a')].find((a) => a.textContent?.includes('Why two returns'));
+    expect(why?.getAttribute('href')).toBe('/insights/cash-flows#two-returns');
+  });
+
+  it('words the risk figures as a positive loss with one decimal', async () => {
+    setup();
+    await flushAll();
+    const risk = el.querySelector('section[aria-labelledby="risk-title"]')!.textContent ?? '';
+    expect(risk).toContain('Likely worst day (1 in 20)');
+    expect(risk).toMatch(/Could lose \d+\.\d%/);
+    expect(risk).not.toContain('VaR 95%');
+  });
+
+  it('says a missing exchange rate once', async () => {
+    base = 'EUR';
+    setup();
+    for (let i = 0; i < 6; i++) {
+      http
+        .match(() => true)
+        .forEach((req) => {
+          if (new URL(req.request.url, 'http://localhost').pathname === '/api/insights') {
+            req.flush({
+              ...INSIGHTS,
+              fx_missing: ['USD'],
+              total_value_base: null,
+              notes: ['USD holdings are left out of the EUR total until an exchange rate is loaded.'],
+            });
+          } else respond(req);
+        });
+      await tick(5);
+      fixture.detectChanges();
+    }
+    expect(el.querySelector('.base-line')?.textContent).toContain('No exchange rate yet for USD');
+    expect(el.querySelector('.notes')).toBeNull();
   });
 
   it('lists what each strategy thinks of each holding, in words', async () => {

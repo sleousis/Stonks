@@ -138,6 +138,10 @@ class LookThroughView(BaseModel):
     currency: str = Field(description="Reporting currency. Amounts are not FX-converted.")
     total_value: float
     look_through: LookThrough
+    funds_without_list: list[str] = Field(
+        default_factory=list,
+        description="Held funds (ETFs) with no holdings list, counted as one name each.",
+    )
     notes: list[str]
 
 
@@ -250,12 +254,14 @@ class InsightsService:
         total_base, fx_missing = self._total_in_base(book)
         if fx_missing:
             notes.append(
-                "no FX rate for " + ", ".join(fx_missing) + ": the base-currency total is left out"
+                f"{', '.join(fx_missing)} holdings are left out of the {book.base_currency} "
+                "total until an exchange rate is loaded."
             )
         if flow_missing:
             fx_missing = sorted({*fx_missing, flow_missing})
             notes.append(
-                f"no FX rate for a {flow_missing} deposit or withdrawal: TWR and MWR are left out"
+                f"Returns are left out until an exchange rate for a {flow_missing} deposit "
+                "or withdrawal is loaded."
             )
         pnl_rows = period_pnl(points, flows, max_gap_days=DEFAULT_MAX_GAP_DAYS)
         headline = DayChangeView.of(daily)
@@ -271,8 +277,8 @@ class InsightsService:
             pnl_rows = [r.model_copy(update={"twr": None}) for r in pnl_rows]
         if book.uncovered:
             notes.append(
-                f"{len(book.uncovered)} holding(s) have no ticker; their broker value counts "
-                "but they have no beta, risk or signals"
+                f"{_count(len(book.uncovered), 'holding has', 'holdings have')} no matching "
+                "ticker. Their value counts, but they get no risk figures or signals."
             )
         return InsightsView(
             portfolio_id=portfolio_id,
@@ -340,35 +346,47 @@ class InsightsService:
             direct = [t for t in tickers if t not in funds]
             df = (
                 lake.sql(
-                    "SELECT id, name, country_iso FROM instruments WHERE id = ANY(?)", [direct]
+                    "SELECT id, name, country_iso, security_type FROM instruments"
+                    " WHERE id = ANY(?)",
+                    [direct],
                 )
                 if direct
-                else pd.DataFrame(columns=["id", "name", "country_iso"])
+                else pd.DataFrame(columns=["id", "name", "country_iso", "security_type"])
             )
         rows = df.to_dict("records")
+        plain_funds = {
+            str(r["id"]) for r in rows if (_text(r["security_type"]) or "") in ("etf", "fund")
+        }
+        without_list = sorted({h.symbol for h in book.priced if h.ticker in plain_funds})
         countries = {str(r["id"]): (_text(r["country_iso"]) or "").upper() or None for r in rows}
         names = {str(r["id"]): _text(r["name"]) for r in rows}
         result = look_through(book, funds, countries=countries, names=names, top=top)
         notes: list[str] = []
         if not funds:
             notes.append(
-                "no fund in this portfolio has a holdings list yet, so this matches the "
-                "plain allocation"
+                "No fund in this portfolio has a holdings list yet, so this matches the "
+                "plain allocation."
             )
         if result.fund_value and result.listed_fund_value < result.fund_value:
             share = 1.0 - result.listed_fund_value / result.fund_value
             notes.append(
-                f"{share:.0%} of your fund value is in holdings the lists leave out "
-                "(shown as not listed)"
+                f"{share:.0%} of your fund value is in holdings the lists leave out, "
+                "shown as Not in the fund list."
             )
         if book.unpriced:
-            notes.append(f"{len(book.unpriced)} holding(s) have no price and are left out")
+            n = len(book.unpriced)
+            notes.append(
+                "1 holding has no price and is left out."
+                if n == 1
+                else f"{n} holdings have no price and are left out."
+            )
         return LookThroughView(
             portfolio_id=portfolio_id,
             as_of=day,
             currency=book.base_currency,
             total_value=book.total_value,
             look_through=result,
+            funds_without_list=without_list,
             notes=notes,
         )
 
@@ -698,7 +716,7 @@ class InsightsService:
         book: Book, returns: pd.DataFrame, bench: str, notes: list[str]
     ) -> dict[str, float | None]:
         if bench not in returns.columns:
-            notes.append(f"no prices for the benchmark {bench}, so no beta")
+            notes.append(f"No prices for the benchmark {bench} yet, so there is no beta.")
             return {}
         out: dict[str, float | None] = {}
         for h in book.priced:
@@ -726,6 +744,11 @@ class InsightsService:
         frame = returns[list(weights)].dropna()
         series = {t: frame[t].tolist() for t in weights}
         return returns_risk(weighted_returns(weights, series))
+
+
+def _count(n: int, one: str, many: str) -> str:
+    """``"1 holding has"`` or ``"3 holdings have"``."""
+    return f"{n} {one if n == 1 else many}"
 
 
 def _utc_time(value: str) -> datetime:
