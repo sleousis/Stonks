@@ -415,8 +415,8 @@ neighbourhood is bordered, with the plateau verdict above. On phones the
 table scrolls inside its own labelled box.
 
 The Lab's screens sit in one row of underline tabs (`pages/lab/lab-nav.ts`)
-that scrolls sideways on phones: Test a strategy (`/lab`) and Trial ledger
-(`/lab/ledger`), then **More tools**: Sweep (`/lab/sweeps`), Signal IC
+that wrap onto two lines on phones: Test a strategy (`/lab`) and Lab history
+(`/lab/ledger`), then **More tools**: Sweep (`/lab/sweeps`), Signal check
 (`/lab/signal-ic`), Factors (`/lab/factors`) and Research sessions
 (`/lab/research`). A sweep
 runs every strategy, or the ones picked, on typed tickers or a saved
@@ -1135,7 +1135,7 @@ flowchart LR
 
 | Page | Route | What it does |
 |---|---|---|
-| Get set up | `/welcome` | The first-run guide: five steps, each can be skipped, kept per user on the server. Admins also see the install checklist |
+| Get set up | `/welcome` | The first-run guide: protect your account, follow a strategy, turn on alerts, then two optional steps (a paper portfolio, a watchlist). Each can be skipped, kept per user on the server. Admins also see the install checklist |
 | Watchlists | `/watchlists` | Your own ticker lists: create, edit, delete, open in the lab, chart a ticker |
 | Charts | `/charts`, `/charts/:ticker?vs=` | Daily candles, volume, moving averages, your fills (B and S) and strategy signals, other tickers compared on one scale, the rolling Sharpe and drawdown, with the fills and signals listed below |
 | Leaderboard | `/leaderboard` | The comparison view: every strategy ranked by its trial result, with its status and verdict, each linking to its strategy page |
@@ -1144,7 +1144,7 @@ flowchart LR
 ```mermaid
 flowchart LR
   T[Today: setup card] --> W[/welcome]
-  W --> P[Portfolio] & L[Watchlist] & F[Follow] & A[Alerts]
+  W --> F[Follow] & A[Alerts] & P[Portfolio, optional] & L[Watchlist, optional]
   L --> C[/charts/:ticker]
   L --> Lab[/lab?tickers=...]
   B[/leaderboard] --> S[/strategies/:id] --> TS[/strategies/:id/tearsheet]
@@ -1155,6 +1155,8 @@ flowchart LR
   factor, a portfolio, a watchlist, a subscription, a push device).
   `PUT /api/onboarding/steps/{step}` stores a skip or a done mark
   (`todo` clears it), `PUT /api/onboarding` closes or reopens the guide.
+  The portfolio and watchlist steps are optional: `complete` and the
+  progress ("2 of 3 done") count only the other three (FR-01).
   `<app-setup-card>` shows on Today while `show` is true. Admins read
   `GET /api/onboarding/system` (`operations.run`): data source key, first
   data load, a backup on disk, a running scheduler, each with a link to fix it.
@@ -1481,7 +1483,7 @@ about the same thing.
 | Approvals, order tickets | `/api/tickets` | `stonks tickets` | `list_tickets`, `get_ticket` |
 | Model versions, candidate, Swap in, Retrain | `/api/strategies/{id}/versions`, `/api/model-versions` | `registry versions`, `swap`, `reject`, `retrain` | `list_model_versions`, `swap_model_version`, `retrain_models` |
 | Signal IC | `/api/lab/signal-ic` | `stonks lab ic` | `run_signal_ic` |
-| Trial ledger | `/api/lab/ledger` | none | `list_ledger_runs`, `get_ledger_run` |
+| Lab history | `/api/lab/ledger` | none | `list_ledger_runs`, `get_ledger_run` |
 | Notifications (feed) | `/api/notifications` | `python -m stonks.notify` | `list_notifications` |
 | Alerts (Health page) | `/api/alerts` | none | `list_alerts` |
 | Get set up (first-run guide) | `/api/onboarding` | none | none |
