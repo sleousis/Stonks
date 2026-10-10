@@ -37,7 +37,7 @@
               if (!/^[\w.-]+\.js$/.test(d.n[j])) return;
               var l = document.createElement('link');
               l.rel = 'modulepreload';
-              l.href = d.n[j];
+              l.href = encodeURIComponent(d.n[j]);
               document.head.appendChild(l);
             });
             break;

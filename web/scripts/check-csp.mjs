@@ -22,7 +22,7 @@ function attribute(attrs, name) {
 /** `sha256-...` for each inline script the browser would run (as in stonks.api.csp). */
 export function inlineScriptHashes(html) {
   const out = [];
-  for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
+  for (const m of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi)) {
     const [, attrs, body] = m;
     if (attribute(attrs, 'src') !== null) continue;
     if (!EXECUTABLE.has((attribute(attrs, 'type') ?? '').toLowerCase())) continue;
