@@ -27,6 +27,7 @@ describe('RiskPage', () => {
   let live: typeof LIVE;
   let insights: typeof INSIGHTS;
   let mine: Record<string, number>;
+  let policy: typeof POLICY;
   const selected = signal<string | null>('pf_2');
   const seen: string[] = [];
 
@@ -34,6 +35,7 @@ describe('RiskPage', () => {
     live = LIVE;
     insights = INSIGHTS;
     mine = {};
+    policy = POLICY;
     seen.length = 0;
     chart = new FakeChartEngine();
     TestBed.configureTestingModule({
@@ -76,12 +78,12 @@ describe('RiskPage', () => {
       case '/api/insights':
         return req.flush(insights);
       case '/api/risk/policy':
-        return req.flush(POLICY);
+        return req.flush(policy);
       case '/api/risk/limits':
         return req.flush({
-          system: POLICY,
+          system: policy,
           mine,
-          effective: { ...POLICY, ...mine },
+          effective: { ...policy, ...mine },
           ignored: [],
         });
       case '/api/risk/snapshots':
@@ -112,6 +114,19 @@ describe('RiskPage', () => {
     expect(text).not.toContain('VaR misses');
     expect(limits.querySelectorAll('.limit-over').length).toBeGreaterThan(0);
     expect(el.textContent).toContain('No limit on sector');
+  });
+
+  it('shows no empty list when no limit is set, only the one line (PB-02)', async () => {
+    policy = {
+      ...POLICY,
+      max_weight_per_ticker: 1,
+      max_open_positions: null,
+      max_weight_per_asset_class: {},
+      rules: {},
+    } as unknown as typeof POLICY;
+    await flushAll();
+    expect(el.querySelector('.limits')).toBeNull();
+    expect(el.textContent).toContain('No limit on the largest holding');
   });
 
   it('keeps the strategy table short enough to fit', async () => {

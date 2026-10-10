@@ -111,11 +111,12 @@ def test_a_trader_reads_insights_on_their_own_book(browse, stack, viewport):
     page.get_by_role("link", name="Risk", exact=True).click()
     expect(page.get_by_role("heading", level=1)).to_have_text("Risk")
     limits = page.locator(".limits")
-    expect(limits).to_contain_text("Largest holding")
-    # PB-02: only limits that exist get a row, the others fold into one line.
-    expect(limits).not_to_contain_text("No limit set")
+    # PB-02: only limits that exist get a row. This stack sets none, so
+    # there is no list and one line names them all.
+    expect(limits).to_have_count(0)
     against = page.locator("section", has=page.get_by_role("heading", name="Against the limits"))
-    expect(against).to_contain_text("No limit on")
+    expect(against).to_contain_text("No limit on the largest holding")
+    expect(against).not_to_contain_text("No limit set")
     expect(page.get_by_role("link", name="Change your risk limits")).to_be_visible()
     expect(page.get_by_role("heading", name="On a bad day")).to_be_visible()
     expect(page.get_by_text("No risk readings yet")).to_be_visible()

@@ -25,29 +25,31 @@
       } @else if (limitsLoading()) {
         <app-loading-state label="Loading the limits" [rows]="6" />
       } @else {
-        <ul class="limits" aria-label="Each measure against its limit">
-          @for (r of limited(); track r.key) {
-            <li [class]="'limit limit-' + r.status">
-              <span class="limit-label">
-                {{ r.label }}
-                @if (r.help) {
-                  <app-help-tip [term]="r.help" />
-                }
-                @if (r.yours) {
-                  <span class="yours">Your limit</span>
-                }
-              </span>
-              <span class="limit-figures num">
-                <span class="visually-hidden">Now </span>{{ r.now }}
-                <span class="muted"> of {{ r.limit }}</span>
-              </span>
-              <span class="meter" aria-hidden="true">
-                <span [style.width]="meterWidth(r)"></span>
-              </span>
-              <span class="limit-status">{{ statusText[r.status] }}</span>
-            </li>
-          }
-        </ul>
+        @if (limited().length) {
+          <ul class="limits" aria-label="Each measure against its limit">
+            @for (r of limited(); track r.key) {
+              <li [class]="'limit limit-' + r.status">
+                <span class="limit-label">
+                  {{ r.label }}
+                  @if (r.help) {
+                    <app-help-tip [term]="r.help" />
+                  }
+                  @if (r.yours) {
+                    <span class="yours">Your limit</span>
+                  }
+                </span>
+                <span class="limit-figures num">
+                  <span class="visually-hidden">Now </span>{{ r.now }}
+                  <span class="muted"> of {{ r.limit }}</span>
+                </span>
+                <span class="meter" aria-hidden="true">
+                  <span [style.width]="meterWidth(r)"></span>
+                </span>
+                <span class="limit-status">{{ statusText[r.status] }}</span>
+              </li>
+            }
+          </ul>
+        }
         <p class="panel-body hint">
           @if (noLimit(); as text) {
             {{ text }}

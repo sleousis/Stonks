@@ -389,7 +389,10 @@ def test_kill_switch_blocks_orders_until_resumed_with_a_fresh_code(
     page.get_by_role("button", name=re.compile("^Resume")).first.click()
     dialog = page.locator("dialog[open]")
     expect(dialog).to_contain_text("Resume trading?")
-    fill_status_dialog(dialog, "RESUME TRADING", "Drill over, trading again.")
+    # PO-07: no real money trades here, so resuming is one tap: no typed
+    # phrase, the reason filled in. The server still asks for a fresh code.
+    expect(dialog.locator("#resume-typed")).to_have_count(0)
+    expect(dialog.locator("#resume-reason")).to_have_count(0)
     dialog.get_by_role("button", name="Resume trading").click()
     step_up = page.locator(
         "dialog[open]", has=page.get_by_role("heading", name="Confirm it is you")
