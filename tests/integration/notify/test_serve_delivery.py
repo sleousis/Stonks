@@ -233,6 +233,7 @@ def test_serve_probing_the_lock_never_stops_a_scheduler_from_starting(settings):
                 continue
             time.sleep(0.05)  # a slow probe, far longer than a real one
             probe.release()
+            time.sleep(0.01)  # the next pass, far sooner than a real one
 
     prober = threading.Thread(target=probe_forever, daemon=True)
     prober.start()

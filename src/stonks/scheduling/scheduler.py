@@ -80,7 +80,9 @@ class InstanceLock:
         from filelock import Timeout
 
         try:
-            self._lock.acquire(timeout=timeout)
+            # Poll often: serve probes the lock briefly on every pass, and a
+            # slow poll could keep landing inside those probes.
+            self._lock.acquire(timeout=timeout, poll_interval=0.005)
         except Timeout:
             raise SchedulerAlreadyRunningError(
                 f"another scheduler holds {self.path}; refusing to start a second one"
