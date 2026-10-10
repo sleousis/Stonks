@@ -7,7 +7,7 @@ Three parts, each usable alone:
    (call it with any event) and an
    :class:`~stonks.engine.driver.EventDriver` handler (``on_bar_close``).
    A trade sets the mark to its price, a quote to its last trade or mid
-   (a delayed quote never counts), a bar to its close at the bar's end. An
+   (a delayed quote or bar never counts), a bar to its close at the bar's end. An
    event older than the mark never moves it back.
 2. **P&L.** :class:`PositionLedger` books one day of one book: the
    positions held at the start of the day, priced at the prior close, and
@@ -130,12 +130,13 @@ class MarkBook:
             price = event.reference
             if price is not None and not event.delayed:
                 self.update(event.ticker, price, event.timestamp, "quote")
-        elif isinstance(event, StreamBar):
+        elif isinstance(event, StreamBar) and not event.delayed:
             self.update(event.ticker, event.close, _bar_end(event), "bar")
 
     def on_bar_close(self, event: BarClose) -> None:
         for bar in event.bars:
-            self.update(bar.ticker, bar.close, _bar_end(bar), "bar")
+            if not bar.delayed:
+                self.update(bar.ticker, bar.close, _bar_end(bar), "bar")
 
     def get(self, ticker: str) -> Mark | None:
         return self._marks.get(ticker)

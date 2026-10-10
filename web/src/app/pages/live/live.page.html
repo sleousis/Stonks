@@ -133,6 +133,13 @@
                       <dd class="num">{{ count(s.gaps) }}</dd>
                     </div>
                   </dl>
+                  @if (s.delayed_only) {
+                    <p class="problem" role="note">
+                      <strong>Delayed prices only:</strong> this account has no live market data.
+                      Delayed prices build no bars unless the server allows them, never reach the
+                      data lake and do not count as fresh prices for new trades.
+                    </p>
+                  }
                   @if (s.last_error) {
                     <p class="problem" role="note">
                       <strong>Last problem:</strong> {{ s.last_error }}

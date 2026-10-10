@@ -41,6 +41,7 @@ import pandas as pd
 
 from stonks.core.interval import Interval
 from stonks.core.protocols import Strategy
+from stonks.core.stream import StreamBar
 from stonks.core.types import Order, Portfolio
 from stonks.engine.driver import BarClose
 from stonks.engine.sessions import (
@@ -105,7 +106,10 @@ class DecisionStep:
     """See the module doc. ``portfolio(book_id)`` returns the book's current
     portfolio. ``stale_after`` stops opening orders on a ticker whose last
     bar is older than that at the decision (``None``: no check, as in the bar
-    backtester). ``fresh_reads`` opens a new point-in-time session per bar
+    backtester). A delayed bar (built from delayed quotes) counts as
+    ``delayed_lag`` older than its close, so with the default guard a
+    delayed price never opens a position, and orders on it carry
+    ``delayed_price`` in their decision context. ``fresh_reads`` opens a new point-in-time session per bar
     close, for a live lake that grows while the step runs; a replay reads
     each history once."""
 
@@ -125,6 +129,7 @@ class DecisionStep:
         asset_classes: Mapping[str, str] | None = None,
         halts: HaltTable = NO_HALTS,
         stale_after: timedelta | None = None,
+        delayed_lag: timedelta = timedelta(minutes=15),
         history_bars: int = 260,
         fresh_reads: bool = False,
         intraday: Callable[[str, datetime], Any] | None = None,
@@ -144,6 +149,7 @@ class DecisionStep:
         self.threshold = threshold
         self.halts = halts
         self.stale_after = stale_after
+        self.delayed_lag = delayed_lag
         self.history_bars = history_bars
         self.fresh_reads = fresh_reads
         self._portfolio = portfolio
@@ -156,6 +162,8 @@ class DecisionStep:
         self._pit = PitSession(lake)
         self._marks: dict[str, float] = {}
         self._last_bar: dict[str, datetime] = {}
+        #: Tickers whose latest bar was delayed.
+        self._delayed: set[str] = set()
         self._attribution: dict[str, dict[str, dict[str, float]]] = {b.id: {} for b in books}
         self._fill_owner: dict[str, dict[str, tuple[int, str]]] = {b.id: {} for b in books}
         self._fill_seq = 0
@@ -196,7 +204,11 @@ class DecisionStep:
         at = event.at.astimezone(UTC)
         for bar in event.bars:
             self._marks[bar.ticker] = bar.close
-            self._last_bar[bar.ticker] = at
+            self._last_bar[bar.ticker] = self.price_time(bar, at)
+            if bar.delayed:
+                self._delayed.add(bar.ticker)
+            else:
+                self._delayed.discard(bar.ticker)
         as_of = (at - self.interval.to_timedelta()).replace(tzinfo=None)
         if self.fresh_reads:
             self._pit = PitSession(self.lake)
@@ -294,6 +306,7 @@ class DecisionStep:
             for o in orders
         ]
         orders = [self.with_interval(o) for o in orders]
+        orders = [self._mark_delayed(o) for o in orders]
         dropped: list[DroppedOrder] = []
         flattened: list[str] = []
         if book.sessions is not None:
@@ -323,7 +336,10 @@ class DecisionStep:
         closing = {o.ticker for o in flat}
         kept = [o for o in kept if o.ticker not in closing]
         flat = [
-            self.with_interval(replace(o, decision_price=self._marks.get(o.ticker))) for o in flat
+            self._mark_delayed(
+                self.with_interval(replace(o, decision_price=self._marks.get(o.ticker)))
+            )
+            for o in flat
         ]
         return kept + flat, dropped, sorted(closing)
 
@@ -357,6 +373,23 @@ class DecisionStep:
             past = portfolio_returns.market_history(view, names, lookback=lookback)
             market = replace(market, returns_history=past.returns, volumes=past.volumes)
         return market
+
+    def price_time(self, bar: StreamBar, at: datetime) -> datetime:
+        """When ``bar``'s price was true: its close ``at``, less the lag of
+        a delayed feed."""
+        return at - self.delayed_lag if bar.delayed else at
+
+    @property
+    def delayed_tickers(self) -> frozenset[str]:
+        """Tickers whose latest bar was built from delayed quotes."""
+        return frozenset(self._delayed)
+
+    def _mark_delayed(self, order: Order) -> Order:
+        if order.ticker not in self._delayed:
+            return order
+        context = dict(order.decision_context or {})
+        context["delayed_price"] = True
+        return replace(order, decision_context=context)
 
     def with_interval(self, order: Order) -> Order:
         """``order`` with the decision bar in its decision context
