@@ -131,7 +131,7 @@ interface Open {
             </div>
           } @else {
             <p class="warning" role="note">
-              <strong>Survivorship bias.</strong> {{ snapshotWarning }}
+              <strong>Backtests look too good.</strong> {{ snapshotWarning }}
             </p>
           }
 

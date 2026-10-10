@@ -1,5 +1,5 @@
 import type { MetricView, ScreenSpec } from '../../api/models';
-import { formatNumber, formatPercent } from '../../core/format/format';
+import { formatMoney, formatNumber, formatPercent } from '../../core/format/format';
 
 export type AssetClass = 'equity' | 'crypto' | 'commodity' | 'bond';
 
@@ -187,12 +187,44 @@ export function fromSpec(spec: ScreenSpec, metrics: readonly MetricView[]): Scre
   };
 }
 
-/** A metric value for a cell: percents as percents, money and ratios as numbers. */
-export function formatMetric(value: number | null | undefined, unit: MetricView['unit']): string {
+/**
+ * A metric value for a cell: percents as percents, money in the row's
+ * currency (compact from 100K, so prices keep their cents), ratios as numbers.
+ */
+export function formatMetric(
+  value: number | null | undefined,
+  unit: MetricView['unit'],
+  currency?: string | null,
+): string {
   if (unit === 'percent') return formatPercent(value, { digits: 1 });
-  if (unit === 'money') return formatNumber(value, { compact: true });
+  if (unit === 'money') {
+    const compact = typeof value === 'number' && Math.abs(value) >= 100_000;
+    return formatMoney(value, { currency, compact });
+  }
   return formatNumber(value, { digits: 2 });
 }
+
+/** Plain names for metrics whose API label is trader shorthand. */
+const PLAIN_METRICS: Readonly<Record<string, Pick<MetricView, 'label' | 'description'>>> = {
+  setup_nr7: {
+    label: 'Narrowest range in 7 days',
+    description:
+      'The smallest daily range of the last 7 days: +1 in an uptrend, -1 in a downtrend, 0 none.',
+  },
+  setup_squeeze: {
+    label: 'Tight range breakout setup',
+    description:
+      'Prices move in an unusually tight range, a common start of a breakout: +1 in an uptrend, -1 in a downtrend, 0 none.',
+  },
+};
+
+/** The metrics with plain names where the API uses shorthand. */
+export function plainMetrics(metrics: readonly MetricView[]): MetricView[] {
+  return metrics.map((m) => (PLAIN_METRICS[m.id] ? { ...m, ...PLAIN_METRICS[m.id] } : m));
+}
+
+/** Suffix on a metric that matches nothing until the data plan has fundamentals. */
+export const NEEDS_PLAN = ' (needs a data plan)';
 
 /** A universe id from a name: `Cheap dividend payers` to `cheap-dividend-payers`. */
 export function universeSlug(name: string): string {

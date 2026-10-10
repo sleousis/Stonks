@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, model } from '@angular/core';
 
 import type { MetricView } from '../../api/models';
-import { type FilterRow, MAX_FILTERS, filterRow } from './screen-form';
+import { type FilterRow, MAX_FILTERS, NEEDS_PLAN, filterRow } from './screen-form';
 
 /**
  * The metric filter builder: one row per bound (a metric, at least, at
@@ -36,7 +36,13 @@ import { type FilterRow, MAX_FILTERS, filterRow } from './screen-form';
               </optgroup>
               <optgroup label="Fundamentals">
                 @for (m of fundamentalMetrics(); track m.id) {
-                  <option [value]="m.id" [selected]="f.metric === m.id">{{ m.label }}</option>
+                  <option
+                    [value]="m.id"
+                    [selected]="f.metric === m.id"
+                    [disabled]="fundamentalsMissing() && f.metric !== m.id"
+                  >
+                    {{ m.label }}{{ fundamentalsMissing() ? needsPlan : '' }}
+                  </option>
                 }
               </optgroup>
             </select>
@@ -147,8 +153,11 @@ export class ScreenFilters {
   /** Prefix for element ids, so two builders can share a page. */
   readonly idPrefix = input('sc');
   readonly filters = model<FilterRow[]>([]);
+  /** No fundamentals stored: their metrics match nothing, so they are greyed out. */
+  readonly fundamentalsMissing = input(false);
 
   protected readonly maxFilters = MAX_FILTERS;
+  protected readonly needsPlan = NEEDS_PLAN;
   protected readonly priceMetrics = computed(() =>
     this.metrics().filter((m) => m.group === 'price'),
   );
