@@ -152,7 +152,7 @@ If you change an inline script:
 
 `tests/unit/test_api_csp.py` fails until both match the page. `npm run build` ends with `scripts/check-csp.mjs`, which fails when the built page runs other inline scripts than the source, or has an inline event handler such as `onload=`.
 
-The API docs at `/docs` and `/redoc` get a looser policy, since they load Swagger UI and ReDoc from `cdn.jsdelivr.net`. Behind Caddy the app's header wins. Caddy only fills in the console policy where a response has none, such as its own error pages.
+The API docs at `/docs` and `/redoc` get a looser policy, since they load Swagger UI and ReDoc from `cdn.jsdelivr.net` and ReDoc's fonts from Google Fonts (`fonts.googleapis.com` and `fonts.gstatic.com`). Behind Caddy the app's header wins. Caddy only fills in the console policy where a response has none, such as its own error pages.
 
 ## What is stored
 

@@ -92,6 +92,38 @@ def test_the_docs_policy_allows_the_swagger_cdn_only_there():
     assert "frame-ancestors 'none'" in docs_policy()
 
 
+def _allowed(sources: list[str], url: str) -> bool:
+    origin = "/".join(url.split("/")[:3])
+    return any(origin == src.rstrip("/") for src in sources)
+
+
+def test_the_docs_policy_allows_everything_fastapis_docs_pages_load():
+    """Read the URLs from FastAPI's own Swagger UI and ReDoc pages, so a
+    FastAPI upgrade that loads something new fails here, not in a browser.
+    ReDoc loads the Google Fonts stylesheet, which pulls its fonts from
+    fonts.gstatic.com."""
+    from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
+
+    policy = _directives(docs_policy())
+    for page in (
+        get_redoc_html(openapi_url="/openapi.json", title="t"),
+        get_swagger_ui_html(openapi_url="/openapi.json", title="t"),
+    ):
+        html = bytes(page.body).decode("utf-8")
+        for tag, url in re.findall(
+            r"<(script|link)\b[^>]*?(?:src|href)=\"(https://[^\"]+)\"", html
+        ):
+            if "favicon" in url:
+                directive = "img-src"
+            elif tag == "script":
+                directive = "script-src"
+            else:
+                directive = "style-src"
+            assert _allowed(policy[directive], url), (directive, url)
+        if "fonts.googleapis.com" in html:
+            assert _allowed(policy["font-src"], "https://fonts.gstatic.com/x"), "font-src"
+
+
 def _client() -> TestClient:
     async def ok(request):
         return PlainTextResponse("ok")

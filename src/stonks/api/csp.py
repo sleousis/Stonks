@@ -32,8 +32,12 @@ CONSOLE_SCRIPT_HASHES: tuple[str, ...] = (
 )
 
 #: FastAPI's interactive API docs load Swagger UI and ReDoc from this CDN,
-#: with an inline start script. Only those pages get the looser policy.
+#: with an inline start script. ReDoc also loads its fonts from Google
+#: Fonts (a stylesheet, then the font files). Only those pages get the
+#: looser policy.
 _DOCS_CDN = "https://cdn.jsdelivr.net"
+_DOCS_FONT_CSS = "https://fonts.googleapis.com"
+_DOCS_FONTS = "https://fonts.gstatic.com"
 _DOCS_PATHS = ("/docs", "/redoc")
 
 _COMMON = (
@@ -74,9 +78,9 @@ def docs_policy() -> str:
         (
             "default-src 'self'",
             f"script-src 'self' 'unsafe-inline' {_DOCS_CDN}",
-            f"style-src 'self' 'unsafe-inline' {_DOCS_CDN}",
+            f"style-src 'self' 'unsafe-inline' {_DOCS_CDN} {_DOCS_FONT_CSS}",
             "img-src 'self' data: https://fastapi.tiangolo.com",
-            f"font-src 'self' {_DOCS_CDN}",
+            f"font-src 'self' {_DOCS_CDN} {_DOCS_FONTS}",
             "connect-src 'self'",
             "worker-src 'self' blob:",
             *_COMMON,
