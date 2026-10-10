@@ -12,18 +12,18 @@ describe('autoBlockedReason', () => {
       auto_blockers: ['12 of 20 paper trading days', 'the portfolio is not a broker portfolio'],
     });
     expect(autoBlockedReason(waiting)).toBe(
-      'Approve each trade and Automatic open after 20 trading days on Paper. 12 of 20 done. ' +
+      'Approve each trade and Automatic need a broker portfolio and 20 paper days. Your paper days: 12 of 20. ' +
         'The portfolio is not a broker portfolio.',
     );
     // Under a list that says the rule once (Today), only the progress.
     expect(autoBlockedReason(waiting, { compact: true })).toBe(
-      'Paper days: 12 of 20. The portfolio is not a broker portfolio.',
+      'Your paper days: 12 of 20. The portfolio is not a broker portfolio.',
     );
   });
 
   it('says the unlock rule once, in the vocabulary words (M8)', () => {
     expect(unlockRule(20)).toBe('Approve each trade and Automatic unlock after 20 paper days.');
-    expect(paperProgress(sub({ paper_days_completed: 4 }))).toBe('Paper days: 4 of 20.');
+    expect(paperProgress(sub({ paper_days_completed: 4 }))).toBe('Your paper days: 4 of 20.');
     expect(paperProgress(sub({ paper_days_completed: 20 }))).toBeNull();
   });
 

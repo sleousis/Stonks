@@ -27,7 +27,9 @@
     ><span aria-hidden="true">←</span> All strategies</a
   >
   <a routerLink="/leaderboard" class="related-link">Compare on the Leaderboard</a>
-  <a routerLink="/lab" [queryParams]="{ strategy: id() }" class="related-link">Test again in Lab</a>
+  <a [routerLink]="testAgain().commands" [queryParams]="testAgain().query" class="related-link"
+    >Test again</a
+  >
 </nav>
 
 @if (strategy.error(); as err) {
@@ -245,16 +247,17 @@
                     <span class="dot" aria-hidden="true"></span>
                     <div class="entry">
                       <p class="entry-head">
-                        @if (h.to) {
+                        @if (h.shape === 'move') {
                           <span class="move">
-                            @if (h.from) {
-                              <app-status-pill [status]="h.from" />
-                              <span class="arrow" aria-label="to">→</span>
-                            }
+                            <app-status-pill [status]="h.from" />
+                            <span class="arrow" aria-label="to">→</span>
                             <app-status-pill [status]="h.to" />
                           </span>
-                        } @else {
-                          <span class="kind">{{ h.kind }}</span>
+                        } @else if (h.shape === 'added') {
+                          <span class="move">
+                            Added as
+                            <app-status-pill [status]="h.to" />
+                          </span>
                         }
                         <time class="num muted" [attr.datetime]="h.when">{{
                           dateTime(h.when)
@@ -363,8 +366,8 @@
                 title="No robustness tests yet"
                 message="Results are saved when a Lab run tests this strategy (out of sample, period stability, perturbation, drift). Test it again in Lab to add them."
               >
-                <a routerLink="/lab" [queryParams]="{ strategy: s.id }" class="btn"
-                  >Test again in Lab</a
+                <a [routerLink]="testAgain().commands" [queryParams]="testAgain().query" class="btn"
+                  >Test again</a
                 >
               </app-empty-state>
             } @else {
@@ -415,20 +418,8 @@
             } @else if (verdict(); as v) {
               <app-strategy-verdict [verdict]="v" details>
                 <div details class="verdict-details">
-                  @if (verdictChecks().length) {
-                    <ul class="mini-checks" aria-label="Go-live checks, value against limit">
-                      @for (c of verdictChecks(); track c.name) {
-                        <li>
-                          <app-status-pill
-                            [status]="c.passed ? 'pass' : 'fail'"
-                            [label]="c.label"
-                          />
-                          @if (c.name !== 'status') {
-                            <span class="num muted">{{ c.value }} against {{ c.limit }}</span>
-                          }
-                        </li>
-                      }
-                    </ul>
+                  @if (verdictChecks(); as vc) {
+                    <p class="muted">Go-live check: {{ vc.passed }} of {{ vc.total }} pass.</p>
                   }
                   @if (reportSummary(); as sum) {
                     <p class="muted">Robustness tests: {{ sum.label }}.</p>
@@ -449,6 +440,7 @@
               [strategyId]="s.id"
               [strategyName]="displayName()"
               [status]="s.status"
+              [trialDaysNeeded]="trialDaysNeeded()"
             />
           }
 
@@ -570,15 +562,7 @@
               </div>
               <div>
                 <dt>Trades</dt>
-                <dd>
-                  <ul class="chips" aria-label="Asset classes it trades">
-                    @for (a of s.applicable_asset_classes; track a) {
-                      <li class="chip">{{ a }}</li>
-                    } @empty {
-                      <li class="muted">None declared</li>
-                    }
-                  </ul>
-                </dd>
+                <dd>{{ assetWords() || 'None declared' }}</dd>
               </div>
               <div>
                 <dt>Added</dt>

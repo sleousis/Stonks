@@ -119,7 +119,7 @@ describe('StrategiesPage', () => {
 
     const headers = Array.from(el.querySelectorAll('thead th')).map((th) => th.textContent ?? '');
     expect(headers.join('|')).toContain('Trial return');
-    expect(headers.join('|')).toContain('Max drawdown');
+    expect(headers.join('|')).toContain('Worst drop');
     expect(headers.join('|')).toContain('Days on trial');
 
     const row = Array.from(el.querySelectorAll('tbody tr')).find((tr) =>

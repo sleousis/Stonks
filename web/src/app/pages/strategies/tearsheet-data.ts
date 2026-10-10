@@ -10,6 +10,13 @@ export {
   yearRows,
 } from '../../shared/ui/monthly-returns';
 
+/**
+ * Trial days before ratios like CAGR, Sharpe and Sortino mean anything
+ * (about three months). Before that pages say "Too early to tell" (R09).
+ */
+export const DAYS_FOR_RATIOS = 63;
+export const TOO_EARLY = 'Too early to tell';
+
 /** The test book value as a line with its drawdown below (paper money: never brass). */
 export function curveSeries(curve: readonly PnlRowView[]): ChartSeries[] {
   return [

@@ -22,6 +22,15 @@ import { StatusPill } from '../../shared/ui/status-pill';
 import { StrategyVerdict } from '../../shared/ui/strategy-verdict';
 import { goliveLabel, rowVerdict, stageLabel } from '../strategies/leaderboard.page';
 
+/**
+ * The go-live column: an approved strategy that no longer passes was let
+ * through by an admin's override, so it says that, not a bare "Failed" (R13).
+ */
+export function reviewGoliveLabel(r: LeaderboardRow): string {
+  if (r.status === 'active' && r.golive_passed === false) return 'Approved by override';
+  return goliveLabel(r.golive_passed);
+}
+
 const STATUS_ORDER: Record<string, number> = { shadow: 0, active: 1, retired: 2 };
 
 /** On trial and ready first (the ones to decide), then on trial, then approved. */
@@ -102,7 +111,7 @@ export class GoLivePage {
     {
       key: 'golive',
       label: 'Go-live check',
-      value: (r) => goliveLabel(r.golive_passed),
+      value: (r) => reviewGoliveLabel(r),
       sortable: false,
       help: false,
     },

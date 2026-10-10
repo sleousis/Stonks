@@ -35,7 +35,7 @@ import {
 import { ToastService } from '../../core/notify/toast.service';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
-import { checkRow } from '../../shared/golive-checks';
+import { traderChecks } from '../../shared/golive-checks';
 import { demoteOptions, isRealMoneyBroker, promoteThroughGate } from '../../shared/governance';
 import {
   LIFECYCLE,
@@ -61,13 +61,14 @@ import { StatusChangeDialog } from '../../shared/ui/status-change-dialog';
 import { StatusPill } from '../../shared/ui/status-pill';
 import { WhyNotPanel } from '../../shared/ui/why-not-panel';
 import { StrategyVerdict } from '../../shared/ui/strategy-verdict';
+import { assetClassWords } from '../lab/lab-requests';
 import { OrderStatus } from '../orders/order-status';
 import { FollowPanel } from './follow-panel';
 import { GoliveCheckList } from './golive-check-list';
 import { ModelVersionsPanel } from './model-versions-panel';
 import { StageBar } from './stage-bar';
 import { formatParam, strategyDisplayName, strategyKindName } from './strategy-format';
-import { curveSeries, curveSummary } from './tearsheet-data';
+import { DAYS_FOR_RATIOS, TOO_EARLY, curveSeries, curveSummary } from './tearsheet-data';
 
 /**
  * The strategy page's tabs (F27): one place to judge a strategy.
@@ -146,7 +147,9 @@ export function paperPerformance(rows: readonly PnlRowView[]): PaperPerformance 
   return {
     totalReturn: last.cumulative_return ?? null,
     maxDrawdown: rows.reduce((worst, r) => Math.min(worst, r.drawdown), 0),
-    days: last.days_elapsed ?? rows.length,
+    // One row per day on trial. The last row's `days_elapsed` counts
+    // something else and disagreed with the verdict and chart (NB-13).
+    days: rows.length,
     firstValue: first.total_value,
     lastValue: last.total_value,
     firstDay: first.day,
@@ -181,6 +184,8 @@ export function actorName(actor: string): string {
 }
 
 export interface HistoryEntry {
+  /** `move`: from one status to another, `added`: the first status, `note`: a reason only. */
+  shape: 'move' | 'added' | 'note';
   id: number;
   when: string;
   from: string | null;
@@ -197,6 +202,7 @@ export function historyEntries(items: readonly StatusChangeView[]): HistoryEntry
   return [...items]
     .sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id)
     .map((h) => ({
+      shape: h.to_status ? (h.from_status ? 'move' : 'added') : 'note',
       id: h.id,
       when: h.created_at,
       from: h.from_status,
@@ -268,9 +274,14 @@ export class StrategyDetailPage {
   /** Query param `?tab=results|review|details|versions` opens that tab. */
   readonly tab = input<string | undefined>(undefined);
 
-  /** Model versions are a builder's tool: shown to those who may run the Lab (F29). */
+  /**
+   * Model versions are a builder's tool: shown to those who may run the Lab
+   * (F29), and only for a strategy that learns from data (NB-16).
+   */
   protected readonly canSeeVersions = computed(
-    () => this.session.can('lab.run') || this.session.can('strategy.promote'),
+    () =>
+      !!this.detail()?.retrainable &&
+      (this.session.can('lab.run') || this.session.can('strategy.promote')),
   );
   /** The page's sections, in the console's one tab style (`<app-page-tabs>`, M4). */
   protected readonly tabs = computed<PageTab[]>(() => [
@@ -326,8 +337,18 @@ export class StrategyDetailPage {
   private readonly status = computed(() => this.detail()?.status ?? null);
   /** A name to read, not the registry id (UX-27). The id sits under Technical details. */
   protected readonly displayName = computed(() =>
-    strategyDisplayName(this.detail()?.id ?? this.id(), { starter: this.detail()?.starter }),
+    strategyDisplayName(this.detail()?.id ?? this.id(), {
+      starter: this.detail()?.starter,
+      name: this.detail()?.name,
+    }),
   );
+  /** "Test again": the Studio draft it came from, else the Lab (NB-09). */
+  protected readonly testAgain = computed(() => {
+    const draft = this.detail()?.draft_id;
+    return draft
+      ? { commands: ['/studio', draft], query: { tab: 'test' } }
+      : { commands: ['/lab'], query: { strategy: this.id() } };
+  });
 
   /**
    * The broker, read for an approved strategy: its title carries the LIVE
@@ -344,6 +365,10 @@ export class StrategyDetailPage {
   /** The go-live check, from the same read as the trial record. */
   protected readonly goliveReport = computed(() => this.sheetValue()?.golive ?? null);
   protected readonly golivePassed = computed(() => this.goliveReport()?.passed ?? null);
+  /** Trial days the go-live check needs, for the follow panel's one line on day counts. */
+  protected readonly trialDaysNeeded = computed(
+    () => this.goliveReport()?.checks.find((c) => c.name === 'min_days')?.limit ?? null,
+  );
 
   /** One plain verdict (F33): worth following, promising, or not good enough yet. */
   protected readonly verdict = computed<Verdict | null>(() => {
@@ -364,10 +389,10 @@ export class StrategyDetailPage {
         : null,
     });
   });
-  /** The verdict's Details fold: each check's value against its limit. */
+  /** The verdict's Details fold: how many go-live checks pass (R13). */
   protected readonly verdictChecks = computed(() => {
     const g = this.goliveReport();
-    return g ? g.checks.map((c) => checkRow(c, g.strategy_id)) : [];
+    return g ? traderChecks(g) : null;
   });
 
   protected readonly curve = computed(() => this.sheetValue()?.curve ?? []);
@@ -394,11 +419,12 @@ export class StrategyDetailPage {
       v === null || v === undefined ? NA : formatPercent(v, { signed });
     const num = (v: number | null | undefined) =>
       v === null || v === undefined ? NA : formatNumber(v, { digits: 2 });
+    const early = p.days < DAYS_FOR_RATIOS;
     return [
       { label: 'Total return', value: pct(p.total_return, true), help: 'total_return' },
-      { label: 'CAGR', value: pct(p.cagr, true), help: 'cagr' },
-      { label: 'Sharpe', value: num(p.sharpe), help: 'sharpe' },
-      { label: 'Max drawdown', value: pct(p.max_drawdown), help: 'max_drawdown' },
+      { label: 'CAGR', value: early ? TOO_EARLY : pct(p.cagr, true), help: 'cagr' },
+      { label: 'Sharpe', value: early ? TOO_EARLY : num(p.sharpe), help: 'sharpe' },
+      { label: 'Worst drop', value: pct(p.max_drawdown), help: 'max_drawdown' },
       { label: 'Volatility', value: pct(p.volatility), help: 'volatility' },
       { label: 'Days on trial', value: formatNumber(p.days), help: false as const },
       {
@@ -432,15 +458,19 @@ export class StrategyDetailPage {
   ];
   protected readonly orderKey = (o: OrderView) => o.client_id;
 
+  /** What kind of strategy it is, in the Lab's words (NB-16). */
   protected readonly kindName = computed(() => {
     const s = this.detail();
-    return s ? strategyKindName(s.class_path) : null;
+    return s ? s.kind || strategyKindName(s.class_path) : null;
   });
+  protected readonly assetWords = computed(() =>
+    assetClassWords(this.detail()?.applicable_asset_classes ?? []),
+  );
 
   protected readonly description = computed(() => {
     const s = this.detail();
     return s
-      ? `${strategyKindName(s.class_path)}. ${STATUS_WORDS[s.status]}.`
+      ? `${this.kindName()}. ${STATUS_WORDS[s.status]}.`
       : 'Verdict, trial results and how to follow it.';
   });
   protected readonly meaning = computed(() => {

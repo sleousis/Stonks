@@ -5,7 +5,9 @@ import {
   Injector,
   afterNextRender,
   computed,
+  effect,
   inject,
+  input,
   resource,
   signal,
 } from '@angular/core';
@@ -104,6 +106,14 @@ export class StudioPage {
 
   /** Creating, renaming and deleting drafts need `lab.run`. */
   protected readonly canLab = computed(() => this.session.can('lab.run'));
+  /** Query param `?new=1` ("New strategy" on the Strategies page) opens the template picker. */
+  readonly startNew = input<string | undefined>(undefined, { alias: 'new' });
+
+  constructor() {
+    effect(() => {
+      if (this.startNew() && this.canLab()) this.openCreate();
+    });
+  }
 
   protected readonly drafts = resource({
     loader: () => this.studio.drafts({ limit: PAGE_SIZE }),
@@ -133,16 +143,13 @@ export class StudioPage {
       {
         id: BLANK,
         title: 'Blank rules',
-        description: 'Close above its 50-bar average; build from there.',
+        description: 'Buys when the price closes above its 50 day average. Change it from there.',
       },
       ...templates.map((t) => ({ id: `t:${t.id}`, title: t.title, description: t.description })),
-      {
-        id: CODE,
-        title: 'Python code',
-        description: this.codeDisabled()
-          ? 'A BaseStrategy subclass. Turned off on this server.'
-          : 'A BaseStrategy subclass, run inside the server.',
-      },
+      // Python code only on a server that allows it (NB-08): hidden otherwise.
+      ...(this.codeDisabled()
+        ? []
+        : [{ id: CODE, title: 'Python code', description: 'A strategy written in Python.' }]),
     ];
   });
 

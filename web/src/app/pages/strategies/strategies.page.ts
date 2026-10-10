@@ -44,9 +44,9 @@ export function withPerformance(
     const p = byId.get(s.id);
     return {
       ...s,
-      name: strategyDisplayName(s.id, { starter: s.starter }),
+      name: strategyDisplayName(s.id, { starter: s.starter, name: s.name }),
       summary: s.starter?.summary ?? null,
-      kind: strategyKindName(s.class_path),
+      kind: s.kind || strategyKindName(s.class_path),
       paper_return: p?.cumulative_return ?? null,
       max_drawdown: p?.max_drawdown ?? null,
       paper_days: p ? p.days : null,
@@ -133,15 +133,10 @@ export class StrategiesPage {
     { key: 'id', label: 'Strategy', mobile: 'title', value: (s) => s.name },
     { key: 'status', label: 'Status' },
     { key: 'paper_return', label: 'Trial return', format: 'signedPercent', tone: true },
-    { key: 'max_drawdown', label: 'Max drawdown', format: 'percent' },
+    { key: 'max_drawdown', label: 'Worst drop', format: 'percent' },
     { key: 'paper_days', label: 'Days on trial', format: 'number' },
+    // Asset classes sit in search only, so the table fits at 1440 px (NB-16).
     { key: 'kind', label: 'Kind', mobile: 'hide' },
-    {
-      key: 'assets',
-      label: 'Asset classes',
-      value: (s) => s.applicable_asset_classes.join(', '),
-      mobile: 'hide',
-    },
     { key: 'created_at', label: 'Added', format: 'date', mobile: 'hide' },
   ];
   protected readonly strategyKey = (s: StrategyRow) => s.id;

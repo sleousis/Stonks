@@ -2,11 +2,15 @@
   title="Strategies"
   description="Every strategy, its status and how it does on trial. Open one to judge it and follow it."
 >
+  <a actions class="btn btn-primary" routerLink="/studio" [queryParams]="{ new: 1 }"
+    >New strategy</a
+  >
+  <a actions class="related-link" routerLink="/lab">Test a strategy</a>
   <a actions class="related-link" routerLink="/leaderboard">Compare on the Leaderboard</a>
   <button
     actions
     type="button"
-    class="btn"
+    class="btn btn-ghost"
     [disabled]="strategies.isLoading()"
     [attr.aria-busy]="strategies.isLoading()"
     (click)="strategies.reload(); paper.reload()"

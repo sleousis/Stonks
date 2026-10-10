@@ -6,7 +6,7 @@ import type { BrokerInfo, LeaderboardRow, LeaderboardView } from '../../api/mode
 import { provideApi } from '../../api/provide-api';
 import { tick } from '../../../testing/http';
 import { paper } from '../../../testing/strategy-fixtures';
-import { GoLivePage, reviewOrder } from './go-live.page';
+import { GoLivePage, reviewGoliveLabel, reviewOrder } from './go-live.page';
 
 function row(id: string, extra: Partial<LeaderboardRow> = {}): LeaderboardRow {
   return {
@@ -126,6 +126,14 @@ describe('GoLivePage (Strategy review)', () => {
     fixture.detectChanges();
     await flushAll({ ...BOARD, rows: [] });
     expect(el.textContent).toContain('No strategies yet');
+  });
+
+  it('says Approved by override, not Failed, for an approved strategy (R13)', () => {
+    expect(reviewGoliveLabel(row('a', { status: 'active', golive_passed: false }))).toBe(
+      'Approved by override',
+    );
+    expect(reviewGoliveLabel(row('b', { golive_passed: false }))).toBe('Failed');
+    expect(reviewGoliveLabel(row('c', { status: 'active', golive_passed: true }))).toBe('Passed');
   });
 
   it('orders the queue: ready, then on trial, then approved', () => {

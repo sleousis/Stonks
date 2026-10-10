@@ -1,16 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 
-import type { Verdict } from '../strategy-verdict';
+import { VERDICT_TONES, VERDICT_WORDS, type Verdict } from '../strategy-verdict';
 import { StrategyVerdict } from './strategy-verdict';
 
 function verdict(reasons: string[], level: Verdict['level'] = 'promising'): Verdict {
-  const words = {
-    worth: 'Worth following',
-    promising: 'Promising, needs more data',
-    not_yet: 'Not good enough yet',
-  } as const;
-  const tones = { worth: 'positive', promising: 'warn', not_yet: 'negative' } as const;
-  return { level, label: words[level], tone: tones[level], reasons };
+  return { level, label: VERDICT_WORDS[level], tone: VERDICT_TONES[level], reasons };
 }
 
 describe('StrategyVerdict (F33)', () => {

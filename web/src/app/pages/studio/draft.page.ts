@@ -91,6 +91,8 @@ export class DraftPage {
   protected readonly canLab = computed(() => this.session.can('lab.run'));
 
   readonly id = input.required<string>();
+  /** Query param `?tab=test|ship` opens that tab ("Test again" on a strategy page). */
+  readonly startTab = input<string | undefined>(undefined, { alias: 'tab' });
 
   protected readonly draftRes = resource({
     params: () => ({ id: this.id() }),
@@ -206,9 +208,12 @@ export class DraftPage {
   protected readonly ensureSaved = (): Promise<boolean> => this.save();
 
   constructor() {
-    // A fresh draft id starts on the build tab with no stale smoke result.
+    // A fresh draft id starts on the build tab (or the linked one) with no
+    // stale smoke result.
     effect(() => {
       this.id();
+      const start = this.startTab();
+      this.tab.set(start === 'test' || start === 'ship' ? start : 'build');
       this.smoke.set(null);
     });
   }
