@@ -1,5 +1,6 @@
 import {
   DEFAULT_FIELDS,
+  KIND_HINT,
   type UniverseForm,
   parseSpec,
   specFromFields,
@@ -15,7 +16,7 @@ import { METRICS } from '../../../testing/screener-fixtures';
 function form(over: Partial<UniverseForm> = {}): UniverseForm {
   return {
     id: 'big-caps',
-    name: '',
+    name: 'Big caps',
     description: '',
     kind: 'list',
     source: 'fields',
@@ -27,6 +28,10 @@ function form(over: Partial<UniverseForm> = {}): UniverseForm {
 }
 
 describe('universe form', () => {
+  it('says what each kind is in plain words', () => {
+    expect(Object.values(KIND_HINT).join(' ')).not.toContain('survivorship');
+  });
+
   it('starts each kind from an example spec', () => {
     expect(JSON.parse(specTemplate('exchange'))).toMatchObject({ exchange: 'US' });
     expect(JSON.parse(specTemplate('index'))).toMatchObject({ index_id: 'sp500' });
@@ -80,8 +85,9 @@ describe('universe form', () => {
     expect(parseSpec('{nope')).toEqual({ error: 'The definition is not valid JSON.' });
   });
 
-  it('checks the id, the fields, the JSON and the CSV', () => {
+  it('checks the name, the id, the fields, the JSON and the CSV', () => {
     expect(universeFormErrors(form())).toEqual({});
+    expect(universeFormErrors(form({ name: ' ' })).name).toBe('Enter a name.');
     expect(universeFormErrors(form({ id: '' })).id).toBe('Enter an id.');
     expect(universeFormErrors(form({ id: 'has space' })).id).toContain('letters');
     expect(universeFormErrors(form({ fields: { ...DEFAULT_FIELDS, tickers: ' ' } })).tickers).toBe(
@@ -147,6 +153,8 @@ describe('universe form', () => {
       spec: { spans: [{ ticker: 'OLD.US', start_date: '2020-01-02' }] },
     });
     expect(spans.source).toBe('json');
+    // A universe stored without a name shows its id as the name.
+    expect(spans.name).toBe('dated');
     expect(JSON.parse(spans.specText)).toEqual({
       spans: [{ ticker: 'OLD.US', start_date: '2020-01-02' }],
     });

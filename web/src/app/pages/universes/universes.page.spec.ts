@@ -9,6 +9,7 @@ import { ConfirmService } from '../../core/confirm/confirm.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, page, tick } from '../../../testing/http';
+import { provideFakeDataCoverage } from '../../../testing/fake-data-coverage';
 import { UniversesPage } from './universes.page';
 
 const UNIVERSES: UniverseView[] = [
@@ -57,6 +58,7 @@ describe('UniversesPage', () => {
         ...provideApi(),
         provideHttpClientTesting(),
         provideRouter([]),
+        provideFakeDataCoverage(),
         { provide: ConfirmService, useValue: { confirm } },
       ],
     });
@@ -92,9 +94,9 @@ describe('UniversesPage', () => {
     fixture.detectChanges();
     button('Create universe')!.click();
     fixture.detectChanges();
-    expect(el.textContent).toContain('Enter an id.');
+    expect(el.textContent).toContain('Enter a name.');
 
-    type('#u-id', 'tech');
+    type('#u-name', 'Tech');
     const kind = el.querySelector<HTMLSelectElement>('#u-kind')!;
     kind.value = 'exchange';
     kind.dispatchEvent(new Event('change'));
@@ -128,7 +130,7 @@ describe('UniversesPage', () => {
   it('asks for at least one ticker on a list', async () => {
     button('New universe')!.click();
     fixture.detectChanges();
-    type('#u-id', 'mine');
+    type('#u-name', 'Mine');
     type('#u-tickers', ' ');
     button('Create universe')!.click();
     fixture.detectChanges();
@@ -140,7 +142,7 @@ describe('UniversesPage', () => {
     vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     button('New universe')!.click();
     fixture.detectChanges();
-    type('#u-id', 'raw');
+    type('#u-name', 'Raw');
     type('#u-tickers', 'nvda.us');
     button('Edit as JSON')!.click();
     fixture.detectChanges();
@@ -156,11 +158,11 @@ describe('UniversesPage', () => {
     await settle();
   });
 
-  it('creates a list universe from an uploaded CSV', async () => {
-    vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+  it('creates a list universe from an uploaded CSV and fills it at once', async () => {
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
     button('New universe')!.click();
     fixture.detectChanges();
-    type('#u-id', 'watch2');
+    type('#u-name', 'Watch2');
     el.querySelectorAll<HTMLInputElement>('input[name="u-source"]')[1].click();
     fixture.detectChanges();
 
@@ -184,6 +186,10 @@ describe('UniversesPage', () => {
     post.flush({ id: 'watch2', kind: 'list', spec: {} });
     (await nextRequest(http, '/api/universes')).flush(page(UNIVERSES));
     await settle();
+    // A list refreshes on its page right away: no manual Refresh and confirm.
+    expect(navigate).toHaveBeenCalledWith(['/universes', 'watch2'], {
+      queryParams: { fill: 1 },
+    });
   });
 
   it('imports an index history', async () => {
@@ -220,10 +226,11 @@ describe('UniversesPage', () => {
     beforeAll(() => (me = { ...TRADER, role: 'viewer', scopes: ['read'] }));
     afterAll(() => (me = ADMIN));
 
-    it('sees why New universe and Import history are off', () => {
+    it('sees why New universe is off, and no index history', () => {
       expect(button('New universe')!.disabled).toBe(true);
-      expect(button('Import history')!.disabled).toBe(true);
       expect(el.textContent).toContain('Traders and admins only.');
+      expect(button('Import history')).toBeUndefined();
+      expect(el.textContent).not.toContain('Index history');
     });
   });
 });

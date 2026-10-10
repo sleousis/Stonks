@@ -82,6 +82,20 @@ fieldset.group {
   margin-right: var(--space-2);
 }
 
+.advanced {
+  display: grid;
+  gap: var(--space-3);
+
+  > summary {
+    display: flex;
+    align-items: center;
+    min-height: var(--touch-min);
+    cursor: pointer;
+    color: var(--color-ink-2);
+    font-weight: var(--weight-medium);
+  }
+}
+
 label.check.field {
   align-self: end;
 }

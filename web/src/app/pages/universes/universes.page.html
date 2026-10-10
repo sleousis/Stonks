@@ -32,6 +32,7 @@
         <app-universe-editor
           mode="create"
           [universes]="universes.hasValue() ? universes.value() : []"
+          [advanced]="isAdmin()"
           (saved)="created($event)"
           (cancelled)="creating.set(false)"
         />
@@ -86,88 +87,89 @@
     }
   </section>
 
-  <!-- Index history --------------------------------------------------------->
-  <section class="panel span-12" aria-labelledby="index-title">
-    <div class="panel-head">
-      <h2 id="index-title">Index history</h2>
-      <span class="muted">For index universes</span>
-    </div>
-    <form class="panel-body" novalidate (submit)="$event.preventDefault(); importHistory()">
-      <p class="muted intro">
-        A member snapshot plus dated additions and removals. CSV columns: date, ticker, action
-        (member, add or remove).
-      </p>
-      <div class="form-grid form-grid-2">
-        <div class="field">
-          <label for="ix-id">Index id</label>
-          <input
-            id="ix-id"
-            class="input"
-            placeholder="e.g. sp500"
-            spellcheck="false"
-            autocapitalize="off"
-            [attr.aria-invalid]="indexSubmitted() && !!indexErrors().id"
-            [value]="indexId()"
-            (input)="indexId.set($any($event.target).value)"
-          />
-          @if (indexSubmitted() && indexErrors().id; as e) {
-            <p class="error">{{ e }}</p>
-          }
+  <!-- Index history (admins, Advanced) ---------------------------------------->
+  @if (isAdmin()) {
+    <details class="panel span-12 advanced" aria-labelledby="index-title">
+      <summary class="panel-head">
+        <h2 id="index-title">Index history</h2>
+        <span class="muted">Advanced, for index universes</span>
+      </summary>
+      <form class="panel-body" novalidate (submit)="$event.preventDefault(); importHistory()">
+        <p class="muted intro">
+          A member snapshot plus dated additions and removals. CSV columns: date, ticker, action
+          (member, add or remove).
+        </p>
+        <div class="form-grid form-grid-2">
+          <div class="field">
+            <label for="ix-id">Index id</label>
+            <input
+              id="ix-id"
+              class="input"
+              placeholder="e.g. sp500"
+              spellcheck="false"
+              autocapitalize="off"
+              [attr.aria-invalid]="indexSubmitted() && !!indexErrors().id"
+              [value]="indexId()"
+              (input)="indexId.set($any($event.target).value)"
+            />
+            @if (indexSubmitted() && indexErrors().id; as e) {
+              <p class="error">{{ e }}</p>
+            }
+          </div>
+          <div class="field">
+            <label for="ix-format">Format</label>
+            <select
+              id="ix-format"
+              class="input"
+              [value]="indexFormat()"
+              (change)="indexFormat.set($any($event.target).value)"
+            >
+              <option value="csv">CSV</option>
+              <option value="json">JSON</option>
+            </select>
+          </div>
+          <div class="field span-all">
+            <label for="ix-file">File</label>
+            <input
+              #indexInput
+              id="ix-file"
+              class="input file"
+              type="file"
+              accept=".csv,.json,text/csv,application/json,text/plain"
+              (change)="pickIndexFile(indexInput)"
+            />
+            @if (indexFile(); as n) {
+              <p class="hint">Chosen: {{ n }}.</p>
+            }
+          </div>
+          <div class="field span-all">
+            <label for="ix-content">Or paste the history</label>
+            <textarea
+              id="ix-content"
+              class="input code"
+              rows="5"
+              spellcheck="false"
+              placeholder="date,ticker,action"
+              [attr.aria-invalid]="indexSubmitted() && !!indexErrors().content"
+              [value]="indexContent()"
+              (input)="indexContent.set($any($event.target).value)"
+            ></textarea>
+            @if (indexSubmitted() && indexErrors().content; as e) {
+              <p class="error">{{ e }}</p>
+            }
+          </div>
         </div>
-        <div class="field">
-          <label for="ix-format">Format</label>
-          <select
-            id="ix-format"
-            class="input"
-            [value]="indexFormat()"
-            (change)="indexFormat.set($any($event.target).value)"
+        <div class="form-actions">
+          <button
+            type="submit"
+            class="btn"
+            [disabled]="importing() || !canEdit()"
+            [attr.aria-busy]="importing()"
           >
-            <option value="csv">CSV</option>
-            <option value="json">JSON</option>
-          </select>
+            {{ importing() ? 'Importing…' : 'Import history' }}
+          </button>
         </div>
-        <div class="field span-all">
-          <label for="ix-file">File</label>
-          <input
-            #indexInput
-            id="ix-file"
-            class="input file"
-            type="file"
-            accept=".csv,.json,text/csv,application/json,text/plain"
-            (change)="pickIndexFile(indexInput)"
-          />
-          @if (indexFile(); as n) {
-            <p class="hint">Chosen: {{ n }}.</p>
-          }
-        </div>
-        <div class="field span-all">
-          <label for="ix-content">Or paste the history</label>
-          <textarea
-            id="ix-content"
-            class="input code"
-            rows="5"
-            spellcheck="false"
-            placeholder="date,ticker,action"
-            [attr.aria-invalid]="indexSubmitted() && !!indexErrors().content"
-            [value]="indexContent()"
-            (input)="indexContent.set($any($event.target).value)"
-          ></textarea>
-          @if (indexSubmitted() && indexErrors().content; as e) {
-            <p class="error">{{ e }}</p>
-          }
-        </div>
-      </div>
-      <div class="form-actions">
-        <button
-          type="submit"
-          class="btn"
-          [disabled]="importing() || !canEdit()"
-          [attr.aria-busy]="importing()"
-        >
-          {{ importing() ? 'Importing…' : 'Import history' }}
-        </button>
-        <app-permission-note permission="lab.run" />
-      </div>
-    </form>
-  </section>
+      </form>
+    </details>
+  }
 </div>

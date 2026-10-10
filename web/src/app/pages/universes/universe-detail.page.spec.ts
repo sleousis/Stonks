@@ -12,6 +12,7 @@ import { isoDay } from '../../core/format/format';
 import { ToastService } from '../../core/notify/toast.service';
 import { ADMIN, TRADER } from '../../../testing/auth-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
+import { provideFakeDataCoverage } from '../../../testing/fake-data-coverage';
 import { UniverseDetailPage } from './universe-detail.page';
 
 const UNIVERSE: UniverseView = {
@@ -80,6 +81,7 @@ describe('UniverseDetailPage', () => {
         ...provideApi(),
         provideHttpClientTesting(),
         provideRouter([]),
+        provideFakeDataCoverage(),
         { provide: ConfirmService, useValue: { confirm } },
         { provide: JobsService, useValue: { track: (id: string) => finished(id) } },
       ],
@@ -108,6 +110,47 @@ describe('UniverseDetailPage', () => {
     const rows = [...members.querySelectorAll('tbody tr')].map((tr) => tr.textContent?.trim());
     expect(rows).toEqual(['AAPL.US', 'MSFT.US']);
     expect(el.querySelector<HTMLInputElement>('#m-date')!.value).toBe(isoDay());
+  });
+
+  it('says where to pick it in the lab, in the lab words', () => {
+    const hint = el.querySelector('.lab-hint')!;
+    expect(hint.textContent).toContain('Tickers to test');
+    expect(hint.querySelector('a')).toBeNull();
+    // The definition as JSON sits under Advanced.
+    const spec = el.querySelector('details.advanced')!;
+    expect(spec.querySelector('summary')!.textContent).toContain('Definition');
+  });
+
+  it('fills a list just created without asking (?fill=1)', async () => {
+    const list: UniverseView = { ...UNIVERSE, kind: 'list', member_count: null };
+    const second = TestBed.createComponent(UniverseDetailPage);
+    second.componentRef.setInput('id', 'us-big');
+    second.componentRef.setInput('fill', '1');
+    second.detectChanges();
+    (await nextRequest(http, '/api/universes/us-big')).flush(list);
+    await flushMembers([]);
+    await flushHistory([]);
+    for (let i = 0; i < 4; i++) {
+      await tick();
+      second.detectChanges();
+    }
+    (await nextRequest(http, '/api/universes/us-big/refresh', 'POST')).flush({ id: 'job_f' });
+    expect(confirm).not.toHaveBeenCalled();
+    (await nextRequest(http, '/api/universes/refresh/job_f/result')).flush({
+      universe_id: 'us-big',
+      kind: 'list',
+      members: 2,
+      current_members: 2,
+      spans: 2,
+      warnings: [],
+    });
+    (await nextRequest(http, '/api/universes/us-big')).flush({ ...list, member_count: 2 });
+    await flushMembers(['AAPL.US', 'MSFT.US']);
+    await flushHistory();
+    for (let i = 0; i < 4; i++) {
+      await tick();
+      second.detectChanges();
+    }
   });
 
   it('links to the lab with this universe picked (17.9)', () => {
@@ -319,7 +362,7 @@ describe('UniverseDetailPage', () => {
     (await nextRequest(http, '/api/screener/metrics')).flush([]);
     await settle();
     const panel = el.querySelector('#edit-panel')!;
-    expect(panel.querySelector<HTMLInputElement>('#u-id')!.value).toBe('us-big');
+    expect(panel.querySelector<HTMLInputElement>('#u-name')!.value).toBe('US large caps');
     button('Save changes')!.click();
     const put = await nextRequest(http, '/api/universes/us-big', 'PUT');
     expect(put.request.body).toMatchObject({ kind: 'rule', name: 'US large caps' });
@@ -354,6 +397,9 @@ describe('UniverseDetailPage', () => {
       expect(button('Edit')!.disabled).toBe(false);
       expect(el.querySelector('app-page-header')!.textContent).toContain('Admins only.');
       expect(el.textContent).not.toContain('the lake');
+      // The JSON definition and the data source are for admins.
+      expect(el.textContent).not.toContain('"rebalance"');
+      expect(el.querySelector('#e-source')).toBeNull();
     });
   });
 });
