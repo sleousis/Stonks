@@ -24,8 +24,8 @@ import { lastPreview } from './preview-memory';
 
 /**
  * Going live (F52): one checklist that walks the whole path from paper to
- * real money for one portfolio, in order: the server's broker gateway, the
- * broker connection, the portfolio's stage, the allocation, the account
+ * real money for one portfolio, in order: the broker connection, the
+ * server's link to Interactive Brokers (IBKR only), the portfolio's stage, the allocation, the account
  * profile, the safeguards, a dry-run preview, and the switch of a follow to
  * Approve each trade or Automatic. Each step shows whether it is done, who
  * acts (you or your admin) and a link to where it is done. It reads only;
@@ -85,7 +85,7 @@ import { lastPreview } from './preview-memory';
           </div>
         }
         <p class="progress" aria-live="polite">
-          <strong class="num">{{ doneCount() }} of {{ steps().length }}</strong> steps done for
+          <strong class="num">{{ doneCount() }} of {{ total() }}</strong> steps done for
           <strong>{{ p.name }}</strong
           >.
           @if (stageLabel(); as s) {
@@ -97,10 +97,10 @@ import { lastPreview } from './preview-memory';
           role="progressbar"
           aria-label="Steps done"
           aria-valuemin="0"
-          [attr.aria-valuemax]="steps().length"
+          [attr.aria-valuemax]="total()"
           [attr.aria-valuenow]="doneCount()"
         >
-          <span [style.width.%]="(doneCount() / steps().length) * 100"></span>
+          <span [style.width.%]="(doneCount() / total()) * 100"></span>
         </div>
       </div>
 
@@ -110,32 +110,37 @@ import { lastPreview } from './preview-memory';
 
       <ol class="steps" [class.live]="realMoney()">
         @for (s of steps(); track s.key; let i = $index) {
-          <li class="step" [attr.data-state]="s.state" [attr.data-step]="s.key">
-            <span class="mark" aria-hidden="true">
-              @if (s.state === 'done') {
-                ✓
-              } @else {
-                {{ i + 1 }}
+          @if (s.key === 'later') {
+            <!-- The steps that wait for a broker, as one muted line (PO-12). -->
+            <li class="later muted" data-step="later">{{ s.title }}</li>
+          } @else {
+            <li class="step" [attr.data-state]="s.state" [attr.data-step]="s.key">
+              <span class="mark" aria-hidden="true">
+                @if (s.state === 'done') {
+                  ✓
+                } @else {
+                  {{ numbers()[i] }}
+                }
+              </span>
+              <div class="body">
+                <h2 class="title">
+                  <span class="visually-hidden">Step {{ numbers()[i] }}: </span>{{ s.title }}
+                </h2>
+                <p class="detail">{{ s.detail }}</p>
+              </div>
+              <span class="state" [attr.data-state]="s.state">{{ stateWords[s.state] }}</span>
+              @if (s.link; as l) {
+                <a
+                  class="btn"
+                  [class.btn-primary]="s.state === 'todo' && firstTodo() === s.key"
+                  [routerLink]="l.path"
+                  [fragment]="l.fragment"
+                  [queryParams]="l.query ?? null"
+                  >{{ l.label }}<span class="visually-hidden"> for {{ s.title }}</span></a
+                >
               }
-            </span>
-            <div class="body">
-              <h2 class="title">
-                <span class="visually-hidden">Step {{ i + 1 }}: </span>{{ s.title }}
-              </h2>
-              <p class="detail">{{ s.detail }}</p>
-            </div>
-            <span class="state" [attr.data-state]="s.state">{{ stateWords[s.state] }}</span>
-            @if (s.link; as l) {
-              <a
-                class="btn"
-                [class.btn-primary]="s.state === 'todo' && firstTodo() === s.key"
-                [routerLink]="l.path"
-                [fragment]="l.fragment"
-                [queryParams]="l.query ?? null"
-                >{{ l.label }}<span class="visually-hidden"> for {{ s.title }}</span></a
-              >
-            }
-          </li>
+            </li>
+          }
         }
       </ol>
 
@@ -202,6 +207,12 @@ import { lastPreview } from './preview-memory';
     }
     .step[data-state='done'] {
       background: var(--color-surface-2);
+    }
+    .later {
+      padding: var(--space-2) var(--space-4);
+      border: 1px dashed var(--color-border);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
     }
     .mark {
       display: inline-grid;
@@ -349,6 +360,20 @@ export class GoingLivePage {
       rules: value(this.rules),
       follows: value(this.follows) ?? (this.follows.error() ? [] : undefined),
       previewedAt: lastPreview(p.id),
+    });
+  });
+
+  /** Every step, counting the ones the muted line stands for. */
+  protected readonly total = computed(() =>
+    this.steps().reduce((sum, s) => sum + (s.span ?? 1), 0),
+  );
+  /** Each entry's step number, after the steps a muted line stands for. */
+  protected readonly numbers = computed(() => {
+    let next = 1;
+    return this.steps().map((s) => {
+      const n = next;
+      next += s.span ?? 1;
+      return n;
     });
   });
 

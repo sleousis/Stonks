@@ -150,8 +150,8 @@ describe('GoingLivePage', () => {
     expect(el.querySelector('app-error-state')).toBeNull();
     const steps = [...el.querySelectorAll('li.step')];
     expect(steps.map((s) => s.getAttribute('data-step'))).toEqual([
-      'gateway',
       'broker',
+      'gateway',
       'stage',
       'allocation',
       'profile',
@@ -184,12 +184,21 @@ describe('GoingLivePage', () => {
     expect(el.querySelector('ol.steps')!.classList).toContain('live');
   });
 
-  it('holds the later steps of a paper portfolio behind the broker step', async () => {
+  it('folds the steps that wait for a broker into one muted line (PO-12)', async () => {
     const el = await render({ portfolio: 'pf_p' });
-    expect(el.querySelector('li[data-step="broker"] .state')!.textContent).toContain('Not yet');
-    expect(el.querySelector('li[data-step="stage"] .state')!.textContent).toContain(
-      'Needs an earlier step',
+    const steps = [...el.querySelectorAll('ol.steps > li')].map((li) =>
+      li.getAttribute('data-step'),
     );
+    expect(steps).toEqual(['broker', 'later', 'mode']);
+    expect(el.querySelector('li[data-step="broker"] .state')!.textContent).toContain('Not yet');
+    expect(el.querySelector('li[data-step="later"]')!.textContent).toContain(
+      'Steps 2 to 6 open once a broker is linked.',
+    );
+    expect(el.textContent).not.toContain('Needs an earlier step');
+    expect(el.textContent).not.toContain('gateway');
+    // The last step keeps its place in the count.
+    expect(el.querySelector('li[data-step="mode"] .mark')!.textContent?.trim()).toBe('7');
+    expect(el.querySelector('.progress')!.textContent).toContain('of 7');
     expect(el.querySelector('app-page-header app-mode-stamp')).toBeNull();
     const picker = el.querySelector<HTMLSelectElement>('#gl-portfolio')!;
     expect(picker.value).toBe('pf_p');
