@@ -393,6 +393,8 @@ def test_kill_switch_blocks_orders_until_resumed_with_a_fresh_code(
     # phrase, the reason filled in. The server still asks for a fresh code.
     expect(dialog.locator("#resume-typed")).to_have_count(0)
     expect(dialog.locator("#resume-reason")).to_have_count(0)
+    # The stale code comes back as 403 step_up_required, and the console asks.
+    v.guard.expect_refusal(403, r"/api/halts/\d+/resume$", "a stale code asks for a fresh one")
     dialog.get_by_role("button", name="Resume trading").click()
     step_up = page.locator(
         "dialog[open]", has=page.get_by_role("heading", name="Confirm it is you")
