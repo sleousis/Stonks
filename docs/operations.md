@@ -898,7 +898,7 @@ The shipped `config/default.toml` turns on three protections for a new install. 
 
 Stonks finds `config/default.toml` under the working folder first, then in the project that holds the code, so running from another folder keeps these limits. Without any config file, `stonks serve`, `stonks tick` and the scheduler refuse to start, and other commands log a warning, because the code defaults drop every limit above.
 
-The circuit breaker and the drawdown scaler read the book's value with deposits and withdrawals taken out, in the same way as the time-weighted return (see [returns and cash flows](#returns-and-cash-flows)). A deposit after a 10% loss still shows a 10% drawdown, and a withdrawal is not a loss. The value history on the P&L pages stays as it was.
+The circuit breaker and the drawdown scaler read the book's value with deposits and withdrawals taken out, in the same way as the time-weighted return (see [returns and cash flows](#returns-and-cash-flows)). A deposit after a 10% loss still shows a 10% drawdown, and a withdrawal is not a loss. A flow in another currency is converted on its own day. If no rate converts it, only that day counts as flat, and every other flow is still taken out. The value history on the P&L pages stays as it was.
 
 There is no one-day loss limit: the shortest breaker is the week loss over `week_sessions` runs (set it to 1 for a day). An existing install that keeps its own config file keeps its own values. To loosen a protection, change it in the file or in the console (below); a portfolio or follow can only tighten it.
 

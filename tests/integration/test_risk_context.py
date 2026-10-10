@@ -225,15 +225,24 @@ def test_a_withdrawal_does_not_trip_the_circuit_breaker(lake, state):
     assert adj == [] and kept[0].quantity == 10.0
 
 
-def test_a_flow_in_another_currency_without_a_rate_keeps_the_raw_curve(lake, state, monkeypatch):
-    from stonks.fx import FxRateMissing
+def test_a_flow_in_another_currency_without_a_rate_counts_its_day_as_flat(lake, state, monkeypatch):
     from stonks.insights import flows
+    from stonks.insights.flows import RecordedFlow
 
-    def missing(*_a, **_k):
-        raise FxRateMissing("JPY", "USD", date(2026, 3, 30))
-
-    monkeypatch.setattr(flows, "external_flows", missing)
-    _snap(state, "2026-03-27", 1_000.0)
-    _snap(state, "2026-03-30", 1_500.0)
+    jpy = RecordedFlow(
+        day=date(2026, 3, 30),
+        kind="deposit",
+        amount=50_000.0,
+        source="broker",
+        currency="JPY",
+        account_currency="USD",
+    )
+    monkeypatch.setattr(flows, "recorded_flows", lambda s, p: [jpy])
+    _snap(state, "2026-03-26", 1_000.0)
+    _snap(state, "2026-03-27", 1_100.0)
+    _snap(state, "2026-03-30", 1_500.0)  # the JPY deposit landed: no rate to value it
     ctx = build_risk_context(lake, state, Portfolio(cash=1_500.0), {}, AS_OF)
-    assert ctx.equity_curve == [(date(2026, 3, 27), 1_000.0), (date(2026, 3, 30), 1_500.0)]
+    values = [v for _, v in ctx.equity_curve]
+    assert values[-1] == pytest.approx(1_500.0)
+    assert values[-1] / values[-2] == pytest.approx(1.0)
+    assert values[1] / values[0] == pytest.approx(1.1)
