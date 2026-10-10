@@ -30,7 +30,7 @@ import json
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import date
+from datetime import UTC, date
 from typing import Any, Protocol
 
 import numpy as np
@@ -583,7 +583,7 @@ def _gate_live_small(g: GateInput) -> list[GateCheck]:
             facts.profile_set,
             "the account profile is set" if facts.profile_set else "set the account profile first",
         ),
-        _drill(g.state, g.portfolio_id, g.today),
+        _drill(g.state, g.portfolio_id, g.today, settings.drill_max_age_days),
         _tracking(metrics, settings),
     ]
 
@@ -615,7 +615,7 @@ def _gate_live_scale(g: GateInput) -> list[GateCheck]:
             value=metrics["tca_gap_bps"],
             required="interval low <= 0",
         ),
-        _drill(g.state, g.portfolio_id, g.today),
+        _drill(g.state, g.portfolio_id, g.today, settings.drill_max_age_days),
         _tracking(metrics, settings),
     ]
 
@@ -667,31 +667,47 @@ def _drift_known(metrics: Mapping[str, Any]) -> GateCheck:
     )
 
 
-def _drill(state: SqliteState, portfolio_id: str, today: date) -> GateCheck:
-    """A passing kill switch drill in the last 30 days.
+def _drill(state: SqliteState, portfolio_id: str, today: date, max_age_days: int) -> GateCheck:
+    """The latest kill switch drill for the portfolio, or a global one,
+    passed and ran in the last ``max_age_days`` days (``[production.live.stages]
+    drill_max_age_days``). Without one, or when the latest failed, the gate
+    is blocked."""
+    from stonks.production.drills import latest_drill
 
-    TODO(19.11): ``kill_switch_drills`` comes with the drills work package.
-    Until then the check is ``unavailable``."""
+    run = "run `stonks halts drill`"
     if not _table_exists(state, "kill_switch_drills"):
-        return GateCheck("kill_switch_drill", None, "unavailable: drills come with roadmap 19.11")
-    cols = {r["name"] for r in state.sql("PRAGMA table_info(kill_switch_drills)")}
-    if not {"portfolio_id", "passed", "created_at"} <= cols:
-        return GateCheck("kill_switch_drill", None, "unavailable: unknown drills table")
-    rows = state.sql(
-        "SELECT MAX(created_at) AS last FROM kill_switch_drills WHERE portfolio_id = ?"
-        " AND passed = 1",
-        [portfolio_id],
-    )
-    last = rows[0]["last"] if rows else None
-    if last is None:
-        return GateCheck("kill_switch_drill", False, "no passing drill yet")
-    age = (today - date.fromisoformat(str(last)[:10])).days
+        return GateCheck(
+            "kill_switch_drill",
+            False,
+            f"no drills table: run `stonks db init`, then {run}",
+            required=max_age_days,
+        )
+    latest = latest_drill(state, portfolio_id)
+    if latest is None:
+        return GateCheck(
+            "kill_switch_drill",
+            False,
+            f"no passing kill switch drill yet: {run}",
+            required=max_age_days,
+        )
+    age = (today - latest.ran_at.astimezone(UTC).date()).days
+    if not latest.passed:
+        return GateCheck(
+            "kill_switch_drill",
+            False,
+            f"last kill switch drill failed {age} day(s) ago: fix it and {run}",
+            value=age,
+            required=max_age_days,
+        )
+    ok = age <= max_age_days
     return GateCheck(
         "kill_switch_drill",
-        age <= 30,
-        f"last passing drill {age} day(s) ago",
+        ok,
+        f"last passing drill {age} day(s) ago"
+        if ok
+        else f"last passing drill {age} day(s) ago, older than {max_age_days} days: {run}",
         value=age,
-        required=30,
+        required=max_age_days,
     )
 
 

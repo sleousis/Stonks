@@ -46,9 +46,25 @@ def workdir(tmp_path, monkeypatch):
 def test_scratch_drill_goes_through_the_halt_service_and_leaves_real_state_alone(tmp_path):
     real = tmp_path / "real.sqlite"
     settings = Settings(state=StateConfig(path=real))
-    report = run_kill_switch_drill_scratch(settings)
+    report = run_kill_switch_drill_scratch(settings, record=False)
     assert report.passed, report.steps
     assert not real.exists()
+
+
+def test_scratch_drill_records_one_row_and_nothing_else_in_real_state(tmp_path):
+    real = tmp_path / "real.sqlite"
+    settings = Settings(state=StateConfig(path=real))
+    report = run_kill_switch_drill_scratch(settings, ran_by="cli:ops", portfolio_id="pf_default")
+    assert report.passed, report.steps
+    with SqliteState(real) as state:
+        rows = state.sql("SELECT * FROM kill_switch_drills")
+        assert [(r["ran_by"], r["portfolio_id"], r["passed"]) for r in rows] == [
+            ("cli:ops", "pf_default", 1)
+        ]
+        assert json.loads(rows[0]["report_json"])["broker"] == "simulated"
+        # the drill's halt and order stayed in the scratch state
+        assert state.sql("SELECT COUNT(*) AS n FROM risk_halts")[0]["n"] == 0
+        assert state.sql("SELECT COUNT(*) AS n FROM orders")[0]["n"] == 0
 
 
 def test_scratch_drill_through_the_ibkr_adapter_on_the_fake_gateway(tmp_path):
@@ -67,6 +83,39 @@ def test_halts_drill_prints_every_step(runner, workdir):
     for name in ("place_working_order", "engage_kill", "working_order_cancelled", "resume"):
         assert name in result.output
     assert "drill passed" in result.output
+    assert "recorded for every portfolio" in result.output
+    with SqliteState(workdir / "data" / "state.sqlite") as state:
+        rows = state.sql("SELECT ran_by, portfolio_id, passed FROM kill_switch_drills")
+    assert len(rows) == 1
+    assert rows[0]["ran_by"].startswith("cli") and rows[0]["passed"] == 1
+    assert rows[0]["portfolio_id"] is None
+
+
+def test_halts_drill_for_one_portfolio(runner, workdir):
+    result = runner.invoke(app, ["halts", "drill", "--portfolio", "pf_default"])
+    assert result.exit_code == 0, result.output
+    with SqliteState(workdir / "data" / "state.sqlite") as state:
+        rows = state.sql("SELECT portfolio_id FROM kill_switch_drills")
+    assert [r["portfolio_id"] for r in rows] == ["pf_default"]
+
+
+def test_halts_drill_refuses_an_unknown_portfolio(runner, workdir):
+    result = runner.invoke(app, ["halts", "drill", "--portfolio", "pf_typo"])
+    assert result.exit_code != 0
+    assert "pf_typo" in result.output and "no such portfolio" in result.output
+    with SqliteState(workdir / "data" / "state.sqlite") as state:
+        assert state.sql("SELECT COUNT(*) AS n FROM kill_switch_drills")[0]["n"] == 0
+
+
+def test_scratch_drill_refuses_an_unknown_portfolio_before_running(tmp_path):
+    settings = Settings(state=StateConfig(path=tmp_path / "real.sqlite"))
+    with pytest.raises(ValueError, match="no such portfolio"):
+        run_kill_switch_drill_scratch(settings, portfolio_id="pf_typo")
+
+
+def test_halts_drill_no_record(runner, workdir):
+    result = runner.invoke(app, ["halts", "drill", "--no-record"])
+    assert result.exit_code == 0, result.output
     assert not (workdir / "data" / "state.sqlite").exists()
 
 

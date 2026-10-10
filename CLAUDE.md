@@ -83,7 +83,7 @@ uv run stonks halts kill --scope global|user|portfolio [--portfolio ID] [--buys-
 uv run stonks halts resume ID --reason "..."   # asks you to type RESUME TRADING
 uv run stonks halts clear ID --reason "..."    # circuit-breaker or operational halt
 uv run stonks reconcile list [--portfolio ID] | show ID | run --portfolio ID [--kind adhoc|sod|submit|eod]   # broker vs ledger drift
-uv run stonks halts drill [--json-out F]       # kill switch dry run: scratch state, simulated broker
+uv run stonks halts drill [--json-out F --portfolio ID --no-record]   # kill switch dry run: scratch state, simulated broker, run recorded for the stage gates
 uv run stonks live soak-report --portfolio ID [--days 20 --strict]   # paper soak summary
 uv run stonks live reconcile --portfolio ID    # sync open orders with the broker now (read only)
 uv run stonks pnl [--since YYYY-MM-DD] [--strategy <shadow-id>] [--portfolio ID]
@@ -211,7 +211,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - `corporate_filings (accession_number, ticker, issuer_cik, form, filing_date, known_at, period_of_report, items, url, source)`, `institutional_holdings (accession_number, line, filer_cik, report_period, known_at, cusip, ticker, amount, amount_type, value_usd, put_call, investment_discretion, ...)` and `insider_transactions.known_at` (024): SEC filings point in time, `known_at` is the acceptance time in UTC. See `docs/edgar.md`.
 - `macro_indicators_versions` (the `macro_indicators` columns plus `known_at`) and `fund_holdings_versions` (the `fund_holdings` columns plus `removed`, PK adds `known_at`) (025): every vendor revision with the time Stonks first saw it. Macro reads with `as_of` and `PointInTimeLake` pick the version seen by the decision (a first print counts from its publication date). A fund holdings upsert is a whole `(fund, as_of, source)` list, so a holding missing from a re-fetch gets a `removed` version and leaves the list from then on (P12).
 
-**State (SQLite, migrations 001-057):**
+**State (SQLite, migrations 001-058):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -259,6 +259,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - 055: `model_forecasts (strategy_id, version, ticker, event_key, as_of, probability, outcome, resolved_on, recorded_at)`: each probability forecast of a classifier model version, one row per event, resolved later for the live calibration (Brier, reliability) on the Model versions tab (roadmap 23.9).
 - 056: `statement_imports.preset`, `.kind` (`activities` or `holdings`) and `.as_of`, and `statement_import_holdings (import_id, row_id, raw_symbol, ticker, quantity, price, market_value, currency, description, is_cash)`: broker export presets (DEGIRO), where a holdings export sets a CSV portfolio's holdings on its day (`docs/design/degiro.md`).
 - 057: `notification_deliveries.claimed_by`: the delivery worker that holds each row, so a worker whose lease ran out mid-batch skips rows another worker claimed.
+- 058: `kill_switch_drills (id, ran_at, ran_by, portfolio_id, broker, passed, report_json)`: every `stonks halts drill` run (the drill itself runs on scratch state). `portfolio_id` NULL is a global drill that counts for every portfolio. The `live_small` and `live_scale` stage gates need a passing drill within `[production.live.stages] drill_max_age_days` (30).
 
 ## Conventions to match
 

@@ -6,11 +6,12 @@ portfolio failing without stopping the others."""
 from __future__ import annotations
 
 import json
-from datetime import timedelta
+from datetime import UTC, datetime, time, timedelta
 
 import pytest
 
 import tests.integration.test_live_gates as base
+from stonks.production.drills import DrillReport, DrillStep, record_drill
 from stonks.production.live.gates import (
     GateDay,
     ReconcileReportDrift,
@@ -176,27 +177,86 @@ def test_tracking_error_against_its_limit(state, limit, passed):
     assert check["tracking_error"].required == limit
 
 
-def _drills_table(state, columns="portfolio_id TEXT, passed INTEGER, created_at TEXT"):
-    state.execute(f"CREATE TABLE kill_switch_drills ({columns})")
+def _drill(state, *, age, passed=True, portfolio_id=PF):
+    report = DrillReport(
+        broker="simulated",
+        portfolio_id="pf_drill",
+        client_id="drill-1",
+        started_at=CLOCK.now(),
+        finished_at=CLOCK.now(),
+        steps=(DrillStep("engage_kill", passed, "engaged", 1.0),),
+    )
+    when = datetime.combine(DAY - timedelta(days=age), time(10), tzinfo=UTC)
+    record_drill(state, report, ran_by="cli:ops", portfolio_id=portfolio_id, ran_at=when)
 
 
-def test_a_drills_table_of_another_shape_is_unavailable(state):
-    _drills_table(state, "id TEXT")
+def test_a_state_db_before_the_drills_table_blocks_the_gate(state):
+    state.execute("DROP TABLE kill_switch_drills")
     check = _live_small_checks(state, StageGateSettings())["kill_switch_drill"]
-    assert check.passed is None and "unknown drills table" in check.detail
+    assert check.passed is False and "stonks db init" in check.detail
 
 
-def test_no_passing_drill_fails_the_gate(state):
-    _drills_table(state)
-    state.execute("INSERT INTO kill_switch_drills VALUES (?, 0, ?)", [PF, DAY.isoformat()])
+def test_no_drill_blocks_the_gate_and_says_how_to_run_one(state):
     check = _live_small_checks(state, StageGateSettings())["kill_switch_drill"]
-    assert check.passed is False and check.detail == "no passing drill yet"
+    assert check.passed is False
+    assert "no passing kill switch drill" in check.detail
+    assert "stonks halts drill" in check.detail
+
+
+def test_a_failed_drill_does_not_count(state):
+    _drill(state, age=1, passed=False)
+    check = _live_small_checks(state, StageGateSettings())["kill_switch_drill"]
+    assert check.passed is False and "last kill switch drill failed" in check.detail
+
+
+def test_a_failed_drill_after_a_pass_blocks_the_gate(state):
+    _drill(state, age=9, passed=True)
+    _drill(state, age=1, passed=False)
+    check = _live_small_checks(state, StageGateSettings())["kill_switch_drill"]
+    assert check.passed is False
+    assert "last kill switch drill failed" in check.detail
+    assert "stonks halts drill" in check.detail
+
+
+def test_a_pass_after_a_failed_drill_clears_the_gate(state):
+    _drill(state, age=5, passed=False)
+    _drill(state, age=1, passed=True)
+    check = _live_small_checks(state, StageGateSettings())["kill_switch_drill"]
+    assert check.passed is True
+
+
+def test_a_drill_of_another_portfolio_does_not_count(state):
+    _drill(state, age=1, portfolio_id="pf_other")
+    check = _live_small_checks(state, StageGateSettings())["kill_switch_drill"]
+    assert check.passed is False
+
+
+def test_a_global_drill_counts_for_every_portfolio(state):
+    _drill(state, age=1, portfolio_id=None)
+    check = _live_small_checks(state, StageGateSettings())["kill_switch_drill"]
+    assert check.passed is True
 
 
 @pytest.mark.parametrize(("age", "passed"), [(3, True), (30, True), (31, False)])
 def test_a_passing_drill_counts_for_thirty_days(state, age, passed):
-    _drills_table(state)
-    when = (DAY - timedelta(days=age)).isoformat() + "T10:00:00+00:00"
-    state.execute("INSERT INTO kill_switch_drills VALUES (?, 1, ?)", [PF, when])
+    _drill(state, age=age)
     check = _live_small_checks(state, StageGateSettings())["kill_switch_drill"]
-    assert (check.passed, check.value) == (passed, age)
+    assert (check.passed, check.value, check.required) == (passed, age, 30)
+    if not passed:
+        assert "older than 30 days" in check.detail and "stonks halts drill" in check.detail
+
+
+@pytest.mark.parametrize(("age", "passed"), [(7, True), (8, False)])
+def test_the_drill_window_comes_from_settings(state, age, passed):
+    _drill(state, age=age)
+    settings = StageGateSettings(drill_max_age_days=7)
+    check = _live_small_checks(state, settings)["kill_switch_drill"]
+    assert (check.passed, check.required) == (passed, 7)
+
+
+def test_the_live_scale_gate_needs_a_recent_drill_too(state):
+    base._promote(state, "broker_paper", "live_small")
+    report = gate_report(state, PF, settings=StageGateSettings(), clock=CLOCK)
+    assert report.target == "live_scale"
+    by = {c.name: c for c in report.checks}
+    assert by["kill_switch_drill"].passed is False
