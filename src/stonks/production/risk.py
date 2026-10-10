@@ -178,14 +178,17 @@ def build_risk_context(
 ) -> RiskContext:
     """A full ``RiskContext`` for held, priced and ``universe`` tickers: the
     last ``history_bars`` adjusted bars (one query), asset classes and
-    sectors, ``portfolio_id``'s equity curve and each holding's entry date
+    sectors, ``portfolio_id``'s equity curve with its deposits and
+    withdrawals taken out (:mod:`stonks.production.risk_curve`) and each holding's entry date
     (from that portfolio's fills only).
 
     ``overrides`` are the per-strategy policies the context also serves:
     style exposures are read when ``policy`` or any of them turns the style
     exposure rule on (22.10), and fund sector weights when one turns the
     sector cap's look-through on (23.14)."""
+    from stonks.fx import load_fx_rates
     from stonks.production.pnl import load_pnl
+    from stonks.production.risk_curve import adjusted_curve
 
     held = [t for t, q in portfolio.positions.items() if abs(q) > 1e-12]
     tickers = sorted({*held, *prices, *universe})
@@ -208,11 +211,17 @@ def build_risk_context(
         policy=policy or RiskPolicy(),
         history=load_history(lake, tickers, as_of, bars=history_bars),
         sectors={t: s for t, (_, s) in profiles.items() if s},
-        equity_curve=[
-            (r.day, r.total_value)
-            for r in load_pnl(state, portfolio_id=portfolio_id)
-            if r.day <= as_of
-        ],
+        equity_curve=adjusted_curve(
+            state,
+            portfolio_id,
+            [
+                (r.day, r.total_value)
+                for r in load_pnl(state, portfolio_id=portfolio_id)
+                if r.day <= as_of
+            ],
+            as_of=as_of,
+            fx_loader=lambda codes: load_fx_rates(lake, codes),
+        ),
         entry_dates=_entry_dates(state, held, as_of, portfolio_id),
         portfolio_id=portfolio_id,
         cost_model=(

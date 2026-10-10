@@ -2,7 +2,9 @@
 
 :class:`StreamHealth` is the runner's live record: state, connects and
 disconnects, events per kind, bars written, late ticks, gaps and their
-backfills, and the last error. :meth:`StreamHealth.snapshot` gives a JSON
+backfills, the last error, and whether the source sends only delayed data
+(:attr:`StreamHealth.delayed_only`, an IBKR account without a market data
+subscription). :meth:`StreamHealth.snapshot` gives a JSON
 view, and :func:`stream_metric_families` the Prometheus families, rendered
 by :func:`stonks.scheduling.metrics.render_prometheus` like every other
 metric. Labels carry the source id, never a key or an account.
@@ -16,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
-from stonks.core.stream import StreamEvent
+from stonks.core.stream import Heartbeat, QuoteTick, StreamBar, StreamEvent
 from stonks.scheduling.metrics import MetricFamily, Sample
 
 StreamState = Literal["idle", "connecting", "streaming", "backoff", "stopped", "failed"]
@@ -28,13 +30,15 @@ STREAM_STATES: tuple[StreamState, ...] = (
     "stopped",
     "failed",
 )
-GapReason = Literal["startup", "disconnect", "stale"]
+GapReason = Literal["startup", "disconnect", "stale", "delayed"]
+GAP_REASONS: tuple[GapReason, ...] = ("startup", "disconnect", "stale", "delayed")
 _KINDS = ("trade", "quote", "bar", "heartbeat")
 
 
 @dataclass
 class Gap:
-    """A stretch with no stream data. ``backfilled`` is ``None`` until a
+    """A stretch with no stream bars in the lake: no data at all, or for
+    ``delayed`` only delayed bars, which stay out. ``backfilled`` is ``None`` until a
     backfill ran (or when none was needed), then whether it worked."""
 
     start: datetime
@@ -70,17 +74,28 @@ class StreamHealth:
     backfills_ok: int = 0
     backfills_failed: int = 0
     gaps: deque[Gap] = field(default_factory=lambda: deque[Gap](maxlen=50))
-    gaps_total: dict[str, int] = field(
-        default_factory=lambda: {"startup": 0, "disconnect": 0, "stale": 0}
-    )
+    gaps_total: dict[str, int] = field(default_factory=lambda: dict.fromkeys(GAP_REASONS, 0))
     last_error: str | None = None
+    #: Delayed quotes and bars received.
+    delayed_events: int = 0
+    #: Trades, live quotes and live bars received.
+    live_events: int = 0
 
     def count(self, event: StreamEvent, now: datetime) -> None:
         self.events[event.kind] = self.events.get(event.kind, 0) + 1
-        if event.kind == "heartbeat":
+        if isinstance(event, Heartbeat):
             self.last_heartbeat_at = now
+            return
+        self.last_event_at = now
+        if isinstance(event, (QuoteTick, StreamBar)) and event.delayed:
+            self.delayed_events += 1
         else:
-            self.last_event_at = now
+            self.live_events += 1
+
+    @property
+    def delayed_only(self) -> bool:
+        """The source sent delayed data and nothing live."""
+        return self.delayed_events > 0 and self.live_events == 0
 
     def add_gap(self, gap: Gap) -> None:
         self.gaps.append(gap)
@@ -108,6 +123,9 @@ class StreamHealth:
             "gaps": [g.as_dict() for g in self.gaps],
             "gaps_total": dict(self.gaps_total),
             "last_error": self.last_error,
+            "delayed_events": self.delayed_events,
+            "live_events": self.live_events,
+            "delayed_only": self.delayed_only,
         }
 
     @classmethod
@@ -137,6 +155,8 @@ class StreamHealth:
             backfills_ok=int(backfills.get("ok") or 0),
             backfills_failed=int(backfills.get("failed") or 0),
             last_error=data.get("last_error"),
+            delayed_events=int(data.get("delayed_events") or 0),
+            live_events=int(data.get("live_events") or 0),
         )
         health.events.update({str(k): int(v) for k, v in (data.get("events") or {}).items()})
         health.gaps_total.update(
@@ -152,7 +172,7 @@ class StreamHealth:
                 Gap(
                     start=datetime.fromisoformat(start),
                     end=datetime.fromisoformat(end) if isinstance(end, str) else None,
-                    reason=reason if reason in ("startup", "disconnect", "stale") else "stale",
+                    reason=reason if reason in GAP_REASONS else "stale",
                     backfilled=gap.get("backfilled"),
                 )
             )
@@ -195,6 +215,18 @@ def stream_metric_families(health: StreamHealth) -> list[MetricFamily]:
             "When the last trade, quote or bar arrived (0 for never).",
             "gauge",
             _ts(health.last_event_at),
+        ),
+        one(
+            "stonks_stream_delayed_only",
+            "1 while the source has sent delayed data and nothing live.",
+            "gauge",
+            1 if health.delayed_only else 0,
+        ),
+        one(
+            "stonks_stream_delayed_events_total",
+            "Delayed quotes and bars received.",
+            "counter",
+            health.delayed_events,
         ),
         one(
             "stonks_stream_bars_written_total",

@@ -109,7 +109,11 @@ class QuoteTick:
 
 @dataclass(frozen=True, slots=True)
 class StreamBar:
-    """A finished bar. ``timestamp`` is the bar's start, as in ``bars``."""
+    """A finished bar. ``timestamp`` is the bar's start, as in ``bars``.
+
+    ``delayed`` marks a bar built from delayed quotes (or delivered as
+    delayed by its feed). Such a bar is never written to the lake and never
+    counts as a fresh price."""
 
     ticker: str
     timestamp: datetime
@@ -120,6 +124,7 @@ class StreamBar:
     close: float
     volume: int = 0
     source: str = ""
+    delayed: bool = False
 
     kind: ClassVar[EventKind] = "bar"
 

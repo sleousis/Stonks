@@ -124,3 +124,30 @@ def test_a_replay_writes_the_engine_status_and_intraday_pnl(settings, tmp_path, 
         assert sum(latency["counts"]) == summary["orders_sent"]
         snaps = state.sql("SELECT count(*) AS n FROM intraday_snapshots")[0]["n"]
         assert snaps > 0
+
+
+def test_build_engine_takes_the_delayed_quote_settings(settings, tmp_path) -> None:
+    from datetime import timedelta
+
+    from stonks.engine.process import build_engine
+    from stonks.store.lake import DuckDBLake
+    from stonks.streaming.sources.replay import ReplaySource
+
+    settings.streaming.accept_delayed_quotes = True
+    settings.streaming.delayed_lag_seconds = 600
+    rec = record(day_frame(DAYS[0]), tmp_path / "rec")
+    lake = DuckDBLake(settings.lake.path, read_only=True)
+    try:
+        with SqliteState(settings.state.path) as state:
+            process = build_engine(
+                settings,
+                lake=lake,
+                state=state,
+                session=DAYS[0],
+                source=ReplaySource(rec),
+                strategies=strategies(),
+            )
+            assert process.driver.builder.accept_delayed is True
+            assert process.step.delayed_lag == timedelta(minutes=10)
+    finally:
+        lake.close()

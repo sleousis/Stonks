@@ -75,11 +75,14 @@ class InstanceLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = FileLock(str(self.path))
 
-    def acquire(self) -> None:
+    def acquire(self, timeout: float = 0.0) -> None:
+        """Take the lock, waiting up to ``timeout`` seconds for it."""
         from filelock import Timeout
 
         try:
-            self._lock.acquire(timeout=0)
+            # Poll often: serve probes the lock briefly on every pass, and a
+            # slow poll could keep landing inside those probes.
+            self._lock.acquire(timeout=timeout, poll_interval=0.005)
         except Timeout:
             raise SchedulerAlreadyRunningError(
                 f"another scheduler holds {self.path}; refusing to start a second one"
@@ -95,6 +98,21 @@ class InstanceLock:
 
     def __exit__(self, *exc: object) -> None:
         self.release()
+
+
+#: How long a starting scheduler waits for the lock. ``stonks serve``
+#: takes it for an instant on each delivery pass to see whether a scheduler
+#: runs (``scheduling.delivery``), so a scheduler must not give up at once.
+LOCK_GRACE_SECONDS = 2.0
+
+
+def acquire_scheduler_lock(config: SchedulerConfig, state_path: Any) -> InstanceLock:
+    """Take the scheduler's instance lock with :data:`LOCK_GRACE_SECONDS`.
+    Raises :class:`SchedulerAlreadyRunningError` when another scheduler
+    holds it."""
+    lock = InstanceLock(default_lock_path(config, state_path))
+    lock.acquire(timeout=LOCK_GRACE_SECONDS)
+    return lock
 
 
 @dataclass(frozen=True)

@@ -262,3 +262,56 @@ def test_run_forever_stops_on_the_event(state, clock, push):
     worker.run_forever(stop, interval_seconds=10.0)  # returns at once
     assert time.monotonic() - started < 5.0
     assert push.sent == []
+
+
+# ---- leases across a long batch ---------------------------------------------------
+
+
+class _SlowPush(FakePush):
+    """Sends to ``slow`` devices take ``seconds`` on the shared clock, and
+    ``during`` runs inside the first slow send (another worker's pass)."""
+
+    def __init__(self, clock, slow: set[str], seconds: float) -> None:
+        super().__init__()
+        self.clock, self.slow, self.seconds = clock, slow, seconds
+        self.during = None
+
+    def send(self, message, target):
+        result = super().send(message, target)
+        if target in self.slow:
+            self.clock.now += timedelta(seconds=self.seconds)
+            hook, self.during = self.during, None
+            if hook is not None:
+                hook()
+        return result
+
+
+def test_a_row_whose_lease_ran_out_mid_batch_is_never_sent_twice(state, clock, users):
+    """Worker A claims a batch whose first sends are slow. Its lease on a
+    later row runs out, worker B claims and sends that row, and A must not
+    send it again when it gets there."""
+    uid = users["alice"].id
+    for device in ("psh_a_slow", "psh_b_slow", "psh_c_fast"):
+        add_device(state, uid, device)
+    settings = OutboxSettings(lease_seconds=120)
+    push = _SlowPush(clock, slow={"psh_a_slow", "psh_b_slow"}, seconds=70)
+    NotificationRouter(state, {"webpush": push}, settings, clock=clock).publish(
+        Event(audience=Audience.users(uid), category="order", title="Filled", body="x")
+    )
+    a = DeliveryWorker(state, {"webpush": push}, settings, clock=clock)
+    b = DeliveryWorker(state, {"webpush": push}, settings, clock=clock)
+    first = True
+
+    def b_runs_during_the_second_slow_send():
+        nonlocal first
+        if first:  # the hook fires after the first slow send: arm it again
+            first = False
+            push.during = b_runs_during_the_second_slow_send
+            return
+        b.run_once()
+
+    push.during = b_runs_during_the_second_slow_send
+    a.run_once()
+    targets = [t for _, t in push.sent]
+    assert sorted(targets) == ["psh_a_slow", "psh_b_slow", "psh_c_fast"]
+    assert {r["status"] for r in _rows(state)} == {"sent"}

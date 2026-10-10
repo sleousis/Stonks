@@ -9,7 +9,9 @@
 #      upload, restic copies the whole data volume, and they start again.
 #
 # Usage: deploy/backup/backup.sh [--services-stopped] [--tag TAG]
-# Needs RESTIC_REPOSITORY, RESTIC_PASSWORD and the S3 keys in deploy/.env.
+# Needs RESTIC_REPOSITORY, RESTIC_PASSWORD and the bucket keys in
+# deploy/backup.env (backup.env.example). The old layout, with them in
+# deploy/.env, still works but warns: see migrate-backup-env.sh.
 set -Eeuo pipefail
 
 DEPLOY_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -36,18 +38,19 @@ while [ $# -gt 0 ]; do
 	shift
 done
 
-hc="$(env_get HC_PING_BACKUP)"
-[ -n "$(env_get RESTIC_REPOSITORY)" ] || {
+hc="$(backup_env_get HC_PING_BACKUP)"
+[ -n "$(backup_env_get RESTIC_REPOSITORY)" ] || {
 	log "RESTIC_REPOSITORY not set; skipping"
 	exit 0
 }
 # The example file's old placeholder encrypts the off-server copy with a
 # password anyone can guess. Warn on every run, but still back up: no copy
 # at all is worse. To fix, add a new key and remove the old one:
-#   restic key add, then restic key remove <old id>, then update .env.
-if [ "$(env_get RESTIC_PASSWORD)" = "change-me" ]; then
-	notify warning "RESTIC_PASSWORD in .env is the placeholder 'change-me'; change the repository key"
+#   restic key add, then restic key remove <old id>, then update backup.env.
+if [ "$(backup_env_get RESTIC_PASSWORD)" = "change-me" ]; then
+	notify warning "RESTIC_PASSWORD is the placeholder 'change-me'; change the repository key"
 fi
+warn_legacy_backup_env notify
 ping_hc "$hc" start
 
 restarted=0
@@ -65,7 +68,7 @@ finish() {
 }
 trap finish EXIT
 
-restic() { compose --profile backup run --rm -T restic "$@"; }
+restic() { restic_run "$@"; }
 
 # Create the repository on first use.
 if ! restic cat config >/dev/null 2>&1; then

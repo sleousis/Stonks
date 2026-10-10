@@ -15,11 +15,34 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Stonks" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- The Content-Security-Policy allows these inline scripts by their sha256
+         hash (src/stonks/api/csp.py, deploy/Caddyfile). Change one, then run
+         uv run python -m tools.csp_hashes to print the new hashes. -->
     <script>
       // Apply a forced theme before first paint (ThemeService owns it after boot).
       try {
         var t = localStorage.getItem('stonks.theme');
         if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
+    <script data-route-preload-run>
+      // Preload the current page's chunks (UX-44). The build writes the route
+      // table just above this script (scripts/preload-routes.mjs).
+      try {
+        var d = JSON.parse(document.getElementById('route-preload').textContent);
+        for (var i = 0; i < d.r.length; i++) {
+          if (new RegExp(d.r[i][0]).test(location.pathname)) {
+            d.r[i][1].forEach(function (j) {
+              // Only a plain chunk file name of this build, never markup.
+              if (!/^[\w.-]+\.js$/.test(d.n[j])) return;
+              var l = document.createElement('link');
+              l.rel = 'modulepreload';
+              l.href = encodeURIComponent(d.n[j]);
+              document.head.appendChild(l);
+            });
+            break;
+          }
+        }
       } catch (e) {}
     </script>
     <style>

@@ -23,6 +23,7 @@ import requests
 from stonks.core.interval import Interval
 from stonks.ingest.adjustment import adj_ratio, adjustment_drift
 from stonks.ingest.metadata_bundle import MetadataBundle
+from stonks.ingest.minimal_profile import minimal_profile
 from stonks.ingest.quality import (
     BarQualityChecker,
     RunQuality,
@@ -524,6 +525,10 @@ class IngestPipeline:
             if interval == Interval.DAY_1:
                 self._readjust(ticker, clean, quality)
             upsert(clean)
+            if not clean.empty:
+                # a price-only ticker still needs an asset class to trade
+                profile = minimal_profile(ticker, source_id=supplier)
+                self._lake.insert_missing_instruments(_rows_to_df([profile]))
             return {"rows": len(rows), "quarantined": quarantined, "supplied_by": supplier}
 
         try:

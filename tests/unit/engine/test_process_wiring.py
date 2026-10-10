@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import replace
+from datetime import timedelta
 
 import pytest
 
@@ -164,3 +165,46 @@ def test_the_engine_stores_intraday_pnl(lake, state, recording) -> None:
     minutes = len(session_minutes(DAY))
     assert total >= minutes // 5
     assert snaps[0].fills > 0
+
+
+# ---- delayed data (IBKR paper accounts) ----------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def delayed_recording(tmp_path_factory):
+    from stonks.streaming.recorder import StreamRecorder, read_recording
+
+    plain = record(day_frame(DAY), tmp_path_factory.mktemp("plain"))
+    root = tmp_path_factory.mktemp("delayed")
+    rec = StreamRecorder(root, chunk_events=10_000_000, chunk_every=timedelta(days=365))
+    for event in read_recording(plain):
+        rec.write(replace(event, delayed=True))  # type: ignore[arg-type]
+    rec.close()
+    return root
+
+
+class _Store:
+    def __init__(self) -> None:
+        self.rows = 0
+
+    def upsert(self, frame) -> None:
+        self.rows += len(frame)
+
+
+def test_delayed_bars_decide_nothing_by_default(lake, state, delayed_recording) -> None:
+    process = replay_process(lake, state, delayed_recording, [book(PF)])
+    stats = process.run()
+    assert stats.bar_closes == 0
+    assert _orders(state) == []
+
+
+def test_accepted_delayed_bars_dispatch_but_never_reach_the_lake(
+    lake, state, delayed_recording
+) -> None:
+    store = _Store()
+    process = replay_process(
+        lake, state, delayed_recording, [book(PF)], accept_delayed=True, bar_store=store
+    )
+    stats = process.run()
+    assert stats.bar_closes == len(session_minutes(DAY))
+    assert store.rows == 0

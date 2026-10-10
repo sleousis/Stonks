@@ -93,7 +93,7 @@ def test_connect_sync_and_trade_with_ownership_by_attribution(ibkr_service, alic
     trader.place_order(order)
     gw.fill(order.client_id, 10, 200.0, commission=1.0)
     gw.set_position(AAPL, 10)
-    reconcile_orders(trader, state, portfolio_id=pid)
+    reconcile_orders(trader, state, now=gw.now, portfolio_id=pid)
 
     # the book owns AAPL only: the owner's MSFT stays external, never traded
     managed, external = managed_view(trader.fetch_portfolio(), owned_positions(state, pid))

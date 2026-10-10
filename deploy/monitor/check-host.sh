@@ -49,7 +49,7 @@ if [ -n "$api_id" ]; then
 	[ "$health" = "healthy" ] || problems+=("api container is $health")
 fi
 
-hc="$(env_get HC_PING_HOST)"
+hc="$(backup_env_get HC_PING_HOST)"
 if [ "${#problems[@]}" -eq 0 ]; then
 	ping_hc "$hc"
 	exit 0

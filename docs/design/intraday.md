@@ -2,7 +2,7 @@
 
 Design for roadmap Phase 21. It takes Stonks from one decision a day to decisions on minute bars, with live prices, a live event engine, intraday strategies, and the risk and monitoring an always-on loop needs.
 
-Status: all of Phase 21 is built (21.1, 21.2.1 to 21.2.5, 21.3.1 to 21.3.5) and off by default. Section 13 shows how the engine process connects the pieces. The work packages are in section 17.
+Status: all of Phase 21 is built (21.1, 21.2.1 to 21.2.5, 21.3.1 to 21.3.5) and off by default. Section 13 shows how the engine process connects the pieces. Section 17 covers delayed quotes on paper accounts. The work packages are in section 18.
 
 Owner decisions this page follows:
 
@@ -446,7 +446,43 @@ flowchart LR
 - **Never applied.** The result is a `[backtest.costs]` block for a person to review. With recorded quotes the minute fill model already adds the quoted half spread, so books filled that way set `half_spread_bps` to 0.
 - No migration: it reads `orders`, `fills`, the `bars` store and the recordings.
 
-## 17. Work packages
+## 17. Delayed quotes (paper accounts)
+
+An IBKR account without a market data subscription gets delayed quotes, about 15 minutes behind the market. IBKR paper accounts often have nothing else. The IBKR source marks each such quote `delayed` (`QuoteTick.delayed`), and Stonks never treats it as live.
+
+```mermaid
+flowchart LR
+  Q[delayed QuoteTick] --> A{accept_delayed_quotes}
+  A -- off, default --> D[dropped and counted<br/>no bar]
+  A -- on --> B[bar with delayed = true]
+  B -. never .-> L[(bars lake)]
+  B --> R[delayed gap]
+  R --> F[REST backfill<br/>every delayed_backfill_seconds]
+  F --> L
+  B --> E[engine bar close]
+  E --> G[stale-price guard<br/>bar counts as lag old]
+  E --> M[MarkBook<br/>no mark]
+```
+
+- **Off by default.** A delayed quote builds no bar. `BarBuilder` drops it and counts it in `delayed_dropped`. A delayed bar a source delivers itself is dropped the same way.
+- **The switch.** `[streaming] accept_delayed_quotes = true` lets delayed quotes build bars, in the stream runner and in the engine. A bar with any delayed tick in it comes out with `delayed = true`.
+- **Kept out of the lake.** The `bars` table has no flag for a delayed bar, and the bar is stamped about 15 minutes late. So `BarWriter` and the engine never write it. They count it in `delayed_skipped`.
+- **The backfill fills the lake.** The engine computes signals from the lake, not from the bars of the event. So the stream runner notes the minutes it keeps out as a `delayed` gap, and the REST backfill fills them with vendor bars every `delayed_backfill_seconds` (300). The newest `backfill_delay_seconds` wait for the next round, so the vendor has finished them. Signals therefore lag by up to about `delayed_backfill_seconds` plus `backfill_delay_seconds`. With `backfill = false`, or no REST source, nothing fills those minutes and intraday signals run on old history all day. Only the marks and exits move.
+- **The stale-price guard.** The decision step counts a delayed bar as `delayed_lag_seconds` (900) older than its close. With the default `[engine] stale_after_seconds` of 180, a delayed price never opens a position in a live engine. Exits and the flatten window still work. To paper trade on delayed data, raise `stale_after_seconds` above the lag on purpose. Orders decided on a delayed price carry `delayed_price` in their decision context, so TCA and reviews can tell them apart.
+- **Marks.** `MarkBook` ignores delayed bars as it ignores delayed quotes. Intraday P&L keeps the prior close until a live price arrives.
+- **Health.** `StreamHealth` counts delayed and live events. `delayed_only` is true while a source has sent delayed data and nothing live. The runner logs `stream.delayed_only` once. `/metrics` has `stonks_stream_delayed_only` and `stonks_stream_delayed_events_total`, `/api/stream/status` has `delayed_only` and `delayed_events`, and the console's Live page shows a note.
+
+The trade-off for paper accounts:
+
+| Choice | What you get | What you give up |
+|--------|--------------|------------------|
+| Default (off) | No bar ever rests on a price 15 minutes old. The lake stays clean. | On a delayed-only account the engine sees no bar closes, so a paper book does nothing intraday. |
+| `accept_delayed_quotes = true` | Bar closes, signals and exits on a paper account. Useful to test the wiring end to end. Signals need the REST backfill on. | Decisions lag the market by about 15 minutes, and signals lag by the backfill cadence too, so paper results look better or worse than live. New entries still need `stale_after_seconds` above the lag. |
+| A market data subscription | Live quotes, no trade-off. | The subscription fee. |
+
+Never set `accept_delayed_quotes` for a live book. Treat paper results built on delayed bars as a test of the wiring, not as evidence that a strategy works.
+
+## 18. Work packages
 
 All built. Shared files (`config.py`, `config/default.toml`, `cli.py`, router mounts, the MCP server, `pyproject.toml`, the docs) changed only in the integration step after each wave.
 

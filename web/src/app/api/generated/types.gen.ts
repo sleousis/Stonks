@@ -15422,6 +15422,14 @@ export type StreamHealthView = {
      */
     connects: number;
     /**
+     * Delayed Events
+     */
+    delayed_events?: number;
+    /**
+     * Delayed Only
+     */
+    delayed_only?: boolean;
+    /**
      * Disconnects
      */
     disconnects: number;

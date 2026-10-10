@@ -21,12 +21,16 @@ tag="${1:?usage: deploy.sh <tag, e.g. v1.2.3>}"
 	exit 2
 }
 chmod 600 .env
+[ ! -f backup.env ] || chmod 600 backup.env
 # The example file's old placeholder is a working credential: this token
 # signs in as the admin.
 if [ "$(env_get STONKS_API_TOKEN)" = "change-me" ]; then
 	log "STONKS_API_TOKEN in .env is still the placeholder 'change-me'; set a real value first"
 	exit 2
 fi
+
+# Backup secrets in .env reach every app container. Warn, keep deploying.
+warn_legacy_backup_env notify
 
 previous="$(cat .deployed-tag 2>/dev/null || true)"
 ts="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -72,7 +76,7 @@ stop_writers
 
 # 3. Local snapshot for instant rollback, plus the off-server backup if set up.
 snapshot_create "${snapshot%.tar.gz}"
-if [ -n "$(env_get RESTIC_REPOSITORY)" ]; then
+if [ -n "$(backup_env_get RESTIC_REPOSITORY)" ]; then
 	"$DEPLOY_DIR/backup/backup.sh" --services-stopped --tag "pre-deploy-$tag" ||
 		notify warning "pre-deploy off-server backup failed; local snapshot $snapshot kept"
 fi

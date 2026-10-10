@@ -3,3 +3,5 @@
 *.sh            text eol=lf
 Dockerfile      text eol=lf
 deploy/**       text eol=lf
+# The Content-Security-Policy hashes the console's inline scripts byte for byte.
+web/src/index.html text eol=lf

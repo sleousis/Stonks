@@ -11,6 +11,13 @@
   stream (forex feeds, IBKR snapshots), ``trades`` never, ``quotes`` always
   (and then ignores trades).
 - A bar a source delivered itself passes through when its interval matches.
+- A delayed quote (``QuoteTick.delayed``, an IBKR account without a market
+  data subscription) never builds a bar unless ``accept_delayed`` is on.
+  It is dropped and counted in :attr:`BarBuilder.delayed_dropped`. When it
+  is on, a bar with any delayed tick in it comes out with ``delayed=True``,
+  so the writer keeps it out of the lake and the engine's stale-price guard
+  never takes it for a fresh price. A delayed source bar follows the same
+  rule.
 - A bar closes when a tick of a later bar of its ticker arrives, or once
   its end plus ``grace`` has passed (:meth:`BarBuilder.close_due`, also
   called on every heartbeat).
@@ -47,6 +54,7 @@ class _OpenBar:
     first_at: datetime
     last_at: datetime
     source: str
+    delayed: bool = False
 
     def add(self, at: datetime, price: float, size: float) -> None:
         self.high = max(self.high, price)
@@ -65,12 +73,14 @@ class BarBuilder:
         interval: Interval = Interval.MIN_1,
         mode: BarMode = "auto",
         grace: timedelta = timedelta(seconds=2),
+        accept_delayed: bool = False,
     ) -> None:
         if not interval.is_intraday:
             raise ValueError(f"bars are built at an intraday interval, got {interval.code}")
         self.interval = interval
         self.mode: BarMode = mode
         self.grace = grace
+        self.accept_delayed = accept_delayed
         self._step = interval.to_timedelta()
         self._open: dict[str, _OpenBar] = {}
         #: Per ticker, the start of the newest bar already closed.
@@ -78,6 +88,8 @@ class BarBuilder:
         self._traded: set[str] = set()
         self.late_ticks = 0
         self.ticks_used = 0
+        #: Delayed quotes and bars dropped because ``accept_delayed`` is off.
+        self.delayed_dropped = 0
 
     # ---- input ----------------------------------------------------------------------
 
@@ -97,13 +109,21 @@ class BarBuilder:
     def _quote(self, q: QuoteTick) -> list[StreamBar]:
         if self.mode == "trades" or (self.mode == "auto" and q.ticker in self._traded):
             return []
+        if q.delayed and not self.accept_delayed:
+            self.delayed_dropped += 1
+            return []
         price = q.reference
         if price is None:
             return []
-        return self._add(q.ticker, q.timestamp, price, 0.0, q.source)
+        return self._add(q.ticker, q.timestamp, price, 0.0, q.source, delayed=q.delayed)
 
     def _pass_through(self, bar: StreamBar) -> list[StreamBar]:
-        if bar.interval != self.interval or self._is_late(bar.ticker, bar.timestamp):
+        if bar.interval != self.interval:
+            return []
+        if bar.delayed and not self.accept_delayed:
+            self.delayed_dropped += 1
+            return []
+        if self._is_late(bar.ticker, bar.timestamp):
             return []
         out: list[StreamBar] = []
         current = self._open.get(bar.ticker)
@@ -124,7 +144,14 @@ class BarBuilder:
         )
 
     def _add(
-        self, ticker: str, at: datetime, price: float, size: float, source: str
+        self,
+        ticker: str,
+        at: datetime,
+        price: float,
+        size: float,
+        source: str,
+        *,
+        delayed: bool = False,
     ) -> list[StreamBar]:
         start = bucket_start(at, self.interval)
         if self._is_late(ticker, start):
@@ -138,10 +165,11 @@ class BarBuilder:
             current = None
         if current is None:
             self._open[ticker] = _OpenBar(
-                start, price, price, price, price, size, at, at, source or "stream"
+                start, price, price, price, price, size, at, at, source or "stream", delayed
             )
         else:
             current.add(at, price, size)
+            current.delayed = current.delayed or delayed
         return out
 
     # ---- closing --------------------------------------------------------------------
@@ -159,6 +187,7 @@ class BarBuilder:
             close=bar.close,
             volume=round(bar.volume),
             source=bar.source,
+            delayed=bar.delayed,
         )
 
     def close_due(self, now: datetime, *, grace: timedelta | None = None) -> list[StreamBar]:

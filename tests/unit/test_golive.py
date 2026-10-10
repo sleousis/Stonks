@@ -212,6 +212,24 @@ def test_active_strategy_uses_real_portfolio_and_its_own_fills(env):
     assert report.passed
 
 
+def test_a_withdrawal_in_the_paper_period_is_not_a_drawdown(env):
+    state, registry = env
+    sid = register(registry, "active", [oos(0.0)])
+    ds = days(25)
+    values = [10_000.0] * 10 + [7_000.0] * 15  # 30% withdrawn, nothing lost
+    seed_portfolio(state, list(zip(ds, values, strict=True)))
+    state.execute(
+        "INSERT INTO portfolio_cash_flows (portfolio_id, flow_date, kind, amount, created_at,"
+        " created_by) VALUES ('pf_default', ?, 'withdrawal', 3000, ?, 'test')",
+        [ds[10].isoformat(), f"{ds[10].isoformat()}T12:00:00+00:00"],
+    )
+
+    period = load_paper_period(state, registry, sid)
+
+    assert period.max_drawdown == pytest.approx(0.0)
+    assert period.period_return == pytest.approx(0.0)
+
+
 def test_since_trims_and_rebases_the_paper_period(env):
     state, registry = env
     sid = register(registry, "shadow", [oos(0.0)])

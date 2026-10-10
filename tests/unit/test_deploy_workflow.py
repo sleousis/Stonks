@@ -36,3 +36,9 @@ def test_the_copy_never_deletes_the_ibkr_secret_files():
     profiles could no longer start."""
     command = _rsync_command()
     assert "--filter 'protect /ibkr/secrets/*'" in command
+
+
+def test_the_copy_keeps_the_backup_env_on_the_server():
+    """deploy/backup.env holds the restic and bucket secrets. It lives only
+    on the server, so ``rsync --delete`` must leave it alone."""
+    assert "--exclude backup.env" in _rsync_command()

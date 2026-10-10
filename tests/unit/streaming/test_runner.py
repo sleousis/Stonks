@@ -12,7 +12,7 @@ import pytest
 from stonks.config import Settings
 from stonks.core.clock import FakeClock
 from stonks.core.interval import Interval
-from stonks.core.stream import Heartbeat, StreamEvent, TradeTick
+from stonks.core.stream import Heartbeat, QuoteTick, StreamEvent, TradeTick
 from stonks.scheduling.calendar import Session
 from stonks.scheduling.metrics import render_prometheus
 from stonks.streaming.base import (
@@ -471,3 +471,85 @@ def test_build_from_settings_uses_the_registry(lake, tmp_path):
     s.streaming.backfill = False
     r = build_runner(s, lake=lake, clock=FakeClock(OPEN))
     assert r.source.source_id == "replay" and r.tickers == ["A.US"]
+
+
+def _delayed(seconds: float, last: float = 10.0) -> QuoteTick:
+    return QuoteTick("A.US", at(seconds), None, None, last=last, delayed=True, source="fake")
+
+
+def test_a_delayed_only_source_writes_no_bars_and_says_so(lake):
+    r, _, _ = runner([[_delayed(1), _delayed(61), _delayed(121)]], lake=lake, finite=True)
+    health = r.run()
+    assert stored(lake).empty
+    assert health.delayed_only is True
+    assert r.builder.delayed_dropped == 3
+    assert health.snapshot()["delayed_only"] is True
+
+
+def test_accepted_delayed_bars_reach_subscribers_but_never_the_lake(lake):
+    seen: list = []
+    r, _, _ = runner(
+        [[_delayed(1), _delayed(61)]],
+        lake=lake,
+        finite=True,
+        cfg=settings(accept_delayed_quotes=True),
+        bar_subscribers=[seen.append],
+    )
+    r.run()
+    assert [b.delayed for b in seen] == [True, True]
+    assert stored(lake).empty
+    assert r.writer is not None and r.writer.delayed_skipped == 2
+
+
+def test_the_delayed_backfill_setting_has_a_default():
+    assert StreamingSettings().delayed_backfill_seconds == 300
+
+
+def test_minutes_kept_out_for_delayed_bars_are_backfilled_through_rest(lake):
+    backfill = FakeBackfiller()
+    r, _, _ = runner(
+        [[_delayed(s) for s in (1, 61, 121, 181, 241)]],
+        lake=lake,
+        finite=True,
+        cfg=settings(accept_delayed_quotes=True, delayed_backfill_seconds=120),
+        backfiller=backfill,
+    )
+    health = r.run()
+    assert stored(lake).empty  # the delayed bars themselves never land
+    assert [(c[1], c[2]) for c in backfill.calls] == [
+        (at(0), at(120)),
+        (at(120), at(240)),
+        (at(240), at(300)),  # the rest at shutdown
+    ]
+    assert health.gaps_total["delayed"] == 3
+    assert health.backfills_ok == 3
+
+
+def test_the_delayed_backfill_leaves_the_newest_minutes_to_the_vendor(lake):
+    backfill = FakeBackfiller()
+    r, _, _ = runner(
+        [[_delayed(s) for s in (1, 61, 121, 181)]],
+        lake=lake,
+        finite=True,
+        cfg=settings(
+            accept_delayed_quotes=True, delayed_backfill_seconds=120, backfill_delay_seconds=60
+        ),
+        backfiller=backfill,
+    )
+    r.run()
+    assert [(c[1], c[2]) for c in backfill.calls] == [
+        (at(0), at(61)),
+        (at(61), at(121)),
+        (at(121), at(240)),
+    ]
+
+
+def test_no_delayed_backfill_without_a_backfiller(lake):
+    r, _, _ = runner(
+        [[_delayed(s) for s in (1, 61, 121, 181)]],
+        lake=lake,
+        finite=True,
+        cfg=settings(accept_delayed_quotes=True, delayed_backfill_seconds=60),
+    )
+    health = r.run()
+    assert health.backfills_ok == 0 and health.backfills_failed == 0

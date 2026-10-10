@@ -92,7 +92,7 @@ def test_algo_parent_fills_through_ibkr_children_as_one_order(tmp_path):
     ref = broker.broker_ref(parent.client_id)
     assert gw.algo_orders[ref][0] == "Twap"
     gw.work_algo(ref, [(4, 200.1), (3, 200.2), (3, 200.3)], commission=0.35)
-    summary = reconcile_orders(broker, state, portfolio_id="pf_default")
+    summary = reconcile_orders(broker, state, now=gw.now, portfolio_id="pf_default")
     assert summary.fills_inserted == 3
     row = state.sql("SELECT status, exec_algo FROM orders WHERE client_id = ?", [parent.client_id])
     state.close()

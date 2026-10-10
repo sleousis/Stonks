@@ -114,6 +114,8 @@ Session jobs run on NYSE trading days. `price_check` skips while `[production.pr
 
 The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 
+`stonks serve` runs the delivery worker too while no scheduler delivers (`[notify] deliver_in_serve`). `auto`, the default, runs it when serve hosts no scheduler. Before each pass it checks the scheduler lock and sends nothing while a `stonks schedule run` holds it. So serve steps back when the scheduler starts after it, as in the Compose file, and takes over when the scheduler stops. `on` always runs it and `off` never does. Each worker claims its deliveries with a lease and its own token, so two workers never send one twice.
+
 Listing any `[[scheduler.jobs]]` in the config replaces the whole default list:
 
 ```toml
@@ -369,7 +371,7 @@ uv run python -m stonks.notify deliver                  # one delivery pass
 
 Set `STONKS_VAPID_PUBLIC_KEY`, `STONKS_VAPID_PRIVATE_KEY` and `STONKS_VAPID_SUBJECT` (a `mailto:` or `https:` contact) as secrets. Email is optional (`STONKS_SMTP_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`, `_FROM`, `_SECURITY`). Rotating the VAPID pair makes every user re-enable push.
 
-The scheduler runs the delivery worker. Without the scheduler, run `deliver` every minute from cron or a timer. The console's install and push opt-in are described in [ui.md](ui.md#install-and-notifications-pwa).
+The scheduler runs the delivery worker, and `stonks serve` runs it while no scheduler does (`[notify] deliver_in_serve`, see [the scheduler](#scheduler)). With `deliver_in_serve = "off"` and no scheduler, run `deliver` every minute from cron or a timer. The console's install and push opt-in are described in [ui.md](ui.md#install-and-notifications-pwa).
 
 ## Price alerts
 
@@ -748,7 +750,7 @@ The console shows the words, the API and the CLI the ids in brackets. Only the t
 - `live_gate_days` records, for every portfolio past `sim_paper`: orders sent, filled, rejected, refused by our own rules and stuck, fills with no commission, the TCA gap, the book's and its model book's return, and drift. A session is clean with no drift, no stuck order, every commission booked and under 2% rejected. A week that is not clean sends the owner an alert. It never changes the stage or the allocation.
 - Thresholds sit under `[production.live.stages]`: 20 paper days for gate 1, 20 clean sessions in `broker_paper` for gate 2, 40 sessions with the last 30 clean and 30 filled orders for gate 3, whose TCA gap interval must include zero or sit below it.
 - Every promotion also replays the book's strategies over the last `[production.live.replay] sessions` (5) sessions, point in time (`recent_replay`). It blocks when a strategy made no decision at all, failed on every call or did not load. It never looks at profit or loss. Switching a subscription to approve or auto, or turning a paused or disabled one back on, runs the same replay first. With no universe or no bars it shows as unavailable and does not block.
-- Checks with no data yet (drift before reconciliation lands, the kill switch drill before 19.11, tracking error without model books) show as "no data yet" and do not block. Tracking error needs `[production] model_books = "all"`.
+- Checks with no data yet (drift before reconciliation lands, tracking error without model books) show as "no data yet" and do not block. The kill switch drill blocks when there is none, or when the latest one failed. Tracking error needs `[production] model_books = "all"`.
 - The preview runs the live book's decision as a dry run through every rule and the broker's what-if. It never sends an order and needs trade rights only.
 
 ```
@@ -852,11 +854,11 @@ Stage 1 is at least 20 trading days of the real schedule against the IBKR paper 
 
 ```bash
 uv run stonks live soak-report --portfolio <id> [--days 20] [--end YYYY-MM-DD] [--model ID] [--json] [--strict]
-uv run stonks halts drill [--price 100] [--timeout 10] [--json-out drill.json]
+uv run stonks halts drill [--price 100] [--timeout 10] [--json-out drill.json] [--portfolio ID] [--no-record]
 ```
 
 - `live soak-report` reads the state DB only. Per portfolio it shows orders by outcome and the top rejection reasons, slippage against the decision price, fills against the model book (the portfolio's paper twin, or `--model`), gateway outage days and recoveries, `broker_drift` halts, and `reconcile_reports` rows when that table exists. It lists findings (too few days, unknown orders, over 5% rejects, mean slippage over 50 bps, fills that differ from the model book, an outage not recovered, drift). A soak with no finding is clean. `--strict` exits 1 when it is not.
-- `halts drill` is the kill switch dry run. It uses a scratch state DB and the simulated broker, never production data and never a real order. It places a far limit, engages the global kill switch through the halt service, and checks that the gates stop new orders and the working order is cancelled within the timeout. It exits 1 when a step fails. See [runbooks/kill-switch-drill.md](runbooks/kill-switch-drill.md) for the paper drill.
+- `halts drill` is the kill switch dry run. It uses a scratch state DB and the simulated broker, never production data and never a real order. It places a far limit, engages the global kill switch through the halt service, and checks that the gates stop new orders and the working order is cancelled within the timeout. It exits 1 when a step fails. Each run is then recorded in `kill_switch_drills` in the real state DB, for every portfolio or for `--portfolio`. The `live_small` and `live_scale` stage gates need the latest drill to have passed within `drill_max_age_days` (30) under `[production.live.stages]`. A failed drill after a pass blocks the gates again. `--portfolio` must name a portfolio that exists. See [runbooks/kill-switch-drill.md](runbooks/kill-switch-drill.md) for the paper drill.
 - Live contract tests: `tests/integration/live/test_ibkr_live.py` with `STONKS_RUN_LIVE_TESTS=1`, `STONKS_IBKR_HOST`, `STONKS_IBKR_PORT` and a `DU` `STONKS_IBKR_ACCOUNT`. They check login and account, contracts, what-if, a far limit placed and cancelled, executions, a reconnect and quotes. They stop at once if the gateway manages any account that is not paper. No credential is read: the gateway holds the login.
 
 ### Account rules
@@ -897,6 +899,8 @@ The shipped `config/default.toml` turns on three protections for a new install. 
 | `[production.risk.rules.drawdown_scaling]` | `schedule = [[0.10, 0.5], [0.20, 0.0]]` | Half-size new buys from 10% down, none from 20% down. |
 
 Stonks finds `config/default.toml` under the working folder first, then in the project that holds the code, so running from another folder keeps these limits. Without any config file, `stonks serve`, `stonks tick` and the scheduler refuse to start, and other commands log a warning, because the code defaults drop every limit above.
+
+The circuit breaker and the drawdown scaler read the book's value with deposits and withdrawals taken out, in the same way as the time-weighted return (see [returns and cash flows](#returns-and-cash-flows)). A deposit after a 10% loss still shows a 10% drawdown, and a withdrawal is not a loss. A flow in another currency is converted on its own day. If no rate converts it, only that day counts as flat, and every other flow is still taken out. The value history on the P&L pages stays as it was.
 
 There is no one-day loss limit: the shortest breaker is the week loss over `week_sessions` runs (set it to 1 for a day). An existing install that keeps its own config file keeps its own values. To loosen a protection, change it in the file or in the console (below); a portfolio or follow can only tighten it.
 
@@ -1062,7 +1066,7 @@ uv run stonks registry promote <id> --override --reason "why"
 uv run stonks registry history <id>
 ```
 
-With `[golive] incubation = true` the gate needs at least 63 days (or MinTRL, capped at 252), 20 trades, live results inside the Monte Carlo band, no quit-rule breach, stored reports for every `promotion` preset test, non-zero costs, a recorded hypothesis, and at least 30 backtest trades. The gate never changes status; `registry promote` does, and refuses without a pass or an override.
+With `[golive] incubation = true` the gate needs at least 63 days (or MinTRL, capped at 252), 20 trades, live results inside the Monte Carlo band, no quit-rule breach, stored reports for every `promotion` preset test, non-zero costs, a recorded hypothesis, and at least 30 backtest trades. For an approved strategy the gate reads the default book with its deposits and withdrawals taken out, so moved money is never a gain or a drawdown. The gate never changes status; `registry promote` does, and refuses without a pass or an override.
 
 ## Reading P&L
 
@@ -1090,6 +1094,8 @@ Only deposits and withdrawals are flows. Dividends, interest and fees stay insid
 uv run stonks cash-flows record --kind deposit --amount 5000 [--date YYYY-MM-DD] [--note ...] --user you@example.com
 uv run stonks cash-flows list --user you@example.com
 ```
+
+The risk rules read the same flows. The circuit breaker, the drawdown scaler and the live stage gate's daily book return take them out, so moving money never trips or hides a halt. A broker flow in another currency with no FX rate leaves their curve as it was, and the log says so (`risk_curve.fx_missing`).
 
 The API does the same (`/api/portfolios/{id}/cash-flows`). A withdrawal larger than the cash, a date before the book's latest snapshot or in the future, and a running tick are refused.
 
