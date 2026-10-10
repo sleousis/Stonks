@@ -83,6 +83,11 @@ export const PILL_WORDS: Readonly<Record<string, string>> = {
   passed: 'Passed',
   fail: 'Failed',
   failed: 'Failed',
+  succeeded: 'Done',
+  filled: 'Filled',
+  running: 'Running',
+  queued: 'Waiting',
+  cancelled: 'Cancelled',
 };
 
 /** The form for a status; outcomes (passed, filled, failed...) are receipts. */

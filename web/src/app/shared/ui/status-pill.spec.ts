@@ -24,8 +24,16 @@ describe('StatusPill', () => {
     expect(render('FAILED')).toBe('Failed');
   });
 
+  it('writes job and order statuses in capitalised words', () => {
+    expect(render('succeeded')).toBe('Done');
+    expect(render('filled')).toBe('Filled');
+    expect(render('running')).toBe('Running');
+    expect(render('queued')).toBe('Waiting');
+    expect(render('cancelled')).toBe('Cancelled');
+  });
+
   it('keeps an explicit label and other statuses as given', () => {
     expect(render('active', 'Turned on')).toBe('Turned on');
-    expect(render('filled')).toBe('filled');
+    expect(render('stale')).toBe('stale');
   });
 });
