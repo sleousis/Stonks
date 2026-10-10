@@ -885,7 +885,9 @@ def live_gate_days_action(ctx: RunContext) -> JobOutcome:
     that was not clean. It never changes a stage or an allocation. Skips
     while no portfolio is past ``sim_paper``."""
     from stonks.core.clock import FixedClock
+    from stonks.insights.flows import lake_fx_loader
     from stonks.production.live.gates import live_portfolios, owner_alert, record_gate_days
+    from stonks.store.lake import DuckDBLake
     from stonks.store.state import SqliteState
 
     state = SqliteState(ctx.settings.state.path)
@@ -898,6 +900,8 @@ def live_gate_days_action(ctx: RunContext) -> JobOutcome:
             settings=ctx.settings.production.live.stages,
             alert=owner_alert(state),
             clock=FixedClock(ctx.now),
+            # a deposit in another currency is converted for the book return
+            fx_loader=lake_fx_loader(lambda: DuckDBLake(ctx.settings.lake.path, read_only=True)),
         )
     finally:
         state.close()
