@@ -6267,6 +6267,8 @@ How many registered strategies are in each lifecycle status.
 | `connected` | boolean | yes |  |
 | `connected_at` | date-time \| null | yes |  |
 | `connects` | integer | yes |  |
+| `delayed_events` | integer | no |  |
+| `delayed_only` | boolean | no |  |
 | `disconnects` | integer | yes |  |
 | `gaps` | integer | yes |  |
 | `last_error` | string \| null | yes |  |

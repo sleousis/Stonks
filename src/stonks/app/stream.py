@@ -60,6 +60,11 @@ class StreamHealthView(BaseModel):
     backfills_ok: int
     backfills_failed: int
     last_error: str | None
+    #: Delayed quotes and bars received (an account without a market data
+    #: subscription).
+    delayed_events: int = 0
+    #: The source sent delayed data and nothing live.
+    delayed_only: bool = False
 
 
 class EngineView(BaseModel):
@@ -155,6 +160,8 @@ def _stream_view(status: EngineStatus, now: datetime, live: bool) -> StreamHealt
         backfills_ok=h.backfills_ok,
         backfills_failed=h.backfills_failed,
         last_error=redact_text(h.last_error, _secrets()) if h.last_error else None,
+        delayed_events=h.delayed_events,
+        delayed_only=h.delayed_only,
     )
 
 
