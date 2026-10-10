@@ -36,6 +36,9 @@ class Permission(StrEnum):
     NOTIFICATIONS_MANAGE = "notifications.manage"
     KILLSWITCH_GLOBAL = "killswitch.global"
     STRATEGY_PROMOTE = "strategy.promote"
+    #: Put your own Studio draft On trial. On trial is paper only and
+    #: changes nothing for anyone else, so traders may (approval stays admin).
+    STRATEGY_TRIAL = "strategy.trial"
     CODE_STRATEGIES = "strategy.code"
     OPERATIONS_RUN = "operations.run"
     BACKUP_RESTORE = "backups.restore"
@@ -83,6 +86,7 @@ POLICY: dict[Permission, Rule] = {
     Permission.NOTIFICATIONS_MANAGE: Rule(_TRADERS, frozenset({ApiScope.TRADE})),
     Permission.KILLSWITCH_GLOBAL: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
     Permission.STRATEGY_PROMOTE: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
+    Permission.STRATEGY_TRIAL: Rule(_TRADERS, frozenset({ApiScope.LAB, ApiScope.ADMIN})),
     Permission.CODE_STRATEGIES: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
     Permission.OPERATIONS_RUN: Rule(_ADMINS, frozenset({ApiScope.ADMIN})),
     Permission.BACKUP_RESTORE: Rule(_ADMINS, frozenset({ApiScope.ADMIN}), step_up=True),

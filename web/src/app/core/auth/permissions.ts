@@ -41,6 +41,7 @@ export const POLICY: Readonly<Record<Permission, Rule>> = {
   'notifications.manage': { roles: TRADERS, scopes: ['trade'] },
   'killswitch.global': { roles: ADMINS, scopes: ['admin'] },
   'strategy.promote': { roles: ADMINS, scopes: ['admin'] },
+  'strategy.trial': { roles: TRADERS, scopes: ['lab', 'admin'] },
   'operations.run': { roles: ADMINS, scopes: ['admin'] },
   'backups.restore': { roles: ADMINS, scopes: ['admin'] },
   'portfolio.totals': { roles: ADMINS, scopes: ['admin'] },

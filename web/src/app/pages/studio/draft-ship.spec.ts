@@ -24,7 +24,8 @@ describe('DraftShip', () => {
   let confirm: ReturnType<typeof vi.fn>;
   let emitted: Draft[];
 
-  function setup(draft: Draft, answer = true, allowed = true): void {
+  /** `allowed`: true for an admin, false for a viewer, 'trader' for a trader. */
+  function setup(draft: Draft, answer = true, allowed: boolean | 'trader' = true): void {
     confirm = vi.fn().mockResolvedValue(answer);
     TestBed.configureTestingModule({
       imports: [DraftShip],
@@ -37,8 +38,11 @@ describe('DraftShip', () => {
     });
     controller = TestBed.inject(HttpTestingController);
     const session = TestBed.inject(SessionService);
-    vi.spyOn(session, 'can').mockReturnValue(allowed);
-    vi.spyOn(session, 'whyNot').mockReturnValue(allowed ? null : 'Admins only.');
+    const can = (p: string) => (allowed === 'trader' ? p !== 'strategy.promote' : allowed);
+    vi.spyOn(session, 'can').mockImplementation((p) => can(p));
+    vi.spyOn(session, 'whyNot').mockImplementation((p) =>
+      can(p) ? null : 'Traders and admins only.',
+    );
     fixture = TestBed.createComponent(DraftShip);
     fixture.componentRef.setInput('draft', draft);
     emitted = [];
@@ -167,20 +171,34 @@ describe('DraftShip', () => {
   });
 
   describe('permissions (UI-06)', () => {
-    it('disables Put on trial with a reason without strategy.promote', async () => {
+    it('disables Put on trial with a reason without strategy.trial', async () => {
       setup(makeDraft(), true, false);
       const button = buttonNamed(LIFECYCLE.paper.label);
       expect(button.disabled).toBe(true);
-      expect(el.querySelector('app-permission-note')?.textContent).toContain('Admins only.');
+      expect(el.querySelector('app-permission-note')?.textContent).toContain('Traders and admins');
       button.click();
       await tick(5);
       expect(confirm).not.toHaveBeenCalled();
     });
 
-    it('disables Approve and Back on trial without strategy.promote', () => {
-      setup(registered('shadow'), true, false);
-      expect(buttonNamed(LIFECYCLE.live.label).disabled).toBe(true);
-      expect(el.textContent).toContain('Admins only.');
+    it('lets a trader put their own draft on trial (NB-02)', async () => {
+      setup(makeDraft(), true, 'trader');
+      const button = buttonNamed(LIFECYCLE.paper.label);
+      expect(button.disabled).toBe(false);
+      button.click();
+      await tick();
+      const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/register', 'POST');
+      req.flush(registered('shadow'));
+      await tick();
+      expect(emitted).toHaveLength(1);
+    });
+
+    it('shows a trader the next step instead of Approve', () => {
+      setup(registered('shadow'), true, 'trader');
+      const labels = [...el.querySelectorAll('button')].map((b) => b.textContent?.trim());
+      expect(labels).not.toContain(LIFECYCLE.live.label);
+      expect(el.textContent).toContain('An admin approves it after the go-live check.');
+      expect(el.textContent).toContain('Follow it');
     });
 
     it('shows no note for admins', () => {

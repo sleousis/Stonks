@@ -62934,7 +62934,7 @@
     },
     "/api/studio/drafts/{draft_id}/register": {
       "post": {
-        "description": "Register the draft's strategy in ``shadow``.",
+        "description": "Put the draft's strategy On trial (``shadow``). Only the draft's owner\n(or an admin) may: another user's draft is a 404.",
         "operationId": "registerDraft",
         "parameters": [
           {
@@ -63028,7 +63028,7 @@
         "tags": [
           "studio"
         ],
-        "x-permission": "strategy.promote"
+        "x-permission": "strategy.trial"
       }
     },
     "/api/studio/drafts/{draft_id}/validate": {

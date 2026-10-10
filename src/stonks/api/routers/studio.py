@@ -3,8 +3,10 @@ and lab-run jobs, registration and enable / disable.
 
 Code-draft operations answer 403 while ``api.allow_code_strategies`` is
 off, and are for admins only (code runs with the server's rights). Rule
-drafts need ``lab.run``. Registering, enabling and disabling change the
-shared catalog, so they need ``strategy.promote`` (admins).
+drafts need ``lab.run``. The draft's owner may register it On trial
+(``strategy.trial``): that is paper only and changes nothing for anyone
+else. Enabling and disabling change what trades, so they need
+``strategy.promote`` (admins).
 """
 
 from __future__ import annotations
@@ -216,10 +218,12 @@ def start_lab_run(
     "/drafts/{draft_id}/register",
     response_model=Draft,
     operation_id="registerDraft",
-    dependencies=needs(Permission.STRATEGY_PROMOTE),
+    dependencies=needs(Permission.STRATEGY_TRIAL),
 )
-def register_draft(draft_id: str, services: ServicesDep) -> Draft:
-    """Register the draft's strategy in ``shadow``."""
+def register_draft(draft_id: str, services: ServicesDep, principal: PrincipalDep) -> Draft:
+    """Put the draft's strategy On trial (``shadow``). Only the draft's owner
+    (or an admin) may: another user's draft is a 404."""
+    _guard_code(services, principal, draft_id)
     return _call(services, lambda s: s.register_draft(draft_id))
 
 
