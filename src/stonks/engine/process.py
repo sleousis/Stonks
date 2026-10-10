@@ -86,6 +86,7 @@ from stonks.engine.step import DecisionStep, StepBook, StepDecision
 from stonks.execution.reconcile import reconcile_orders
 from stonks.logging import get_logger
 from stonks.store.state import SqliteState
+from stonks.streaming.bars import BarBuilder
 from stonks.streaming.base import StreamingSource
 
 if TYPE_CHECKING:
@@ -218,6 +219,8 @@ class EngineProcess:
         publish_seconds: float = 15.0,
         pnl: IntradayPnlTracker | None = None,
         notify_halts: bool = True,
+        accept_delayed: bool = False,
+        delayed_lag: timedelta = timedelta(minutes=15),
     ) -> None:
         if (source is None) == (runner is None):
             raise ValueError("give the engine either a source (replay) or a runner (live)")
@@ -261,7 +264,10 @@ class EngineProcess:
         self._notify_halts = notify_halts
         self.pnl = pnl
         stream = source if source is not None else runner.source  # type: ignore[union-attr]
-        self.driver = EventDriver(stream, clock=clock, interval=interval, settle=settle)
+        # delayed quotes build bars only when ``[streaming]
+        # accept_delayed_quotes`` allows it, and those bars are marked
+        builder = BarBuilder(interval=interval, accept_delayed=accept_delayed)
+        self.driver = EventDriver(stream, clock=clock, builder=builder, settle=settle)
         self.monitor = EngineMonitor(
             self.driver,
             engine_id=engine_id,
@@ -281,6 +287,7 @@ class EngineProcess:
             threshold=threshold,
             halts=halts,
             stale_after=stale_after,
+            delayed_lag=delayed_lag,
             fresh_reads=self.mode == "live",
             intraday=lambda book_id, _at: self._intraday.get(book_id),
         )
@@ -506,12 +513,14 @@ class EngineProcess:
             self._last_heartbeat = now
 
     def _write_bars(self, event: BarClose) -> None:
-        if self.bar_store is None or not event.bars:
+        # a delayed bar never reaches the lake (``streaming.writer``)
+        bars = [b for b in event.bars if not b.delayed]
+        if self.bar_store is None or not bars:
             return
         from stonks.streaming.writer import bars_frame
 
         try:
-            self.bar_store.upsert(bars_frame(event.bars, self.interval))
+            self.bar_store.upsert(bars_frame(bars, self.interval))
         except Exception as exc:  # the runner's writer and the backfill retry it
             _log.warning("engine.bar_write_failed", close=event.at.isoformat(), error=str(exc))
 
@@ -537,7 +546,10 @@ class EngineProcess:
             except Exception as exc:
                 _log.warning("engine.pnl_failed", close=at.isoformat(), error=str(exc))
         marks = {**self.step.marks, **{b.ticker: b.close for b in event.bars}}
-        last_bar = {**self.step.last_bar_at, **{b.ticker: at for b in event.bars}}
+        last_bar = {
+            **self.step.last_bar_at,
+            **{b.ticker: self.step.price_time(b, at) for b in event.bars},
+        }
         stale = self._stream_stale()
         for book in self.books:
             try:
@@ -884,4 +896,6 @@ def build_engine(
         calendar=cfg.calendar,
         publish_seconds=settings.streaming.monitor.publish_seconds,
         pnl=pnl,
+        accept_delayed=settings.streaming.accept_delayed_quotes,
+        delayed_lag=timedelta(seconds=settings.streaming.delayed_lag_seconds),
     )

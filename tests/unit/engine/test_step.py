@@ -261,3 +261,41 @@ def test_decision_time_is_aware_utc(lake) -> None:
     assert decisions[0].at.tzinfo is not None
     assert decisions[0].as_of.tzinfo is None
     assert decisions[0].as_of == datetime(2026, 9, 24, 14, 0)
+
+
+def _delayed(event: BarClose) -> BarClose:
+    from dataclasses import replace
+
+    return replace(event, bars=tuple(replace(b, delayed=True) for b in event.bars))
+
+
+def test_delayed_bars_count_as_old_for_the_stale_price_guard(lake) -> None:
+    live, live_decisions, _ = make_step(lake, [StepBook(id="a")], stale_after=timedelta(minutes=2))
+    live.on_bar_close(close_event(40))
+    assert live_decisions[0].orders  # the baseline opens
+
+    step, decisions, _ = make_step(lake, [StepBook(id="a")], stale_after=timedelta(minutes=2))
+    step.on_bar_close(_delayed(close_event(40)))
+    assert decisions[0].orders == []
+    assert step.delayed_tickers == frozenset(TICKERS)
+
+
+def test_delayed_bars_open_only_when_the_guard_allows_the_lag(lake) -> None:
+    step, decisions, _ = make_step(
+        lake,
+        [StepBook(id="a")],
+        stale_after=timedelta(minutes=30),
+        delayed_lag=timedelta(minutes=15),
+    )
+    step.on_bar_close(_delayed(close_event(40)))
+    assert decisions[0].orders
+    assert all(
+        o.decision_context and o.decision_context["delayed_price"] for o in decisions[0].orders
+    )
+
+
+def test_a_live_bar_clears_the_delayed_mark(lake) -> None:
+    step, _, _ = make_step(lake, [StepBook(id="a")])
+    step.on_bar_close(_delayed(close_event(40)))
+    step.on_bar_close(close_event(41, seq=2))
+    assert step.delayed_tickers == frozenset()
