@@ -203,13 +203,26 @@ def test_concentration():
     ],
 )
 def test_judge(side, r, stance):
-    got, reason = judge(side, r, "AAA.US", date(2026, 3, 20))
+    got, reason = judge(side, r)
     assert got == stance
-    assert "AAA.US" in reason
+    # No ticker, date or raw percentage: a score is not a return (PB-01).
+    assert "AAA.US" not in reason and "2026" not in reason and "%" not in reason
+
+
+def test_judge_says_which_way_a_strategy_leans():
+    assert judge("long", 20.0) == ("agree", "Leans long.")
+    assert judge("long", -0.3) == ("disagree", "Leans short.")
+    assert judge("short", -0.3) == ("agree", "Leans short.")
+    assert judge("long", 0.0)[1] == "No lean either way."
+
+
+def test_judge_shows_a_number_only_for_a_real_return():
+    assert judge("long", 0.031, is_return=True) == ("agree", "Expects +3.1%, leans long.")
 
 
 class _Fixed:
     applicable_asset_classes = ("equity",)
+    estimate_is_return = True
 
     def __init__(self, scores):
         self.scores = scores
@@ -240,13 +253,23 @@ def test_strategy_agreement_per_holding():
     assert {o.stance for o in btc} == {"not_applicable"}
     assert "crypto" in btc[0].reason
     zzz = rows["ZZZ"].opinions
-    assert {o.stance for o in zzz} == {"not_applicable"} and "not covered" in zzz[0].reason
+    assert {o.stance for o in zzz} == {"not_applicable"} and "Not covered" in zzz[0].reason
+
+
+def test_strategy_agreement_hides_a_score_that_is_not_a_return():
+    class _Score(_Fixed):
+        estimate_is_return = False
+
+    rows = strategy_agreement(_book(), {"etf": _Score({"AAA.US": 20.0})}, date(2026, 3, 20), None)
+    aaa = next(r for r in rows if r.symbol == "AAA.US").opinions[0]
+    assert aaa.stance == "agree" and aaa.expected_return is None
+    assert aaa.reason == "Leans long."
 
 
 def test_strategy_agreement_without_a_date_has_no_views():
     rows = strategy_agreement(_book(), {"trend": _Fixed({})}, None, None)
     aaa = next(r for r in rows if r.symbol == "AAA.US")
-    assert aaa.opinions[0].stance == "no_view" and "no prices" in aaa.opinions[0].reason
+    assert aaa.opinions[0].stance == "no_view" and "No prices" in aaa.opinions[0].reason
 
 
 def test_period_pnl_1d_matches_the_daily_pnl_gap_rule():

@@ -112,7 +112,7 @@ def test_strategy_agreement_of_the_default_book(client):
     up = next(r for r in body["holdings"] if r["symbol"] == "UP.US")
     opinion = up["opinions"][0]
     assert opinion["strategy_id"] == "bah_active" and opinion["stance"] == "agree"
-    assert "UP.US" in opinion["reason"] and up["agree"] == 1
+    assert opinion["reason"] == "Leans long." and up["agree"] == 1
     assert body["as_of"] is not None
 
 
