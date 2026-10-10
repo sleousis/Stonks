@@ -1712,6 +1712,17 @@ A :class:`~stonks.app.lab.LabRunRequest` without the strategy. A rule draft's sp
 | `material` | boolean | yes |  |
 | `ours` | number \| string \| null | yes |  |
 
+### DuplicateSource
+
+Where rows a preview calls duplicates were imported before.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `import_id` | string | yes |  |
+| `imported_on` | date | yes |  |
+| `portfolio_id` | string | yes |  |
+| `portfolio_name` | string \| null | yes |  |
+
 ### EarningsEvent
 
 | Field | Type | Required | Description |
@@ -6101,6 +6112,7 @@ A broker export Stonks reads without a mapping.
 |-------|------|----------|-------------|
 | `as_of` | date \| null | no |  |
 | `duplicate` | integer | yes |  |
+| `duplicates_in` | [DuplicateSource](#duplicatesource) \| null | no |  |
 | `first_date` | date \| null | yes |  |
 | `guessed` | boolean | yes |  |
 | `headers` | list[string] | yes |  |
