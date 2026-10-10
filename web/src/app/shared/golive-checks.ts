@@ -1,6 +1,7 @@
 import type { GoLiveCheckView, GoLiveReport, PromotionChecklistView } from '../api/models';
 import { MISSING, formatMoney, formatNumber, formatPercent } from '../core/format/format';
 import { toTraderWords } from './governance-labels';
+import { failReason } from './strategy-verdict';
 
 export type GoLiveCheckName = GoLiveCheckView['name'];
 
@@ -225,4 +226,37 @@ export function checklistItems(c: PromotionChecklistView | undefined): Checklist
     text('hypothesis', 'Hypothesis'),
     text('premortem', 'Premortem'),
   ];
+}
+
+/** Checks for the system and reviewers, never shown to a trader (R13). */
+const INTERNAL_CHECKS = new Set<GoLiveCheckName>(['status', 'hypothesis_recorded']);
+
+/** A failing check in one plain sentence, with how to fix it. */
+export interface TraderCheck {
+  name: GoLiveCheckName;
+  label: string;
+  sentence: string;
+  fix: CheckFix | null;
+}
+
+/**
+ * The go-live check as a trader reads it (R13): only the failing checks,
+ * each one sentence, and the passing ones as a count. Internal checks
+ * (status, the hypothesis length) are left out.
+ */
+export function traderChecks(report: GoLiveReport): {
+  failing: TraderCheck[];
+  passed: number;
+  total: number;
+} {
+  const shown = report.checks.filter((c) => !INTERNAL_CHECKS.has(c.name));
+  const failing = shown
+    .filter((c) => !c.passed)
+    .map((c) => ({
+      name: c.name,
+      label: CHECK_LABELS[c.name] ?? c.name,
+      sentence: failReason(c),
+      fix: checkFix(c, report.strategy_id),
+    }));
+  return { failing, passed: shown.length - failing.length, total: shown.length };
 }

@@ -6,25 +6,33 @@ import { formatNumber, formatPercent } from '../core/format/format';
  * the go-live check, its trial result and its robustness tests, in words a
  * person who is not a quant can act on. The figures stay under "Details".
  */
-export type VerdictLevel = 'worth' | 'promising' | 'not_yet';
+export type VerdictLevel = 'worth' | 'promising' | 'on_trial' | 'not_yet';
 
 export const VERDICT_WORDS: Readonly<Record<VerdictLevel, string>> = {
   worth: 'Worth following',
   promising: 'Promising, needs more data',
+  on_trial: 'On trial',
   not_yet: 'Not good enough yet',
 };
 
-/** The status pill tone for each verdict (text and a mark too, never colour alone). */
-export const VERDICT_TONES: Readonly<Record<VerdictLevel, 'positive' | 'warn' | 'negative'>> = {
+export type VerdictTone = 'positive' | 'warn' | 'info' | 'negative';
+
+/**
+ * The status pill tone for each verdict (text and a mark too, never colour
+ * alone). Being On trial is the normal state of a young strategy, so it is
+ * information, never a warning or danger (R03).
+ */
+export const VERDICT_TONES: Readonly<Record<VerdictLevel, VerdictTone>> = {
   worth: 'positive',
   promising: 'warn',
+  on_trial: 'info',
   not_yet: 'negative',
 };
 
 export interface Verdict {
   level: VerdictLevel;
   label: string;
-  tone: 'positive' | 'warn' | 'negative';
+  tone: VerdictTone;
   /** Why, in plain sentences, the most important first. */
   reasons: string[];
 }
@@ -56,6 +64,9 @@ const BAD_SIGNS = new Set<GoLiveCheckView['name']>([
   'quit_rule',
 ]);
 
+const NO_TESTS = 'No robustness tests yet. Run a Lab test to add them.';
+const APPROVAL = 'Approval comes after the go-live check.';
+
 function count(v: number | null | undefined): string {
   return formatNumber(v, { digits: 0 });
 }
@@ -64,8 +75,13 @@ function pct(v: number | null | undefined, signed = false): string {
   return formatPercent(v === 0 ? 0 : v, { signed });
 }
 
-/** Both figures are known, so a sentence can quote them. */
+/**
+ * Both figures are known, so a sentence can quote them. Robustness tests
+ * with a limit of 0 (none on record) are not measured: no tests is missing
+ * data, not a bad result (R03).
+ */
 function measured(c: GoLiveCheckView): boolean {
+  if (c.name === 'survival' && !c.limit) return false;
   return c.value != null && c.limit != null;
 }
 
@@ -102,7 +118,7 @@ export function failReason(c: GoLiveCheckView): string {
     case 'survival':
       return known
         ? `It passed ${count(c.value)} of ${count(c.limit)} robustness tests. It needs to pass all of them.`
-        : 'No robustness tests are on record.';
+        : NO_TESTS;
     case 'within_mc_band':
       return known
         ? 'Its drop on trial is worse than its backtest says is likely.'
@@ -166,6 +182,17 @@ export function strategyVerdict(input: VerdictInput): Verdict {
         ...(trial ? [trialLine(trial)] : []),
       ]);
     }
+    if (input.status === 'shadow') {
+      // On trial is the normal state (R03): say how far the trial is.
+      const days = g.checks.find((c) => c.name === 'min_days');
+      const head =
+        days && !days.passed && measured(days)
+          ? `On trial: ${count(days.value)} of ${count(days.limit)} days. ${APPROVAL}`
+          : `On trial. ${APPROVAL}`;
+      const rest = young.filter((c) => c.name !== 'min_days').map(failReason);
+      if (trial) rest.unshift(lost ? `${trialLine(trial)} Give it more time.` : trialLine(trial));
+      return verdict('on_trial', [head, ...rest]);
+    }
     const reasons = young.map(failReason);
     if (lost && trial) reasons.unshift(`${trialLine(trial)} Give it more time.`);
     else if (trial) reasons.push(trialLine(trial));
@@ -184,11 +211,14 @@ export function strategyVerdict(input: VerdictInput): Verdict {
   if (input.golivePassed === true && !lost) {
     return verdict('worth', ['It passed the go-live check.', ...(trial ? [trialLine(trial)] : [])]);
   }
-  const reasons: string[] = [];
+  const onTrial = input.status === 'shadow';
+  const reasons: string[] = onTrial ? [`On trial. ${APPROVAL}`] : [];
   if (trial) reasons.push(lost ? `${trialLine(trial)} Give it more time.` : trialLine(trial));
   else reasons.push('It has no trial record yet.');
   if (tests && tests.total > 0) reasons.push(`It passed all ${tests.total} robustness tests.`);
-  else reasons.push('No robustness tests are on record.');
-  if (input.golivePassed === false) reasons.push('It has not passed the go-live check yet.');
-  return verdict('promising', reasons);
+  else reasons.push(NO_TESTS);
+  if (input.golivePassed === false && !onTrial) {
+    reasons.push('It has not passed the go-live check yet.');
+  }
+  return verdict(onTrial ? 'on_trial' : 'promising', reasons);
 }
