@@ -2175,8 +2175,12 @@ class DuckDBLake:
 
     def _record_macro_versions(self, df: pd.DataFrame, known_at: datetime) -> None:
         """Append the current row of each upserted observation to
-        ``macro_indicators_versions`` unless it equals that observation's
-        latest version. A version already stamped ``known_at`` is replaced."""
+        ``macro_indicators_versions`` unless it equals the version known at
+        ``known_at``. A version already stamped ``known_at`` is replaced.
+
+        A stamp older than an observation's newest version (a replay or a
+        backfill) lands in its place in time, and the current row goes back
+        to the newest version, so the current table stays the latest view."""
         cols = self._MACRO_INDICATOR_COLS
         same_key = " AND ".join(
             f"k.{c} = t.{c}"
@@ -2204,8 +2208,26 @@ class DuckDBLake:
                                     PARTITION BY country_iso, indicator, observation_date
                                     ORDER BY known_at DESC) AS rn
                                   FROM macro_indicators_versions
-                                 WHERE indicator IN (SELECT DISTINCT indicator FROM _keys)) v
+                                 WHERE indicator IN (SELECT DISTINCT indicator FROM _keys)
+                                   AND known_at <= CAST(? AS TIMESTAMP)) v
                          WHERE v.rn = 1 AND {unchanged})
+                """,
+                [known_at, known_at],
+            )
+            values = [c for c in cols if c not in _MACRO_PK]
+            self.con.execute(
+                f"""
+                UPDATE macro_indicators t
+                   SET {", ".join(f"{c} = n.{c}" for c in values)}
+                  FROM (SELECT * FROM (
+                            SELECT *, row_number() OVER (
+                                       PARTITION BY country_iso, indicator, observation_date
+                                       ORDER BY known_at DESC) AS rn
+                              FROM macro_indicators_versions
+                             WHERE indicator IN (SELECT DISTINCT indicator FROM _keys))
+                         WHERE rn = 1 AND known_at > CAST(? AS TIMESTAMP)) n
+                 WHERE {same_key.replace("k.", "n.")}
+                   AND EXISTS (SELECT 1 FROM _keys k WHERE {same_key})
                 """,
                 [known_at],
             )
@@ -2382,7 +2404,12 @@ class DuckDBLake:
         stamped ``known_at`` (default now, naive UTC), and a holding that
         dropped out gets a ``removed`` version, so a point-in-time read sees
         a revision only from the time Stonks stored it (P12). The current
-        table keeps each row's first ``known_at``."""
+        table keeps each row's first ``known_at``.
+
+        A stamp older than a holding's newest version (a replay or a
+        backfill) adds versions in their place in time, compared with what
+        was known then, and the snapshot's current rows go back to the
+        newest versions, so the current table stays the latest view."""
         if df.empty:
             return 0
         frame = df.copy()
@@ -2433,6 +2460,7 @@ class DuckDBLake:
                                ORDER BY known_at DESC) AS rn
                       FROM fund_holdings_versions t
                      WHERE EXISTS (SELECT 1 FROM _snapshots s WHERE {snapshot})
+                       AND t.known_at <= CAST(? AS TIMESTAMP)
                 ) WHERE rn = 1)"""
             unchanged = " AND ".join(f"t.{c} IS NOT DISTINCT FROM i.{c}" for c in values)
             vcols = ", ".join([*self._FUND_HOLDING_COLS, "known_at", "removed"])
@@ -2445,7 +2473,7 @@ class DuckDBLake:
                  WHERE NOT EXISTS (SELECT 1 FROM {latest} t
                                     WHERE {listed} AND NOT t.removed AND {unchanged})
                 """,
-                [stamp],
+                [stamp, stamp],
             )
             self.con.execute(
                 f"""
@@ -2455,11 +2483,52 @@ class DuckDBLake:
                   FROM {latest} t
                  WHERE NOT t.removed AND NOT EXISTS (SELECT 1 FROM _fh_in i WHERE {listed})
                 """,
-                [stamp],
+                [stamp, stamp],
             )
+            self._restore_newer_fund_holdings(stamp)
             self.con.execute("DROP TABLE IF EXISTS _snapshots")
             self.con.execute("DROP TABLE IF EXISTS _fh_in")
         return len(frame)
+
+    def _restore_newer_fund_holdings(self, stamp: datetime) -> None:
+        """Put back in ``fund_holdings`` each holding of ``_snapshots`` whose
+        newest version is stamped after ``stamp``: its values, its absence
+        when that version is a removal, and its row when an older snapshot
+        just dropped it."""
+        values = ("weight", "name", "sector", "country")
+        key = (
+            "c.fund = n.fund AND c.holding = n.holding AND c.as_of = n.as_of"
+            " AND c.source = n.source"
+        )
+        newer = """(SELECT * FROM (
+                SELECT v.*, row_number() OVER (
+                           PARTITION BY fund, holding, as_of, source
+                           ORDER BY known_at DESC) AS rn,
+                       min(known_at) FILTER (WHERE NOT removed) OVER (
+                           PARTITION BY fund, holding, as_of, source) AS first_known
+                  FROM fund_holdings_versions v
+                 WHERE EXISTS (SELECT 1 FROM _snapshots s
+                                WHERE s.fund = v.fund AND s.as_of = v.as_of
+                                  AND s.source = v.source)
+            ) WHERE rn = 1 AND known_at > CAST(? AS TIMESTAMP))"""
+        self.con.execute(
+            f"DELETE FROM fund_holdings c WHERE EXISTS (SELECT 1 FROM {newer} n"
+            f" WHERE {key} AND n.removed)",
+            [stamp],
+        )
+        self.con.execute(
+            f"UPDATE fund_holdings c SET {', '.join(f'{v} = n.{v}' for v in values)}"
+            f" FROM {newer} n WHERE {key} AND NOT n.removed",
+            [stamp],
+        )
+        cols = ", ".join(self._FUND_HOLDING_COLS)
+        self.con.execute(
+            f"INSERT INTO fund_holdings ({cols}, known_at)"
+            f" SELECT {', '.join(f'n.{c}' for c in self._FUND_HOLDING_COLS)}, n.first_known"
+            f" FROM {newer} n WHERE NOT n.removed"
+            f" AND NOT EXISTS (SELECT 1 FROM fund_holdings c WHERE {key})",
+            [stamp],
+        )
 
     def fund_holdings(self, funds: Any, *, as_of: Any) -> pd.DataFrame:
         """Each fund's holdings known on ``as_of`` (roadmap 23.14, P12): per

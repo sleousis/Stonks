@@ -90,6 +90,24 @@ def test_the_same_macro_print_again_adds_no_version(revised):
     assert stored == (2,)
 
 
+def test_a_backfill_stamped_before_the_newest_version_keeps_the_latest_view(revised):
+    """An upsert stamped before the newest version (a replay or backfill)
+    adds a version in its place in time, and the current table stays the
+    latest known version, so the two views agree."""
+    revised.upsert_macro_indicators(_macro(3.5), known_at=datetime(2024, 3, 1))
+    assert _values(revised.get_macro_series("USA", "cpi", stamped_at="period_end")) == [3.7]
+    late = revised.get_macro_series("USA", "cpi", as_of=date(2024, 7, 1), stamped_at="period_end")
+    assert _values(late) == [3.7]
+    middle = revised.get_macro_series("USA", "cpi", as_of=date(2024, 4, 1), stamped_at="period_end")
+    assert _values(middle) == [3.5]
+
+
+def test_a_backfill_equal_to_the_version_known_then_adds_no_version(revised):
+    revised.upsert_macro_indicators(_macro(3.6), known_at=datetime(2024, 3, 1))
+    stored = revised.con.execute("SELECT count(*) FROM macro_indicators_versions").fetchone()
+    assert stored == (2,)
+
+
 def test_macro_migration_backfills_existing_rows():
     db = DuckDBLake(Path(":memory:"))
     db.migrate()
@@ -186,3 +204,32 @@ def test_holdings_migration_backfills_existing_rows():
         assert db.con.execute("SELECT count(*) FROM fund_holdings_versions").fetchone() == (1,)
     finally:
         db.close()
+
+
+def _current(lake) -> dict[str, float]:
+    rows = lake.con.execute("SELECT holding, weight FROM fund_holdings").fetchall()
+    return {str(h): round(float(w), 4) for h, w in rows}
+
+
+def test_a_holdings_backfill_stamped_before_the_newest_version_keeps_the_latest_view(lake):
+    lake.upsert_fund_holdings(_holdings(("AAPL.US", 0.07)), known_at=datetime(2026, 9, 26))
+    lake.upsert_fund_holdings(
+        _holdings(("AAPL.US", 0.072), ("MSFT.US", 0.06)), known_at=datetime(2026, 9, 30)
+    )
+    lake.upsert_fund_holdings(_holdings(("AAPL.US", 0.071)), known_at=datetime(2026, 9, 28))
+    assert _current(lake) == {"AAPL.US": 0.072, "MSFT.US": 0.06}
+    assert _read(lake, date(2026, 10, 1)) == {"AAPL.US": 0.072, "MSFT.US": 0.06}
+    assert _read(lake, date(2026, 9, 28)) == {"AAPL.US": 0.071}
+
+
+def test_a_holdings_backfill_does_not_bring_back_a_holding_that_left_later(lake):
+    lake.upsert_fund_holdings(
+        _holdings(("AAPL.US", 0.07), ("MSFT.US", 0.06)), known_at=datetime(2026, 9, 26)
+    )
+    lake.upsert_fund_holdings(_holdings(("AAPL.US", 0.07)), known_at=datetime(2026, 9, 30))
+    lake.upsert_fund_holdings(
+        _holdings(("AAPL.US", 0.07), ("MSFT.US", 0.065)), known_at=datetime(2026, 9, 28)
+    )
+    assert _current(lake) == {"AAPL.US": 0.07}
+    assert _read(lake, date(2026, 10, 1)) == {"AAPL.US": 0.07}
+    assert _read(lake, date(2026, 9, 28)) == {"AAPL.US": 0.07, "MSFT.US": 0.065}
