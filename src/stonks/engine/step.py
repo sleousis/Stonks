@@ -336,7 +336,10 @@ class DecisionStep:
         closing = {o.ticker for o in flat}
         kept = [o for o in kept if o.ticker not in closing]
         flat = [
-            self.with_interval(replace(o, decision_price=self._marks.get(o.ticker))) for o in flat
+            self._mark_delayed(
+                self.with_interval(replace(o, decision_price=self._marks.get(o.ticker)))
+            )
+            for o in flat
         ]
         return kept + flat, dropped, sorted(closing)
 

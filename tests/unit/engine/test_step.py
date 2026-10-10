@@ -299,3 +299,17 @@ def test_a_live_bar_clears_the_delayed_mark(lake) -> None:
     step.on_bar_close(_delayed(close_event(40)))
     step.on_bar_close(close_event(41, seq=2))
     assert step.delayed_tickers == frozenset()
+
+
+def test_flatten_orders_on_a_delayed_price_carry_the_mark(lake) -> None:
+    rules = SessionRules(flatten_at_close=True, flatten_minutes=5)
+    book = StepBook(id="a", sessions=rules)
+    held = {"a": Portfolio(cash=0.0, positions={TICKERS[0]: 10.0, TICKERS[1]: 4.0})}
+    step, decisions, _ = make_step(lake, [book], portfolios=held)
+    step.on_bar_close(_delayed(close_event(len(MINUTES) - 3)))
+    orders = decisions[0].orders
+    assert sorted(o.ticker for o in orders) == sorted(TICKERS)
+    assert all(o.strategy_id == FLATTEN_STRATEGY_ID for o in orders)
+    assert all(
+        o.decision_context and o.decision_context.get("delayed_price") is True for o in orders
+    )
