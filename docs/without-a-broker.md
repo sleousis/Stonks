@@ -38,10 +38,11 @@ uv sync
 uv run stonks db init
 uv run stonks users bootstrap --email you@example.com
 uv run stonks ingest prices --source yahoo --tickers SPY.US,QQQ.US,AAPL.US --since 2024-01-01
-uv run stonks ingest metadata --source yahoo --tickers SPY.US,QQQ.US,AAPL.US
 ```
 
-Yahoo needs no key. Load the metadata too: it tells Stonks each ticker's asset class. A trading run skips a ticker whose asset class it does not know, even when the Lab could test it. After that the scheduler keeps both fresh: its daily price update reads Yahoo while no `EODHD_API_KEY` is set, and its metadata update always reads Yahoo.
+Yahoo needs no key. Prices are enough. A trading run skips a ticker whose asset class it does not know, so each price ingest records a small profile for a ticker that has none: the ticker, its exchange and currency from the suffix (`.US` is USD), and its asset class (crypto for a pair like `BTC-USD.CC`, otherwise equity). It never changes a profile that exists. The scheduled price update and the Lab's on-demand fetch do the same.
+
+`uv run stonks ingest metadata --source yahoo --tickers ...` is optional. It adds the name, the sector and the rest. After that the scheduler keeps both fresh: its daily price update reads Yahoo while no `EODHD_API_KEY` is set, and its metadata update always reads Yahoo.
 
 Set the tickers the trading run looks at in `[production] universe`, or in the console under Settings. `stonks users bootstrap` sets ten liquid funds when none is set.
 

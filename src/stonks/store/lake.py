@@ -2023,6 +2023,26 @@ class DuckDBLake:
         self._record_sector_versions([str(t) for t in df["id"].dropna().unique()], stamp)
         return count
 
+    def insert_missing_instruments(self, df: pd.DataFrame) -> int:
+        """Insert the profiles in ``df`` whose id has no ``instruments`` row
+        yet and leave every existing row alone. A price ingest records a
+        minimal profile this way (``stonks.ingest.minimal_profile``).
+        Returns the number of rows inserted."""
+        if df.empty:
+            return 0
+        cols = list(self._INSTRUMENT_PROFILE_COLS)
+        frame = df.reindex(columns=cols).dropna(subset=["id"]).drop_duplicates(subset=["id"])
+        if frame.empty:
+            return 0
+        before = self.con.execute("SELECT COUNT(*) FROM instruments").fetchone()
+        with self._registered(frame):
+            self.con.execute(
+                f"INSERT INTO instruments ({', '.join(cols)}) "
+                f"SELECT {', '.join(cols)} FROM _in ON CONFLICT (id) DO NOTHING"
+            )
+        after = self.con.execute("SELECT COUNT(*) FROM instruments").fetchone()
+        return int(after[0] if after else 0) - int(before[0] if before else 0)
+
     def _record_sector_versions(self, tickers: list[str], known_at: datetime) -> None:
         """Append the current sector of each of ``tickers`` whose label
         differs from its latest version (or has none yet)."""
