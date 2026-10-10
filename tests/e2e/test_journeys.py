@@ -148,21 +148,19 @@ def test_build_universe_from_csv_and_view_members(browse, stack, viewport, tmp_p
     expect(page.get_by_role("heading", name="Stored universes")).to_be_visible()
     v.check_page("universes")
     page.get_by_role("button", name="New universe").click()
-    page.get_by_label("Id", exact=True).fill(uid)
+    # R22: the name comes first and the id is made from it.
+    page.get_by_label("Name", exact=True).fill(uid)
     page.get_by_label("A CSV file").check()
     page.get_by_label("CSV file", exact=True).set_input_files(csv)
     v.check_page("universes-new")
     page.get_by_role("button", name="Create universe").click()
 
-    # Creating opens the universe; its members appear after a refresh.
+    # Creating opens the universe, and a list fills its members at once.
     expect(page.get_by_role("heading", level=1)).to_contain_text(uid)
-    expect(page.locator("main")).to_contain_text("Not refreshed")
-    v.check_page("universe-detail")
-    page.get_by_role("button", name="Refresh", exact=True).click()
-    page.get_by_role("dialog").get_by_role("button", name="Refresh").click()
+    expect(page).to_have_url(re.compile(r"/universes/e2e-csv-"))
     main = page.locator("main")
-    expect(main).to_contain_text("succeeded", timeout=60_000)
-    expect(main).to_contain_text("3 on ")
+    expect(main).to_contain_text("3 on ", timeout=60_000)
+    v.check_page("universe-detail")
     for ticker in ("AAA.US", "BBB.US", "CCC.US"):
         expect(main).to_contain_text(ticker)
     v.check_page("universe-members")

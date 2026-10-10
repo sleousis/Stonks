@@ -47,16 +47,13 @@ def test_a_trader_places_an_order_by_hand(browse, stack, viewport):
     page.get_by_label("Ticker").fill("aaa.us")
     page.get_by_label("Quantity").fill("3")
     page.get_by_label("Why this trade").fill("e2e manual buy")
-    page.get_by_role("button", name="Check order").click()
-    ticket = page.get_by_role("group", name="Checked order")
-    expect(ticket).to_contain_text("AAA.US")
-    expect(ticket).to_contain_text("PAPER")
-    expect(ticket).to_contain_text("Every check passed")
-    v.check_page("order-ticket")
-
-    page.get_by_role("button", name="Place order").click()
+    # PO-08: one Review order step checks the order and opens the ticket.
+    page.get_by_role("button", name="Review order").click()
     dialog = page.get_by_role("dialog")
     expect(dialog).to_contain_text("Buy 3 AAA.US?")
+    expect(dialog).to_contain_text("PAPER")
+    expect(dialog).to_contain_text("pretend money in your paper portfolio")
+    v.check_page("order-ticket")
     dialog.get_by_role("button", name="Place order").click()
     expect(page.locator(".result")).to_contain_text("Filled")
     listed = page.locator("app-manual-orders-list")
@@ -71,7 +68,7 @@ def test_a_trader_places_an_order_by_hand(browse, stack, viewport):
     page.get_by_role("radio", name="Sell").click()
     page.get_by_label("Quantity").fill("5000")
     page.get_by_label("Why this trade").fill("too big")
-    page.get_by_role("button", name="Check order").click()
+    page.get_by_role("button", name="Review order").click()
     expect(page.locator("app-order-refusal, .failure").first).to_contain_text("Not placed")
     v.check_page("order-ticket-refused")
     v.guard.assert_clean()
@@ -167,9 +164,8 @@ def test_a_trader_keeps_price_alerts(browse, stack, viewport):
 def test_the_telegram_panel_says_when_there_is_no_bot(browse, stack, viewport):
     v = _trader(browse, stack, "telegram", viewport)
     page = v.page
-    v.go("/settings?tab=alerts")
-    # Settings sends alert settings to their one page (F39).
-    page.get_by_role("link", name="Open alert settings").click()
+    # Alert settings are their one page (F39, FR-15: Settings has no Alerts tab).
+    v.go("/notifications/settings")
     expect(page.get_by_role("heading", level=1)).to_have_text("Alert settings")
     expect(page.get_by_role("heading", name="Where alerts reach you")).to_be_visible()
     panel = page.locator("app-telegram-link")

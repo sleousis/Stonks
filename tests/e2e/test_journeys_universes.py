@@ -1,9 +1,9 @@
 """Journey for the roadmap 20.10 Universes page:
 
-- a trader goes from Data to Universes, makes a list universe, refreshes it,
-  reads its members and membership history, edits it (the page says the
-  members are behind until the next refresh), refreshes again and fetches
-  the missing prices with the job followed to its result,
+- a trader goes from Data to Universes, makes a list universe by name
+  (it fills its members at once, R22), reads its members and membership
+  history, edits it (a list refills on save) and fetches the missing
+  prices with the job followed to its result,
 - the lab run form links a picked universe to its page,
 - an admin deletes it after typing its id.
 
@@ -21,17 +21,11 @@ from playwright.sync_api import expect
 pytestmark = pytest.mark.e2e
 
 
-def _refresh(page) -> None:
-    page.get_by_role("button", name="Refresh", exact=True).click()
-    page.get_by_role("dialog").get_by_role("button", name="Refresh").click()
-    result = page.get_by_label("Refresh result")
-    expect(result).to_be_visible(timeout=60_000)
-
-
 def test_a_trader_builds_edits_and_fills_a_universe_then_an_admin_deletes_it(
     browse, stack, viewport
 ):
-    uid = f"e2e_edit_{viewport}"
+    # R22: the id is made from the name.
+    uid = f"edit-me-{viewport}"
     v = browse(stack.trader)
     page = v.go("/data")
     page.get_by_role("link", name="Universes", exact=True).click()
@@ -39,14 +33,15 @@ def test_a_trader_builds_edits_and_fills_a_universe_then_an_admin_deletes_it(
 
     # A list from typed tickers.
     page.get_by_role("button", name="New universe").click()
-    page.get_by_label("Id", exact=True).fill(uid)
-    page.get_by_label("Name (optional)").fill(f"Edit me {viewport}")
+    page.get_by_label("Name", exact=True).fill(f"Edit me {viewport}")
     page.get_by_role("textbox", name="Tickers", exact=True).fill("aaa.us, bbb.us")
     v.check_page("universes-create-list")
     page.get_by_role("button", name="Create universe").click()
     expect(page.get_by_role("heading", level=1)).to_contain_text(f"Edit me {viewport}")
+    expect(page).to_have_url(re.compile(rf"/universes/{uid}"))
 
-    _refresh(page)
+    # A list fills its members at once, with no Refresh to press.
+    expect(page.get_by_label("Refresh result")).to_be_visible(timeout=60_000)
     members = page.locator("section", has=page.get_by_role("heading", name="Members on a date"))
     expect(members).to_contain_text("2 on ")
     history = page.locator("section", has=page.get_by_role("heading", name="Membership history"))
@@ -54,17 +49,15 @@ def test_a_trader_builds_edits_and_fills_a_universe_then_an_admin_deletes_it(
     expect(history).to_contain_text("Still a member")
     v.check_page("universe-history")
 
-    # Edit: the same form, the id fixed, the members behind until a refresh.
+    # Edit: the same form. Saving a list refills its members at once.
     page.get_by_role("button", name="Edit", exact=True).click()
     edit = page.locator("#edit-panel")
-    expect(edit.get_by_label("Id", exact=True)).to_have_value(uid)
+    expect(edit.get_by_label("Name", exact=True)).to_have_value(f"Edit me {viewport}")
     edit.get_by_role("textbox", name="Tickers", exact=True).fill("AAA.US, BBB.US, CCC.US")
     v.check_page("universe-edit")
     edit.get_by_role("button", name="Save changes").click()
     expect(page.locator("#edit-panel")).to_have_count(0)
-    expect(page.get_by_text("The definition changed after the last refresh")).to_be_visible()
-    _refresh(page)
-    expect(members).to_contain_text("3 on ")
+    expect(members).to_contain_text("3 on ", timeout=60_000)
     expect(page.get_by_text("The definition changed after the last refresh")).to_have_count(0)
 
     # Fetch the missing prices over the last month, followed to its result.

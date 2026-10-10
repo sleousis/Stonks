@@ -743,11 +743,11 @@ top of Settings, System. It reads `GET /api/settings/system` through
 - **Dialogs** are built on `app-sheet` (`shared/ui/sheet.ts`) with
   `app-typed-confirm`.
 - **Settings** shows one section at a time (M14), picked with
-  `<app-page-tabs>` and kept in the address (`/settings?tab=alerts`):
-  Account (sign-in and security, the For scripts fold), Alerts (one panel that opens
-  Alert settings, the one home of every alert setting), Display (theme, numbers and dates, keyboard), Risk limits,
-  and System for admins (broker, risk policy, data sources, cost models,
-  and how to turn the assistant on while it is off). Alert settings have
+  `<app-page-tabs>` and kept in the address (`/settings?tab=risk`):
+  Display (theme, numbers and dates, keyboard), Risk limits, and System for
+  admins (broker, data sources, cost models, and how to turn the assistant
+  on while it is off). Sign-in and security live on Profile, and every
+  alert setting lives on Alert settings (`/notifications/settings`). Alert settings have
   **Send a test notification** (`POST /api/notifications/test`): it goes to
   every channel you turned on, skips quiet hours, and the toast says how
   many deliveries went out and on which channels.
@@ -1225,16 +1225,16 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  F[Fill the ticket] --> C[Check order: preview]
-  C -->|409 order_refused| R[Each rule's cut, accept a smaller order]
+  F[Fill the ticket] --> L{Real money?}
+  L -->|yes| S[Fresh code] --> C
+  L -->|no| C[Review order: preview]
+  C -->|409 order_refused| R[Plain refusal, accept a smaller order]
   R --> C
-  C --> L{Real money?}
-  L -->|yes| S[Fresh code] --> T
-  L -->|no| T[Ticket: side, PAPER or LIVE]
+  C --> T[Ticket: side, PAPER or LIVE]
   T --> P[Place order] --> W[Your orders by hand: Change, Cancel]
 ```
 
-- **Order ticket.** `pages/orders/manual-ticket.page.ts`. Ticker, side, quantity, market or limit, and a reason (kept with the order). Side and order type use `<app-segmented emphasis="strong">`: the picked option is a solid block, and a line under Side says "You are buying" or "You are selling" with the side tag (M13). **Check order** calls `POST /api/orders/manual/preview`: every halt and risk rule runs and nothing is placed. The ticket then shows the last close, the value and any cut. **Place order** checks again, asks with the order ticket (`ConfirmService`, `ticket`), then places it. A real-money book asks for a fresh code first (`StepUpService.ensure()`) and the ticker typed on the ticket. `?ticker=&side=` prefill it.
+- **Order ticket.** `pages/orders/manual-ticket.page.ts`. Ticker, side, quantity, market or limit, and a reason (kept with the order). Side and order type use `<app-segmented emphasis="strong">`: the picked option is a solid block, and a line under Side says "You are buying" or "You are selling" with the side tag (M13). **Review order** is the one step (PO-08): it calls `POST /api/orders/manual/preview`, where every halt and risk rule runs and nothing is placed, then opens the order ticket (`ConfirmService`, `ticket`) with any cut by the risk limits or a halt note. **Place order** on the ticket places it, **Cancel** sends nothing. A refusal reads in plain words (`order-refusal.ts`). A real-money book asks for a fresh code first (`StepUpService.ensure()`) and the ticker typed on the ticket. `?ticker=&side=` prefill it.
 - **Refusals.** A 409 `order_refused` carries `risk_adjustments`. `refusalOf()` (`pages/orders/order-refusal.ts`) reads them from `ApiError.problem`, the whole problem body. `<app-order-refusal>` lists each rule with what it did ("Cuts 100 to 40", "Drops the order") and, when the rules allow a smaller order, offers **Accept a smaller order**, which sends `allow_reduce` and checks again. Preview, place and change are silent: the ticket shows the failure, so no toast repeats it.
 - **Idempotency.** The ticket sends its own `client_id`. A new key is made when the order changes and after it is placed, so a retry of the same order never places it twice.
 - **Change and cancel.** "Your orders by hand" lists `GET /api/orders?origin=manual`. A working order (pending, submitted, partly filled) has **Change** (`<app-order-change-sheet>`: new quantity or limit and a reason, the same refusal panel) and **Cancel** (a reason, `<app-status-change-dialog>`).
