@@ -24,6 +24,7 @@ import { humanize } from '../../shared/ui/param-form/param-spec';
 import { LabNav } from './lab-nav';
 import { className, scoreText } from './ledger.page';
 import { OBJECTIVES, strategyTitle } from './lab-requests';
+import { FAILED_RUN_TEXT } from '../../shared/lab-results/job-error';
 
 /** `{lookback_days: 20, threshold: 0}` -> "Lookback days 20, threshold 0". */
 export function paramsText(params: Record<string, unknown>): string {
@@ -65,21 +66,18 @@ export function searchName(tuner: string): string {
     LoadingState,
   ],
   template: `
-    <app-page-header
-      title="Lab"
-      description="One recorded lab run and every setting it tried (its trials)."
-    >
+    <app-page-header title="Lab" description="One recorded lab run and every setting it tried.">
       <app-export-button
         actions
         kind="lab-trials"
-        label="Trials CSV"
+        label="Settings CSV"
         [ghost]="true"
         [runId]="runId()"
       />
     </app-page-header>
     <app-lab-nav />
 
-    <a class="back" routerLink="/lab/ledger">Back to the trial ledger</a>
+    <a class="back" routerLink="/lab/ledger">Back to the Lab history</a>
 
     @if (run.error(); as err) {
       <app-error-state title="Could not load this run" [error]="err" (retry)="run.reload()" />
@@ -97,41 +95,40 @@ export function searchName(tuner: string): string {
           </span>
         </div>
         <div class="panel-body">
+          @if (r.robustness === 'error') {
+            <p class="failed-reason" role="note">{{ failedText }}</p>
+          }
           <div class="tiles">
-            <app-stat-tile label="Trials this run" help="trials" [value]="count(r.n_trials)" />
+            <app-stat-tile label="Settings tried" [value]="count(r.n_trials)" detail="This run" />
             <app-stat-tile
-              label="Trials with errors"
+              label="Settings with errors"
               [value]="count(r.n_failed)"
               detail="Settings that could not run"
             />
             <app-stat-tile label="Best score" [value]="best()" [detail]="objectiveName()" />
             <app-stat-tile
-              label="Trials of this strategy"
-              help="trials"
+              label="Settings tried in all runs"
               [value]="count(r.n_trials_class)"
-              detail="Every run so far"
+              detail="Of this strategy"
             />
           </div>
           <p class="lead">
-            A trial is one setting the search tried. It is Done when the setting ran, whatever its
-            score. The verdict is separate: it comes from the robustness tests
-            <app-help-tip term="robustness_tests" /> on the best setting, so a run can fail with
-            every trial done.
-          </p>
-          <p class="lead">
-            {{ strategyName() }} has had {{ count(r.n_trials_class) }} trials across every run. The
-            more trials a strategy has had, the more likely a good result is luck, so tests such as
-            the deflated Sharpe <app-help-tip term="deflated_sharpe" /> count them all.
+            The more settings a strategy has tried, the more likely a good result is luck, so the
+            robustness tests <app-help-tip term="robustness_tests" /> count them all.
           </p>
           <dl class="facts">
-            <div>
-              <dt>Hypothesis</dt>
-              <dd>{{ r.hypothesis || 'None written' }}</dd>
-            </div>
-            <div>
-              <dt>Premortem</dt>
-              <dd>{{ r.premortem || 'None written' }}</dd>
-            </div>
+            @if (idea(); as idea) {
+              <div>
+                <dt>Idea</dt>
+                <dd>{{ idea }}</dd>
+              </div>
+            }
+            @if (r.premortem) {
+              <div>
+                <dt>Premortem</dt>
+                <dd>{{ r.premortem }}</dd>
+              </div>
+            }
             <div>
               <dt>Data</dt>
               <dd>{{ dataText() }}</dd>
@@ -146,16 +143,16 @@ export function searchName(tuner: string): string {
 
       <section class="panel" aria-labelledby="trials-title">
         <div class="panel-head">
-          <h2 id="trials-title">Trials</h2>
+          <h2 id="trials-title">Settings tried</h2>
         </div>
         @if (r.trials.length === 0) {
           <app-empty-state
-            title="No trials recorded"
-            message="The run stopped before its first trial finished."
+            title="No settings recorded"
+            message="The run stopped before its first setting finished."
           />
         } @else {
           <app-data-table
-            caption="Every trial of this run"
+            caption="Every setting this run tried"
             [rows]="r.trials"
             [columns]="columns"
             [rowKey]="trialKey"
@@ -201,6 +198,17 @@ export class LedgerRunPage {
       : undefined;
     return known ? strategyTitle(known) : className(path);
   });
+  protected readonly failedText = FAILED_RUN_TEXT;
+  /** The idea the run tests: as written, else the catalog's description. */
+  protected readonly idea = computed(() => {
+    if (!this.run.hasValue()) return '';
+    const r = this.run.value();
+    if (r.hypothesis) return r.hypothesis;
+    const known = this.classes.hasValue()
+      ? this.classes.value().find((c) => c.class_path === r.strategy_class)
+      : undefined;
+    return known?.description ?? '';
+  });
   protected readonly objectiveName = computed(() => {
     if (!this.run.hasValue()) return null;
     const o = this.run.value().objective;
@@ -223,9 +231,8 @@ export class LedgerRunPage {
     const r = this.run.value();
     const parts = [
       r.tuner ? `${searchName(r.tuner)} search` : null,
-      r.budget ? `up to ${r.budget} trials` : null,
+      r.budget ? `up to ${r.budget} settings` : null,
     ];
-    if (r.seed != null) parts.push(`seed ${r.seed}`);
     return parts.filter(Boolean).join(', ') || 'Not recorded';
   });
 
@@ -235,10 +242,16 @@ export class LedgerRunPage {
   protected readonly params = paramsText;
 
   protected readonly columns: TableColumn<LedgerTrialView>[] = [
-    { key: 'trial_index', label: 'Trial', format: 'number', mobile: 'title', help: false },
+    { key: 'trial_index', label: 'No.', format: 'number', mobile: 'title', help: false },
     { key: 'params', label: 'Settings', sortable: false, value: (t) => paramsText(t.params) },
-    { key: 'score', label: 'Score', value: (t) => t.score ?? null, format: 'number' },
+    {
+      key: 'score',
+      label: 'Score',
+      value: (t) => t.score ?? null,
+      display: (t) => scoreText(t.score),
+      align: 'end',
+    },
     { key: 'n_bars', label: 'Days of data', format: 'number', mobile: 'hide' },
-    { key: 'status', label: 'Trial', help: false },
+    { key: 'status', label: 'Ran', help: false },
   ];
 }
