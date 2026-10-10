@@ -205,8 +205,8 @@ export function heatmapRows(h: HeatmapView): HeatRow[] {
       }
     </ul>
     <p class="foot">
-      Every cell counts as a trial, and the winner is still the tuner's pick. A broad high area is a
-      good sign. A lone bright cell may be luck.
+      Every cell counts as a setting tried, and the winner is still the tuner's pick. A broad high
+      area is a good sign. A lone bright cell may be luck.
     </p>
   `,
   styles: `

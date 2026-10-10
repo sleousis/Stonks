@@ -1,4 +1,10 @@
-import { SIMPLE_SUITE, simpleTestErrors, simpleTestRequest } from './simple-test-form';
+import {
+  SIMPLE_SUITE,
+  earliestCommonStart,
+  simpleTestErrors,
+  simpleTestRequest,
+} from './simple-test-form';
+import { presetTickers } from './strategy-preset';
 
 const TODAY = new Date(Date.UTC(2026, 8, 28));
 
@@ -44,5 +50,22 @@ describe('simple test form', () => {
     });
     // A saved list replaces the tickers.
     expect(simpleTestErrors({ ...base, tickers: '', universeId: 'us-big' })).toEqual({});
+  });
+
+  it('records the strategy idea as the hypothesis when given', () => {
+    expect(simpleTestRequest(base, TODAY, 'Trends persist.').hypothesis).toBe('Trends persist.');
+    expect(simpleTestRequest(base, TODAY).hypothesis).toBeUndefined();
+  });
+
+  it('starts on the first day every ticker has prices (R15)', () => {
+    expect(earliestCommonStart(['2024-01-02T00:00:00', '2024-03-01T00:00:00'])).toBe('2024-03-01');
+    expect(earliestCommonStart(['2024-01-02', null])).toBeNull();
+    expect(earliestCommonStart([])).toBeNull();
+  });
+
+  it("reads a saved strategy's own tickers (NB-09)", () => {
+    expect(presetTickers({ ticker: 'spy.us', allocation: 1 })).toBe('SPY.US');
+    expect(presetTickers({ tickers: ['AAPL.US', 'msft.us'] })).toBe('AAPL.US, MSFT.US');
+    expect(presetTickers({ lookback_days: 20 })).toBe('');
   });
 });

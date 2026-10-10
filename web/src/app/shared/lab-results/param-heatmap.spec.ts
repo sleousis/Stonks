@@ -63,7 +63,7 @@ describe('ParamHeatmap', () => {
     expect(el.querySelectorAll('td.plateau')).toHaveLength(1);
   });
 
-  it('shows the plateau verdict, the metric, what was held and the trial note', () => {
+  it('shows the plateau verdict, the metric, what was held and the settings note', () => {
     const el = render();
     const text = el.textContent!;
     expect(text).toContain('Plateau test');
@@ -71,7 +71,7 @@ describe('ParamHeatmap', () => {
     expect(text).toContain('Neighbours fall off.');
     expect(text).toContain('10%');
     expect(text).toContain('Mode slow');
-    expect(text).toContain('Every cell counts as a trial');
+    expect(text).toContain('Every cell counts as a setting tried');
   });
 
   it('works without a plateau overlay', () => {

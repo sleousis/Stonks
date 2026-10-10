@@ -104,7 +104,7 @@ describe('SignalIcPage', () => {
 
   async function run(): Promise<void> {
     el.querySelector<HTMLInputElement>(`input[value="${MOMENTUM.class_path}"]`)!.click();
-    type('#ic-tickers', 'aapl.us msft.us');
+    type('#ic-tickers', 'a.us b.us c.us d.us e.us f.us g.us h.us i.us j.us');
     type('#ic-horizons', '1, 21');
     el.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
     await settle();
@@ -114,7 +114,7 @@ describe('SignalIcPage', () => {
     await run();
     expect(posted[0]).toMatchObject({
       strategy: { class_path: MOMENTUM.class_path },
-      universe: ['AAPL.US', 'MSFT.US'],
+      universe: ['A.US', 'B.US', 'C.US', 'D.US', 'E.US', 'F.US', 'G.US', 'H.US', 'I.US', 'J.US'],
       horizons: [1, 21],
     });
     const result = el.querySelector('app-signal-ic-result')!;

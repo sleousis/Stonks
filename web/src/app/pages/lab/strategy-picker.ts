@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, input, model, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  afterRenderEffect,
+  computed,
+  inject,
+  input,
+  model,
+  signal,
+} from '@angular/core';
 
 import type { StrategyClassInfo } from '../../api/models';
 import { assetClassWords, groupStrategies, strategyTitle } from './lab-requests';
@@ -168,4 +178,24 @@ export class StrategyPicker {
   protected readonly groups = computed(() => groupStrategies(this.classes(), this.query()));
   protected readonly title = strategyTitle;
   protected readonly assets = assetClassWords;
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  constructor() {
+    // A strategy picked from outside ("Test again in Lab") scrolls into view
+    // inside the list, never moving the page.
+    afterRenderEffect(() => {
+      const value = this.value();
+      if (!value) return;
+      const list = this.host.nativeElement.querySelector<HTMLElement>('.list');
+      const option = list
+        ?.querySelector<HTMLInputElement>(`input[type="radio"]:checked`)
+        ?.closest<HTMLElement>('.option');
+      if (!list || !option) return;
+      const top = option.offsetTop - list.offsetTop;
+      if (top < list.scrollTop || top + option.offsetHeight > list.scrollTop + list.clientHeight) {
+        list.scrollTop = Math.max(0, top - list.clientHeight / 3);
+      }
+    });
+  }
 }

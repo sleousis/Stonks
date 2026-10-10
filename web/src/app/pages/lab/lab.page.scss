@@ -159,8 +159,32 @@ progress {
 }
 
 .job-error {
-  color: var(--color-loss);
+  display: grid;
+  gap: var(--space-2);
   overflow-wrap: anywhere;
+
+  p {
+    margin: 0;
+    color: var(--color-loss);
+  }
+}
+
+.job-error-details {
+  font-size: var(--text-sm);
+  color: var(--color-ink-2);
+
+  summary {
+    display: flex;
+    align-items: center;
+    min-height: var(--touch-min);
+    cursor: pointer;
+  }
+
+  code {
+    display: block;
+    white-space: pre-wrap;
+    font-size: var(--text-xs);
+  }
 }
 
 .row-actions {

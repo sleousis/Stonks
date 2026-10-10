@@ -137,7 +137,7 @@ export const SUITES: readonly SuiteInfo[] = [
     id: 'standard',
     label: 'Standard',
     description:
-      'Adds noisy prices, walk-forward, luck after many tries, higher costs and the signal ranking. A few minutes on a small universe.',
+      'Adds noisy prices, rolling retests, luck after many tries, higher costs and the signal ranking. A few minutes on a small universe.',
     tests: [
       'oos',
       'period_stability',
@@ -152,7 +152,7 @@ export const SUITES: readonly SuiteInfo[] = [
     id: 'promotion',
     label: 'Full',
     description:
-      'Every test the approval check asks for: overfitting, shuffled trades and prices, nearby settings, other tickers, the benchmark, random data and past crises. Slow.',
+      'Every test the approval check asks for: the luckiest setting, shuffled trades and prices, nearby settings, other tickers, the benchmark, random data and past crises. Slow.',
     tests: [
       'oos',
       'walk_forward',

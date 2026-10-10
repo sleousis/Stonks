@@ -4,6 +4,7 @@ import {
   computed,
   inject,
   input,
+  linkedSignal,
   resource,
   signal,
 } from '@angular/core';
@@ -17,7 +18,13 @@ import { PageHeader } from '../../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../../shared/ui/states';
 import { DataPlanNote } from '../../../shared/ui/data-plan-note';
 import { LabNav } from '../lab-nav';
-import { FORMULA_ROUTE, directionText, matchesQuery, warmupText } from './factor-requests';
+import {
+  FORMULA_ROUTE,
+  RESEARCH_SETS,
+  directionText,
+  historyText,
+  matchesQuery,
+} from './factor-requests';
 
 type Kind = 'expression' | 'fundamental';
 
@@ -54,13 +61,13 @@ type Kind = 'expression' | 'fundamental';
       <div class="panel-head">
         <h2 id="factors-title">Factor library</h2>
         @if (lastCatalog(); as c) {
-          <span class="count num">{{ shown().length }} of {{ c.factors.length }}</span>
+          <span class="count num">{{ shown().length }} of {{ visibleCount() }}</span>
         }
       </div>
       <div class="panel-body">
         <p class="lead">
           A factor is a number per name per day that should rank the returns that follow. Each one
-          says whether higher or lower is better and how many bars of history it needs first.
+          says whether higher or lower is better and how much history it needs first.
         </p>
         <form
           class="filters"
@@ -108,6 +115,14 @@ type Kind = 'expression' | 'fundamental';
               }
             </select>
           </div>
+          <label class="check research">
+            <input
+              type="checkbox"
+              [checked]="showResearch()"
+              (change)="showResearch.set($any($event.target).checked)"
+            />
+            Show research sets
+          </label>
           <div class="field">
             <label for="factor-kind">Kind</label>
             <select
@@ -202,12 +217,29 @@ export class FactorsPage {
 
   /** Sets and families from the last good load, so the filters stay while one loads. */
   protected readonly lastCatalog = keepLatest(this.catalog);
-  protected readonly sets = computed(() => this.lastCatalog()?.sets ?? []);
-  protected readonly families = computed(() => this.lastCatalog()?.families ?? []);
+  /** Research sets (alpha158) stay hidden until asked for, or picked by link. */
+  protected readonly showResearch = linkedSignal(() => RESEARCH_SETS.includes(this.set() ?? ''));
+  private readonly visible = computed(() =>
+    (this.lastCatalog()?.factors ?? []).filter(
+      (f) => this.showResearch() || !RESEARCH_SETS.includes(f.set ?? ''),
+    ),
+  );
+  protected readonly sets = computed(() =>
+    (this.lastCatalog()?.sets ?? []).filter(
+      (s) => this.showResearch() || !RESEARCH_SETS.includes(s.name),
+    ),
+  );
+  protected readonly families = computed(() => {
+    const all = this.lastCatalog()?.families ?? [];
+    if (this.showResearch()) return all;
+    const used = new Set(this.visible().map((f) => f.family));
+    return all.filter((f) => used.has(f));
+  });
 
   protected readonly shown = computed(() =>
-    (this.lastCatalog()?.factors ?? []).filter((f) => matchesQuery(f, this.query())),
+    this.visible().filter((f) => matchesQuery(f, this.query())),
   );
+  protected readonly visibleCount = computed(() => this.visible().length);
 
   protected readonly key = (f: FactorView) => f.id;
   protected readonly columns: TableColumn<FactorView>[] = [
@@ -224,9 +256,8 @@ export class FactorsPage {
     },
     {
       key: 'lookback_bars',
-      label: 'Warm-up',
-      align: 'end',
-      value: (f) => warmupText(f.lookback_bars),
+      label: 'Needs',
+      value: (f) => historyText(f.lookback_bars),
       mobile: 'hide',
       help: false,
     },

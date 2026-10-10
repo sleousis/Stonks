@@ -77,6 +77,33 @@ describe('FactorsPage', () => {
     );
   });
 
+  it('keeps research sets such as alpha158 behind Show research sets', async () => {
+    catalog = {
+      ...FACTOR_CATALOG,
+      factors: [
+        ...FACTOR_CATALOG.factors,
+        { ...FACTOR_CATALOG.factors[0], id: 'KMID', set: 'alpha158', family: 'kbar' },
+      ],
+      sets: [...FACTOR_CATALOG.sets, { name: 'alpha158', count: 1 }],
+      families: [...FACTOR_CATALOG.families, 'kbar'],
+    };
+    // Reload the catalog with a research set in it.
+    fixture.componentRef.setInput('family', 'x');
+    fixture.detectChanges();
+    fixture.componentRef.setInput('family', undefined);
+    await settle();
+    expect(rows().join()).not.toContain('KMID');
+    expect(el.querySelector('#factor-set')!.textContent).not.toContain('alpha158');
+    expect(el.querySelector('#factor-family')!.textContent).not.toContain('kbar');
+    const toggle = [...el.querySelectorAll<HTMLLabelElement>('label.check')].find((l) =>
+      l.textContent!.includes('Show research sets'),
+    )!;
+    toggle.querySelector('input')!.click();
+    fixture.detectChanges();
+    expect(rows().join()).toContain('KMID');
+    expect(el.querySelector('#factor-set')!.textContent).toContain('alpha158');
+  });
+
   it('filters by typed text on the page', () => {
     const search = el.querySelector<HTMLInputElement>('#factor-search')!;
     search.value = 'piotroski';

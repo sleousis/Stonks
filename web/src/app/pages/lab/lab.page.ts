@@ -50,7 +50,9 @@ import { type LabRunForm, SUITES, formFromRequest, strategyTitle } from './lab-r
 import { strategyDisplayName } from '../../shared/strategy-names';
 import { SweepResult } from '../../shared/lab-results/sweep-result';
 import { LabNav } from './lab-nav';
-import { type StrategyPreset, presetFromStrategy } from './strategy-preset';
+import { type StrategyPreset, presetFromStrategy, presetTickers } from './strategy-preset';
+import { WatchlistsService } from '../../api/watchlists.service';
+import { jobErrorText } from '../../shared/lab-results/job-error';
 
 /** The run types the forms on this screen start. */
 export type FormKind = 'backtest' | 'lab_run';
@@ -87,12 +89,6 @@ export function nextStep(result: LabRunView): NextStep {
   };
 }
 
-/** "It failed 1 of 3 robustness tests: Walk-forward." */
-export function failedText(n: Extract<NextStep, { kind: 'failed' }>): string {
-  const head = `It failed ${n.failed.length} of ${n.total} robustness ${n.total === 1 ? 'test' : 'tests'}`;
-  return n.failed.length ? `${head}: ${n.failed.join(', ')}.` : `${head}.`;
-}
-
 const SUITE_PARAMS = new Set(['quick', 'standard', 'promotion']);
 
 type Shown =
@@ -105,7 +101,7 @@ const KIND_LABELS: Record<string, string> = {
   backtest: 'Backtest',
   lab_run: 'Lab run',
   lab_sweep: 'Sweep',
-  signal_ic: 'Signal IC',
+  signal_ic: 'Signal check',
 };
 
 export function kindLabel(kind: string): string {
@@ -115,11 +111,12 @@ export function kindLabel(kind: string): string {
 /**
  * Strategy a lab job ran, from its stored request: the catalog's plain name
  * for its class (when `titles` knows it), else the class name, or a saved
- * strategy's display name.
+ * strategy's display name (its plain title when `names` knows it).
  */
 export function jobStrategy(
   job: Pick<Job, 'params'>,
   titles: ReadonlyMap<string, string> = new Map(),
+  names: ReadonlyMap<string, string> = new Map(),
 ): string {
   const name = (classPath: string) =>
     titles.get(classPath) ?? classPath.split(':').at(-1) ?? classPath;
@@ -131,7 +128,8 @@ export function jobStrategy(
   }
   const ref = job.params['strategy'] as
     { class_path?: string | null; strategy_id?: string | null } | undefined;
-  if (ref?.strategy_id) return strategyDisplayName(ref.strategy_id);
+  if (ref?.strategy_id)
+    return strategyDisplayName(ref.strategy_id, { name: names.get(ref.strategy_id) });
   if (ref?.class_path) return name(ref.class_path);
   return '–';
 }
@@ -176,6 +174,7 @@ export class LabPage {
   private readonly system = inject(SystemService);
   private readonly universesApi = inject(UniversesService);
   private readonly strategiesApi = inject(StrategiesService);
+  private readonly watchlistsApi = inject(WatchlistsService);
   private readonly jobsApi = inject(JobsApiService);
   private readonly jobs = inject(JobsService);
   private readonly confirm = inject(ConfirmService);
@@ -203,12 +202,13 @@ export class LabPage {
   );
   /**
    * Simple (pick, run, read a plain verdict) or Advanced (every setting).
-   * A saved strategy or a suite from a link opens Advanced; otherwise the
-   * viewer's last choice, simple at first.
+   * A saved strategy opens Simple with it picked, a suite from a link opens
+   * Advanced, otherwise the viewer's last choice, simple at first.
    */
-  protected readonly view = linkedSignal<LabView>(() =>
-    this.strategy() || this.suiteParam() ? 'advanced' : readView(),
-  );
+  protected readonly view = linkedSignal<LabView>(() => {
+    if (this.strategy()) return 'simple';
+    return this.suiteParam() ? 'advanced' : readView();
+  });
   /** Fields the lab-run form starts from: the query's suite and universe, or a re-run. */
   protected readonly prefill = linkedSignal<Partial<LabRunForm> | null>(() => {
     const suite = this.suiteParam();
@@ -238,6 +238,13 @@ export class LabPage {
   protected readonly strategyPreset = computed<StrategyPreset | null>(() =>
     this.sourceStrategy.hasValue() ? presetFromStrategy(this.sourceStrategy.value()) : null,
   );
+  /** The simple form's tickers: a watchlist's from the link, else the saved strategy's own. */
+  protected readonly simpleTickers = computed(() => {
+    const listed = this.tickerList();
+    if (listed) return listed;
+    const p = this.strategyPreset();
+    return p ? presetTickers(p.params) || null : null;
+  });
   /** The preset's class is not in the catalog (e.g. a code strategy that is off). */
   protected readonly presetUncatalogued = computed(() => {
     const p = this.strategyPreset();
@@ -255,6 +262,24 @@ export class LabPage {
   private readonly universes = resource({ loader: () => this.universesApi.list() });
   protected readonly universeList = computed(() =>
     this.universes.hasValue() ? this.universes.value() : [],
+  );
+  /** The viewer's watchlists, offered on the simple form. */
+  private readonly watchlists = resource({ loader: () => this.watchlistsApi.list(true) });
+  protected readonly watchlistList = computed(() =>
+    this.watchlists.hasValue() ? this.watchlists.value() : [],
+  );
+  /** Registered strategies, for the plain names in the history. */
+  private readonly registered = resource({
+    loader: () => this.strategiesApi.list({ limit: 200 }),
+  });
+  private readonly strategyNames = computed(
+    () =>
+      new Map(
+        (this.registered.hasValue() ? this.registered.value().items : []).map((s) => [
+          s.id,
+          strategyDisplayName(s.id, { starter: s.starter }),
+        ]),
+      ),
   );
   protected readonly intervalList = computed(() =>
     this.intervals.hasValue() ? this.intervals.value() : [],
@@ -312,7 +337,11 @@ export class LabPage {
   protected readonly historyColumns: TableColumn<Job>[] = [
     { key: 'created_at', label: 'Started', format: 'datetime', mobile: 'title' },
     { key: 'kind', label: 'Kind', value: (j) => kindLabel(j.kind) },
-    { key: 'strategy', label: 'Strategy', value: (j) => jobStrategy(j, this.titles()) },
+    {
+      key: 'strategy',
+      label: 'Strategy',
+      value: (j) => jobStrategy(j, this.titles(), this.strategyNames()),
+    },
     { key: 'status', label: 'Status' },
     {
       key: 'progress',
@@ -350,9 +379,10 @@ export class LabPage {
   protected readonly canRerun = computed(() => !!this.followed()?.params);
 
   protected readonly kindLabel = kindLabel;
-  protected readonly jobStrategy = (job: Pick<Job, 'params'>) => jobStrategy(job, this.titles());
+  protected readonly jobStrategy = (job: Pick<Job, 'params'>) =>
+    jobStrategy(job, this.titles(), this.strategyNames());
+  protected readonly jobError = jobErrorText;
   protected readonly displayName = strategyDisplayName;
-  protected readonly failedText = failedText;
   protected readonly canCancel = canCancel;
   protected readonly isTerminal = isTerminal;
 

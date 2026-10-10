@@ -140,7 +140,7 @@ describe('LabRunFormView', () => {
       );
     const text = items.map((li) => li.textContent).join(' ');
     for (const name of [
-      'Many splits (CPCV)',
+      'Many data splits',
       'Past crises',
       'After each signal',
       'Adds something new',
@@ -185,7 +185,12 @@ describe('LabRunFormView', () => {
   it('uses plain labels for the search settings', async () => {
     await create();
     const text = el.textContent!;
-    for (const label of ['Share used for tuning', 'Gap before testing', 'Random seed', 'Trials'])
+    for (const label of [
+      'Share used for tuning',
+      'Gap before testing',
+      'Random seed',
+      'Settings to try',
+    ])
       expect(text).toContain(label);
     for (const jargon of ['Embargo bars', 'Train share', 'Budget'])
       expect(text).not.toContain(jargon);

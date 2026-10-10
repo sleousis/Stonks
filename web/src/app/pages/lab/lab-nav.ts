@@ -12,16 +12,17 @@ export interface LabSection {
 /** The Lab's screens, as links so each has its own address. */
 export const LAB_SECTIONS: readonly LabSection[] = [
   { path: '/lab', label: 'Test a strategy', exact: true },
-  { path: '/lab/ledger', label: 'Trial ledger', exact: false },
+  { path: '/lab/ledger', label: 'Lab history', exact: false },
   { path: '/lab/sweeps', label: 'Sweep', exact: false, more: true },
-  { path: '/lab/signal-ic', label: 'Signal IC', exact: false, more: true },
+  { path: '/lab/signal-ic', label: 'Signal check', exact: false, more: true },
   { path: '/lab/factors', label: 'Factors', exact: false, more: true },
   { path: '/lab/research', label: 'Research sessions', exact: false, more: true },
 ];
 
 /**
  * Underline tabs for the Lab's screens: the two everyday ones, then "More
- * tools". One row that scrolls sideways on phones, never two rows of pills.
+ * tools". On phones the tabs wrap onto two lines, so every screen shows,
+ * and the "More tools" label is dropped.
  */
 @Component({
   selector: 'app-lab-nav',
@@ -68,19 +69,12 @@ export const LAB_SECTIONS: readonly LabSection[] = [
     .lab-nav {
       margin-bottom: var(--space-4);
       border-bottom: 1px solid var(--color-border);
-      overflow-x: auto;
-      scrollbar-width: none;
-      @include bp.phone {
-        mask-image: linear-gradient(to right, #000 85%, transparent);
-      }
-    }
-    .lab-nav::-webkit-scrollbar {
-      display: none;
     }
     ul {
       display: flex;
+      flex-wrap: wrap;
       align-items: stretch;
-      gap: var(--space-1);
+      gap: 0 var(--space-1);
       margin: 0;
       padding: 0;
       list-style: none;
@@ -101,6 +95,7 @@ export const LAB_SECTIONS: readonly LabSection[] = [
       font-weight: var(--weight-medium);
       @include bp.phone {
         min-height: var(--touch-min);
+        padding: 0 var(--space-2);
       }
       @include bp.coarse {
         min-height: var(--touch-min);
@@ -126,6 +121,9 @@ export const LAB_SECTIONS: readonly LabSection[] = [
       text-transform: uppercase;
       letter-spacing: 0.04em;
       color: var(--color-ink-3);
+      @include bp.phone {
+        display: none;
+      }
     }
   `,
 })

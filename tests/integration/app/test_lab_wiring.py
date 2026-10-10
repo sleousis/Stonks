@@ -165,3 +165,17 @@ def test_backtest_result_has_trades_drawdown_and_metrics(services):
     assert len(result.trades) == stats.n_trades + stats.n_open
     assert stats.costs_paid > 0  # realistic default costs
     assert result.sortino is not None and result.fitness is not None
+
+
+def test_a_standard_lab_job_with_walk_forward_runs_on_a_pool(services, settings, monkeypatch):
+    """R01: the job objective carries a cancel checkpoint that cannot be
+    pickled. Walk-forward must ship only the inner objective to its pool."""
+    monkeypatch.setattr("stonks.lab.parallel.default_max_workers", lambda: 2)
+    settings.lab.parallel = ParallelSettings(max_workers=2)
+    job = services.lab.submit_lab_run(_request(survival_tests=None, preset="standard"))
+    done = services.jobs.wait(job.id, timeout=600)
+    assert done.status == "succeeded", done.error
+    tests = {r["test_id"] for r in done.result["survival_reports"]}
+    assert "walk_forward" in tests
+    (wf,) = [r for r in done.result["survival_reports"] if r["test_id"] == "walk_forward"]
+    assert wf["metrics"]["n_folds"] > 0, wf["notes"]

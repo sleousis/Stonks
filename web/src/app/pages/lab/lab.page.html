@@ -47,11 +47,32 @@
         "
       />
     } @else {
+      @if (strategy(); as id) {
+        <div class="preset panel-body" role="status">
+          @if (sourceStrategy.error()) {
+            <p class="preset-warn">Could not load that strategy, so the forms start empty.</p>
+          } @else if (strategyPreset(); as p) {
+            @if (presetUncatalogued()) {
+              <p class="preset-warn">
+                {{ presetName() }} uses a strategy that is not available to test here, so the forms
+                start empty.
+              </p>
+            } @else {
+              <p>
+                Testing <strong>{{ presetName() }}</strong> again. Its strategy is picked, and its
+                saved settings are in Advanced.
+              </p>
+            }
+          }
+        </div>
+      }
       <div id="lab-simple" class="panel-body" [hidden]="view() !== 'simple'">
         <app-simple-test-form
           [classes]="classes.value()"
           [universes]="universeList()"
-          [tickers]="tickerList()"
+          [watchlists]="watchlistList()"
+          [tickers]="simpleTickers()"
+          [classPath]="strategyPreset()?.classPath ?? null"
           [universe]="universe() ?? null"
           [testCount]="standardCount()"
           [busy]="starting()"
@@ -92,25 +113,6 @@
             </button>
           </div>
         </div>
-        @if (strategy(); as id) {
-          <div class="preset panel-body" role="status">
-            @if (sourceStrategy.error()) {
-              <p class="preset-warn">Could not load that strategy, so the forms start empty.</p>
-            } @else if (strategyPreset(); as p) {
-              @if (presetUncatalogued()) {
-                <p class="preset-warn">
-                  {{ presetName() }} uses a strategy that is not available to test here, so the
-                  forms start empty.
-                </p>
-              } @else {
-                <p>
-                  Testing <strong>{{ presetName() }}</strong> again: its strategy and saved settings
-                  are filled in. A lab run searches the settings again.
-                </p>
-              }
-            }
-          </div>
-        }
         <div
           id="lab-panel-backtest"
           class="panel-body"
@@ -181,7 +183,16 @@
                 </div>
               }
               @if (f.handle.error(); as e) {
-                <p class="job-error" role="alert">{{ e }}</p>
+                @let failure = jobError(e);
+                <div class="job-error" role="alert">
+                  <p>{{ failure.text }}</p>
+                  @if (failure.details) {
+                    <details class="job-error-details">
+                      <summary>Details</summary>
+                      <code>{{ failure.details }}</code>
+                    </details>
+                  }
+                </div>
               } @else if (status === 'cancelled') {
                 <p class="muted">The job was cancelled before it finished.</p>
               }
@@ -240,8 +251,8 @@
                       }
                       @case ('passed') {
                         <p class="next-text">
-                          <strong>It passed.</strong> To put it on trial, run it again with "Put it
-                          on trial if it passes" ticked. The form is filled in for you.
+                          To put it on trial, run it again with "Put it on trial if it passes"
+                          ticked. The form is filled in for you.
                         </p>
                         <div class="next-actions">
                           <button
@@ -256,9 +267,8 @@
                       }
                       @case ('failed') {
                         <p class="next-text">
-                          <strong>{{ failedText(n) }}</strong> Change the window, tickers or suite
-                          and run it again. Loosening a test until it passes is how overfitting
-                          sneaks in.
+                          Change the window, tickers or tests and run it again. Loosening a test
+                          until it passes is how overfitting sneaks in.
                         </p>
                         <div class="next-actions">
                           <button
