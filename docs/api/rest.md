@@ -1253,6 +1253,7 @@ Live calibration of a classifier version's probability forecasts (roadmap 23.9):
 | `quantity` | number | yes |  |
 | `side` | string \| null | yes |  |
 | `strategy_id` | string \| null | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 
 ### ChartSignalView
 
@@ -1262,6 +1263,7 @@ Live calibration of a classifier version's probability forecasts (roadmap 23.9):
 | `kind` | string | yes |  |
 | `reason` | string \| null | yes |  |
 | `strategy_id` | string | yes |  |
+| `strategy_name` | string \| null | no | The strategy's plain title (a starter's), or null: the console names it from the id. |
 | `strength` | number \| null | yes |  |
 
 ### ChartView

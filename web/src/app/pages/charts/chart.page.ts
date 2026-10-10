@@ -21,7 +21,7 @@ import { PriceChart } from '../../shared/chart/price-chart';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-table/data-table';
 import { PageHeader } from '../../shared/ui/page-header';
-import { strategyDisplayName } from '../../shared/strategy-names';
+import { rowStrategyName } from '../../shared/strategy-names';
 import { SideTag } from '../../shared/ui/side-tag';
 import { NoBook } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -209,14 +209,14 @@ export class ChartPage {
     {
       key: 'strategy_id',
       label: 'Strategy',
-      value: (f) => (f.strategy_id ? strategyDisplayName(f.strategy_id) : ''),
+      value: (f) => rowStrategyName(f) ?? '',
       mobile: 'hide',
     },
   ];
   protected readonly signalColumns: TableColumn<ChartSignalView>[] = [
     { key: 'as_of', label: 'Date', format: 'date', mobile: 'title' },
     { key: 'kind', label: 'Signal', value: (s) => SIGNAL_WORDS[s.kind] ?? s.kind },
-    { key: 'strategy_id', label: 'Strategy', value: (s) => strategyDisplayName(s.strategy_id) },
+    { key: 'strategy_id', label: 'Strategy', value: (s) => rowStrategyName(s) ?? '' },
     { key: 'reason', label: 'Why', value: (s) => s.reason ?? '', sortable: false },
   ];
   protected readonly fillKey = (f: ChartFillView) => `${f.order_client_id}-${f.filled_at}`;

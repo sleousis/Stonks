@@ -46,7 +46,8 @@ function view(days: number): ChartView {
     signals: [
       {
         as_of: last,
-        strategy_id: 'momentum_3fa9c21b',
+        strategy_id: 'starter_trend',
+        strategy_name: 'Simple trend',
         kind: 'entry',
         strength: 0.5,
         reason: 'trend is up',
@@ -153,6 +154,9 @@ describe('ChartPage', () => {
     // Strategies by name, never by raw id (UX-27).
     expect(el.textContent).toContain('Momentum 3fa9');
     expect(el.textContent).not.toContain('momentum_3fa9c21b');
+    // A titled strategy shows the title the API sends.
+    expect(el.textContent).toContain('Simple trend');
+    expect(el.textContent).not.toContain('starter_trend');
     expect(el.querySelector('app-side-tag')).not.toBeNull();
 
     // Toggles redraw without a new request.
