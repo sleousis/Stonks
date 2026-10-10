@@ -8,11 +8,11 @@ import {
 } from '@angular/core';
 
 import { JournalService } from '../../api/journal.service';
-import { formatMoney, isoDay, toneClass } from '../../core/format/format';
+import { formatDate, formatMoney, isoDay, toneClass } from '../../core/format/format';
 import { PortfolioContextService } from '../../core/portfolio/portfolio-context.service';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { StatTile } from '../../shared/ui/stat-tile';
-import { monthGrid, monthName, shiftMonth } from './journal-format';
+import { monthGrid, monthName, plural, shiftMonth } from './journal-format';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -70,13 +70,23 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
           <app-stat-tile
             label="Realised"
             [value]="money(cal.total)"
-            [detail]="cal.trades + ' closed'"
+            [detail]="closedText(cal.trades)"
             [help]="false"
             featured
           />
           <app-stat-tile label="This month" [value]="money(monthTotal())" [help]="false" />
-          <app-stat-tile label="Best day" [value]="cal.best_day ?? 'n/a'" [help]="false" />
-          <app-stat-tile label="Worst day" [value]="cal.worst_day ?? 'n/a'" [help]="false" />
+          <app-stat-tile
+            label="Best day this month"
+            [value]="best() ? money(best()!.pnl) : 'n/a'"
+            [detail]="best() ? dayText(best()!.key) : null"
+            [help]="false"
+          />
+          <app-stat-tile
+            label="Worst day this month"
+            [value]="worst() ? money(worst()!.pnl) : 'n/a'"
+            [detail]="worst() ? dayText(worst()!.key) : null"
+            [help]="false"
+          />
         </div>
         @if (cal.unconverted > 0) {
           <p class="lead">
@@ -108,7 +118,7 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                       <span class="day">{{ c.day }}</span>
                       @if (c.pnl !== null) {
                         <span class="amt num">{{ money(c.pnl) }}</span>
-                        <span class="visually-hidden">{{ c.trades }} trades</span>
+                        <span class="visually-hidden">{{ count(c.trades, 'trade') }}</span>
                       }
                     }
                   </td>
@@ -162,6 +172,31 @@ export class JournalCalendar {
     if (!this.calendar.hasValue()) return 0;
     return this.calendar.value().months.find((m) => m.key === this.month())?.pnl ?? 0;
   });
+
+  /** The days of the month shown, so best and worst never come from another month. */
+  private readonly monthDays = computed(() =>
+    this.calendar.hasValue()
+      ? this.calendar.value().days.filter((d) => d.key.startsWith(this.month()))
+      : [],
+  );
+  protected readonly best = computed(() => {
+    const days = this.monthDays().filter((d) => d.pnl > 0);
+    return days.length ? days.reduce((a, b) => (b.pnl > a.pnl ? b : a)) : null;
+  });
+  protected readonly worst = computed(() => {
+    const days = this.monthDays().filter((d) => d.pnl < 0);
+    return days.length ? days.reduce((a, b) => (b.pnl < a.pnl ? b : a)) : null;
+  });
+
+  protected readonly count = plural;
+
+  protected closedText(n: number): string {
+    return `${plural(n, 'trade')} closed`;
+  }
+
+  protected dayText(iso: string): string {
+    return formatDate(iso);
+  }
 
   protected label(month: string): string {
     return monthName(month);

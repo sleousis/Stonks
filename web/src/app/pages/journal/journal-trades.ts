@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   inject,
   linkedSignal,
   resource,
@@ -15,14 +16,7 @@ import { DataTable, TableCell, type TableColumn } from '../../shared/ui/data-tab
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { Segmented, type SegmentOption } from '../../shared/ui/segmented';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
-import {
-  exitLabel,
-  formatHolding,
-  formatR,
-  formatShare,
-  planLabel,
-  sleeveLabel,
-} from './journal-format';
+import { exitLabel, formatHolding, formatR, planLabel, sleeveLabel } from './journal-format';
 
 export const TRADES_PAGE_SIZE = 25;
 
@@ -48,8 +42,8 @@ const STATUSES: readonly SegmentOption<Status>[] = [
       </div>
       <p class="lead">
         Each trade runs from the fill that opened it to the fill that closed it. A partial exit is
-        its own line. Excursions are the worst and best moves while you held. R is the result in
-        units of the risk at your first stop.
+        its own line. R is the result measured in the risk you took to your first stop, so +2R made
+        twice what you risked. Open a trade to see how far it moved for and against you.
       </p>
 
       @let page = latest();
@@ -72,7 +66,7 @@ const STATUSES: readonly SegmentOption<Status>[] = [
         <app-data-table
           caption="Round trips. Open a trade to review it."
           [rows]="page.items"
-          [columns]="columns"
+          [columns]="columns()"
           [rowKey]="rowKey"
           [total]="page.total"
           [offset]="page.offset"
@@ -119,74 +113,60 @@ export class JournalTrades {
   });
   protected readonly latest = keepLatest(this.trades);
 
-  protected readonly columns: TableColumn<JournalTradeView>[] = [
-    { key: 'ticker', label: 'Trade', mobile: 'title' },
-    {
-      key: 'sleeve',
-      label: 'Strategy',
-      value: (t) => sleeveLabel(t.sleeve, t.sleeve_name),
-    },
-    { key: 'entry_at', label: 'Entered', format: 'date', mobile: 'hide' },
-    {
-      key: 'holding_days',
-      label: 'Held',
-      value: (t) => t.holding_days,
-      display: (t) => formatHolding(t.holding_days),
-    },
-    {
-      key: 'pnl',
-      label: 'P&L',
-      format: 'signedMoney',
-      tone: true,
-      currency: (t) => t.currency,
-    },
-    {
-      key: 'r_multiple',
-      label: 'R',
-      format: 'number',
-      tone: true,
-      display: (t) => formatR(t.r_multiple),
-    },
-    {
-      key: 'mae_pct',
-      label: 'Worst move',
-      format: 'number',
-      mobile: 'hide',
-      display: (t) => formatShare(t.mae_pct, true),
-    },
-    {
-      key: 'mfe_pct',
-      label: 'Best move',
-      format: 'number',
-      mobile: 'hide',
-      display: (t) => formatShare(t.mfe_pct, true),
-    },
-    {
-      key: 'exit_efficiency',
-      label: 'Exit efficiency',
-      format: 'number',
-      mobile: 'hide',
-      display: (t) => formatShare(t.exit_efficiency),
-    },
-    {
-      key: 'exit',
-      label: 'Exit',
-      value: (t) => exitLabel(t.exit_trigger, t.is_open),
-    },
-    {
-      key: 'plan',
-      label: 'Plan',
-      mobile: 'hide',
-      value: (t) => planLabel(t.followed_plan),
-    },
-    {
-      key: 'tags',
-      label: 'Tags',
-      mobile: 'hide',
-      sortable: false,
-      value: (t) => [...t.tags, ...t.mistakes].join(', '),
-    },
-  ];
+  /** Open trades have no R or exit yet, so the Open filter leaves those columns out. */
+  protected readonly columns = computed(() =>
+    this.status() === 'open' ? COLUMNS.filter((c) => !CLOSED_ONLY.has(c.key)) : COLUMNS,
+  );
 
   protected readonly rowKey = (t: JournalTradeView) => t.leg_id;
 }
+
+const CLOSED_ONLY = new Set(['r_multiple', 'exit']);
+
+const COLUMNS: TableColumn<JournalTradeView>[] = [
+  { key: 'ticker', label: 'Trade', mobile: 'title' },
+  {
+    key: 'sleeve',
+    label: 'Strategy',
+    value: (t) => sleeveLabel(t.sleeve, t.sleeve_name),
+  },
+  { key: 'entry_at', label: 'Entered', format: 'date', mobile: 'hide' },
+  {
+    key: 'holding_days',
+    label: 'Held',
+    value: (t) => t.holding_days,
+    display: (t) => formatHolding(t.holding_days),
+  },
+  {
+    key: 'pnl',
+    label: 'P&L',
+    format: 'signedMoney',
+    tone: true,
+    currency: (t) => t.currency,
+  },
+  {
+    key: 'r_multiple',
+    label: 'R',
+    format: 'number',
+    tone: true,
+    display: (t) => formatR(t.r_multiple),
+  },
+  {
+    key: 'exit',
+    label: 'Exit',
+    value: (t) => exitLabel(t.exit_trigger, t.is_open),
+  },
+  {
+    key: 'plan',
+    label: 'Plan',
+    mobile: 'hide',
+    value: (t) => planLabel(t.followed_plan),
+  },
+  {
+    key: 'tags',
+    label: 'Tags',
+    mobile: 'hide',
+    sortable: false,
+    value: (t) => [...t.tags, ...t.mistakes].join(', '),
+  },
+];
