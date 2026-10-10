@@ -140,7 +140,7 @@ describe('LabRunFormView', () => {
       );
     const text = items.map((li) => li.textContent).join(' ');
     for (const name of [
-      'Many splits (CPCV)',
+      'Many data splits',
       'Past crises',
       'After each signal',
       'Adds something new',

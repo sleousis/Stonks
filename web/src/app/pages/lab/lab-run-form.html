@@ -500,13 +500,13 @@
       </section>
 
       @if (runs('walk_forward')) {
-        <div class="sub grid-2" role="group" aria-label="Walk-forward options">
+        <div class="sub grid-2" role="group" aria-label="Rolling retest options">
           <p class="sub-title span-2">
-            Walk-forward <app-help-tip term="walk_forward" />
+            Rolling retest <app-help-tip term="walk_forward" />
             <span class="muted">Blank fields use the test's defaults.</span>
           </p>
           <div class="field">
-            <label for="lr-wf-splits">Folds</label>
+            <label for="lr-wf-splits">Retest periods</label>
             <input
               id="lr-wf-splits"
               class="input num"
@@ -584,7 +584,7 @@
               Also try several window lengths
             </label>
             <span class="check-hint" id="lr-wf-matrix-hint">
-              A walk-forward matrix: passes only if most train and test lengths work.
+              Passes only if most train and test lengths work.
             </span>
           </div>
         </div>
