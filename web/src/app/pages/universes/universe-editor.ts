@@ -17,7 +17,7 @@ import { UniversesService } from '../../api/universes.service';
 import { ToastService } from '../../core/notify/toast.service';
 import { formatNumber } from '../../core/format/format';
 import { DataCoverageService } from '../../shared/ui/data-plan-note';
-import { SOURCE_LABELS } from '../data/data-labels';
+import { SOURCE_LABELS, exchangeLabel as exchangeName } from '../data/data-labels';
 import { ScreenFilters } from '../screener/screen-filters';
 import {
   ASSET_CLASSES,
@@ -134,8 +134,11 @@ export class UniverseEditor {
     params: () => (this.needsExchanges() ? {} : undefined),
     loader: () => this.api.exchanges(),
   });
-  protected readonly exchangeLabel = (e: { exchange: string; instruments: number }) =>
-    `${e.exchange}: ${formatNumber(e.instruments, { digits: 0 })} instruments`;
+  protected readonly exchangeLabel = (e: { exchange: string; instruments: number }) => {
+    const name = exchangeName(e.exchange);
+    const label = name === e.exchange ? name : `${name} (${e.exchange})`;
+    return `${label}: ${formatNumber(e.instruments, { digits: 0 })} instruments`;
+  };
 
   /** Universes a rule may start from: every other stored one. */
   protected readonly startFrom = computed(() =>

@@ -21,6 +21,7 @@ import type {
   ScreenUniverseView,
 } from '../../api/models';
 import { DataCoverageService } from '../../shared/ui/data-plan-note';
+import { exchangeLabel } from '../data/data-labels';
 import { HelpTip } from '../../shared/ui/help-tip';
 import { JobsApiService } from '../../api/jobs-api.service';
 import { ScreenerService } from '../../api/screener.service';
@@ -160,7 +161,12 @@ export class ScreenerPage {
       { key: 'ticker', label: 'Ticker', mobile: 'title' },
       { key: 'name', label: 'Name' },
       { key: 'sector', label: 'Sector', mobile: 'hide' },
-      { key: 'exchange', label: 'Exchange', mobile: 'hide' },
+      {
+        key: 'exchange',
+        label: 'Exchange',
+        value: (row) => exchangeLabel(row.exchange),
+        mobile: 'hide',
+      },
     ];
     for (const id of r?.metrics ?? []) {
       const m = this.metricList().find((x) => x.id === id);

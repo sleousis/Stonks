@@ -15,6 +15,7 @@ import { formatMoney, formatNumber, formatPercent, toneClass } from '../../core/
 import type { ChartSeries } from '../../shared/chart/chart-engine';
 import { TimeSeriesChart } from '../../shared/chart/time-series-chart';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
+import { intervalLabel } from './data-labels';
 import { parseTickers } from './ingest-request';
 
 const INTRADAY = /^\d+(m|h)$/;
@@ -43,7 +44,7 @@ export function pointTime(bar: BarView, interval: string): string {
         <h2 id="price-title">
           Prices
           @if (ticker(); as t) {
-            <span class="muted">· {{ t }} · {{ interval() }}</span>
+            <span class="muted">· {{ t }} · {{ intervalName(interval()) }}</span>
           }
         </h2>
         @if (bars.hasValue() && bars.value().truncated) {
@@ -74,7 +75,9 @@ export function pointTime(bar: BarView, interval: string): string {
             (change)="interval.set($any($event.target).value)"
           >
             @for (code of intervals(); track code) {
-              <option [value]="code" [selected]="code === interval()">{{ code }}</option>
+              <option [value]="code" [selected]="code === interval()">
+                {{ intervalName(code) }}
+              </option>
             }
           </select>
         </div>
@@ -160,6 +163,7 @@ export class PricePanel {
   readonly ticker = model<string | null>(null);
   readonly interval = model('1d');
   readonly intervals = input<readonly string[]>(['1d']);
+  protected readonly intervalName = intervalLabel;
   /** Bump to refetch (after a data update). */
   readonly refresh = input(0);
 
