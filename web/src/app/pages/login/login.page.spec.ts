@@ -7,6 +7,7 @@ import { of } from 'rxjs';
 
 import { provideApi } from '../../api/provide-api';
 import { AuthTokenService } from '../../core/auth/auth-token.service';
+import { SessionService } from '../../core/auth/session.service';
 import { DEVICE_INFO, NOTIFICATION_API } from '../../core/pwa/notification-permission.service';
 import { PUSH_SUBSCRIPTION_API } from '../../core/pwa/push-subscription-api';
 import { TRADER, UNAUTHORIZED, problem } from '../../../testing/auth-fixtures';
@@ -99,7 +100,28 @@ describe('LoginPage', () => {
     );
     await settle();
     expect(el.querySelector('[role="alert"]')?.textContent).toContain('did not match');
+    expect(el.querySelector('[role="alert"]')?.textContent).not.toContain('Forgot');
     expect(heading(el)).toBe('Sign in');
+  });
+
+  it('says how to get a forgotten password back, and after two wrong tries (FR-19)', async () => {
+    const el = render();
+    expect(el.querySelector('.forgot')?.textContent).toBe(
+      'Forgot your password? Ask your admin to reset it.',
+    );
+    for (let i = 0; i < 2; i++) {
+      type(el, '#login-email', 'ann@example.com');
+      type(el, '#login-password', 'nope');
+      submit(el);
+      (await nextRequest(controller, '/api/auth/login', 'POST')).flush(
+        problem(401, 'invalid_credentials'),
+        UNAUTHORIZED,
+      );
+      await settle();
+    }
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain(
+      'Forgot your password? Ask your admin to reset it.',
+    );
   });
 
   it('asks for both fields before sending anything', async () => {
@@ -126,7 +148,7 @@ describe('LoginPage', () => {
       otpauth_uri: 'otpauth://totp/Stonks:ann?secret=JBSWY3DPEHPK3PXP&issuer=Stonks',
     });
     await settle();
-    expect(heading(el)).toBe('Set up your authenticator');
+    expect(heading(el)).toBe('Set up your authenticator app');
     expect(el.querySelector('app-qr-code svg path')?.getAttribute('d')).toMatch(/^M/);
     expect(el.textContent).toContain('JBSW Y3DP EHPK 3PXP');
     // UX-11: a phone cannot scan its own screen.
@@ -201,9 +223,14 @@ describe('LoginPage', () => {
     expect(navigate).toHaveBeenCalledWith('/');
   });
 
+  /** The server answers that reads need no credential: local work and scripts. */
+  function openMode() {
+    TestBed.inject(SessionService)['statusSignal'].set('open');
+  }
+
   it('keeps token mode working: a valid API token signs in for this tab', async () => {
+    openMode();
     const el = render();
-    el.querySelector('details')!.open = true;
     type(el, '#login-token', 'stk_abc');
     el.querySelector<HTMLFormElement>('#token-form')!.dispatchEvent(new Event('submit'));
     const me = await nextRequest(controller, '/api/auth/me');
@@ -215,8 +242,8 @@ describe('LoginPage', () => {
   });
 
   it('drops a token the API rejects', async () => {
+    openMode();
     const el = render();
-    el.querySelector('details')!.open = true;
     type(el, '#login-token', 'wrong');
     el.querySelector<HTMLFormElement>('#token-form')!.dispatchEvent(new Event('submit'));
     (await nextRequest(controller, '/api/auth/me')).flush(
@@ -228,11 +255,12 @@ describe('LoginPage', () => {
     expect(TestBed.inject(AuthTokenService).token()).toBeNull();
   });
 
-  it('keeps the API-token path folded under For scripts (UX-43)', () => {
-    const el = render();
-    const details = el.querySelector('details')!;
+  it('shows the API-token path only in token mode, under For scripts (UX-43, FR-15)', () => {
+    expect(render().querySelector('#login-token')).toBeNull();
+    fixture.destroy();
+    openMode();
+    const details = render().querySelector('details')!;
     expect(details.querySelector('summary')?.textContent?.trim()).toBe('For scripts');
-    expect(details.open).toBe(false);
   });
 
   it('shows a wait, not the password form, on a reload mid sign-in (UX-70)', async () => {

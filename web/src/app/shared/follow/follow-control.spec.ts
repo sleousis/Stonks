@@ -14,7 +14,6 @@ import { TRADER } from '../../../testing/auth-fixtures';
 import { sub } from '../../../testing/home-fixtures';
 import { nextRequest, tick } from '../../../testing/http';
 import { FollowControl } from './follow-control';
-import { autoBlockedReason } from './follow-rules';
 
 @Component({
   imports: [FollowControl],
@@ -72,13 +71,61 @@ describe('FollowControl (M8)', () => {
     expect(el.textContent).toContain(MODES[1].help);
   });
 
-  it('keeps the gated modes closed with the reason until 20 days on Paper', () => {
-    const el = render(sub({ paper_days_completed: 12 }));
-    expect(radio(el, 'auto').disabled).toBe(true);
-    expect(radio(el, 'approve').disabled).toBe(true);
-    expect(el.textContent).toContain(
-      'Approve each trade and Automatic need a broker portfolio and 20 paper days. Your paper days: 12 of 20.',
+  it('shows only Alerts only and Paper with one line until the gate opens (FR-03)', () => {
+    const el = render(
+      sub({
+        paper_days_completed: 12,
+        auto_blockers: ['auto mode needs a broker portfolio', '12 of 20 paper trading days'],
+      }),
     );
+    const labels = [...el.querySelectorAll('.mode')].map((m) => m.textContent!.trim());
+    expect(labels).toEqual(['Alerts only', 'Paper']);
+    expect(radio(el, 'auto')).toBeNull();
+    expect(el.textContent).toContain(
+      'More modes unlock with a broker portfolio after 20 paper days.',
+    );
+    expect(el.textContent).toContain('Your paper days: 12 of 20.');
+    expect(el.textContent).not.toContain('Automatic needs');
+  });
+
+  it('an Alerts only follow shows no paper-day count', () => {
+    const el = render(
+      sub({
+        mode: 'notify',
+        portfolio_id: null,
+        paper_days_completed: 0,
+        auto_blockers: ['auto mode needs a portfolio', '0 of 20 paper trading days'],
+      }),
+    );
+    expect(el.textContent).not.toContain('Paper days');
+    expect(el.textContent).toContain('More modes unlock with a broker portfolio');
+  });
+
+  it('asks before Alerts only restarts the paper days (PO-01)', async () => {
+    const confirm = vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(false);
+    const el = render(
+      sub({ paper_days_completed: 10, auto_blockers: ['10 of 20 paper trading days'] }),
+    );
+    radio(el, 'notify').click();
+    await tick();
+    const options = confirm.mock.calls[0][0];
+    expect(options.title).toBe('Switch to Alerts only?');
+    expect(options.message).toBe('Your 10 paper days start again from 0.');
+    expect(options.confirmLabel).toBe('Switch and restart');
+    controller.expectNone('/api/subscriptions/sub_1');
+    expect(radio(el, 'paper').checked).toBe(true);
+  });
+
+  it('switches to Alerts only after the restart is confirmed', async () => {
+    vi.spyOn(TestBed.inject(ConfirmService), 'confirm').mockResolvedValue(true);
+    const el = render(
+      sub({ paper_days_completed: 3, auto_blockers: ['3 of 20 paper trading days'] }),
+    );
+    radio(el, 'notify').click();
+    const req = await nextRequest(controller, '/api/subscriptions/sub_1', 'PATCH');
+    expect(req.request.body).toEqual({ mode: 'notify' });
+    req.flush(sub({ mode: 'notify', paper_days_completed: 0 }));
+    await tick();
   });
 
   it('switches Alerts only and Paper straight away and reports the change', async () => {
@@ -178,21 +225,5 @@ describe('FollowControl (M8)', () => {
     const el = render();
     expect(el.querySelector<HTMLButtonElement>('[role="switch"]')!.disabled).toBe(true);
     expect(el.querySelector<HTMLFieldSetElement>('fieldset.modes')!.disabled).toBe(true);
-  });
-});
-
-describe('autoBlockedReason', () => {
-  it('puts the day count first and server blockers in plain words', () => {
-    expect(
-      autoBlockedReason(
-        sub({
-          paper_days_completed: 12,
-          auto_blockers: ['12 of 20 paper trading days', 'the strategy is not active'],
-        }),
-      ),
-    ).toBe(
-      'Approve each trade and Automatic need a broker portfolio and 20 paper days. Your paper days: 12 of 20. The strategy is not approved yet.',
-    );
-    expect(autoBlockedReason(sub())).toBeNull();
   });
 });

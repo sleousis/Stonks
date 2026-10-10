@@ -78,16 +78,56 @@ describe('NotificationPrefs', () => {
   it('shows a switch per alert type and channel, without the in-app feed', async () => {
     const el = await render();
     const heads = [...el.querySelectorAll('thead th')].map((th) => th.textContent?.trim());
-    expect(heads).toEqual(['Alert', 'Push', 'Webhook']);
+    // No webhook saved yet: no Webhook column (FR-16).
+    expect(heads).toEqual(['Alert', 'Push']);
     expect(box(el, 'Signals by Push').checked).toBe(true);
     expect(box(el, 'Orders and fills by Push').checked).toBe(false);
-    expect(el.textContent).toContain('Europe/London');
+    // The quiet hours name their time zone.
+    expect(el.querySelector('label[for="quiet-start"]')?.textContent).toContain('Europe/London');
+  });
+
+  it('shows Telegram only once linked, never ticked before (FR-16)', async () => {
+    fixture = TestBed.createComponent(NotificationPrefs);
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/notifications/preferences')).flush({
+      ...VIEW,
+      channels: ['telegram', 'webpush'],
+    });
+    (await nextRequest(controller, '/api/telegram/link')).flush({
+      bot_configured: true,
+      bot_enabled: true,
+      linked: false,
+    });
+    await tick();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const heads = [...el.querySelectorAll('thead th')].map((th) => th.textContent?.trim());
+    expect(heads).toEqual(['Alert', 'Push']);
+  });
+
+  it('adds an Email column from More channels', async () => {
+    const el = await render({ ...VIEW, channels: ['email', 'webpush'] });
+    expect([...el.querySelectorAll('thead th')].map((th) => th.textContent?.trim())).toEqual([
+      'Alert',
+      'Push',
+    ]);
+    const email = [...el.querySelectorAll('label.kind')]
+      .find((l) => l.textContent?.trim() === 'Email')!
+      .querySelector('input')!;
+    email.click();
+    fixture.detectChanges();
+    expect([...el.querySelectorAll('thead th')].map((th) => th.textContent?.trim())).toEqual([
+      'Alert',
+      'Email',
+      'Push',
+    ]);
   });
 
   it('shows a channel the server keeps off by default as off until it is turned on', async () => {
     const el = await render({
       ...VIEW,
-      channels: ['telegram', 'webhook', 'webpush'],
+      channels: ['webhook', 'webpush'],
+      webhook: 'https://hooks.example.com/***',
       preferences: [],
       channel_defaults: [
         { channel: 'telegram', default_enabled: true, fallback: true },
@@ -95,7 +135,6 @@ describe('NotificationPrefs', () => {
         { channel: 'webpush', default_enabled: true, fallback: false },
       ],
     });
-    expect(box(el, 'Signals by Telegram').checked).toBe(true);
     expect(box(el, 'Signals by Push').checked).toBe(true);
     expect(box(el, 'Signals by Webhook').checked).toBe(false);
   });
@@ -163,12 +202,12 @@ describe('NotificationPrefs', () => {
       'Which alerts go where',
       'Upcoming events',
       'Quiet hours',
-      'Your webhook',
+      'More channels',
     ]);
     fixture.componentRef.setInput('only', ['webhook']);
     fixture.detectChanges();
     expect([...el.querySelectorAll('h3')].map((h) => h.textContent?.trim())).toEqual([
-      'Your webhook',
+      'More channels',
     ]);
   });
 

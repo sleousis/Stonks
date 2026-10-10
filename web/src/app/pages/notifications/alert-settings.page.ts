@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, resource } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+import { BriefingsService } from '../../api/briefings.service';
 import { BriefingPrefs } from '../../shared/ui/briefing-prefs';
 import { NotificationPrefs } from '../../shared/ui/notification-prefs';
 import { NotificationSettings } from '../../shared/ui/notification-settings';
@@ -11,10 +12,10 @@ import { TelegramLink } from './telegram-link';
 
 /**
  * Every alert setting in one place (F39): where alerts reach you first
- * (push on this device, your devices, Telegram, your webhook: turning push
- * on is the first thing on a phone), then what reaches you and when (the
- * alert and channel grid, upcoming events, quiet hours, a pointer to price
- * alerts). Settings links here.
+ * (Telegram, the main channel without a broker, then push on this device,
+ * your devices and more channels), then what reaches you and when (the
+ * alert and channel grid, upcoming events, quiet hours, briefings while
+ * they are on, a pointer to price alerts). Settings links here.
  */
 @Component({
   selector: 'app-alert-settings-page',
@@ -32,23 +33,25 @@ import { TelegramLink } from './telegram-link';
   template: `
     <app-page-header
       title="Alert settings"
-      description="What reaches you, where and when. Everything always shows in the Feed; these choose what else reaches you."
+      description="What reaches you, where and when. Everything always shows in the Feed. These choose what else reaches you."
     />
     <app-notifications-tabs />
 
     <div class="layout">
       <section class="group" aria-labelledby="where-group">
         <h2 id="where-group" class="group-title">Where alerts reach you</h2>
-        <app-notification-settings title="Push on this device" />
-        <app-push-devices />
         <app-telegram-link />
+        <app-notification-settings />
+        <app-push-devices />
         <app-notification-prefs [only]="['webhook']" />
       </section>
 
       <section class="group" aria-labelledby="what-group">
         <h2 id="what-group" class="group-title">What reaches you, and when</h2>
         <app-notification-prefs [only]="['channels', 'events', 'quiet']" />
-        <app-briefing-prefs />
+        @if (briefingsOn()) {
+          <app-briefing-prefs />
+        }
         <section class="panel" aria-labelledby="price-alerts-title">
           <div class="panel-head">
             <h3 id="price-alerts-title">Price alerts</h3>
@@ -99,4 +102,18 @@ import { TelegramLink } from './telegram-link';
     }
   `,
 })
-export class AlertSettingsPage {}
+export class AlertSettingsPage {
+  private readonly briefings = inject(BriefingsService);
+  /** Briefings show only while this install has them (FR-16). */
+  private readonly briefingPrefs = resource({
+    loader: async () => {
+      try {
+        return await this.briefings.prefs();
+      } catch {
+        return null;
+      }
+    },
+  });
+  protected readonly briefingsOn = () =>
+    this.briefingPrefs.hasValue() && this.briefingPrefs.value()?.available === true;
+}

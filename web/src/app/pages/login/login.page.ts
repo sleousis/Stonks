@@ -41,7 +41,7 @@ export type LoginStep = 'loading' | 'password' | 'enrol' | 'verify' | 'codes' | 
 const HEADINGS: Record<LoginStep, string> = {
   loading: 'Signing in',
   password: 'Sign in',
-  enrol: 'Set up your authenticator',
+  enrol: 'Set up your authenticator app',
   verify: 'Enter your code',
   codes: 'Save your recovery codes',
   push: 'Get alerts on this device?',
@@ -87,6 +87,9 @@ export class LoginPage implements OnInit {
    * "For scripts", open only when this server runs with open reads (dev).
    */
   protected readonly tokenPathOpen = computed(() => this.session.status() === 'open');
+  /** Under Sign in, and added to the error after two wrong tries (FR-19). */
+  protected readonly forgotLine = FORGOT;
+  private failedTries = 0;
   /** Why alerts did not turn on, after the trader asked (UX-46). */
   protected readonly pushProblem = signal<string | null>(null);
 
@@ -125,9 +128,16 @@ export class LoginPage implements OnInit {
     }
     const { email, password } = this.passwordForm.getRawValue();
     await this.run(async () => {
-      const next = await this.session.login(email.trim(), password);
-      this.passwordForm.controls.password.reset();
-      await this.startSecondFactor(next);
+      try {
+        const next = await this.session.login(email.trim(), password);
+        this.failedTries = 0;
+        this.passwordForm.controls.password.reset();
+        await this.startSecondFactor(next);
+      } catch (err) {
+        this.failedTries += 1;
+        if (this.failedTries < 2) throw err;
+        throw new Error(`${errorMessage(err)} ${FORGOT}`, { cause: err });
+      }
     });
   }
 
@@ -268,6 +278,7 @@ export class LoginPage implements OnInit {
 }
 
 const LATER = 'You can turn them on later in Settings.';
+const FORGOT = 'Forgot your password? Ask your admin to reset it.';
 
 /** Why alerts are still off after the trader asked for them, in one line. */
 function pushProblemText(state: NotificationState, push: PushStatus): string {

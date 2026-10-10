@@ -266,6 +266,8 @@ textarea {
   display: grid;
   gap: var(--space-4);
   max-width: 640px;
+  // Each field keeps its own height: a select or a hint never stretches its neighbour (FR-11).
+  align-items: start;
 
   @include bp.from-tablet {
     &.form-grid-2 {
@@ -491,5 +493,28 @@ textarea {
   }
   tr {
     break-inside: avoid;
+  }
+}
+
+// The shared disclosure marker: a chevron in a <summary> that turns when its
+// <details> opens. Use it where the summary is a flex row, which hides the
+// browser's own triangle.
+.disclosure-chev {
+  flex: none;
+  width: 0.5em;
+  height: 0.5em;
+  margin: 0 0.15em;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: var(--color-ink-3);
+  transform: rotate(-45deg);
+  transition: transform var(--dur-fast) var(--ease);
+
+  details[open] > summary & {
+    transform: rotate(45deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 }

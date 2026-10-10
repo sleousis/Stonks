@@ -11,7 +11,12 @@ import {
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 
-import type { OnboardingView, StepUpdate, StrategySummary } from '../../api/models';
+import type {
+  OnboardingStepView,
+  OnboardingView,
+  StepUpdate,
+  StrategySummary,
+} from '../../api/models';
 import { type OnboardingStepId, OnboardingService } from '../../api/onboarding.service';
 import { PortfoliosService } from '../../api/portfolios.service';
 import { StrategiesService } from '../../api/strategies.service';
@@ -27,17 +32,27 @@ import { NotificationSettings } from '../../shared/ui/notification-settings';
 import { PageHeader } from '../../shared/ui/page-header';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import {
+  OPTIONAL_STEPS,
   STEP_COPY,
   SYSTEM_COPY,
   currentStep,
+  orderedSteps,
   parseTickerText,
   progressText,
+  setupComplete,
 } from './welcome-steps';
+import { STATUS_WORDS } from '../../shared/governance-labels';
 import { strategyDisplayName } from '../../shared/strategy-names';
+import { TelegramLink } from '../notifications/telegram-link';
+
+/** The starting cash of a paper portfolio the guide opens. */
+const DEFAULT_PAPER_CASH = 100000;
 
 /**
  * The first-run guide: five plain steps, each can be skipped, progress kept
- * on the server for this person. Admins also see whether the install is
+ * on the server for this person. The no-broker path comes first (follow a
+ * strategy, turn on alerts), and the portfolio and watchlist steps are
+ * optional (FR-01). Admins also see whether the install is
  * ready. Steps the data already shows done (a portfolio, a watchlist, a
  * strategy you follow, a device with alerts) tick themselves.
  */
@@ -49,6 +64,7 @@ import { strategyDisplayName } from '../../shared/strategy-names';
     PageHeader,
     ModeStamp,
     NotificationSettings,
+    TelegramLink,
     LoadingState,
     ErrorState,
     EmptyState,
@@ -57,8 +73,13 @@ import { strategyDisplayName } from '../../shared/strategy-names';
   styleUrl: './welcome.page.scss',
 })
 export class WelcomePage {
-  /** Names, never ids (F18): `stocks_on_the_move_3fa9c21b` reads Stocks on the move 3fa9. */
-  protected readonly displayName = strategyDisplayName;
+  /** Names, never ids (F18): a starter's title, else `Stocks on the move 3fa9`. */
+  protected strategyName(st: StrategySummary): string {
+    return strategyDisplayName(st.id, { starter: st.starter });
+  }
+  protected statusWord(status: StrategySummary['status']): string {
+    return STATUS_WORDS[status] ?? status;
+  }
   private readonly api = inject(OnboardingService);
   private readonly portfoliosApi = inject(PortfoliosService);
   private readonly watchlistsApi = inject(WatchlistsService);
@@ -105,6 +126,14 @@ export class WelcomePage {
       return stillTodo ? prev : currentStep(view);
     },
   });
+  /** The steps in the guide's order: follow and alerts before the optional ones. */
+  protected readonly steps = computed(() =>
+    this.guide.hasValue() ? orderedSteps(this.guide.value().steps) : [],
+  );
+  /** Done once every step that matters is handled; the optional ones may wait. */
+  protected readonly complete = computed(
+    () => this.guide.hasValue() && setupComplete(this.guide.value().steps),
+  );
   protected readonly progress = computed(() =>
     this.guide.hasValue() ? progressText(this.guide.value().steps) : '',
   );
@@ -112,7 +141,7 @@ export class WelcomePage {
 
   // ---- form state -------------------------------------------------------------
   protected readonly portfolioName = signal('Paper portfolio');
-  protected readonly portfolioCash = signal('100000');
+  protected readonly portfolioCash = signal(String(DEFAULT_PAPER_CASH));
   protected readonly listName = signal('My watchlist');
   protected readonly listTickers = signal('');
   protected readonly followStrategy = signal('');
@@ -126,6 +155,12 @@ export class WelcomePage {
 
   constructor() {
     void this.portfolios.load();
+  }
+
+  protected tagWord(step: OnboardingStepView): string {
+    if (step.state === 'done') return 'Done';
+    if (step.state === 'skipped') return 'Skipped';
+    return OPTIONAL_STEPS.has(step.id) ? 'Optional' : 'To do';
   }
 
   protected toggle(step: OnboardingStepId): void {
@@ -174,21 +209,28 @@ export class WelcomePage {
     event.preventDefault();
     const strategy = this.followStrategy();
     const mode = this.followMode();
-    const portfolio = this.followBook();
     if (!strategy) return this.formError.set('Pick a strategy to follow.');
-    if (mode === 'paper' && !portfolio) {
-      return this.formError.set('Following on Paper needs a portfolio. Open one in step 2 first.');
-    }
+    const st = this.strategies.value()?.find((x) => x.id === strategy);
+    const name = st ? this.strategyName(st) : strategyDisplayName(strategy);
     await this.run('follow', async () => {
+      let portfolio = this.followBook();
+      // Paper with no portfolio yet: open one with the default cash (FR-01).
+      if (mode === 'paper' && !portfolio) {
+        const made = await this.portfoliosApi.create({
+          name: 'Paper portfolio',
+          initial_cash: DEFAULT_PAPER_CASH,
+        });
+        await this.portfolios.load(true);
+        this.portfolios.select(made.id);
+        portfolio = made.id;
+      }
       await this.subscriptionsApi.subscribe({
         strategy_id: strategy,
         mode,
         portfolio_id: mode === 'paper' ? portfolio : null,
       });
       this.toasts.success(
-        mode === 'paper'
-          ? `Paper trading ${this.displayName(strategy)}.`
-          : `Following ${this.displayName(strategy)} for signals.`,
+        mode === 'paper' ? `Paper trading ${name}.` : `Following ${name} for signals.`,
       );
       this.guide.reload();
     });

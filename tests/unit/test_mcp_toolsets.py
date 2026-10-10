@@ -11,7 +11,14 @@ from stonks.auth.principal import Principal
 from stonks.mcp import entry
 from stonks.mcp.client import ApiClient
 from stonks.mcp.server import build_server
-from stonks.mcp.toolsets import ALWAYS, TOOLSET_NAMES, allowed, toolset_about, unknown_toolsets
+from stonks.mcp.toolsets import (
+    ALWAYS,
+    TOOLSET_COPY,
+    TOOLSET_NAMES,
+    allowed,
+    toolset_about,
+    unknown_toolsets,
+)
 
 
 def _names(toolsets):
@@ -28,8 +35,18 @@ def _names(toolsets):
 def test_groups_are_the_tool_modules():
     assert {"reads", "jobs", "orders", "risk", "decisions"} <= set(TOOLSET_NAMES)
     about = dict(toolset_about())
-    assert about["decisions"].startswith("Why did or didn't we trade")
+    assert about["decisions"] == "Trade decisions: Read why a stock did or did not trade."
     assert unknown_toolsets(["risk", "nope"]) == ["nope"]
+
+
+def test_every_group_has_a_label_and_one_plain_sentence():
+    """AO-02: no docstring jargon reaches people choosing a token's groups."""
+    assert set(TOOLSET_COPY) == set(TOOLSET_NAMES)
+    for name, text in toolset_about():
+        label, sentence = text.split(": ", 1)
+        assert label and sentence.endswith("."), name
+        for jargon in ("roadmap", "``", "confirm=true", "BL-", "GET", ";"):
+            assert jargon not in text, (name, jargon)
 
 
 def test_a_limited_token_sees_only_its_groups_and_whoami():

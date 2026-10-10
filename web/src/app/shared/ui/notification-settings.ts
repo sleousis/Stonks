@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+} from '@angular/core';
 
 import { NotificationPermissionService } from '../../core/pwa/notification-permission.service';
 import { StatusPill } from './status-pill';
@@ -20,7 +29,7 @@ import { StatusPill } from './status-pill';
       <div class="panel-body">
         <p class="lead">
           Get signals, fills and risk alerts on this device, even when the console is closed.
-          Messages carry no amounts or holdings; details open in the console.
+          Messages carry no amounts or holdings. Details open in the console.
         </p>
 
         @switch (svc.state()) {
@@ -115,9 +124,20 @@ import { StatusPill } from './status-pill';
   `,
 })
 export class NotificationSettings implements OnInit {
-  /** The panel's title ("Notifications" in the setup guide, "Push on this device" on Alert settings). */
-  readonly title = input('Notifications');
+  /** The panel's title ("This device" in the setup guide). */
+  readonly title = input('Push on this device');
+  /** Push just came on for this device (the setup guide ticks its step). */
+  readonly turnedOn = output<void>();
   protected readonly svc = inject(NotificationPermissionService);
+
+  constructor() {
+    let before: string | null = null;
+    effect(() => {
+      const now = this.svc.push();
+      if (now === 'on' && before !== null && before !== 'on') this.turnedOn.emit();
+      before = now;
+    });
+  }
 
   protected readonly pill = computed(() => {
     const state = this.svc.state();

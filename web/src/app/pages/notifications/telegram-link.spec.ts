@@ -96,6 +96,37 @@ describe('TelegramLink', () => {
     expect(el.querySelector('app-one-time-secret')).toBeNull();
   });
 
+  it('tells the setup guide once the chat is linked', async () => {
+    const el = await render(link());
+    const linked = vi.fn();
+    fixture.componentInstance.linked.subscribe(linked);
+    button(el, 'Get a link code').click();
+    (await nextRequest(http, '/api/telegram/link-code', 'POST')).flush({
+      code: 'K7Q2ZP',
+      expires_at: '2026-09-27T10:10:00Z',
+      bot_username: null,
+    });
+    await settle();
+    expect(linked).not.toHaveBeenCalled();
+    button(el, 'Check the link').click();
+    (await nextRequest(http, '/api/telegram/link')).flush(link({ linked: true }));
+    await settle();
+    expect(linked).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks you to get the bot name from your admin when the server has none (NB-17)', async () => {
+    const el = await render(link({ bot_username: null }));
+    button(el, 'Get a link code').click();
+    (await nextRequest(http, '/api/telegram/link-code', 'POST')).flush({
+      code: 'K7Q2ZP',
+      expires_at: '2026-09-27T10:10:00Z',
+      bot_username: null,
+    });
+    await settle();
+    expect(el.textContent).toContain("Ask your admin for the bot's name.");
+    expect(el.textContent).not.toContain('the bot in Telegram');
+  });
+
   it('asks first, then unlinks', async () => {
     const el = await render(link({ linked: true, username: 'tess' }));
     button(el, 'Unlink Telegram').click();

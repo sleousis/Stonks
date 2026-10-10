@@ -223,6 +223,17 @@ export class ProfilePage {
     }
   }
 
+  /** The group's label: the API sends "Label: one plain sentence." (AO-02). */
+  protected toolsetLabel(g: ToolsetView): string {
+    const i = g.about.indexOf(': ');
+    return i > 0 ? g.about.slice(0, i) : g.name;
+  }
+
+  protected toolsetSentence(g: ToolsetView): string {
+    const i = g.about.indexOf(': ');
+    return i > 0 ? g.about.slice(i + 2) : g.about;
+  }
+
   protected pickToolset(name: string, checked: boolean): void {
     this.pickedToolsets.update((names) =>
       checked ? [...new Set([...names, name])] : names.filter((n) => n !== name),

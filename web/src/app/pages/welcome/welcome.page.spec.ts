@@ -27,7 +27,11 @@ function guide(states: Partial<Record<(typeof IDS)[number], 'done' | 'skipped'>>
 describe('welcome steps', () => {
   it('opens the first step still to do and counts progress', () => {
     const v = guide({ account: 'done', portfolio: 'skipped' });
-    expect(currentStep(v)).toBe('data');
+    // Follow and alerts come before the optional steps (FR-01).
+    expect(currentStep(v)).toBe('follow');
+    expect(currentStep(guide({ account: 'done', follow: 'done', alerts: 'done' }))).toBe(
+      'portfolio',
+    );
     expect(progressText(v.steps)).toBe('1 of 5 done, 1 skipped');
     expect(currentStep(guide(Object.fromEntries(IDS.map((i) => [i, 'done']))))).toBeNull();
   });
@@ -140,12 +144,14 @@ describe('WelcomePage', () => {
     const titles = [...el.querySelectorAll('.step-title')].map((t) => t.textContent?.trim());
     expect(titles).toEqual([
       'Protect your account',
-      'Pick a portfolio',
-      'Choose what to watch',
       'Follow a strategy',
       'Turn on alerts',
+      'Open a paper portfolio',
+      'Choose what to watch',
     ]);
-    expect(el.querySelector('.step.open .step-title')?.textContent).toContain('Pick a portfolio');
+    expect(el.querySelector('.step.open .step-title')?.textContent).toContain('Follow a strategy');
+    const tags = [...el.querySelectorAll('.step .tag')].map((t) => t.textContent?.trim());
+    expect(tags).toEqual(['Done', 'To do', 'To do', 'Optional', 'Optional']);
     expect(el.textContent).toContain('1 of 5 done');
     expect(el.textContent).not.toContain('Your install');
   });
@@ -157,18 +163,20 @@ describe('WelcomePage', () => {
       'portfolio',
     );
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('.step.open .step-title')?.textContent).toContain('Pick a portfolio');
+    expect(el.querySelector('.step.open .step-title')?.textContent).toContain(
+      'Open a paper portfolio',
+    );
     expect(el.querySelector('#wp-name')).not.toBeNull();
   });
 
   it('ignores an unknown step in the link', async () => {
     const fixture = await render(TRADER, guide({ account: 'done' }), 'nope');
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('.step.open .step-title')?.textContent).toContain('Pick a portfolio');
+    expect(el.querySelector('.step.open .step-title')?.textContent).toContain('Follow a strategy');
   });
 
   it('skips a step and keeps the choice on the server', async () => {
-    const fixture = await render();
+    const fixture = await render(TRADER, guide({ account: 'done' }), 'portfolio');
     const el: HTMLElement = fixture.nativeElement;
     buttonNamed(el, 'Skip this step').click();
     const req = await nextRequest(http, '/api/onboarding/steps/portfolio', 'PUT');
@@ -176,15 +184,17 @@ describe('WelcomePage', () => {
     req.flush(guide({ account: 'done', portfolio: 'skipped' }));
     await tick();
     fixture.detectChanges();
-    expect(el.querySelector('.step.open .step-title')?.textContent).toContain(
-      'Choose what to watch',
-    );
+    expect(el.querySelector('.step.open .step-title')?.textContent).toContain('Follow a strategy');
     expect(el.querySelector('.step[data-state="skipped"] .tag')?.textContent).toContain('Skipped');
   });
 
   it('saves a watchlist from the data step', async () => {
-    const fixture = await render(TRADER, guide({ account: 'done', portfolio: 'done' }));
+    const fixture = await render(TRADER, guide({ account: 'done', portfolio: 'done' }), 'data');
     const el: HTMLElement = fixture.nativeElement;
+    // A saved watchlist ticks the step itself, so there is no "Mark as done" (FR-01).
+    expect([...el.querySelectorAll('button')].map((b) => b.textContent?.trim())).not.toContain(
+      'Mark as done',
+    );
     const tickers = el.querySelector<HTMLTextAreaElement>('#wd-tickers')!;
     tickers.value = 'aapl.us msft.us';
     tickers.dispatchEvent(new Event('input'));
@@ -215,6 +225,64 @@ describe('WelcomePage', () => {
     expect(el.textContent).toContain('Needs attention');
     const fixes = [...el.querySelectorAll('.check-fix')].map((a) => a.getAttribute('href'));
     expect(fixes).toEqual(['/data', '/ops/schedule']);
+  });
+
+  it('opens a paper portfolio when you follow on Paper without one (FR-01)', async () => {
+    const row = { id: 'momentum_3fa9c21b', status: 'active', class_path: 'x:Momentum' };
+    const fixture = await render(TRADER, guide({ account: 'done' }), 'follow', [], [row]);
+    const el: HTMLElement = fixture.nativeElement;
+    const select = el.querySelector<HTMLSelectElement>('#wf-strategy')!;
+    select.value = 'momentum_3fa9c21b';
+    select.dispatchEvent(new Event('change'));
+    expect(select.options[1].textContent?.trim()).toBe('Momentum 3fa9 (Approved)');
+    [...el.querySelectorAll<HTMLLabelElement>('label.mode')]
+      .find((l) => l.textContent?.includes('Paper'))!
+      .querySelector('input')!
+      .click();
+    fixture.detectChanges();
+    el.querySelector<HTMLFormElement>('form.inline-form')!.dispatchEvent(new Event('submit'));
+    const made = await nextRequest(http, '/api/portfolios', 'POST');
+    expect(made.request.body).toEqual({ name: 'Paper portfolio', initial_cash: 100000 });
+    made.flush(book({ id: 'pf_new', name: 'Paper portfolio' }));
+    (await nextRequest(http, '/api/portfolios')).flush(
+      page([book({ id: 'pf_new', name: 'Paper portfolio' })]),
+    );
+    const req = await nextRequest(http, '/api/subscriptions', 'POST');
+    expect(req.request.body).toEqual({
+      strategy_id: 'momentum_3fa9c21b',
+      mode: 'paper',
+      portfolio_id: 'pf_new',
+    });
+    req.flush({});
+    await tick(5);
+    for (const r of http.match((x) => x.url.split('?')[0] === '/api/onboarding')) r.flush(guide());
+  });
+
+  it('offers this device and Telegram as two equal choices for alerts (FR-07)', async () => {
+    const fixture = await render(TRADER, guide({ account: 'done', follow: 'done' }), 'alerts');
+    (await nextRequest(http, '/api/telegram/link')).flush({
+      bot_configured: true,
+      bot_enabled: true,
+      bot_username: 'stonks_bot',
+      linked: false,
+      linked_at: null,
+      username: null,
+    });
+    await tick(5);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const heads = [...el.querySelectorAll('.channels h3')].map((h) => h.textContent?.trim());
+    expect(heads).toEqual(['This device', 'Telegram']);
+    expect(el.textContent).not.toContain('I turned them on');
+    expect(el.textContent).toContain('Get a link code');
+  });
+
+  it('is done once follow and alerts are, the optional steps may wait', async () => {
+    const fixture = await render(
+      TRADER,
+      guide({ account: 'done', follow: 'done', alerts: 'done' }),
+    );
+    expect(fixture.nativeElement.textContent).toContain('You are set up');
   });
 
   it('says you are set up when every step is handled', async () => {

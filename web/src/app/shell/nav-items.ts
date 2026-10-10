@@ -3,9 +3,10 @@ import type { Feature } from '../core/features/feature-flags.service';
 
 /**
  * Where an item sits:
- * - `Main`: the trader's pages, on top for everyone signed in, about seven;
- * - `More`: markets, trial results and trade costs, one fold down;
- * - `Advanced`: the build tools and the strategy review;
+ * - `Main`: the trader's pages, on top for everyone signed in, about seven,
+ *   with building and testing a strategy next to Strategies;
+ * - `More`: approvals, markets and trial results, one fold down;
+ * - `Advanced`: the strategy review, options, trade costs and halts;
  * - `System`: the operator pages, admins only;
  * - `Account`: the menu by the user's name, pinned to the bottom of the rail.
  */
@@ -37,14 +38,23 @@ export interface NavItem {
 export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/', label: 'Today', key: 'm', group: 'Main', keywords: ['home'] },
   { path: '/strategies', label: 'Strategies', key: 's', group: 'Main', keywords: ['follow'] },
-  { path: '/orders', label: 'Orders', key: 'o', group: 'Main', keywords: ['trades', 'fills'] },
   {
-    path: '/tickets',
-    label: 'Approvals',
+    path: '/studio',
+    label: 'Build a strategy',
+    key: 'u',
     group: 'Main',
-    permission: 'portfolio.trade',
-    keywords: ['tickets', 'approve', 'order tickets'],
+    permission: 'lab.run',
+    keywords: ['studio', 'build', 'rules', 'new strategy'],
   },
+  {
+    path: '/lab',
+    label: 'Lab',
+    key: 'l',
+    group: 'Main',
+    permission: 'lab.run',
+    keywords: ['backtest', 'test'],
+  },
+  { path: '/orders', label: 'Orders', key: 'o', group: 'Main', keywords: ['trades', 'fills'] },
   {
     path: '/insights',
     label: 'Insights',
@@ -53,8 +63,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
     keywords: ['portfolio', 'risk', 'value'],
   },
   { path: '/charts', label: 'Charts', key: 'z', group: 'Main', keywords: ['price'] },
-  { path: '/notifications', label: 'Notifications', key: 'n', group: 'Main', keywords: ['alerts'] },
 
+  {
+    // The inbox only fills for Approve each trade on a broker portfolio.
+    path: '/tickets',
+    label: 'Approvals',
+    group: 'More',
+    permission: 'portfolio.trade',
+    keywords: ['tickets', 'approve', 'order tickets'],
+  },
   {
     path: '/going-live',
     label: 'Going live',
@@ -84,13 +101,6 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
   { path: '/leaderboard', label: 'Leaderboard', key: 'b', group: 'More', keywords: ['rank'] },
   {
-    path: '/trades',
-    label: 'Trade costs',
-    key: 't',
-    group: 'More',
-    keywords: ['costs', 'journal', 'slippage'],
-  },
-  {
     path: '/assistant',
     label: 'Assistant',
     key: 'y',
@@ -100,33 +110,25 @@ export const NAV_ITEMS: readonly NavItem[] = [
   },
 
   {
-    path: '/studio',
-    label: 'Studio',
-    key: 'u',
-    group: 'Advanced',
-    permission: 'lab.run',
-    keywords: ['build', 'rules'],
-  },
-  {
-    path: '/lab',
-    label: 'Lab',
-    key: 'l',
-    group: 'Advanced',
-    permission: 'lab.run',
-    keywords: ['backtest', 'test'],
-  },
-  {
-    path: '/options',
-    label: 'Options',
-    group: 'Advanced',
-    keywords: ['chain', 'greeks', 'payoff', 'calls', 'puts', 'implied vol'],
-  },
-  {
     path: '/go-live',
     label: 'Strategy review',
     key: 'g',
     group: 'Advanced',
     keywords: ['checks', 'approve', 'go-live check'],
+  },
+  {
+    path: '/options',
+    label: 'Options',
+    group: 'Advanced',
+    feature: 'options',
+    keywords: ['chain', 'greeks', 'payoff', 'calls', 'puts', 'implied vol'],
+  },
+  {
+    path: '/trades',
+    label: 'Trade costs',
+    key: 't',
+    group: 'Advanced',
+    keywords: ['costs', 'journal', 'slippage'],
   },
   {
     // A trader's kill switches and breakers (F11): the page shows only their own.
@@ -160,6 +162,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Intraday engine',
     group: 'System',
     adminOnly: true,
+    feature: 'intraday',
     keywords: ['intraday', 'stream', 'latency', 'engine'],
   },
   {
@@ -192,6 +195,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'Model versions',
     group: 'System',
     adminOnly: true,
+    feature: 'models',
     keywords: ['retrain', 'candidates', 'swap'],
   },
   {
@@ -245,8 +249,14 @@ export const NAV_ITEMS: readonly NavItem[] = [
 export const NAV_GROUPS = ['More', 'Advanced', 'System'] as const;
 export type FoldingGroup = (typeof NAV_GROUPS)[number];
 
-/** Open the first time someone sees the rail. The group holding the page always opens. */
-export const NAV_GROUPS_OPEN_BY_DEFAULT: readonly FoldingGroup[] = ['More'];
+/**
+ * Open the first time someone sees the rail (FR-08): nothing for traders,
+ * so day one shows only the main pages, and System for admins. The group
+ * holding the page always opens.
+ */
+export function defaultOpenGroups(admin: boolean): readonly FoldingGroup[] {
+  return admin ? ['System'] : [];
+}
 
 /** What the nav needs to know about the user. `SessionService` fits. */
 export interface NavViewer {

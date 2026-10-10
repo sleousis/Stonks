@@ -51,8 +51,9 @@ export function aboveText(a: Breadth['above_50']): string {
               <app-stat-tile label="New highs and lows" [value]="highsLows()" [help]="false" />
               @if (v.distribution_days !== null && v.distribution_days !== undefined) {
                 <app-stat-tile
-                  [label]="'Distribution days on ' + indexName()"
+                  label="Distribution days"
                   [value]="distribution()"
+                  [detail]="distributionMeaning()"
                   [help]="false"
                 />
               }
@@ -127,8 +128,16 @@ export class BreadthCard {
     this.breadth.hasValue() ? this.breadth.value().breadth : null,
   );
   protected readonly universe = computed(() =>
-    this.breadth.hasValue() ? this.breadth.value().universe : '',
+    // The lake is our word for the data store: say what it means (FR-18).
+    this.breadth.hasValue()
+      ? this.breadth.value().universe.replace(/\bin the lake\b/i, 'Stonks tracks')
+      : '',
   );
+  /** What a distribution day is, in place of a bare term (FR-18). */
+  protected readonly distributionMeaning = computed(() => {
+    const index = this.indexName();
+    return index ? `Down days on heavy volume on ${index}` : 'Down days on heavy volume';
+  });
   protected readonly asOf = computed(() => {
     const day = this.b()?.as_of;
     return day ? `Close of ${formatDate(day)}` : null;
