@@ -204,3 +204,10 @@ def test_without_the_table_there_is_nothing_to_hold(tmp_path):
         assert price_check_health(bare) == []
     finally:
         bare.close()
+
+
+def test_a_check_that_never_ran_says_so_instead_of_passing(state):
+    """Health shows a neutral "Not run yet", never "Passed", before the first check."""
+    [check] = price_check_health(state)
+    assert check.name == "price_check" and check.ok
+    assert check.detail == "not run yet"

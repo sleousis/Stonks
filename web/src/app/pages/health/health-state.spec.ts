@@ -101,6 +101,14 @@ describe('splitChecks', () => {
     expect(split.other.map((c) => c.name)).toEqual(['freshness', 'stuck_ticks']);
   });
 
+  it('leaves out lab workers while none are in use', () => {
+    const idle = check('lab_queue', true, '0 queued, 0 running, 0 worker(s) alive');
+    expect(splitChecks([idle]).other).toEqual([]);
+    expect(splitChecks([check('lab_queue', true, 'no lab queue table')]).other).toEqual([]);
+    const busy = check('lab_queue', true, '1 queued, 0 running, 1 worker(s) alive');
+    expect(splitChecks([busy]).other.map((c) => c.name)).toEqual(['lab_queue']);
+  });
+
   it('leaves broker gateway checks to their own panel, but counts them overall', () => {
     const checks = [check('stuck_ticks', true), check('broker:live', false, 'live gateway down')];
     expect(splitChecks(checks).other.map((c) => c.name)).toEqual(['stuck_ticks']);
@@ -154,6 +162,11 @@ describe('checkPill', () => {
       tone: 'neutral',
     });
     expect(checkOutcome(check('var_violations', true, 'within band'))).toBe('passed');
+    // A check that never ran is neither passed nor failed.
+    expect(checkPill(check('price_check', true, 'not run yet'))).toEqual({
+      label: 'Not run yet',
+      tone: 'neutral',
+    });
   });
 });
 

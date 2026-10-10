@@ -142,6 +142,8 @@ export class HealthPage {
   );
   protected readonly freshness = computed(() => this.split().freshness);
   protected readonly runChecks = computed(() => this.split().other);
+  /** Only tickers that need a look: the rest are counted, not listed. */
+  protected readonly staleRows = computed(() => this.freshness().filter((r) => r.level !== 'good'));
 
   protected readonly level = computed<HealthLevel>(() =>
     this.report.hasValue() ? worstLevel(this.report.value().checks.map(checkLevel)) : 'good',
@@ -226,13 +228,6 @@ export class HealthPage {
     if (!rows.length) return '';
     return rows.every((r) => r.level === 'good') ? 'gain' : 'loss';
   });
-
-  protected readonly stuckCount = computed(
-    () =>
-      this.runChecks().filter(
-        (c) => (c.name === 'stuck_ticks' || c.name === 'stuck_ingest_runs') && !c.ok,
-      ).length,
-  );
 
   /** The limit a check compares against, from the report's thresholds. */
   protected threshold(name: string): string | null {
