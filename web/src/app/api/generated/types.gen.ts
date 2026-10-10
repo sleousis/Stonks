@@ -5357,6 +5357,10 @@ export type InstrumentView = {
      * Sector
      */
     sector: string | null;
+    /**
+     * Security Type
+     */
+    security_type?: string | null;
 };
 
 /**
@@ -13813,6 +13817,10 @@ export type ScreenResult = {
  * ScreenRow
  */
 export type ScreenRow = {
+    /**
+     * Currency
+     */
+    currency?: string | null;
     /**
      * Exchange
      */

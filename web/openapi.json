@@ -9860,6 +9860,17 @@
               }
             ],
             "title": "Sector"
+          },
+          "security_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Security Type"
           }
         },
         "required": [
@@ -25360,6 +25371,17 @@
       },
       "ScreenRow": {
         "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
           "exchange": {
             "anyOf": [
               {

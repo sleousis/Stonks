@@ -163,6 +163,7 @@ def test_strategy_status_routes(client, seeded):
 def test_market_routes(client):
     inst = client.get("/api/market/instruments", params={"q": "flat"}).json()
     assert [i["id"] for i in inst["items"]] == ["FLAT.US"]
+    assert "security_type" in inst["items"][0]
     bars = client.get(
         "/api/market/bars",
         params={"ticker": "UP.US", "interval": "1d", "start": "2026-03-30", "end": "2026-04-01"},

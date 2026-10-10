@@ -49,6 +49,8 @@ class ScreenRow(BaseModel):
     name: str | None = None
     sector: str | None = None
     exchange: str | None = None
+    #: ISO 4217 code of the instrument's prices (``None``: not stored).
+    currency: str | None = None
     #: The value of each shown metric (``None``: no value on the date).
     values: dict[str, float | None]
 
@@ -158,6 +160,9 @@ def _instrument_info(lake: DuckDBLake, tickers: list[str]) -> dict[str, dict[str
     if not tickers:
         return {}
     rows = lake.con.execute(
-        "SELECT id, name, sector, exchange FROM instruments WHERE id = ANY(?)", [tickers]
+        "SELECT id, name, sector, exchange, currency FROM instruments WHERE id = ANY(?)",
+        [tickers],
     ).fetchall()
-    return {r[0]: {"name": r[1], "sector": r[2], "exchange": r[3]} for r in rows}
+    return {
+        r[0]: {"name": r[1], "sector": r[2], "exchange": r[3], "currency": r[4]} for r in rows
+    }

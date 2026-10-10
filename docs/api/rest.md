@@ -2576,6 +2576,7 @@ Sums over every active portfolio's latest snapshot, for admins. No tickers, sect
 | `is_delisted` | boolean \| null | yes |  |
 | `name` | string \| null | yes |  |
 | `sector` | string \| null | yes |  |
+| `security_type` | string \| null | no |  |
 
 ### IntervalInfo
 
@@ -5682,6 +5683,7 @@ Turn an alert on for one of your saved screens, or change it.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `currency` | string \| null | no |  |
 | `exchange` | string \| null | no |  |
 | `name` | string \| null | no |  |
 | `sector` | string \| null | no |  |

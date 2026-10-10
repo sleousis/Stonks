@@ -29,6 +29,8 @@ class InstrumentView(BaseModel):
     sector: str | None
     industry: str | None
     is_delisted: bool | None
+    #: `common_stock`, `etf`, `fund`, ... (equities only), to tell funds from stocks.
+    security_type: str | None = None
 
 
 class BarView(BaseModel):
@@ -111,7 +113,8 @@ class MarketDataService:
         with self._ctx.lake() as lake:
             total = int(lake.sql(f"SELECT COUNT(*) AS n FROM instruments{clause}", params).n[0])
             df = lake.sql(
-                "SELECT id, name, asset_class, exchange, currency, sector, industry, is_delisted "
+                "SELECT id, name, asset_class, exchange, currency, sector, industry, is_delisted, "
+                "security_type "
                 f"FROM instruments{clause} ORDER BY id LIMIT ? OFFSET ?",
                 [*params, limit, offset],
             )
