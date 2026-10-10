@@ -54,12 +54,12 @@ def test_scratch_drill_goes_through_the_halt_service_and_leaves_real_state_alone
 def test_scratch_drill_records_one_row_and_nothing_else_in_real_state(tmp_path):
     real = tmp_path / "real.sqlite"
     settings = Settings(state=StateConfig(path=real))
-    report = run_kill_switch_drill_scratch(settings, ran_by="cli:ops", portfolio_id="pf_a")
+    report = run_kill_switch_drill_scratch(settings, ran_by="cli:ops", portfolio_id="pf_default")
     assert report.passed, report.steps
     with SqliteState(real) as state:
         rows = state.sql("SELECT * FROM kill_switch_drills")
         assert [(r["ran_by"], r["portfolio_id"], r["passed"]) for r in rows] == [
-            ("cli:ops", "pf_a", 1)
+            ("cli:ops", "pf_default", 1)
         ]
         assert json.loads(rows[0]["report_json"])["broker"] == "simulated"
         # the drill's halt and order stayed in the scratch state
@@ -92,11 +92,25 @@ def test_halts_drill_prints_every_step(runner, workdir):
 
 
 def test_halts_drill_for_one_portfolio(runner, workdir):
-    result = runner.invoke(app, ["halts", "drill", "--portfolio", "pf_a"])
+    result = runner.invoke(app, ["halts", "drill", "--portfolio", "pf_default"])
     assert result.exit_code == 0, result.output
     with SqliteState(workdir / "data" / "state.sqlite") as state:
         rows = state.sql("SELECT portfolio_id FROM kill_switch_drills")
-    assert [r["portfolio_id"] for r in rows] == ["pf_a"]
+    assert [r["portfolio_id"] for r in rows] == ["pf_default"]
+
+
+def test_halts_drill_refuses_an_unknown_portfolio(runner, workdir):
+    result = runner.invoke(app, ["halts", "drill", "--portfolio", "pf_typo"])
+    assert result.exit_code != 0
+    assert "pf_typo" in result.output and "no such portfolio" in result.output
+    with SqliteState(workdir / "data" / "state.sqlite") as state:
+        assert state.sql("SELECT COUNT(*) AS n FROM kill_switch_drills")[0]["n"] == 0
+
+
+def test_scratch_drill_refuses_an_unknown_portfolio_before_running(tmp_path):
+    settings = Settings(state=StateConfig(path=tmp_path / "real.sqlite"))
+    with pytest.raises(ValueError, match="no such portfolio"):
+        run_kill_switch_drill_scratch(settings, portfolio_id="pf_typo")
 
 
 def test_halts_drill_no_record(runner, workdir):

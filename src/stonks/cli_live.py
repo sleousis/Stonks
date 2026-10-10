@@ -246,15 +246,18 @@ def register(halts_app: typer.Typer) -> None:
             raise typer.BadParameter(
                 f"--broker must be one of {list(DRILL_BROKERS)}", param_hint="--broker"
             )
-        report = run_kill_switch_drill_scratch(
-            _settings(),
-            ticker=ticker,
-            reference_price=price,
-            cancel_timeout=timeout,
-            record=record,
-            ran_by=_cli_actor(),
-            portfolio_id=portfolio,
-        )
+        try:
+            report = run_kill_switch_drill_scratch(
+                _settings(),
+                ticker=ticker,
+                reference_price=price,
+                cancel_timeout=timeout,
+                record=record,
+                ran_by=_cli_actor(),
+                portfolio_id=portfolio,
+            )
+        except ValueError as exc:
+            raise typer.BadParameter(str(exc), param_hint="--portfolio") from exc
         if json_out:
             Path(json_out).write_text(json.dumps(report.to_dict(), indent=2, default=str))
         table = Table(title=f"Stop trading drill ({report.broker} broker, scratch state)")

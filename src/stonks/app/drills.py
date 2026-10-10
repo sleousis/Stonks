@@ -55,7 +55,13 @@ def run_kill_switch_drill_scratch(
     a temporary folder deleted afterwards. With ``record`` the outcome,
     passed or failed, is stored in the real state DB under ``ran_by``.
     ``portfolio_id`` ties the record to one portfolio; ``None`` is a drill
-    of the global kill switch, which counts for every portfolio."""
+    of the global kill switch, which counts for every portfolio. An unknown
+    ``portfolio_id`` raises :class:`ValueError` before the drill runs."""
+    if record and portfolio_id is not None:
+        with AppContext(settings).state() as state:
+            state.migrate()
+            if not state.sql("SELECT 1 FROM portfolios WHERE id = ?", [portfolio_id]):
+                raise ValueError(f"no such portfolio: {portfolio_id}")
     report = _scratch_drill(
         settings,
         broker=broker,
