@@ -98,9 +98,20 @@ describe('ManualOrdersList', () => {
   it('offers change and cancel only on working orders', async () => {
     const el = await render([order(), order({ client_id: 'k2', status: 'filled' })]);
     expect(el.querySelectorAll('button').length).toBeGreaterThanOrEqual(2);
-    expect(el.textContent).toContain('None');
+    // A finished order has an empty Actions cell, never the word None (PO-10).
+    expect(el.textContent).not.toContain('None');
     expect(isWorking({ status: 'partially_filled' })).toBe(true);
     expect(isWorking({ status: 'cancelled' })).toBe(false);
+  });
+
+  it('hides the Actions column when no order is working (PO-10)', async () => {
+    const el = await render([
+      order({ status: 'filled' }),
+      order({ client_id: 'k2', status: 'cancelled' }),
+    ]);
+    const heads = [...el.querySelectorAll('th')].map((th) => th.textContent?.trim());
+    expect(heads.join(' ')).not.toContain('Actions');
+    expect(el.textContent).not.toContain('None');
   });
 
   it('says what fills an empty list', async () => {

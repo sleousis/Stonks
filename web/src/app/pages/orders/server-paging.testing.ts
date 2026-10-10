@@ -62,6 +62,11 @@ export async function pageThrough<T>(
     fixture.detectChanges();
     await serve();
   }
+  // A page may also read its filter choices (the followed strategies): answer
+  // them empty, they are not what this helper tests.
+  for (const req of http.match((r) => r.url.startsWith('/api/subscriptions'))) {
+    req.flush({ items: [], total: 0, limit: 500, offset: 0 });
+  }
   http.verify();
   const range = el.querySelector('.pager .range')?.textContent?.trim() ?? '';
   return { fixture, offsets, range, keptRowsWhileLoading };

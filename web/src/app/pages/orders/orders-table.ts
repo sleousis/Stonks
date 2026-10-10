@@ -60,7 +60,7 @@ import { OrderStatus, orderReason, stopWords } from './order-status';
         } @else if (o.limit_price !== null && o.limit_price !== undefined) {
           <span class="num">{{ money(o.limit_price) }}</span>
         } @else {
-          <span class="muted">Market</span>
+          <span class="muted" aria-label="Market order">–</span>
         }
       </ng-template>
       <ng-template appCell="side" [appCellOf]="rows()" let-o>
@@ -82,7 +82,7 @@ import { OrderStatus, orderReason, stopWords } from './order-status';
 })
 export class OrdersTable {
   readonly rows = input.required<readonly OrderView[]>();
-  readonly caption = input('Orders placed by trading runs');
+  readonly caption = input('Orders from trading runs and by hand');
   /** Server paging: the page's total. Null pages on the client. */
   readonly total = input<number | null>(null);
   readonly offset = input<number | null>(null);
@@ -97,11 +97,15 @@ export class OrdersTable {
     { key: 'ticker', label: 'Ticker', mobile: 'title' },
     { key: 'side', label: 'Side' },
     { key: 'quantity', label: 'Qty', format: 'number' },
-    { key: 'limit_price', label: 'Price', mobile: 'hide' },
+    { key: 'limit_price', label: 'Limit or stop', mobile: 'hide', help: false },
     { key: 'status', label: 'Status' },
-    { key: 'strategy_id', label: 'Strategy', value: (o) => rowStrategyName(o) },
+    {
+      key: 'strategy_id',
+      label: 'Strategy',
+      value: (o) => (o.origin === 'manual' ? 'By hand' : rowStrategyName(o)),
+    },
     { key: 'tick_id', label: 'Run', sortable: false, mobile: 'hide' },
-    // Phones keep the time an order was placed (UX-57); Price goes instead.
+    // Phones keep the time an order was placed (UX-57). Limit or stop goes instead.
     { key: 'created_at', label: 'Created', format: 'datetime' },
   ];
   /** Inside a run's own drill-down the run column would point to itself. */

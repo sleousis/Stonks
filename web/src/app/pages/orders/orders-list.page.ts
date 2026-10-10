@@ -6,10 +6,13 @@ import {
   input,
   linkedSignal,
   resource,
+  signal,
 } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { OrdersService } from '../../api/orders.service';
+import { SubscriptionsService } from '../../api/subscriptions.service';
+import { strategyDisplayName } from '../../shared/strategy-names';
 import { autoRefresh } from '../../shared/auto-refresh';
 import { keepLatest } from '../../shared/ui/data-table/keep-latest';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
@@ -20,9 +23,12 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
 const PAGE_SIZE = 50;
 
 /**
- * Orders placed by trading runs, filtered from the server. Filters live in the URL
- * (`?ticker=&strategy=&tick=&status=`) so other pages can link to a filtered
- * view and the back button restores it.
+ * Orders from trading runs and by hand, filtered from the server. Filters
+ * live in the URL (`?ticker=&strategy=&tick=&status=`) so other pages can
+ * link to a filtered view and the back button restores it. Strategy picks
+ * from the followed strategies by name. A run (`?tick=`, from a run's page)
+ * shows as a chip to clear, never a box to type an id in (PO-09). On phones
+ * the filters fold behind a Filter button.
  */
 @Component({
   selector: 'app-orders-list-page',
@@ -35,12 +41,43 @@ const PAGE_SIZE = 50;
         @if (page(); as p) {
           <span class="count num">{{ p.total }} matching</span>
         }
+        <a class="head-link" routerLink="/orders/ticks">See trading runs</a>
+      </div>
+
+      <div class="filter-bar">
+        <button
+          type="button"
+          class="btn filter-toggle"
+          aria-controls="orders-filters"
+          [attr.aria-expanded]="filtersOpen()"
+          (click)="filtersOpen.set(!filtersOpen())"
+        >
+          Filter
+          @if (filterCount()) {
+            <span class="num">({{ filterCount() }})</span>
+          }
+        </button>
+        @if (tick(); as run) {
+          <span class="chip">
+            One trading run
+            <button
+              type="button"
+              class="chip-clear"
+              aria-label="Show orders from every run"
+              (click)="setFilter('tick', '')"
+            >
+              ×
+            </button>
+          </span>
+        }
       </div>
 
       <form
+        id="orders-filters"
         class="filters"
         role="search"
         aria-label="Filter orders"
+        [class.open]="filtersOpen()"
         (submit)="$event.preventDefault()"
       >
         <div class="field">
@@ -56,23 +93,17 @@ const PAGE_SIZE = 50;
         </div>
         <div class="field">
           <label for="f-strategy">Strategy</label>
-          <input
+          <select
             id="f-strategy"
             class="input"
-            placeholder="Any strategy"
             [value]="strategy() ?? ''"
             (change)="setFilter('strategy', $any($event.target).value)"
-          />
-        </div>
-        <div class="field">
-          <label for="f-tick">Trading run</label>
-          <input
-            id="f-tick"
-            class="input"
-            placeholder="Any run"
-            [value]="tick() ?? ''"
-            (change)="setFilter('tick', $any($event.target).value)"
-          />
+          >
+            <option value="">Any strategy</option>
+            @for (s of strategyOptions(); track s.value) {
+              <option [value]="s.value" [selected]="s.value === strategy()">{{ s.label }}</option>
+            }
+          </select>
         </div>
         <div class="field">
           <label for="f-status">Status</label>
@@ -104,16 +135,17 @@ const PAGE_SIZE = 50;
         @if (hasFilters()) {
           <app-empty-state
             title="No orders match these filters"
-            message="Clear a filter or widen the search. Filters match ids exactly."
+            message="Clear a filter or widen the search."
           >
             <button type="button" class="btn" (click)="clearFilters()">Clear filters</button>
           </app-empty-state>
         } @else {
           <app-empty-state
             title="No orders yet"
-            message="Orders appear here after a trading run. Start one from the Trading runs tab, with a dry run first."
+            message="Orders appear here after a trading run, or when you place one by hand."
           >
-            <a class="btn" routerLink="/orders/ticks">Go to trading runs</a>
+            <a class="btn btn-primary" routerLink="/orders/new">New order</a>
+            <a class="btn" routerLink="/orders/ticks">See trading runs</a>
           </app-empty-state>
         }
       } @else {
@@ -135,6 +167,7 @@ const PAGE_SIZE = 50;
 })
 export class OrdersListPage {
   private readonly ordersApi = inject(OrdersService);
+  private readonly subscriptionsApi = inject(SubscriptionsService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
@@ -158,6 +191,28 @@ export class OrdersListPage {
     JSON.stringify({ ...this.filters(), portfolio: this.portfolioCtx.selectedId() }),
   );
   protected readonly hasFilters = computed(() => Object.values(this.filters()).some(Boolean));
+  /** Filters set in the folded phone form, shown on its button. */
+  protected readonly filterCount = computed(
+    () => [this.ticker(), this.strategy(), this.status()].filter(Boolean).length,
+  );
+  protected readonly filtersOpen = signal(false);
+
+  /** The strategies this portfolio follows, by name. A filter from a link stays listed. */
+  private readonly follows = resource({ loader: () => this.subscriptionsApi.list() });
+  protected readonly strategyOptions = computed(() => {
+    const picked = this.portfolioCtx.selectedId();
+    const subs = this.follows.hasValue() ? this.follows.value() : [];
+    const ids = new Set(
+      subs
+        .filter((s) => !picked || !s.portfolio_id || s.portfolio_id === picked)
+        .map((s) => s.strategy_id),
+    );
+    const current = this.strategy();
+    if (current) ids.add(current);
+    return [...ids]
+      .map((id) => ({ value: id, label: strategyDisplayName(id) }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  });
   protected readonly offset = linkedSignal({ source: this.filterKey, computation: () => 0 });
 
   protected readonly orders = resource({

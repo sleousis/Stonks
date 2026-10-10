@@ -89,8 +89,9 @@ describe('OrdersListPage', () => {
     const { el } = await render([order(0)]);
     const cell = (label: string) => el.querySelector(`td[data-label="${label}"]`)!;
     expect(cell('Created').classList).not.toContain('hide-phone');
-    expect(cell('Price').classList).toContain('hide-phone');
-    expect(cell('Price').textContent).toContain('Market');
+    expect(cell('Limit or stop').classList).toContain('hide-phone');
+    // A market order has no limit or stop: a dash, not the word Market (PO-10).
+    expect(cell('Limit or stop').textContent?.trim()).toBe('–');
   });
 
   it('says what a protective stop does, in plain words', async () => {
@@ -112,7 +113,7 @@ describe('OrdersListPage', () => {
     expect(tags[0]).toContain('Sells if the price falls to');
     expect(tags[0]).toContain('90.50');
     expect(tags[0]).toContain('until the position closes');
-    const price = el.querySelector('td[data-label="Price"]')!;
+    const price = el.querySelector('td[data-label="Limit or stop"]')!;
     expect(price.textContent).toContain('Stop');
     expect(el.textContent).toContain('Working');
   });
@@ -121,9 +122,66 @@ describe('OrdersListPage', () => {
     const { el } = await render([]);
     const text = el.textContent ?? '';
     expect(text).toContain('No orders yet');
-    expect(text).toContain('Trading runs tab');
+    expect(text).toContain('or when you place one by hand');
     expect(text).not.toMatch(/stonks |tick runs/);
-    expect(el.querySelector('label[for="f-tick"]')?.textContent).toContain('Trading run');
+    expect(el.querySelector('a[href="/orders/ticks"]')?.textContent).toContain('See trading runs');
+    // No box to type a run id in (PO-09).
+    expect(el.querySelector('#f-tick')).toBeNull();
+  });
+
+  it('says By hand for a manual order and names the caption plainly (PO-10)', async () => {
+    const { el } = await render([
+      { ...order(0), origin: 'manual', strategy_id: null, tick_id: null },
+      order(1),
+    ]);
+    expect(el.querySelector('caption')?.textContent).toContain(
+      'Orders from trading runs and by hand',
+    );
+    const strategies = [...el.querySelectorAll('td[data-label="Strategy"]')].map((td) =>
+      td.textContent?.trim(),
+    );
+    expect(strategies).toContain('By hand');
+  });
+
+  it('picks a strategy by name from the followed ones (PO-09)', async () => {
+    const { fixture, el } = await render([order(0)]);
+    (await nextRequest(controller, '/api/subscriptions')).flush({
+      items: [{ id: 's1', strategy_id: 'breakout_1a2b3c4d', portfolio_id: null }],
+      total: 1,
+      limit: 500,
+      offset: 0,
+    });
+    for (let i = 0; i < 3; i++) {
+      await tick();
+      fixture.detectChanges();
+    }
+    const select = el.querySelector<HTMLSelectElement>('select#f-strategy')!;
+    const labels = [...select.options].map((o) => o.textContent?.trim());
+    expect(labels).toEqual(['Any strategy', 'Breakout 1a2b']);
+  });
+
+  it('shows a run from a link as a chip with a clear button', async () => {
+    const fixture = TestBed.createComponent(OrdersListPage);
+    fixture.componentRef.setInput('tick', 't1');
+    fixture.detectChanges();
+    (await nextRequest(controller, '/api/orders')).flush({
+      items: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    });
+    for (let i = 0; i < 3; i++) {
+      await tick();
+      fixture.detectChanges();
+    }
+    const el = fixture.nativeElement as HTMLElement;
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+    expect(el.querySelector('.chip')?.textContent).toContain('One trading run');
+    el.querySelector<HTMLButtonElement>('.chip-clear')!.click();
+    expect(navigate).toHaveBeenCalledWith(
+      [],
+      expect.objectContaining({ queryParams: { tick: null } }),
+    );
   });
 
   it('writes a filter to the URL', async () => {

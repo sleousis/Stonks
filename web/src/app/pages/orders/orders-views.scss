@@ -40,6 +40,66 @@ select.input {
   padding-right: var(--space-6);
 }
 
+// The phone Filter button and the run chip (PO-09) ---------------------------
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) 0;
+
+  &:not(:has(.chip)) {
+    @include bp.from-tablet {
+      display: none;
+    }
+  }
+}
+
+.filter-toggle {
+  @include bp.from-tablet {
+    display: none;
+  }
+}
+
+.filters:not(.open) {
+  @include bp.phone {
+    display: none;
+  }
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding-left: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill, 999px);
+  font-size: var(--text-sm);
+}
+
+.chip-clear {
+  min-width: var(--touch-min);
+  min-height: var(--touch-min);
+  border: 0;
+  background: none;
+  color: var(--color-ink-2);
+  font-size: var(--text-md);
+  cursor: pointer;
+
+  @include bp.from-desktop {
+    min-width: 2rem;
+    min-height: 2rem;
+  }
+}
+
+.head-link {
+  margin-left: auto;
+  font-size: var(--text-sm);
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+}
+
 // Cells ---------------------------------------------------------------------
 .mono {
   font-family: var(--font-mono);
