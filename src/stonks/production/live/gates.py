@@ -752,7 +752,8 @@ def _period_return(rows: Sequence[Any], day: date) -> float | None:
 
 
 def _book_return(state: SqliteState, portfolio_id: str, day: date) -> float | None:
-    """The book's return into ``day`` from its last snapshot of each day."""
+    """The book's return into ``day`` from its last snapshot of each day,
+    with deposits and withdrawals taken out (``production.risk_curve``)."""
     rows = state.sql(
         "SELECT as_of, total_value FROM portfolio_snapshots s WHERE portfolio_id = ?"
         " AND as_of <= ? AND id = (SELECT MAX(id) FROM portfolio_snapshots"
@@ -760,7 +761,14 @@ def _book_return(state: SqliteState, portfolio_id: str, day: date) -> float | No
         " ORDER BY as_of DESC LIMIT 2",
         [portfolio_id, day.isoformat()],
     )
-    return _period_return(rows, day)
+    if len(rows) < 2 or rows[0]["as_of"] != day.isoformat():
+        return None
+    from stonks.production.risk_curve import adjusted_curve
+
+    # a deposit or withdrawal between the two snapshots is not a return
+    points = [(date.fromisoformat(r["as_of"]), float(r["total_value"])) for r in reversed(rows)]
+    (_, before), (_, now) = adjusted_curve(state, portfolio_id, points)
+    return now / before - 1.0 if before > 0 else None
 
 
 def _tca_gaps(state: SqliteState, portfolio_id: str, start: date, end: date) -> list[float]:

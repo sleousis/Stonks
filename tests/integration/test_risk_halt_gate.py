@@ -247,3 +247,27 @@ def test_a_user_kill_switch_cancels_the_legacy_books_working_paper_orders(tmp_pa
         assert s.count_rows("fills") == 0
     finally:
         s.close()
+
+
+def _flow(state, day: date, kind: str, amount: float, pf: str = PF) -> None:
+    state.execute(
+        "INSERT INTO portfolio_cash_flows (portfolio_id, flow_date, kind, amount, created_at,"
+        " created_by) VALUES (?, ?, ?, ?, ?, 'test')",
+        [pf, day.isoformat(), kind, amount, f"{day.isoformat()}T12:00:00+00:00"],
+    )
+
+
+def test_a_withdrawal_does_not_trip_the_breaker(state):
+    _snapshots(state, date(2025, 6, 2), [10_000.0, 10_100.0, 5_100.0])
+    _flow(state, date(2025, 6, 4), "withdrawal", 5_000.0)
+    assert RiskHaltGate().check(_ctx(state, pol=BREAKER)) is None
+    assert active_halts(state, AS_OF, portfolio_id=PF) == []
+
+
+def test_a_deposit_does_not_hide_a_loss_from_the_breaker(state):
+    _snapshots(state, date(2025, 6, 2), [10_000.0, 9_300.0, 19_300.0])
+    _flow(state, date(2025, 6, 4), "deposit", 10_000.0)
+    # only today counts, so the raw curve (19 300 against 10 000) would not trip
+    pol = policy(circuit_breaker={"max_month_loss": 0.06, "cooldown": "none"})
+    verdict = RiskHaltGate().check(_ctx(state, pol=pol, dry_run=True))
+    assert verdict is not None and "month_loss" in verdict.reason

@@ -67,6 +67,7 @@ from stonks.execution.brokers.base import OrderCanceller, OrderRejectedError, Or
 from stonks.execution.order_state import mark_unknown, unknown_orders, write_state
 from stonks.execution.orders import classify_all
 from stonks.execution.reconcile import NON_TERMINAL_STATUSES, reconcile_order, reconcile_orders
+from stonks.fx import load_fx_rates
 from stonks.logging import get_logger
 from stonks.production.financing import short_account
 from stonks.production.hooks import GateContext, run_gates
@@ -300,6 +301,7 @@ def place_manual_order(
             dry_run=True,
             policy=book.risk,
             parent_portfolio_id=book.parent_id,
+            fx_loader=lambda codes: load_fx_rates(lake, codes),
         ),
         _log,
     )

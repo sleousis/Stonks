@@ -97,6 +97,7 @@ from stonks.execution.reconcile import (
     startup_reconcile,
 )
 from stonks.factors.style import safe_style_exposures, uses_style_model
+from stonks.fx import load_fx_rates
 from stonks.lifecycle.calibration import track_calibration
 from stonks.logging import get_logger
 from stonks.notify import Notification, Notifier
@@ -1249,6 +1250,7 @@ def _run_book(run: _TickRun, book: TickBook) -> BookResult:
                 dry_run=dry_run,
                 policy=book.spec.risk,
                 parent_portfolio_id=book.parent_id,
+                fx_loader=lambda codes: load_fx_rates(lake, codes),
             ),
             log,
         )

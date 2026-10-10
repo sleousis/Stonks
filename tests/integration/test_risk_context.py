@@ -143,3 +143,97 @@ def test_build_risk_context_fills_every_field(lake, state):
     assert ctx.cost_model is not None
     assert ctx.volumes == {"A.US": 1_000.0}
     assert ctx.as_of == AS_OF
+
+
+# ---- the cash-flow-adjusted curve (deposits and withdrawals taken out) ----
+
+
+def _snap(state, day: str, value: float, pf: str = "pf_default") -> None:
+    state.execute(
+        "INSERT INTO portfolio_snapshots (taken_at, as_of, cash, positions_json, total_value,"
+        " portfolio_id) VALUES (?, ?, ?, '{}', ?, ?)",
+        [f"{day}T21:00:00+00:00", day, value, value, pf],
+    )
+
+
+def _flow(state, day: str, kind: str, amount: float, pf: str = "pf_default") -> None:
+    state.execute(
+        "INSERT INTO portfolio_cash_flows (portfolio_id, flow_date, kind, amount, created_at,"
+        " created_by) VALUES (?, ?, ?, ?, ?, 'test')",
+        [pf, day, kind, amount, f"{day}T12:00:00+00:00"],
+    )
+
+
+def _rule(name: str):
+    from stonks.production.rules import registered_rules
+
+    [rule] = [r for r in registered_rules() if r.name == name]
+    return rule
+
+
+def _buy():
+    from stonks.core.types import Order
+
+    return Order(client_id="b1", ticker="A.US", side="buy", quantity=10.0)
+
+
+def _policy(**rules):
+    from stonks.production.rules.settings import RuleSettings
+
+    return RiskPolicy(rules=RuleSettings.model_validate(rules))
+
+
+def test_a_deposit_after_a_10pct_loss_still_shows_a_10pct_drawdown(lake, state):
+    _snap(state, "2026-03-26", 1_000.0)
+    _snap(state, "2026-03-27", 900.0)  # 10% loss
+    _flow(state, "2026-03-30", "deposit", 1_000.0)
+    _snap(state, "2026-03-30", 1_900.0)  # the deposit's own snapshot
+    pol = _policy(drawdown_scaling={"schedule": [(0.05, 0.5)]})
+    ctx = build_risk_context(
+        lake, state, Portfolio(cash=1_900.0), {"A.US": 12.0}, AS_OF, policy=pol
+    )
+    values = [v for _, v in ctx.equity_curve]
+    assert 1 - values[-1] / max(values) == pytest.approx(0.10)
+    kept, adj = _rule("drawdown_scaling").apply([_buy()], ctx)
+    assert kept[0].quantity == pytest.approx(5.0)
+    assert "10.00%" in adj[0].reason
+
+
+def test_the_deposit_day_without_a_snapshot_lines_up_with_todays_value(lake, state):
+    _snap(state, "2026-03-27", 1_000.0)
+    _snap(state, "2026-03-30", 900.0)
+    _flow(state, "2026-03-31", "deposit", 1_000.0)  # landed today, before the tick
+    pol = _policy(drawdown_scaling={"schedule": [(0.05, 0.5)]})
+    ctx = build_risk_context(
+        lake, state, Portfolio(cash=1_900.0), {"A.US": 12.0}, AS_OF, policy=pol
+    )
+    assert ctx.equity_curve[-1][1] == pytest.approx(1_900.0)
+    kept, _ = _rule("drawdown_scaling").apply([_buy()], ctx)
+    assert kept[0].quantity == pytest.approx(5.0)
+
+
+def test_a_withdrawal_does_not_trip_the_circuit_breaker(lake, state):
+    _snap(state, "2026-03-26", 10_000.0)
+    _snap(state, "2026-03-27", 10_100.0)
+    _flow(state, "2026-03-30", "withdrawal", 5_000.0)
+    _snap(state, "2026-03-30", 5_100.0)
+    pol = _policy(circuit_breaker={"max_month_loss": 0.06, "max_drawdown_halt": 0.2})
+    ctx = build_risk_context(
+        lake, state, Portfolio(cash=5_100.0), {"A.US": 12.0}, AS_OF, policy=pol
+    )
+    kept, adj = _rule("circuit_breaker").apply([_buy()], ctx)
+    assert adj == [] and kept[0].quantity == 10.0
+
+
+def test_a_flow_in_another_currency_without_a_rate_keeps_the_raw_curve(lake, state, monkeypatch):
+    from stonks.fx import FxRateMissing
+    from stonks.insights import flows
+
+    def missing(*_a, **_k):
+        raise FxRateMissing("JPY", "USD", date(2026, 3, 30))
+
+    monkeypatch.setattr(flows, "external_flows", missing)
+    _snap(state, "2026-03-27", 1_000.0)
+    _snap(state, "2026-03-30", 1_500.0)
+    ctx = build_risk_context(lake, state, Portfolio(cash=1_500.0), {}, AS_OF)
+    assert ctx.equity_curve == [(date(2026, 3, 27), 1_000.0), (date(2026, 3, 30), 1_500.0)]
