@@ -83,7 +83,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
       <div class="panel-body">
         <p class="muted">
           Retrains every strategy that learns from data on its latest data. The weekly run does the
-          same. A strategy retrained in the last few days is skipped unless you tick the box.
+          same. A strategy retrained in the last few days is skipped unless you check the box.
         </p>
         <app-retrain-job label="Retrain all" (finished)="candidates.reload()" />
       </div>
