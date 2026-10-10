@@ -138,7 +138,7 @@ describe('ManualTicketPage', () => {
   it('says what is missing and sends nothing', async () => {
     setup();
     const el = await render();
-    button(el, 'Check order').click();
+    button(el, 'Review order').click();
     fixture.detectChanges();
     expect(el.querySelector('#mo-ticker-error')?.textContent).toContain('Enter a ticker');
     expect(el.querySelector('#mo-qty-error')?.textContent).toContain('above zero');
@@ -147,10 +147,10 @@ describe('ManualTicketPage', () => {
     expect(http.match(() => true)).toHaveLength(0);
   });
 
-  it('puts the cursor on the first field to fix when Place order is pressed too soon', async () => {
+  it('puts the cursor on the first field to fix when Review order is pressed too soon', async () => {
     setup();
     const el = await render();
-    button(el, 'Place order').click();
+    button(el, 'Review order').click();
     await settle();
     expect(document.activeElement?.id).toBe('mo-ticker');
     await tick(5);
@@ -196,14 +196,15 @@ describe('ManualTicketPage', () => {
     await settle();
     expect(el.querySelector<HTMLInputElement>('#mo-qty')!.value).toBe('100');
     expect(el.querySelector('#mo-plan-result')?.textContent).toContain('3 to 1');
-    button(el, 'Check order').click();
+    button(el, 'Review order').click();
     const check = await nextRequest(http, '/api/orders/manual/preview', 'POST');
     expect(check.request.body).toMatchObject({ quantity: 100, stop_price: 24, target_price: 28 });
+    confirm.mockResolvedValueOnce(false);
     check.flush(result({ quantity: 100, requested_quantity: 100, stop_price: 24, reward_risk: 3 }));
     await settle();
-    const ticket = el.querySelector('[aria-label="Checked order"]')!;
-    expect(ticket.textContent).toContain('Stop');
-    expect(ticket.textContent).toContain('3 to 1');
+    const lines = confirm.mock.calls[0][0].ticket!.lines;
+    expect(lines.map((l) => l.label)).toContain('Stop');
+    expect(lines.find((l) => l.label === 'Reward to risk')?.value).toBe('3 to 1');
   });
 
   it('drops a size worked out for a stop that changed meanwhile', async () => {
@@ -253,13 +254,15 @@ describe('ManualTicketPage', () => {
     expect(http.match(() => true)).toHaveLength(0);
   });
 
-  it('checks the order and shows it as a ticket', async () => {
+  it('reviews the order in one step: one button, the ticket opens to place or cancel (PO-08)', async () => {
     setup();
     const el = await render();
+    expect(button(el, 'Check order')).toBeUndefined();
+    expect(button(el, 'Place order')).toBeUndefined();
     fill(el);
     pick(el, 'Order type', 'Limit');
     type(el, '#mo-limit', '24.5');
-    button(el, 'Check order').click();
+    button(el, 'Review order').click();
     const req = await nextRequest(http, '/api/orders/manual/preview', 'POST');
     expect(req.request.body).toMatchObject({
       portfolio_id: 'pf_1',
@@ -272,13 +275,82 @@ describe('ManualTicketPage', () => {
       allow_reduce: false,
     });
     expect(req.request.body.client_id).toMatch(/^console-/);
+    confirm.mockResolvedValueOnce(false);
     req.flush(result({ order_type: 'limit', limit_price: 24.5 }));
     await settle();
-    const ticket = el.querySelector('[aria-label="Checked order"]')!;
-    expect(ticket.textContent).toContain('Tess book');
-    expect(ticket.textContent).toContain('Limit at $24.50');
-    expect(ticket.textContent).toContain('PAPER');
-    expect(ticket.textContent).toContain('Every check passed');
+    const options = confirm.mock.calls[0][0];
+    expect(options.confirmLabel).toBe('Place order');
+    expect(options.ticket?.live).toBe(false);
+    const values = options.ticket!.lines.map((l) => l.value);
+    expect(values).toContain('Tess book');
+    expect(values).toContain('Limit at $24.50');
+    expect(el.querySelector('[aria-label="Checked order"]')).toBeNull();
+    await tick(5);
+    expect(http.match(() => true)).toHaveLength(0);
+  });
+
+  it('asks for a reason of 3 letters or more before anything is sent (PO-03)', async () => {
+    setup();
+    const el = await render();
+    fill(el);
+    type(el, '#mo-reason', 'ok');
+    button(el, 'Review order').click();
+    fixture.detectChanges();
+    expect(el.querySelector('#mo-reason-error')?.textContent).toContain(
+      'Say why in a few words (3 letters or more).',
+    );
+    await tick(5);
+    expect(http.match(() => true)).toHaveLength(0);
+  });
+
+  it('flags a stop on the wrong side of the price (PO-04)', async () => {
+    setup();
+    const el = await render();
+    fill(el);
+    pick(el, 'Order type', 'Limit');
+    type(el, '#mo-limit', '187');
+    type(el, '#mo-stop', '1000');
+    button(el, 'Review order').click();
+    fixture.detectChanges();
+    expect(el.querySelector('#mo-stop-error')?.textContent).toContain(
+      'For a buy, the stop goes below the price.',
+    );
+    await tick(5);
+    expect(http.match(() => true)).toHaveLength(0);
+  });
+
+  it('says a paper stop never sells and sizes from a percent of the portfolio (PO-04, PO-16)', async () => {
+    setup();
+    const el = await render();
+    expect(el.querySelector('#mo-stop-hint')?.textContent).toContain(
+      'Paper does not sell at your stop. It sets the size and goes in your journal.',
+    );
+    expect(el.textContent).toContain('Percent of portfolio');
+    expect(el.textContent).not.toContain('Percent of book');
+  });
+
+  it('says a halt in words with a way to resume (PO-03)', async () => {
+    setup();
+    const el = await render();
+    fill(el);
+    button(el, 'Review order').click();
+    (await nextRequest(http, '/api/orders/manual/preview', 'POST')).flush(
+      {
+        title: 'Conflict',
+        status: 409,
+        code: 'order_refused',
+        detail:
+          'trading is halted for this portfolio: kill (portfolio pf_c5e4a4fc1dd5): Stopped from the console.',
+      },
+      { status: 409, statusText: 'Conflict' },
+    );
+    await settle();
+    const alert = el.querySelector('app-order-refusal [role="alert"]')!;
+    expect(alert.textContent).toContain(
+      'Trading is stopped for Tess book. Resume it to place orders.',
+    );
+    expect(alert.textContent).not.toContain('pf_');
+    expect(alert.querySelector('a')?.getAttribute('href')).toBe('/ops/halts');
   });
 
   it('places a paper order after the ticket, then reads the list again', async () => {
@@ -287,7 +359,7 @@ describe('ManualTicketPage', () => {
     const el = await render();
     fill(el);
     pick(el, 'Side', 'Sell');
-    button(el, 'Place order').click();
+    button(el, 'Review order').click();
     const preview = await nextRequest(http, '/api/orders/manual/preview', 'POST');
     const key = preview.request.body.client_id;
     preview.flush(result({ side: 'sell' }));
@@ -315,7 +387,7 @@ describe('ManualTicketPage', () => {
     setup();
     const el = await render();
     fill(el);
-    button(el, 'Place order').click();
+    button(el, 'Review order').click();
     (await nextRequest(http, '/api/orders/manual/preview', 'POST')).flush(result({ live: true }));
     const placed = await nextRequest(http, '/api/orders/manual', 'POST');
     expect(ensure).toHaveBeenCalled();
@@ -337,7 +409,7 @@ describe('ManualTicketPage', () => {
     const error = vi.spyOn(TestBed.inject(ToastService), 'error');
     const el = await render();
     fill(el);
-    button(el, 'Place order').click();
+    button(el, 'Review order').click();
     (await nextRequest(http, '/api/orders/manual/preview', 'POST')).flush(result());
     (await nextRequest(http, '/api/orders/manual', 'POST')).flush(
       result({ status: 'rejected', reason: 'not enough cash' }),
@@ -357,7 +429,7 @@ describe('ManualTicketPage', () => {
     const el = await render();
     fill(el);
     confirm.mockResolvedValueOnce(false);
-    button(el, 'Place order').click();
+    button(el, 'Review order').click();
     (await nextRequest(http, '/api/orders/manual/preview', 'POST')).flush(result());
     await tick(5);
     expect(http.match(() => true)).toHaveLength(0);
@@ -367,7 +439,7 @@ describe('ManualTicketPage', () => {
     setup();
     const el = await render();
     fill(el);
-    button(el, 'Check order').click();
+    button(el, 'Review order').click();
     (await nextRequest(http, '/api/orders/manual/preview', 'POST')).flush(
       {
         title: 'Conflict',
@@ -390,21 +462,25 @@ describe('ManualTicketPage', () => {
     await settle();
     const alert = el.querySelector('app-order-refusal [role="alert"]')!;
     expect(alert.textContent).toContain('allow 4 of the 10');
-    expect(alert.textContent).toContain('Max position weight');
+    expect(alert.textContent).toContain('Largest position');
+    confirm.mockResolvedValueOnce(false);
     alert.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
     const again = await nextRequest(http, '/api/orders/manual/preview', 'POST');
     expect(again.request.body.allow_reduce).toBe(true);
     again.flush(result({ quantity: 4, requested_quantity: 10 }));
     await settle();
-    expect(el.textContent).toContain('The risk limits cut this order to 4');
-    expect(el.querySelector('[aria-label="Checked order"]')?.textContent).toContain('Asked for');
+    const options = confirm.mock.calls[0][0];
+    expect(options.message).toContain('The risk limits cut it to 4 of the 10 you asked for.');
+    expect(options.ticket!.lines.map((l) => l.label)).toContain('Asked for');
+    await tick(5);
+    expect(http.match(() => true)).toHaveLength(0);
   });
 
   it('asks for a fresh code and the typed ticker on a real-money book', async () => {
     setup(true);
     const el = await render();
     fill(el);
-    button(el, 'Place order').click();
+    button(el, 'Review order').click();
     (await nextRequest(http, '/api/orders/manual/preview', 'POST')).flush(result({ live: true }));
     const placed = await nextRequest(http, '/api/orders/manual', 'POST');
     expect(ensure).toHaveBeenCalledWith(expect.stringContaining('real-money'));
@@ -426,7 +502,7 @@ describe('ManualTicketPage', () => {
     const el = await render();
     fill(el);
     ensure.mockResolvedValueOnce(false);
-    button(el, 'Place order').click();
+    button(el, 'Review order').click();
     await tick(5);
     expect(http.match(() => true)).toHaveLength(0);
     expect(confirm).not.toHaveBeenCalled();
@@ -436,7 +512,7 @@ describe('ManualTicketPage', () => {
     setup();
     const el = await render();
     fill(el);
-    button(el, 'Check order').click();
+    button(el, 'Review order').click();
     (await nextRequest(http, '/api/orders/manual/preview', 'POST')).flush(
       { title: 'Not Found', status: 404, detail: 'no price for AAA.US' },
       { status: 404, statusText: 'Not Found' },
@@ -494,5 +570,12 @@ describe('orderLines', () => {
       'About',
     ]);
     expect(lines.find((l) => l.label === 'About')?.value).toBe('$100.00');
+  });
+
+  it('says a paper market order fills at the last close (PO-16)', () => {
+    const paper = orderLines(result(), 'Book', 'USD');
+    expect(paper.find((l) => l.label === 'Type')?.value).toBe('Market, fills at the last close');
+    const live = orderLines(result({ live: true }), 'Book', 'USD');
+    expect(live.find((l) => l.label === 'Type')?.value).toBe('Market, at the next price');
   });
 });

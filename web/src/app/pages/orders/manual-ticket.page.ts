@@ -28,7 +28,7 @@ import { type SegmentOption, Segmented } from '../../shared/ui/segmented';
 import { SideTag } from '../../shared/ui/side-tag';
 import { EarningsWarningLine } from './earnings-warning';
 import { ManualOrdersList } from './manual-orders-list';
-import { OrderRefusalPanel, type OrderRefusal, refusalOf } from './order-refusal';
+import { OrderRefusalPanel, type OrderRefusal, refusalOf, tidyMessage } from './order-refusal';
 import { OrderStatus } from './order-status';
 import { TaxPreviewPanel, type TaxQuestion } from './tax-preview';
 
@@ -48,7 +48,7 @@ const TYPES: SegmentOption<OrderType>[] = [
   { value: 'limit', label: 'Limit' },
 ];
 const RISK_MODES: SegmentOption<RiskMode>[] = [
-  { value: 'percent', label: 'Percent of book' },
+  { value: 'percent', label: 'Percent of portfolio' },
   { value: 'amount', label: 'Amount' },
 ];
 
@@ -61,7 +61,10 @@ function optionalPrice(raw: string): number | null {
 
 /** "Risk 498.00 at the stop, 166 shares, 3.0 to 1" for a worked-out size. */
 export function planText(p: TradePlanView, currency: string): string {
-  if (p.quantity === 0) return p.note ?? 'The risk is too small for one share.';
+  if (p.quantity === 0) {
+    if (p.capped_by === 'cash') return 'Not enough cash for one share.';
+    return p.note ? tidyMessage(p.note) : 'The risk is too small for one share.';
+  }
   const parts = [
     `${formatNumber(p.quantity)} shares risk ${formatMoney(p.risk_amount, { currency })} at the stop`,
   ];
@@ -100,7 +103,9 @@ export function orderLines(
     value:
       r.order_type === 'limit'
         ? `Limit at ${formatMoney(r.limit_price, { currency })}`
-        : 'Market, at the next price',
+        : r.live
+          ? 'Market, at the next price'
+          : 'Market, fills at the last close',
   });
   lines.push({ label: 'Last close', value: formatMoney(r.reference_price, { currency }) });
   if (r.stop_price !== null && r.stop_price !== undefined) {
@@ -124,8 +129,8 @@ export function orderLines(
 
 /**
  * Place an order by hand on the picked portfolio. The trader fills the
- * ticket, checks it (every halt and risk rule runs, nothing is placed), then
- * places it. A real-money book asks for a fresh code first and the ticker
+ * ticket and reviews it: every halt and risk rule runs, nothing is placed,
+ * and the checked order opens as a ticket to place or cancel. A real-money book asks for a fresh code first and the ticker
  * typed on the ticket. A refused order shows each rule's adjustment, and
  * when the rules allow a smaller order the trader may accept it.
  *
@@ -276,7 +281,7 @@ export function orderLines(
                     @if (live()) {
                       Your broker gets a stop order once the entry fills.
                     } @else {
-                      Below a buy, above a short sale. Kept with the order.
+                      Paper does not sell at your stop. It sets the size and goes in your journal.
                     }
                   </span>
                 }
@@ -311,7 +316,7 @@ export function orderLines(
             </div>
             <div class="risk-row">
               <label for="mo-risk" class="visually-hidden">
-                {{ riskMode() === 'percent' ? 'Risk, percent of the book' : 'Risk, amount' }}
+                {{ riskMode() === 'percent' ? 'Risk, percent of the portfolio' : 'Risk, amount' }}
               </label>
               <input
                 id="mo-risk"
@@ -362,55 +367,15 @@ export function orderLines(
           </div>
 
           <div class="actions">
-            <button type="button" class="btn" [disabled]="busy()" (click)="check()">
-              Check order
-            </button>
             <button type="submit" class="btn btn-primary" [disabled]="busy() || !canTrade()">
-              Place order
+              Review order
             </button>
             <app-permission-note permission="portfolio.trade" />
           </div>
         </form>
       </section>
 
-      <aside class="side" aria-label="Order ticket">
-        @if (preview(); as p) {
-          <div class="ticket" [class.live]="live()" role="group" aria-label="Checked order">
-            <p class="ticket-head">
-              <span class="ticket-kind">Order ticket</span>
-              <app-side-tag [side]="p.side" />
-              <app-mode-stamp [live]="live()" />
-            </p>
-            <dl class="ticket-lines">
-              @for (line of previewLines(); track line.label) {
-                <div>
-                  <dt>{{ line.label }}</dt>
-                  <dd class="num">{{ line.value }}</dd>
-                </div>
-              }
-            </dl>
-            @if (p.halt) {
-              <p class="note warn">{{ p.halt }}</p>
-            }
-            @if (p.quantity < p.requested_quantity) {
-              <p class="note">
-                The risk limits cut this order to {{ num(p.quantity) }}. Placing it places the
-                smaller order.
-              </p>
-            } @else {
-              <p class="note ok">Every check passed. Nothing is placed until you place it.</p>
-            }
-          </div>
-        } @else if (!refusal() && !failure()) {
-          <div class="ticket blank" role="group" aria-label="Order ticket">
-            <p class="ticket-head">
-              <span class="ticket-kind">Order ticket</span>
-              <app-mode-stamp [live]="live()" />
-            </p>
-            <p class="muted">Fill in the order and check it. The price and the checks show here.</p>
-          </div>
-        }
-
+      <aside class="side" aria-label="Order result">
         <app-tax-preview [question]="taxQuestion()" />
 
         @if (refusal(); as r) {
@@ -496,9 +461,6 @@ export function orderLines(
       gap: var(--space-3);
       min-width: 0;
     }
-    .ticket.blank {
-      box-shadow: none;
-    }
     .plan {
       display: grid;
       gap: var(--space-3);
@@ -514,6 +476,7 @@ export function orderLines(
     }
     .plan-grid {
       display: grid;
+      align-items: start;
       gap: var(--space-3);
       grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
     }
@@ -525,16 +488,6 @@ export function orderLines(
     .risk-row .input {
       flex: 1 1 8rem;
       min-width: 0;
-    }
-    .note {
-      font-size: var(--text-sm);
-      color: var(--color-ink-2);
-    }
-    .note.ok {
-      color: var(--color-gain);
-    }
-    .note.warn {
-      color: var(--color-warn);
     }
     .failure {
       padding: var(--space-3) var(--space-4);
@@ -590,6 +543,8 @@ export class ManualTicketPage implements OnInit {
   protected readonly riskMode = signal<RiskMode>('percent');
   protected readonly risk = signal('');
   protected readonly plan = signal<TradePlanView | null>(null);
+  /** The ticker's last close, once a size or a check has read it. */
+  private readonly lastClose = signal<{ ticker: string; price: number } | null>(null);
   private readonly triedPlan = signal(false);
 
   protected readonly busy = signal(false);
@@ -617,26 +572,23 @@ export class ManualTicketPage implements OnInit {
     if (this.orderType() === 'limit' && !(Number(this.limit()) > 0)) {
       out.limit = 'Enter a limit price above zero.';
     }
-    if (!this.reason().trim()) out.reason = 'Say why, in a few words.';
+    if (this.reason().trim().length < 3) {
+      out.reason = 'Say why in a few words (3 letters or more).';
+    }
     this.planErrors(out);
     return out;
   });
 
-  /** The tax preview's question: the order once it has been checked. */
+  /** The tax preview's question: a real-money order once it has been checked. */
   protected readonly taxQuestion = computed<TaxQuestion | null>(() => {
     const p = this.preview();
-    if (!p) return null;
+    if (!p || !(p.live || this.live())) return null;
     return {
       ticker: p.ticker,
       side: p.side,
       quantity: p.quantity,
       price: p.limit_price ?? p.reference_price,
     };
-  });
-
-  protected readonly previewLines = computed(() => {
-    const p = this.preview();
-    return p ? orderLines(p, this.portfolioName(), this.currency()) : [];
   });
 
   ngOnInit(): void {
@@ -656,10 +608,28 @@ export class ManualTicketPage implements OnInit {
     const target = optionalPrice(this.target());
     if (Number.isNaN(stop)) out.stop = 'Enter a stop price above zero, or leave it empty.';
     if (Number.isNaN(target)) out.target = 'Enter a target above zero, or leave it empty.';
+    const price = this.entryPrice();
+    if (stop !== null && !Number.isNaN(stop) && price !== null) {
+      if (this.sideField() === 'buy' && stop >= price) {
+        out.stop = 'For a buy, the stop goes below the price.';
+      } else if (this.sideField() === 'sell' && stop <= price) {
+        out.stop = 'For a sale, the stop goes above the price.';
+      }
+    }
     if (this.triedPlan()) {
       if (stop === null) out.stop = 'Enter the stop to size from risk.';
       if (!(Number(this.risk()) > 0)) out.risk = 'Enter the risk you accept, above zero.';
     }
+  }
+
+  /** The entry the stop is measured from: the limit, else the last close read. */
+  private entryPrice(): number | null {
+    if (this.orderType() === 'limit') {
+      const limit = Number(this.limit());
+      return limit > 0 ? limit : null;
+    }
+    const close = this.lastClose();
+    return close && close.ticker === this.tickerField().trim().toUpperCase() ? close.price : null;
   }
 
   /** Size the entry from the chosen risk and the stop, then fill the quantity. */
@@ -682,6 +652,7 @@ export class ManualTicketPage implements OnInit {
       // other inputs, so it must not fill the quantity.
       if (JSON.stringify(this.sizingBody()) !== JSON.stringify(body)) return;
       this.triedPlan.set(false);
+      if (result.entry_is_close) this.lastClose.set({ ticker, price: result.entry_price });
       if (result.quantity > 0) this.edit(this.quantity, String(result.quantity));
       this.plan.set(result);
     } catch (err) {
@@ -722,11 +693,11 @@ export class ManualTicketPage implements OnInit {
 
   protected async setAllowReduce(on: boolean): Promise<void> {
     this.allowReduce.set(on);
-    if (on) await this.check();
+    if (on) await this.place();
   }
 
   /** Run every check without placing anything. */
-  async check(): Promise<ManualOrderResult | null> {
+  private async check(): Promise<ManualOrderResult | null> {
     const body = this.request();
     if (!body) return null;
     this.busy.set(true);
@@ -734,6 +705,7 @@ export class ManualTicketPage implements OnInit {
     this.placed.set(null);
     try {
       const result = await this.api.preview(body);
+      this.lastClose.set({ ticker: result.ticker, price: result.reference_price });
       this.preview.set(result);
       this.refusal.set(null);
       return result;
@@ -745,7 +717,10 @@ export class ManualTicketPage implements OnInit {
     }
   }
 
-  /** Check, confirm on the ticket (a fresh code first for real money), then place. */
+  /**
+   * Review the order: check it, show it as a ticket to place or cancel (a
+   * fresh code first for real money), then place it.
+   */
   async place(): Promise<void> {
     if (!this.request()) return;
     let live = this.live();
@@ -764,9 +739,7 @@ export class ManualTicketPage implements OnInit {
     }
     const ok = await this.confirm.confirm({
       title: `${checked.side === 'buy' ? 'Buy' : 'Sell'} ${formatNumber(checked.quantity)} ${checked.ticker}?`,
-      message: live
-        ? 'This order goes to your broker with real money.'
-        : 'This order trades with pretend money in your paper portfolio.',
+      message: this.confirmText(checked, live),
       confirmLabel: 'Place order',
       tone: live ? 'danger' : 'default',
       typedConfirmation: live ? checked.ticker : undefined,
@@ -809,6 +782,22 @@ export class ManualTicketPage implements OnInit {
     }
   }
 
+  /** What placing does, plus a cut by the risk limits or a halt that lets it through. */
+  private confirmText(r: ManualOrderResult, live: boolean): string {
+    const parts = [
+      live
+        ? 'This order goes to your broker with real money.'
+        : 'This order trades with pretend money in your paper portfolio.',
+    ];
+    if (r.quantity < r.requested_quantity) {
+      const cut = formatNumber(r.quantity);
+      const asked = formatNumber(r.requested_quantity);
+      parts.push(`The risk limits cut it to ${cut} of the ${asked} you asked for.`);
+    }
+    if (r.halt) parts.push(tidyMessage(r.halt));
+    return parts.join(' ');
+  }
+
   private placedText(r: ManualOrderResult): string {
     const what = `${r.side === 'buy' ? 'Bought' : 'Sold'} ${formatNumber(r.quantity)} ${r.ticker}`;
     if (r.duplicate) return `This order was already placed. ${r.ticker} is unchanged.`;
@@ -821,7 +810,10 @@ export class ManualTicketPage implements OnInit {
 
   private showFailure(err: unknown): void {
     this.preview.set(null);
-    const refused = refusalOf(err);
+    const refused = refusalOf(err, {
+      portfolio: this.portfolioName(),
+      currency: this.currency(),
+    });
     if (refused) {
       this.refusal.set(refused);
       return;
