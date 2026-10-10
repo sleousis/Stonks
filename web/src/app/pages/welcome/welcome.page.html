@@ -9,7 +9,7 @@
 
 <p class="demo-note">
   Just looking? <a routerLink="/demo">Open the demo portfolio</a>: sample holdings and prices, never
-  mixed with your real books.
+  mixed with your own portfolios.
 </p>
 
 @if (session.isAdmin()) {
@@ -71,7 +71,7 @@
       </button>
     </p>
   }
-  @if (view.complete) {
+  @if (complete()) {
     <app-empty-state
       title="You are set up"
       message="Signals from the strategies you follow show on Today after each daily run."
@@ -81,7 +81,7 @@
   }
 
   <ol class="steps">
-    @for (s of view.steps; track s.id; let i = $index) {
+    @for (s of steps(); track s.id; let i = $index) {
       <li class="step" [attr.data-state]="s.state" [class.open]="open() === s.id">
         <span class="node num" aria-hidden="true">{{ s.state === 'done' ? '✓' : i + 1 }}</span>
         <div class="step-body">
@@ -94,7 +94,7 @@
           >
             <span class="step-title">{{ copy[s.id].title }}</span>
             <span class="tag" [attr.data-state]="s.state">
-              {{ s.state === 'done' ? 'Done' : s.state === 'skipped' ? 'Skipped' : 'To do' }}
+              {{ tagWord(s) }}
             </span>
           </button>
           @if (open() === s.id) {
@@ -231,9 +231,7 @@
                           <option value="" [selected]="!followStrategy()">Pick one</option>
                           @for (st of strategies.value() ?? []; track st.id) {
                             <option [value]="st.id" [selected]="followStrategy() === st.id">
-                              {{ displayName(st.id) }} ({{
-                                st.status === 'active' ? 'approved' : 'on trial'
-                              }})
+                              {{ strategyName(st) }} ({{ statusWord(st.status) }})
                             </option>
                           }
                         </select>
@@ -287,14 +285,10 @@
                   }
                 }
                 @case ('alerts') {
-                  <app-notification-settings />
-                  <p class="muted">
-                    Rather use Telegram? Link your chat in
-                    <a routerLink="/notifications/settings">Alert settings</a>.
-                  </p>
-                  <button type="button" class="btn btn-ghost" (click)="guide.reload()">
-                    I turned them on
-                  </button>
+                  <div class="channels">
+                    <app-notification-settings title="This device" (turnedOn)="guide.reload()" />
+                    <app-telegram-link (linked)="guide.reload()" />
+                  </div>
                 }
               }
 
@@ -305,7 +299,7 @@
               @if (!s.derived) {
                 <div class="step-foot">
                   @if (s.state === 'todo') {
-                    @if (s.id === 'account' || s.id === 'data') {
+                    @if (s.id === 'account') {
                       <button
                         type="button"
                         class="btn btn-ghost"
@@ -347,7 +341,7 @@
       <button type="button" class="btn" [disabled]="busy() === 'close'" (click)="close()">
         Close the guide
       </button>
-      <span class="muted">You can open it again from your profile.</span>
+      <span class="muted">Open it again from Get set up in your account menu.</span>
     </div>
   }
 }

@@ -11,11 +11,12 @@ import { RouterLink } from '@angular/router';
 
 import { OnboardingService } from '../../api/onboarding.service';
 import { SessionService } from '../../core/auth/session.service';
-import { STEP_COPY, progressText } from '../welcome/welcome-steps';
+import { STEP_COPY, currentStep, progressText, showSetup } from '../welcome/welcome-steps';
 
 /**
- * "Finish setting up" on Today, until every first-run step is done or
- * skipped, or the trader closes the guide. Silent: when the guide cannot
+ * "Get set up" on Today, until every first-run step that matters is done
+ * or skipped (the portfolio and watchlist steps are optional), or the
+ * trader closes the guide. Silent: when the guide cannot
  * load, Today simply does not show it.
  */
 @Component({
@@ -36,7 +37,7 @@ import { STEP_COPY, progressText } from '../welcome/welcome-steps';
     } @else if (view(); as v) {
       <section class="setup" aria-labelledby="setup-title">
         <div class="text">
-          <h2 id="setup-title">Finish setting up</h2>
+          <h2 id="setup-title">Get set up</h2>
           <p class="line">
             <span class="num">{{ progress() }}</span
             >. Next: {{ next() }}.
@@ -155,21 +156,23 @@ export class SetupCard {
     effect(() => {
       const id = this.session.me()?.user_id;
       if (!id || !this.guide.hasValue()) return;
-      writeShown(id, this.guide.value()?.show === true);
+      const v = this.guide.value();
+      writeShown(id, !!v && showSetup(v));
     });
   }
 
   protected readonly view = computed(() => {
     const v = this.guide.hasValue() ? this.guide.value() : null;
-    return v && v.show ? v : null;
+    return v && showSetup(v) ? v : null;
   });
   protected readonly progress = computed(() => {
     const v = this.view();
     return v ? progressText(v.steps) : '';
   });
   protected readonly next = computed(() => {
-    const step = this.view()?.steps.find((s) => s.state === 'todo');
-    return step ? STEP_COPY[step.id].title.toLowerCase() : '';
+    const v = this.view();
+    const step = v ? currentStep(v) : null;
+    return step ? STEP_COPY[step].title.toLowerCase() : '';
   });
 
   protected async hide(): Promise<void> {
