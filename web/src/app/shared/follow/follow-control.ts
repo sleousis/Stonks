@@ -24,7 +24,7 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
 import { MODES, modeLabel } from '../governance-labels';
 import { strategyDisplayName } from '../strategy-names';
 import { HelpTip } from '../ui/help-tip';
-import { autoBlockedReason, isGatedMode } from './follow-rules';
+import { blockerDetail, isGatedMode, lockedModesLine } from './follow-rules';
 
 let nextId = 0;
 
@@ -66,21 +66,20 @@ let nextId = 0;
       </button>
     </div>
 
-    <fieldset class="modes" [disabled]="!current().enabled || !canManage()">
+    <fieldset
+      class="modes"
+      [disabled]="!current().enabled || !canManage()"
+      [attr.aria-describedby]="lockedLine() ? id + '-locked' : null"
+    >
       <legend class="visually-hidden">How you follow {{ name() }}</legend>
-      @for (m of modes; track m.value) {
-        <label
-          class="mode"
-          [class.on]="current().mode === m.value"
-          [class.locked]="locked(m.value)"
-        >
+      @for (m of shownModes(); track m.value) {
+        <label class="mode" [class.on]="current().mode === m.value">
           <input
             type="radio"
             [name]="id + '-mode'"
             [value]="m.value"
             [checked]="current().mode === m.value"
-            [disabled]="busy() || (gated(m.value) && !canAuto()) || locked(m.value)"
-            [attr.aria-describedby]="gated(m.value) && blocked() ? id + '-why' : null"
+            [disabled]="busy() || (gated(m.value) && !canAuto())"
             (change)="setMode(m.value)"
           />
           {{ m.label }}
@@ -94,8 +93,16 @@ let nextId = 0;
     @if (showHelp()) {
       <p class="help">{{ help() }} <app-help-tip [term]="modeWord()" /></p>
     }
-    @if (blocked() && !gated(current().mode)) {
-      <p class="why" [id]="id + '-why'">{{ blocked() }}</p>
+    @if (lockedLine(); as line) {
+      <p class="why" [id]="id + '-locked'" [class.visually-hidden]="compact()">
+        {{ line }}
+        @if (!compact()) {
+          <app-help-tip term="Paper" />
+        }
+      </p>
+    }
+    @if (detail(); as d) {
+      <p class="why">{{ d }}</p>
     }
   `,
   styles: `
@@ -211,10 +218,6 @@ let nextId = 0;
       color: var(--color-primary-ink);
       font-weight: var(--weight-semibold);
     }
-    .mode.locked {
-      color: var(--color-ink-3);
-      cursor: not-allowed;
-    }
     .help,
     .why {
       font-size: var(--text-sm);
@@ -245,8 +248,8 @@ export class FollowControl {
   /** One line on what the current mode does, with its glossary tip. */
   readonly showHelp = input(true);
   /**
-   * In a list that says the unlock rule once above it (Today): the closed
-   * modes' line says only how far this follow has come ("Paper days: 4 of 20.").
+   * In a list that says the unlock line once above it (Today): each row
+   * keeps it for screen readers only and shows how far it has come.
    */
   readonly compact = input(false);
   /** Each change the server accepted, with the updated follow. */
@@ -274,8 +277,17 @@ export class FollowControl {
   protected readonly name = computed(
     () => this.strategyName()?.trim() || strategyDisplayName(this.current().strategy_id),
   );
-  protected readonly blocked = computed(() =>
-    autoBlockedReason(this.current(), { compact: this.compact() }),
+  /** The line that stands in for the closed gated modes (FR-03), or null. */
+  protected readonly lockedLine = computed(() =>
+    isGatedMode(this.current().mode) ? null : lockedModesLine(this.current()),
+  );
+  /** Alerts only and Paper, plus the gated two once the gate opens. */
+  protected readonly shownModes = computed(() =>
+    this.lockedLine() ? MODES.filter((m) => !isGatedMode(m.value)) : MODES,
+  );
+  /** Paper days so far and anything else the gate reported. */
+  protected readonly detail = computed(() =>
+    this.lockedLine() ? blockerDetail(this.current()) : null,
   );
   protected readonly modeWord = computed(() => modeLabel(this.current().mode));
   protected readonly help = computed(
@@ -284,11 +296,6 @@ export class FollowControl {
 
   protected gated(mode: string): boolean {
     return isGatedMode(mode);
-  }
-
-  /** A gated mode the auto gate still keeps closed. */
-  protected locked(mode: string): boolean {
-    return isGatedMode(mode) && !!this.blocked() && !isGatedMode(this.current().mode);
   }
 
   protected async toggle(): Promise<void> {
@@ -308,7 +315,9 @@ export class FollowControl {
         ? await this.confirmAuto(false)
         : mode === 'approve'
           ? await this.confirmApprove()
-          : true;
+          : mode === 'notify' && sub.paper_days_completed > 0
+            ? await this.confirmRestart(sub.paper_days_completed)
+            : true;
     if (!confirmed) {
       this.revert();
       return;
@@ -322,6 +331,16 @@ export class FollowControl {
     const book = this.portfolios.options().find((p) => p.id === sub.portfolio_id) ?? null;
     // Unknown portfolio: assume real money, so the ticket errs on the safe side.
     return { name: book?.name ?? 'Your portfolio', live: book ? book.trading === 'live' : true };
+  }
+
+  /** Alerts only starts the paper-day count again from 0 (PO-01). */
+  private confirmRestart(days: number): Promise<boolean> {
+    const word = days === 1 ? 'day starts' : 'days start';
+    return this.confirm.confirm({
+      title: 'Switch to Alerts only?',
+      message: `Your ${days} paper ${word} again from 0.`,
+      confirmLabel: 'Switch and restart',
+    });
   }
 
   /** A fresh code, then a ticket with the strategy's name typed (UX-02, UX-14). */
