@@ -163,6 +163,4 @@ def _instrument_info(lake: DuckDBLake, tickers: list[str]) -> dict[str, dict[str
         "SELECT id, name, sector, exchange, currency FROM instruments WHERE id = ANY(?)",
         [tickers],
     ).fetchall()
-    return {
-        r[0]: {"name": r[1], "sector": r[2], "exchange": r[3], "currency": r[4]} for r in rows
-    }
+    return {r[0]: {"name": r[1], "sector": r[2], "exchange": r[3], "currency": r[4]} for r in rows}
