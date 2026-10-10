@@ -5,7 +5,11 @@ One pass (:meth:`DeliveryWorker.run_once`):
 
 1. **Claim** due rows (``pending``, ``deferred``, ``failed``, or ``sending``
    whose lease ran out, i.e. a worker that crashed mid-send) in one UPDATE,
-   setting ``sending`` with a lease. Two workers never claim the same row.
+   setting ``sending`` with a lease and the worker's own ``claimed_by``
+   token. Two workers never claim the same row. Before each send the worker
+   renews the lease of the rows it still holds, and sends only those: when a
+   slow batch outlasted the lease and another worker claimed a row, the
+   first one skips it. Every status write checks the token too.
    Delivery is at-least-once: a crash after a send but before the row is
    marked sends it again, and the push ``Topic`` collapses such repeats.
 2. **Quiet hours.** ``low``/``normal`` rows for a user inside their quiet
@@ -25,6 +29,7 @@ that runs it (SQLite connections are per thread).
 from __future__ import annotations
 
 import threading
+import uuid
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -72,6 +77,8 @@ class DeliveryWorker:
         self._settings = settings if settings is not None else OutboxSettings()
         self._clock = clock
         self._prefs = PreferenceStore(state)
+        #: Written to ``claimed_by`` on every row this worker claims.
+        self.token = uuid.uuid4().hex
 
     def run_forever(self, stop: threading.Event, interval_seconds: float = 5.0) -> None:
         """Deliver until ``stop`` is set; sleeps only when a pass found nothing."""
@@ -105,8 +112,9 @@ class DeliveryWorker:
                 if end is not None:
                     self._state.execute(
                         "UPDATE notification_deliveries SET status = 'deferred', deferred = 1,"
-                        " next_attempt_at = ?, updated_at = ? WHERE id = ?",
-                        [iso(end), iso(now), row["id"]],
+                        " next_attempt_at = ?, updated_at = ?, claimed_by = NULL"
+                        " WHERE id = ? AND claimed_by = ?",
+                        [iso(end), iso(now), row["id"], self.token],
                     )
                     stats.deferred += 1
                     continue
@@ -131,15 +139,36 @@ class DeliveryWorker:
         lease = now + timedelta(seconds=self._settings.lease_seconds)
         cur = self._state.execute(
             "UPDATE notification_deliveries SET status = 'sending', next_attempt_at = ?,"
-            " updated_at = ?"
+            " updated_at = ?, claimed_by = ?"
             " WHERE id IN (SELECT id FROM notification_deliveries"
             "   WHERE status IN ('pending', 'deferred', 'failed', 'sending')"
             "   AND next_attempt_at <= ? ORDER BY next_attempt_at, id LIMIT ?)"
             " RETURNING id, notification_id, user_id, channel, target_id, attempts, deferred",
-            [iso(lease), iso(now), iso(now), self._settings.batch_size],
+            [iso(lease), iso(now), self.token, iso(now), self._settings.batch_size],
         )
         rows = [dict(r) for r in cur.fetchall()]
         return sorted(rows, key=lambda r: r["id"])
+
+    def _renew(self, rows: list[dict]) -> list[dict]:
+        """The rows this worker still holds, their lease renewed from now.
+        A row another worker claimed after this one's lease ran out is
+        dropped, so it is never sent twice."""
+        now = self._clock()
+        lease = now + timedelta(seconds=self._settings.lease_seconds)
+        marks = ", ".join("?" for _ in rows)
+        cur = self._state.execute(
+            "UPDATE notification_deliveries SET next_attempt_at = ?, updated_at = ?"
+            f" WHERE id IN ({marks}) AND status = 'sending' AND claimed_by = ?"
+            " RETURNING id",
+            [iso(lease), iso(now), *[r["id"] for r in rows], self.token],
+        )
+        held = {r["id"] for r in cur.fetchall()}
+        if len(held) < len(rows):
+            _log.info(
+                "notify.worker.claim_lost",
+                deliveries=[r["id"] for r in rows if r["id"] not in held],
+            )
+        return [r for r in rows if r["id"] in held]
 
     def _notifications(self, ids: set[int]) -> dict[int, dict]:
         if not ids:
@@ -181,6 +210,9 @@ class DeliveryWorker:
     def _deliver(
         self, rows: list[dict], message: Message, now: datetime, stats: WorkerStats
     ) -> None:
+        rows = self._renew(rows)
+        if not rows:
+            return
         head = rows[0]
         user_id, name, target_id = head["user_id"], head["channel"], head["target_id"]
         channel = self._channels.get(name)
@@ -253,7 +285,8 @@ class DeliveryWorker:
     ) -> None:
         self._state.execute(
             "UPDATE notification_deliveries SET status = ?, attempts = ?, last_error = ?,"
-            " next_attempt_at = ?, sent_at = ?, updated_at = ? WHERE id = ?",
+            " next_attempt_at = ?, sent_at = ?, updated_at = ?, claimed_by = NULL"
+            " WHERE id = ? AND claimed_by = ?",
             [
                 status,
                 row["attempts"] if attempts is None else attempts,
@@ -262,5 +295,6 @@ class DeliveryWorker:
                 iso(now) if status == "sent" else None,
                 iso(now),
                 row["id"],
+                self.token,
             ],
         )

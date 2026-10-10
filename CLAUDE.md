@@ -210,7 +210,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - `fund_holdings (fund, holding, as_of, source, weight, name, sector, country, known_at; PK (fund, holding, as_of, source))` (023): what each ETF holds, weights as fractions, read point in time by `known_at` (`stonks.funds`). Insights look-through and the sector cap's `look_through` read it.
 - `corporate_filings (accession_number, ticker, issuer_cik, form, filing_date, known_at, period_of_report, items, url, source)`, `institutional_holdings (accession_number, line, filer_cik, report_period, known_at, cusip, ticker, amount, amount_type, value_usd, put_call, investment_discretion, ...)` and `insider_transactions.known_at` (024): SEC filings point in time, `known_at` is the acceptance time in UTC. See `docs/edgar.md`.
 
-**State (SQLite, migrations 001-056):**
+**State (SQLite, migrations 001-057):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
 - 002: `shadow_decisions`, `shadow_portfolio_snapshots` (model books).
 - 003: `jobs` (API background jobs). 004: `portfolio_snapshots.as_of`. 005: `strategy_drafts` (Studio). 006: `orders.status_reason`. 007: `alerts`.
@@ -257,6 +257,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - 054: `execution_algo_settings` (per portfolio, or per strategy within it), `orders.exec_algo`, `orders.parent_client_id`, `algo_parents` and `algo_slices` (parents Stonks works as child slices at a broker without the algo): execution algorithms (roadmap 23.16, `docs/execution-algos.md`).
 - 055: `model_forecasts (strategy_id, version, ticker, event_key, as_of, probability, outcome, resolved_on, recorded_at)`: each probability forecast of a classifier model version, one row per event, resolved later for the live calibration (Brier, reliability) on the Model versions tab (roadmap 23.9).
 - 056: `statement_imports.preset`, `.kind` (`activities` or `holdings`) and `.as_of`, and `statement_import_holdings (import_id, row_id, raw_symbol, ticker, quantity, price, market_value, currency, description, is_cash)`: broker export presets (DEGIRO), where a holdings export sets a CSV portfolio's holdings on its day (`docs/design/degiro.md`).
+- 057: `notification_deliveries.claimed_by`: the delivery worker that holds each row, so a worker whose lease ran out mid-batch skips rows another worker claimed.
 
 ## Conventions to match
 
