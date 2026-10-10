@@ -28095,12 +28095,28 @@
             "title": "Created At",
             "type": "string"
           },
+          "draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Id"
+          },
           "id": {
             "title": "Id",
             "type": "string"
           },
           "metadata": {
             "$ref": "#/components/schemas/StrategyMetadataView"
+          },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
           },
           "params": {
             "additionalProperties": true,
@@ -28292,12 +28308,28 @@
             "title": "Created At",
             "type": "string"
           },
+          "draft_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Id"
+          },
           "id": {
             "title": "Id",
             "type": "string"
           },
           "metadata": {
             "$ref": "#/components/schemas/StrategyMetadataView"
+          },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
           },
           "params": {
             "additionalProperties": true,

@@ -15242,10 +15242,18 @@ export type StrategyDetail = {
      */
     created_at: string;
     /**
+     * Draft Id
+     */
+    draft_id?: string | null;
+    /**
      * Id
      */
     id: string;
     metadata: StrategyMetadataView;
+    /**
+     * Name
+     */
+    name?: string;
     /**
      * Params
      */
@@ -15369,10 +15377,18 @@ export type StrategySummary = {
      */
     created_at: string;
     /**
+     * Draft Id
+     */
+    draft_id?: string | null;
+    /**
      * Id
      */
     id: string;
     metadata: StrategyMetadataView;
+    /**
+     * Name
+     */
+    name?: string;
     /**
      * Params
      */

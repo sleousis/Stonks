@@ -83,21 +83,29 @@ def strategy_display_name(strategy_id: str, *, draft_name: str | None = None) ->
     return _humanise(strategy_id) if _SNAKE_ID.match(strategy_id) else strategy_id
 
 
-def strategy_names(state: Any, strategy_ids: Iterable[str]) -> dict[str, str]:
-    """A display name per id, with the names of the Studio drafts they came from."""
+def draft_refs(state: Any, strategy_ids: Iterable[str]) -> dict[str, tuple[str, str]]:
+    """``(draft id, draft name)`` of each strategy registered from a Studio draft."""
     ids = sorted({i for i in strategy_ids if i})
     if not ids:
         return {}
     marks = ",".join("?" * len(ids))
-    drafts = {
-        str(r["registered_strategy_id"]): str(r["name"])
+    return {
+        str(r["registered_strategy_id"]): (str(r["id"]), str(r["name"]))
         for r in state.sql(
-            "SELECT registered_strategy_id, name FROM strategy_drafts"
+            "SELECT registered_strategy_id, id, name FROM strategy_drafts"
             f" WHERE registered_strategy_id IN ({marks})",
             ids,
         )
     }
-    return {i: strategy_display_name(i, draft_name=drafts.get(i)) for i in ids}
+
+
+def strategy_names(state: Any, strategy_ids: Iterable[str]) -> dict[str, str]:
+    """A display name per id, with the names of the Studio drafts they came from."""
+    ids = sorted({i for i in strategy_ids if i})
+    drafts = draft_refs(state, ids)
+    return {
+        i: strategy_display_name(i, draft_name=drafts[i][1] if i in drafts else None) for i in ids
+    }
 
 
 def name_views[V: BaseModel](state: Any, views: Sequence[V]) -> Sequence[V]:

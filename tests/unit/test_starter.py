@@ -58,5 +58,11 @@ def test_installing_twice_changes_nothing(world):
     assert registry.list_all(status="retired")[0].id == "starter_momentum"
 
 
+def test_starter_summaries_are_plain_words():
+    # NB-16: no citations or jargon in what a trader reads.
+    for spec in STARTERS:
+        assert "EWMAC" not in spec.summary and "(" not in spec.summary
+
+
 def test_other_strategies_are_not_starters():
     assert starter_info("bah_active") is None

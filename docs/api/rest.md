@@ -6201,8 +6201,10 @@ One audited status change or intervention (BL-24).
 | `applicable_asset_classes` | list[string] | yes |  |
 | `class_path` | string | yes |  |
 | `created_at` | string | yes |  |
+| `draft_id` | string \| null | no |  |
 | `id` | string | yes |  |
 | `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
+| `name` | string | no |  |
 | `params` | object | yes |  |
 | `starter` | [StarterLabelView](#starterlabelview) \| null | no | Set for a starter strategy: its plain title and summary. |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
@@ -6250,8 +6252,10 @@ How many registered strategies are in each lifecycle status.
 | `applicable_asset_classes` | list[string] | yes |  |
 | `class_path` | string | yes |  |
 | `created_at` | string | yes |  |
+| `draft_id` | string \| null | no |  |
 | `id` | string | yes |  |
 | `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
+| `name` | string | no |  |
 | `params` | object | yes |  |
 | `starter` | [StarterLabelView](#starterlabelview) \| null | no | Set for a starter strategy: its plain title and summary. |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |

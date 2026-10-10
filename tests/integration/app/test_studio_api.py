@@ -152,7 +152,12 @@ def test_backtest_register_enable_disable_flow(client):
     registered = client.post(f"/api/studio/drafts/{draft['id']}/register", headers=AUTH).json()
     sid = registered["registered_strategy_id"]
     assert registered["strategy_status"] == "shadow"
-    assert client.get(f"/api/strategies/{sid}").json()["status"] == "shadow"
+    strategy = client.get(f"/api/strategies/{sid}").json()
+    assert strategy["status"] == "shadow"
+    # NAMES: one name everywhere, the draft's own, and a way back to it.
+    assert (strategy["name"], strategy["draft_id"]) == ("Flow", draft["id"])
+    listed = client.get("/api/strategies").json()["items"]
+    assert {s["id"]: s["name"] for s in listed}[sid] == "Flow"
     again = client.post(f"/api/studio/drafts/{draft['id']}/register", headers=AUTH)
     assert again.status_code == 409
 

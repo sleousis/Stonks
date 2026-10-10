@@ -21,6 +21,7 @@ from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.app.pagination import Page
 from stonks.app.serialize import FiniteFloat, finite, to_jsonable
+from stonks.app.strategy_names import draft_refs, strategy_display_name
 from stonks.core.protocols import Strategy
 from stonks.logging import get_logger
 from stonks.production.golive import evaluate_golive
@@ -144,6 +145,11 @@ class StarterLabelView(BaseModel):
 
 class StrategySummary(BaseModel):
     id: str
+    #: The name people read: a starter's title, the Studio draft's name, or
+    #: the id in words (``etf_trend`` reads "ETF trend").
+    name: str = ""
+    #: The Studio draft it was registered from, or null.
+    draft_id: str | None = None
     class_path: str
     status: StrategyStatus
     params: dict[str, Any]
@@ -189,7 +195,10 @@ class StrategyService:
             handles = [
                 h for h in handles if needle in h.id.lower() or needle in h.class_path.lower()
             ]
-        items = [self._summary(h) for h in handles[offset : offset + limit]]
+        page = handles[offset : offset + limit]
+        with self._ctx.state() as state:
+            drafts = draft_refs(state, [h.id for h in page])
+        items = [self._summary(h, drafts.get(h.id)) for h in page]
         return Page[StrategySummary](items=items, total=len(handles), limit=limit, offset=offset)
 
     def counts(self) -> StrategyStatusCounts:
@@ -210,8 +219,10 @@ class StrategyService:
                 raise NotFoundError(f"no strategy with id {strategy_id!r}")
             reports = registry.get_reports(strategy_id)
             history = registry.status_history(strategy_id)
+        with self._ctx.state() as state:
+            draft = draft_refs(state, [strategy_id]).get(strategy_id)
         return StrategyDetail(
-            **self._summary(handle).model_dump(),
+            **self._summary(handle, draft).model_dump(),
             survival_reports=[
                 SurvivalReportView(
                     test_id=r.test_id,
@@ -299,13 +310,15 @@ class StrategyService:
             except KeyError:
                 raise NotFoundError(f"no strategy with id {strategy_id!r}") from None
 
-    def _summary(self, h: StrategyHandle) -> StrategySummary:
+    def _summary(self, h: StrategyHandle, draft: tuple[str, str] | None = None) -> StrategySummary:
         from stonks.starter import starter_info
 
         meta = _describe(h.class_path, h.params)
         starter = starter_info(h.id)
         return StrategySummary(
             id=h.id,
+            name=strategy_display_name(h.id, draft_name=draft[1] if draft else None),
+            draft_id=draft[0] if draft else None,
             class_path=h.class_path,
             status=h.status,  # type: ignore[arg-type]
             params=to_jsonable(h.params),
