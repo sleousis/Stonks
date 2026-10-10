@@ -54,6 +54,11 @@ export const routes: Routes = [
       return typeof id === 'string' && id ? `/strategies/${encodeURIComponent(id)}` : '/';
     },
   },
+  // Older notifications link to pages that never existed: open the page
+  // the notify layer links to now.
+  { path: 'alerts', pathMatch: 'full', redirectTo: '/notifications/price-alerts' },
+  { path: 'approvals', pathMatch: 'full', redirectTo: '/tickets' },
+  { path: 'subscriptions', pathMatch: 'full', redirectTo: '/' },
   { path: 'studio', loadChildren: () => import('./pages/studio/studio.routes') },
   { path: 'lab', loadChildren: () => import('./pages/lab/lab.routes') },
   { path: 'data', loadChildren: () => import('./pages/data/data.routes') },

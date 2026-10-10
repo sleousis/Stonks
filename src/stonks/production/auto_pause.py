@@ -201,7 +201,7 @@ def _notify_owner(state: SqliteState, portfolio_id: str, reason: str, as_of: dat
         body=body,
         audience=Audience.owner_of(portfolio_id),
         dedupe_key=f"auto_paused:{portfolio_id}:{reason.split(':', 1)[0]}:{as_of.isoformat()}",
-        deep_link="/subscriptions",
+        deep_link="/",  # My strategies on Today, where a follow resumes
         portfolio_id=portfolio_id,
     )
     try:

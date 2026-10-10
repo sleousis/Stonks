@@ -107,17 +107,15 @@ def _cmd_run(ld: _Loaded) -> int:
     from stonks.notify import notifier_from_settings
     from stonks.scheduling.delivery import start_delivery_worker
     from stonks.scheduling.scheduler import (
-        InstanceLock,
         SchedulerAlreadyRunningError,
-        default_lock_path,
+        acquire_scheduler_lock,
     )
 
     if not ld.config.enabled:
         print("scheduler disabled ([scheduler].enabled = false)", file=sys.stderr)
         return EXIT_USAGE
-    lock = InstanceLock(default_lock_path(ld.config, ld.settings.state.path))
     try:
-        lock.acquire()
+        lock = acquire_scheduler_lock(ld.config, ld.settings.state.path)
     except SchedulerAlreadyRunningError as exc:
         print(str(exc), file=sys.stderr)
         return EXIT_ALREADY_RUNNING

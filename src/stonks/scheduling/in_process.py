@@ -241,10 +241,9 @@ def start_in_process_scheduler(
     from stonks.scheduling.deadman import DeadlineWatchdog, HttpPinger
     from stonks.scheduling.runs import RunStore
     from stonks.scheduling.scheduler import (
-        InstanceLock,
         Scheduler,
         SchedulerAlreadyRunningError,
-        default_lock_path,
+        acquire_scheduler_lock,
     )
 
     config = config or scheduler_config_from(settings)
@@ -252,9 +251,8 @@ def start_in_process_scheduler(
         return None
     executor = InProcessExecutor(services, timeout_seconds=config.job_timeout_minutes * 60)
     specs = build_job_specs(config, actions=executor.actions())
-    lock = InstanceLock(default_lock_path(config, settings.state.path))
     try:
-        lock.acquire()
+        lock = acquire_scheduler_lock(config, settings.state.path)
     except SchedulerAlreadyRunningError as exc:
         _log.warning("scheduler.in_process_not_started", reason=str(exc))
         return None

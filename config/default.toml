@@ -503,6 +503,12 @@ backends = ["log", "store"]
 # Drop notifications below this level: info | warning | error. "store" keeps
 # every level.
 min_level = "warning"
+# Send queued alerts (Web Push, email, Telegram, webhooks) from stonks serve:
+# "auto" whenever no scheduler delivers them (checked before every pass, so
+# serve steps back when a scheduler starts and takes over when it stops),
+# "on" always, "off" never. A delivery is never sent twice, even with two
+# workers running.
+deliver_in_serve = "auto"
 
 [notify.webhook]
 # Set the URL via STONKS_NOTIFY_WEBHOOK_URL in .env; it usually embeds a token.
