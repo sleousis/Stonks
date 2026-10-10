@@ -150,6 +150,11 @@ class StrategySummary(BaseModel):
     name: str = ""
     #: The Studio draft it was registered from, or null.
     draft_id: str | None = None
+    #: What kind of strategy it is, in the Lab's words ("Moving average
+    #: trend"), or "" when its class cannot be loaded.
+    kind: str = ""
+    #: It learns from data, so it has model versions to refit (roadmap 22.6).
+    retrainable: bool = False
     class_path: str
     status: StrategyStatus
     params: dict[str, Any]
@@ -314,11 +319,14 @@ class StrategyService:
         from stonks.starter import starter_info
 
         meta = _describe(h.class_path, h.params)
+        kind, retrainable = _class_facts(h.class_path, h.params)
         starter = starter_info(h.id)
         return StrategySummary(
             id=h.id,
             name=strategy_display_name(h.id, draft_name=draft[1] if draft else None),
             draft_id=draft[0] if draft else None,
+            kind=kind,
+            retrainable=retrainable,
             class_path=h.class_path,
             status=h.status,  # type: ignore[arg-type]
             params=to_jsonable(h.params),
@@ -459,6 +467,26 @@ def _change_view(c: StatusChange) -> StatusChangeView:
         golive_report=c.golive_report,
         created_at=c.created_at,
     )
+
+
+def _class_facts(class_path: str, params: dict[str, Any]) -> tuple[str, bool]:
+    """The class's plain title (as the Lab names it) and whether it learns
+    from data; ``("", False)`` when the class cannot be loaded."""
+    import importlib
+
+    from stonks.app.catalog import plain_title
+    from stonks.lifecycle.retrain import is_retrainable
+
+    try:
+        module_name, cls_name = class_path.split(":", 1)
+        cls = getattr(importlib.import_module(module_name), cls_name)
+    except Exception:
+        return "", False
+    try:
+        retrainable = is_retrainable(cls(dict(params)))
+    except Exception:
+        retrainable = False
+    return plain_title(cls), retrainable
 
 
 def _describe(class_path: str, params: dict[str, Any]) -> StrategyMetadata:

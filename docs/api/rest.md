@@ -6203,9 +6203,11 @@ One audited status change or intervention (BL-24).
 | `created_at` | string | yes |  |
 | `draft_id` | string \| null | no |  |
 | `id` | string | yes |  |
+| `kind` | string | no |  |
 | `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
 | `name` | string | no |  |
 | `params` | object | yes |  |
+| `retrainable` | boolean | no |  |
 | `starter` | [StarterLabelView](#starterlabelview) \| null | no | Set for a starter strategy: its plain title and summary. |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
 | `status_history` | list[[StatusChangeView](#statuschangeview)] | yes |  |
@@ -6254,9 +6256,11 @@ How many registered strategies are in each lifecycle status.
 | `created_at` | string | yes |  |
 | `draft_id` | string \| null | no |  |
 | `id` | string | yes |  |
+| `kind` | string | no |  |
 | `metadata` | [StrategyMetadataView](#strategymetadataview) | yes |  |
 | `name` | string | no |  |
 | `params` | object | yes |  |
+| `retrainable` | boolean | no |  |
 | `starter` | [StarterLabelView](#starterlabelview) \| null | no | Set for a starter strategy: its plain title and summary. |
 | `status` | "active" \| "shadow" \| "retired" | yes |  |
 | `updated_at` | string | yes |  |

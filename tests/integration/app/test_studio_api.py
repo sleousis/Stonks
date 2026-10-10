@@ -156,6 +156,8 @@ def test_backtest_register_enable_disable_flow(client):
     assert strategy["status"] == "shadow"
     # NAMES: one name everywhere, the draft's own, and a way back to it.
     assert (strategy["name"], strategy["draft_id"]) == ("Flow", draft["id"])
+    assert strategy["kind"]  # the Lab's plain name for its class
+    assert strategy["retrainable"] is False  # rules learn nothing: no model versions
     listed = client.get("/api/strategies").json()["items"]
     assert {s["id"]: s["name"] for s in listed}[sid] == "Flow"
     again = client.post(f"/api/studio/drafts/{draft['id']}/register", headers=AUTH)

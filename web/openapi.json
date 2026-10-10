@@ -28110,6 +28110,11 @@
             "title": "Id",
             "type": "string"
           },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
           "metadata": {
             "$ref": "#/components/schemas/StrategyMetadataView"
           },
@@ -28122,6 +28127,11 @@
             "additionalProperties": true,
             "title": "Params",
             "type": "object"
+          },
+          "retrainable": {
+            "default": false,
+            "title": "Retrainable",
+            "type": "boolean"
           },
           "starter": {
             "anyOf": [
@@ -28323,6 +28333,11 @@
             "title": "Id",
             "type": "string"
           },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
           "metadata": {
             "$ref": "#/components/schemas/StrategyMetadataView"
           },
@@ -28335,6 +28350,11 @@
             "additionalProperties": true,
             "title": "Params",
             "type": "object"
+          },
+          "retrainable": {
+            "default": false,
+            "title": "Retrainable",
+            "type": "boolean"
           },
           "starter": {
             "anyOf": [

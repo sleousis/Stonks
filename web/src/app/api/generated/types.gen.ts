@@ -15249,6 +15249,10 @@ export type StrategyDetail = {
      * Id
      */
     id: string;
+    /**
+     * Kind
+     */
+    kind?: string;
     metadata: StrategyMetadataView;
     /**
      * Name
@@ -15260,6 +15264,10 @@ export type StrategyDetail = {
     params: {
         [key: string]: unknown;
     };
+    /**
+     * Retrainable
+     */
+    retrainable?: boolean;
     /**
      * Set for a starter strategy: its plain title and summary.
      */
@@ -15384,6 +15392,10 @@ export type StrategySummary = {
      * Id
      */
     id: string;
+    /**
+     * Kind
+     */
+    kind?: string;
     metadata: StrategyMetadataView;
     /**
      * Name
@@ -15395,6 +15407,10 @@ export type StrategySummary = {
     params: {
         [key: string]: unknown;
     };
+    /**
+     * Retrainable
+     */
+    retrainable?: boolean;
     /**
      * Set for a starter strategy: its plain title and summary.
      */
