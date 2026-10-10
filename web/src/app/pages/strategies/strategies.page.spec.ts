@@ -111,6 +111,9 @@ describe('StrategiesPage', () => {
     expect(el.textContent).toContain('3 strategies');
     expect(el.textContent).toContain('Momentum strategy');
     expect(el.textContent).not.toContain('stonks.strategies');
+    // A new trader sees how to make and test a strategy (NB-05).
+    expect(el.querySelector('a[href="/studio?step=new"]')?.textContent).toContain('New strategy');
+    expect(el.querySelector('a[href="/lab"]')?.textContent).toContain('Test a strategy');
   });
 
   it('shows paper return, max drawdown and days on paper where there is a paper book', async () => {

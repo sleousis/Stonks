@@ -80,10 +80,10 @@
         role="tab"
         class="tab"
         [id]="'tab-' + t.id"
-        [attr.aria-selected]="tab() === t.id"
+        [attr.aria-selected]="activeTab() === t.id"
         [attr.aria-controls]="'panel-' + t.id"
-        [tabIndex]="tab() === t.id ? 0 : -1"
-        (click)="tab.set(t.id)"
+        [tabIndex]="activeTab() === t.id ? 0 : -1"
+        (click)="activeTab.set(t.id)"
         (keydown)="onTabKey($event)"
       >
         <span class="tab-step" aria-hidden="true">{{ i + 1 }}</span>
@@ -98,7 +98,12 @@
   </div>
 
   <!-- Build ------------------------------------------------------------------>
-  <div role="tabpanel" id="panel-build" aria-labelledby="tab-build" [hidden]="tab() !== 'build'">
+  <div
+    role="tabpanel"
+    id="panel-build"
+    aria-labelledby="tab-build"
+    [hidden]="activeTab() !== 'build'"
+  >
     @if (d.status === 'registered' && d.registered_strategy_id; as strategyId) {
       <div id="registered-note" class="callout" role="note">
         <p class="callout-title">Edits here no longer change the running strategy</p>
@@ -257,7 +262,7 @@
   </div>
 
   <!-- Test ------------------------------------------------------------------->
-  <div role="tabpanel" id="panel-test" aria-labelledby="tab-test" [hidden]="tab() !== 'test'">
+  <div role="tabpanel" id="panel-test" aria-labelledby="tab-test" [hidden]="activeTab() !== 'test'">
     @if (isCode() && d.source_code === null) {
       <div class="callout" role="note">
         <p class="callout-title">Code strategies are turned off</p>
@@ -281,7 +286,7 @@
   </div>
 
   <!-- Ship ------------------------------------------------------------------->
-  <div role="tabpanel" id="panel-ship" aria-labelledby="tab-ship" [hidden]="tab() !== 'ship'">
+  <div role="tabpanel" id="panel-ship" aria-labelledby="tab-ship" [hidden]="activeTab() !== 'ship'">
     <app-draft-ship [draft]="d" [ensureSaved]="ensureSaved" (changed)="onDraftChanged($event)" />
   </div>
 

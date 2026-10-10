@@ -106,12 +106,12 @@ export class StudioPage {
 
   /** Creating, renaming and deleting drafts need `lab.run`. */
   protected readonly canLab = computed(() => this.session.can('lab.run'));
-  /** Query param `?new=1` ("New strategy" on the Strategies page) opens the template picker. */
-  readonly startNew = input<string | undefined>(undefined, { alias: 'new' });
+  /** Query param `?step=new` ("New strategy" on the Strategies page) opens the template picker. */
+  readonly step = input<string | undefined>(undefined);
 
   constructor() {
     effect(() => {
-      if (this.startNew() && this.canLab()) this.openCreate();
+      if (this.step() === 'new' && this.canLab()) this.openCreate();
     });
   }
 

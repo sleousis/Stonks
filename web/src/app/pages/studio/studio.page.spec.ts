@@ -163,6 +163,12 @@ describe('StudioPage', () => {
     expect(buttonNamed('Create draft').disabled).toBe(true);
   });
 
+  it('opens the template picker from ?step=new (NB-05)', async () => {
+    fixture.componentRef.setInput('step', 'new');
+    await load([], false);
+    expect(el.querySelector('#create-title')?.textContent).toContain('New draft');
+  });
+
   it('hides the code option when the server turns it off (NB-08)', async () => {
     await load([], false);
     buttonNamed('New draft', el.querySelector('app-page-header') as HTMLElement).click();

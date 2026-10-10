@@ -137,7 +137,8 @@ export function kindLabel(kind: string): string {
  */
 export function indicatorWords(ind: IndicatorDef, interval: string): string {
   const name = kindLabel(ind.kind);
-  if (ind.period == null) return ind.source && ind.source !== 'close' ? `${name} of ${ind.source}` : name;
+  if (ind.period == null)
+    return ind.source && ind.source !== 'close' ? `${name} of ${ind.source}` : name;
   const unit = INTERVAL_WORDS[interval]?.unit ?? 'candles';
   return `${name} over ${ind.period} ${unit}`;
 }

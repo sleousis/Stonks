@@ -94,7 +94,7 @@ export class DraftPage {
 
   readonly id = input.required<string>();
   /** Query param `?tab=test|ship` opens that tab ("Test again" on a strategy page). */
-  readonly startTab = input<string | undefined>(undefined, { alias: 'tab' });
+  readonly tab = input<string | undefined>(undefined);
 
   protected readonly draftRes = resource({
     params: () => ({ id: this.id() }),
@@ -158,7 +158,7 @@ export class DraftPage {
   });
 
   protected readonly saving = signal(false);
-  protected readonly tab = signal<DraftTab>('build');
+  protected readonly activeTab = signal<DraftTab>('build');
   protected readonly renaming = signal(false);
   protected readonly nameDraft = signal('');
 
@@ -214,8 +214,8 @@ export class DraftPage {
     // stale smoke result.
     effect(() => {
       this.id();
-      const start = this.startTab();
-      this.tab.set(start === 'test' || start === 'ship' ? start : 'build');
+      const start = this.tab();
+      this.activeTab.set(start === 'test' || start === 'ship' ? start : 'build');
       this.smoke.set(null);
     });
   }
@@ -242,7 +242,7 @@ export class DraftPage {
 
   protected onTabKey(event: KeyboardEvent): void {
     const order = this.tabs.map((t) => t.id);
-    const i = order.indexOf(this.tab());
+    const i = order.indexOf(this.activeTab());
     const next =
       event.key === 'ArrowRight'
         ? order[(i + 1) % order.length]
@@ -255,7 +255,7 @@ export class DraftPage {
               : null;
     if (!next) return;
     event.preventDefault();
-    this.tab.set(next);
+    this.activeTab.set(next);
     this.host.nativeElement.querySelector<HTMLElement>(`#tab-${next}`)?.focus();
   }
 

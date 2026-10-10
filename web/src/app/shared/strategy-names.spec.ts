@@ -47,9 +47,9 @@ describe('strategyDisplayName (UX-27)', () => {
   });
 
   it('drops the hex suffix when the draft name is known', () => {
-    expect(strategyDisplayName('admin_trend_rule_e3001234', { draftName: 'Admin trend rule' })).toBe(
-      'Admin trend rule',
-    );
+    expect(
+      strategyDisplayName('admin_trend_rule_e3001234', { draftName: 'Admin trend rule' }),
+    ).toBe('Admin trend rule');
   });
 
   it('keeps an id that is not snake_case', () => {
