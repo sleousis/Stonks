@@ -48,7 +48,9 @@ def _profile(lake, ticker: str) -> dict | None:
     ("ticker", "asset_class", "exchange", "currency"),
     [
         ("AAPL.US", "equity", "US", "USD"),
-        ("VOD.LSE", "equity", "LSE", "GBX"),
+        # London lines quote in pence, pounds or dollars: no guess (scale 1)
+        ("VOD.LSE", "equity", "LSE", None),
+        ("CSPX.LSE", "equity", "LSE", None),
         ("SAP.XETRA", "equity", "XETRA", "EUR"),
         ("SHOP.TO", "equity", "TO", "CAD"),
         ("BTC-USD.CC", "crypto", "CC", "USD"),
@@ -62,6 +64,20 @@ def test_the_minimal_profile_reads_the_ticker(ticker, asset_class, exchange, cur
     assert profile == TickerProfile(
         id=ticker, asset_class=asset_class, exchange=exchange, currency=currency
     )
+
+
+def test_a_london_line_is_never_rescaled_on_a_guess(lake):
+    """A USD line such as CSPX.LSE must not be read as pence: production
+    multiplies GBX prices by 0.01, so a guessed GBX would size its orders
+    100 times too large. Only a real metadata profile sets the unit."""
+    from stonks.fx.units import price_scales
+
+    source = FakeListingSource(prices={"CSPX.LSE": _bars("CSPX.LSE")})
+    IngestPipeline(source, lake, clock=_clock).run_prices(
+        ["CSPX.LSE"], since=date(2025, 6, 2), until=date(2025, 6, 13)
+    )
+    assert _profile(lake, "CSPX.LSE")["currency"] is None
+    assert price_scales(lake, ["CSPX.LSE"]) == {}
 
 
 def test_a_price_run_records_a_minimal_profile_for_an_unknown_ticker(lake):

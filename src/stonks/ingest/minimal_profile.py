@@ -17,12 +17,14 @@ from stonks.core.types import AssetClass
 from stonks.ingest.schemas import TickerProfile
 from stonks.ingest.sources.eodhd import classify_asset_class
 
-#: Exchange suffix -> the currency its prices are quoted in. EODHD and Yahoo
-#: both quote London in pence (GBX). A suffix not listed here gets no
-#: currency, which reads the same as an unknown one.
+#: Exchange suffix -> the currency its prices are quoted in. A suffix not
+#: listed here gets no currency, which reads the same as an unknown one and
+#: leaves prices unscaled. London is left out on purpose: its lines quote in
+#: pence (GBX), pounds or dollars (CSPX.LSE), and a wrong GBX would make
+#: production read a dollar price as pence (``fx.units.price_scales``).
+#: A metadata ingest sets the real unit.
 _EXCHANGE_CURRENCY: dict[str, str] = {
     "US": "USD",
-    "LSE": "GBX",
     **dict.fromkeys(("XETRA", "F", "PA", "AS", "BR", "LS", "MC", "MI", "VI", "HE", "IR"), "EUR"),
     "SW": "CHF",
     "CO": "DKK",
