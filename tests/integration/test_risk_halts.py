@@ -181,6 +181,40 @@ def test_a_kill_switch_notification_says_trading_stopped(state):
     assert row["title"] == "Trading stopped"
 
 
+def test_a_trip_notification_names_the_portfolio_and_opens_the_halts_page(state):
+    """PO-06: the trader's words, never an id, and a link they can use."""
+    from stonks.production.halts import notify_trip
+
+    state.execute(
+        "UPDATE portfolios SET name = ? WHERE id = 'pf_default'", ["Jamie's paper portfolio"]
+    )
+    halt, _ = trip_halt(
+        state,
+        "kill",
+        reason="Stopped by me",
+        actor="a",
+        portfolio_id="pf_default",
+        halt="all",
+        on=DAY,
+    )
+    notify_trip(state, halt)
+    [row] = state.sql("SELECT body, deep_link FROM notification_outbox")
+    assert row["body"] == "New orders are blocked for Jamie's paper portfolio. Stopped by me."
+    assert "pf_" not in row["body"]
+    assert row["deep_link"] == "/ops/halts"
+
+
+def test_a_global_trip_notification_says_every_portfolio(state):
+    from stonks.production.halts import notify_trip
+
+    halt, _ = trip_halt(
+        state, "kill", reason="Fed day.", actor="a", scope="global", halt="buys", on=DAY
+    )
+    events = []
+    notify_trip(state, halt, publish=events.append)
+    assert events[0].body == "New buys are blocked for every portfolio. Fed day."
+
+
 def test_a_failing_notification_never_raises(state):
     from stonks.production.halts import notify_trip
 
