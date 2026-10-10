@@ -114,6 +114,8 @@ Session jobs run on NYSE trading days. `price_check` skips while `[production.pr
 
 The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 
+`stonks serve` runs the delivery worker too while no scheduler delivers (`[notify] deliver_in_serve`). `auto`, the default, runs it when serve hosts no scheduler and no `stonks schedule run` holds the scheduler lock. `on` always runs it and `off` never does. Each worker claims its deliveries with a lease, so two workers never send one twice.
+
 Listing any `[[scheduler.jobs]]` in the config replaces the whole default list:
 
 ```toml
@@ -369,7 +371,7 @@ uv run python -m stonks.notify deliver                  # one delivery pass
 
 Set `STONKS_VAPID_PUBLIC_KEY`, `STONKS_VAPID_PRIVATE_KEY` and `STONKS_VAPID_SUBJECT` (a `mailto:` or `https:` contact) as secrets. Email is optional (`STONKS_SMTP_HOST`, `_PORT`, `_USERNAME`, `_PASSWORD`, `_FROM`, `_SECURITY`). Rotating the VAPID pair makes every user re-enable push.
 
-The scheduler runs the delivery worker. Without the scheduler, run `deliver` every minute from cron or a timer. The console's install and push opt-in are described in [ui.md](ui.md#install-and-notifications-pwa).
+The scheduler runs the delivery worker, and `stonks serve` runs it while no scheduler does (`[notify] deliver_in_serve`, see [the scheduler](#scheduler)). With `deliver_in_serve = "off"` and no scheduler, run `deliver` every minute from cron or a timer. The console's install and push opt-in are described in [ui.md](ui.md#install-and-notifications-pwa).
 
 ## Price alerts
 

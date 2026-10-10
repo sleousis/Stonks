@@ -110,11 +110,13 @@ The in-app feed always keeps a copy. Quiet hours are set on the same page. Durin
 
 A trading run scores the strategy and moves its test book. Each new signal (a buy, a sale, an add or a trim of the test book) goes to its Alerts only followers, at most three per strategy and run. A test book fills at the next open, so the alert comes the evening the strategy decides. A second run on the same day sends nothing twice.
 
-The notifications go out through the delivery worker, which runs next to the scheduler. Pick one of these:
+The notifications go out through the delivery worker. `uv run stonks serve` runs it by default, so the alerts go out as soon as a run queues them. A scheduler runs it too, and then serve leaves it to the scheduler. A notification is never sent twice. Pick one of these for the daily runs:
 
 - **One process.** Set `[scheduler] backend = "in_process"` and run `uv run stonks serve`. It runs the daily jobs (prices, metadata, the trading run 45 minutes after the close) and delivers the alerts.
 - **Two processes.** Run `uv run stonks serve` and `uv run stonks schedule run`.
-- **No scheduler.** Run `uv run stonks ingest prices --source yahoo ...` and `uv run stonks tick` from cron after the close, and `uv run python -m stonks.notify deliver` every minute.
+- **No scheduler.** Run `uv run stonks serve`, and `uv run stonks ingest prices --source yahoo ...` and `uv run stonks tick` from cron after the close. Without serve, also run `uv run python -m stonks.notify deliver` every minute.
+
+`[notify] deliver_in_serve` sets this: `auto` (the default), `on` or `off`.
 
 You can also start a run by hand in the console: Orders, Trading runs, untick Dry run and click Start paper run. A dry run sends no alerts.
 
