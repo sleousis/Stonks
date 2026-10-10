@@ -168,7 +168,13 @@ cd /opt/stonks/deploy
 docker compose up -d                 # recreates the app containers without them
 ```
 
-It moves only the backup keys and leaves every other line alone. A key already set in `backup.env` keeps that value. It is safe to run twice. Then check that `docker compose exec api env | grep RESTIC` prints nothing.
+It moves only the backup keys and leaves every other line alone. It is safe to run twice, and it never deletes the only copy of a secret:
+
+- If you already copied `backup.env.example` to `backup.env`, its empty and placeholder lines take the values from `.env`.
+- A key with the same value in both files is removed from `.env`.
+- A key with two different real values stays in both files. The script names it and exits with an error. Pick the right value, put it in `backup.env`, delete the line from `.env` and run it again.
+
+Until you migrate, an empty or placeholder line in `backup.env` does not hide the value in `.env`, so backups keep running. The scripts read `.env` the way Compose does, with quotes and ` #` comments. Then check that `docker compose exec api env | grep RESTIC` prints nothing.
 
 ### In GitHub (Settings > Secrets and variables > Actions)
 

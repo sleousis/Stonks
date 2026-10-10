@@ -322,13 +322,13 @@ def test_the_migration_moves_the_backup_keys_out_of_env(tmp_path):
 
 
 @needs_bash
-def test_the_migration_never_overwrites_a_value_already_in_backup_env(tmp_path):
+def test_the_migration_drops_a_value_backup_env_already_holds(tmp_path):
     shutil.copytree(LIB.parent, tmp_path / "scripts")
-    (tmp_path / ".env").write_text("RESTIC_PASSWORD=old\n")
-    (tmp_path / "backup.env").write_text("RESTIC_PASSWORD=new\n")
+    (tmp_path / ".env").write_text("RESTIC_PASSWORD=pw\n")
+    (tmp_path / "backup.env").write_text("RESTIC_PASSWORD='pw'\n")
     out = _migrate(tmp_path)
     assert out.returncode == 0, out.stderr
-    assert (tmp_path / "backup.env").read_text() == "RESTIC_PASSWORD=new\n"
+    assert (tmp_path / "backup.env").read_text() == "RESTIC_PASSWORD='pw'\n"
     assert (tmp_path / ".env").read_text() == ""
     assert "RESTIC_PASSWORD" in out.stderr  # says which old value it dropped
 
@@ -396,3 +396,106 @@ def test_backup_reads_backup_env_and_passes_nothing_extra(tmp_path):
     calls = (tmp_path / "docker.log").read_text(encoding="utf-8")
     assert "run --rm -T restic backup" in calls
     assert "-e RESTIC" not in calls
+
+
+EXAMPLE_BACKUP_ENV = LIB.parents[1] / "backup.env.example"
+
+
+@needs_bash
+def test_an_unfilled_backup_env_does_not_hide_the_old_layout(tmp_path):
+    """A copy of backup.env.example has empty values and a placeholder
+    repository. Those are not set, so the values in .env still count."""
+    (tmp_path / ".env").write_text("RESTIC_REPOSITORY=s3:real\nRESTIC_PASSWORD=pw\n")
+    shutil.copy(EXAMPLE_BACKUP_ENV, tmp_path / "backup.env")
+    assert _lib(tmp_path, "backup_env_get RESTIC_REPOSITORY").stdout == "s3:real"
+    assert _lib(tmp_path, "backup_env_get RESTIC_PASSWORD").stdout == "pw"
+    assert _lib(tmp_path, "backup_env_get HC_PING_HOST fallback").stdout == "fallback"
+
+
+@needs_bash
+def test_every_example_value_counts_as_unset(tmp_path):
+    (tmp_path / ".env").write_text("")
+    shutil.copy(EXAMPLE_BACKUP_ENV, tmp_path / "backup.env")
+    for key in BACKUP_KEYS:
+        assert _lib(tmp_path, f"backup_env_get {key} unset").stdout == "unset", key
+
+
+@needs_bash
+def test_the_migration_fills_a_backup_env_copied_from_the_example(tmp_path):
+    """The docs say to copy the example first. Its empty and placeholder
+    lines take the real values from .env, and nothing is lost."""
+    shutil.copytree(LIB.parent, tmp_path / "scripts")
+    (tmp_path / ".env").write_text(
+        "EODHD_API_KEY=e\nRESTIC_REPOSITORY=s3:real\nRESTIC_PASSWORD=pw\n"
+        "AWS_ACCESS_KEY_ID=kid\nAWS_SECRET_ACCESS_KEY=sk\n"
+    )
+    shutil.copy(EXAMPLE_BACKUP_ENV, tmp_path / "backup.env")
+    out = _migrate(tmp_path)
+    assert out.returncode == 0, out.stderr
+    assert (tmp_path / ".env").read_text() == "EODHD_API_KEY=e\n"
+    lines = (tmp_path / "backup.env").read_text().splitlines()
+    for line in (
+        "RESTIC_REPOSITORY=s3:real",
+        "RESTIC_PASSWORD=pw",
+        "AWS_ACCESS_KEY_ID=kid",
+        "AWS_SECRET_ACCESS_KEY=sk",
+    ):
+        assert lines.count(line) == 1, line
+    for key in ("RESTIC_REPOSITORY", "RESTIC_PASSWORD", "AWS_ACCESS_KEY_ID"):
+        assert sum(row.startswith(f"{key}=") for row in lines) == 1, key
+    assert "your-bucket" not in "\n".join(lines)
+    # The comments of the example stay.
+    assert any(row.startswith("# ---- Off-server backups") for row in lines)
+
+
+@needs_bash
+def test_the_migration_keeps_a_conflicting_value_in_env(tmp_path):
+    """Two different real values: the script cannot know which one is
+    right, so it never deletes either. It says so and leaves .env alone."""
+    shutil.copytree(LIB.parent, tmp_path / "scripts")
+    (tmp_path / ".env").write_text("RESTIC_PASSWORD=old\nAWS_ACCESS_KEY_ID=same\n")
+    (tmp_path / "backup.env").write_text("RESTIC_PASSWORD=new\nAWS_ACCESS_KEY_ID=same\n")
+    out = _migrate(tmp_path)
+    assert out.returncode == 1
+    assert (tmp_path / "backup.env").read_text() == "RESTIC_PASSWORD=new\nAWS_ACCESS_KEY_ID=same\n"
+    assert (tmp_path / ".env").read_text() == "RESTIC_PASSWORD=old\n"
+    assert "RESTIC_PASSWORD" in out.stderr
+
+
+@needs_bash
+def test_backup_on_the_old_layout_ignores_an_unfilled_backup_env(tmp_path):
+    deploy_dir = _server(tmp_path, deployed="v1.0.0")
+    with (deploy_dir / ".env").open("a") as env:
+        env.write("RESTIC_REPOSITORY=s3:x\nRESTIC_PASSWORD=pw-secret\n")
+    shutil.copy(EXAMPLE_BACKUP_ENV, deploy_dir / "backup.env")
+    out = _backup(deploy_dir)
+    assert out.returncode == 0, out.stderr
+    calls = (tmp_path / "docker.log").read_text(encoding="utf-8")
+    assert "-e RESTIC_REPOSITORY" in calls
+    assert "-e RESTIC_PASSWORD" in calls
+    assert "pw-secret" not in calls
+
+
+@needs_bash
+@pytest.mark.parametrize(
+    ("line", "value"),
+    [
+        ("K=plain", "plain"),
+        ('K="double"', "double"),
+        ("K='single'", "single"),
+        ("K=s3cr3t  # from vault", "s3cr3t"),
+        ("K=s3cr3t # note", "s3cr3t"),
+        ("K=pa#ss", "pa#ss"),
+        ("K='a # b'", "a # b"),
+        ('K="a # b"  # note', "a # b"),
+        (r'K="say \"hi\" \\ done"', r'say "hi" \ done'),
+        (r"K='no \escapes'", r"no \escapes"),
+        ("K=trailing   ", "trailing"),
+        ("K=", ""),
+    ],
+)
+def test_file_get_reads_values_the_way_compose_does(tmp_path, line, value):
+    """On the old layout the scripts pass .env values to restic themselves,
+    so they must read quotes and comments as Compose's env_file does."""
+    (tmp_path / "f.env").write_text(f"{line}\n")
+    assert _lib(tmp_path, 'file_get "$DEPLOY_DIR/f.env" K').stdout == value

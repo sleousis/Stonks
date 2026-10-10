@@ -5,9 +5,13 @@
 # The restic password, the bucket keys and the host ping URLs belong in
 # deploy/backup.env, which only the restic container and the host scripts
 # read. This script moves each of those lines (the keys in BACKUP_ENV_KEYS,
-# lib.sh) and leaves every other line alone. A key already set in
-# backup.env keeps its value there, and the old line in .env is dropped.
-# Safe to run twice.
+# lib.sh) and leaves every other line alone. Safe to run twice.
+#
+# backup.env may be a copy of backup.env.example: an empty or placeholder
+# line there takes the value from .env. A key with a real value in both
+# files is dropped from .env only when the two values match. When they
+# differ, both stay, the script names the key and exits 1, so the only
+# copy of a secret is never deleted.
 #
 # Usage (on the server):  deploy/scripts/migrate-backup-env.sh
 # Then recreate the containers so they lose the old values:
@@ -30,18 +34,41 @@ umask 077
 touch "$backup_file"
 chmod 600 "$backup_file"
 
+# Put LINE in place of the KEY lines in backup.env (the first one), or
+# append it when there is none. Rewritten in place, so the mode stays 600.
+backup_put() {
+	local key="$1" line="$2" tmp
+	if grep -qE "^${key}=" "$backup_file"; then
+		tmp="$(mktemp "$DEPLOY_DIR/.backup.env.migrate.XXXXXX")"
+		KEY="$key" LINE="$line" awk '
+			index($0, ENVIRON["KEY"] "=") == 1 { if (!done) print ENVIRON["LINE"]; done = 1; next }
+			{ print }
+		' "$backup_file" >"$tmp"
+		cat "$tmp" >"$backup_file"
+		rm -f "$tmp"
+	else
+		printf '%s\n' "$line" >>"$backup_file"
+	fi
+}
+
 moved=()
 dropped=()
+conflicts=()
 keep="$(mktemp "$DEPLOY_DIR/.env.migrate.XXXXXX")"
 trap 'rm -f "$keep"' EXIT
 while IFS= read -r line || [ -n "$line" ]; do
 	key="${line%%=*}"
 	if [ "$key" != "$line" ] && [[ " $BACKUP_ENV_KEYS " == *" $key "* ]]; then
-		if grep -qE "^${key}=" "$backup_file"; then
+		value="$(env_unquote "${line#*=}")"
+		if ! backup_env_has "$key"; then
+			backup_put "$key" "$line"
+			moved+=("$key")
+		elif backup_placeholder "$value" ||
+			[ "$value" = "$(file_get "$backup_file" "$key")" ]; then
 			dropped+=("$key")
 		else
-			printf '%s\n' "$line" >>"$backup_file"
-			moved+=("$key")
+			printf '%s\n' "$line" >>"$keep"
+			conflicts+=("$key")
 		fi
 		continue
 	fi
@@ -55,7 +82,11 @@ if [ "${#moved[@]}" -gt 0 ]; then
 	log "moved to backup.env: ${moved[*]}"
 fi
 if [ "${#dropped[@]}" -gt 0 ]; then
-	log "already in backup.env, removed from .env: ${dropped[*]}"
+	log "same or empty value already in backup.env, removed from .env: ${dropped[*]}"
+fi
+if [ "${#conflicts[@]}" -gt 0 ]; then
+	log "error: ${conflicts[*]} differ between .env and backup.env, so both were kept. Decide which value is right, put it in backup.env, delete the line from .env, then run this again"
+	exit 1
 fi
 if [ "${#moved[@]}" -eq 0 ] && [ "${#dropped[@]}" -eq 0 ]; then
 	log "nothing to move; .env holds no backup keys"
