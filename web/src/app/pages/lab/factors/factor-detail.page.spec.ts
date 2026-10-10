@@ -140,6 +140,11 @@ describe('FactorDetailPage', () => {
     return h.closest('section')!;
   }
 
+  /** The one basket picker at the top, shared by the three sections. */
+  function basket(): HTMLElement {
+    return el.querySelector<HTMLElement>('section[aria-label="Tickers to test"]')!;
+  }
+
   function pick(root: HTMLElement, selector: string, value: string): void {
     const select = root.querySelector<HTMLSelectElement>(selector)!;
     select.value = value;
@@ -154,10 +159,17 @@ describe('FactorDetailPage', () => {
 
   it('shows what the factor measures and links its formula to the editor', async () => {
     await open('mom_12_1');
-    const facts = panel('mom_12_1');
+    // The description is the title, the id sits small beside it.
+    const facts = panel(MOM.description);
+    expect(facts.querySelector('.tag')!.textContent).toContain('mom_12_1');
     expect(facts.textContent).toContain(MOM.hypothesis);
     expect(facts.textContent).toContain('Higher is better');
-    expect(facts.textContent).toContain('252 bars');
+    expect(facts.textContent).toContain('1 year of history');
+    expect(facts.textContent).toContain('Stocks, Crypto');
+    // The formula folds away under Show formula.
+    expect(facts.querySelector('details summary')!.textContent).toContain('Show formula');
+    // One basket picker for the page, none inside the sections.
+    expect(el.querySelectorAll('app-basket-picker')).toHaveLength(1);
     const edit = facts.querySelector<HTMLAnchorElement>('a[href^="/lab/factors/formula"]')!;
     expect(decodeURIComponent(edit.getAttribute('href')!)).toContain(MOM.expression!);
   });
@@ -165,7 +177,7 @@ describe('FactorDetailPage', () => {
   it('shows the values on a date for a universe', async () => {
     await open('mom_12_1');
     const values = panel('Values on a date');
-    pick(values, '#fv-universe', 'sp40');
+    pick(basket(), '#fd-universe', 'sp40');
     const date = values.querySelector<HTMLInputElement>('#fv-date')!;
     date.value = '2026-09-25';
     date.dispatchEvent(new Event('input'));
@@ -184,9 +196,9 @@ describe('FactorDetailPage', () => {
   it('runs a tear sheet on a watchlist and shows the result', async () => {
     await open('mom_12_1');
     const sheet = panel('Tear sheet');
-    sheet.querySelector<HTMLInputElement>('input[name="ts-basket"][value="watchlist"]')!.click();
+    basket().querySelector<HTMLInputElement>('input[name="fd-basket"][value="watchlist"]')!.click();
     fixture.detectChanges();
-    pick(sheet, '#ts-watchlist', 'wl1');
+    pick(basket(), '#fd-watchlist', 'wl1');
     submit(sheet);
     await settle();
     expect(posted['/api/factors/tearsheets']).toMatchObject({
@@ -202,7 +214,7 @@ describe('FactorDetailPage', () => {
   it('starts a factor strategy lab run with the factor pinned', async () => {
     await open('mom_12_1');
     const run = panel('Test as a strategy');
-    pick(run, '#fr-universe', 'sp40');
+    pick(basket(), '#fd-universe', 'sp40');
     submit(run);
     await settle();
     expect(posted['/api/lab/runs']).toMatchObject({

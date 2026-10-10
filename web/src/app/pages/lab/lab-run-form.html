@@ -237,7 +237,7 @@
                 Grid: tries every combination
               </option>
               <option value="optuna" [selected]="form().tuner === 'optuna'">
-                Bayesian (Optuna): learns where good trials are
+                Bayesian (Optuna): learns where good settings are
               </option>
             </select>
           </div>
@@ -276,7 +276,7 @@
                 @if (form().sampler === 'nsga2' && form().objective !== 'multi') {
                   NSGA-II only helps with "Sharpe, Calmar and drawdown together".
                 } @else {
-                  The same seed gives the same trials for any number of workers.
+                  The same seed gives the same settings for any number of workers.
                 }
               </span>
             </div>
@@ -288,15 +288,16 @@
                   [checked]="form().prune"
                   (change)="patch({ prune: $any($event.target).checked })"
                 />
-                Stop weak trials early
+                Stop weak settings early
               </label>
               <span class="check-hint" id="lr-prune-hint">
-                Only strategies with a fast path can be stopped early. A stopped trial still counts.
+                Only strategies with a fast path can be stopped early. A stopped setting still
+                counts.
               </span>
             </div>
           }
           <div class="field">
-            <label for="lr-budget">Trials</label>
+            <label for="lr-budget">Settings to try</label>
             <input
               id="lr-budget"
               class="input num"
@@ -334,7 +335,9 @@
             @if (errors()['seed']; as e) {
               <span class="error" id="lr-seed-hint">{{ e }}</span>
             } @else {
-              <span class="hint" id="lr-seed-hint">The same seed picks the same trials again.</span>
+              <span class="hint" id="lr-seed-hint"
+                >The same seed picks the same settings again.</span
+              >
             }
           </div>
           <div class="field">
@@ -409,7 +412,8 @@
             Draw a parameter heatmap
           </label>
           <span class="check-hint" id="lr-heatmap-hint">
-            After tuning, scores two parameters around the winner. Every cell counts as a trial.
+            After tuning, scores two parameters around the winner. Every cell counts as a setting
+            tried.
           </span>
         </div>
         @if (form().heatmap) {
@@ -670,7 +674,7 @@
               <option value="no" [selected]="form().mcptRetune === 'no'">Never</option>
             </select>
             <span class="hint" id="lr-mcpt-retune-hint">
-              Stricter, but costs (shuffles + 1) × trials backtests.
+              Stricter, but costs (shuffles + 1) × settings backtests.
             </span>
           </div>
         </div>

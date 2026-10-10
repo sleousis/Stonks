@@ -158,7 +158,7 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
                       <dd>{{ p.validation }}</dd>
                     </div>
                     <div>
-                      <dt>Trials</dt>
+                      <dt>Settings tried</dt>
                       <dd class="num">{{ p.trialsText }}</dd>
                     </div>
                     <div>
@@ -185,7 +185,7 @@ export function outcomeTests(outcome: Record<string, unknown> | null): TestLine[
                   }
                   @if (p.lab_run_id) {
                     <a class="cell-link" [routerLink]="['/lab/ledger', p.lab_run_id]"
-                      >Open the lab run in the trial ledger</a
+                      >Open the lab run in the Lab history</a
                     >
                   }
                   @if (p.args.length) {
@@ -362,7 +362,7 @@ export class ResearchSessionPage {
     const s = this.session.value();
     return [
       {
-        label: 'Trials used',
+        label: 'Settings tried',
         used: s.trials_used,
         max: s.max_trials,
         text: usedOf(s.trials_used, s.max_trials),
