@@ -18,7 +18,7 @@ cd "$DEPLOY_DIR"
 
 snap="${1:-latest}"
 restic() { restic_run "$@"; }
-warn_legacy_backup_env
+warn_legacy_backup_env log
 
 read -r -p "Replace ALL live data with restic snapshot '$snap'? Type RESTORE: " answer
 [ "$answer" = "RESTORE" ] || {

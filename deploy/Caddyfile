@@ -19,7 +19,7 @@
 		# The console's policy (src/stonks/api/csp.py). The app sets it on its own
 		# responses, and the API docs get a looser one there. "?" fills it in only
 		# where a response has none, such as Caddy's own error pages.
-		?Content-Security-Policy "default-src 'self'; script-src 'self' 'sha256-KC3V0qVKo5qInDk2JVN6KUjFYu6/nAE0F9WvsYC53lI=' 'sha256-WgdjueR99hcH3twD1+e+qBkCL2e5/a8NKNgcjSS7hcU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		?Content-Security-Policy "default-src 'self'; script-src 'self' 'sha256-KC3V0qVKo5qInDk2JVN6KUjFYu6/nAE0F9WvsYC53lI=' 'sha256-mkNkfJL6Td2NlcQandHgX945couk/OUEYLKTr/ymsNU='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		-Server
 	}
 

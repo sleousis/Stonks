@@ -33,9 +33,11 @@
         for (var i = 0; i < d.r.length; i++) {
           if (new RegExp(d.r[i][0]).test(location.pathname)) {
             d.r[i][1].forEach(function (j) {
+              // Only a plain chunk file name of this build, never markup.
+              if (!/^[\w.-]+\.js$/.test(d.n[j])) return;
               var l = document.createElement('link');
               l.rel = 'modulepreload';
-              l.href = d.n[j];
+              l.href = encodeURIComponent(d.n[j]);
               document.head.appendChild(l);
             });
             break;

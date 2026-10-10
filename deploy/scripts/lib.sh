@@ -28,7 +28,7 @@ env_unquote() {
 			ch="${raw:i:1}"
 			if [ "$ch" = '"' ]; then
 				break
-			elif [ "$ch" = '\' ] && [ $((i + 1)) -lt "${#raw}" ]; then
+			elif [ "$ch" = "\\" ] &&[ $((i + 1)) -lt "${#raw}" ]; then
 				i=$((i + 1))
 				ch="${raw:i:1}"
 				case "$ch" in

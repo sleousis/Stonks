@@ -84,7 +84,7 @@ test('preloads a route chunk and its static imports, never the initial ones', ()
 
 test('the route table is data, never script, so the CSP hash stays fixed', () => {
   const data = preloadData([{ re: '^/a</script>/?$', modules: ['m'] }], () => ['x.js']);
-  const json = data.replace(/^<script[^>]*>/, '').replace(/<\/script>$/, '');
+  const json = data.replace(/^<script[^>]*>/i, '').replace(/<\/script\s*>$/i, '');
   assert.doesNotMatch(json, /</);
   assert.deepEqual(JSON.parse(json), { n: ['x.js'], r: [['^/a</script>/?$', [0]]] });
 });
