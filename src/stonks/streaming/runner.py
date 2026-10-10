@@ -18,7 +18,10 @@ flowing into the bar store:
    the gap is backfilled through the REST intraday ingest
    (:class:`PipelineBackfiller`). Writes are idempotent, so the backfill and
    the stream never duplicate a bar.
-5. :class:`~stonks.streaming.health.StreamHealth` records all of it.
+5. :class:`~stonks.streaming.health.StreamHealth` records all of it, and
+   says when the source sends only delayed quotes (logged once as
+   ``stream.delayed_only``). Delayed quotes build bars only with
+   ``accept_delayed_quotes``, and those bars never reach the lake.
 
 A subscriber that raises is counted and logged, never allowed to stop the
 stream. A failed bar write keeps its bars for the next flush. On stop the
@@ -155,7 +158,9 @@ class StreamRunner:
         self.settings = settings
         self.tickers = list(settings.tickers if tickers is None else tickers)
         self.builder = BarBuilder(
-            mode=settings.bar_mode, grace=timedelta(seconds=settings.bar_grace_seconds)
+            mode=settings.bar_mode,
+            grace=timedelta(seconds=settings.bar_grace_seconds),
+            accept_delayed=settings.accept_delayed_quotes,
         )
         self.writer = (
             BarWriter(
@@ -181,6 +186,7 @@ class StreamRunner:
         self._min_gap = timedelta(seconds=settings.min_gap_seconds)
         self._backfill_delay = timedelta(seconds=settings.backfill_delay_seconds)
         self._gap: Gap | None = None
+        self._warned_delayed = False
 
     # ---- control --------------------------------------------------------------------
 
@@ -274,6 +280,13 @@ class StreamRunner:
 
     def _handle(self, event: StreamEvent, now: datetime) -> None:
         self.health.count(event, now)
+        if self.health.delayed_only and not self._warned_delayed:
+            self._warned_delayed = True
+            _log.warning(
+                "stream.delayed_only",
+                source=self.health.source,
+                accepted=self.settings.accept_delayed_quotes,
+            )
         if self.recorder is not None:
             self.recorder.write(event)
         for subscriber in self.subscribers:

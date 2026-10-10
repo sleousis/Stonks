@@ -137,6 +137,13 @@ class StreamingSettings(BaseModel):
     #: price or the mid, ``auto`` from trades, and from quotes for tickers
     #: that never traded on the stream (forex, IBKR snapshots).
     bar_mode: BarMode = "auto"
+    #: Build bars from delayed quotes too (an IBKR paper account often has
+    #: only delayed data). Such bars are marked delayed: they never reach
+    #: the lake and the engine's stale-price guard counts them as
+    #: ``delayed_lag_seconds`` old. Off: delayed quotes build no bars.
+    accept_delayed_quotes: bool = False
+    #: How far a delayed feed runs behind the market (IBKR: 15 minutes).
+    delayed_lag_seconds: float = Field(default=900.0, ge=0)
     #: A bar closes this long after its minute ends, for late ticks.
     bar_grace_seconds: float = Field(default=2.0, ge=0)
     #: Closed bars are written after this many seconds or bars.
