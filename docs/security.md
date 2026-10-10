@@ -137,6 +137,23 @@ The API answers only requests whose `Host` is a loopback name, `[api].host` (whe
 
 Only `[api].ui_origin`, the Angular dev server (`http://localhost:4200`), may call the API from another origin, and only in the dev profile (`STONKS_PROFILE=dev` sets `[api].cors_ui_origin`). It may send the cookie and `X-CSRF-Token`. On a server CORS is off. The built console is served from the same origin and needs no CORS.
 
+## Content-Security-Policy
+
+Every response of `stonks serve` carries a `Content-Security-Policy`, so the console is covered locally too. It also sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: strict-origin-when-cross-origin`. The code is `src/stonks/api/csp.py`.
+
+The console loads everything from its own origin: scripts, styles, fonts, the API, the SSE job streams and the service worker for web push. No other origin is allowed. The page cannot be framed, and plugins and `<base>` changes are refused.
+
+`web/src/index.html` has two inline scripts: the theme before first paint and the route preload loop. The policy allows them by their sha256 hash, and no other inline script runs. The build writes the route table as JSON data, not script, so the loop and its hash never change between builds. Inline styles stay allowed, because Angular adds component styles that way.
+
+If you change an inline script:
+
+1. Run `uv run python -m tools.csp_hashes`. It prints the new hashes and the line for Caddy.
+2. Put them in `CONSOLE_SCRIPT_HASHES` in `csp.py` and in the `Content-Security-Policy` line of `deploy/Caddyfile`.
+
+`tests/unit/test_api_csp.py` fails until both match the page. `npm run build` ends with `scripts/check-csp.mjs`, which fails when the built page runs other inline scripts than the source, or has an inline event handler such as `onload=`.
+
+The API docs at `/docs` and `/redoc` get a looser policy, since they load Swagger UI and ReDoc from `cdn.jsdelivr.net` and ReDoc's fonts from Google Fonts (`fonts.googleapis.com` and `fonts.gstatic.com`). Behind Caddy the app's header wins. Caddy only fills in the console policy where a response has none, such as its own error pages.
+
 ## What is stored
 
 | Secret | Stored as |

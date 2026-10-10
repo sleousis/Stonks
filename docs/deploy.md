@@ -54,11 +54,13 @@ flowchart LR
 | `deploy/compose.yaml` | `api` and `caddy`, plus profiles for `scheduler`, `lab-worker`, `restic` (backup), the IB Gateways and the model server. |
 | `deploy/ibkr/` | The IB Gateway guide and the folder for its secret files (never committed). |
 | `deploy/compose.tailscale.yaml` | Lets Caddy get its `*.ts.net` certificate from Tailscale. |
-| `deploy/Caddyfile` | HTTPS, security headers, reverse proxy to the API. It passes the real `Host`, and the API answers only `STONKS_DOMAIN` (Compose sets `STONKS_API_ALLOWED_HOSTS`, see [security.md](security.md#allowed-hosts)). |
-| `deploy/.env.example` | Every setting and secret the server needs (placeholders). |
+| `deploy/Caddyfile` | HTTPS, security headers (the Content-Security-Policy too, see [security.md](security.md#content-security-policy)), reverse proxy to the API. It passes the real `Host`, and the API answers only `STONKS_DOMAIN` (Compose sets `STONKS_API_ALLOWED_HOSTS`, see [security.md](security.md#allowed-hosts)). |
+| `deploy/.env.example` | Every setting and secret the app needs (placeholders). The app containers get this file. |
+| `deploy/backup.env.example` | The backup and host-check secrets (placeholders). Only the `restic` container and the host scripts get this file. |
 | `deploy/cloud-init.yaml` | First-boot setup: users, Docker, firewall, automatic updates, data volume, Tailscale. |
 | `infra/terraform/hetzner/` | Creates the server, firewall and volume on Hetzner Cloud. |
 | `deploy/scripts/deploy.sh`, `rollback.sh` | Deploy with snapshot, migrations, health check and automatic rollback; manual rollback. |
+| `deploy/scripts/migrate-backup-env.sh` | Moves the backup secrets from an old single `.env` into `backup.env`. |
 | `deploy/backup/` | `backup.sh` (nightly), `restore-test.sh` (monthly), `restore.sh` (disaster). |
 | `deploy/monitor/check-host.sh` | Disk, memory, load and container checks every 5 minutes. |
 | `deploy/crontab` | The schedule for the three jobs above. Installed by every deploy. |
@@ -143,11 +145,36 @@ docker version && ls -ld /srv/stonks/data /opt/stonks/deploy
 scp deploy/.env.example deploy@stonks:/opt/stonks/deploy/.env
 ssh deploy@stonks 'chmod 600 /opt/stonks/deploy/.env'
 ssh -t deploy@stonks 'nano /opt/stonks/deploy/.env'
+scp deploy/backup.env.example deploy@stonks:/opt/stonks/deploy/backup.env
+ssh deploy@stonks 'chmod 600 /opt/stonks/deploy/backup.env'
+ssh -t deploy@stonks 'nano /opt/stonks/deploy/backup.env'
 ```
 
-Fill in at least `STONKS_IMAGE` (`ghcr.io/<owner>/<repo>`, lower case), `STONKS_DOMAIN` (the API refuses requests for any other name), `STONKS_API_TOKEN` (`openssl rand -hex 32`), `EODHD_API_KEY`, the `RESTIC_*` and `AWS_*` backup values, and the `HC_PING_*` URLs.
+In `.env`, fill in at least `STONKS_IMAGE` (`ghcr.io/<owner>/<repo>`, lower case), `STONKS_DOMAIN` (the API refuses requests for any other name), `STONKS_API_TOKEN` (`openssl rand -hex 32`), `EODHD_API_KEY` and the app's `HC_PING_*` URLs. In `backup.env`, fill in the `RESTIC_*` and `AWS_*` backup values and the `HC_PING_BACKUP`, `HC_PING_RESTORE_TEST` and `HC_PING_HOST` URLs.
 
-Secrets live **only** in this file. They are never baked into the image and never committed.
+Secrets live **only** in these two files. They are never baked into the image and never committed.
+
+### Why two files
+
+Compose hands `.env` to every app container (api, scheduler, lab-worker). If one of them were broken into, the attacker could read every value in it. So the backup secrets sit in `backup.env`, which only the `restic` container and the host scripts read. With the restic password and the bucket keys, an attacker could read or delete the off-server backups, the one copy you need after an attack.
+
+### Upgrading from a single .env
+
+Older installs kept the backup secrets in `.env`. `deploy.sh`, `backup.sh`, `restore.sh` and `restore-test.sh` still work that way, but they warn on every run. To move:
+
+```bash
+cd /opt/stonks/deploy
+./scripts/migrate-backup-env.sh      # moves the backup lines into backup.env (chmod 600)
+docker compose up -d                 # recreates the app containers without them
+```
+
+It moves only the backup keys and leaves every other line alone. It is safe to run twice, and it never deletes the only copy of a secret:
+
+- If you already copied `backup.env.example` to `backup.env`, its empty and placeholder lines take the values from `.env`.
+- A key with the same value in both files is removed from `.env`.
+- A key with two different real values stays in both files. The script names it and exits with an error. Pick the right value, put it in `backup.env`, delete the line from `.env` and run it again.
+
+Until you migrate, an empty or placeholder line in `backup.env` does not hide the value in `.env`, so backups keep running. The scripts read `.env` the way Compose does, with quotes and ` #` comments. Then check that `docker compose exec api env | grep RESTIC` prints nothing.
 
 ### In GitHub (Settings > Secrets and variables > Actions)
 
@@ -171,10 +198,10 @@ Turn on **secret scanning** and **push protection** (Settings > Code security). 
 | `STONKS_API_TOKEN` | Every 90 days, and when a trader leaves | New value in `.env`, `docker compose up -d`, tell traders |
 | Broker and data keys | Every 90 days or per the vendor | Vendor console, then `.env` |
 | `DEPLOY_SSH_KEY` | Yearly | New key pair, update `~deploy/.ssh/authorized_keys` and the secret |
-| B2/R2 keys | Yearly | New app key scoped to the bucket, then `.env`. Keep `RESTIC_PASSWORD` (it encrypts the old snapshots) |
+| B2/R2 keys | Yearly | New app key scoped to the bucket, then `backup.env`. Keep `RESTIC_PASSWORD` (it encrypts the old snapshots) |
 | Tailscale OAuth client | Yearly | New client, update both secrets |
 
-Optional: keep an encrypted copy of `.env` in the repo with [sops](https://github.com/getsops/sops) and an age key that only you hold.
+Optional: keep an encrypted copy of `.env` and `backup.env` in the repo with [sops](https://github.com/getsops/sops) and an age key that only you hold.
 
 ## 3. First deploy
 
@@ -248,7 +275,7 @@ Use `--with-data` only if the newer version's migrations broke the older one. It
 
 `backup.sh` uses `python -m stonks.ops backup` when the image has it (a consistent copy with no downtime, written to `/data/backups`). Otherwise it stops the writers (api, scheduler and lab-worker) for the upload and backs up the whole volume.
 
-Set up the bucket:
+Set up the bucket, then put its values in `backup.env`:
 
 - **Backblaze B2**: create a private bucket and an application key limited to it. `RESTIC_REPOSITORY=s3:https://s3.<region>.backblazeb2.com/<bucket>/stonks`.
 - **Cloudflare R2**: create a bucket and an R2 API token with object read/write on it. `RESTIC_REPOSITORY=s3:https://<account-id>.r2.cloudflarestorage.com/<bucket>/stonks` and `AWS_DEFAULT_REGION=auto`.
@@ -265,7 +292,7 @@ docker compose --profile backup run --rm restic snapshots      # list backups
 
 ## 7. Restore
 
-After losing the server: create a new one (section 1), set `.env` (same `RESTIC_*` values), deploy the same tag, then:
+After losing the server: create a new one (section 1), set `.env` and `backup.env` (same `RESTIC_*` values), deploy the same tag, then:
 
 ```bash
 /opt/stonks/deploy/backup/restore.sh            # latest; or pass a snapshot id
@@ -287,7 +314,7 @@ flowchart LR
   API[stonks alerts] -->|STONKS_NOTIFY_WEBHOOK_URL| W
 ```
 
-1. **Dead-man checks.** In [healthchecks.io](https://healthchecks.io) (free for 20 checks) or a self-hosted Uptime Kuma, create one check per job and put its ping URL in `.env`:
+1. **Dead-man checks.** In [healthchecks.io](https://healthchecks.io) (free for 20 checks) or a self-hosted Uptime Kuma, create one check per job and put its ping URL in `backup.env` (the first three) or `.env` (the last three):
 
    | Variable | Schedule | Grace |
    |----------|----------|-------|
@@ -440,11 +467,12 @@ flowchart LR
 git clone https://github.com/OWNER/stonks.git /opt/stonks
 cd /opt/stonks/deploy
 cp .env.example .env && chmod 600 .env
+cp backup.env.example backup.env && chmod 600 backup.env
 sudo mkdir -p /srv/stonks/data        # or set STONKS_DATA_PATH to your folder
 sudo chown 10001:10001 /srv/stonks/data
 ```
 
-Fill in `.env` as in [2. Set the secrets](#2-set-the-secrets). On a home server:
+Fill in `.env` and `backup.env` as in [2. Set the secrets](#2-set-the-secrets). On a home server:
 
 - `STONKS_IMAGE` and `STONKS_IMAGE_TAG`: the published image and a release tag.
 - `STONKS_DATA_PATH`: a folder on the SSD.

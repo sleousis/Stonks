@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from stonks.api.csp import SecurityHeadersMiddleware
 from stonks.api.deps import (
     CSRF_HEADER,
     MetricsAccessConfig,
@@ -112,8 +113,9 @@ def create_app(
         mount_spa(app, cfg.ui_dist)
     _install_openapi_postprocessing(app)
 
-    # Middleware: last added runs first. Host check first (DNS-rebinding
-    # guard for the open-on-loopback reads), then CORS, then logging.
+    # Middleware: last added runs first. Security headers wrap everything,
+    # then the host check (DNS-rebinding guard for the open-on-loopback
+    # reads), then CORS, then logging.
     app.add_middleware(_RequestLogMiddleware)
     # Only the Angular dev server's origin ([api].ui_origin) may call the
     # API cross-origin, with the session cookie and its CSRF header, and only
@@ -131,6 +133,9 @@ def create_app(
     if cfg.host not in _WILDCARD_BINDS:  # "0.0.0.0" binds every address, names none
         allowed.append(cfg.host)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=sorted(set(allowed)))
+    # Outermost, so every response gets the CSP and the basic security
+    # headers, the host check's 400 too (stonks.api.csp).
+    app.add_middleware(SecurityHeadersMiddleware)
     return app
 
 
