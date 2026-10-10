@@ -140,6 +140,33 @@ describe('schedule helpers', () => {
     expect(formatSize(5 * 1024 * 1024)).toBe('5 MB');
     expect(formatSize(null)).toBe('–');
   });
+
+  it('says in words why a live, sync or retrain job waits', () => {
+    expect(OFF_REASONS['no_live_portfolio']).toBe('No portfolio trades at a broker.');
+    expect(OFF_REASONS['no_connections']).toBe('No broker is connected.');
+    expect(OFF_REASONS['no_learning_strategies']).toBe('No strategy learns from data.');
+  });
+
+  it('gives a daily time in the viewer zone with the server zone in brackets', () => {
+    const at = '2026-10-11T05:00:00Z';
+    const local = new Date(at);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const hhmm = `${pad(local.getHours())}:${pad(local.getMinutes())}`;
+    const text = localWhen({
+      trigger_text: 'Every day at 05:00 UTC',
+      trigger: '',
+      next_run_at: at,
+    });
+    expect(text).toBe(
+      hhmm === '05:00' ? 'Every day at 05:00 UTC' : `Every day at ${hhmm} (05:00 UTC)`,
+    );
+    expect(
+      localWhen({ trigger_text: 'Every 5 minutes', trigger: 'every 5m', next_run_at: at }),
+    ).toBe('Every 5 minutes');
+    expect(localWhen({ trigger_text: '', trigger: 'every 5m', next_run_at: null })).toBe(
+      'every 5m',
+    );
+  });
 });
 
 describe('SchedulePage', () => {

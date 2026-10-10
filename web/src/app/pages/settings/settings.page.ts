@@ -5,7 +5,6 @@ import {
   inject,
   linkedSignal,
   resource,
-  signal,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
