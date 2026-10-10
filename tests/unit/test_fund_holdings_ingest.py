@@ -166,7 +166,9 @@ def test_lake_reads_the_latest_snapshot_known_by_the_day(lake: DuckDBLake) -> No
     assert lake.fund_holdings(["QQQ.US"], as_of=date(2026, 9, 28)).empty
 
 
-def test_lake_rerun_keeps_the_first_known_at(lake: DuckDBLake) -> None:
+def test_lake_rerun_shows_a_revision_only_once_known(lake: DuckDBLake) -> None:
+    """P12 (DuckDB 025): a revised weight for the same snapshot is invisible
+    before Stonks stored it."""
     frame = _frame([_row("SPY.US", "AAPL.US", date(2026, 9, 25), 0.07)])
     lake.upsert_fund_holdings(frame, known_at=datetime(2026, 9, 26))
     lake.upsert_fund_holdings(
@@ -174,6 +176,8 @@ def test_lake_rerun_keeps_the_first_known_at(lake: DuckDBLake) -> None:
         known_at=datetime(2026, 9, 28),
     )
     got = lake.fund_holdings(["SPY.US"], as_of=date(2026, 9, 26))
+    assert got["weight"].iloc[0] == pytest.approx(0.07)
+    got = lake.fund_holdings(["SPY.US"], as_of=date(2026, 9, 28))
     assert got["weight"].iloc[0] == pytest.approx(0.071)
     assert lake.funds_with_holdings() == ["SPY.US"]
 

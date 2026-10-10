@@ -32,7 +32,7 @@ from stonks.store.bars import (
     ParquetBarStore,
     checksums,
 )
-from stonks.store.statement_versions import known_versions
+from stonks.store.statement_versions import MACRO_KEY, known_versions
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations_duckdb"
 
@@ -346,6 +346,30 @@ def _statement_table(statement: str) -> str:
             f"unknown statement {statement!r}; expected one of {sorted(_STATEMENT_TABLES)}"
         )
     return statement
+
+
+#: A fund holding's primary key (DuckDB 023).
+_FUND_HOLDING_PK: tuple[str, ...] = ("fund", "holding", "as_of", "source")
+
+#: A macro row's primary key (DuckDB 009).
+_MACRO_PK: tuple[str, ...] = ("country_iso", "indicator", "observation_date")
+
+
+def _macro_available(stamped_at: str) -> str:
+    """SQL for a macro row's ``available_date``: its period end plus the
+    publication lag in days, which the caller binds to the one ``?`` (see
+    :meth:`DuckDBLake.get_macro_series`)."""
+    if stamped_at == "period_start":
+        period_end = """CASE period
+                WHEN 'monthly' THEN observation_date + INTERVAL 1 MONTH
+                WHEN 'quarterly' THEN observation_date + INTERVAL 3 MONTH
+                ELSE observation_date + INTERVAL 1 YEAR
+            END - INTERVAL 1 DAY"""
+    elif stamped_at == "period_end":
+        period_end = "observation_date"
+    else:
+        raise ValueError(f"stamped_at must be 'period_start' or 'period_end', got {stamped_at!r}")
+    return f"CAST(CAST({period_end} AS DATE) + to_days(CAST(? AS INTEGER)) AS DATE)"
 
 
 def _non_negative_lag(days: int) -> int:
@@ -1184,6 +1208,7 @@ class DuckDBLake:
         as_of: Any = None,
         publication_lag_days: int = 0,
         stamped_at: str = "period_start",
+        known_by: datetime | None = None,
     ) -> pd.DataFrame:
         """One macro indicator series (``observation_date, period, value,
         available_date``), oldest first.
@@ -1198,38 +1223,81 @@ class DuckDBLake:
         from ``period`` (``annual`` / ``quarterly`` / ``monthly``, and a
         year when unknown, the conservative choice). ``"period_end"`` uses
         ``observation_date`` itself. With ``as_of`` set, only observations
-        available on or before it are returned.
+        available on or before it are returned, each in the version known
+        then (P12, DuckDB 025): seen by ``known_by``, the end of ``as_of``'s
+        day by default. Without ``as_of`` the latest values are returned.
         """
-        lag = _non_negative_lag(publication_lag_days)
-        if stamped_at == "period_start":
-            period_end = """CASE period
-                    WHEN 'monthly' THEN observation_date + INTERVAL 1 MONTH
-                    WHEN 'quarterly' THEN observation_date + INTERVAL 3 MONTH
-                    ELSE observation_date + INTERVAL 1 YEAR
-                END - INTERVAL 1 DAY"""
-        elif stamped_at == "period_end":
-            period_end = "observation_date"
-        else:
-            raise ValueError(
-                f"stamped_at must be 'period_start' or 'period_end', got {stamped_at!r}"
+        if as_of is not None:
+            cutoff = _as_calendar_date(as_of)
+            versions = self.get_macro_series_versions(
+                country_iso,
+                indicator,
+                publication_lag_days=publication_lag_days,
+                stamped_at=stamped_at,
             )
+            filed = pd.Series(versions["available_date"].map(lambda d: d <= cutoff), dtype=bool)
+            df = known_versions(
+                versions,
+                known_by or day_start(cutoff + timedelta(days=1)),
+                filed,
+                key=MACRO_KEY,
+            )
+            return df.reset_index(drop=True)
         df = self.con.execute(
             f"""
-            SELECT observation_date, period, value,
-                   CAST(CAST({period_end} AS DATE) + to_days(CAST(? AS INTEGER)) AS DATE)
-                       AS available_date
+            SELECT observation_date, period, value, {_macro_available(stamped_at)} AS available_date
               FROM macro_indicators
              WHERE country_iso = ? AND indicator = ?
              ORDER BY observation_date
             """,
-            [lag, country_iso, indicator],
+            [_non_negative_lag(publication_lag_days), country_iso, indicator],
         ).fetchdf()
-        df = _dates_to_python(df, ("observation_date", "available_date"))
-        if as_of is not None:
-            cutoff = _as_calendar_date(as_of)
-            df = df[df["available_date"].map(lambda d: d <= cutoff).astype(bool)]
-            df = df.reset_index(drop=True)
-        return df
+        return _dates_to_python(df, ("observation_date", "available_date"))
+
+    def get_macro_series_versions(
+        self,
+        country_iso: str,
+        indicator: str,
+        *,
+        publication_lag_days: int = 0,
+        stamped_at: str = "period_start",
+    ) -> pd.DataFrame:
+        """Every version of one macro series (DuckDB 025), oldest
+        observation first and, per observation, oldest version first:
+        ``observation_date, period, value, available_date`` as in
+        :meth:`get_macro_series`, plus ``known_at`` (when Stonks first saw
+        the version). A row written straight to the table without a version
+        reads as its first version."""
+        df = self.con.execute(
+            f"""
+            WITH v AS (
+                SELECT observation_date, period, value, known_at
+                  FROM macro_indicators_versions
+                 WHERE country_iso = ? AND indicator = ?
+                UNION ALL
+                SELECT c.observation_date, c.period, c.value,
+                       CAST(c.observation_date AS TIMESTAMP) AS known_at
+                  FROM macro_indicators c
+                 WHERE c.country_iso = ? AND c.indicator = ?
+                   AND NOT EXISTS (SELECT 1 FROM macro_indicators_versions x
+                                    WHERE x.country_iso = c.country_iso
+                                      AND x.indicator = c.indicator
+                                      AND x.observation_date = c.observation_date)
+            )
+            SELECT observation_date, period, value,
+                   {_macro_available(stamped_at)} AS available_date, known_at
+              FROM v
+             ORDER BY observation_date, known_at
+            """,
+            [
+                country_iso,
+                indicator,
+                country_iso,
+                indicator,
+                _non_negative_lag(publication_lag_days),
+            ],
+        ).fetchdf()
+        return _dates_to_python(df, ("observation_date", "available_date"))
 
     def get_shares_outstanding(self, ticker: str) -> pd.DataFrame:
         """Share-count history (``date, shares``) for ``ticker``, oldest
@@ -2080,24 +2148,67 @@ class DuckDBLake:
             pk=("ticker",),
         )
 
-    def upsert_macro_indicators(self, df: pd.DataFrame) -> int:
+    def upsert_macro_indicators(self, df: pd.DataFrame, *, known_at: datetime | None = None) -> int:
         """Upsert macroeconomic-indicator observations.
 
         Identity is ``(country_iso, indicator, observation_date)``: each
-        country × indicator × date pair maps to one observation. Re-running
-        the same fetch is a no-op; vendor revisions to a previously-published
-        value land via the ``ON CONFLICT DO UPDATE`` branch in plain
-        ``_upsert`` (NULL still overwrites here — unlike financial
-        statements, the macro endpoint always returns the full series, so
-        a NULL ``Value`` is the vendor's authoritative "not published"
-        rather than "not present in this fetch").
+        country x indicator x date pair maps to one observation. Re-running
+        the same fetch is a no-op. A vendor revision overwrites the current
+        row (NULL too: the macro endpoint always returns the full series,
+        so a NULL ``Value`` is the vendor's "not published"), and every
+        change is also kept in ``macro_indicators_versions`` (DuckDB 025),
+        stamped ``known_at`` (now, in naive UTC, by default), so a decision
+        before Stonks saw the revision still reads the old value (P12).
         """
-        return self._upsert(
-            df,
-            table="macro_indicators",
-            cols=self._MACRO_INDICATOR_COLS,
-            pk=("country_iso", "indicator", "observation_date"),
+        if df.empty:
+            return 0
+        stamp = known_at if known_at is not None else datetime.now(UTC).replace(tzinfo=None)
+        with self.transaction():
+            count = self._upsert(
+                df,
+                table="macro_indicators",
+                cols=self._MACRO_INDICATOR_COLS,
+                pk=_MACRO_PK,
+            )
+            self._record_macro_versions(df, stamp)
+        return count
+
+    def _record_macro_versions(self, df: pd.DataFrame, known_at: datetime) -> None:
+        """Append the current row of each upserted observation to
+        ``macro_indicators_versions`` unless it equals that observation's
+        latest version. A version already stamped ``known_at`` is replaced."""
+        cols = self._MACRO_INDICATOR_COLS
+        same_key = " AND ".join(
+            f"k.{c} = t.{c}"
+            if c != "observation_date"
+            else "CAST(k.observation_date AS DATE) = t.observation_date"
+            for c in _MACRO_PK
         )
+        unchanged = " AND ".join(f"v.{c} IS NOT DISTINCT FROM t.{c}" for c in cols)
+        keys = _last_per_key(pd.DataFrame(df[list(_MACRO_PK)]), _MACRO_PK)
+        with self._registered(keys, "_keys"):
+            self.con.execute(
+                "DELETE FROM macro_indicators_versions t WHERE t.known_at = ?"
+                f" AND EXISTS (SELECT 1 FROM _keys k WHERE {same_key})",
+                [known_at],
+            )
+            self.con.execute(
+                f"""
+                INSERT INTO macro_indicators_versions ({", ".join(cols)}, known_at)
+                SELECT {", ".join(f"t.{c}" for c in cols)}, CAST(? AS TIMESTAMP)
+                  FROM macro_indicators t
+                 WHERE EXISTS (SELECT 1 FROM _keys k WHERE {same_key})
+                   AND NOT EXISTS (
+                        SELECT 1
+                          FROM (SELECT *, row_number() OVER (
+                                    PARTITION BY country_iso, indicator, observation_date
+                                    ORDER BY known_at DESC) AS rn
+                                  FROM macro_indicators_versions
+                                 WHERE indicator IN (SELECT DISTINCT indicator FROM _keys)) v
+                         WHERE v.rn = 1 AND {unchanged})
+                """,
+                [known_at],
+            )
 
     def upsert_defi_tvl(self, df: pd.DataFrame) -> int:
         """Upsert daily DeFi TVL observations keyed by
@@ -2263,9 +2374,15 @@ class DuckDBLake:
 
     def upsert_fund_holdings(self, df: pd.DataFrame, *, known_at: datetime | None = None) -> int:
         """Upsert fund holdings keyed by ``(fund, holding, as_of, source)``
-        (roadmap 23.14). A new row is stamped ``known_at`` (default now,
-        naive UTC). A re-run updates the values but keeps the first
-        ``known_at``, so a point-in-time read never moves backward."""
+        (roadmap 23.14). Each ``(fund, as_of, source)`` group in ``df`` is
+        that snapshot in full: a stored holding missing from it has dropped
+        out and leaves the current table.
+
+        Every change is kept in ``fund_holdings_versions`` (DuckDB 025),
+        stamped ``known_at`` (default now, naive UTC), and a holding that
+        dropped out gets a ``removed`` version, so a point-in-time read sees
+        a revision only from the time Stonks stored it (P12). The current
+        table keeps each row's first ``known_at``."""
         if df.empty:
             return 0
         frame = df.copy()
@@ -2274,34 +2391,109 @@ class DuckDBLake:
                 frame[col] = None
         frame = _last_per_key(
             frame.reindex(columns=list(self._FUND_HOLDING_COLS)),
-            ("fund", "holding", "as_of", "source"),
+            _FUND_HOLDING_PK,
         )
         stamp = (known_at or datetime.now(UTC)).replace(tzinfo=None)
         frame["known_at"] = stamp
         cols = [*self._FUND_HOLDING_COLS, "known_at"]
-        updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in ("weight", "name", "sector", "country"))
-        with self._registered(frame.reindex(columns=cols)):
+        values = ("weight", "name", "sector", "country")
+        updates = ", ".join(f"{c} = EXCLUDED.{c}" for c in values)
+        snapshot = "s.fund = t.fund AND s.as_of = t.as_of AND s.source = t.source"
+        listed = (
+            "i.fund = t.fund AND i.holding = t.holding AND i.as_of = t.as_of"
+            " AND i.source = t.source"
+        )
+        with self.transaction(), self._registered(frame.reindex(columns=cols)):
             self.con.execute(
-                f"INSERT INTO fund_holdings ({', '.join(cols)}) SELECT {', '.join(cols)} FROM _in"
+                "CREATE OR REPLACE TEMP TABLE _fh_in AS"
+                " SELECT * REPLACE (CAST(as_of AS DATE) AS as_of) FROM _in"
+            )
+            self.con.execute(
+                "CREATE OR REPLACE TEMP TABLE _snapshots AS"
+                " SELECT DISTINCT fund, as_of, source FROM _fh_in"
+            )
+            self.con.execute(
+                f"INSERT INTO fund_holdings ({', '.join(cols)}) SELECT {', '.join(cols)} FROM _fh_in"
                 f" ON CONFLICT (fund, holding, as_of, source) DO UPDATE SET {updates}"
             )
+            self.con.execute(
+                f"DELETE FROM fund_holdings t"
+                f" WHERE EXISTS (SELECT 1 FROM _snapshots s WHERE {snapshot})"
+                f" AND NOT EXISTS (SELECT 1 FROM _fh_in i WHERE {listed})"
+            )
+            # A re-run at the same stamp replaces its versions.
+            self.con.execute(
+                "DELETE FROM fund_holdings_versions t WHERE t.known_at = ?"
+                f" AND EXISTS (SELECT 1 FROM _snapshots s WHERE {snapshot})",
+                [stamp],
+            )
+            latest = f"""(SELECT * FROM (
+                    SELECT t.*, row_number() OVER (
+                               PARTITION BY fund, holding, as_of, source
+                               ORDER BY known_at DESC) AS rn
+                      FROM fund_holdings_versions t
+                     WHERE EXISTS (SELECT 1 FROM _snapshots s WHERE {snapshot})
+                ) WHERE rn = 1)"""
+            unchanged = " AND ".join(f"t.{c} IS NOT DISTINCT FROM i.{c}" for c in values)
+            vcols = ", ".join([*self._FUND_HOLDING_COLS, "known_at", "removed"])
+            self.con.execute(
+                f"""
+                INSERT INTO fund_holdings_versions ({vcols})
+                SELECT {", ".join(f"i.{c}" for c in self._FUND_HOLDING_COLS)},
+                       CAST(? AS TIMESTAMP), false
+                  FROM _fh_in i
+                 WHERE NOT EXISTS (SELECT 1 FROM {latest} t
+                                    WHERE {listed} AND NOT t.removed AND {unchanged})
+                """,
+                [stamp],
+            )
+            self.con.execute(
+                f"""
+                INSERT INTO fund_holdings_versions ({vcols})
+                SELECT {", ".join(f"t.{c}" for c in self._FUND_HOLDING_COLS)},
+                       CAST(? AS TIMESTAMP), true
+                  FROM {latest} t
+                 WHERE NOT t.removed AND NOT EXISTS (SELECT 1 FROM _fh_in i WHERE {listed})
+                """,
+                [stamp],
+            )
+            self.con.execute("DROP TABLE IF EXISTS _snapshots")
+            self.con.execute("DROP TABLE IF EXISTS _fh_in")
         return len(frame)
 
     def fund_holdings(self, funds: Any, *, as_of: Any) -> pd.DataFrame:
         """Each fund's holdings known on ``as_of`` (roadmap 23.14, P12): per
         fund the latest ``as_of`` on or before the day whose rows Stonks had
-        stored by the end of it, from one source (the first by name). Columns
+        stored by the end of it, from one source (the first by name). Each
+        holding reads its latest version stored by then (DuckDB 025), and a
+        holding that had dropped out by then is left out. Columns
         ``_FUND_HOLDING_COLS``, largest weight first."""
         names = sorted({str(f) for f in funds})
         cols = ", ".join(f"h.{c}" for c in self._FUND_HOLDING_COLS)
         if not names:
             return pd.DataFrame(columns=list(self._FUND_HOLDING_COLS))
         day = _as_calendar_date(as_of)
+        end = datetime.combine(day + timedelta(days=1), datetime.min.time())
         df = self.con.execute(
             f"""
-            WITH known AS (
-                SELECT * FROM fund_holdings
+            WITH v AS (
+                SELECT * FROM fund_holdings_versions
                  WHERE fund = ANY(?) AND as_of <= ? AND known_at < ?
+                UNION ALL BY NAME
+                SELECT c.*, false AS removed FROM fund_holdings c
+                 WHERE c.fund = ANY(?) AND c.as_of <= ? AND c.known_at < ?
+                   AND NOT EXISTS (SELECT 1 FROM fund_holdings_versions x
+                                    WHERE x.fund = c.fund AND x.holding = c.holding
+                                      AND x.as_of = c.as_of AND x.source = c.source)
+            ),
+            latest AS (
+                SELECT *, row_number() OVER (
+                           PARTITION BY fund, holding, as_of, source
+                           ORDER BY known_at DESC) AS rn
+                  FROM v
+            ),
+            known AS (
+                SELECT * FROM latest WHERE rn = 1 AND NOT removed
             ),
             pick AS (
                 SELECT fund, max(as_of) AS as_of FROM known GROUP BY fund
@@ -2315,7 +2507,7 @@ class DuckDBLake:
               JOIN chosen c ON h.fund = c.fund AND h.as_of = c.as_of AND h.source = c.source
              ORDER BY h.fund, h.weight DESC, h.holding
             """,
-            [names, day, datetime.combine(day + timedelta(days=1), datetime.min.time())],
+            [names, day, end, names, day, end],
         ).fetchdf()
         return _dates_to_python(df, ("as_of",))
 

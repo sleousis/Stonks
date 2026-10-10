@@ -187,7 +187,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 
 ## Canonical schemas (current)
 
-**Lake (DuckDB, migrations 001-024):**
+**Lake (DuckDB, migrations 001-025):**
 - `instruments (id, asset_class, exchange, currency, ipo_date, sector, industry, is_delisted, name, identifiers, GICS, address, ...)`: renamed from `tickers` in 007. `asset_class` in {equity, crypto, commodity, bond}.
 - `bars (ticker, timestamp, interval, open, high, low, close, adj_close, volume; PK (ticker, timestamp, interval))`: OHLCV at any `Interval` code (1m, 5m, 1h, 4h, 1d, 1w, 1mo, ...). `prices` is a read-only view of `interval='1d'`. Write with `upsert_bars` or the daily `upsert_prices` shim. With the Parquet backend the rows live under `<lake dir>/bars` instead of the table.
 - Statements (008, equity only), keyed `(ticker, period_end, frequency)`: `income_statement`, `balance_sheet`, `cash_flow_statement`, each with `filing_date` and `currency`. `upsert_<statement>` reindexes sparse frames and uses `COALESCE(EXCLUDED.col, table.col)`, so a NULL never overwrites a stored value but a real restated value does.
@@ -209,6 +209,7 @@ uv run python -m stonks.engine run [--session D] | replay PATH [--write-bars] | 
 - `instrument_sector_versions (ticker, sector, gic_sector, known_at)` (022): every sector label an instrument has had, with the time Stonks first saw it. Factor attribution reads the label known on each day (`factors.style.sector_labels`).
 - `fund_holdings (fund, holding, as_of, source, weight, name, sector, country, known_at; PK (fund, holding, as_of, source))` (023): what each ETF holds, weights as fractions, read point in time by `known_at` (`stonks.funds`). Insights look-through and the sector cap's `look_through` read it.
 - `corporate_filings (accession_number, ticker, issuer_cik, form, filing_date, known_at, period_of_report, items, url, source)`, `institutional_holdings (accession_number, line, filer_cik, report_period, known_at, cusip, ticker, amount, amount_type, value_usd, put_call, investment_discretion, ...)` and `insider_transactions.known_at` (024): SEC filings point in time, `known_at` is the acceptance time in UTC. See `docs/edgar.md`.
+- `macro_indicators_versions` (the `macro_indicators` columns plus `known_at`) and `fund_holdings_versions` (the `fund_holdings` columns plus `removed`, PK adds `known_at`) (025): every vendor revision with the time Stonks first saw it. Macro reads with `as_of` and `PointInTimeLake` pick the version seen by the decision (a first print counts from its publication date). A fund holdings upsert is a whole `(fund, as_of, source)` list, so a holding missing from a re-fetch gets a `removed` version and leaves the list from then on (P12).
 
 **State (SQLite, migrations 001-056):**
 - 001: `strategies (id, class_path, params_json, artifact_path, status, ...)` with status in {active, shadow, retired}; `survival_reports`; `tick_runs (id ulid, started_at, finished_at, status, summary_json)`; `orders (client_id PK, tick_id, strategy_id, ticker, side, quantity, order_type, limit_price, status, broker_order_id, ...)`; `fills`; `portfolio_snapshots (tick_id, taken_at, cash, positions_json, total_value)`.
