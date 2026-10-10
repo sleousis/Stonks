@@ -1064,7 +1064,7 @@ uv run stonks registry promote <id> --override --reason "why"
 uv run stonks registry history <id>
 ```
 
-With `[golive] incubation = true` the gate needs at least 63 days (or MinTRL, capped at 252), 20 trades, live results inside the Monte Carlo band, no quit-rule breach, stored reports for every `promotion` preset test, non-zero costs, a recorded hypothesis, and at least 30 backtest trades. The gate never changes status; `registry promote` does, and refuses without a pass or an override.
+With `[golive] incubation = true` the gate needs at least 63 days (or MinTRL, capped at 252), 20 trades, live results inside the Monte Carlo band, no quit-rule breach, stored reports for every `promotion` preset test, non-zero costs, a recorded hypothesis, and at least 30 backtest trades. For an approved strategy the gate reads the default book with its deposits and withdrawals taken out, so moved money is never a gain or a drawdown. The gate never changes status; `registry promote` does, and refuses without a pass or an override.
 
 ## Reading P&L
 

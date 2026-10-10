@@ -17,7 +17,9 @@ The paper period is the strategy's virtual shadow P&L while it is
 is ``active`` (the default portfolio's ledger only). The real portfolio is shared by all active strategies, so for
 an active strategy the P&L checks describe the combined book; trades are
 still counted per strategy. P&L is read only through
-``stonks.production.pnl`` so its day grouping stays in one place.
+``stonks.production.pnl`` so its day grouping stays in one place, and the
+real portfolio's curve has its deposits and withdrawals taken out
+(``stonks.production.risk_curve``) so moved money is never a gain or a loss.
 
 Missing data never passes: no snapshots fails ``min_days``,
 ``max_drawdown`` and ``max_drift``; no backtest expectation fails
@@ -271,7 +273,13 @@ def load_paper_period(
     else:
         source, raw, trades = "none", [], 0
 
-    rows = daily_pnl([(r.day, r.total_value) for r in raw])
+    points = [(r.day, r.total_value) for r in raw]
+    if source == "portfolio":
+        from stonks.production.risk_curve import adjusted_curve
+
+        # a deposit or withdrawal on the shared book is not a gain or a loss
+        points = adjusted_curve(state, DEFAULT_PORTFOLIO_ID, points)
+    rows = daily_pnl(points)
     return PaperPeriod(
         strategy_id=strategy_id,
         status=handle.status,
