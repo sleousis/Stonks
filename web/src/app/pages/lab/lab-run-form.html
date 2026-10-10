@@ -11,7 +11,7 @@
     <legend>Data</legend>
     @if (universes().length) {
       <div class="field">
-        <label for="lr-universe">Run on</label>
+        <label for="lr-universe">Tickers to test</label>
         <select
           id="lr-universe"
           class="input"
@@ -64,6 +64,7 @@
       [errors]="errors()"
       [intervals]="intervals()"
       [showTickers]="!form().universeId"
+      [tickersLabel]="universes().length ? 'Tickers' : 'Tickers to test'"
       (patch)="patch($event)"
     />
   </fieldset>

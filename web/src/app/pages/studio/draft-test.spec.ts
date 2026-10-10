@@ -248,7 +248,7 @@ describe('DraftTest', () => {
 
     suites[2].click();
     fixture.detectChanges();
-    expect(el.textContent).toContain('Shuffled prices (MCPT)');
+    expect(el.textContent).toContain('Shuffled prices');
     buttonNamed('Run lab').click();
     const req = await nextRequest(controller, '/api/studio/drafts/draft_abc123/lab-runs', 'POST');
     const body = req.request.body as Record<string, unknown>;
@@ -306,7 +306,7 @@ describe('DraftTest', () => {
     );
     expect(pills).toEqual(['Passed', 'Failed']);
     expect(text).toContain('Out of sample');
-    expect(text).toContain('Unstable');
+    expect(text).toContain('Its results swung too much');
   });
 
   it('disables backtests and lab runs with a reason without lab.run (UI-06)', () => {

@@ -457,7 +457,11 @@ def run_folds(
 
 
 def _without_lake(dataset: Any) -> Any:
-    if dataclasses.is_dataclass(dataset) and hasattr(dataset, "lake"):
+    if (
+        dataclasses.is_dataclass(dataset)
+        and not isinstance(dataset, type)
+        and hasattr(dataset, "lake")
+    ):
         return dataclasses.replace(dataset, lake=None)
     return dataset
 
