@@ -70,6 +70,8 @@ describe('LabPage with ?strategy=', () => {
     if (path === '/api/lab/survival-tests') return req.flush([]);
     if (path === '/api/lab/survival-presets') return req.flush([]);
     if (path === '/api/universes') return req.flush({ items: [], total: 0, limit: 200, offset: 0 });
+    if (path === '/api/watchlists' || path === '/api/strategies')
+      return req.flush({ items: [], total: 0, limit: 200, offset: 0 });
     const m = /^\/api\/strategies\/([^/]+)$/.exec(path);
     if (m) {
       const s = strategies[decodeURIComponent(m[1])];
@@ -106,6 +108,22 @@ describe('LabPage with ?strategy=', () => {
       `#lab-panel-lab_run input[value="${MOMENTUM.class_path}"]`,
     );
     expect(lr?.checked).toBe(true);
+  });
+
+  it('opens the simple test with the strategy picked, settings left to Advanced (NB-09)', async () => {
+    strategies['bah-v1'] = {
+      ...registered('bah-v1', MOMENTUM.class_path),
+      params: { ticker: 'spy.us', lookback_days: 60 },
+    };
+    await open('bah-v1');
+    expect(el.querySelector('#lab-simple')!.hasAttribute('hidden')).toBe(false);
+    expect(el.querySelector('#lab-advanced')!.hasAttribute('hidden')).toBe(true);
+    const picked = el.querySelector<HTMLInputElement>(
+      `#lab-simple input[value="${MOMENTUM.class_path}"]`,
+    );
+    expect(picked?.checked).toBe(true);
+    expect(el.querySelector<HTMLTextAreaElement>('#st-tickers')?.value).toBe('SPY.US');
+    expect(el.querySelector('#lab-simple')!.textContent).not.toContain('Lookback');
   });
 
   it('says when the registered class is not in the catalog', async () => {

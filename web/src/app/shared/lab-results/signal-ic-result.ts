@@ -11,8 +11,17 @@ export const IC_EXPLANATION =
   'IC shows how well the strategy’s scores ranked the moves that came next across tickers. ' +
   '0 means no skill, higher is better, and below 0 means it ranked them the wrong way round.';
 
+/** Why a signal check could not measure anything, in plain words. */
+export function signalIcEmptyText(r: Pick<SignalIcView, 'note' | 'n_tickers'>): string {
+  const need = /needs at least (\d+)/.exec(r.note ?? '');
+  if (need) {
+    return `Not enough tickers to rank. The check needs at least ${need[1]}, this one had ${r.n_tickers}.`;
+  }
+  return 'Not enough data to measure the signal. Try more tickers or a longer window.';
+}
+
 /**
- * A signal IC result: the IC per forward horizon (the decay curve as a
+ * A signal check result: the IC per forward horizon (the decay curve as a
  * table), the average move per score bucket, and how often the scores change.
  *
  *   <app-signal-ic-result [result]="view" />
@@ -23,60 +32,59 @@ export const IC_EXPLANATION =
   imports: [DataTable, TableCell, StatTile],
   template: `
     @let r = result();
-    <div class="summary">
-      <app-stat-tile
-        label="IC estimate"
-        featured
-        [help]="false"
-        [value]="ic(r.ic_estimate)"
-        [detail]="r.ic_horizon ? 'Next ' + bars(r.ic_horizon) : null"
-      />
-      <app-stat-tile label="Tickers" [value]="count(r.n_tickers)" />
-      <app-stat-tile
-        label="Dates scored"
-        [value]="count(r.n_dates)"
-        [detail]="'Every ' + bars(r.every_bars)"
-      />
-      <app-stat-tile label="Score turnover" [value]="pct(r.score_turnover)" />
-    </div>
-    <p class="explain">{{ explanation }}</p>
     @if (r.status !== 'ok') {
-      <p class="note" role="status">
-        Not enough data to measure the signal.{{ r.note ? ' ' + r.note : '' }}
-      </p>
-    }
-    @if (rows().length) {
-      <app-data-table
-        caption="IC by horizon"
-        [rows]="rows()"
-        [columns]="columns"
-        [rowKey]="rowKey"
-        [pageSize]="0"
-      >
-        <ng-template appCell="horizon" [appCellOf]="rows()" let-h>
-          <span class="num">{{ bars(h.horizon) }}</span>
-        </ng-template>
-        <ng-template appCell="mean_ic" [appCellOf]="rows()" let-h>
-          <span class="num" [class.na]="na(h.mean_ic)">{{ ic(h.mean_ic) }}</span>
-        </ng-template>
-        <ng-template appCell="t_stat_hac" [appCellOf]="rows()" let-h>
-          <span class="num" [class.na]="na(h.t_stat_hac)">{{ num(h.t_stat_hac) }}</span>
-        </ng-template>
-        <ng-template appCell="hit_rate" [appCellOf]="rows()" let-h>
-          <span class="num" [class.na]="na(h.hit_rate)">{{ pct(h.hit_rate) }}</span>
-        </ng-template>
-        <ng-template appCell="spread_mean" [appCellOf]="rows()" let-h>
-          <span class="num" [class.na]="na(h.spread_mean)">{{ pct(h.spread_mean, true) }}</span>
-        </ng-template>
-        <ng-template appCell="buckets" [appCellOf]="rows()" let-h>
-          <span class="num buckets">{{ buckets(h) }}</span>
-        </ng-template>
-      </app-data-table>
-      <p class="muted foot">
-        Top minus bottom is the average next move of the highest scored tickers minus the lowest.
-        The buckets run from the lowest scores to the highest. A t-stat above 2 is unlikely to be
-        luck.
-      </p>
+      <p class="note" role="status">{{ emptyText() }}</p>
+    } @else {
+      <div class="summary">
+        <app-stat-tile
+          label="IC estimate"
+          featured
+          [help]="false"
+          [value]="ic(r.ic_estimate)"
+          [detail]="r.ic_horizon ? 'Next ' + bars(r.ic_horizon) : null"
+        />
+        <app-stat-tile label="Tickers" [value]="count(r.n_tickers)" />
+        <app-stat-tile
+          label="Dates scored"
+          [value]="count(r.n_dates)"
+          [detail]="'Every ' + bars(r.every_bars)"
+        />
+        <app-stat-tile label="Score turnover" [value]="pct(r.score_turnover)" />
+      </div>
+      <p class="explain">{{ explanation }}</p>
+      @if (rows().length) {
+        <app-data-table
+          caption="IC by horizon"
+          [rows]="rows()"
+          [columns]="columns"
+          [rowKey]="rowKey"
+          [pageSize]="0"
+        >
+          <ng-template appCell="horizon" [appCellOf]="rows()" let-h>
+            <span class="num">{{ bars(h.horizon) }}</span>
+          </ng-template>
+          <ng-template appCell="mean_ic" [appCellOf]="rows()" let-h>
+            <span class="num" [class.na]="na(h.mean_ic)">{{ ic(h.mean_ic) }}</span>
+          </ng-template>
+          <ng-template appCell="t_stat_hac" [appCellOf]="rows()" let-h>
+            <span class="num" [class.na]="na(h.t_stat_hac)">{{ num(h.t_stat_hac) }}</span>
+          </ng-template>
+          <ng-template appCell="hit_rate" [appCellOf]="rows()" let-h>
+            <span class="num" [class.na]="na(h.hit_rate)">{{ pct(h.hit_rate) }}</span>
+          </ng-template>
+          <ng-template appCell="spread_mean" [appCellOf]="rows()" let-h>
+            <span class="num" [class.na]="na(h.spread_mean)">{{ pct(h.spread_mean, true) }}</span>
+          </ng-template>
+          <ng-template appCell="buckets" [appCellOf]="rows()" let-h>
+            <span class="num buckets">{{ buckets(h) }}</span>
+          </ng-template>
+        </app-data-table>
+        <p class="muted foot">
+          Top minus bottom is the average next move of the highest scored tickers minus the lowest.
+          The buckets run from the lowest scores to the highest. A t-stat above 2 is unlikely to be
+          luck.
+        </p>
+      }
     }
   `,
   styles: `
@@ -115,6 +123,8 @@ export class SignalIcResult {
   readonly result = input.required<SignalIcView>();
 
   protected readonly explanation = IC_EXPLANATION;
+  /** One plain sentence when the check could not run, never n/a tiles. */
+  protected readonly emptyText = computed(() => signalIcEmptyText(this.result()));
   protected readonly rows = computed(() =>
     [...(this.result().horizons ?? [])].sort((a, b) => a.horizon - b.horizon),
   );

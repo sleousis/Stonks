@@ -180,17 +180,18 @@ describe('LabRunResultView', () => {
   it('renders the verdict, best score and best params', () => {
     const el = render();
     expect(tiles(el)).toEqual({
-      Status: 'Did not hold up',
       'Best score': '1.12',
-      // Older results carry no trial counts.
-      'Trials this run': 'n/a',
-      'Trials of this strategy': 'n/a',
+      // Older results carry no counts.
+      'Settings tried': 'n/a',
+      'Settings tried in all runs': 'n/a',
     });
-    expect(el.textContent).toContain('2 of 3 robustness tests passed');
-    // The verdict in words, naming what failed, and why trials are not the verdict.
+    // One plain verdict, naming what failed. No Status tile repeats it.
     const plain = el.querySelector('.plain')!.textContent!;
-    expect(plain).toContain('It did not hold up: it failed 1 of 3 robustness tests (Walk-forward)');
-    expect(plain).toContain('A trial only says a setting ran');
+    expect(plain).toContain('Did not hold up.');
+    expect(plain).toContain(
+      'It did not hold up: it failed 1 of 3 robustness tests (Rolling retest)',
+    );
+    expect(el.textContent).not.toContain('trial');
     const params = [...el.querySelectorAll('.params div')].map((d) =>
       [d.querySelector('dt')!.textContent!.trim(), d.querySelector('dd')!.textContent!.trim()].join(
         ' ',
@@ -224,13 +225,13 @@ describe('LabRunResultView', () => {
     expect(issue.querySelector('app-status-pill')!.textContent!.trim()).toBe('Warning');
   });
 
-  it('renders one pass/fail row per survival test with metrics and notes', () => {
+  it('renders one pass/fail row per survival test with a plain reason and figures', () => {
     const el = render();
     const rows = [...el.querySelectorAll('.test')];
     expect(rows.map((r) => r.querySelector('.test-name')!.textContent!.trim())).toEqual([
       'Out of sample',
-      'Walk-forward',
-      'Shuffled prices (MCPT)',
+      'Rolling retest',
+      'Shuffled prices',
     ]);
     // Each test says what it guards against.
     expect(rows[0].querySelector('.hint')!.textContent).toContain('Guards against');
@@ -240,12 +241,15 @@ describe('LabRunResultView', () => {
       'Passed',
     ]);
     expect(rows[1].classList).toContain('failed');
-    expect(rows[1].textContent).toContain('Positive folds');
-    expect(rows[0].textContent).toContain('Out-of-sample score');
+    expect(rows[1].textContent).toContain('Retests that made money');
+    expect(rows[0].textContent).toContain('Score on unseen data');
     expect(rows[1].textContent).toContain('25.00%');
-    expect(rows[1].textContent).toContain('1 of 4 folds positive.');
+    // One sentence on why, never the raw notes.
+    expect(rows[1].querySelector('.reason')!.textContent).toBe(
+      'It stopped working when retested on later slices of time.',
+    );
+    expect(rows[1].textContent).not.toContain('1 of 4 folds positive.');
     expect(rows[2].textContent).toContain('0.02');
-    expect(rows[2].querySelector('.notes')).toBeNull();
   });
 
   it('links a registered strategy', () => {
@@ -268,29 +272,34 @@ describe('LabRunResultView', () => {
     expect(formatMetric('used_realistic_costs', 1)).toBe('Yes');
   });
 
-  it('shows trial counts, the benchmark and the deciding figures of each test', () => {
+  it('shows the settings tried, the benchmark and the deciding figures of each test', () => {
     const el = render(LAB_RUN_VIEW_FULL);
     const t = tiles(el);
-    expect(t['Trials this run']).toBe('40');
-    expect(t['Trials of this strategy']).toBe('180');
-    expect(figures(el.querySelector('[aria-labelledby="lr-bench-title"]'))['Excess CAGR']).toBe(
-      '+3.10%',
-    );
+    expect(t['Settings tried']).toBe('40');
+    expect(t['Settings tried in all runs']).toBe('180');
+    const bench = el.querySelector('[aria-labelledby="lr-bench-title"]')!;
+    const headline = figures(bench.querySelector('app-figure-grid'));
+    expect(Object.keys(headline)).toEqual(['Benchmark yearly return', 'Benchmark worst drop']);
+    // The other figures fold away under All figures.
+    expect(bench.querySelector('details')!.textContent).toContain('Excess CAGR');
+    expect(bench.querySelector('details')!.textContent).toContain('+3.10%');
 
     const rows = [...el.querySelectorAll('.test')];
     expect(rows[0].querySelector(':scope > dl')!.textContent).toContain('Deflated Sharpe');
     expect(rows[0].querySelector(':scope > dl')!.textContent).toContain('0.971');
-    expect(rows[1].querySelector(':scope > dl')!.textContent).toContain('PBO');
-    expect(rows[1].querySelector(':scope > dl')!.textContent).toContain('n/a');
-    expect(rows[2].querySelector(':scope > dl')!.textContent).toContain(
-      '95th percentile drawdown (MC)',
+    expect(rows[1].querySelector(':scope > dl')!.textContent).toContain(
+      'Chance the best setting was luck',
     );
+    expect(rows[1].querySelector(':scope > dl')!.textContent).toContain('n/a');
+    expect(rows[2].querySelector(':scope > dl')!.textContent).toContain('Bad case worst drop');
     expect(rows[2].querySelector(':scope > dl')!.textContent).toContain('18.00%');
-    expect(rows[3].querySelector(':scope > dl')!.textContent).toContain('Break-even cost multiple');
+    expect(rows[3].querySelector(':scope > dl')!.textContent).toContain('Costs it can bear');
     expect(rows[3].querySelector(':scope > dl')!.textContent).toContain('Sharpe at 2× costs');
-    expect(rows[4].querySelector(':scope > dl')!.textContent).toContain('Walk-forward efficiency');
+    expect(rows[4].querySelector(':scope > dl')!.textContent).toContain(
+      'Share of past return kept',
+    );
     expect(rows[4].querySelector(':scope > dl')!.textContent).toContain('0.72');
     // Secondary figures are folded away.
-    expect(rows[0].querySelector('details')?.textContent).toContain('Var sr');
+    expect(rows[0].querySelector('details')?.textContent).toContain('Sharpe variance');
   });
 });
