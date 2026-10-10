@@ -82,6 +82,13 @@ describe('registerShellCommands', () => {
     expect(press('r', 1100)).toBe(false);
   });
 
+  it('still finds Notifications with g n, though the rail leaves it to the bell (FR-08)', () => {
+    expect(labels()).toContain('Notifications');
+    expect(labels()).toContain('Alert settings');
+    const gn = shortcuts.allSequences.find((s) => s.prefix === 'g' && s.key === 'n');
+    expect(gn?.path).toBe('/notifications');
+  });
+
   it('keeps g t for Trade costs, now a tab under Orders', () => {
     const gt = shortcuts.allSequences.find((s) => s.prefix === 'g' && s.key === 't');
     expect(gt?.path).toBe('/trades');

@@ -24,6 +24,18 @@ import { type NavItem, NAV_ITEMS, navItemVisible, navViewer } from './nav-items'
 const SUB_PAGES: readonly (Omit<NavItem, 'group'> & { keywords: readonly string[] })[] = [
   { path: '/orders/ticks', label: 'Trading runs', keywords: ['runs', 'history', 'orders'] },
   { path: '/orders/fills', label: 'Fills', keywords: ['executions', 'trades'] },
+  // The bell carries Notifications in the rail (FR-08); the palette and g n still find it.
+  {
+    path: '/notifications',
+    label: 'Notifications',
+    key: 'n',
+    keywords: ['alerts', 'feed', 'bell'],
+  },
+  {
+    path: '/notifications/settings',
+    label: 'Alert settings',
+    keywords: ['telegram', 'push', 'quiet hours', 'webhook'],
+  },
   {
     path: '/journal',
     label: 'Journal',
