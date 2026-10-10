@@ -25,7 +25,7 @@ import { PageHeader } from '../../shared/ui/page-header';
 import { NoBook, bookState } from '../../shared/ui/no-book';
 import { EmptyState, ErrorState, LoadingState } from '../../shared/ui/states';
 import { InsightsNav } from './insights-nav';
-import { type LimitRow, STATUS_TEXT, limitRows } from './limit-rows';
+import { type LimitRow, STATUS_TEXT, limitRows, noLimitText } from './limit-rows';
 
 const HISTORY_PAGE = 20;
 /** Days drawn on the chart (the route's page limit). */
@@ -34,16 +34,21 @@ const CHART_DAYS = 200;
 /** Below this Kupiec p-value the misses are more than bad luck. */
 const KUPIEC_ALARM = 0.05;
 
+const NORMAL = '(about 1 in 20 is normal).';
+
 /**
- * "3 misses, 1.2 times the expected rate", plus ", more often than chance
- * explains" when the Kupiec test says the model is off. No raw p-value.
+ * How many days were worse than the 95% VaR said, in words, plus a plain
+ * warning when the Kupiec test says that is more than bad luck. No ratio,
+ * no raw p-value.
  */
 export function violationText(count: number, ratio: number | null, kupiec: number | null): string {
-  const misses = `${count} ${count === 1 ? 'miss' : 'misses'}`;
-  if (ratio == null) return misses;
-  const alarm = kupiec != null && kupiec < KUPIEC_ALARM && ratio > 1;
-  const tail = alarm ? ', more often than chance explains' : '';
-  return `${misses}, ${formatNumber(ratio, { digits: 2 })} times the expected rate${tail}`;
+  const head =
+    count === 0
+      ? 'No day was'
+      : `${formatNumber(count, { digits: 0 })} ${count === 1 ? 'day was' : 'days were'}`;
+  const alarm = kupiec != null && kupiec < KUPIEC_ALARM && (ratio ?? 0) > 1;
+  const tail = alarm ? ' That is more often than chance explains.' : '';
+  return `${head} worse than expected ${NORMAL}${tail}`;
 }
 
 /**
@@ -131,13 +136,12 @@ export class RiskPage {
   protected readonly rows = computed<LimitRow[]>(() => {
     const system = this.policy.hasValue() ? this.policy.value() : null;
     const effective = this.mine.hasValue() ? this.mine.value().effective : system;
-    return limitRows(
-      this.insights.hasValue() ? this.insights.value() : null,
-      effective,
-      this.live.hasValue() ? this.live.value() : null,
-      system,
-    );
+    return limitRows(this.insights.hasValue() ? this.insights.value() : null, effective, system);
   });
+  /** Only the measures that have a limit get a row. */
+  protected readonly limited = computed(() => this.rows().filter((r) => r.status !== 'none'));
+  /** The rest, folded into one sentence. */
+  protected readonly noLimit = computed(() => noLimitText(this.rows()));
   /** At least one row follows your own, stricter limit. */
   protected readonly anyYours = computed(() => this.rows().some((r) => r.yours));
   /** Buys under your smallest order size are skipped: said once under the limits. */
@@ -151,6 +155,9 @@ export class RiskPage {
 
   protected readonly pct = (value: number | null | undefined) =>
     formatPercent(value, { digits: 2 });
+  /** A loss as a positive share with one decimal, the same on Insights. */
+  protected readonly loss = (value: number | null | undefined) =>
+    formatPercent(value == null ? value : Math.abs(value), { digits: 1 });
   /** The book's own currency, the one its value and cash are kept in. */
   private readonly currency = computed(() =>
     this.insights.hasValue() ? this.insights.value().currency : null,
@@ -164,7 +171,7 @@ export class RiskPage {
     return [
       {
         id: 'var95',
-        label: 'VaR 95%',
+        label: 'Likely worst day (1 in 20)',
         kind: 'line',
         color: 'primary',
         format: 'percent',
@@ -174,7 +181,7 @@ export class RiskPage {
       },
       {
         id: 'es95',
-        label: 'ES 95%',
+        label: 'Average of the worst days',
         kind: 'line',
         color: 'muted',
         format: 'percent',
@@ -205,8 +212,8 @@ export class RiskPage {
     if (!last || !first) return null;
     const misses = items.filter((r) => r.violation_95).length;
     return (
-      `One-day 95% VaR from ${first.as_of} to ${last.as_of}, latest ${this.pct(last.var_95)} ` +
-      `of value. The day's loss beat VaR on ${misses} of ${items.length} days.`
+      `Likely worst day from ${first.as_of} to ${last.as_of}, latest ${this.loss(last.var_95)} ` +
+      `of value. A real day was worse on ${misses} of ${items.length} days.`
     );
   });
 
@@ -218,19 +225,13 @@ export class RiskPage {
       value: (r) => (r.strategy_id ? strategyDisplayName(r.strategy_id) : 'Whole portfolio'),
     },
     { key: 'value', label: 'Value', format: 'money', currency: () => this.currency() },
-    { key: 'var_95', label: 'VaR 95%', format: 'percent', help: 'var' },
+    { key: 'var_95', label: 'Likely worst day', format: 'percent', help: 'var' },
     {
       key: 'es_95',
-      label: 'ES 95%',
+      label: 'Average worst day',
       format: 'percent',
       help: 'expected_shortfall',
       mobile: 'hide',
-    },
-    {
-      key: 'violation_ratio_95',
-      label: 'Violation ratio',
-      format: 'number',
-      help: 'violation_ratio',
     },
     { key: 'decayed', label: 'Edge', sortable: false, help: 'alpha_decay' },
   ];
@@ -240,15 +241,15 @@ export class RiskPage {
     { key: 'as_of', label: 'Day', format: 'date', mobile: 'title' },
     { key: 'value', label: 'Value', format: 'money', currency: () => this.currency() },
     { key: 'realized_return', label: 'Return', format: 'signedPercent', tone: true },
-    { key: 'var_95', label: 'VaR 95%', format: 'percent', help: 'var' },
+    { key: 'var_95', label: 'Likely worst day', format: 'percent', help: 'var' },
     {
       key: 'es_95',
-      label: 'ES 95%',
+      label: 'Average worst day',
       format: 'percent',
       help: 'expected_shortfall',
       mobile: 'hide',
     },
-    { key: 'violation_95', label: 'Beat VaR', sortable: false },
+    { key: 'violation_95', label: 'Worse than expected', sortable: false },
   ];
   protected readonly historyKey = (r: RiskSnapshotView) => `${r.as_of}:${r.strategy_id ?? ''}`;
 }

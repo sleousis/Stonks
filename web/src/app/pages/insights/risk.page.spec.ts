@@ -108,15 +108,27 @@ describe('RiskPage', () => {
     expect(text).toContain('Near the limit');
     expect(text).toContain('Over the limit');
     expect(text).toContain('Weight in crypto');
+    expect(text).not.toContain('No limit set');
+    expect(text).not.toContain('VaR misses');
     expect(limits.querySelectorAll('.limit-over').length).toBeGreaterThan(0);
+    expect(el.textContent).toContain('No limit on sector');
+  });
+
+  it('keeps the strategy table short enough to fit', async () => {
+    await flushAll();
+    expect(el.textContent).not.toContain('Violation ratio');
   });
 
   it("shows today's VaR and ES and how often the model missed", async () => {
     await flushAll();
     const text = el.textContent ?? '';
-    expect(text).toContain('2.00%');
-    expect(text).toContain('3.30%');
-    expect(text).toContain('3 misses, 1.2 times the expected rate');
+    expect(text).toContain('Likely worst day (1 in 20)');
+    expect(text).toContain('Average of the worst days');
+    expect(text).toContain('Could lose 2.0%');
+    expect(text).toContain('Could lose 2.5%');
+    expect(text).not.toContain('VaR 99%');
+    expect(text).toContain('3 days were worse than expected (about 1 in 20 is normal).');
+    expect(text).not.toContain('times the expected rate');
     expect(text).not.toContain('Treat these numbers with care');
   });
 
@@ -169,7 +181,7 @@ describe('RiskPage', () => {
     const hint = el.querySelector('.limits + .hint')?.textContent ?? '';
     expect(hint).toContain('Rows marked Your limit');
     expect(hint).toContain('Buys worth less than $250.00 are skipped');
-    expect(el.querySelector('a[href="/settings"]')?.textContent).toContain('risk limits');
+    expect(el.querySelector('a[href="/settings?tab=risk"]')?.textContent).toContain('risk limits');
   });
 
   it('names each strategy part in words, not by id', async () => {
@@ -178,17 +190,24 @@ describe('RiskPage', () => {
     expect(el.textContent).not.toContain('Strategy sleeves');
   });
 
-  it('words misses without a ratio', async () => {
+  it('says plainly when no day beat the model', async () => {
     await flushAll();
-    expect(violationText(1, null, null)).toBe('1 miss');
+    expect(violationText(0, null, null)).toBe(
+      'No day was worse than expected (about 1 in 20 is normal).',
+    );
+    expect(violationText(1, null, null)).toBe(
+      '1 day was worse than expected (about 1 in 20 is normal).',
+    );
   });
 
   it('never shows a raw p-value, and says plainly when misses beat chance (UX-69)', async () => {
     await flushAll();
     expect(el.textContent).not.toMatch(/\(p \d/);
-    expect(violationText(3, 1.2, 0.61)).toBe('3 misses, 1.2 times the expected rate');
+    expect(violationText(3, 1.2, 0.61)).toBe(
+      '3 days were worse than expected (about 1 in 20 is normal).',
+    );
     expect(violationText(9, 3, 0.01)).toBe(
-      '9 misses, 3 times the expected rate, more often than chance explains',
+      '9 days were worse than expected (about 1 in 20 is normal). That is more often than chance explains.',
     );
   });
 });

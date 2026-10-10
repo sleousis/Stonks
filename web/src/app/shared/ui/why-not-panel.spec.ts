@@ -1,7 +1,11 @@
 import type { TradeDecisionView } from '../../api/models';
-import { OUTCOME_LABELS, decisionDetail } from './why-not-panel';
+import { OUTCOME_LABELS, decisionDetail, groupDecisions } from './why-not-panel';
 
-function row(step: string, detail: Record<string, unknown>): TradeDecisionView {
+function row(
+  step: string,
+  detail: Record<string, unknown>,
+  extra: Partial<TradeDecisionView> = {},
+): TradeDecisionView {
   return {
     tick_id: 't1',
     portfolio_id: 'pf',
@@ -15,6 +19,7 @@ function row(step: string, detail: Record<string, unknown>): TradeDecisionView {
     detail,
     summary: 'AAA.US: kept out',
     step_text: '',
+    ...extra,
   };
 }
 
@@ -38,12 +43,34 @@ describe('why not panel', () => {
 
   it('shows the target and current weight inside the buffer', () => {
     expect(decisionDetail(row('buffer', { target_weight: 0.5, current_weight: 0.48 }))).toBe(
-      'target 0.5, now 0.48',
+      'target 50%, now 48%',
     );
   });
 
   it('names the pick that won the book', () => {
     expect(decisionDetail(row('rank', { winner: 'mom' }))).toBe('mom won the book');
     expect(decisionDetail(row('held', {}))).toBe('');
+  });
+});
+
+describe('grouping the decisions', () => {
+  const items = [
+    row('traded', {}, { tick_id: 't2', as_of: '2026-03-21', ticker: 'A', outcome: 'traded' }),
+    row('held', {}, { tick_id: 't2', as_of: '2026-03-21', ticker: 'B', outcome: 'held' }),
+    row('rank', {}, { tick_id: 't1', as_of: '2026-03-20', ticker: 'C' }),
+  ];
+
+  it('shows only the latest run and hides plain holds by default', () => {
+    const groups = groupDecisions(items, false);
+    expect(groups.map((g) => g.day)).toEqual(['2026-03-21']);
+    expect(groups[0].rows.map((r) => r.ticker)).toEqual(['A']);
+  });
+
+  it('shows every row, grouped by day, when asked', () => {
+    const groups = groupDecisions(items, true);
+    expect(groups.map((g) => [g.day, g.rows.length])).toEqual([
+      ['2026-03-21', 2],
+      ['2026-03-20', 1],
+    ]);
   });
 });
