@@ -29,7 +29,6 @@ import type {
   ChartPoint,
   ChartSeries,
   ChartTheme,
-  ChartValueFormat,
   CrosshairReadout,
   PriceChartData,
   PriceChartHandle,
