@@ -114,7 +114,7 @@ Session jobs run on NYSE trading days. `price_check` skips while `[production.pr
 
 The scheduler also runs the notification delivery worker (`[scheduler].deliver_notifications`, on by default). Don't add a cron `deliver` next to it.
 
-`stonks serve` runs the delivery worker too while no scheduler delivers (`[notify] deliver_in_serve`). `auto`, the default, runs it when serve hosts no scheduler and no `stonks schedule run` holds the scheduler lock. `on` always runs it and `off` never does. Each worker claims its deliveries with a lease, so two workers never send one twice.
+`stonks serve` runs the delivery worker too while no scheduler delivers (`[notify] deliver_in_serve`). `auto`, the default, runs it when serve hosts no scheduler. Before each pass it checks the scheduler lock and sends nothing while a `stonks schedule run` holds it. So serve steps back when the scheduler starts after it, as in the Compose file, and takes over when the scheduler stops. `on` always runs it and `off` never does. Each worker claims its deliveries with a lease and its own token, so two workers never send one twice.
 
 Listing any `[[scheduler.jobs]]` in the config replaces the whole default list:
 

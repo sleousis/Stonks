@@ -31,7 +31,7 @@ from __future__ import annotations
 import threading
 import uuid
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -80,11 +80,19 @@ class DeliveryWorker:
         #: Written to ``claimed_by`` on every row this worker claims.
         self.token = uuid.uuid4().hex
 
-    def run_forever(self, stop: threading.Event, interval_seconds: float = 5.0) -> None:
-        """Deliver until ``stop`` is set; sleeps only when a pass found nothing."""
+    def run_forever(
+        self,
+        stop: threading.Event,
+        interval_seconds: float = 5.0,
+        *,
+        active: Callable[[], bool] | None = None,
+    ) -> None:
+        """Deliver until ``stop`` is set; sleeps only when a pass found nothing.
+        ``active``, when given, is asked before each pass: a pass it turns
+        down sends nothing (a standby worker, ``scheduling.delivery``)."""
         while not stop.is_set():
             try:
-                busy = self.run_once().total > 0
+                busy = (active is None or active()) and self.run_once().total > 0
             except Exception as exc:  # keep the loop alive; the next pass retries
                 _log.error("notify.worker.pass_failed", error_type=type(exc).__name__)
                 busy = False

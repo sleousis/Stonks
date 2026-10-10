@@ -63,9 +63,9 @@ def alice(state, users) -> str:
     return uid
 
 
-def _publish(state, push, user_id: str, n: int = 1) -> None:
+def _publish(state, push, user_id: str, n: int = 1, *, start: int = 0) -> None:
     router = NotificationRouter(state, {"webpush": push})
-    for i in range(n):
+    for i in range(start, start + n):
         router.publish(
             Event(
                 audience=Audience.users(user_id),
@@ -101,27 +101,23 @@ def test_the_default_is_auto():
 
 
 @pytest.mark.parametrize(
-    ("mode", "hosted_scheduler", "hosted_delivery", "elsewhere", "expected"),
+    ("mode", "hosted_scheduler", "hosted_delivery", "expected"),
     [
-        ("auto", False, False, False, True),  # serve alone
-        ("auto", False, False, True, False),  # a separate scheduler delivers
-        ("auto", True, True, False, False),  # the hosted scheduler delivers
-        ("auto", True, False, False, False),  # the hosted scheduler was told not to
-        ("on", False, False, True, True),
-        ("on", True, False, False, True),
-        ("on", True, True, False, False),  # never two workers in one process
-        ("off", False, False, False, False),
+        ("auto", False, False, "standby"),  # serve alone, or a separate scheduler
+        ("auto", True, True, "none"),  # the hosted scheduler delivers
+        ("auto", True, False, "none"),  # the hosted scheduler was told not to
+        ("on", False, False, "always"),
+        ("on", True, False, "always"),
+        ("on", True, True, "none"),  # never two workers in one process
+        ("off", False, False, "none"),
     ],
 )
-def test_who_delivers(mode, hosted_scheduler, hosted_delivery, elsewhere, expected):
+def test_who_delivers(mode, hosted_scheduler, hosted_delivery, expected):
     assert (
-        delivery.serve_delivers(
-            mode,
-            hosted_scheduler=hosted_scheduler,
-            hosted_delivery=hosted_delivery,
-            scheduler_elsewhere=lambda: elsewhere,
+        delivery.serve_delivery_plan(
+            mode, hosted_scheduler=hosted_scheduler, hosted_delivery=hosted_delivery
         )
-        is expected
+        == expected
     )
 
 
@@ -135,15 +131,51 @@ def test_serve_alone_delivers(settings, state, push, alice):
     assert sorted(m.body for m, _ in push.sent) == ["order 0", "order 1", "order 2"]
 
 
+def _scheduler_lock(settings: Settings) -> InstanceLock:
+    return InstanceLock(default_lock_path(settings.scheduler, settings.state.path))
+
+
+def _assert_nothing_sent(state, wait: float = 0.3) -> None:
+    time.sleep(wait)
+    assert _sent_rows(state) == 0
+
+
 def test_serve_leaves_delivery_to_a_running_scheduler(settings, state, push, alice):
-    lock = InstanceLock(default_lock_path(settings.scheduler, settings.state.path))
+    """A scheduler that runs when serve starts delivers. When it stops,
+    serve takes over without a restart."""
+    lock = _scheduler_lock(settings)
     lock.acquire()  # what a separate `stonks schedule run` holds
     try:
         app = _app(settings)
         with TestClient(app):
-            assert app.state.services.schedule.delivery is None
+            _publish(state, push, alice, n=2)
+            _assert_nothing_sent(state)
+            lock.release()  # the scheduler stops or crashes
+            _wait_sent(state, 2)
     finally:
         lock.release()
+
+
+def test_serve_steps_back_when_a_scheduler_starts_later(settings, state, push, alice):
+    """The shipped Compose file starts the scheduler after the api: serve's
+    worker must stop delivering once the scheduler holds its lock."""
+    app = _app(settings)
+    lock = _scheduler_lock(settings)
+    with TestClient(app):
+        _publish(state, push, alice, n=1)
+        _wait_sent(state, 1)
+        lock.acquire()  # `stonks schedule run` starts
+        try:
+            time.sleep(0.2)  # serve's next passes see the lock
+            _publish(state, push, alice, n=1, start=1)
+            _assert_nothing_sent_after(state, before=1)
+        finally:
+            lock.release()
+
+
+def _assert_nothing_sent_after(state, *, before: int, wait: float = 0.3) -> None:
+    time.sleep(wait)
+    assert _sent_rows(state) == before
 
 
 def test_serve_and_a_scheduler_never_send_a_delivery_twice(settings, state, push, alice):
@@ -183,3 +215,31 @@ def test_the_setting_turns_it_off(settings, state, push, alice):
         time.sleep(0.2)
     assert push.sent == []
     assert _sent_rows(state) == 0
+
+
+def test_serve_probing_the_lock_never_stops_a_scheduler_from_starting(settings):
+    """Serve checks the scheduler lock on every pass. A scheduler that
+    starts in that instant waits a moment for it instead of refusing."""
+    from stonks.scheduling.scheduler import acquire_scheduler_lock
+
+    stop = threading.Event()
+
+    def probe_forever() -> None:
+        while not stop.is_set():
+            probe = _scheduler_lock(settings)
+            try:
+                probe.acquire()
+            except Exception:
+                continue
+            time.sleep(0.05)  # a slow probe, far longer than a real one
+            probe.release()
+
+    prober = threading.Thread(target=probe_forever, daemon=True)
+    prober.start()
+    try:
+        for _ in range(10):
+            lock = acquire_scheduler_lock(settings.scheduler, settings.state.path)
+            lock.release()
+    finally:
+        stop.set()
+        prober.join(timeout=5)

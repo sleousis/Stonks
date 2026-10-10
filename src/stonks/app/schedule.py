@@ -270,8 +270,9 @@ class ScheduleService:
     def start_hosted(self) -> SchedulerHandle | None:
         """Start the in-process scheduler when the backend resolves to
         ``in_process`` (None otherwise, or when another holds the lock),
-        then serve's own delivery worker when no scheduler delivers
-        (``[notify] deliver_in_serve``)."""
+        then serve's own delivery worker (``[notify] deliver_in_serve``:
+        in ``auto`` a standby worker that sends only while no scheduler
+        holds the lock)."""
         if self.handle is None and resolve_backend(self.config, os.environ) == "in_process":
             self.handle = start_in_process_scheduler(
                 self._services, self._ctx.settings, config=self.config

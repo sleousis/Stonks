@@ -6,10 +6,13 @@ in whichever process runs the scheduler (``stonks schedule run`` or the
 in-process scheduler of ``stonks serve``), with its own SQLite connection
 built on that thread. Off with ``[scheduler].deliver_notifications = false``.
 
-``stonks serve`` runs one too when no scheduler delivers
-(``[notify] deliver_in_serve``, see :func:`serve_delivers`), so alerts go
-out from a lone API process. Two workers never send a delivery twice: each
-claims its rows in one UPDATE with a lease (``DeliveryWorker``).
+``stonks serve`` runs one too (``[notify] deliver_in_serve``, see
+:func:`serve_delivery_plan`), so alerts go out from a lone API process. In
+``auto`` it is a standby worker: before each pass it checks the scheduler
+lock and sends nothing while a scheduler holds it. So serve steps back when
+a scheduler starts after it (the Compose order) and takes over when the
+scheduler stops. Two workers never send a delivery twice: each claims its
+rows with a lease and its own token (``DeliveryWorker``).
 """
 
 from __future__ import annotations
@@ -56,30 +59,33 @@ def start_delivery_worker(settings: Any) -> DeliveryHandle | None:
     return _spawn(settings, config)
 
 
-def serve_delivers(
-    mode: ServeDelivery,
-    *,
-    hosted_scheduler: bool,
-    hosted_delivery: bool,
-    scheduler_elsewhere: Callable[[], bool],
-) -> bool:
-    """Whether ``stonks serve`` starts its own delivery worker.
+#: What serve runs: no worker, one that always delivers, or a standby
+#: worker that delivers only while no scheduler holds the lock.
+ServePlan = Literal["none", "always", "standby"]
 
-    ``off`` never, and never a second worker in a process whose hosted
-    scheduler already runs one. ``on`` otherwise always. ``auto`` only
-    when no scheduler delivers: none is hosted here (a hosted one follows
-    its own ``deliver_notifications``) and no other process holds the
-    scheduler lock with delivery on."""
+
+def serve_delivery_plan(
+    mode: ServeDelivery, *, hosted_scheduler: bool, hosted_delivery: bool
+) -> ServePlan:
+    """The delivery worker ``stonks serve`` runs.
+
+    ``off`` none, and never a second worker in a process whose hosted
+    scheduler already runs one. ``on`` otherwise always delivers. ``auto``
+    runs none next to a hosted scheduler (it follows its own
+    ``deliver_notifications``), else a standby worker."""
     if mode == "off" or hosted_delivery:
-        return False
+        return "none"
     if mode == "on":
-        return True
-    return not hosted_scheduler and not scheduler_elsewhere()
+        return "always"
+    return "none" if hosted_scheduler else "standby"
 
 
 def scheduler_delivers_elsewhere(config: SchedulerConfig, state_path: Any) -> bool:
     """True when another process holds the scheduler lock (a running
-    ``stonks schedule run``) and schedulers deliver notifications."""
+    ``stonks schedule run``) and schedulers deliver notifications.
+
+    It takes the lock for an instant to find out. A scheduler starting in
+    that instant waits for it (``LOCK_GRACE_SECONDS``) instead of refusing."""
     from stonks.scheduling.scheduler import (
         InstanceLock,
         SchedulerAlreadyRunningError,
@@ -97,6 +103,27 @@ def scheduler_delivers_elsewhere(config: SchedulerConfig, state_path: Any) -> bo
     return False
 
 
+class _Standby:
+    """The gate of serve's standby worker: deliver only while no scheduler
+    delivers. Logs each change, not each pass."""
+
+    def __init__(self, config: SchedulerConfig, state_path: Any) -> None:
+        self._config = config
+        self._state_path = state_path
+        self._active: bool | None = None
+
+    def __call__(self) -> bool:
+        try:
+            active = not scheduler_delivers_elsewhere(self._config, self._state_path)
+        except Exception as exc:  # an unreadable lock file: leave it to the scheduler
+            _log.warning("notify.serve_delivery_probe_failed", error_type=type(exc).__name__)
+            active = False
+        if active != self._active:
+            _log.info("notify.serve_delivery_active" if active else "notify.serve_delivery_standby")
+            self._active = active
+        return active
+
+
 def start_serve_delivery_worker(
     settings: Any,
     config: SchedulerConfig,
@@ -104,20 +131,21 @@ def start_serve_delivery_worker(
     hosted_scheduler: bool,
     hosted_delivery: bool,
 ) -> DeliveryHandle | None:
-    """The worker ``stonks serve`` runs when :func:`serve_delivers` says so."""
+    """The worker ``stonks serve`` runs, as :func:`serve_delivery_plan` says."""
     mode: ServeDelivery = settings.notify.deliver_in_serve
-    if not SERVE_DELIVERY_ENABLED or not serve_delivers(
-        mode,
-        hosted_scheduler=hosted_scheduler,
-        hosted_delivery=hosted_delivery,
-        scheduler_elsewhere=lambda: scheduler_delivers_elsewhere(config, settings.state.path),
-    ):
+    plan = serve_delivery_plan(
+        mode, hosted_scheduler=hosted_scheduler, hosted_delivery=hosted_delivery
+    )
+    if not SERVE_DELIVERY_ENABLED or plan == "none":
         _log.info("notify.serve_delivery_skipped", mode=mode)
         return None
-    return _spawn(settings, config)
+    gate = _Standby(config, settings.state.path) if plan == "standby" else None
+    return _spawn(settings, config, active=gate)
 
 
-def _spawn(settings: Any, config: SchedulerConfig) -> DeliveryHandle:
+def _spawn(
+    settings: Any, config: SchedulerConfig, *, active: Callable[[], bool] | None = None
+) -> DeliveryHandle:
     stop = threading.Event()
 
     def run() -> None:
@@ -125,7 +153,9 @@ def _spawn(settings: Any, config: SchedulerConfig) -> DeliveryHandle:
         state = SqliteState(settings.state.path)
         try:
             worker = DeliveryWorker(state, build_channels(notify), notify.outbox)
-            worker.run_forever(stop, interval_seconds=config.delivery_interval_seconds)
+            worker.run_forever(
+                stop, interval_seconds=config.delivery_interval_seconds, active=active
+            )
         except Exception as exc:  # pragma: no cover - logged, never kills the host
             _log.error("notify.delivery_worker_failed", error_type=type(exc).__name__)
         finally:
