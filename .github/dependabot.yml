@@ -48,6 +48,11 @@ updates:
     groups:
       base-images:
         patterns: ["*"]
+    # The console stage runs the Node LTS major that CI uses. Move both
+    # together by hand (tests/unit/test_workflows.py checks they match).
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "Bump"
 

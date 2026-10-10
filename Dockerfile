@@ -14,7 +14,8 @@ ARG PYTHON_VERSION=3.13
 # ---- 1. Angular console ----------------------------------------------------
 # The bundle is platform-neutral, so build it on the native builder platform
 # (fast) even when the final image is multi-arch.
-FROM --platform=$BUILDPLATFORM node:22-bookworm-slim AS console
+# Node stays on the LTS major that CI builds and tests the console with.
+FROM --platform=$BUILDPLATFORM node:24-bookworm-slim AS console
 WORKDIR /web
 COPY web/package.json web/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
@@ -22,7 +23,7 @@ COPY web/ ./
 RUN npm run build
 
 # ---- 2. Python package with uv ---------------------------------------------
-FROM ghcr.io/astral-sh/uv:0.12.13 AS uv
+FROM ghcr.io/astral-sh/uv:0.12.23 AS uv
 
 FROM python:${PYTHON_VERSION}-slim-bookworm AS build
 COPY --from=uv /uv /uvx /bin/

@@ -89,16 +89,18 @@ def mcp_aliases() -> frozenset[str]:
 @cache
 def cli_commands() -> frozenset[str]:
     """Every leaf Typer command as ``stonks group sub``."""
-    import click
     import typer
 
     from stonks.cli import app
 
     out: set[str] = set()
 
-    def walk(cmd: click.Command, prefix: str) -> None:
-        if isinstance(cmd, click.Group):
-            for name, sub in cmd.commands.items():
+    # Typer 0.27 vendors its own click, so groups are found by their
+    # ``commands`` rather than by an isinstance check on click.Group.
+    def walk(cmd: Any, prefix: str) -> None:
+        subs = getattr(cmd, "commands", None)
+        if subs:
+            for name, sub in subs.items():
                 walk(sub, f"{prefix} {name}")
         else:
             out.add(prefix)

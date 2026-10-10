@@ -8,8 +8,8 @@ escape those brackets, so the rendered help must show every one.
 from __future__ import annotations
 
 import re
+from typing import Any
 
-import click
 import pytest
 import typer
 from typer.testing import CliRunner
@@ -19,14 +19,14 @@ from stonks.cli import app
 _TOKEN = re.compile(r"\\?\[([A-Za-z_][\w.]*)\]")
 
 
-def _commands(group: click.Command, path: tuple[str, ...] = ()):
+def _commands(group: Any, path: tuple[str, ...] = ()):
+    # Typer 0.27 vendors its own click, so a group is anything with commands.
     yield path, group
-    if isinstance(group, click.Group):
-        for name, sub in group.commands.items():
-            yield from _commands(sub, (*path, name))
+    for name, sub in (getattr(group, "commands", None) or {}).items():
+        yield from _commands(sub, (*path, name))
 
 
-def _raw_help(command: click.Command) -> str:
+def _raw_help(command: Any) -> str:
     parts = [command.help or ""]
     parts += [getattr(p, "help", None) or "" for p in command.params]
     return "\n".join(parts)
