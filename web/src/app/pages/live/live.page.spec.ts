@@ -73,6 +73,16 @@ describe('LivePage', () => {
     expect(el.querySelector('.problem[role="note"]')!.textContent).toContain('connect refused');
   });
 
+  it('says when the stream sends only delayed prices', async () => {
+    const base = engine();
+    const el = await render(
+      status({
+        engines: [engine({ stream: { ...base.stream!, delayed_only: true, delayed_events: 12 } })],
+      }),
+    );
+    expect(el.querySelector('.problem[role="note"]')!.textContent).toContain('Delayed prices only');
+  });
+
   it('says when no engine runs and when intraday is off', async () => {
     const el = await render(status({ engines: [], streaming_enabled: false }));
     expect(el.textContent).toContain('No intraday engine running');

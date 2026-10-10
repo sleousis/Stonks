@@ -37,6 +37,14 @@ A read on a day takes, per fund, the newest list Stonks already had by the
 end of that day (principle P12). So a list fetched today never changes what
 a past day saw.
 
+A vendor can also revise a list it already sent. Each change is kept in
+`fund_holdings_versions` (DuckDB 025) with its own `known_at`:
+
+- A new weight for the same list shows only from the time Stonks stored it.
+- A re-fetch is the whole list. A holding that is missing from it gets a
+  `removed` version and leaves the list from then on. Days before still
+  see it.
+
 ## In insights
 
 The Insights page has an "Inside your funds" panel. It shows single names,

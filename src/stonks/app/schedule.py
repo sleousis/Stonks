@@ -27,6 +27,7 @@ from stonks.accounts import AuditLog, Scope
 from stonks.app.context import AppContext
 from stonks.app.errors import ConflictError, NotFoundError, ValidationError
 from stonks.logging import get_logger
+from stonks.scheduling import delivery
 from stonks.scheduling.calendar import US_CALENDAR, get_calendar
 from stonks.scheduling.config import SchedulerConfig, resolve_backend, scheduler_config_from
 from stonks.scheduling.in_process import (
@@ -241,6 +242,8 @@ class ScheduleService:
         self._inflight: set[str] = set()
         self._guard = threading.Lock()
         self.handle: SchedulerHandle | None = None
+        #: Serve's own notification delivery worker (``None``: not running).
+        self.delivery: delivery.DeliveryHandle | None = None
 
     def bind(self, services: Any) -> None:
         """The ``Services`` container jobs run through (set once at wiring)."""
@@ -266,19 +269,29 @@ class ScheduleService:
 
     def start_hosted(self) -> SchedulerHandle | None:
         """Start the in-process scheduler when the backend resolves to
-        ``in_process`` (None otherwise, or when another holds the lock)."""
-        if self.handle is not None:
-            return self.handle
-        if resolve_backend(self.config, os.environ) != "in_process":
-            return None
-        self.handle = start_in_process_scheduler(
-            self._services, self._ctx.settings, config=self.config
-        )
-        if self.handle is not None:
-            _log.info("scheduler.hosted")
+        ``in_process`` (None otherwise, or when another holds the lock),
+        then serve's own delivery worker (``[notify] deliver_in_serve``:
+        in ``auto`` a standby worker that sends only while no scheduler
+        holds the lock)."""
+        if self.handle is None and resolve_backend(self.config, os.environ) == "in_process":
+            self.handle = start_in_process_scheduler(
+                self._services, self._ctx.settings, config=self.config
+            )
+            if self.handle is not None:
+                _log.info("scheduler.hosted")
+        if self.delivery is None:
+            self.delivery = delivery.start_serve_delivery_worker(
+                self._ctx.settings,
+                self.config,
+                hosted_scheduler=self.handle is not None,
+                hosted_delivery=self.handle is not None and self.handle.delivery is not None,
+            )
         return self.handle
 
     def stop_hosted(self, timeout: float = 30.0) -> None:
+        worker, self.delivery = self.delivery, None
+        if worker is not None:
+            worker.stop(timeout=timeout)
         handle, self.handle = self.handle, None
         if handle is not None:
             handle.stop(timeout=timeout)

@@ -28376,6 +28376,16 @@
             "title": "Connects",
             "type": "integer"
           },
+          "delayed_events": {
+            "default": 0,
+            "title": "Delayed Events",
+            "type": "integer"
+          },
+          "delayed_only": {
+            "default": false,
+            "title": "Delayed Only",
+            "type": "boolean"
+          },
           "disconnects": {
             "title": "Disconnects",
             "type": "integer"

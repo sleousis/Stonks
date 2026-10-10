@@ -90,12 +90,17 @@ def event_row(event: StreamEvent, seq: int) -> dict[str, Any]:
             low=event.low,
             close=event.close,
             volume=event.volume,
+            delayed=event.delayed,
         )
     return row
 
 
 def _opt(value: Any) -> float | None:
     return None if value is None or pd.isna(value) else float(value)
+
+
+def _flag(value: Any) -> bool:
+    return False if value is None or pd.isna(value) else bool(value)
 
 
 def _as_utc(value: Any) -> datetime:
@@ -121,7 +126,7 @@ def event_from_row(row: dict[str, Any]) -> StreamEvent:
             bid_size=_opt(row["bid_size"]),
             ask_size=_opt(row["ask_size"]),
             last=_opt(row["last"]),
-            delayed=bool(row["delayed"]),
+            delayed=_flag(row["delayed"]),
             source=source,
         )
     if kind == "bar":
@@ -135,6 +140,7 @@ def event_from_row(row: dict[str, Any]) -> StreamEvent:
             float(row["close"]),
             int(row["volume"] or 0),
             source,
+            delayed=_flag(row.get("delayed")),
         )
     if kind == "heartbeat":
         return Heartbeat(ts, source)

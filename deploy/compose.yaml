@@ -18,6 +18,8 @@
 #
 # Run from this directory:  docker compose up -d
 # Secrets and settings come from ./.env (copy .env.example; chmod 600).
+# Backup secrets come from ./backup.env (copy backup.env.example; chmod 600),
+# read by the restic container and the host scripts only.
 # Backups:                  docker compose --profile backup run --rm restic snapshots
 
 name: stonks
@@ -276,11 +278,13 @@ services:
     logging: *logging
 
   # One-shot backup tool, not started by `up`. See deploy/backup/.
+  # Its secrets come from backup.env only, and no app container gets that
+  # file: a compromised app cannot read or delete the off-server copies.
   restic:
     image: restic/restic:0.19.1
     profiles: ["backup"]
     env_file:
-      - path: .env
+      - path: backup.env
         required: false
     environment:
       RESTIC_CACHE_DIR: /cache

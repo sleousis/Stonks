@@ -18,7 +18,14 @@ flowing into the bar store:
    the gap is backfilled through the REST intraday ingest
    (:class:`PipelineBackfiller`). Writes are idempotent, so the backfill and
    the stream never duplicate a bar.
-5. :class:`~stonks.streaming.health.StreamHealth` records all of it.
+5. :class:`~stonks.streaming.health.StreamHealth` records all of it, and
+   says when the source sends only delayed quotes (logged once as
+   ``stream.delayed_only``). Delayed quotes build bars only with
+   ``accept_delayed_quotes``, and those bars never reach the lake. Their
+   minutes form a ``delayed`` gap that the REST backfill fills every
+   ``delayed_backfill_seconds`` (leaving the newest
+   ``backfill_delay_seconds`` to the next round), so the engine's signals,
+   which read the lake, keep moving.
 
 A subscriber that raises is counted and logged, never allowed to stop the
 stream. A failed bar write keeps its bars for the next flush. On stop the
@@ -155,7 +162,9 @@ class StreamRunner:
         self.settings = settings
         self.tickers = list(settings.tickers if tickers is None else tickers)
         self.builder = BarBuilder(
-            mode=settings.bar_mode, grace=timedelta(seconds=settings.bar_grace_seconds)
+            mode=settings.bar_mode,
+            grace=timedelta(seconds=settings.bar_grace_seconds),
+            accept_delayed=settings.accept_delayed_quotes,
         )
         self.writer = (
             BarWriter(
@@ -181,6 +190,9 @@ class StreamRunner:
         self._min_gap = timedelta(seconds=settings.min_gap_seconds)
         self._backfill_delay = timedelta(seconds=settings.backfill_delay_seconds)
         self._gap: Gap | None = None
+        self._delayed_gap: Gap | None = None
+        self._delayed_every = timedelta(seconds=settings.delayed_backfill_seconds)
+        self._warned_delayed = False
 
     # ---- control --------------------------------------------------------------------
 
@@ -233,6 +245,7 @@ class StreamRunner:
                 self._on_connect(now)
             self._handle(event, now)
             self._maybe_backfill(now)
+            self._maybe_backfill_delayed(now)
             self._check_stale(now)
 
     def _on_connect(self, now: datetime) -> None:
@@ -274,6 +287,13 @@ class StreamRunner:
 
     def _handle(self, event: StreamEvent, now: datetime) -> None:
         self.health.count(event, now)
+        if self.health.delayed_only and not self._warned_delayed:
+            self._warned_delayed = True
+            _log.warning(
+                "stream.delayed_only",
+                source=self.health.source,
+                accepted=self.settings.accept_delayed_quotes,
+            )
         if self.recorder is not None:
             self.recorder.write(event)
         for subscriber in self.subscribers:
@@ -295,6 +315,8 @@ class StreamRunner:
         if self.writer is not None:
             self.writer.add(bars)
         for bar in bars:
+            if bar.delayed:
+                self._keep_out(bar)
             for subscriber in self.bar_subscribers:
                 self._notify(subscriber, bar)
 
@@ -336,6 +358,44 @@ class StreamRunner:
         self._gap = None
         if self.backfiller is None or gap.end - gap.start < self._min_gap:
             return
+        self._backfill(gap, gap.start, gap.end)
+
+    def _keep_out(self, bar: StreamBar) -> None:
+        """Note the minutes of a delayed bar, which never reaches the lake,
+        for the REST backfill."""
+        if self.backfiller is None:
+            return
+        end = bar.timestamp + bar.interval.to_timedelta()
+        gap = self._delayed_gap
+        if gap is None:
+            self._delayed_gap = Gap(bar.timestamp, end, "delayed")
+            self.health.add_gap(self._delayed_gap)
+        else:
+            gap.start = min(gap.start, bar.timestamp)
+            gap.end = max(gap.end or end, end)
+
+    def _maybe_backfill_delayed(self, now: datetime, *, force: bool = False) -> None:
+        """Backfill the minutes kept out for delayed bars every
+        ``delayed_backfill_seconds``. The newest ``backfill_delay_seconds``
+        wait for the next round, so the vendor has finished them."""
+        gap = self._delayed_gap
+        if gap is None or gap.end is None:
+            return
+        if not force and now - gap.start < self._delayed_every:
+            return
+        cut = gap.end if force else min(gap.end, now - self._backfill_delay)
+        if cut <= gap.start:
+            return
+        if cut < gap.end:  # the rest waits for the next round
+            self._delayed_gap = Gap(cut, gap.end, "delayed")
+            self.health.add_gap(self._delayed_gap)
+            gap.end = cut
+        else:
+            self._delayed_gap = None
+        self._backfill(gap, gap.start, cut)
+
+    def _backfill(self, gap: Gap, start: datetime, end: datetime) -> None:
+        assert self.backfiller is not None
         if self.writer is not None:
             # stream bars first, so the vendor's bars land last
             try:
@@ -343,7 +403,7 @@ class StreamRunner:
             except Exception as exc:
                 self._write_failed(exc)
         try:
-            self.backfiller.backfill(self.tickers, gap.start, gap.end)
+            self.backfiller.backfill(self.tickers, start, end)
         except Exception as exc:
             gap.backfilled = False
             self.health.backfills_failed += 1
@@ -355,8 +415,8 @@ class StreamRunner:
         _log.info(
             "stream.backfilled",
             reason=gap.reason,
-            start=gap.start.isoformat(),
-            end=gap.end.isoformat(),
+            start=start.isoformat(),
+            end=end.isoformat(),
         )
 
     # ---- shutdown -------------------------------------------------------------------
@@ -365,6 +425,7 @@ class StreamRunner:
         now = self.clock.now()
         self._emit(self.builder.drain() if drain else self.builder.flush(now))
         self._maybe_backfill(now, force=True)
+        self._maybe_backfill_delayed(now, force=True)
         if self.writer is not None:
             try:
                 self.writer.flush()

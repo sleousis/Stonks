@@ -6,6 +6,13 @@ store keeps the last write per ``(ticker, timestamp, interval)``, so writing
 a bar again (a replay, a restart, a REST backfill of the same minutes) never
 duplicates it. Inside one batch the last bar per key wins too.
 
+A delayed bar (built from delayed quotes) is never written. The ``bars``
+table has no flag for it, so every later reader would take it for a live
+bar stamped at the wrong minute. It is counted in
+:attr:`BarWriter.delayed_skipped`. The stream runner notes those minutes
+as a ``delayed`` gap, and its REST backfill fills them every
+``delayed_backfill_seconds``.
+
 A failed write keeps the buffer, so the next flush tries again and no bar
 is lost to a short store error. Timestamps are stored as naive UTC, like
 every other bar.
@@ -45,6 +52,7 @@ class BarWriter:
         self.bars_written = 0
         self.flushes = 0
         self.failed_flushes = 0
+        self.delayed_skipped = 0
 
     @property
     def pending(self) -> int:
@@ -56,6 +64,9 @@ class BarWriter:
                 raise ValueError(
                     f"this writer stores {self.interval.code} bars, got {bar.interval.code}"
                 )
+            if bar.delayed:
+                self.delayed_skipped += 1
+                continue
             self._buffer[(bar.ticker, bar.timestamp)] = bar
 
     def maybe_flush(self, now: datetime) -> int:

@@ -64,6 +64,9 @@ class StageGateSettings(BaseModel):
     max_tracking_error: float | None = Field(default=None, gt=0)
     #: Sessions in a week, for the bad-week alert.
     week_sessions: int = Field(default=5, ge=1, le=10)
+    #: Gates 2 and 3 need a passing kill switch drill (``stonks halts
+    #: drill``) for the portfolio, or a global one, within this many days.
+    drill_max_age_days: int = Field(default=30, ge=1)
 
 
 class ReconcileSettings(BaseModel):

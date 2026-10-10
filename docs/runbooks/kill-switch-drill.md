@@ -29,7 +29,7 @@ uv run stonks halts kill --scope global --reason "what happened"
 uv run stonks halts drill
 ```
 
-It runs on a scratch state DB in a temporary folder with the simulated broker. Production data is never touched and no real order is sent. It:
+It runs on a scratch state DB in a temporary folder with the simulated broker. No real order is sent and the drill never touches production data. It:
 
 1. places one buy of 1 share with a limit at half the reference price, so it cannot fill,
 2. engages the global kill switch in stop-all mode through the same service the API uses,
@@ -38,7 +38,15 @@ It runs on a scratch state DB in a temporary folder with the simulated broker. P
 5. sends the broker's global cancel,
 6. clears the scratch halt.
 
-Every step prints `ok` or `failed`. The command exits 1 when a step fails. `--json-out drill.json` keeps the report. Keep it with the date as the drill record.
+Every step prints `ok` or `failed`. The command exits 1 when a step fails. `--json-out drill.json` also writes the report to a file.
+
+Each run, passed or failed, is then recorded in the real state DB, in the `kill_switch_drills` table: when it ran, who ran it, whether it passed, and the full report. Nothing else in production changes.
+
+- By default the record counts for every portfolio, because the drill tests the global kill switch.
+- `--portfolio <id>` records it for one portfolio only. The portfolio must exist, or the command stops before the drill runs.
+- `--no-record` skips the record.
+
+The `live_small` and `live_scale` stage gates need a passing drill from the last 30 days. Set the window with `drill_max_age_days` under `[production.live.stages]`. Only the latest drill counts. Without a recent passing drill, or when the latest drill failed, the gate is blocked and its message says to run `stonks halts drill`.
 
 ## Drill 2: against the IBKR paper account
 

@@ -3,8 +3,10 @@
 - :func:`run_kill_switch_drill_scratch` runs the kill switch drill on a
   fresh scratch state DB in a temporary folder, through the real
   ``HaltService.engage_kill`` (global scope, stop-all), with the simulated
-  working-order broker unless a test passes another. Production data is
-  never read or written, and no real order is ever sent.
+  working-order broker unless a test passes another. No real order is ever
+  sent. Afterwards one row goes into ``kill_switch_drills`` in the real
+  state DB (unless ``record=False``), which the live stage gates read.
+  Nothing else in production is read or written.
 - :func:`live_soak_report` reads the paper soak report of one portfolio
   from the configured state DB (read-only).
 - :func:`reconcile_portfolio` syncs one portfolio's open orders with its
@@ -23,9 +25,11 @@ from stonks.app.context import AppContext
 from stonks.config import Settings, StateConfig
 from stonks.execution.reconcile import StartupReconcile
 from stonks.production.drills import (
+    DRILL_ACTOR,
     DRILL_REASON,
     DrillReport,
     SimulatedWorkingBroker,
+    record_drill,
     run_kill_switch_drill,
 )
 from stonks.production.soak import SoakReport, soak_report
@@ -41,10 +45,45 @@ def run_kill_switch_drill_scratch(
     ticker: str = "AAPL.US",
     reference_price: float = 100.0,
     cancel_timeout: float = 10.0,
+    record: bool = True,
+    ran_by: str = DRILL_ACTOR,
+    portfolio_id: str | None = None,
 ) -> DrillReport:
-    """The drill on a throwaway copy of the schema. ``settings`` only lends
-    everything but the state path, which points into a temporary folder
-    deleted afterwards."""
+    """The drill on a throwaway copy of the schema, then its record.
+
+    ``settings`` only lends everything but the state path, which points into
+    a temporary folder deleted afterwards. With ``record`` the outcome,
+    passed or failed, is stored in the real state DB under ``ran_by``.
+    ``portfolio_id`` ties the record to one portfolio; ``None`` is a drill
+    of the global kill switch, which counts for every portfolio. An unknown
+    ``portfolio_id`` raises :class:`ValueError` before the drill runs."""
+    if record and portfolio_id is not None:
+        with AppContext(settings).state() as state:
+            state.migrate()
+            if not state.sql("SELECT 1 FROM portfolios WHERE id = ?", [portfolio_id]):
+                raise ValueError(f"no such portfolio: {portfolio_id}")
+    report = _scratch_drill(
+        settings,
+        broker=broker,
+        ticker=ticker,
+        reference_price=reference_price,
+        cancel_timeout=cancel_timeout,
+    )
+    if record:
+        with AppContext(settings).state() as state:
+            state.migrate()
+            record_drill(state, report, ran_by=ran_by, portfolio_id=portfolio_id)
+    return report
+
+
+def _scratch_drill(
+    settings: Settings,
+    *,
+    broker: object | None,
+    ticker: str,
+    reference_price: float,
+    cancel_timeout: float,
+) -> DrillReport:
     from stonks.app.halts import HaltService, KillSwitchRequest
 
     drill_broker = broker if broker is not None else SimulatedWorkingBroker()

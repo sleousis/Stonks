@@ -66,6 +66,14 @@ def test_delayed_or_unsound_quotes_and_heartbeats_are_ignored():
     assert book.marks() == {}
 
 
+def test_delayed_bars_never_move_the_mark():
+    book = MarkBook()
+    late = StreamBar("A.US", T0, Interval.MIN_1, 1, 2, 1, 2, 1, delayed=True)
+    book(late)
+    book.on_bar_close(BarClose(at=T0 + ONE, interval=Interval.MIN_1, bars=(late,), sequence=1))
+    assert book.marks() == {}
+
+
 def test_a_bar_close_event_marks_every_bar():
     book = MarkBook()
     bars = (

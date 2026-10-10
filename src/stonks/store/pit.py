@@ -53,7 +53,7 @@ import pandas as pd
 
 from stonks.core.interval import Interval, decision_reach, known_through, visible_cutoff
 from stonks.core.timeutil import as_datetime
-from stonks.store.statement_versions import known_versions
+from stonks.store.statement_versions import MACRO_KEY, known_versions
 
 __all__ = ["PitSession", "PointInTimeLake", "PointInTimeViolation"]
 
@@ -340,6 +340,20 @@ class PointInTimeLake:
         publication_lag_days: int = 0,
         stamped_at: str = "period_start",
     ) -> pd.DataFrame:
+        """Prints published by the decision day, each in the version known
+        at the decision (P12, DuckDB 025): a revision counts once seen."""
+        if callable(getattr(self._lake, "get_macro_series_versions", None)):
+            versions = self._cached(
+                ("macro_versions", country_iso, indicator, publication_lag_days, stamped_at),
+                lambda: self._lake.get_macro_series_versions(
+                    country_iso,
+                    indicator,
+                    publication_lag_days=publication_lag_days,
+                    stamped_at=stamped_at,
+                ),
+            )
+            published = _on_or_before(versions["available_date"], self._clamp_day(as_of))
+            return known_versions(versions, self._reach, published, key=MACRO_KEY)
         full = self._cached(
             ("macro", country_iso, indicator, publication_lag_days, stamped_at),
             lambda: self._lake.get_macro_series(

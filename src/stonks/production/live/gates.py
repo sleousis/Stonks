@@ -30,8 +30,8 @@ import json
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
-from datetime import date
-from typing import Any, Protocol
+from datetime import UTC, date
+from typing import TYPE_CHECKING, Any, Protocol
 
 import numpy as np
 
@@ -47,6 +47,9 @@ from stonks.production.live.stages import (
     stages_enabled,
 )
 from stonks.store.state import SqliteState
+
+if TYPE_CHECKING:
+    from stonks.production.risk_curve import FxLoader
 
 _log = get_logger("stonks.production.live.gates")
 
@@ -187,9 +190,11 @@ def compute_gate_day(
     model: ModelBook | None = None,
     stage: LiveStage | None = None,
     clock: Clock = SYSTEM_CLOCK,
+    fx_loader: FxLoader | None = None,
 ) -> GateDay:
     """The gate metrics of ``portfolio_id`` for the session ``day``, read
-    from the ledger. Writes nothing."""
+    from the ledger. Writes nothing. ``fx_loader`` converts a deposit or
+    withdrawal in another currency for the book return."""
     settings = settings or StageGateSettings()
     d = day.isoformat()
     orders = state.sql(
@@ -219,7 +224,7 @@ def compute_gate_day(
         fills_missing_commission=missing,
         tca_orders=len(gaps),
         tca_gap_bps=float(np.mean(gaps)) if gaps else None,
-        live_return=_book_return(state, portfolio_id, day),
+        live_return=_book_return(state, portfolio_id, day, fx_loader=fx_loader),
         model_return=(model or ShadowModelBook()).session_return(state, portfolio_id, day),
         drift_items=(drift or ReconcileReportDrift()).unexplained(state, portfolio_id, day),
         computed_at=iso_now(clock),
@@ -298,6 +303,7 @@ def record_gate_days(
     model: ModelBook | None = None,
     alert: Callable[[str, Sequence[GateDay]], None] | None = None,
     clock: Clock = SYSTEM_CLOCK,
+    fx_loader: FxLoader | None = None,
 ) -> GateDaysRun:
     """Compute and store ``day`` for every live portfolio, then alert the
     owner of each one whose last week was not clean. Only alerts: the
@@ -308,7 +314,14 @@ def record_gate_days(
     for portfolio_id in live_portfolios(state):
         try:
             gate = compute_gate_day(
-                state, portfolio_id, day, settings=settings, drift=drift, model=model, clock=clock
+                state,
+                portfolio_id,
+                day,
+                settings=settings,
+                drift=drift,
+                model=model,
+                clock=clock,
+                fx_loader=fx_loader,
             )
             with state.transaction():
                 record_gate_day(state, gate)
@@ -583,7 +596,7 @@ def _gate_live_small(g: GateInput) -> list[GateCheck]:
             facts.profile_set,
             "the account profile is set" if facts.profile_set else "set the account profile first",
         ),
-        _drill(g.state, g.portfolio_id, g.today),
+        _drill(g.state, g.portfolio_id, g.today, settings.drill_max_age_days),
         _tracking(metrics, settings),
     ]
 
@@ -615,7 +628,7 @@ def _gate_live_scale(g: GateInput) -> list[GateCheck]:
             value=metrics["tca_gap_bps"],
             required="interval low <= 0",
         ),
-        _drill(g.state, g.portfolio_id, g.today),
+        _drill(g.state, g.portfolio_id, g.today, settings.drill_max_age_days),
         _tracking(metrics, settings),
     ]
 
@@ -667,31 +680,47 @@ def _drift_known(metrics: Mapping[str, Any]) -> GateCheck:
     )
 
 
-def _drill(state: SqliteState, portfolio_id: str, today: date) -> GateCheck:
-    """A passing kill switch drill in the last 30 days.
+def _drill(state: SqliteState, portfolio_id: str, today: date, max_age_days: int) -> GateCheck:
+    """The latest kill switch drill for the portfolio, or a global one,
+    passed and ran in the last ``max_age_days`` days (``[production.live.stages]
+    drill_max_age_days``). Without one, or when the latest failed, the gate
+    is blocked."""
+    from stonks.production.drills import latest_drill
 
-    TODO(19.11): ``kill_switch_drills`` comes with the drills work package.
-    Until then the check is ``unavailable``."""
+    run = "run `stonks halts drill`"
     if not _table_exists(state, "kill_switch_drills"):
-        return GateCheck("kill_switch_drill", None, "unavailable: drills come with roadmap 19.11")
-    cols = {r["name"] for r in state.sql("PRAGMA table_info(kill_switch_drills)")}
-    if not {"portfolio_id", "passed", "created_at"} <= cols:
-        return GateCheck("kill_switch_drill", None, "unavailable: unknown drills table")
-    rows = state.sql(
-        "SELECT MAX(created_at) AS last FROM kill_switch_drills WHERE portfolio_id = ?"
-        " AND passed = 1",
-        [portfolio_id],
-    )
-    last = rows[0]["last"] if rows else None
-    if last is None:
-        return GateCheck("kill_switch_drill", False, "no passing drill yet")
-    age = (today - date.fromisoformat(str(last)[:10])).days
+        return GateCheck(
+            "kill_switch_drill",
+            False,
+            f"no drills table: run `stonks db init`, then {run}",
+            required=max_age_days,
+        )
+    latest = latest_drill(state, portfolio_id)
+    if latest is None:
+        return GateCheck(
+            "kill_switch_drill",
+            False,
+            f"no passing kill switch drill yet: {run}",
+            required=max_age_days,
+        )
+    age = (today - latest.ran_at.astimezone(UTC).date()).days
+    if not latest.passed:
+        return GateCheck(
+            "kill_switch_drill",
+            False,
+            f"last kill switch drill failed {age} day(s) ago: fix it and {run}",
+            value=age,
+            required=max_age_days,
+        )
+    ok = age <= max_age_days
     return GateCheck(
         "kill_switch_drill",
-        age <= 30,
-        f"last passing drill {age} day(s) ago",
+        ok,
+        f"last passing drill {age} day(s) ago"
+        if ok
+        else f"last passing drill {age} day(s) ago, older than {max_age_days} days: {run}",
         value=age,
-        required=30,
+        required=max_age_days,
     )
 
 
@@ -751,8 +780,11 @@ def _period_return(rows: Sequence[Any], day: date) -> float | None:
     return now / before - 1.0 if before > 0 else None
 
 
-def _book_return(state: SqliteState, portfolio_id: str, day: date) -> float | None:
-    """The book's return into ``day`` from its last snapshot of each day."""
+def _book_return(
+    state: SqliteState, portfolio_id: str, day: date, *, fx_loader: FxLoader | None = None
+) -> float | None:
+    """The book's return into ``day`` from its last snapshot of each day,
+    with deposits and withdrawals taken out (``production.risk_curve``)."""
     rows = state.sql(
         "SELECT as_of, total_value FROM portfolio_snapshots s WHERE portfolio_id = ?"
         " AND as_of <= ? AND id = (SELECT MAX(id) FROM portfolio_snapshots"
@@ -760,7 +792,14 @@ def _book_return(state: SqliteState, portfolio_id: str, day: date) -> float | No
         " ORDER BY as_of DESC LIMIT 2",
         [portfolio_id, day.isoformat()],
     )
-    return _period_return(rows, day)
+    if len(rows) < 2 or rows[0]["as_of"] != day.isoformat():
+        return None
+    from stonks.production.risk_curve import adjusted_curve
+
+    # a deposit or withdrawal between the two snapshots is not a return
+    points = [(date.fromisoformat(r["as_of"]), float(r["total_value"])) for r in reversed(rows)]
+    (_, before), (_, now) = adjusted_curve(state, portfolio_id, points, fx_loader=fx_loader)
+    return now / before - 1.0 if before > 0 else None
 
 
 def _tca_gaps(state: SqliteState, portfolio_id: str, start: date, end: date) -> list[float]:

@@ -51,6 +51,8 @@ export function engine(over: Partial<EngineView> = {}): EngineView {
       backfills_ok: 1,
       backfills_failed: 0,
       last_error: null,
+      delayed_events: 0,
+      delayed_only: false,
     },
     dispatch_lag: latency({ count: 90, p50_seconds: 0.05, p95_seconds: 0.25, max_seconds: 0.4 }),
     event_to_order: latency({ count: 6, p50_seconds: 0.5, p95_seconds: 1, max_seconds: 0.9 }),

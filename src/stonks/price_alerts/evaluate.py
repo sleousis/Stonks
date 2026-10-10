@@ -340,7 +340,7 @@ def firing_event(firing: Firing) -> Event:
         body=firing.detail,
         audience=Audience.users(firing.owner_id),
         dedupe_key=f"price:{firing.rule_id}:{firing.ticker}:{firing.observed_at}",
-        deep_link="/alerts",
+        deep_link="/notifications/price-alerts",
     )
 
 
