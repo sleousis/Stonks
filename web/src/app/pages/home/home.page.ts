@@ -20,7 +20,8 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
  * today's signals and runs in time order, and my strategies with their
  * switches, and the market's breadth. Admins see their own portfolio first too, with the totals
  * across traders under it (M3, F23). The left column flows on its own, so
- * a tall strategies list never leaves a hole beside it.
+ * a tall strategies list never leaves a hole beside it. On a phone the
+ * order is tape, portfolio, strategies, signals, breadth.
  */
 @Component({
   selector: 'app-home-page',
@@ -53,15 +54,19 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
 
     <div class="home">
       <app-fills-tape class="tape" />
-      <div class="portfolio">
-        <app-portfolio-card />
-        @if (session.isAdmin()) {
-          <app-totals-card />
-        }
+      <div class="col left">
+        <div class="portfolio">
+          <app-portfolio-card />
+          @if (session.isAdmin()) {
+            <app-totals-card />
+          }
+        </div>
+        <app-signals-card class="signals" />
       </div>
-      <app-signals-card class="signals" />
-      <app-strategies-card class="strategies" />
-      <app-breadth-card class="breadth" />
+      <div class="col right">
+        <app-strategies-card class="strategies" />
+        <app-breadth-card class="breadth" />
+      </div>
     </div>
   `,
   styles: `
@@ -71,20 +76,35 @@ import { TradingDayService } from '../../core/schedule/trading-day.service';
       display: grid;
       gap: var(--space-4);
       grid-template-columns: minmax(0, 1fr);
-      grid-template-areas: 'portfolio' 'tape' 'signals' 'strategies' 'breadth';
+      /* Phones: following a strategy comes before the signals it sends (FR-05). */
+      grid-template-areas: 'tape' 'portfolio' 'strategies' 'signals' 'breadth';
 
+      /* Desktop: two columns that each flow on their own, so a tall card in
+         one never leaves a gap in the other (M3, FR-10). */
       @include bp.from-desktop {
         grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
         grid-template-areas:
           'tape tape'
-          'portfolio strategies'
-          'signals strategies'
-          'signals breadth';
-        /* The strategies row is flexible, so a tall strategies column grows it
-           and never stretches the portfolio row into a gap (M3). */
-        grid-template-rows: auto auto 1fr auto;
+          'left right';
         align-items: start;
       }
+    }
+    /* On a phone the columns step aside and their cards join the one grid. */
+    .col {
+      display: contents;
+
+      @include bp.from-desktop {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-4);
+        min-width: 0;
+      }
+    }
+    .left {
+      grid-area: left;
+    }
+    .right {
+      grid-area: right;
     }
     .tape {
       grid-area: tape;

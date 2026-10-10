@@ -19,6 +19,14 @@ import { PortfolioContextService } from '../../core/portfolio/portfolio-context.
 import { TradingDayService } from '../../core/schedule/trading-day.service';
 
 const TOP_HOLDINGS = 8;
+/** A yearly rate means little before about three months of history (NB-14). */
+const YEARLY_AFTER_DAYS = 90;
+
+/** Calendar days between the first and last day of a P&L series. */
+export function historyDays(rows: readonly { day: string }[]): number {
+  if (rows.length < 2) return 0;
+  return (Date.parse(rows.at(-1)!.day) - Date.parse(rows[0].day)) / 86_400_000;
+}
 /** Moved to core/format/day-change.ts so every page names the day alike (M2). */
 export { sessionLabel } from '../../core/format/day-change';
 
@@ -238,15 +246,21 @@ export class PortfolioCard {
       book.base_currency ?? this.portfolioCtx.current()?.base_currency,
     );
   });
-  /** Since the start, with deposits and withdrawals taken out. */
+  /**
+   * Since the start, with deposits and withdrawals taken out. The yearly
+   * figure waits for about three months of history: ten days of +1.6%
+   * would read as +48.5% a year (NB-14).
+   */
   protected readonly returnsLine = computed(() => {
     const series = this.pnl.hasValue() ? this.pnl.value() : null;
-    if (!series || (series.twr == null && series.mwr == null)) return null;
+    if (!series) return null;
+    const yearly = series.mwr != null && historyDays(series.rows) >= YEARLY_AFTER_DAYS;
+    if (series.twr == null && !yearly) return null;
     const parts: string[] = [];
     if (series.twr != null) {
       parts.push(`return ${formatPercent(series.twr, { signed: true, digits: 1 })}`);
     }
-    if (series.mwr != null) {
+    if (yearly && series.mwr != null) {
       parts.push(`${formatPercent(series.mwr, { signed: true, digits: 1 })} a year on your money`);
     }
     return `Since the start: ${parts.join(', ')}. Deposits and withdrawals left out.`;
@@ -281,7 +295,7 @@ export class PortfolioCard {
       .slice(0, TOP_HOLDINGS)
       .map((p) => ({
         ticker: p.ticker,
-        quantity: `${formatNumber(p.quantity)} shares`,
+        quantity: `${formatNumber(p.quantity, { digits: 2 })} shares`,
         value:
           p.market_value == null
             ? 'n/a'
