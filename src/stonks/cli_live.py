@@ -225,18 +225,35 @@ def register(halts_app: typer.Typer) -> None:
         json_out: str | None = typer.Option(
             None, "--json-out", help="also write the report as JSON to this file"
         ),
+        portfolio: str | None = typer.Option(
+            None,
+            "--portfolio",
+            help="record the drill for this portfolio only (default: for every portfolio)",
+        ),
+        record: bool = typer.Option(
+            True, "--record/--no-record", help="record the run for the live stage gates"
+        ),
     ) -> None:
         """Kill switch drill, dry run: on a scratch state, place a tiny limit
         far from the market, engage the global kill switch, and check that new
-        orders stop and the working order is cancelled at the broker."""
+        orders stop and the working order is cancelled at the broker. The run
+        is then recorded in the real state DB, where the live_small and
+        live_scale stage gates look for a recent passing drill."""
         from stonks.app.drills import run_kill_switch_drill_scratch
+        from stonks.cli import _cli_actor
 
         if broker not in DRILL_BROKERS:
             raise typer.BadParameter(
                 f"--broker must be one of {list(DRILL_BROKERS)}", param_hint="--broker"
             )
         report = run_kill_switch_drill_scratch(
-            _settings(), ticker=ticker, reference_price=price, cancel_timeout=timeout
+            _settings(),
+            ticker=ticker,
+            reference_price=price,
+            cancel_timeout=timeout,
+            record=record,
+            ran_by=_cli_actor(),
+            portfolio_id=portfolio,
         )
         if json_out:
             Path(json_out).write_text(json.dumps(report.to_dict(), indent=2, default=str))
@@ -248,6 +265,9 @@ def register(halts_app: typer.Typer) -> None:
             table.add_row(s.name, mark, s.detail, f"{s.elapsed_ms:g}")
         console.print(table)
         console.print("[green]drill passed[/green]" if report.passed else "[red]drill failed[/red]")
+        if record:
+            scope = f"for {portfolio}" if portfolio else "for every portfolio"
+            console.print(f"recorded {scope} (the live stage gates read it)")
         if not report.passed:
             raise typer.Exit(code=1)
 

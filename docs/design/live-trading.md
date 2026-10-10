@@ -617,7 +617,7 @@ New pages in `docs/runbooks/`. They also close the open Phase 12 item "broker un
 
 - Monthly in `broker_paper`, quarterly in live, and before every stage promotion.
 - `stonks halts drill <portfolio>` places one tiny limit order far from the market (it cannot fill), engages the portfolio kill switch in stop-all mode, checks that IBKR reports the order `Cancelled` within 10 seconds and that `reqGlobalCancel` ran, then waits for a person to resume with `RESUME TRADING`.
-- The drill writes a `kill_switch_drills` row with the timings. A gate report needs a passing drill from the last 30 days.
+- Every `stonks halts drill` run writes a `kill_switch_drills` row (migration 057) with who ran it, whether it passed and the report. The drill itself runs on scratch state. The `live_small` and `live_scale` gates need a passing drill for the portfolio, or a global one, within `drill_max_age_days` (30). Without one the gate is blocked.
 
 ## 8. Testing
 
@@ -659,7 +659,7 @@ Each package owns the tests of its own modules. Shared files (`config.py`, `conf
 | 19.8 Tickets, approve mode and the submit job | `Mode.APPROVE`, `order_tickets`, decide versus submit for live books in the tick, the `live_submit` job, ticket API with step-up approval, the ticket view and push, MCP read-only tools. | `accounts/models.py`, `accounts/subscriptions.py`, `production/tickets.py`, `production/submit.py`, `production/tick.py`, `app/tickets.py`, `api/routers/tickets.py`, `web/src/app/tickets/*`, `store/migrations_sqlite/NNN_order_tickets.sql` |
 | 19.9 Stages, gates and preview | The stage state machine and `live_stage_changes`, `live_gate_days`, the gate reports, `stonks live stage` and `stonks live preview`, the go-live page section. | `production/live/stages.py`, `production/live/gates.py`, `production/live/preview.py`, `app/live.py`, `api/routers/live.py`, `web/src/app/golive/*`, `store/migrations_sqlite/NNN_live_stages.sql` |
 | 19.10 Protective stops | Stop placement after entry fills, resizing and cancelling, OCA groups, attribution of stop fills. | `production/live/stops.py` |
-| 19.11 Live tests, drills and runbooks | Live contract tests, `stonks live soak-report`, `stonks halts drill` (dry run, no `kill_switch_drills` table yet), the five runbooks, the ops and deploy doc sections. | `tests/integration/live/test_ibkr_live.py`, `production/soak.py`, `production/drills.py`, `docs/runbooks/{broker-outage,stuck-order,reconcile-drift,gateway-reauth,kill-switch-drill}.md` |
+| 19.11 Live tests, drills and runbooks | Live contract tests, `stonks live soak-report`, `stonks halts drill` (dry run on scratch state, each run recorded in `kill_switch_drills` for the stage gates), the five runbooks, the ops and deploy doc sections. | `tests/integration/live/test_ibkr_live.py`, `production/soak.py`, `production/drills.py`, `docs/runbooks/{broker-outage,stuck-order,reconcile-drift,gateway-reauth,kill-switch-drill}.md` |
 | 19.12 Go live | Not code. Run stage 1 (20 days paper soak), gate 1, stage 2 in auto (approve mode optional), gate 2, then raise the allocation by hand. Each step has a logged reason. | operations only |
 
 Waves:

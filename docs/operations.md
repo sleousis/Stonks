@@ -852,11 +852,11 @@ Stage 1 is at least 20 trading days of the real schedule against the IBKR paper 
 
 ```bash
 uv run stonks live soak-report --portfolio <id> [--days 20] [--end YYYY-MM-DD] [--model ID] [--json] [--strict]
-uv run stonks halts drill [--price 100] [--timeout 10] [--json-out drill.json]
+uv run stonks halts drill [--price 100] [--timeout 10] [--json-out drill.json] [--portfolio ID] [--no-record]
 ```
 
 - `live soak-report` reads the state DB only. Per portfolio it shows orders by outcome and the top rejection reasons, slippage against the decision price, fills against the model book (the portfolio's paper twin, or `--model`), gateway outage days and recoveries, `broker_drift` halts, and `reconcile_reports` rows when that table exists. It lists findings (too few days, unknown orders, over 5% rejects, mean slippage over 50 bps, fills that differ from the model book, an outage not recovered, drift). A soak with no finding is clean. `--strict` exits 1 when it is not.
-- `halts drill` is the kill switch dry run. It uses a scratch state DB and the simulated broker, never production data and never a real order. It places a far limit, engages the global kill switch through the halt service, and checks that the gates stop new orders and the working order is cancelled within the timeout. It exits 1 when a step fails. See [runbooks/kill-switch-drill.md](runbooks/kill-switch-drill.md) for the paper drill.
+- `halts drill` is the kill switch dry run. It uses a scratch state DB and the simulated broker, never production data and never a real order. It places a far limit, engages the global kill switch through the halt service, and checks that the gates stop new orders and the working order is cancelled within the timeout. It exits 1 when a step fails. Each run is then recorded in `kill_switch_drills` in the real state DB, for every portfolio or for `--portfolio`. The `live_small` and `live_scale` stage gates need a passing drill within `drill_max_age_days` (30) under `[production.live.stages]`. See [runbooks/kill-switch-drill.md](runbooks/kill-switch-drill.md) for the paper drill.
 - Live contract tests: `tests/integration/live/test_ibkr_live.py` with `STONKS_RUN_LIVE_TESTS=1`, `STONKS_IBKR_HOST`, `STONKS_IBKR_PORT` and a `DU` `STONKS_IBKR_ACCOUNT`. They check login and account, contracts, what-if, a far limit placed and cancelled, executions, a reconnect and quotes. They stop at once if the gateway manages any account that is not paper. No credential is read: the gateway holds the login.
 
 ### Account rules
