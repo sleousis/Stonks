@@ -3882,7 +3882,7 @@ requires-dist = [
     { name = "statsmodels", specifier = ">=0.15.0" },
     { name = "stonks", extras = ["chronos", "timesfm", "kronos"], marker = "extra == 'forecasters'" },
     { name = "structlog", specifier = ">=26.1.0" },
-    { name = "timesfm", extras = ["torch"], marker = "extra == 'timesfm'", specifier = ">=2.0,<4" },
+    { name = "timesfm", extras = ["torch"], marker = "extra == 'timesfm'", specifier = ">=3.0.2,<4" },
     { name = "torch", marker = "extra == 'kronos'", specifier = ">=2.14.1" },
     { name = "tqdm", marker = "extra == 'kronos'", specifier = ">=4.66" },
     { name = "typer", specifier = ">=0.27.2" },
