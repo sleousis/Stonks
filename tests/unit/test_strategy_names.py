@@ -160,6 +160,9 @@ def test_display_name_humanises_every_id_like_the_console() -> None:
         "Admin trend rule"
     )
     assert strategy_display_name("momentum-v3") == "momentum-v3"
+    # A ticker inside a snake_case id reads in capitals, as it is traded.
+    assert strategy_display_name("bah_btc-usd") == "Bah BTC-USD"
+    assert strategy_display_name("bah_btc-usd_0a1b2c3d") == "Bah BTC-USD 0a1b"
 
 
 def test_names_come_from_the_draft_a_strategy_was_registered_from(tmp_path) -> None:

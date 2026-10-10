@@ -17,8 +17,12 @@ export interface DisplayNameHints {
   name?: string | null;
 }
 
-/** A snake_case id such as `etf_trend` or `starter_buy_and_hold`. */
-const SNAKE_ID = /^[a-z0-9]+(?:_[a-z0-9]+)*$/;
+/**
+ * A snake_case id such as `etf_trend` or `starter_buy_and_hold`. A word may
+ * hold a hyphen (a ticker such as `btc-usd`) once the id has an underscore,
+ * so `momentum-v3` stays as it is.
+ */
+const SNAKE_ID = /^(?:[a-z0-9]+(?:_[a-z0-9]+)*|[a-z0-9-]+(?:_[a-z0-9-]+)+)$/;
 
 /** Words that read as capitals in a name. */
 const ACRONYMS: Readonly<Record<string, string>> = {
@@ -44,12 +48,12 @@ const ACRONYMS: Readonly<Record<string, string>> = {
   hrp: 'HRP',
 };
 
-/** `etf_trend` -> `ETF trend`, `starter_buy_and_hold` -> `Starter buy and hold`. */
+/** `etf_trend` -> `ETF trend`, `bah_btc-usd` -> `Bah BTC-USD`. */
 function humanise(snake: string): string {
   const words = snake
     .split(/_+/)
     .filter(Boolean)
-    .map((w) => ACRONYMS[w] ?? w);
+    .map((w) => (w.includes('-') ? w.toUpperCase() : (ACRONYMS[w] ?? w)));
   const text = words.join(' ');
   return text.charAt(0).toUpperCase() + text.slice(1);
 }

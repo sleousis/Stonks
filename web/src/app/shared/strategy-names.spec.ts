@@ -56,6 +56,11 @@ describe('strategyDisplayName (UX-27)', () => {
     expect(strategyDisplayName('momentum-v3')).toBe('momentum-v3');
     expect(strategyDisplayName('')).toBe('');
   });
+
+  it('reads a ticker inside a snake_case id in capitals', () => {
+    expect(strategyDisplayName('bah_btc-usd')).toBe('Bah BTC-USD');
+    expect(strategyDisplayName('bah_btc-usd_0a1b2c3d')).toBe('Bah BTC-USD 0a1b');
+  });
 });
 
 describe('strategyKindName', () => {

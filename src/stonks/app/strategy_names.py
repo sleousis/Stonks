@@ -25,7 +25,9 @@ from stonks.starter import starter_info
 
 #: A slug plus the registry's eight hex characters (``momentum_0a1b2c3d``).
 _GENERATED_ID = re.compile(r"^(.+?)_([0-9a-f]{8})$")
-_SNAKE_ID = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*$")
+#: A snake_case id. A word may hold a hyphen (a ticker such as ``btc-usd``)
+#: once the id has an underscore, so ``momentum-v3`` stays as it is.
+_SNAKE_ID = re.compile(r"^(?:[a-z0-9]+(?:_[a-z0-9]+)*|[a-z0-9-]+(?:_[a-z0-9-]+)+)$")
 
 #: Words that read as capitals in a name (kept in step with the console).
 _ACRONYMS = {
@@ -63,7 +65,8 @@ def strategy_title(strategy_id: str | None) -> str | None:
 
 
 def _humanise(snake: str) -> str:
-    text = " ".join(_ACRONYMS.get(w, w) for w in snake.split("_") if w)
+    words = (w.upper() if "-" in w else _ACRONYMS.get(w, w) for w in snake.split("_") if w)
+    text = " ".join(words)
     return text[:1].upper() + text[1:]
 
 
