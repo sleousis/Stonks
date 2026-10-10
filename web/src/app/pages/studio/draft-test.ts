@@ -46,7 +46,30 @@ import {
   suiteTests,
   suitesFromPresets,
 } from '../lab/lab-requests';
-import { INTERVALS } from './rule-spec';
+import { INTERVALS, intervalWord } from './rule-spec';
+
+/**
+ * A small set of liquid funds to test on when the draft names no tickers
+ * (the starter universe, `stonks.starter.STARTER_UNIVERSE`), so the Test
+ * tab never starts empty (NB-07).
+ */
+export const STARTER_TICKERS: readonly string[] = [
+  'SPY.US',
+  'QQQ.US',
+  'IWM.US',
+  'EFA.US',
+  'EEM.US',
+  'TLT.US',
+  'IEF.US',
+  'GLD.US',
+  'VNQ.US',
+  'XLE.US',
+];
+
+/** A backtest that never traded (the buy rule was never true). */
+export function noTrades(r: BacktestResult): boolean {
+  return r.trade_count === 0 || (r.trade_count == null && r.trades?.length === 0);
+}
 
 /**
  * Test a draft: a backtest (equity, drawdown, metrics) and a lab run
@@ -82,10 +105,19 @@ export class DraftTest {
   readonly ensureSaved = input<() => Promise<boolean>>(() => Promise.resolve(true));
 
   protected readonly intervals = INTERVALS;
+  protected readonly intervalWord = intervalWord;
+  protected readonly noTrades = noTrades;
   protected readonly pickable = PICKABLE_TESTS;
 
   // ---- setup form ------------------------------------------------------------
-  protected readonly tickersText = linkedSignal(() => (this.specTickers() ?? []).join(', '));
+  /** The draft's own tickers, else the starter set (NB-07). */
+  protected readonly tickersText = linkedSignal(() => {
+    const own = this.specTickers() ?? [];
+    return (own.length ? own : STARTER_TICKERS).join(', ');
+  });
+  protected readonly usesStarterTickers = computed(
+    () => !(this.specTickers() ?? []).length && this.tickersText() === STARTER_TICKERS.join(', '),
+  );
   protected readonly start = signal(defaultWindow().start);
   protected readonly end = signal(defaultWindow().end);
   protected readonly interval = linkedSignal(() => this.specInterval());

@@ -11,9 +11,12 @@ import {
   type RuleSpecDoc,
   changeKind,
   defaultComparison,
+  indicatorWords,
+  intervalWord,
   newIndicator,
   renameIndicator,
 } from './rule-spec';
+import { assetClassWords } from '../lab/lab-requests';
 
 const MAX_INDICATORS = 32;
 
@@ -41,6 +44,18 @@ export class RuleBuilder {
   protected readonly newKind = signal('sma');
 
   protected readonly indicatorIds = computed(() => this.spec().indicators.map((i) => i.id));
+  /** Each indicator in words ("RSI over 14 days") for the rules and the ranking (NB-08). */
+  protected readonly indicatorLabels = computed<Record<string, string>>(() => {
+    const s = this.spec();
+    return Object.fromEntries(s.indicators.map((i) => [i.id, indicatorWords(i, s.interval)]));
+  });
+  protected readonly intervalWord = intervalWord;
+  protected assetWord(ac: string): string {
+    return assetClassWords([ac]);
+  }
+  protected sourceWord(src: string): string {
+    return src.charAt(0).toUpperCase() + src.slice(1);
+  }
   protected readonly canAddIndicator = computed(
     () => this.spec().indicators.length < MAX_INDICATORS,
   );

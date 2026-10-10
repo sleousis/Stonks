@@ -241,15 +241,17 @@
           />
         </section>
 
-        <aside class="panel json" aria-labelledby="json-title">
-          <div class="panel-head">
-            <h2 id="json-title">JSON</h2>
-            <span class="muted">What the API stores</span>
-          </div>
-          <div class="panel-body">
-            <app-spec-json [spec]="s" (apply)="applyJson($event)" />
-          </div>
-        </aside>
+        @if (canSeeJson()) {
+          <details class="panel json">
+            <summary class="panel-head">
+              <h2 id="json-title">Show JSON</h2>
+              <span class="muted">What the API stores</span>
+            </summary>
+            <div class="panel-body">
+              <app-spec-json [spec]="s" (apply)="applyJson($event)" />
+            </div>
+          </details>
+        }
       </div>
     }
   </div>

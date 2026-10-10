@@ -89,6 +89,8 @@ export class DraftPage {
 
   /** Saving, renaming, checking and testing need `lab.run`. */
   protected readonly canLab = computed(() => this.session.can('lab.run'));
+  /** The raw JSON is an admin's tool, folded away (NB-08). */
+  protected readonly canSeeJson = computed(() => this.session.can('strategy.promote'));
 
   readonly id = input.required<string>();
   /** Query param `?tab=test|ship` opens that tab ("Test again" on a strategy page). */

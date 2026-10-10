@@ -119,6 +119,11 @@
 }
 
 // Build ----------------------------------------------------------------------
+.json > summary {
+  min-height: var(--touch-min);
+  cursor: pointer;
+}
+
 .build-grid {
   display: grid;
   gap: var(--space-4);
@@ -126,7 +131,10 @@
   align-items: start;
 
   @include bp.from-desktop {
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    // Two columns only when the JSON panel is there (admins).
+    &:has(> .json) {
+      grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    }
 
     .json {
       position: sticky;

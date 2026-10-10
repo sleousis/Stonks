@@ -78,14 +78,14 @@ describe('ConditionEditor', () => {
 
   it('wraps a node in Not', () => {
     create(RSI_BELOW_30);
-    button('Not').click();
+    button('Is not').click();
     expect(changes.at(-1)).toEqual({ type: 'not', condition: RSI_BELOW_30 });
   });
 
   it('unwraps a Not', () => {
     create({ type: 'not', condition: RSI_BELOW_30 });
     expect(el.textContent).toContain('true when the condition below is false');
-    button('Remove not').click();
+    button('Remove “is not”').click();
     expect(changes.at(-1)).toEqual(RSI_BELOW_30);
   });
 
