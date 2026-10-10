@@ -54,7 +54,7 @@ flowchart LR
 | `deploy/compose.yaml` | `api` and `caddy`, plus profiles for `scheduler`, `lab-worker`, `restic` (backup), the IB Gateways and the model server. |
 | `deploy/ibkr/` | The IB Gateway guide and the folder for its secret files (never committed). |
 | `deploy/compose.tailscale.yaml` | Lets Caddy get its `*.ts.net` certificate from Tailscale. |
-| `deploy/Caddyfile` | HTTPS, security headers, reverse proxy to the API. It passes the real `Host`, and the API answers only `STONKS_DOMAIN` (Compose sets `STONKS_API_ALLOWED_HOSTS`, see [security.md](security.md#allowed-hosts)). |
+| `deploy/Caddyfile` | HTTPS, security headers (the Content-Security-Policy too, see [security.md](security.md#content-security-policy)), reverse proxy to the API. It passes the real `Host`, and the API answers only `STONKS_DOMAIN` (Compose sets `STONKS_API_ALLOWED_HOSTS`, see [security.md](security.md#allowed-hosts)). |
 | `deploy/.env.example` | Every setting and secret the app needs (placeholders). The app containers get this file. |
 | `deploy/backup.env.example` | The backup and host-check secrets (placeholders). Only the `restic` container and the host scripts get this file. |
 | `deploy/cloud-init.yaml` | First-boot setup: users, Docker, firewall, automatic updates, data volume, Tailscale. |

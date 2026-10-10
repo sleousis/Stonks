@@ -41,7 +41,7 @@ closed "For scripts" section of the sign-in page, open only in dev, or of
 | Command | What it does |
 |---|---|
 | `npm start` | Dev server with the `/api` proxy (`proxy.conf.json`) |
-| `npm run build` | Production build into `web/dist/`, then `scripts/preload-routes.mjs` (see [Lighthouse budget](#lighthouse-budget)) |
+| `npm run build` | Production build into `web/dist/`, then `scripts/preload-routes.mjs` (see [Lighthouse budget](#lighthouse-budget)) and `scripts/check-csp.mjs` (see [security.md](security.md#content-security-policy)) |
 | `npm test` | Unit tests once, headless (Vitest + jsdom via `ng test`) |
 | `npm run test:watch` | Unit tests in watch mode |
 | `npm run lint` | ESLint (angular-eslint, template accessibility rules), the node specs in `scripts/`, and the copy check |
@@ -1786,9 +1786,13 @@ What keeps it there:
 - `index.html` paints the rail and the drawing brand mark before any
   script runs, so first paint does not wait for Angular.
 - `npm run build` runs `scripts/preload-routes.mjs`: `modulepreload` for
-  the chunks `main.js` imports, and a small inline script that preloads the
-  current URL's lazy page chunks, so they download with `main.js` instead
-  of one round trip after another. It keeps `ngsw.json`'s index hash right.
+  the chunks `main.js` imports, and a route table (JSON data) that a small
+  inline script in `index.html` reads to preload the current URL's lazy
+  page chunks, so they download with `main.js` instead of one round trip
+  after another. It keeps `ngsw.json`'s index hash right. The script never
+  changes between builds, so the Content-Security-Policy allows it by hash
+  ([security.md](security.md#content-security-policy)). Critical CSS
+  inlining is off: its loader is an inline script the policy would block.
 - The command palette, shortcut sheet, step-up prompt and kill sheet are
   `@defer`red until first use (the kill sheet on idle).
 - The display face is Archivo cut to its one width and Latin only

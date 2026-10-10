@@ -2,9 +2,14 @@
 //
 // Each page is a lazy chunk that imports more shared chunks, so on a cold
 // load the browser finds them one round trip at a time. This reads the
-// build's stats, maps every route to the chunks it needs, and writes a small
-// inline script into index.html that adds <link rel="modulepreload"> for the
-// current URL's chunks, so they download in parallel with main.js.
+// build's stats, maps every route to the chunks it needs, and writes that
+// table into index.html as JSON. The small loop in src/index.html (marked
+// data-route-preload-run) reads it and adds <link rel="modulepreload"> for
+// the current URL's chunks, so they download in parallel with main.js.
+//
+// The table is data (type="application/json"), not script. The loop's text
+// never changes between builds, so the Content-Security-Policy allows it by
+// a fixed sha256 hash (src/stonks/api/csp.py).
 //
 // Also refreshes index.html's hash in ngsw.json (the service worker checks it)
 // and removes the stats file from the output.
@@ -18,6 +23,8 @@ const STATS = join(DIST, 'browser-stats.json');
 const INDEX = join(DIST, 'index.html');
 const NGSW = join(DIST, 'ngsw.json');
 const MARK = 'data-route-preload';
+// The loop's opening tag. The Angular build writes the bare attribute as ="".
+const RUN = /<script data-route-preload-run(?:="")?>/;
 
 /** The `{ ... }` object literal around `at`, by brace matching. */
 function enclosingObject(src, at) {
@@ -150,8 +157,8 @@ export function chunkGraph(stats, root) {
   return { closure, eager };
 }
 
-/** The inline script: a chunk list, route patterns with chunk indexes, and the loop. */
-export function preloadScript(rows, closure) {
+/** The route table as a JSON data block: a chunk list, and route patterns with chunk indexes. */
+export function preloadData(rows, closure) {
   const names = [];
   const index = new Map();
   const table = [];
@@ -164,13 +171,20 @@ export function preloadScript(rows, closure) {
     });
     table.push([row.re, ids]);
   }
-  const data = JSON.stringify({ n: names, r: table });
-  return (
-    `<script ${MARK}>(function(){try{var d=${data},p=location.pathname,h=document.head;` +
-    `for(var i=0;i<d.r.length;i++){if(new RegExp(d.r[i][0]).test(p)){` +
-    `d.r[i][1].forEach(function(j){var l=document.createElement('link');` +
-    `l.rel='modulepreload';l.href=d.n[j];h.appendChild(l)});break}}}catch(e){}})()</script>`
-  );
+  // No "<" in the block, so nothing in it can close the script element.
+  const data = JSON.stringify({ n: names, r: table }).replace(/</g, '\\u003c');
+  return `<script type="application/json" id="route-preload" ${MARK}>${data}</script>`;
+}
+
+/** index.html with the links and the table just before the preload loop, replacing earlier ones. */
+export function injectPreload(html, links, data) {
+  if (!RUN.test(html)) {
+    throw new Error('index.html has no <script data-route-preload-run> to read the route table');
+  }
+  const clean = html
+    .replace(new RegExp(`<script type="application/json" id="route-preload" ${MARK}>.*?</script>`), '')
+    .replace(new RegExp(`<link rel="modulepreload" href="[^"]+" ${MARK}>`, 'g'), '');
+  return clean.replace(RUN, (tag) => `${links}${data}${tag}`);
 }
 
 function sha1(content) {
@@ -196,13 +210,10 @@ function main() {
   const stats = JSON.parse(statsText);
   const { closure, eager } = chunkGraph(stats, process.cwd());
   const rows = routeTable(resolve('src/app/app.routes.ts'));
-  const script = preloadScript(rows, closure);
+  const data = preloadData(rows, closure);
   // The initial chunks main.js imports: fetched with main, not after it.
   const links = eager.map((n) => `<link rel="modulepreload" href="${n}" ${MARK}>`).join('');
-  let html = readFileSync(INDEX, 'utf8')
-    .replace(new RegExp(`<script ${MARK}>.*?</script>`), '')
-    .replace(new RegExp(`<link rel="modulepreload" href="[^"]+" ${MARK}>`, 'g'), '');
-  html = html.replace('</head>', `${links}${script}\n</head>`);
+  const html = injectPreload(readFileSync(INDEX, 'utf8'), links, data);
   writeFileSync(INDEX, html);
   const ngswText = readIfPresent(NGSW);
   if (ngswText !== null) {
@@ -215,7 +226,7 @@ function main() {
   }
   rmSync(STATS);
   console.log(
-    `preload-routes: ${rows.length} routes, script ${script.length} bytes in ${relative('.', INDEX)}`,
+    `preload-routes: ${rows.length} routes, table ${data.length} bytes in ${relative('.', INDEX)}`,
   );
 }
 
