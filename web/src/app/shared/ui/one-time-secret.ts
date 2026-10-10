@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  afterNextRender,
+  booleanAttribute,
+  computed,
+  inject,
+  input,
+  signal,
+} from '@angular/core';
 
 import { copyText, downloadText } from './copy-button';
 
@@ -24,7 +34,7 @@ import { copyText, downloadText } from './copy-button';
         </ol>
       }
       <div class="actions">
-        <button type="button" class="btn" (click)="copy()">
+        <button type="button" class="btn copy" (click)="copy()">
           {{ copied() ? 'Copied' : 'Copy' }}
         </button>
         @if (filename(); as name) {
@@ -65,12 +75,13 @@ import { copyText, downloadText } from './copy-button';
     }
     .codes {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
       gap: var(--space-2);
       margin: 0;
       padding-left: var(--space-5);
     }
     .codes code {
+      white-space: nowrap;
       font-size: var(--text-md);
       font-variant-numeric: tabular-nums;
       user-select: all;
@@ -91,6 +102,21 @@ export class OneTimeSecret {
   readonly warning = input('Shown once. Save it now.');
   /** Offer "Download .txt" under this file name (recovery codes). */
   readonly filename = input<string | null>(null);
+  /**
+   * Bring it into view and put focus on Copy when it appears (AO-12): a
+   * new token shows above the form that made it, off screen.
+   */
+  readonly reveal = input(false, { transform: booleanAttribute });
+
+  constructor() {
+    const host = inject<ElementRef<HTMLElement>>(ElementRef);
+    afterNextRender(() => {
+      if (!this.reveal()) return;
+      const el = host.nativeElement;
+      el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+      el.querySelector<HTMLButtonElement>('button.copy')?.focus({ preventScroll: true });
+    });
+  }
 
   protected readonly copied = signal(false);
   /** The browser refused the clipboard (plain http, policy): say so (UX-50). */

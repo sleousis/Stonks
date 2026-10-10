@@ -6,7 +6,7 @@ export const STEP_COPY: Record<OnboardingStepId, { title: string; lead: string; 
   account: {
     title: 'Protect your account',
     lead: 'Your password and a code from your authenticator app keep your money safe.',
-    done: 'Your authenticator is set up.',
+    done: 'Your authenticator app is set up.',
   },
   portfolio: {
     title: 'Open a paper portfolio',

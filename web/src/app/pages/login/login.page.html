@@ -59,36 +59,40 @@
           >
             {{ busy() ? 'Signing in…' : 'Sign in' }}
           </button>
+          <p class="forgot">{{ forgotLine }}</p>
         </form>
 
-        <details class="alt scripts" [open]="tokenPathOpen()">
-          <summary>For scripts</summary>
-          <form
-            id="token-form"
-            class="form"
-            [formGroup]="tokenForm"
-            (ngSubmit)="useToken()"
-            novalidate
-          >
-            <div class="field">
-              <label for="login-token">API token</label>
-              <input
-                id="login-token"
-                class="input"
-                type="password"
-                formControlName="token"
-                autocomplete="off"
-                autocapitalize="off"
-                spellcheck="false"
-                aria-describedby="login-token-hint"
-              />
-              <span id="login-token-hint" class="hint">
-                For local work and scripts. Kept in this tab only.
-              </span>
-            </div>
-            <button type="submit" class="btn wide" [disabled]="busy()">Use token</button>
-          </form>
-        </details>
+        <!-- Only while the server runs open for local work and scripts (FR-15). -->
+        @if (tokenPathOpen()) {
+          <details class="alt scripts" open>
+            <summary>For scripts</summary>
+            <form
+              id="token-form"
+              class="form"
+              [formGroup]="tokenForm"
+              (ngSubmit)="useToken()"
+              novalidate
+            >
+              <div class="field">
+                <label for="login-token">API token</label>
+                <input
+                  id="login-token"
+                  class="input"
+                  type="password"
+                  formControlName="token"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  aria-describedby="login-token-hint"
+                />
+                <span id="login-token-hint" class="hint">
+                  For local work and scripts. Kept in this tab only.
+                </span>
+              </div>
+              <button type="submit" class="btn wide" [disabled]="busy()">Use token</button>
+            </form>
+          </details>
+        }
       }
 
       @case ('enrol') {
