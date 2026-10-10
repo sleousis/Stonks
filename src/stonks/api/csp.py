@@ -28,7 +28,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 #: sha256 hashes of the inline scripts in web/src/index.html, in page order.
 CONSOLE_SCRIPT_HASHES: tuple[str, ...] = (
     "sha256-KC3V0qVKo5qInDk2JVN6KUjFYu6/nAE0F9WvsYC53lI=",
-    "sha256-WgdjueR99hcH3twD1+e+qBkCL2e5/a8NKNgcjSS7hcU=",
+    "sha256-+Jb5+AxvkmTR/x608Q8JrS09X3c611QZi4RY1bOFuAA=",
 )
 
 #: FastAPI's interactive API docs load Swagger UI and ReDoc from this CDN,
